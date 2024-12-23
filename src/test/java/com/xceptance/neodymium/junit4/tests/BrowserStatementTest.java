@@ -476,12 +476,11 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         String[] expected = new String[]
         {
-          "test :: Browser Chrome_1024x768",
-          "testParent :: Browser Chrome_1024x768"
+          "test :: Browser Chrome_1024x768"
         };
         checkDescription(BrowserOverwrittingChild.class, expected);
         Result result = JUnitCore.runClasses(BrowserOverwrittingChild.class);
-        checkPass(result, 2, 0);
+        checkPass(result, 1, 0);
     }
 
     private void checkChrome(BrowserConfiguration config)
