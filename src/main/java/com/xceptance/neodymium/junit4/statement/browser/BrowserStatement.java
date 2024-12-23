@@ -65,7 +65,7 @@ public class BrowserStatement extends StatementBuilder<BrowserMethodData>
         {
             if (!param.isStartBrowserOnCleanUp() && Neodymium.getWebDriverStateContainer() != null)
             {
-                browserRunner.teardown(testFailed, param, Neodymium.getWebDriverStateContainer());
+                new BrowserRunner().teardown(testFailed, param, Neodymium.getWebDriverStateContainer());
             }
         }
     }
