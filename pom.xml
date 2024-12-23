@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.xceptance</groupId>
 	<artifactId>neodymium-library</artifactId>
-	<version>5.1.2</version>
+	<version>5.1.1</version>
 
 	<name>neodymium-library</name>
 	<url>https://github.com/Xceptance/neodymium-library</url>
@@ -250,19 +250,19 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>com.assertthat</groupId>
-			<artifactId>selenium-shutterbug</artifactId>
-			<version>1.6</version>
-			<exclusions>
-				<exclusion>
-					<groupId>org.seleniumhq.selenium</groupId>
-					<artifactId>selenium-java</artifactId>
+    		<groupId>com.assertthat</groupId>
+    		<artifactId>selenium-shutterbug</artifactId>
+    		<version>1.6</version>
+    		<exclusions>
+        		<exclusion>
+	    			<groupId>org.seleniumhq.selenium</groupId>
+	    			<artifactId>selenium-java</artifactId>
 				</exclusion>
-				<exclusion>
-					<groupId>org.apache.httpcomponents.client5</groupId>
-					<artifactId>httpclient5</artifactId>
-				</exclusion>
-			</exclusions>
+                <exclusion>
+                    <groupId>org.apache.httpcomponents.client5</groupId>
+                    <artifactId>httpclient5</artifactId>
+                </exclusion>
+     		</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>xyz.rogfam</groupId>
@@ -337,8 +337,8 @@
 		</dependency>
 		<dependency>
 			<groupId>io.qameta.allure</groupId>
-			<artifactId>allure-cucumber7-jvm</artifactId>
-			<version>2.29.1</version>
+			<artifactId>allure-cucumber6-jvm</artifactId>
+			<version>2.13.6</version>
 		</dependency>
 		<dependency>
 			<groupId>io.qameta.allure</groupId>
