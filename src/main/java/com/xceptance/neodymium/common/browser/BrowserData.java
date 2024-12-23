@@ -32,14 +32,11 @@ public class BrowserData extends Data
 
     private List<RandomBrowsers> classRandomBrowsersAnnotation;
 
-    private Class<?> testClass;
-
     private static final String SYSTEM_PROPERTY_BROWSERDEFINITION = "browserdefinition";
 
     public BrowserData(Class<?> testClass)
     {
         this();
-        this.testClass = testClass;
         initClassAnnotationsFor(testClass);
     }
 
@@ -201,15 +198,15 @@ public class BrowserData extends Data
         {
             return browsers.stream()
                            .filter(browserTag -> systemBrowserFilter.contains(browserTag))
-                           .map(browserTag -> addKeepBrowserOpenInformation(browserTag, testClass, testMethod))
+                           .map(browserTag -> addKeepBrowserOpenInformation(browserTag, testMethod))
                            .collect(Collectors.toList());
         }
         return browsers.stream()
-                       .map(browserTag -> addKeepBrowserOpenInformation(browserTag, testClass, testMethod))
+                       .map(browserTag -> addKeepBrowserOpenInformation(browserTag, testMethod))
                        .collect(Collectors.toList());
     }
 
-    public static BrowserMethodData addKeepBrowserOpenInformation(String browserTag, Class<?> testClass, Method method)
+    public static BrowserMethodData addKeepBrowserOpenInformation(String browserTag, Method method)
     {
         List<KeepBrowserOpen> methodKeepBrowserOpenAnnotations = getAnnotations(method, KeepBrowserOpen.class);
         List<KeepBrowserOpen> classKeepBrowserOpenAnnotations = getAnnotations(method.getDeclaringClass(), KeepBrowserOpen.class);
@@ -247,6 +244,7 @@ public class BrowserData extends Data
             }
         }
         boolean junit5 = method.getAnnotation(NeodymiumTest.class) != null;
+        Class<?> testClass = method.getDeclaringClass();
         List<Method> afterMethodsWithTestBrowser = List.of(testClass.getMethods()).stream()
                                                        .filter(classMethod -> (junit5 ? classMethod.getAnnotation(AfterEach.class)
                                                                                       : classMethod.getAnnotation(After.class)) != null)
