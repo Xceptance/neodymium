@@ -393,4 +393,8 @@ public interface NeodymiumConfiguration extends Mutable
     @Key("neodymium.popupInterval")
     @DefaultValue("1000")
     public int getPopupBlockerInterval();
+
+    @Key("neodymium.seleniumLogLevel")
+    @DefaultValue("SEVERE")
+    public String seleniumLogLevel();
 }

@@ -13,6 +13,8 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -195,6 +197,8 @@ public final class BrowserRunnerHelper
         final MutableCapabilities capabilities = config.getCapabilities();
         final WebDriverStateContainer wDSC = new WebDriverStateContainer();
         SelenideProxyServer selenideProxyServer = null;
+        Logger.getLogger("org.openqa.selenium").setLevel(Level.parse(Neodymium.configuration().seleniumLogLevel()));
+
         if (Neodymium.configuration().useLocalProxy())
         {
             final BrowserUpProxy proxy = setupEmbeddedProxy();
@@ -241,7 +245,7 @@ public final class BrowserRunnerHelper
                 var remoteDebuggingPort = PortProber.findFreePort();
                 Neodymium.setRemoteDebuggingPort(remoteDebuggingPort);
                 options.addArguments("--remote-debugging-port=" + remoteDebuggingPort);
-                
+
                 if (config.getArguments() != null && config.getArguments().size() > 0)
                 {
                     options.addArguments(config.getArguments());
@@ -361,18 +365,18 @@ public final class BrowserRunnerHelper
 
                 final String driverInPathPath = new ExecutableFinder().find("msedgedriver");
                 final EdgeOptions options = new EdgeOptions().merge(capabilities);
-                
+
                 if (config.getArguments() != null && config.getArguments().size() > 0)
                 {
                     options.addArguments(config.getArguments());
                 }
-                
+
                 EdgeBuilder edgeBuilder = new EdgeBuilder(config.getDriverArguments());
                 if (StringUtils.isNotBlank(driverInPathPath))
                 {
                     edgeBuilder.usingDriverExecutable(new File(driverInPathPath));
                 }
-                
+
                 wDSC.setWebDriver(new EdgeDriver(edgeBuilder.build(), options));
             }
             else if (safariBrowsers.contains(browserName))
