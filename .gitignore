@@ -30,3 +30,6 @@ temp-*.properties
 embeddedLocalProxySelfSignedRootCertificate.p12
 /bin/
 /allure-results/
+
+# intellij project directory
+.idea
