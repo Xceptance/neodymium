@@ -113,12 +113,14 @@ public class JavaScriptUtils
     {
         String popupBlocker = "function popupBlocker()" +
                               "{" +
-                              "   var popupElement = document.querySelector(\"" + popupSelector + "\");" +
-                              "   if(popupElement != null)" +
-                              "   {" +
-                              "       popupElement.click();" +
-                              "       console.log('Popup " + popupSelector + "closed')" +
-                              "   }" +
+                              " var popupElement = document.querySelector('" + popupSelector.replaceAll("\"", "\\\\\"").replaceAll("'",
+                                                                                                                                   "\\\\\"")
+                              + "');"
+                              + " if(popupElement != null)" +
+                              " {" +
+                              " popupElement.click();" +
+                              " console.log('Popup " + popupSelector.replaceAll("\"", "\\\\\"").replaceAll("'", "\\\\\"") + "closed')" +
+                              " }" +
                               "}" +
                               "" +
                               "setInterval(popupBlocker," + Neodymium.configuration().getPopupBlockerInterval() + ");";

@@ -19,14 +19,28 @@ public class PopupBlockerTestclass extends NeodymiumTest
     public void testPopUpIsBlocked()
     {
         Selenide.open("https://www.xceptance.com/");
-        String popup = "var e = document.createElement(\"div\");\r\n"
-                       + "e.innerHTML = \"testThing\";\r\n"
-                       + "e.setAttribute('id','myWindow');\r\n"
-                       + "e.setAttribute('onclick','this.remove()');\r\n"
+        String popup = "var e = document.createElement('div');"
+                       + "e.innerHTML = 'testThing';"
+                       + "e.setAttribute('id','myWindow');"
+                       + "e.setAttribute('onclick','this.remove()');"
                        + "document.body.appendChild(e);";
         Selenide.executeJavaScript(popup, "");
         Selenide.sleep(1500);
         $("#myWindow").shouldNotBe(visible);
+    }
+
+    @Test
+    public void testPopUpWithQuotesSelectorIsBlocked()
+    {
+        Selenide.open("https://www.xceptance.com/");
+        String popup = "var e = document.createElement('div');"
+                       + "e.innerHTML = 'testThing';"
+                       + "e.setAttribute('data-testid','closeIcon');"
+                       + "e.setAttribute('onclick','this.remove()');"
+                       + "document.body.appendChild(e);";
+        Selenide.executeJavaScript(popup);
+        Selenide.sleep(1500);
+        $("[data-testid='closeIcon']").shouldNotBe(visible);
     }
 
     @Test
