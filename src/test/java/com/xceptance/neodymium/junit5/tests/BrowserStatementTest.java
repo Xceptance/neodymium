@@ -458,11 +458,12 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         String[] expected = new String[]
         {
-          "test :: Browser Chrome_1024x768"
+          "test :: Browser Chrome_1024x768",
+          "testParent :: Browser Chrome_1024x768"
         };
         checkDescription(BrowserOverwrittingChild.class, expected);
         NeodymiumTestExecutionSummary summary = run(BrowserOverwrittingChild.class);
-        checkPass(summary, 1, 0);
+        checkPass(summary, 2, 0);
     }
 
     private void checkChrome(BrowserConfiguration config)

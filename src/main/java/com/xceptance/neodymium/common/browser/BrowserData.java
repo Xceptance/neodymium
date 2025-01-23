@@ -32,6 +32,8 @@ public class BrowserData extends Data
 
     private List<RandomBrowsers> classRandomBrowsersAnnotation;
 
+    private Class<?> testClass;
+
     private static final String SYSTEM_PROPERTY_BROWSERDEFINITION = "browserdefinition";
 
     public BrowserData(Class<?> testClass)
@@ -42,6 +44,7 @@ public class BrowserData extends Data
 
     public void initClassAnnotationsFor(Class<?> testClass)
     {
+        this.testClass = testClass;
         classRandomBrowsersAnnotation = getAnnotations(testClass, RandomBrowsers.class);
 
         if (getAnnotations(testClass, SuppressBrowsers.class).isEmpty())
@@ -206,7 +209,7 @@ public class BrowserData extends Data
                        .collect(Collectors.toList());
     }
 
-    public static BrowserMethodData addKeepBrowserOpenInformation(String browserTag, Method method)
+    public static BrowserMethodData addKeepBrowserOpenInformationForBeforeOrAfter(String browserTag, Method method)
     {
         List<KeepBrowserOpen> methodKeepBrowserOpenAnnotations = getAnnotations(method, KeepBrowserOpen.class);
         List<KeepBrowserOpen> classKeepBrowserOpenAnnotations = getAnnotations(method.getDeclaringClass(), KeepBrowserOpen.class);
@@ -243,15 +246,22 @@ public class BrowserData extends Data
                 keepOpenOnFailure = false;
             }
         }
+
+        return new BrowserMethodData(browserTag, keepOpen, keepOpenOnFailure, false, false, new ArrayList<Method>());
+    }
+
+    private BrowserMethodData addKeepBrowserOpenInformation(String browserTag, Method method)
+    {
+        BrowserMethodData browserMethodData = addKeepBrowserOpenInformationForBeforeOrAfter(browserTag, method);
         boolean junit5 = method.getAnnotation(NeodymiumTest.class) != null;
-        Class<?> testClass = method.getDeclaringClass();
         List<Method> afterMethodsWithTestBrowser = List.of(testClass.getMethods()).stream()
                                                        .filter(classMethod -> (junit5 ? classMethod.getAnnotation(AfterEach.class)
                                                                                       : classMethod.getAnnotation(After.class)) != null)
                                                        .collect(Collectors.toList());
         if (!(Neodymium.configuration().startNewBrowserForSetUp() && Neodymium.configuration().startNewBrowserForCleanUp()))
         {
-            return new BrowserMethodData(browserTag, keepOpen, keepOpenOnFailure, false, false, afterMethodsWithTestBrowser);
+            browserMethodData.setAfterMethodsWithTestBrowser(afterMethodsWithTestBrowser);
+            return browserMethodData;
 
         }
         boolean separateBrowserForSetupRequired = false;
@@ -284,7 +294,10 @@ public class BrowserData extends Data
             separateBrowserForCleanupRequired = afterMethodsWithTestBrowser.isEmpty() && !afterMethods.isEmpty();
         }
 
-        return new BrowserMethodData(browserTag, keepOpen, keepOpenOnFailure, separateBrowserForSetupRequired, separateBrowserForCleanupRequired, afterMethodsWithTestBrowser);
+        browserMethodData.setStartBrowserOnSetUp(separateBrowserForSetupRequired);
+        browserMethodData.setStartBrowserOnCleanUp(separateBrowserForCleanupRequired);
+        browserMethodData.setAfterMethodsWithTestBrowser(afterMethodsWithTestBrowser);
+        return browserMethodData;
     }
 
     private List<String> computeRandomBrowsers(final Method method, final List<RandomBrowsers> randomBrowsersAnnotation,

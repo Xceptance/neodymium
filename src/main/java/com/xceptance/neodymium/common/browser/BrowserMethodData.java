@@ -58,4 +58,19 @@ public class BrowserMethodData
     {
         return afterMethodsWithTestBrowser;
     }
+
+    public void setStartBrowserOnSetUp(boolean startBrowserOnSetUp)
+    {
+        this.startBrowserOnSetUp = startBrowserOnSetUp;
+    }
+
+    public void setStartBrowserOnCleanUp(boolean startBrowserOnCleanUp)
+    {
+        this.startBrowserOnCleanUp = startBrowserOnCleanUp;
+    }
+
+    public void setAfterMethodsWithTestBrowser(List<Method> afterMethodsWithTestBrowser)
+    {
+        this.afterMethodsWithTestBrowser = afterMethodsWithTestBrowser;
+    }
 }

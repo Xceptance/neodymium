@@ -34,7 +34,8 @@ public class BrowserBeforeRunner
 
         // if browserConfiguration is null, the browser should not be started for this method and browserTag and
         // browserRunner are therefore not required
-        BrowserMethodData browserTag = browserConfiguration != null ? BrowserData.addKeepBrowserOpenInformation(browserConfiguration.getBrowserTag(), before)
+        BrowserMethodData browserTag = browserConfiguration != null ? BrowserData.addKeepBrowserOpenInformationForBeforeOrAfter(browserConfiguration.getBrowserTag(),
+                                                                                                                                before)
                                                                     : null;
         BrowserRunner browserRunner = browserTag != null ? new BrowserRunner(browserTag, before.getName()) : null;
 
