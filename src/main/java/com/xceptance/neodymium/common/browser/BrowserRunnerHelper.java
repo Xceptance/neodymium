@@ -194,11 +194,13 @@ public final class BrowserRunnerHelper
     public static WebDriverStateContainer createWebDriverStateContainer(final BrowserConfiguration config, final Object testClassInstance)
         throws MalformedURLException
     {
-        final MutableCapabilities capabilities = config.getCapabilities();
-        final WebDriverStateContainer wDSC = new WebDriverStateContainer();
-        SelenideProxyServer selenideProxyServer = null;
         Logger.getLogger("org.openqa.selenium").setLevel(Level.parse(Neodymium.configuration().seleniumLogLevel()));
 
+        final MutableCapabilities capabilities = config.getCapabilities();
+        final WebDriverStateContainer wDSC = new WebDriverStateContainer();
+
+        // set up proxy
+        SelenideProxyServer selenideProxyServer = null;
         if (Neodymium.configuration().useLocalProxy())
         {
             final BrowserUpProxy proxy = setupEmbeddedProxy();
@@ -212,18 +214,23 @@ public final class BrowserRunnerHelper
         {
             capabilities.setCapability(CapabilityType.PROXY, createProxyCapabilities());
         }
+        else if (Neodymium.configuration().enableSelenideProxy())
+        {
+            final SelenideProxyServerFactory selenideProxyServerFactory = Plugins.inject(SelenideProxyServerFactory.class);
+            selenideProxyServer = selenideProxyServerFactory.create(new SelenideConfig(),
+                                                                    (Proxy) capabilities.getCapability(CapabilityType.PROXY));
+            final var proxy = selenideProxyServer.getSeleniumProxy();
+            capabilities.setCapability(CapabilityType.PROXY, proxy);
+        }
+        else {
+            // no proxy should be used, so set the proxy to null
+            // makes it possible to run some test with temp proxy and some without during a single test run
+            capabilities.setCapability(CapabilityType.PROXY, (Object) null);
+        }
 
         final String testEnvironment = config.getTestEnvironment();
         if (StringUtils.isEmpty(testEnvironment) || "local".equalsIgnoreCase(testEnvironment))
         {
-            if (Neodymium.configuration().enableSelenideProxy())
-            {
-                final SelenideProxyServerFactory selenideProxyServerFactory = Plugins.inject(SelenideProxyServerFactory.class);
-                selenideProxyServer = selenideProxyServerFactory.create(new SelenideConfig(),
-                                                                        (Proxy) capabilities.getCapability(CapabilityType.PROXY));
-                final var proxy = selenideProxyServer.getSeleniumProxy();
-                capabilities.setCapability(CapabilityType.PROXY, proxy);
-            }
             final String browserName = capabilities.getBrowserName();
             if (chromeBrowsers.contains(browserName))
             {
