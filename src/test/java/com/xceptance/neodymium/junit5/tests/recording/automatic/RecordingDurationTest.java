@@ -14,14 +14,14 @@ import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.common.recording.FilmTestExecution;
 import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
-import com.xceptance.neodymium.junit5.testclasses.recording.AutomaticRecordingTest;
+import com.xceptance.neodymium.junit5.testclasses.recording.CustomRecordingTest;
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 
 public class RecordingDurationTest extends AbstractNeodymiumTest
 {
     public double runTest(boolean isGif, String oneImagePerMilliseconds) throws IOException
     {
-        AutomaticRecordingTest.isGif = isGif;
+        CustomRecordingTest.isGif = isGif;
         String format = isGif ? "gif" : "video";
         FilmTestExecution.clearThreadContexts();
         Map<String, String> properties1 = new HashMap<>();
@@ -34,9 +34,9 @@ public class RecordingDurationTest extends AbstractNeodymiumTest
         writeMapToPropertiesFile(properties1, tempConfigFile1);
         ConfigFactory.setProperty(FilmTestExecution.TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:" + fileLocation);
         tempFiles.add(tempConfigFile1);
-        run(AutomaticRecordingTest.class);
+        run(CustomRecordingTest.class);
         RecordingConfigurations config = isGif ? FilmTestExecution.getContextGif() : FilmTestExecution.getContextVideo();
-        File recordingFile = new File(config.tempFolderToStoreRecording() + AutomaticRecordingTest.uuid + "." + config.format());
+        File recordingFile = new File(config.tempFolderToStoreRecording() + CustomRecordingTest.uuid + "." + config.format());
         recordingFile.deleteOnExit();
         Assert.assertTrue("the recording file doesn't exist", recordingFile.exists());
         ProcessBuilder pb = new ProcessBuilder("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", recordingFile.getAbsolutePath());
