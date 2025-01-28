@@ -1,7 +1,6 @@
 package com.xceptance.neodymium.junit4.testclasses.multibrowser;
 
 import static com.codeborne.selenide.CollectionCondition.sizeGreaterThan;
-import static com.codeborne.selenide.Condition.exist;
 import static com.codeborne.selenide.Condition.matchText;
 import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
@@ -30,10 +29,10 @@ public class BrowserstackHomePageTest
         Assert.assertTrue(Selenide.executeJavaScript("return navigator.userAgent.indexOf(\"Safari\")>-1;"));
 
         // short validation to check that the correct page was opened, should be moved to OpenHomePageFlow
-        $("#service-areas").should(exist);
+
         // basic validation
         // Verifies the company Logo and name are visible.
-        $("#navigation .navbar-brand a[title=Home]").shouldBe(visible);
+        $("#navigation .navbar-brand a").shouldBe(visible);
 
         // Verifies the Navigation bar is visible
         $("#navigation .navbar-header ul.nav").shouldBe(visible);
@@ -42,16 +41,13 @@ public class BrowserstackHomePageTest
         $$("#navigation .navbar-header ul.nav > li > a").shouldHave(sizeGreaterThan(0));
 
         // Asserts the first headline is there.
-        $("#service-areas .landing-intro > h1").shouldBe(matchText("[A-Z].{3,}"));
-
-        // Asserts the animated carousel is there.
-        $("#myCarousel").shouldBe(visible);
+        $("#main h1").shouldBe(matchText("[A-Z].{3,}"));
 
         // Verifies the "services" section is there.
         // Asserts there's at least 1 item in the list.
-        $$("#service-areas .container .thumbnail").shouldHave(sizeGreaterThan(0));
+        $$("#main .row.strip a").shouldHave(sizeGreaterThan(0));
 
         // Verifies the company button is there.
-        $$("#xlt-background .container p.lead > a.btn-primary").shouldHave(sizeGreaterThan(0));
+        $$("p.lead > a").shouldHave(sizeGreaterThan(0));
     }
 }

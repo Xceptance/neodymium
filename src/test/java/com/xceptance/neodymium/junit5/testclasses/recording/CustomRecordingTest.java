@@ -9,7 +9,7 @@ import com.xceptance.neodymium.common.recording.FilmTestExecution;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 
 @Browser("Chrome_headless")
-public class AutomaticRecordingTest
+public class CustomRecordingTest
 {
     public static String uuid;
 

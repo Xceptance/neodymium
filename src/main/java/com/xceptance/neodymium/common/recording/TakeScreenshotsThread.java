@@ -6,10 +6,12 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Date;
 
+import org.openqa.selenium.NoSuchSessionException;
 import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.remote.UnreachableBrowserException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,7 +98,7 @@ public class TakeScreenshotsThread extends Thread
                       file.delete();
 
                     }
-                    catch (NoSuchWindowException e)
+                    catch (NoSuchWindowException | NoSuchSessionException | UnreachableBrowserException e)
                     {
                         // catching the exception prevents the video from failing
                     }
