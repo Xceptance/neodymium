@@ -48,14 +48,14 @@
 		<maven.compiler.source.version>17</maven.compiler.source.version>
 		<maven.compiler.target.version>17</maven.compiler.target.version>
 		<surefire.version>3.5.2</surefire.version>
-		<allure.version>2.29.0</allure.version>
-		<selenide.version>7.6.0</selenide.version>
+		<allure.version>2.29.1</allure.version>
+		<selenide.version>7.7.1</selenide.version>
 		<cucumber.version>7.20.1</cucumber.version>
-		<browserup.version>2.2.17</browserup.version>
-		<log4j.version>2.24.2</log4j.version>
+		<browserup.version>3.0.1</browserup.version>
+		<log4j.version>2.24.3</log4j.version>
 		<junit.version>4.13.2</junit.version>
-		<junit.jupiter.version>5.11.3</junit.jupiter.version>
-		<junit.vintage.version>5.11.3</junit.vintage.version>
+		<junit.jupiter.version>5.11.4</junit.jupiter.version>
+		<junit.vintage.version>5.11.4</junit.vintage.version>
 	</properties>
 
 	<repositories>
@@ -338,7 +338,7 @@
 		<dependency>
 			<groupId>io.qameta.allure</groupId>
 			<artifactId>allure-cucumber7-jvm</artifactId>
-			<version>2.29.1</version>
+			<version>${allure.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>io.qameta.allure</groupId>
@@ -368,12 +368,12 @@
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-csv</artifactId>
-			<version>1.12.0</version>
+			<version>1.13.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-text</artifactId>
-			<version>1.12.0</version>
+			<version>1.13.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
