@@ -224,7 +224,7 @@ public abstract class AbstractNeodymiumTest
         }
         catch (AssertionFailedError e)
         {
-            Assertions.fail("Assertionsion failed. " + e.getMessage() + " Stack trace: " + stackTrace);
+            Assertions.fail("Assertion failed. " + e.getMessage() + " Stack trace: " + stackTrace);
         }
     }
 

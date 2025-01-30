@@ -1,19 +1,19 @@
 package com.xceptance.neodymium.junit5.tests;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.aeonbits.owner.ConfigFactory;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
 import com.xceptance.neodymium.junit5.testclasses.datautils.DataUtilsHelperTests;
 import com.xceptance.neodymium.junit5.testclasses.datautils.DataUtilsTests;
 import com.xceptance.neodymium.junit5.testclasses.datautils.DataUtilsTestsXml;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.NeodymiumRandom;
+import org.aeonbits.owner.ConfigFactory;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 public class DataUtilsTest extends AbstractNeodymiumTest
 {
@@ -21,7 +21,7 @@ public class DataUtilsTest extends AbstractNeodymiumTest
     public static void setUpNeodymiumConfiguration() throws IOException
     {
         // set up a temp-neodymium.properties
-        final String fileLocation = "config/temp-neodymium.properties";
+        final String fileLocation = "config/temp-DataUtilsTest-neodymium.properties";
         File tempConfigFile = new File("./" + fileLocation);
         tempFiles.add(tempConfigFile);
         Map<String, String> properties = new HashMap<>();
@@ -35,6 +35,15 @@ public class DataUtilsTest extends AbstractNeodymiumTest
         properties.put("neodymium.dataUtils.password.digitAmount", "3");
         properties.put("neodymium.dataUtils.password.specialCharAmount", "3");
         properties.put("neodymium.dataUtils.password.specialChars", "#-_*");
+
+        // set the new properties
+        for (String key : properties.keySet())
+        {
+            Neodymium.configuration().setProperty(key, properties.get(key));
+        }
+
+        // set random seed
+        NeodymiumRandom.setSeed(Neodymium.configuration().initialRandomValue());
 
         writeMapToPropertiesFile(properties, tempConfigFile);
         ConfigFactory.setProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:" + fileLocation);

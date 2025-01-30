@@ -1,10 +1,11 @@
 package com.xceptance.neodymium.junit4.tests;
 
+import com.xceptance.neodymium.junit4.testclasses.softassertion.UseSoftAssertions;
+import com.xceptance.neodymium.util.Neodymium;
+import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
-
-import com.xceptance.neodymium.junit4.testclasses.softassertion.UseSoftAssertions;
 
 public class SoftAssertionTest extends NeodymiumTest
 {
@@ -13,5 +14,11 @@ public class SoftAssertionTest extends NeodymiumTest
     {
         Result result = JUnitCore.runClasses(UseSoftAssertions.class);
         checkFail(result, 1, 0, 1);
+    }
+
+    @After
+    public void resetAssertionMode()
+    {
+        Neodymium.softAssertions(false);
     }
 }
