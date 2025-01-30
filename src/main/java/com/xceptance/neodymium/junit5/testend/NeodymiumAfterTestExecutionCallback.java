@@ -1,16 +1,11 @@
 package com.xceptance.neodymium.junit5.testend;
 
-import javax.annotation.ParametersAreNonnullByDefault;
-
+import com.xceptance.neodymium.common.ScreenshotWriter;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
-import com.xceptance.neodymium.common.ScreenshotWriter;
-
-@ParametersAreNonnullByDefault
 public class NeodymiumAfterTestExecutionCallback implements AfterTestExecutionCallback
 {
-
     @Override
     public void afterTestExecution(ExtensionContext context) throws Exception
     {
