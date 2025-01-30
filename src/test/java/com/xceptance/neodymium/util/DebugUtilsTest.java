@@ -1,13 +1,10 @@
 package com.xceptance.neodymium.util;
 
-import static com.codeborne.selenide.CollectionCondition.size;
-import static com.codeborne.selenide.Condition.exist;
-import static com.codeborne.selenide.Condition.visible;
-import static com.codeborne.selenide.Selenide.$;
-import static com.codeborne.selenide.Selenide.$$;
-
-import java.util.List;
-
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.SelenideElement;
+import com.codeborne.selenide.WebDriverRunner;
+import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -17,11 +14,13 @@ import org.openqa.selenium.WebElement;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.openqa.selenium.support.events.EventFiringDecorator;
 
-import com.codeborne.selenide.Selenide;
-import com.codeborne.selenide.SelenideElement;
-import com.codeborne.selenide.WebDriverRunner;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import java.util.List;
+
+import static com.codeborne.selenide.CollectionCondition.size;
+import static com.codeborne.selenide.Condition.exist;
+import static com.codeborne.selenide.Condition.visible;
+import static com.codeborne.selenide.Selenide.$;
+import static com.codeborne.selenide.Selenide.$$;
 
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")
@@ -115,7 +114,15 @@ public class DebugUtilsTest
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "750");
 
         Selenide.open("https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_select");
-        $("#snigel-cmp-framework #accept-choices").click();
+
+        // check if the cookie banner is present and accept it if so
+        SelenideElement acceptCookiesButton = $("#snigel-cmp-framework #accept-choices");
+        
+        SelenideAddons.optionalWaitUntilCondition(acceptCookiesButton, visible);
+        if (acceptCookiesButton.isDisplayed())
+        {
+            acceptCookiesButton.click();
+        }
 
         Neodymium.getDriver().switchTo().frame("iframeResult");
 
