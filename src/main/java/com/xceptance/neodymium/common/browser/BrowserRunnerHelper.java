@@ -183,13 +183,15 @@ public final class BrowserRunnerHelper
      * 
      * @param config
      *            {@link BrowserConfiguration} that describes the desired browser instance
+     * @param testClassInstance
+     *            {@link String} name of the test to display on test environment
      * @return {@link WebDriverStateContainer} the instance of the browser described in {@link BrowserConfiguration} and
      *         in {@link NeodymiumConfiguration}
      * @throws MalformedURLException
      *             if <a href="https://github.com/Xceptance/neodymium-library/wiki/Selenium-grid">Selenium grid</a> is
      *             used and the given grid URL is invalid
      */
-    public static WebDriverStateContainer createWebDriverStateContainer(final BrowserConfiguration config, final Object testClassInstance)
+    public static WebDriverStateContainer createWebDriverStateContainer(final BrowserConfiguration config, final String testClassInstance)
         throws MalformedURLException
     {
         final MutableCapabilities capabilities = config.getCapabilities();
@@ -404,7 +406,7 @@ public final class BrowserRunnerHelper
             config.getGridProperties().put("userName", testEnvironmentProperties.getUsername());
             config.getGridProperties().put("accessKey", testEnvironmentProperties.getPassword());
             final String buildId = StringUtils.isBlank(System.getenv("BUILD_NUMBER")) ? "local run" : System.getenv("BUILD_NUMBER");
-            config.getGridProperties().put("sessionName", testClassInstance instanceof String ? testClassInstance : testClassInstance.getClass().toString());
+            config.getGridProperties().put("sessionName", testClassInstance);
             config.getGridProperties().put("buildName", "Test Automation");
             config.getGridProperties().put("buildIdentifier", buildId);
             if (testEnvironmentUrl.contains("browserstack"))
