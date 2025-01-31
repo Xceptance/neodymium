@@ -3,6 +3,7 @@ package com.xceptance.neodymium.junit4.testclasses.webDriver;
 import static com.codeborne.selenide.Condition.attribute;
 import static com.codeborne.selenide.Condition.enabled;
 import static com.codeborne.selenide.Condition.exactText;
+import static com.codeborne.selenide.Condition.exist;
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
 
@@ -14,6 +15,7 @@ import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import com.codeborne.selenide.ClickOptions;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
@@ -57,7 +59,7 @@ public class DownloadFilesInDifferentWays extends NeodymiumTest
         $(".fc-cta-consent").click();
         $("#fileSelector").uploadFile(new File("src/test/resources/2020-in-one-picture.png"));
         $("button[aria-label='COMBINED']").shouldBe(enabled, Duration.ofMillis(9000));
-        $("button[aria-label='COMBINED']").scrollIntoView(true).click();
+        $("button[aria-label='COMBINED']").click(ClickOptions.usingJavaScript());
         waitForFileDownloading();
         validateFilePresentInDownloadHistory();
     }
@@ -92,7 +94,8 @@ public class DownloadFilesInDifferentWays extends NeodymiumTest
         if (Neodymium.getBrowserName().contains("chrome"))
         {
             Selenide.open("chrome://downloads/");
-            $$(Selectors.shadowCss("#title-area", "downloads-manager", "#downloadsList downloads-item")).findBy(exactText(fileName.getName())).parent()
+            $$(Selectors.shadowCss("#title-area", "downloads-manager", "#downloadsList downloads-item")).findBy(exactText(fileName.getName()))
+                                                                                                        .should(exist, Duration.ofMillis(9000)).parent()
                                                                                                         .find(".description[role='gridcell']")
                                                                                                         .shouldHave(attribute("hidden"));
         }

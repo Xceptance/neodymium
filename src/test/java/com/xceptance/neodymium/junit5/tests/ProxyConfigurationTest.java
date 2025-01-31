@@ -1,18 +1,17 @@
 package com.xceptance.neodymium.junit5.tests;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.aeonbits.owner.ConfigFactory;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
 import com.xceptance.neodymium.junit5.testclasses.proxy.RunWithProxy;
 import com.xceptance.neodymium.junit5.testclasses.proxy.SetProxyForWebDriver;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 import com.xceptance.neodymium.util.Neodymium;
+import org.aeonbits.owner.ConfigFactory;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ProxyConfigurationTest extends AbstractNeodymiumTest
 {
@@ -42,6 +41,12 @@ public class ProxyConfigurationTest extends AbstractNeodymiumTest
         properties.put("neodymium.proxy.socket.userName", SOCKET_USERNAME);
         properties.put("neodymium.proxy.socket.password", SOCKET_PASSWORD);
         properties.put("neodymium.proxy.socket.version", SOCKET_VERSION);
+
+        // set the new properties
+        for (String key : properties.keySet())
+        {
+            Neodymium.configuration().setProperty(key, properties.get(key));
+        }
 
         File tempConfigFile = new File("./" + fileLocation);
         writeMapToPropertiesFile(properties, tempConfigFile);

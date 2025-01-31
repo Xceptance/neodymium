@@ -204,17 +204,9 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<configuration>
 							<includes>
-								<include>
-									com/xceptance/neodymium/junit4/tests/**/*Test.java</include>
+								<include>	com/xceptance/neodymium/junit4/tests/**/*Test.java</include>
+								<include>	com/xceptance/neodymium/util/**/*Test.java</include>
 							</includes>
-							<includes>
-								<include>
-									com/xceptance/neodymium/util/**/*Test.java</include>
-							</includes>
-							<excludes>
-								<exclude>
-									com/xceptance/neodymium/junit4/tests/visual/**/*Test.java</exclude>
-							</excludes>
 						</configuration>
 						<dependencies>
 							<dependency>
@@ -238,8 +230,6 @@
 							<includes>
 								<include>
 									com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
-								<include>
-									com/xceptance/neodymium/util/**/*Test.java</include>
 							</includes>
 						</configuration>
 					</plugin>

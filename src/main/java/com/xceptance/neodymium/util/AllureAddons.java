@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
@@ -273,7 +274,14 @@ public class AllureAddons
                 {
                     Selenide.sleep(100);
                 }
-                lock = FileChannel.open(Paths.get(getEnvFile().getAbsolutePath()), StandardOpenOption.APPEND).tryLock();
+                try
+                {
+                    lock = FileChannel.open(Paths.get(getEnvFile().getAbsolutePath()), StandardOpenOption.APPEND).tryLock();
+                }
+                catch (OverlappingFileLockException e)
+                {
+                    LOGGER.debug(getEnvFile() + " is already locked");
+                }
                 retries++;
             }
             while (retries < MAX_RETRY_COUNT && lock == null);
@@ -444,12 +452,13 @@ public class AllureAddons
             {
                 LOGGER.warn("Could not acquire Filelock in time. Failed to add information about enviroment to Allure report");
             }
-        }catch(ParserConfigurationException|TransformerException|SAXException|
+        }
+        catch (ParserConfigurationException | TransformerException | SAXException |
 
-    IOException e)
-    {
-        LOGGER.warn("Failed to add information about environment to Allure report", e);
-    }
+            IOException e)
+        {
+            LOGGER.warn("Failed to add information about environment to Allure report", e);
+        }
     }
 
     /**

@@ -12,6 +12,7 @@ import java.time.Duration;
 
 import org.junit.jupiter.api.AfterEach;
 
+import com.codeborne.selenide.ClickOptions;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
@@ -54,7 +55,7 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
         $(".fc-cta-consent").click();
         $("#fileSelector").uploadFile(new File("src/test/resources/2020-in-one-picture.png"));
         $("button[aria-label='COMBINED']").shouldBe(enabled);
-        $("button[aria-label='COMBINED']").scrollIntoView(true).click();
+        $("button[aria-label='COMBINED']").click(ClickOptions.usingJavaScript());
         waitForFileDownloading();
         validateFilePresentInDownloadHistory();
     }

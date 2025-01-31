@@ -9,6 +9,7 @@ import org.aeonbits.owner.ConfigFactory;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit5.testclasses.multibrowser.BrowserstackHomePageTest;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 import com.xceptance.neodymium.util.TestConfiguration;
@@ -41,9 +42,13 @@ public class BrowserstackProxyTest extends AbstractNeodymiumTest
         properties2.put("browserprofile.Safari_Browserstack.browserName", "Safari");
         properties2.put("browserprofile.Safari_Browserstack.version", "14.0");
         properties2.put("browserprofile.Safari_Browserstack.testEnvironment", "browserstack");
-        File tempConfigFile2 = new File("./config/dev-browser.properties");
+        File tempConfigFile2 = File.createTempFile("BrowserstackProxyTest", "", new File("./config/"));
         writeMapToPropertiesFile(properties2, tempConfigFile2);
         tempFiles.add(tempConfigFile2);
+
+        // this line is important as we initialize the config from the temporary file we created above
+        MultibrowserConfiguration.clearAllInstances();
+        MultibrowserConfiguration.getInstance(tempConfigFile2.getPath());
     }
 
     @Test
