@@ -28,7 +28,15 @@ public class TestEnvironment
     {
         url = properties.getProperty(baseKey + ".url");
         username = properties.getProperty(baseKey + ".username");
+        if (StringUtils.isBlank(username))
+        {
+            username = System.getenv("BROWSERSTACK_USERNAME");
+        }
         password = properties.getProperty(baseKey + ".password");
+        if (StringUtils.isBlank(password))
+        {
+            password = System.getenv("BROWSERSTACK_PASSWORD");
+        }
         optionsTag = properties.getProperty(baseKey + ".optionsTag");
         useProxy = Boolean.valueOf(properties.getProperty(baseKey + ".proxy"));
         if (useProxy)
