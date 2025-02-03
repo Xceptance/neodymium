@@ -1,5 +1,7 @@
 package com.xceptance.neodymium.util;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -8,6 +10,7 @@ import java.lang.reflect.Method;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 import org.junit.runner.RunWith;
 
 import com.codeborne.selenide.Selenide;
@@ -31,6 +34,36 @@ public class LighthouseUtilsTest
         Selenide.open("https://blog.xceptance.com/");
 
         LighthouseUtils.createLightHouseReport("lighthouseUtilsReport");
+    }
+
+    @Test
+    public void testLighthouseUtilsAuditNotTriggered() throws Exception
+    {
+        Neodymium.configuration().setProperty("neodymium.lighthouse.assert.audits", "doctype");
+
+        mockLighthouseBinary();
+
+        Selenide.open("https://blog.xceptance.com/");
+
+        LighthouseUtils.createLightHouseReport("lighthouseUtilsReport");
+
+        // No exception appeared so everything is fine.
+    }
+
+    @Test
+    public void testLighthouseUtilsAuditTriggered() throws Exception
+    {
+        Neodymium.configuration().setProperty("neodymium.lighthouse.assert.audits", "duplicated-javascript");
+
+        mockLighthouseBinary();
+
+        Selenide.open("https://blog.xceptance.com/");
+
+        AssertionError auditAssertion = assertThrows(AssertionError.class, () -> {
+            LighthouseUtils.createLightHouseReport("lighthouseUtilsReport");
+        });
+        Assertions.assertTrue(auditAssertion.getMessage().contains(
+                                                                   "he following Lighthouse audits [duplicated-javascript] contain errors that need to be fixed, please look into the Lighthouse report named \"lighthouseUtilsReport\" for further information."));
     }
 
     @Test
@@ -146,11 +179,13 @@ public class LighthouseUtilsTest
         runProcess.setAccessible(true);
         Process p = null;
 
+        String lighthouseReportJson = getMockedLighthouseJson();
         if (System.getProperty("os.name").toLowerCase().contains("win"))
         {
             Neodymium.configuration()
                      .setProperty("neodymium.lighthouse.binaryPath",
-                                  "echo {\"categories\": {\"performance\": {\"score\": 0.5}, \"accessibility\": {\"score\": 0.5}, \"best-practices\": {\"score\": 0.5}, \"seo\": {\"score\": 0.5}}} > target/lighthouseUtilsReport.report.json | echo makeCommentWork #");
+                                  "echo " + lighthouseReportJson
+                                                                     + " > target/lighthouseUtilsReport.report.json | echo makeCommentWork #");
             p = (Process) runProcess.invoke(null, new Object[]
             {
               new String[]
@@ -165,7 +200,8 @@ public class LighthouseUtilsTest
             {
                 Neodymium.configuration()
                          .setProperty("neodymium.lighthouse.binaryPath",
-                                      "echo {\"categories\": {\"performance\": {\"score\": 0.5}, \"accessibility\": {\"score\": 0.5}, \"best-practices\": {\"score\": 0.5}, \"seo\": {\"score\": 0.5}}} > target/lighthouseUtilsReport.report.json");
+                                      "echo " + lighthouseReportJson
+                                                                         + " > target/lighthouseUtilsReport.report.json");
                 p = (Process) runProcess.invoke(null, new Object[]
                 {
                   new String[]
@@ -195,6 +231,35 @@ public class LighthouseUtilsTest
         {
             continue;
         }
+    }
+
+    private String getMockedLighthouseJson()
+    {
+        return "{"
+               + "  'categories': {"
+               + "    'performance': {"
+               + "      'score': 0.5"
+               + "    },"
+               + "    'accessibility': {"
+               + "      'score': 0.5"
+               + "    },"
+               + "    'best-practices': {"
+               + "      'score': 0.5"
+               + "    },"
+               + "    'seo': {"
+               + "      'score': 0.5"
+               + "    }"
+               + "  },"
+               + "  'audits': {"
+               + "    'duplicated-javascript': {"
+               + "      'details': {"
+               + "        'items': ["
+               + "          {}"
+               + "        ]"
+               + "      }"
+               + "    }"
+               + "  }"
+               + "}";
     }
 
 }
