@@ -269,7 +269,9 @@ public class LighthouseUtils
             }
             
             SelenideAddons.wrapAssertionError(() -> {
-                Assert.assertTrue("the following Lighthouse audits " + errorAudits + " contain errors that need to be fixed, please look into the Lighthouse report named \"" + reportName + "\" for further information. ", errorAudits.size() > 0);
+                Assert.assertTrue("the following Lighthouse audits " + errorAudits
+                                   + " contain errors that need to be fixed, please look into the Lighthouse report named \"" + reportName
+                                  + "\" for further information. ", errorAudits.size() == 0);
             });
         }
     }

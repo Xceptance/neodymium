@@ -34,6 +34,43 @@ public class LighthouseUtilsTest
     }
 
     @Test
+    public void testLighthouseUtilsAuditNotTriggered() throws Exception
+    {
+        Neodymium.configuration().setProperty("neodymium.lighthouse.assert.audits", "doctype");
+
+        mockLighthouseBinary();
+
+        Selenide.open("https://blog.xceptance.com/");
+
+        LighthouseUtils.createLightHouseReport("lighthouseUtilsReport");
+
+        // No exception appeared so everything is fine.
+    }
+
+    @Test
+    public void testLighthouseUtilsAuditTriggered() throws Exception
+    {
+        Neodymium.configuration().setProperty("neodymium.lighthouse.assert.audits", "duplicated-javascript");
+
+        mockLighthouseBinary();
+
+        Selenide.open("https://blog.xceptance.com/");
+
+        try
+        {
+            LighthouseUtils.createLightHouseReport("lighthouseUtilsReport");
+            Assert.fail("Lighout audit duplicated-javascript should have triggered a AssertionError.");
+        }
+        catch (AssertionError a)
+        {
+            String actualMessage = a.getMessage();
+
+            Assert.assertTrue("Unexcpected Error message.",
+                              actualMessage.contains("Lighthouse audits [duplicated-javascript] contain errors that need to be fixed"));
+        }
+    }
+
+    @Test
     public void testLighthouseUtilsPerformanceException() throws Exception
     {
         Neodymium.configuration().setProperty("neodymium.lighthouse.assert.thresholdScore.performance", "0.51");
@@ -149,11 +186,13 @@ public class LighthouseUtilsTest
         runProcess.setAccessible(true);
         Process p = null;
 
+        String lighthouseReportJson = getMockedLighthouseJson();
         if (System.getProperty("os.name").toLowerCase().contains("win"))
         {
             Neodymium.configuration()
                      .setProperty("neodymium.lighthouse.binaryPath",
-                                  "echo {\"categories\": {\"performance\": {\"score\": 0.5}, \"accessibility\": {\"score\": 0.5}, \"best-practices\": {\"score\": 0.5}, \"seo\": {\"score\": 0.5}}} > target/lighthouseUtilsReport.report.json | echo makeCommentWork #");
+                                  "echo " + lighthouseReportJson
+                                                                     + " > target/lighthouseUtilsReport.report.json | echo makeCommentWork #");
             p = (Process) runProcess.invoke(null, new Object[]
             {
               new String[]
@@ -168,7 +207,8 @@ public class LighthouseUtilsTest
             {
                 Neodymium.configuration()
                          .setProperty("neodymium.lighthouse.binaryPath",
-                                      "echo {\"categories\": {\"performance\": {\"score\": 0.5}, \"accessibility\": {\"score\": 0.5}, \"best-practices\": {\"score\": 0.5}, \"seo\": {\"score\": 0.5}}} > target/lighthouseUtilsReport.report.json");
+                                      "echo " + lighthouseReportJson
+                                                                         + " > target/lighthouseUtilsReport.report.json");
                 p = (Process) runProcess.invoke(null, new Object[]
                 {
                   new String[]
@@ -198,6 +238,35 @@ public class LighthouseUtilsTest
         {
             continue;
         }
+    }
+
+    private String getMockedLighthouseJson()
+    {
+        return "{"
+               + "  'categories': {"
+               + "    'performance': {"
+               + "      'score': 0.5"
+               + "    },"
+               + "    'accessibility': {"
+               + "      'score': 0.5"
+               + "    },"
+               + "    'best-practices': {"
+               + "      'score': 0.5"
+               + "    },"
+               + "    'seo': {"
+               + "      'score': 0.5"
+               + "    }"
+               + "  },"
+               + "  'audits': {"
+               + "    'duplicated-javascript': {"
+               + "      'details': {"
+               + "        'items': ["
+               + "          {}"
+               + "        ]"
+               + "      }"
+               + "    }"
+               + "  }"
+               + "}";
     }
 
 }
