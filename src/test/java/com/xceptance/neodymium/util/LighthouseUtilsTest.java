@@ -1,5 +1,7 @@
 package com.xceptance.neodymium.util;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -8,6 +10,7 @@ import java.lang.reflect.Method;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 import org.junit.runner.RunWith;
 
 import com.codeborne.selenide.Selenide;
@@ -56,18 +59,11 @@ public class LighthouseUtilsTest
 
         Selenide.open("https://blog.xceptance.com/");
 
-        try
-        {
+        AssertionError auditAssertion = assertThrows(AssertionError.class, () -> {
             LighthouseUtils.createLightHouseReport("lighthouseUtilsReport");
-            Assert.fail("Lighout audit duplicated-javascript should have triggered a AssertionError.");
-        }
-        catch (AssertionError a)
-        {
-            String actualMessage = a.getMessage();
-
-            Assert.assertTrue("Unexcpected Error message.",
-                              actualMessage.contains("Lighthouse audits [duplicated-javascript] contain errors that need to be fixed"));
-        }
+        });
+        Assertions.assertTrue(auditAssertion.getMessage().contains(
+                                                                   "he following Lighthouse audits [duplicated-javascript] contain errors that need to be fixed, please look into the Lighthouse report named \"lighthouseUtilsReport\" for further information."));
     }
 
     @Test
