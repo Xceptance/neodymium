@@ -1,13 +1,9 @@
 package com.xceptance.neodymium.util;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map.Entry;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-
+import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
+import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
@@ -15,10 +11,12 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map.Entry;
 
 @RunWith(NeodymiumRunner.class)
 @SuppressBrowsers
@@ -159,7 +157,6 @@ public class AllureAddonsTest
         Assert.assertEquals("Wrong root node name in environments-test.xml", "environment", environment.getNodeName());
 
         NodeList childNodes = environment.getChildNodes();
-        Assert.assertEquals("Wrong number of params in environments.xml", list.size(), childNodes.getLength());
 
         List<NameValuePair> params = new ArrayList<NameValuePair>();
         for (int i = 0; i < childNodes.getLength(); i++)
@@ -182,6 +179,9 @@ public class AllureAddonsTest
             }
             params.add(new NameValuePair(key, value));
         }
+
+        Assert.assertEquals("Wrong number of params in environments.xml. It contains: " + params, list.size(), childNodes.getLength());
+
         for (Entry<String, String> testDataPoint : list)
         {
             int found = 0;
@@ -206,6 +206,12 @@ public class AllureAddonsTest
         {
             this.name = name;
             this.value = value;
+        }
+
+        @Override
+        public String toString()
+        {
+            return "[ " + name + " ; " + value + " ]";
         }
     }
 }
