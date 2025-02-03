@@ -45,16 +45,13 @@ public class LighthouseUtilsTest
 
         Selenide.open("https://blog.xceptance.com/");
 
-        try
-        {
+        AssertionError auditAssertion = Assert.assertThrows(AssertionError.class, () -> {
             LighthouseUtils.createLightHouseReport("lighthouseUtilsReport");
-        }
-        catch (AssertionError e)
-        {
-            Assert.assertTrue("the compared error messages doesn't match",
-                              e.getMessage()
-                               .contains("The Lighthouse performance score 0.5 doesn't exceed nor match the required threshold of 0.51, please improve the score to match expectations"));
-        }
+        });
+
+        Assert.assertTrue("the compared error messages doesn't match",
+                          auditAssertion.getMessage()
+                           .contains("The Lighthouse performance score 0.5 doesn't exceed nor match the required threshold of 0.51, please improve the score to match expectations"));
     }
 
     @Test
