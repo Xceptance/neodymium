@@ -170,6 +170,12 @@ public class AllureAddonsTest
                 Node subNode = subNodes.item(j);
                 if ("key".equals(subNode.getNodeName()))
                 {
+                    // skip browser configuration coming from other tests
+                    if ("Used Browserconfigurations".equals(subNode.getTextContent()))
+                    {
+                        j++; // skip the value for they key
+                        continue;
+                    }
                     key = subNode.getTextContent();
                 }
                 else if ("value".equals(subNode.getNodeName()))
@@ -177,10 +183,17 @@ public class AllureAddonsTest
                     value = subNode.getTextContent();
                 }
             }
-            params.add(new NameValuePair(key, value));
+
+            // skip empty pairs from browser configuration entries
+            if (!"".equals(key))
+            {
+                params.add(new NameValuePair(key, value));
+            }
         }
 
-        Assert.assertEquals("Wrong number of params in environments.xml. It contains: " + params, list.size(), childNodes.getLength());
+        // assert provided list with parsed params
+        // in case environment contained browser configuration childNodes.getLength contains more entries than expected
+        Assert.assertEquals("Wrong number of params in environments.xml. It contains: " + params, list.size(), params.size());
 
         for (Entry<String, String> testDataPoint : list)
         {
