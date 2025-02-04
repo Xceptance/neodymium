@@ -1,13 +1,9 @@
 package com.xceptance.neodymium.util;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map.Entry;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-
+import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
+import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
@@ -15,10 +11,12 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map.Entry;
 
 @RunWith(NeodymiumRunner.class)
 @SuppressBrowsers
@@ -159,7 +157,6 @@ public class AllureAddonsTest
         Assert.assertEquals("Wrong root node name in environments-test.xml", "environment", environment.getNodeName());
 
         NodeList childNodes = environment.getChildNodes();
-        Assert.assertEquals("Wrong number of params in environments.xml", list.size(), childNodes.getLength());
 
         List<NameValuePair> params = new ArrayList<NameValuePair>();
         for (int i = 0; i < childNodes.getLength(); i++)
@@ -173,6 +170,12 @@ public class AllureAddonsTest
                 Node subNode = subNodes.item(j);
                 if ("key".equals(subNode.getNodeName()))
                 {
+                    // skip browser configuration coming from other tests
+                    if ("Used Browserconfigurations".equals(subNode.getTextContent()))
+                    {
+                        j++; // skip the value for they key
+                        continue;
+                    }
                     key = subNode.getTextContent();
                 }
                 else if ("value".equals(subNode.getNodeName()))
@@ -180,8 +183,18 @@ public class AllureAddonsTest
                     value = subNode.getTextContent();
                 }
             }
-            params.add(new NameValuePair(key, value));
+
+            // skip empty pairs from browser configuration entries
+            if (!"".equals(key))
+            {
+                params.add(new NameValuePair(key, value));
+            }
         }
+
+        // assert provided list with parsed params
+        // in case environment contained browser configuration childNodes.getLength contains more entries than expected
+        Assert.assertEquals("Wrong number of params in environments.xml. It contains: " + params, list.size(), params.size());
+
         for (Entry<String, String> testDataPoint : list)
         {
             int found = 0;
@@ -206,6 +219,12 @@ public class AllureAddonsTest
         {
             this.name = name;
             this.value = value;
+        }
+
+        @Override
+        public String toString()
+        {
+            return "[ " + name + " ; " + value + " ]";
         }
     }
 }

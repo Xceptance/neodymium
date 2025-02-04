@@ -1,14 +1,11 @@
 package com.xceptance.neodymium.util;
 
-import javax.annotation.Nonnull;
-
 import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.ex.SelenideErrorFormatter;
 import com.codeborne.selenide.impl.Screenshot;
 
 public class SelenideErrorDetailsFormatter extends SelenideErrorFormatter
 {
-    @Nonnull
     @Override
     public String generateErrorDetails(AssertionError error, Driver driver, Screenshot screenshot, long timeoutMs)
     {
