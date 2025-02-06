@@ -71,29 +71,7 @@ public class BrowserRunner
 
     public void teardown(boolean testFailed)
     {
-        try
-        {
-            if (FilmTestExecution.getContextGif().filmAutomatically())
-            {
-                FilmTestExecution.finishGifFilming(recordingID, testFailed);
-            }
-            if (FilmTestExecution.getContextVideo().filmAutomatically())
-            {
-                FilmTestExecution.finishVideoFilming(recordingID, testFailed);
-            }
-            if (shouldLogBrowsers)
-            {
-                AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder()
-                                                                   .put("Used Browserconfigurations",
-                                                                        Neodymium.getBrowserProfileName())
-                                                                   .build(),
-                                                       EnvironmentInfoMode.APPEND_VALUE);
-            }
-        }
-        finally
-        {
-            teardown(testFailed, false, browserMethodData, wDSCont);
-        }
+        teardown(testFailed, browserMethodData, wDSCont);
     }
 
     public void teardown(boolean testFailed, BrowserMethodData browserMethodData, WebDriverStateContainer wDSCont)
@@ -108,7 +86,7 @@ public class BrowserRunner
             {
                 FilmTestExecution.finishVideoFilming(recordingID, testFailed);
             }
-            if (shouldLogBrowsers)
+            if (shouldLogBrowsers && Neodymium.getBrowserProfileName() != null)
             {
                 AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder()
                                                                    .put("Used Browserconfigurations",
@@ -207,7 +185,7 @@ public class BrowserRunner
             WebDriverCache.instance.putWebDriverStateContainer(browserMethodData.getBrowserTag(), webDriverStateContainer);
         }
         // close the WebDriver
-        else
+        else if (webDriverStateContainer != null)
         {
             LOGGER.debug("Teardown browser");
             WebDriver webDriver = webDriverStateContainer.getWebDriver();
@@ -216,7 +194,7 @@ public class BrowserRunner
                 webDriver.quit();
             }
 
-            BrowserUpProxy proxy = webDriverStateContainer != null ? webDriverStateContainer.getProxy() : null;
+            BrowserUpProxy proxy = webDriverStateContainer.getProxy() != null ? webDriverStateContainer.getProxy() : null;
             if (proxy != null)
             {
                 try
