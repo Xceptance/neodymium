@@ -86,11 +86,11 @@ public class BrowserRunner
             {
                 FilmTestExecution.finishVideoFilming(recordingID, testFailed);
             }
-            if (shouldLogBrowsers)
+            if (shouldLogBrowsers && Neodymium.getBrowserProfileName() != null)
             {
                 AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder()
                                                                    .put("Used Browserconfigurations",
-                                                                        Neodymium.getBrowserProfileName() != null ? Neodymium.getBrowserProfileName() : "")
+                                                                        Neodymium.getBrowserProfileName())
                                                                    .build(),
                                                        EnvironmentInfoMode.APPEND_VALUE);
             }
