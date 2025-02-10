@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.xceptance</groupId>
 	<artifactId>neodymium-library</artifactId>
-	<version>5.2.0</version>
+	<version>5.2.0_SNAPSHOT_ALLURE</version>
 
 	<name>neodymium-library</name>
 	<url>https://github.com/Xceptance/neodymium-library</url>
@@ -422,6 +422,12 @@
 			<groupId>org.skyscreamer</groupId>
 			<artifactId>jsonassert</artifactId>
 			<version>2.0-rc1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.platform</groupId>
+			<artifactId>junit-platform-launcher</artifactId>
+			<version>1.11.4</version>
+			<scope>compile</scope>
 		</dependency>
 	</dependencies>
 </project>

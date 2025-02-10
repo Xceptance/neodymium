@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.aeonbits.owner.ConfigFactory;
 import org.openqa.selenium.By;
@@ -58,6 +59,11 @@ public class Neodymium
     private final Map<String, String> data = new HashMap<>();
 
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "neodymium.temporaryConfigFile";
+
+    // variable to store the test IDs to process the Allure results after the test is finished and the results are written
+    // just a first naive implementation and should be improved
+    // TODO implement a good solution
+    public static ConcurrentHashMap<String, String> testIds = new ConcurrentHashMap<>();
 
     /**
      * Constructor
