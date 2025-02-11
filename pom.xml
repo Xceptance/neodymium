@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.xceptance</groupId>
 	<artifactId>neodymium-library</artifactId>
-	<version>5.2.0_SNAPSHOT_SHUTTERBUG_DEPENDENCIES_3</version>
+	<version>5.2.0</version>
 
 	<name>neodymium-library</name>
 	<url>https://github.com/Xceptance/neodymium-library</url>
@@ -365,6 +365,12 @@
 			<groupId>com.jayway.jsonpath</groupId>
 			<artifactId>json-path</artifactId>
 			<version>2.9.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>net.minidev</groupId>
+					<artifactId>json-smart</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>com.codeborne</groupId>
