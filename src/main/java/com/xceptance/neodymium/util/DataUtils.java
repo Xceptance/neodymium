@@ -36,7 +36,7 @@ public class DataUtils
 
     private static final Map<Thread, Boolean> ALLURE_ALL_DATA_USED_FLAG = Collections.synchronizedMap(new WeakHashMap<>());
 
-    private final static Configuration JSONPATH_CONFIGURATION = Configuration.builder().jsonProvider(new GsonJsonProvider(GSON))
+    public final static Configuration JSONPATH_CONFIGURATION = Configuration.builder().jsonProvider(new GsonJsonProvider(GSON))
                                                                              .mappingProvider(new GsonMappingProvider(GSON)).build();
 
     static Boolean getAllureAllDataUsedFlag()
