@@ -127,6 +127,20 @@ public class Neodymium
     }
 
     /**
+     * Shortcut for localized text access. Will return a null String if the key cannot be found.<br>
+     * Looks up the key in the localization setup starting the configured full locale e.g. 'en_US', falls back to the
+     * language 'en' if not found, fallback to default.
+     *
+     * @param key
+     *            key to lookup
+     * @return localized text or null String
+     */
+    public static String localizedTextUnchecked(final String key)
+    {
+        return getContext().localization.getTextUnchecked(key);
+    }
+
+    /**
      * Get the complete test data set
      * 
      * @return dataMap
@@ -146,6 +160,20 @@ public class Neodymium
     public static String dataValue(final String key)
     {
         return getData().get(key);
+    }
+
+    /**
+     * Shortcut for data access. Will return the given default value if the key cannot be found
+     *
+     * @param key
+     *            key to lookup
+     * @param defaultValue
+     *            default value if key is not found
+     * @return value of the data map or the given default value
+     */
+    public static String dataValueOrDefault(final String key, String defaultValue)
+    {
+        return getData().getOrDefault(key, defaultValue);
     }
 
     /**

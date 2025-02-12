@@ -106,4 +106,45 @@ public class NeodymiumLocalization
 
         return result;
     }
+
+    /**
+     * Looks up the key in the localization setup starting full locale such as en_US first, fallback to language en,
+     * fallback to default. If no localization is found null String is returned.
+     *
+     * @param key
+     *            the key to look for without the locale
+     * @return the found localization or null String
+     */
+    public String getTextUnchecked(final String key)
+    {
+        final String localeString = Neodymium.dataValueOrDefault("locale", Neodymium.configuration().locale());
+
+        Locale locale;
+        try
+        {
+            locale = LocaleUtils.toLocale(localeString);
+        }
+        catch (IllegalArgumentException e)
+        {
+            // the locale was not found
+            locale = null;
+        }
+
+        // en_US
+        String result = properties.getProperty(localeString + "." + key);
+
+        // en
+        if (result == null && locale != null)
+        {
+            result = properties.getProperty(locale.getLanguage() + "." + key);
+        }
+
+        // default
+        if (result == null)
+        {
+            result = properties.getProperty("default." + key);
+        }
+
+        return result;
+    }
 }

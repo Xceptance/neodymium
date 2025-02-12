@@ -80,7 +80,10 @@ public class DataUtils
         sb.append("@");
         sb.append(Neodymium.configuration().dataUtilsEmailDomain());
 
-        return sb.toString().toLowerCase();
+        String generatedEmail = sb.toString().toLowerCase();
+        addAttachment("random email", generatedEmail);
+
+        return generatedEmail;
     }
 
     /**
@@ -117,7 +120,10 @@ public class DataUtils
         final char[] all = (upper + lower + number + special).toCharArray();
         ArrayUtils.shuffle(all, Neodymium.getRandom());
 
-        return new String(all);
+        String generatedPassword = new String(all);
+        addAttachment("random password", generatedPassword);
+
+        return generatedPassword;
     }
 
     /**
@@ -147,7 +153,10 @@ public class DataUtils
             }
             else
             {
-                jsonObject.add(key, new JsonPrimitive(value));
+                // TODO depending on the ooutcome of the discussion don't localize here and instead create another localized JSON for
+                // the test data attachment
+                // TODO if we want to keep the localization here also localize the other values (asString, ...)
+                jsonObject.add(key, new JsonPrimitive(localize(value)));
             }
         }
         return jsonObject;
@@ -181,8 +190,7 @@ public class DataUtils
     /**
      * <p>
      * Retrieves an element from the JSON representation of current test data using the given JsonPath expression and in
-     * case such an element was found, it will be returned as instance of the given class, filled with appropriate
-     * values.
+     * case such an element was found, it will be returned as instance of the given class, filled with appropriate values.
      * </p>
      * <b>Example:</b>
      * 
@@ -204,14 +212,7 @@ public class DataUtils
         try
         {
             T dataObject = JsonPath.using(JSONPATH_CONFIGURATION).parse(getDataAsJsonObject()).read(jsonPath, clazz);
-
-            if (Neodymium.configuration().addTestDataToReport())
-            {
-                if (!getAllureAllDataUsedFlag())
-                {
-                    AllureAddons.addDataAsJsonToReport("Testdata (" + jsonPath + ")", dataObject);
-                }
-            }
+            addAttachment(jsonPath, dataObject);
 
             return dataObject;
         }
@@ -262,6 +263,7 @@ public class DataUtils
         {
             throw new IllegalArgumentException("Test data could not be found for key: " + key);
         }
+        addAttachment(key, localize(value));
 
         return value;
     }
@@ -283,6 +285,7 @@ public class DataUtils
         }
         catch (IllegalArgumentException e)
         {
+            addAttachment(key, localize(defaultValue));
             return defaultValue;
         }
     }
@@ -318,6 +321,7 @@ public class DataUtils
         }
         catch (IllegalArgumentException e)
         {
+            addAttachment(key, defaultValue);
             return defaultValue;
         }
     }
@@ -353,6 +357,7 @@ public class DataUtils
         }
         catch (IllegalArgumentException e)
         {
+            addAttachment(key, defaultValue);
             return defaultValue;
         }
     }
@@ -388,6 +393,7 @@ public class DataUtils
         }
         catch (IllegalArgumentException e)
         {
+            addAttachment(key, defaultValue);
             return defaultValue;
         }
     }
@@ -423,6 +429,7 @@ public class DataUtils
         }
         catch (IllegalArgumentException e)
         {
+            addAttachment(key, defaultValue);
             return defaultValue;
         }
     }
@@ -458,7 +465,42 @@ public class DataUtils
         }
         catch (IllegalArgumentException e)
         {
+            addAttachment(key, defaultValue);
             return defaultValue;
         }
+    }
+
+    /**
+     * Attach the given data named with the given name to the Allure report. The data will only be added if test data should
+     * be added is configured and the data wasn't added already as complete set.
+     *
+     * @param name
+     *            the name the test data file should have in the report
+     * @param data
+     *            the actual test data that should be attached
+     */
+    private static void addAttachment(String name, Object data)
+    {
+        // if the data doesn't need to be added return
+        if (!Neodymium.configuration().addTestDataToReport() || getAllureAllDataUsedFlag())
+        {
+            return;
+        }
+
+        // add the new data
+        AllureAddons.addDataAsJsonToReport("Testdata (" + name + ")", data);
+    }
+
+    /**
+     * Localize the given String. If no localization is found return the initial value.
+     * 
+     * @param value
+     *            the String to localize
+     * @return the localized String or the initial value if no localization was found
+     */
+    private static String localize(String value)
+    {
+        String localizedString = Neodymium.localizedTextUnchecked(value);
+        return localizedString != null ? localizedString : value;
     }
 }
