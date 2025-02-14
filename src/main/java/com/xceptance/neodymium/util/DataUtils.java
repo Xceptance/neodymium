@@ -1,28 +1,13 @@
 package com.xceptance.neodymium.util;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.WeakHashMap;
+import static com.xceptance.neodymium.util.AllureAddons.addDataAsJsonToReport;
 
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.RandomStringGenerator;
 import org.apache.commons.text.TextRandomProvider;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonSyntaxException;
-import com.jayway.jsonpath.Configuration;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.PathNotFoundException;
-import com.jayway.jsonpath.spi.json.GsonJsonProvider;
-import com.jayway.jsonpath.spi.mapper.GsonMappingProvider;
-
-import io.qameta.allure.Allure;
 
 /**
  * Class with util methods for test data
@@ -31,33 +16,6 @@ import io.qameta.allure.Allure;
  */
 public class DataUtils
 {
-    // GsonBuilder().serializeNulls needed to keep explicit null values within Json objects
-    private final static Gson GSON = new GsonBuilder().serializeNulls().create();
-
-    private static final Map<Thread, Boolean> ALLURE_ALL_DATA_USED_FLAG = Collections.synchronizedMap(new WeakHashMap<>());
-
-    private final static Configuration JSONPATH_CONFIGURATION = Configuration.builder().jsonProvider(new GsonJsonProvider(GSON))
-                                                                             .mappingProvider(new GsonMappingProvider(GSON)).build();
-
-    static Boolean getAllureAllDataUsedFlag()
-    {
-        Boolean isUsed = ALLURE_ALL_DATA_USED_FLAG.get(Thread.currentThread());
-        return isUsed == null ? false : isUsed;
-    }
-
-    static Boolean setAllureAllDataUsedFlag(Boolean allureAllDataUsedFlag)
-    {
-        return ALLURE_ALL_DATA_USED_FLAG.put(Thread.currentThread(), allureAllDataUsedFlag);
-    }
-
-    /**
-     * Clears the context instance for the current Thread. <br>
-     */
-    public static void clearThreadContext()
-    {
-        ALLURE_ALL_DATA_USED_FLAG.remove(Thread.currentThread());
-    }
-
     /**
      * Returns a random email address. <br>
      * The random part contains characters that would match the following regular expression: \[a-z0-9]*\<br>
@@ -65,7 +23,7 @@ public class DataUtils
      * neodymium.dataUtils.email.randomCharsAmount = 12<br>
      * neodymium.dataUtils.email.local.prefix = test<br>
      * neodymium.dataUtils.email.domain = varmail.de
-     * 
+     *
      * @return random email
      */
     public static String randomEmail()
@@ -80,7 +38,10 @@ public class DataUtils
         sb.append("@");
         sb.append(Neodymium.configuration().dataUtilsEmailDomain());
 
-        return sb.toString().toLowerCase();
+        String generatedEmail = sb.toString().toLowerCase();
+        addDataAsJsonToReport("Testdata: random email", generatedEmail);
+
+        return generatedEmail;
     }
 
     /**
@@ -91,7 +52,7 @@ public class DataUtils
      * neodymium.dataUtils.password.digitAmount = 2 <br>
      * neodymium.dataUtils.password.specialCharAmount = 2 <br>
      * neodymium.dataUtils.password.specialChars = +-#$%&amp;.;,_
-     * 
+     *
      * @return a password
      */
     public static String randomPassword()
@@ -117,44 +78,27 @@ public class DataUtils
         final char[] all = (upper + lower + number + special).toCharArray();
         ArrayUtils.shuffle(all, Neodymium.getRandom());
 
-        return new String(all);
+        String generatedPassword = new String(all);
+        addDataAsJsonToReport("Testdata: random password", generatedPassword);
+
+        return generatedPassword;
     }
 
     /**
-     * Returns the available test data as JsonObject
+     * Returns the available test data as JsonObject.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().getDataAsJsonObject();} instead
      * 
      * @return a JsonObject representing the available test data
      */
+    @Deprecated
     public static JsonObject getDataAsJsonObject()
     {
-        final Map<String, String> data = Neodymium.getData();
-        final JsonObject jsonObject = new JsonObject();
-
-        // iterate over every data entry and parse the entries to prepare complex structures for object mapping
-        for (Iterator<String> iterator = data.keySet().iterator(); iterator.hasNext();)
-        {
-            final String key = iterator.next();
-            final String value = data.get(key);
-            final String trimmedValue = StringUtils.defaultString(value).trim();
-
-            if (value == null)
-            {
-                jsonObject.add(key, null);
-            }
-            else if (trimmedValue.startsWith("{") || trimmedValue.startsWith("["))
-            {
-                jsonObject.add(key, JsonParser.parseString(value));
-            }
-            else
-            {
-                jsonObject.add(key, new JsonPrimitive(value));
-            }
-        }
-        return jsonObject;
+        return Neodymium.getData().getDataAsJsonObject();
     }
 
     /**
-     * Returns data for the data type requested
+     * Returns data for the data type requested.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().get(clazz);} instead
      * 
      * @param <T>
      *            the inferred type
@@ -163,33 +107,27 @@ public class DataUtils
      * @return an instance of the class provided
      * @throws JsonSyntaxException
      */
+    @Deprecated
     public static <T> T get(final Class<T> clazz)
     {
-        String dataObjectJson = getDataAsJsonObject().toString();
-
-        if (Neodymium.configuration().addTestDataToReport())
-        {
-            Allure.addAttachment("Testdata", "text/html", convertJsonToHtml(dataObjectJson), "html");
-
-            // to check if whole test data object is used
-            setAllureAllDataUsedFlag(true);
-        }
-
-        return GSON.fromJson(dataObjectJson, clazz);
+        return Neodymium.getData().get(clazz);
     }
 
     /**
      * <p>
      * Retrieves an element from the JSON representation of current test data using the given JsonPath expression and in
-     * case such an element was found, it will be returned as instance of the given class, filled with appropriate
-     * values.
+     * case such an element was found, it will be returned as instance of the given class, filled with appropriate values.
      * </p>
      * <b>Example:</b>
      * 
      * <pre>
+     * {@code
      * TestCreditCard creditCard = DataUtils.get("$.creditCard", TestCreditCard.class);
      * Assert.assertEquals("4111111111111111", creditCard.getCardNumber());
+     * }
      * </pre>
+     * 
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().get(jsonPath, clazz);} instead
      * 
      * @param <T>
      *            The inferred type
@@ -199,55 +137,43 @@ public class DataUtils
      *            A reference to an class that should be instantiated and filled from test data
      * @return an instance of the class provided or null
      */
+    @Deprecated
     public static <T> T get(final String jsonPath, final Class<T> clazz)
     {
-        try
-        {
-            T dataObject = JsonPath.using(JSONPATH_CONFIGURATION).parse(getDataAsJsonObject()).read(jsonPath, clazz);
-
-            if (Neodymium.configuration().addTestDataToReport())
-            {
-                if (!getAllureAllDataUsedFlag())
-                {
-                    AllureAddons.addDataAsJsonToReport("Testdata (" + jsonPath + ")", dataObject);
-                }
-            }
-
-            return dataObject;
-        }
-        catch (PathNotFoundException e)
-        {
-            return null;
-        }
+        return Neodymium.getData().get(jsonPath, clazz);
     }
 
     /**
+     * Converts the json String to html.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().convertJsonToHtml(json);} instead
+     *
      * @param json
      *            as a string
      * @return the string of the to html converted json
      */
+    @Deprecated
     public static String convertJsonToHtml(String json)
     {
-        return ""
-               + "<div id=\"json-viewer\"></div>"
-               + "<script src=\"https://cdn.jsdelivr.net/npm/@textea/json-viewer@3\"></script>"
-               + "<script>new JsonViewer({value:" + json + "}).render('#json-viewer')</script>";
+        return Neodymium.getData().convertJsonToHtml(json);
     }
 
     /**
-     * Check if a certain key exist within the data set
+     * Check if a certain key exist within the data set.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().exists(key);} instead
      * 
      * @param key
      *            Name of the test data key
      * @return true if the key was found and false otherwise
      */
+    @Deprecated
     public static boolean exists(String key)
     {
-        return Neodymium.dataValue(key) != null;
+        return Neodymium.getData().exists(key);
     }
 
     /**
-     * Get a test data value as {@link String}
+     * Get a test data value as {@link String}.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asString(key);} instead
      * 
      * @param key
      *            Name of the test data key
@@ -255,19 +181,15 @@ public class DataUtils
      * @throws IllegalArgumentException
      *             if the key was NOT found
      */
+    @Deprecated
     public static String asString(String key)
     {
-        final String value = Neodymium.dataValue(key);
-        if (value == null)
-        {
-            throw new IllegalArgumentException("Test data could not be found for key: " + key);
-        }
-
-        return value;
+        return Neodymium.getData().asString(key);
     }
 
     /**
-     * Get a test data value as string or default value if it couldn't be found
+     * Get a test data value as string or default value if it couldn't be found.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asString(key, defaultValue);} instead
      * 
      * @param key
      *            Name of test data key
@@ -275,190 +197,169 @@ public class DataUtils
      *            a value that will be returned if the key was not found
      * @return mapped value as {@link String} if the key was found else defaultValue
      */
+    @Deprecated
     public static String asString(String key, String defaultValue)
     {
-        try
-        {
-            return asString(key);
-        }
-        catch (IllegalArgumentException e)
-        {
-            return defaultValue;
-        }
+        return Neodymium.getData().asString(key, defaultValue);
     }
 
     /**
-     * Get a test data value as int
-     * 
+     * Get a test data value as int.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asInt(key);} instead
+     *
      * @param key
      *            Name of the test data key
      * @return mapped value as int if the key was found
      * @throws IllegalArgumentException
      *             if the key was NOT found
      */
+    @Deprecated
     public static int asInt(String key)
     {
-        return Integer.parseInt(asString(key));
+        return Neodymium.getData().asInt(key);
     }
 
     /**
-     * Get a test data value as int or default value if it couldn't be found
-     * 
+     * Get a test data value as int or default value if it couldn't be found.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asInt(key, defaultValue);} instead
+     *
      * @param key
      *            Name of test data key
      * @param defaultValue
      *            a value that will be returned if the key was not found
      * @return mapped value as int if the key was found else defaultValue
      */
+    @Deprecated
     public static int asInt(String key, int defaultValue)
     {
-        try
-        {
-            return asInt(key);
-        }
-        catch (IllegalArgumentException e)
-        {
-            return defaultValue;
-        }
+        return Neodymium.getData().asInt(key, defaultValue);
     }
 
     /**
-     * Get a test data value as long
-     * 
+     * Get a test data value as long.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asLong(key);} instead
+     *
      * @param key
      *            Name of the test data key
      * @return mapped value as long if the key was found
      * @throws IllegalArgumentException
      *             if the key was NOT found
      */
+    @Deprecated
     public static long asLong(String key)
     {
-        return Long.parseLong(asString(key));
+        return Neodymium.getData().asLong(key);
     }
 
     /**
-     * Get a test data value as long or default value if it couldn't be found
-     * 
+     * Get a test data value as long or default value if it couldn't be found.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asLong(key, defaultValue);} instead
+     *
      * @param key
      *            Name of test data key
      * @param defaultValue
      *            a value that will be returned if the key was not found
      * @return mapped value as long if the key was found else defaultValue
      */
+    @Deprecated
     public static long asLong(String key, long defaultValue)
     {
-        try
-        {
-            return asLong(key);
-        }
-        catch (IllegalArgumentException e)
-        {
-            return defaultValue;
-        }
+        return Neodymium.getData().asLong(key, defaultValue);
     }
 
     /**
-     * Get a test data value as double
-     * 
+     * Get a test data value as double.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asDouble(key);} instead
+     *
      * @param key
      *            Name of the test data key
      * @return mapped value as double if the key was found
      * @throws IllegalArgumentException
      *             if the key was NOT found
      */
+    @Deprecated
     public static double asDouble(String key)
     {
-        return Double.parseDouble(asString(key));
+        return Neodymium.getData().asDouble(key);
     }
 
     /**
-     * Get a test data value as double or default value if it couldn't be found
-     * 
+     * Get a test data value as double or default value if it couldn't be found.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asDouble(key, defaultValue);} instead
+     *
      * @param key
      *            Name of test data key
      * @param defaultValue
      *            a value that will be returned if the key was not found
      * @return mapped value as double if the key was found else defaultValue
      */
+    @Deprecated
     public static double asDouble(String key, double defaultValue)
     {
-        try
-        {
-            return asDouble(key);
-        }
-        catch (IllegalArgumentException e)
-        {
-            return defaultValue;
-        }
+        return Neodymium.getData().asDouble(key, defaultValue);
     }
 
     /**
-     * Get a test data value as float
-     * 
+     * Get a test data value as float.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asFloat(key);} instead
+     *
      * @param key
      *            Name of the test data key
      * @return mapped value as float if the key was found
      * @throws IllegalArgumentException
      *             if the key was NOT found
      */
+    @Deprecated
     public static float asFloat(String key)
     {
-        return Float.parseFloat(asString(key));
+        return Neodymium.getData().asFloat(key);
     }
 
     /**
-     * Get a test data value as float or default value if it couldn't be found
-     * 
+     * Get a test data value as float or default value if it couldn't be found.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asFloat(key, defaultValue);} instead
+     *
      * @param key
      *            Name of test data key
      * @param defaultValue
      *            a value that will be returned if the key was not found
      * @return mapped value as float if the key was found else defaultValue
      */
+    @Deprecated
     public static float asFloat(String key, float defaultValue)
     {
-        try
-        {
-            return asFloat(key);
-        }
-        catch (IllegalArgumentException e)
-        {
-            return defaultValue;
-        }
+        return Neodymium.getData().asFloat(key, defaultValue);
     }
 
     /**
-     * Get a test data value as boolean
-     * 
+     * Get a test data value as boolean.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asBoolean(key);} instead
+     *
      * @param key
      *            Name of the test data key
      * @return mapped value as boolean if the key was found
      * @throws IllegalArgumentException
      *             if the key was NOT found
      */
+    @Deprecated
     public static boolean asBool(String key)
     {
-        return Boolean.parseBoolean(asString(key));
+        return Neodymium.getData().asBoolean(key);
     }
 
     /**
-     * Get a test data value as boolean or default value if it couldn't be found
-     * 
+     * Get a test data value as boolean or default value if it couldn't be found.<br>
+     * Will be deprecated in the next version. Use {@code Neodymium.getData().asBoolean(key, defaultValue);} instead
+     *
      * @param key
      *            Name of test data key
      * @param defaultValue
      *            a value that will be returned if the key was not found
      * @return mapped value as boolean if the key was found else defaultValue
      */
+    @Deprecated
     public static boolean asBool(String key, boolean defaultValue)
     {
-        try
-        {
-            return asBool(key);
-        }
-        catch (IllegalArgumentException e)
-        {
-            return defaultValue;
-        }
+        return Neodymium.getData().asBoolean(key, defaultValue);
     }
 }

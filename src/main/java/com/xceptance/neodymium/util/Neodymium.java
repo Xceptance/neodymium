@@ -1,7 +1,6 @@
 package com.xceptance.neodymium.util;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.WeakHashMap;
@@ -55,7 +54,7 @@ public class Neodymium
     private final NeodymiumLocalization localization;
 
     // our data for anywhere access
-    private final Map<String, String> data = new HashMap<>();
+    private final TestData data = new TestData();
 
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "neodymium.temporaryConfigFile";
 
@@ -93,7 +92,6 @@ public class Neodymium
     {
         CONTEXTS.remove(Thread.currentThread());
         TestStepListener.clearLastUrl();
-        DataUtils.clearThreadContext();
     }
 
     /**
@@ -131,7 +129,7 @@ public class Neodymium
      * 
      * @return dataMap
      */
-    public static Map<String, String> getData()
+    public static TestData getData()
     {
         return getContext().data;
     }

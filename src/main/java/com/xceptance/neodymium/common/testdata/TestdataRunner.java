@@ -28,6 +28,9 @@ public class TestdataRunner
         if (testData != null)
         {
             Neodymium.getData().putAll(testData.getDataSet());
+
+            // add the test data as JSON to the allure report
+            Neodymium.getData().addAttachmentJson();
             initializeDataObjects(testClassInstance);
         }
         else
