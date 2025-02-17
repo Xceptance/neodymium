@@ -1,4 +1,4 @@
-package com.xceptance.neodymium.util;
+package com.xceptance.neodymium.common.testdata;
 
 import java.util.HashMap;
 
@@ -15,6 +15,7 @@ import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 import com.jayway.jsonpath.spi.json.GsonJsonProvider;
 import com.jayway.jsonpath.spi.mapper.GsonMappingProvider;
+import com.xceptance.neodymium.util.Neodymium;
 
 import io.qameta.allure.Allure;
 
@@ -25,6 +26,8 @@ public class TestData extends HashMap<String, String>
 
     private final static Configuration JSONPATH_CONFIGURATION = Configuration.builder().jsonProvider(new GsonJsonProvider(GSON))
                                                                              .mappingProvider(new GsonMappingProvider(GSON)).build();
+
+    private boolean testDataUsed = false;
 
     /**
      * Returns the available test data as JsonObject.
@@ -54,6 +57,9 @@ public class TestData extends HashMap<String, String>
                 jsonObject.add(key, new JsonPrimitive(value));
             }
         }
+
+        testDataUsed = true;
+
         return jsonObject;
     }
 
@@ -70,6 +76,7 @@ public class TestData extends HashMap<String, String>
     public <T> T get(final Class<T> clazz)
     {
         String dataObjectJson = getDataAsJsonObject().toString();
+        testDataUsed = true;
 
         return GSON.fromJson(dataObjectJson, clazz);
     }
@@ -101,6 +108,7 @@ public class TestData extends HashMap<String, String>
         try
         {
             T dataObject = JsonPath.using(JSONPATH_CONFIGURATION).parse(getDataAsJsonObject()).read(jsonPath, clazz);
+            testDataUsed = true;
             return dataObject;
         }
         catch (PathNotFoundException e)
@@ -150,6 +158,8 @@ public class TestData extends HashMap<String, String>
         {
             throw new IllegalArgumentException("Test data could not be found for key: " + key);
         }
+
+        testDataUsed = true;
 
         return value;
     }
@@ -357,11 +367,21 @@ public class TestData extends HashMap<String, String>
     public void addAttachmentJson()
     {
         // if the data doesn't need to be added return
-        if (!Neodymium.configuration().addTestDataToReport())
+        if (!Neodymium.configuration().addTestDataToReport() || !testDataUsed)
         {
             return;
         }
 
         Allure.addAttachment("Testdata", "text/html", convertJsonToHtml(getDataAsJsonObject().toString()), "html");
+    }
+
+    /**
+     * Set the test data used flag to true. When the test finishes and the flag is true, the test data will be appended to
+     * the Allure report. A call of this function should not be necessary since all methods accessing the test data are also
+     * updating the flag.
+     */
+    public void setTestDataUsed()
+    {
+        this.testDataUsed = true;
     }
 }

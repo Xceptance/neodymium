@@ -18,6 +18,7 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
+import com.xceptance.neodymium.common.testdata.TestData;
 
 /**
  * See our Github wiki: <a href="https://github.com/Xceptance/neodymium-library/wiki/Neodymium-context">Neodymium
@@ -125,13 +126,26 @@ public class Neodymium
     }
 
     /**
-     * Get the complete test data set
+     * Get the complete test data set.<br>
+     * ATTENTION: does NOT set the flag to add the test data to the report. Use with care.
      * 
      * @return dataMap
      */
     public static TestData getData()
     {
         return getContext().data;
+    }
+
+    /**
+     * Get the complete test data set and add set the flag to attach the test data to the report after the test finished.
+     *
+     * @return dataMap
+     */
+    public static TestData getDataAndAddToReport()
+    {
+        TestData testData = getData();
+        testData.setTestDataUsed();
+        return testData;
     }
 
     /**
@@ -143,7 +157,7 @@ public class Neodymium
      */
     public static String dataValue(final String key)
     {
-        return getData().get(key);
+        return getDataAndAddToReport().get(key);
     }
 
     /**
@@ -402,7 +416,7 @@ public class Neodymium
     /**
      * Tablet of any kind?
      * 
-     * @return boolean value boolean value indicating whether it is a tablet device/large phone or not
+     * @return boolean value indicating whether it is a tablet device/large phone or not
      * @see Neodymium
      */
     public static boolean isTablet()
