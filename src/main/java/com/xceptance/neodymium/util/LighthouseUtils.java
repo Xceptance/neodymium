@@ -21,6 +21,8 @@ import com.jayway.jsonpath.PathNotFoundException;
 
 import io.qameta.allure.Allure;
 
+import static com.xceptance.neodymium.util.DataUtils.JSONPATH_CONFIGURATION;
+
 /**
  * Powered by <a href="https://developer.chrome.com/docs/lighthouse/overview?hl=de">Lighthouse</a> (Copyright Google)
  * <p>
@@ -254,8 +256,7 @@ public class LighthouseUtils
                 
                 try 
                 {
-                    int value = JsonPath.read(json, jsonPath);
-                    
+                    long value =  JsonPath.using(JSONPATH_CONFIGURATION).parse(json).read(jsonPath);
                     if (value > 0) 
                     {
                         errorAudits.add(audit.trim());
