@@ -1,13 +1,8 @@
 package com.xceptance.neodymium.util;
 
-import static com.xceptance.neodymium.util.AllureAddons.addDataAsJsonToReport;
-
-import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.text.RandomStringGenerator;
-import org.apache.commons.text.TextRandomProvider;
-
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
+import com.xceptance.neodymium.common.testdata.TestData;
 
 /**
  * Class with util methods for test data
@@ -22,26 +17,16 @@ public class DataUtils
      * The length of the random part, a prefix and the domain can be configured within neodymium.properties: <br>
      * neodymium.dataUtils.email.randomCharsAmount = 12<br>
      * neodymium.dataUtils.email.local.prefix = test<br>
-     * neodymium.dataUtils.email.domain = varmail.de
+     * neodymium.dataUtils.email.domain = varmail.de<br>
+     * <br>
+     * Will be deprecated in the next version. Use {@code TestData.randomEmail();} instead
      *
      * @return random email
      */
+    @Deprecated
     public static String randomEmail()
     {
-        final String randomPart = new RandomStringGenerator.Builder().usingRandom((TextRandomProvider) Neodymium.getRandom())
-                                                                     .selectFrom("abcdefghijklmnopqrstuvwxyz0123456789".toCharArray()).build()
-                                                                     .generate(Neodymium.configuration().dataUtilsEmailRandomCharsAmount());
-
-        final StringBuilder sb = new StringBuilder(42);
-        sb.append(Neodymium.configuration().dataUtilsEmailLocalPrefix());
-        sb.append(randomPart);
-        sb.append("@");
-        sb.append(Neodymium.configuration().dataUtilsEmailDomain());
-
-        String generatedEmail = sb.toString().toLowerCase();
-        addDataAsJsonToReport("Testdata: random email", generatedEmail);
-
-        return generatedEmail;
+        return TestData.randomEmail();
     }
 
     /**
@@ -51,37 +36,16 @@ public class DataUtils
      * neodymium.dataUtils.password.lowercaseCharAmount = 5 <br>
      * neodymium.dataUtils.password.digitAmount = 2 <br>
      * neodymium.dataUtils.password.specialCharAmount = 2 <br>
-     * neodymium.dataUtils.password.specialChars = +-#$%&amp;.;,_
-     *
+     * neodymium.dataUtils.password.specialChars = +-#$%&amp;.;,_ <br>
+     * <br>
+     * Will be deprecated in the next version. Use {@code TestData.randomPassword();} instead
+     * 
      * @return a password
      */
+    @Deprecated
     public static String randomPassword()
     {
-        TextRandomProvider textRandomProvider = (TextRandomProvider) Neodymium.getRandom();
-
-        final String upper = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
-                                                                .selectFrom("abcdefghijklmnopqrstuvwxyz".toUpperCase().toCharArray()).build()
-                                                                .generate(Neodymium.configuration().dataUtilsPasswordUppercaseCharAmount());
-
-        final String lower = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
-                                                                .selectFrom("abcdefghijklmnopqrstuvwxyz".toCharArray()).build()
-                                                                .generate(Neodymium.configuration().dataUtilsPasswordLowercaseCharAmount());
-
-        final String number = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
-                                                                 .selectFrom("0123456789".toCharArray()).build()
-                                                                 .generate(Neodymium.configuration().dataUtilsPasswordDigitAmount());
-
-        final String special = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
-                                                                  .selectFrom(Neodymium.configuration().dataUtilsPasswordSpecialChars().toCharArray()).build()
-                                                                  .generate(Neodymium.configuration().dataUtilsPasswordSpecialCharAmount());
-
-        final char[] all = (upper + lower + number + special).toCharArray();
-        ArrayUtils.shuffle(all, Neodymium.getRandom());
-
-        String generatedPassword = new String(all);
-        addDataAsJsonToReport("Testdata: random password", generatedPassword);
-
-        return generatedPassword;
+        return TestData.randomPassword();
     }
 
     /**

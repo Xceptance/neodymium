@@ -1,8 +1,14 @@
 package com.xceptance.neodymium.common.testdata;
 
+import static com.xceptance.neodymium.util.AllureAddons.addDataAsJsonToReport;
+
+import java.io.Serial;
 import java.util.HashMap;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.RandomStringGenerator;
+import org.apache.commons.text.TextRandomProvider;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -19,8 +25,16 @@ import com.xceptance.neodymium.util.Neodymium;
 
 import io.qameta.allure.Allure;
 
+/**
+ * TestData class to store the test data in a {@link HashMap}. It provides utility methods to access the data and can
+ * convert it automatically to most of the primitive data types. Furthermore, the test data will be attached to the
+ * Allure report if it was used.
+ */
 public class TestData extends HashMap<String, String>
 {
+    @Serial
+    private static final long serialVersionUID = 715832694087529134L;
+
     // GsonBuilder().serializeNulls needed to keep explicit null values within Json objects
     private final static Gson GSON = new GsonBuilder().serializeNulls().create();
 
@@ -28,6 +42,74 @@ public class TestData extends HashMap<String, String>
                                                                              .mappingProvider(new GsonMappingProvider(GSON)).build();
 
     private boolean testDataUsed = false;
+
+    /**
+     * Returns a random email address. <br>
+     * The random part contains characters that would match the following regular expression: \[a-z0-9]*\<br>
+     * The length of the random part, a prefix and the domain can be configured within neodymium.properties: <br>
+     * neodymium.dataUtils.email.randomCharsAmount = 12<br>
+     * neodymium.dataUtils.email.local.prefix = test<br>
+     * neodymium.dataUtils.email.domain = varmail.de
+     *
+     * @return random email
+     */
+    public static String randomEmail()
+    {
+        final String randomPart = new RandomStringGenerator.Builder().usingRandom((TextRandomProvider) Neodymium.getRandom())
+                                                                     .selectFrom("abcdefghijklmnopqrstuvwxyz0123456789".toCharArray()).build()
+                                                                     .generate(Neodymium.configuration().dataUtilsEmailRandomCharsAmount());
+
+        final StringBuilder sb = new StringBuilder(42);
+        sb.append(Neodymium.configuration().dataUtilsEmailLocalPrefix());
+        sb.append(randomPart);
+        sb.append("@");
+        sb.append(Neodymium.configuration().dataUtilsEmailDomain());
+
+        String generatedEmail = sb.toString().toLowerCase();
+        addDataAsJsonToReport("Testdata: random email", generatedEmail);
+
+        return generatedEmail;
+    }
+
+    /**
+     * A random password that is strong enough for most services <br>
+     * The following parts can be configured within neodymium.properties: <br>
+     * neodymium.dataUtils.password.uppercaseCharAmount = 2 <br>
+     * neodymium.dataUtils.password.lowercaseCharAmount = 5 <br>
+     * neodymium.dataUtils.password.digitAmount = 2 <br>
+     * neodymium.dataUtils.password.specialCharAmount = 2 <br>
+     * neodymium.dataUtils.password.specialChars = +-#$%&amp;.;,_
+     *
+     * @return a password
+     */
+    public static String randomPassword()
+    {
+        TextRandomProvider textRandomProvider = (TextRandomProvider) Neodymium.getRandom();
+
+        final String upper = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
+                                                                .selectFrom("abcdefghijklmnopqrstuvwxyz".toUpperCase().toCharArray()).build()
+                                                                .generate(Neodymium.configuration().dataUtilsPasswordUppercaseCharAmount());
+
+        final String lower = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
+                                                                .selectFrom("abcdefghijklmnopqrstuvwxyz".toCharArray()).build()
+                                                                .generate(Neodymium.configuration().dataUtilsPasswordLowercaseCharAmount());
+
+        final String number = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
+                                                                 .selectFrom("0123456789".toCharArray()).build()
+                                                                 .generate(Neodymium.configuration().dataUtilsPasswordDigitAmount());
+
+        final String special = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
+                                                                  .selectFrom(Neodymium.configuration().dataUtilsPasswordSpecialChars().toCharArray()).build()
+                                                                  .generate(Neodymium.configuration().dataUtilsPasswordSpecialCharAmount());
+
+        final char[] all = (upper + lower + number + special).toCharArray();
+        ArrayUtils.shuffle(all, Neodymium.getRandom());
+
+        String generatedPassword = new String(all);
+        addDataAsJsonToReport("Testdata: random password", generatedPassword);
+
+        return generatedPassword;
+    }
 
     /**
      * Returns the available test data as JsonObject.
@@ -100,7 +182,7 @@ public class TestData extends HashMap<String, String>
      * @param jsonPath
      *            The JsonPath leading to the requested object
      * @param clazz
-     *            A reference to an class that should be instantiated and filled from test data
+     *            A reference to a class that should be instantiated and filled from test data
      * @return an instance of the class provided or null
      */
     public <T> T get(final String jsonPath, final Class<T> clazz)
