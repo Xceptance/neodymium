@@ -159,7 +159,15 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         }
 
         // reset the random seed so every test starts with the same values for better reproducibility
-        NeodymiumRandom.setSeed(Neodymium.configuration().initialRandomValue());
+        if (Neodymium.configuration().initialRandomValue() != null)
+        {
+            NeodymiumRandom.setSeed(Neodymium.configuration().initialRandomValue());
+        }
+        else
+        {
+            // set the initial random seed again if no seed is given in the property to make also the random seeds reproducible
+            NeodymiumRandom.setSeed(NeodymiumRandom.getSeed());
+        }
 
         return methodStatement;
     }

@@ -72,7 +72,16 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
         Neodymium.clearThreadContext();
 
         // reset the random seed so every test starts with the same values for better reproducibility
-        NeodymiumRandom.setSeed(Neodymium.configuration().initialRandomValue());
+        if (Neodymium.configuration().initialRandomValue() != null)
+        {
+            // set the seed from the properties
+            NeodymiumRandom.setSeed(Neodymium.configuration().initialRandomValue());
+        }
+        else
+        {
+            // set the initial random seed again if no seed is given in the property to make also the random seeds reproducible
+            NeodymiumRandom.setSeed(NeodymiumRandom.getSeed());
+        }
 
         Class<?> testClass = context.getRequiredTestClass();
         Method templateMethod = context.getRequiredTestMethod();
