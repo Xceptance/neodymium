@@ -38,7 +38,7 @@ public class TestData extends HashMap<String, String>
     // GsonBuilder().serializeNulls needed to keep explicit null values within Json objects
     private final static Gson GSON = new GsonBuilder().serializeNulls().create();
 
-    private final static Configuration JSONPATH_CONFIGURATION = Configuration.builder().jsonProvider(new GsonJsonProvider(GSON))
+    public final static Configuration JSONPATH_CONFIGURATION = Configuration.builder().jsonProvider(new GsonJsonProvider(GSON))
                                                                              .mappingProvider(new GsonMappingProvider(GSON)).build();
 
     private boolean testDataUsed = false;
@@ -47,9 +47,9 @@ public class TestData extends HashMap<String, String>
      * Returns a random email address. <br>
      * The random part contains characters that would match the following regular expression: \[a-z0-9]*\<br>
      * The length of the random part, a prefix and the domain can be configured within neodymium.properties: <br>
-     * neodymium.dataUtils.email.randomCharsAmount = 12<br>
-     * neodymium.dataUtils.email.local.prefix = test<br>
-     * neodymium.dataUtils.email.domain = varmail.de
+     * neodymium.testData.email.randomCharsAmount = 12<br>
+     * neodymium.testData.email.local.prefix = test<br>
+     * neodymium.testData.email.domain = varmail.de
      *
      * @return random email
      */
@@ -57,13 +57,13 @@ public class TestData extends HashMap<String, String>
     {
         final String randomPart = new RandomStringGenerator.Builder().usingRandom((TextRandomProvider) Neodymium.getRandom())
                                                                      .selectFrom("abcdefghijklmnopqrstuvwxyz0123456789".toCharArray()).build()
-                                                                     .generate(Neodymium.configuration().dataUtilsEmailRandomCharsAmount());
+                                                                     .generate(Neodymium.configuration().testDataEmailRandomCharsAmount());
 
         final StringBuilder sb = new StringBuilder(42);
-        sb.append(Neodymium.configuration().dataUtilsEmailLocalPrefix());
+        sb.append(Neodymium.configuration().testDataEmailLocalPrefix());
         sb.append(randomPart);
         sb.append("@");
-        sb.append(Neodymium.configuration().dataUtilsEmailDomain());
+        sb.append(Neodymium.configuration().testDataEmailDomain());
 
         String generatedEmail = sb.toString().toLowerCase();
         addDataAsJsonToReport("Testdata: random email", generatedEmail);
@@ -74,11 +74,11 @@ public class TestData extends HashMap<String, String>
     /**
      * A random password that is strong enough for most services <br>
      * The following parts can be configured within neodymium.properties: <br>
-     * neodymium.dataUtils.password.uppercaseCharAmount = 2 <br>
-     * neodymium.dataUtils.password.lowercaseCharAmount = 5 <br>
-     * neodymium.dataUtils.password.digitAmount = 2 <br>
-     * neodymium.dataUtils.password.specialCharAmount = 2 <br>
-     * neodymium.dataUtils.password.specialChars = +-#$%&amp;.;,_
+     * neodymium.testData.password.uppercaseCharAmount = 2 <br>
+     * neodymium.testData.password.lowercaseCharAmount = 5 <br>
+     * neodymium.testData.password.digitAmount = 2 <br>
+     * neodymium.testData.password.specialCharAmount = 2 <br>
+     * neodymium.testData.password.specialChars = +-#$%&amp;.;,_
      *
      * @return a password
      */
@@ -88,19 +88,19 @@ public class TestData extends HashMap<String, String>
 
         final String upper = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
                                                                 .selectFrom("abcdefghijklmnopqrstuvwxyz".toUpperCase().toCharArray()).build()
-                                                                .generate(Neodymium.configuration().dataUtilsPasswordUppercaseCharAmount());
+                                                                .generate(Neodymium.configuration().testDataPasswordUppercaseCharAmount());
 
         final String lower = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
                                                                 .selectFrom("abcdefghijklmnopqrstuvwxyz".toCharArray()).build()
-                                                                .generate(Neodymium.configuration().dataUtilsPasswordLowercaseCharAmount());
+                                                                .generate(Neodymium.configuration().testDataPasswordLowercaseCharAmount());
 
         final String number = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
                                                                  .selectFrom("0123456789".toCharArray()).build()
-                                                                 .generate(Neodymium.configuration().dataUtilsPasswordDigitAmount());
+                                                                 .generate(Neodymium.configuration().testDataPasswordDigitAmount());
 
         final String special = new RandomStringGenerator.Builder().usingRandom(textRandomProvider)
-                                                                  .selectFrom(Neodymium.configuration().dataUtilsPasswordSpecialChars().toCharArray()).build()
-                                                                  .generate(Neodymium.configuration().dataUtilsPasswordSpecialCharAmount());
+                                                                  .selectFrom(Neodymium.configuration().testDataPasswordSpecialChars().toCharArray()).build()
+                                                                  .generate(Neodymium.configuration().testDataPasswordSpecialCharAmount());
 
         final char[] all = (upper + lower + number + special).toCharArray();
         ArrayUtils.shuffle(all, Neodymium.getRandom());
@@ -172,7 +172,7 @@ public class TestData extends HashMap<String, String>
      *
      * <pre>
      * {@code
-     * TestCreditCard creditCard = DataUtils.get("$.creditCard", TestCreditCard.class);
+     * TestCreditCard creditCard = Neodymium.getData().get("$.creditCard", TestCreditCard.class);
      * Assert.assertEquals("4111111111111111", creditCard.getCardNumber());
      * }
      * </pre>

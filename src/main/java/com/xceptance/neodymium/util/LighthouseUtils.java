@@ -1,5 +1,7 @@
 package com.xceptance.neodymium.util;
 
+import static com.xceptance.neodymium.common.testdata.TestData.JSONPATH_CONFIGURATION;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -20,8 +22,6 @@ import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 
 import io.qameta.allure.Allure;
-
-import static com.xceptance.neodymium.util.DataUtils.JSONPATH_CONFIGURATION;
 
 /**
  * Powered by <a href="https://developer.chrome.com/docs/lighthouse/overview?hl=de">Lighthouse</a> (Copyright Google)
