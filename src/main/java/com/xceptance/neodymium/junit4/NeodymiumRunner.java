@@ -41,9 +41,9 @@ import io.qameta.allure.selenide.AllureSelenide;
 
 /**
  * This class executes {@link JUnit4} test classes (aka JUnit Runner) and adds several features to test execution e.g.
- * multi {@link Browser browser} and
- * <a href="https://github.com/Xceptance/neodymium-library/wiki/Test-data-provider">test data</a>. Vanilla JUnit
- * parameterized tests are supported as well but only with parameter injection (as described here: <a href=
+ * multi {@link Browser browser} and <a href="https://github.com/Xceptance/neodymium/wiki/Test-data-provider">test
+ * data</a>. Vanilla JUnit parameterized tests are supported as well but only with parameter injection (as described
+ * here: <a href=
  * "https://github.com/junit-team/junit4/wiki/parameterized-tests#using-parameter-for-field-injection-instead-of-constructor">Using @Parameter
  * for Field injection instead of Constructor</a>). In order to run a {@link JUnit4} test with this runner the class or
  * its super-class has to be annotated with {@link RunWith}
@@ -100,7 +100,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
             if (!AllureAddons.envFileExists())
             {
                 LOGGER.info("This test uses Neodymium Library (version: " + Neodymium.getNeodymiumVersion()
-                            + "), MIT License, more details on https://github.com/Xceptance/neodymium-library");
+                            + "), MIT License, more details on https://github.com/Xceptance/neodymium");
                 neoVersionLogged = true;
                 AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder()
                                                                    .put("Testing Framework", "Neodymium " + Neodymium.getNeodymiumVersion())

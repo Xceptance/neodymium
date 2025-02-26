@@ -48,9 +48,9 @@ public class SelenideNetworkMockTest extends NeodymiumTest
         String textMock = "{here}";
         Selenide.open();
         WebDriverRunner.getSelenideProxy().responseMocker()
-                       .mockText("test mock", RequestMatchers.urlMatches(HttpMethod.GET, Pattern.compile(".*neodymium-library.*")),
+                       .mockText("test mock", RequestMatchers.urlMatches(HttpMethod.GET, Pattern.compile(".*neodymium.*")),
                                  () -> textMock);
-        Selenide.open("https://github.com/Xceptance/neodymium-library");
+        Selenide.open("https://github.com/Xceptance/neodymium");
         $("body").shouldHave(exactText(textMock));
         Selenide.open("https://blog.xceptance.com/");
         $("#masthead .search-toggle").shouldBe(visible);
