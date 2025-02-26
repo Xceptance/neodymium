@@ -36,6 +36,7 @@ import com.xceptance.neodymium.junit4.statement.browser.BrowserRunBefores;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.NeodymiumRandom;
 
 import io.qameta.allure.selenide.AllureSelenide;
 
@@ -156,6 +157,9 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
 
             // It's fine, just make sure super.methodBlock is called with this method and return the resulting statement
         }
+
+        // reset the random seed so every test starts with the same values for better reproducibility
+        NeodymiumRandom.setSeed(Neodymium.configuration().initialRandomValue());
 
         return methodStatement;
     }

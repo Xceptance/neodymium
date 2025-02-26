@@ -84,9 +84,9 @@ public class NeodymiumRandom
         protected InternalRandom initialValue()
         {
             Long configuredInitialValue = Neodymium.configuration().initialRandomValue();
-            long initalValue = configuredInitialValue == null ? System.currentTimeMillis() : configuredInitialValue;
+            long initialValue = configuredInitialValue == null ? System.currentTimeMillis() : configuredInitialValue;
 
-            return new InternalRandom(initalValue);
+            return new InternalRandom(initialValue);
         }
     };
 

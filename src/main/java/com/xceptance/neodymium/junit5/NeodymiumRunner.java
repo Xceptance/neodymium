@@ -15,6 +15,7 @@ import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.NeodymiumRandom;
 
 import io.qameta.allure.selenide.AllureSelenide;
 
@@ -69,6 +70,9 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
     {
         // clear the context before next child run
         Neodymium.clearThreadContext();
+
+        // reset the random seed so every test starts with the same values for better reproducibility
+        NeodymiumRandom.setSeed(Neodymium.configuration().initialRandomValue());
 
         Class<?> testClass = context.getRequiredTestClass();
         Method templateMethod = context.getRequiredTestMethod();
