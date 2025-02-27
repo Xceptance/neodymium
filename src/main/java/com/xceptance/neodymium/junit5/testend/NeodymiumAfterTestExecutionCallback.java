@@ -1,19 +1,17 @@
 package com.xceptance.neodymium.junit5.testend;
 
-import com.xceptance.neodymium.common.ScreenshotWriter;
-import com.xceptance.neodymium.util.Neodymium;
-import io.qameta.allure.Allure;
-import io.qameta.allure.AllureLifecycle;
-import io.qameta.allure.model.Attachment;
-import io.qameta.allure.model.StepResult;
+import static com.xceptance.neodymium.common.AllureResultProcessor.getAllureResultAttachments;
+
+import java.util.List;
+
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.LinkedList;
-import java.util.List;
+import com.xceptance.neodymium.common.ScreenshotWriter;
+import com.xceptance.neodymium.util.Neodymium;
+
+import io.qameta.allure.Allure;
+import io.qameta.allure.model.Attachment;
 
 public class NeodymiumAfterTestExecutionCallback implements AfterTestExecutionCallback
 {
@@ -22,6 +20,13 @@ public class NeodymiumAfterTestExecutionCallback implements AfterTestExecutionCa
     {
         ScreenshotWriter.doScreenshot(context.getRequiredTestMethod().getName(), context.getRequiredTestClass().getName(), context.getExecutionException(),
                                       context.getRequiredTestMethod().getAnnotations());
+
+        // TODO instead use the listeners AllureTestLifecycleListener and AllureContainerLifecycleListener to process the Allure
+        // results
+        // TODO to make them work, the files
+        // src/main/resources/META-INF/services/io.qameta.allure.listener.ContainerLifecycleListener and
+        // src/main/resources/META-INF/services/io.qameta.allure.listener.TestLifecycleListener
+        // must be added to the test resources directory in the test project
 
         // TODO this processes the attachments from the actual test. If the test fails in the before or after the attachments are NOT processed.
         // to do so, the corresponding callbacks need to be extended. Also the attachments there seam to not be part of the lifecycle but of the container instead.
@@ -42,59 +47,5 @@ public class NeodymiumAfterTestExecutionCallback implements AfterTestExecutionCa
         List<Attachment> attachments = getAllureResultAttachments();
 
         // TODO implement processing steps
-    }
-
-    /**
-     * Get the Allure attachments of the current test.
-     *
-     * @return List<Attachment> of the test
-     */
-    private List<Attachment> getAllureResultAttachments()
-    {
-        List<Attachment> attachments = new LinkedList<>();
-
-        AllureLifecycle lifecycle = Allure.getLifecycle();
-
-        // parse all steps and get the attachments
-        lifecycle.updateTestCase((result) -> {
-            List<Attachment> customAttachments = result.getAttachments();
-            attachments.addAll(customAttachments);
-
-            var steps = result.getSteps();
-
-            for (var step : steps)
-            {
-                attachments.addAll(traverseSteps(step));
-            }
-        });
-
-        return attachments;
-    }
-
-    /**
-     * Traverse all steps and get their attachments.
-     *
-     * @param step
-     *     the base/root step of the AllureLifecycle
-     * @return List<Attachment> of the steps
-     */
-    private List<Attachment> traverseSteps(StepResult step)
-    {
-        List<Attachment> attachments = new ArrayList<>();
-        Deque<StepResult> stepDeque = new ArrayDeque<>();
-        stepDeque.add(step);
-
-        // process all steps
-        while (!stepDeque.isEmpty())
-        {
-            // process the current step
-            StepResult currentStep = stepDeque.poll();
-            // get the attachments
-            attachments.addAll(currentStep.getAttachments());
-
-            // add all sibling steps
-            currentStep.getSteps().forEach(stepDeque::push);
-        }
-        return attachments;
     }
 }
