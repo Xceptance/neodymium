@@ -136,34 +136,42 @@ public interface NeodymiumConfiguration extends Mutable
 
     @Key("neodymium.dataUtils.email.domain")
     @DefaultValue("varmail.de")
+    @Deprecated
     public String dataUtilsEmailDomain();
 
     @Key("neodymium.dataUtils.email.local.prefix")
     @DefaultValue("test")
+    @Deprecated
     public String dataUtilsEmailLocalPrefix();
 
     @Key("neodymium.dataUtils.email.randomCharsAmount")
     @DefaultValue("12")
+    @Deprecated
     public int dataUtilsEmailRandomCharsAmount();
 
     @Key("neodymium.dataUtils.password.uppercaseCharAmount")
     @DefaultValue("2")
+    @Deprecated
     public int dataUtilsPasswordUppercaseCharAmount();
 
     @Key("neodymium.dataUtils.password.lowercaseCharAmount")
     @DefaultValue("5")
+    @Deprecated
     public int dataUtilsPasswordLowercaseCharAmount();
 
     @Key("neodymium.dataUtils.password.digitAmount")
     @DefaultValue("2")
+    @Deprecated
     public int dataUtilsPasswordDigitAmount();
 
     @Key("neodymium.dataUtils.password.specialCharAmount")
     @DefaultValue("2")
+    @Deprecated
     public int dataUtilsPasswordSpecialCharAmount();
 
     @Key("neodymium.dataUtils.password.specialChars")
     @DefaultValue("+-#$%&.;,_")
+    @Deprecated
     public String dataUtilsPasswordSpecialChars();
 
     @Key("neodymium.testData.email.domain")
