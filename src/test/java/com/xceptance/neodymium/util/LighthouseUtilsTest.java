@@ -252,6 +252,7 @@ public class LighthouseUtilsTest
                + "  },"
                + "  'audits': {"
                + "    'duplicated-javascript': {"
+               + "      'score': 0.4,"
                + "      'details': {"
                + "        'items': ["
                + "          {}"
