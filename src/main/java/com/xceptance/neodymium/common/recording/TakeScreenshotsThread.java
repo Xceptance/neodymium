@@ -85,23 +85,22 @@ public class TakeScreenshotsThread extends Thread
                 {
                     long start = new Date().getTime();
 
-
-                    try 
+                    try
                     {
-                      File file = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-                      writer.compressImageIfNeeded(file, recordingConfigurations.imageScaleFactor(), recordingConfigurations.imageQuality());
-                      long delay = recordingConfigurations.oneImagePerMilliseconds() > duration ? recordingConfigurations.oneImagePerMilliseconds()
-                                                                                                : duration;
-                      writer.write(file, delay);
-                      file.delete();
+                        File file = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+                        writer.compressImageIfNeeded(file, recordingConfigurations.imageScaleFactor(), recordingConfigurations.imageQuality());
+                        long delay = recordingConfigurations.oneImagePerMilliseconds() > duration ? recordingConfigurations.oneImagePerMilliseconds()
+                                                                                                  : duration;
+                        writer.write(file, delay);
+                        file.delete();
 
                     }
                     catch (NoSuchWindowException e)
                     {
                         // catching the exception prevents the video from failing
                     }
-                    
-                    duration = new Date().getTime() - start;                    
+
+                    duration = new Date().getTime() - start;
                     millis += duration;
                     turns++;
                     long sleep = recordingConfigurations.oneImagePerMilliseconds() - duration;

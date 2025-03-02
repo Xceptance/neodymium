@@ -161,6 +161,7 @@ public class BrowserExecutionCallback implements InvocationInterceptor, BeforeEa
     @Override
     public void testFailed(ExtensionContext context, Throwable cause)
     {
+        Neodymium.getContext().setTestException(cause);
         if (!tearDownDone)
         {
             browserRunner.teardown(true);

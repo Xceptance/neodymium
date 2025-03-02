@@ -48,6 +48,8 @@ public class BrowserConfigurationMapper
 
     private static final String TEST_ENVIRONMENT = "testEnvironment";
 
+    private static final String ACCESSIBILITY = "accessibility";
+
     private static final String PAGE_LOAD_STRATEGY = "pageLoadStrategy";
 
     private static final String ACCEPT_INSECURE_CERTS = "acceptInsecureCertificates";
@@ -232,6 +234,11 @@ public class BrowserConfigurationMapper
         {
             testEnvironmentProperties.put(DEVICE_ORIENTATION, emulatedDeviceOrientation);
             testEnvironmentProperties.put(ORIENTATION, emulatedDeviceOrientation);
+        }
+        boolean accessibility = Boolean.valueOf(browserProfileConfiguration.get(ACCESSIBILITY));
+        if (accessibility)
+        {
+            testEnvironmentProperties.put(ACCESSIBILITY, accessibility);
         }
         /*
          * Chrome device emulation

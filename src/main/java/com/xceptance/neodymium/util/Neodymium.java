@@ -36,10 +36,10 @@ public class Neodymium
 
     // keep our current browser profile name
     private String browserProfileName;
-    
+
     // keep our current browser name
     private String browserName;
-    
+
     // keep our current remote debugging port
     private int remoteDebuggingPort;
 
@@ -58,6 +58,8 @@ public class Neodymium
     private final Map<String, String> data = new HashMap<>();
 
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "neodymium.temporaryConfigFile";
+
+    private Throwable testException;
 
     /**
      * Constructor
@@ -78,7 +80,7 @@ public class Neodymium
      * 
      * @return the context instance for the current Thread
      */
-    static Neodymium getContext()
+    public static Neodymium getContext()
     {
         return CONTEXTS.computeIfAbsent(Thread.currentThread(), key -> {
             return new Neodymium();
@@ -268,7 +270,7 @@ public class Neodymium
     {
         getContext().browserName = browserName;
     }
-    
+
     /**
      * Remote debugging port of the current bowser
      * 
@@ -278,7 +280,7 @@ public class Neodymium
     {
         return getContext().remoteDebuggingPort;
     }
-    
+
     /**
      * Set the remote debugging port of the current browser.<br>
      * <b>Attention:</b> This function is mainly used to set information within the context internally.
@@ -610,10 +612,7 @@ public class Neodymium
     }
 
     /**
-     * Checks if the test already looked up any element. 
-     *
-     * return whether there is a last element stored
-     *
+     * Checks if the test already looked up any element. return whether there is a last element stored
      */
     public static boolean hasLastUsedElement()
     {
@@ -629,5 +628,15 @@ public class Neodymium
         {
             return false;
         }
+    }
+
+    public Throwable getTestException()
+    {
+        return testException;
+    }
+
+    public void setTestException(Throwable testException)
+    {
+        this.testException = testException;
     }
 }

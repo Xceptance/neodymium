@@ -116,8 +116,17 @@ public class JavaScriptUtils
                               "   var popupElement = document.querySelector(\"" + popupSelector + "\");" +
                               "   if(popupElement != null)" +
                               "   {" +
-                              "       popupElement.click();" +
-                              "       console.log('Popup " + popupSelector + "closed')" +
+                              "       try {" +
+                              "         popupElement.click();" +
+                              "         console.log('Popup " + popupSelector + "closed')" +
+                              "       } catch(error) {}" +
+                              "   }" +
+                              "   if(popupElement != null)" +
+                              "   {" +
+                              "       try {" +
+                              "         popupElement.dispatchEvent(new Event('click'));" +
+                              "         console.log('Popup " + popupSelector + "closed')" +
+                              "       } catch(error) {}" +
                               "   }" +
                               "}" +
                               "" +
