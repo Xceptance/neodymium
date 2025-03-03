@@ -335,6 +335,10 @@ public interface NeodymiumConfiguration extends Mutable
     @DefaultValue("4")
     public int screenshotHighlightLineThickness();
 
+    @Key("neodymium.screenshots.blurFullPageScreenshot")
+    @DefaultValue("false")
+    public boolean blurFullPageScreenshot();
+
     @Key("neodymium.logNeoVersion")
     @DefaultValue("true")
     public boolean logNeoVersion();
