@@ -3,6 +3,7 @@ package com.xceptance.neodymium.util;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.apache.commons.io.IOUtils;
 import org.openqa.selenium.By;
@@ -11,6 +12,11 @@ import org.openqa.selenium.WebElement;
 
 import com.codeborne.selenide.Selenide;
 
+/**
+ * Class with util methods for debugging
+ * 
+ * @author olha
+ */
 public class DebugUtils
 {
     private static final String injectJS;
@@ -36,10 +42,19 @@ public class DebugUtils
 
     public static void highlightAllElements(By by, WebDriver driver)
     {
+        highlightAllElements(() -> driver.findElements(by), driver);
+    }
+
+    public static void highlightAllElements(List<WebElement> elements, WebDriver driver)
+    {
+        highlightAllElements(() -> elements, driver);
+    }
+
+    private static void highlightAllElements(Supplier<List<WebElement>> getElements, WebDriver driver)
+    {
         if (Neodymium.configuration().debuggingHighlightSelectedElements())
         {
-            List<WebElement> foundElements = driver.findElements(by);
-            highlightElements(foundElements, driver);
+            highlightElements(getElements.get(), driver);
             if (Neodymium.configuration().debuggingHighlightDuration() > 0)
             {
                 Selenide.sleep(Neodymium.configuration().debuggingHighlightDuration());

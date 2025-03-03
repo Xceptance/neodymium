@@ -19,12 +19,14 @@ import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.interactions.MoveTargetOutOfBoundsException;
 
 import com.codeborne.selenide.AssertionMode;
+import com.codeborne.selenide.CheckResult;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
+import com.codeborne.selenide.WebElementCondition;
 import com.codeborne.selenide.ex.UIAssertionError;
 import com.codeborne.selenide.impl.Html;
 import com.codeborne.selenide.impl.WebElementsCollectionWrapper;
@@ -58,7 +60,7 @@ public class SelenideAddons
             @Override
             public SelenideElement get()
             {
-                return $$(parentSelector).stream().filter(e -> {
+                return $$(parentSelector).asDynamicIterable().stream().filter(e -> {
                     return e.$(subElementSelector).exists();
                 }).findFirst().get();
             };
@@ -85,7 +87,7 @@ public class SelenideAddons
             @Override
             public ElementsCollection get()
             {
-                List<SelenideElement> list = $$(parentSelector).stream().filter(e -> {
+                List<SelenideElement> list = $$(parentSelector).asDynamicIterable().stream().filter(e -> {
                     return e.$(subElementSelector).exists();
                 }).collect(Collectors.toList());
                 return new ElementsCollection(new WebElementsCollectionWrapper(WebDriverRunner.driver(), list));
@@ -113,7 +115,7 @@ public class SelenideAddons
             @Override
             public ElementsCollection get()
             {
-                List<SelenideElement> list = $$(parentSelector).stream().filter(e -> {
+                List<SelenideElement> list = $$(parentSelector).asDynamicIterable().stream().filter(e -> {
                     return !e.$(subElementSelector).exists();
                 }).collect(Collectors.toList());
                 return new ElementsCollection(new WebElementsCollectionWrapper(WebDriverRunner.driver(), list));
@@ -163,7 +165,7 @@ public class SelenideAddons
             }
             catch (final Throwable t)
             {
-                if (isThrowableCausedBy(t, StaleElementReferenceException.class, SERE))
+                if (t instanceof StaleElementReferenceException || isThrowableCausedBy(t, StaleElementReferenceException.class, SERE))
                 {
                     retryCounter++;
                     if (retryCounter > maxRetryCount)
@@ -241,7 +243,7 @@ public class SelenideAddons
             for (String message : phrasesHintingErrorToCatch)
             {
                 String messageText = t.getMessage();
-                if (messageText!=null && messageText.contains(message))
+                if (messageText != null && messageText.contains(message))
                 {
                     containsMessage = true;
                     break;
@@ -268,7 +270,7 @@ public class SelenideAddons
      * @return a Selenide {@link Condition}
      * @see #matchValue(String)
      */
-    public static Condition matchesValue(String text)
+    public static WebElementCondition matchesValue(String text)
     {
         return matchValue(".*" + text + ".*");
     }
@@ -286,7 +288,7 @@ public class SelenideAddons
      *            etc.
      * @return a Selenide {@link Condition}
      */
-    public static Condition matchValue(final String regex)
+    public static WebElementCondition matchValue(final String regex)
     {
         return Condition.attributeMatching("value", regex);
     }
@@ -308,7 +310,7 @@ public class SelenideAddons
      * @see #matchAttribute(String, String)
      */
     @Deprecated
-    public static Condition matchesAttribute(String attributeName, String text)
+    public static WebElementCondition matchesAttribute(String attributeName, String text)
     {
         return matchAttribute(attributeName, text);
     }
@@ -331,9 +333,9 @@ public class SelenideAddons
      * @return a Selenide {@link Condition}
      */
     @Deprecated
-    public static Condition matchAttribute(final String attributeName, final String regex)
+    public static WebElementCondition matchAttribute(final String attributeName, final String regex)
     {
-        return new Condition("match " + attributeName)
+        return new WebElementCondition("match " + attributeName)
         {
             @Override
             public String toString()
@@ -342,9 +344,9 @@ public class SelenideAddons
             }
 
             @Override
-            public boolean apply(Driver driver, WebElement element)
+            public CheckResult check(Driver driver, WebElement element)
             {
-                return Html.text.matches(getAttributeValue(element, attributeName), regex);
+                return new CheckResult(Html.text.matches(getAttributeValue(element, attributeName), regex), element.getAttribute(attributeName));
             }
         };
     }
@@ -441,7 +443,7 @@ public class SelenideAddons
      *            The condition for the slider to verify the movement
      */
     public static void dragAndDropUntilCondition(SelenideElement elementToMove, SelenideElement elementToCheck, int horizontalMovement,
-                                                 int verticalMovement, int pauseBetweenMovements, int retryMovements, Condition condition)
+                                                 int verticalMovement, int pauseBetweenMovements, int retryMovements, WebElementCondition condition)
     {
         int counter = 0;
         while (!elementToCheck.has(condition))
@@ -489,7 +491,7 @@ public class SelenideAddons
      *            the condition for the element
      * @return if the element did match the condition within the given retries
      */
-    public static boolean optionalWaitUntilCondition(SelenideElement element, Condition condition)
+    public static boolean optionalWaitUntilCondition(SelenideElement element, WebElementCondition condition)
     {
         return optionalWaitUntilCondition(element, condition, null, null);
     }
@@ -512,7 +514,7 @@ public class SelenideAddons
      *            the maximum amount of time to wait
      * @return if the element did match the condition within the given retries
      */
-    public static boolean optionalWaitUntilCondition(SelenideElement element, Condition condition, long maxWaitingTime)
+    public static boolean optionalWaitUntilCondition(SelenideElement element, WebElementCondition condition, long maxWaitingTime)
     {
         return optionalWaitUntilCondition(element, condition, maxWaitingTime, null);
     }
@@ -537,7 +539,7 @@ public class SelenideAddons
      *            the amount of time to wait in between retries
      * @return if the element did match the condition within the given retries
      */
-    public static boolean optionalWaitUntilCondition(SelenideElement element, Condition condition, Long maxWaitingTime, Long pollingInterval)
+    public static boolean optionalWaitUntilCondition(SelenideElement element, WebElementCondition condition, Long maxWaitingTime, Long pollingInterval)
     {
         if (maxWaitingTime == null)
         {
@@ -580,7 +582,7 @@ public class SelenideAddons
      *            the condition for the element
      * @return if the element did stop matching the condition within the given retries
      */
-    public static boolean optionalWaitWhileCondition(SelenideElement element, Condition condition)
+    public static boolean optionalWaitWhileCondition(SelenideElement element, WebElementCondition condition)
     {
         return optionalWaitUntilCondition(element, not(condition), null, null);
     }
@@ -603,7 +605,7 @@ public class SelenideAddons
      *            the maximum amount of time to wait
      * @return if the element did stop matching the condition within the given retries
      */
-    public static boolean optionalWaitWhileCondition(SelenideElement element, Condition condition, long maxWaitingTime)
+    public static boolean optionalWaitWhileCondition(SelenideElement element, WebElementCondition condition, long maxWaitingTime)
     {
         return optionalWaitUntilCondition(element, not(condition), maxWaitingTime, null);
     }
@@ -628,7 +630,7 @@ public class SelenideAddons
      *            the amount of time to wait in between retries
      * @return if the element did stop matching the condition within the given retries
      */
-    public static boolean optionalWaitWhileCondition(SelenideElement element, Condition condition, long maxWaitingTime, long pollingInterval)
+    public static boolean optionalWaitWhileCondition(SelenideElement element, WebElementCondition condition, long maxWaitingTime, long pollingInterval)
     {
         return optionalWaitUntilCondition(element, not(condition), maxWaitingTime, pollingInterval);
     }

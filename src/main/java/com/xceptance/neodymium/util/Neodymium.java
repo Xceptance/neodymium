@@ -7,16 +7,18 @@ import java.util.Random;
 import java.util.WeakHashMap;
 
 import org.aeonbits.owner.ConfigFactory;
+import org.openqa.selenium.By;
 import org.openqa.selenium.Dimension;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 import org.openqa.selenium.remote.RemoteWebDriver;
-import org.openqa.selenium.support.events.EventFiringWebDriver;
 
 import com.browserup.bup.BrowserUpProxy;
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.module.statement.browser.multibrowser.WebDriverStateContainer;
+import com.xceptance.neodymium.common.TestStepListener;
+import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
 
 /**
  * See our Github wiki: <a href="https://github.com/Xceptance/neodymium-library/wiki/Neodymium-context">Neodymium
@@ -34,9 +36,17 @@ public class Neodymium
 
     // keep our current browser profile name
     private String browserProfileName;
-
+    
     // keep our current browser name
     private String browserName;
+    
+    // keep our current remote debugging port
+    private int remoteDebuggingPort;
+
+    // keep last used locator
+    private By lastLocator;
+
+    private WebElement lastUsedElement;
 
     // our global configuration
     private final NeodymiumConfiguration configuration;
@@ -82,6 +92,8 @@ public class Neodymium
     public static void clearThreadContext()
     {
         CONTEXTS.remove(Thread.currentThread());
+        TestStepListener.clearLastUrl();
+        DataUtils.clearThreadContext();
     }
 
     /**
@@ -191,23 +203,14 @@ public class Neodymium
     }
 
     /**
-     * Get the current WebDriver as EventFiringWebDriver
-     *
-     * @return eventFiringWebDriver
-     */
-    public static EventFiringWebDriver getEventFiringWebdriver()
-    {
-        return (EventFiringWebDriver) getDriver();
-    }
-
-    /**
      * Get the current WebDriver as RemoteWebDriver
      *
      * @return remoteWebDriver
      */
     public static RemoteWebDriver getRemoteWebDriver()
     {
-        return (RemoteWebDriver) getEventFiringWebdriver().getWrappedDriver();
+        final WebDriverStateContainer wDSC = getContext().webDriverStateContainer;
+        return wDSC == null ? null : (RemoteWebDriver) wDSC.getWebDriver();
     }
 
     /**
@@ -264,6 +267,28 @@ public class Neodymium
     public static void setBrowserName(String browserName)
     {
         getContext().browserName = browserName;
+    }
+    
+    /**
+     * Remote debugging port of the current bowser
+     * 
+     * @return remote debugging port
+     */
+    public static int getRemoteDebuggingPort()
+    {
+        return getContext().remoteDebuggingPort;
+    }
+    
+    /**
+     * Set the remote debugging port of the current browser.<br>
+     * <b>Attention:</b> This function is mainly used to set information within the context internally.
+     * 
+     * @param remoteDebuggingPort
+     *            the current browser port
+     */
+    public static void setRemoteDebuggingPort(int remoteDebuggingPort)
+    {
+        getContext().remoteDebuggingPort = remoteDebuggingPort;
     }
 
     /**
@@ -457,6 +482,28 @@ public class Neodymium
     }
 
     /**
+     * Shortcut to set download folder
+     * 
+     * @param downloadFolder
+     *            the directory where Selenide should store downloaded files
+     */
+    public static void downloadFolder(String downloadFolder)
+    {
+        Configuration.downloadsFolder = downloadFolder;
+    }
+
+    /**
+     * Shortcut to enable/disable Selenides inbuild Screenshots
+     * 
+     * @param enable
+     *            enable/disable Screenshots
+     */
+    public static void enableSelenideScreenshots(boolean enable)
+    {
+        Configuration.screenshots = enable;
+    }
+
+    /**
      * Validates if the currently configured site is equal to one or more Strings.
      * 
      * @param sites
@@ -513,5 +560,74 @@ public class Neodymium
     {
         final String buildVersion = getContext().getClass().getPackage().getImplementationVersion();
         return buildVersion == null ? "?.?.?" : buildVersion;
+    }
+
+    /**
+     * Saves the last used locator
+     * 
+     * @param by
+     *            CSS Selector
+     */
+    public static void setLastUsedLocator(By by)
+    {
+        getContext().lastLocator = by;
+        getContext().lastUsedElement = null;
+    }
+
+    /**
+     * Saves the last used locator and the element under which to search for
+     * 
+     * @param element
+     *            Webelement
+     * @param by
+     *            CSS Selector
+     */
+    public static void setLastUsedLocator(WebElement element, By by)
+    {
+        getContext().lastLocator = by;
+        getContext().lastUsedElement = element;
+    }
+
+    /**
+     * Returns the last used Element
+     * 
+     * @return last used Element or null if nothing was set
+     */
+    public static WebElement getLastUsedElement()
+    {
+        if (getContext().lastUsedElement != null && getContext().lastLocator != null)
+        {
+            return getContext().lastUsedElement.findElement(getContext().lastLocator);
+        }
+        else if (getContext().lastLocator != null)
+        {
+            return getDriver().findElement(getContext().lastLocator);
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+    /**
+     * Checks if the test already looked up any element. 
+     *
+     * return whether there is a last element stored
+     *
+     */
+    public static boolean hasLastUsedElement()
+    {
+        if (getContext().lastUsedElement != null && getContext().lastLocator != null)
+        {
+            return true;
+        }
+        else if (getContext().lastLocator != null)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
     }
 }

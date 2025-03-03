@@ -6,9 +6,9 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.xceptance.neodymium.NeodymiumRunner;
-import com.xceptance.neodymium.module.statement.browser.multibrowser.Browser;
-import com.xceptance.neodymium.module.statement.repeat.RepeatOnFailure;
+import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import com.xceptance.neodymium.junit4.statement.repeat.RepeatOnFailure;
 
 @Browser("Chrome_headless")
 @Browser("Chrome_1500x1000_headless")

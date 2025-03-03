@@ -90,7 +90,7 @@ public class JavaScriptUtils
         }
     }
 
-    private static void sleep(final int msec)
+    private static void sleep(final long msec)
     {
         // wait
         try
@@ -101,5 +101,30 @@ public class JavaScriptUtils
         {
             return; // leave immediately
         }
+    }
+
+    /**
+     * Closes a on popup container by clicking the element identified by the selector
+     * 
+     * @param popupSelector
+     *            selector for the popup
+     */
+    public static void injectJavascriptPopupBlocker(String popupSelector)
+    {
+        String popupBlocker = "function popupBlocker()" +
+                              "{" +
+                              " var popupElement = document.querySelector('" + popupSelector.replaceAll("\"", "\\\\\"").replaceAll("'",
+                                                                                                                                   "\\\\\"")
+                              + "');"
+                              + " if(popupElement != null)" +
+                              " {" +
+                              " popupElement.click();" +
+                              " console.log('Popup " + popupSelector.replaceAll("\"", "\\\\\"").replaceAll("'", "\\\\\"") + "closed')" +
+                              " }" +
+                              "}" +
+                              "" +
+                              "setInterval(popupBlocker," + Neodymium.configuration().getPopupBlockerInterval() + ");";
+
+        Selenide.executeJavaScript(popupBlocker, "");
     }
 }

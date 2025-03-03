@@ -1,18 +1,21 @@
 package com.xceptance.neodymium.util;
 
-import static org.aeonbits.owner.Config.DisableableFeature.VARIABLE_EXPANSION;
-
 import org.aeonbits.owner.Config.LoadPolicy;
 import org.aeonbits.owner.Config.LoadType;
 import org.aeonbits.owner.Config.Sources;
 import org.aeonbits.owner.Mutable;
 
-import com.xceptance.neodymium.NeodymiumRunner.DescriptionMode;
+import com.xceptance.neodymium.junit4.NeodymiumRunner.DescriptionMode;
 
 @LoadPolicy(LoadType.MERGE)
 @Sources(
 {
-  "${neodymium.temporaryConfigFile}", "file:config/dev-neodymium.properties", "file:config/credentials.properties", "file:config/neodymium.properties"
+  "system:properties",
+  "${neodymium.temporaryConfigFile}",
+  "file:config/dev-neodymium.properties",
+  "system:env",
+  "file:config/credentials.properties",
+  "file:config/neodymium.properties"
 })
 public interface NeodymiumConfiguration extends Mutable
 {
@@ -43,7 +46,7 @@ public interface NeodymiumConfiguration extends Mutable
 
     @Key("neodymium.selenideAddons.staleElement.retry.timeout")
     @DefaultValue("500")
-    public int staleElementRetryTimeout();
+    public long staleElementRetryTimeout();
 
     @Key("neodymium.selenideAddons.optional.retry.pollingIntervall")
     @DefaultValue("3000")
@@ -55,11 +58,11 @@ public interface NeodymiumConfiguration extends Mutable
 
     @Key("neodymium.javaScriptUtils.timeout")
     @DefaultValue("2000")
-    public int javaScriptTimeout();
+    public long javaScriptTimeout();
 
     @Key("neodymium.javaScriptUtils.pollingInterval")
     @DefaultValue("200")
-    public int javaScriptPollingInterval();
+    public long javaScriptPollingInterval();
 
     @Key("neodymium.javaScriptUtils.loading.jQueryIsRequired")
     @DefaultValue("true")
@@ -83,7 +86,7 @@ public interface NeodymiumConfiguration extends Mutable
     @Key("neodymium.url.path")
     @DisableFeature(
     {
-      VARIABLE_EXPANSION
+      DisableableFeature.VARIABLE_EXPANSION
     })
     public String rawPath();
 
@@ -107,6 +110,10 @@ public interface NeodymiumConfiguration extends Mutable
     @Key("neodymium.allureAddons.screenshots.perstep.always")
     @DefaultValue("false")
     public boolean screenshotPerStep();
+
+    @Key("neodymium.allureAddons.reports.path")
+    @DefaultValue("/build/reports/tests/")
+    public String reportsPath();
 
     @Key("neodymium.context.device.breakpoint.small")
     @DefaultValue("576")
@@ -185,6 +192,10 @@ public interface NeodymiumConfiguration extends Mutable
     @Key("neodymium.proxy.socket.password")
     public String getProxySocketPassword();
 
+    @Key("neodymium.selenideProxy")
+    @DefaultValue("false")
+    public boolean enableSelenideProxy();
+
     @Key("neodymium.localproxy")
     @DefaultValue("false")
     public boolean useLocalProxy();
@@ -219,10 +230,6 @@ public interface NeodymiumConfiguration extends Mutable
     @DefaultValue("-1")
     public Integer getWindowHeight();
 
-    @Key("neodymium.webDriver.firefox.legacyMode")
-    @DefaultValue("false")
-    public boolean useFirefoxLegacy();
-
     @Key("neodymium.webDriver.reuseDriver")
     @DefaultValue("false")
     public boolean reuseWebDriver();
@@ -230,6 +237,14 @@ public interface NeodymiumConfiguration extends Mutable
     @Key("neodymium.webDriver.maxReuse")
     @DefaultValue("-1")
     public int maxWebDriverReuse();
+
+    @Key("neodymium.webDriver.startNewBrowserForSetUp")
+    @DefaultValue("true")
+    public boolean startNewBrowserForSetUp();
+
+    @Key("neodymium.webDriver.startNewBrowserForCleanUp")
+    @DefaultValue("true")
+    public boolean startNewBrowserForCleanUp();
 
     @Key("neodymium.webDriver.keepBrowserOpen")
     @DefaultValue("false")
@@ -242,20 +257,34 @@ public interface NeodymiumConfiguration extends Mutable
     @Key("neodymium.webDriver.chrome.pathToDriverServer")
     public String getChromeDriverPath();
 
-    @Key("neodymium.webDriver.edge.pathToDriverServer")
-    public String getEdgeDriverPath();
+    @Key("neodymium.webDriver.chrome.driverArguments")
+    @DefaultValue("")
+    public String getChromeDriverArguments();
 
     @Key("neodymium.webDriver.firefox.pathToDriverServer")
     public String getFirefoxDriverPath();
 
+    @Key("neodymium.webDriver.firefox.driverArguments")
+    @DefaultValue("")
+    public String getFirefoxDriverArguments();
+
     @Key("neodymium.webDriver.ie.pathToDriverServer")
     public String getIeDriverPath();
 
-    @Key("neodymium.webDriver.opera.pathToDriverServer")
-    public String getOperaDriverPath();
+    @Key("neodymium.webDriver.ie.driverArguments")
+    @DefaultValue("")
+    public String getIeDriverArguments();
 
-    @Key("neodymium.webDriver.phantomjs.pathToDriverServer")
-    public String getPhantomJsDriverPath();
+    @Key("neodymium.webDriver.edge.pathToDriverServer")
+    public String getEdgeDriverPath();
+
+    @Key("neodymium.webDriver.edge.driverArguments")
+    @DefaultValue("")
+    public String getEdgeDriverArguments();
+
+    @Key("neodymium.webDriver.safari.driverArguments")
+    @DefaultValue("")
+    public String getSafariDriverArguments();
 
     @Key("neodymium.webDriver.chrome.pathToBrowser")
     public String getChromeBrowserPath();
@@ -263,9 +292,109 @@ public interface NeodymiumConfiguration extends Mutable
     @Key("neodymium.webDriver.firefox.pathToBrowser")
     public String getFirefoxBrowserPath();
 
-    @Key("neodymium.webDriver.opera.pathToBrowser")
-    public String getOperaBrowserPath();
-
     @Key("neodymium.testNameFilter")
     public String getTestNameFilter();
+
+    @Key("neodymium.workInProgress")
+    @DefaultValue("false")
+    public boolean workInProgress();
+
+    @Key("neodymium.screenshots.enableOnSuccess")
+    @DefaultValue("false")
+    public boolean enableOnSuccess();
+
+    @Key("neodymium.screenshots.fullpagecapture.enable")
+    @DefaultValue("false")
+    public boolean enableFullPageCapture();
+
+    @Key("neodymium.screenshots.fullpagecapture.highlightViewport")
+    @DefaultValue("false")
+    public boolean enableHighlightViewport();
+
+    @Key("neodymium.screenshots.enableTreeDirectoryStructure")
+    @DefaultValue("false")
+    public boolean enableTreeDirectoryStructure();
+
+    @Key("neodymium.screenshots.fullpagecapture.highlightColor")
+    @DefaultValue("#FF0000")
+    public String fullScreenHighlightColor();
+
+    @Key("neodymium.screenshots.highlightLastElement")
+    @DefaultValue("false")
+    public boolean enableHighlightLastElement();
+
+    @Key("neodymium.screenshots.enableAdvancedScreenshots")
+    @DefaultValue("false")
+    public boolean enableAdvancedScreenShots();
+
+    @Key("neodymium.screenshots.element.highlightColor")
+    @DefaultValue("#FF00FF")
+    public String screenshotElementHighlightColor();
+
+    @Key("neodymium.screenshots.highlightLineThickness")
+    @DefaultValue("4")
+    public int screenshotHighlightLineThickness();
+
+    @Key("neodymium.logNeoVersion")
+    @DefaultValue("true")
+    public boolean logNeoVersion();
+
+    @Key("neodymium.lighthouse.binaryPath")
+    @DefaultValue("lighthouse")
+    public String lighthouseBinaryPath();
+
+    @Key("neodymium.lighthouse.assert.thresholdScore.performance")
+    @DefaultValue("0.5")
+    public double lighthouseAssertPerformance();
+
+    @Key("neodymium.lighthouse.assert.thresholdScore.accessibility")
+    @DefaultValue("0.5")
+    public double lighthouseAssertAccessibility();
+
+    @Key("neodymium.lighthouse.assert.thresholdScore.bestPractices")
+    @DefaultValue("0.5")
+    public double lighthouseAssertBestPractices();
+
+    @Key("neodymium.lighthouse.assert.thresholdScore.seo")
+    @DefaultValue("0.5")
+    public double lighthouseAssertSeo();
+
+    @Key("neodymium.lighthouse.assert.audits")
+    public String lighthouseAssertAudits();
+
+    @Key("neodymium.report.showSelenideErrorDetails")
+    @DefaultValue("false")
+    public boolean showSelenideErrorDetails();
+
+    @Key("neodymium.report.enableTestDataInReport")
+    @DefaultValue("true")
+    public boolean addTestDataToReport();
+
+    @Key("neodymium.report.environment.enableCustomData")
+    @DefaultValue("true")
+    public boolean enableCustomEnvironmentData();
+
+    @Key("neodymium.report.environment.enableBrowserData")
+    @DefaultValue("true")
+    public boolean enableBrowserEnvironmentData();
+
+    @Key("neodymium.report.enableStepLinks")
+    @DefaultValue("true")
+    public boolean enableStepLinks();
+
+    @Key("neodymium.url.excludeList")
+    @DefaultValue("")
+    public String getExcludeList();
+
+    @Key("neodymium.url.includeList")
+    @DefaultValue("")
+    public String getIncludeList();
+
+    @Key("neodymium.popupInterval")
+    @DefaultValue("1000")
+    public int getPopupBlockerInterval();
+
+    @Key("neodymium.seleniumLogLevel")
+    @DefaultValue("SEVERE")
+    public String seleniumLogLevel();
 }

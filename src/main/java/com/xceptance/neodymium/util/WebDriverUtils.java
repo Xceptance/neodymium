@@ -1,24 +1,27 @@
 package com.xceptance.neodymium.util;
 
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.function.Supplier;
 
 import org.apache.commons.lang3.StringUtils;
 
-import com.xceptance.neodymium.module.statement.browser.BrowserStatement;
-import com.xceptance.neodymium.module.statement.browser.multibrowser.WebDriverCache;
+import com.xceptance.neodymium.common.browser.BrowserMethodData;
+import com.xceptance.neodymium.common.browser.BrowserRunner;
+import com.xceptance.neodymium.common.browser.WebDriverCache;
 
 import io.cucumber.java.Scenario;
 
 public class WebDriverUtils
 {
-    private static ThreadLocal<BrowserStatement> browserStatement = ThreadLocal.withInitial(new Supplier<BrowserStatement>()
+    private static ThreadLocal<BrowserRunner> browserHelper = ThreadLocal.withInitial(new Supplier<BrowserRunner>()
     {
         @Override
-        public BrowserStatement get()
+        public BrowserRunner get()
         {
-            return new BrowserStatement();
+            return new BrowserRunner();
         }
     });
 
@@ -33,11 +36,11 @@ public class WebDriverUtils
      *            }
      *            </pre>
      **/
-    public static void setUp(final String browserProfileName)
+    public static void setUp(final BrowserMethodData browserProfileName, String testName)
     {
-        if (browserStatement.get().getBrowserTags().contains(browserProfileName))
+        if (browserHelper.get().getBrowserTags().contains(browserProfileName.getBrowserTag()))
         {
-            browserStatement.get().setUpTest(browserProfileName);
+            browserHelper.get().setUpTest(browserProfileName, testName);
         }
         else
         {
@@ -59,7 +62,11 @@ public class WebDriverUtils
     public static void setUpWithBrowserTag(Scenario scenario)
     {
         String browserProfileName = getFirstMatchingBrowserTag(scenario);
-        browserStatement.get().setUpTest(browserProfileName);
+        browserHelper.get()
+                     .setUpTest(new BrowserMethodData(browserProfileName, //
+                                                      Neodymium.configuration().keepBrowserOpen(), //
+                                                      Neodymium.configuration().keepBrowserOpenOnFailure(), false, false, new ArrayList<Method>()), //
+                                scenario.getName());
     }
 
     /**
@@ -79,7 +86,11 @@ public class WebDriverUtils
      **/
     public static void preventReuseAndTearDown()
     {
-        browserStatement.get().teardown(false, true, Neodymium.getWebDriverStateContainer());
+        browserHelper.get().teardown(false, true, new BrowserMethodData(Neodymium.getBrowserProfileName(), //
+                                                                        Neodymium.configuration().keepBrowserOpen(), //
+                                                                        Neodymium.configuration()
+                                                                                 .keepBrowserOpenOnFailure(), false, false, new ArrayList<Method>()),
+                                     Neodymium.getWebDriverStateContainer());
     }
 
     /**
@@ -105,7 +116,7 @@ public class WebDriverUtils
      **/
     public static void tearDown(boolean isFailed)
     {
-        browserStatement.get().teardown(isFailed);
+        browserHelper.get().teardown(isFailed);
     }
 
     /**
@@ -131,7 +142,7 @@ public class WebDriverUtils
     static String getFirstMatchingBrowserTag(Scenario scenario)
     {
         Collection<String> scenarioTags = scenario.getSourceTagNames();
-        List<String> browserTags = browserStatement.get().getBrowserTags();
+        List<String> browserTags = browserHelper.get().getBrowserTags();
 
         String firstBrowserTagFound = "";
         for (String tag : scenarioTags)

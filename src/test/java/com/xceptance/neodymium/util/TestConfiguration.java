@@ -19,4 +19,16 @@ public interface TestConfiguration extends Mutable
 
     @Key("BROWSERSTACK_ACCESS_KEY")
     public String browserstackAccessKey();
+
+    @Key("PROXY_HOST")
+    public String proxyHost();
+
+    @Key("PROXY_PORT")
+    public String proxyPort();
+
+    @Key("PROXY_USERNAME")
+    public String proxyUsername();
+
+    @Key("PROXY_PASSWORD")
+    public String proxyPassword();
 }

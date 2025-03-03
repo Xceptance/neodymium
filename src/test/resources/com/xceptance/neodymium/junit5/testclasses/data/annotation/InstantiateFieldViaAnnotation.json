@@ -1,0 +1,16 @@
+[
+  {
+    "testId": "1",
+    "name": "John1",
+    "stringDefaultValue": "first",
+    "intDefaultValue": 1,
+    "longDefaultValue": 1,
+    "floatDefaultValue": 1.0,
+    "doubleDefaultValue": 1.0,
+    "booleanDefaultValue": true
+  },
+  {
+    "testId": "2",
+    "name": "John2"
+  }
+]

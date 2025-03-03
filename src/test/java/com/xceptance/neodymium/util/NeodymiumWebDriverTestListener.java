@@ -37,9 +37,32 @@ public class NeodymiumWebDriverTestListener extends NeodymiumWebDriverListener
     }
 
     @Override
-    public void beforeFindBy(By by, WebElement element, WebDriver driver)
+    public void beforeFindElement(WebDriver driver, By by)
     {
-        super.beforeFindBy(by, element, driver);
         implicitWaitCount++;
+        super.beforeFindElement(driver, by);
+    }
+
+    @Override
+    public void beforeFindElements(WebDriver driver, By by)
+    {
+        super.beforeFindElements(driver, by);
+        implicitWaitCount++;
+    }
+
+    @Override
+    public void beforeFindElement(WebElement element, By locator)
+    {
+        super.beforeFindElement(element, locator);
+        // required to have equal number of methods with NeodymiumWebDriverListener
+        SelenideAddons.$safe(() -> implicitWaitCount++);
+    }
+
+    @Override
+    public void beforeFindElements(WebElement element, By locator)
+    {
+        super.beforeFindElements(element, locator);
+        // required to have equal number of methods with NeodymiumWebDriverListener
+        SelenideAddons.$safe(() -> implicitWaitCount++);
     }
 }

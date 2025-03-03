@@ -1,10 +1,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-library.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22com.xceptance%22%20AND%20a:%22neodymium-library%22) [![Join the chat at https://gitter.im/neodymium-library/community](https://badges.gitter.im/neodymium-library/community.svg)](https://gitter.im/neodymium-library/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-<<<<<<< HEAD
 # Neodymium
-=======
-# Neodymium v4.1.3
->>>>>>> master
+
 Neodymium tries to solve your typical and most pressing UI test automation problems by combining JUnit, WebDriver, BDD/Cucumber, and proper reporting. It gives you ready to use templates, assembles well-known open source projects, and enhances this all with additional functionality that is often missing.
 
 Neodymium is basically the combination of state of the art open source test libraries with additional glue to make it stick reliably together.
@@ -27,10 +24,10 @@ If you already know what you want to do, you can pick one of the demo test suite
 * [Neodymium Cucumber Example](https://github.com/Xceptance/neodymium-cucumber-example): For the fans of BDD/Cucumber, this is almost the same test suite as before but driven by BDD syntax.
 * [Neodymium Showcase](https://github.com/Xceptance/neodymium-showcase): This repository contains different showcases. Each of them demonstrates and comments on the usage of a single feature of Neodymium. Feel free to request more examples by creating an issue.
 
-## Introductions in other media
-We have an article on [DZone](https://dzone.com/articles/neodymium-an-open-source-framework-for-web-testing) describing the main features of Neodymium.
-
-We have a talk (in German) about the features and some best practices for Neodymium available on [YouTube](https://www.youtube.com/watch?v=hn-juzcXrZg).
+## Neodymium in the media
+* [Neodymium – An Open Source Framework for Web Testing](https://blog.xceptance.com/2019/02/26/neodymium-an-open-source-framework-for-web-testing/): An article about our motivation to start Neodymium and its most important features
+* [Neodymium 5.0.0](https://blog.xceptance.com/2024/06/26/a-new-magnetic-force-neodymium-5-0-0-release/): An article about new things in version 5.0
+* [Web Testing mit Neodymium](https://www.youtube.com/watch?v=hn-juzcXrZg): A recorded talk (in German) about testing with Neodymium. It also gives recommendations and shows best practises. Recorded during a J́UG Thüringen Meetup in 2019.
 
 ## Additional Features
 These are our **additions** to make test automation nicer, quicker, and less painful. 
@@ -52,25 +49,29 @@ If you are still impatient, here is the quickest way to get Neodymium added to y
 <dependency>
     <groupId>com.xceptance</groupId>
     <artifactId>neodymium-library</artifactId>
-<<<<<<< HEAD
     <version>INSERT_LATEST_VERSION_HERE</version>
-=======
-    <version>4.1.3</version>
->>>>>>> master
 </dependency>
 ```
-Add the `@RunWith` annotation to your test class or its superclass. This enables test execution with Neodymium.
+
+To write a simple unit test:
+
+Add the `@NeodymiumTest` annotation to your test method. This enables test execution with Neodymium.
+
 ```java
-@RunWith(NeodymiumRunner.class)
 public class MyTests
 {
-    @Test 
+    @NeodymiumTest 
     public void testMethod()
     {
         // test code
     }
 }
+
 ```
+Please be aware that Neodymium (starting at version 5.0.0) is using JUnit5. If you want to run your tests with JUnit4 Neodymium still supports this and you can have a look [here](https://github.com/Xceptance/neodymium-library/wiki/).
+
+If your project is already driven by Neodymium but you want to update to the latest version, please, check the [migration notes](https://github.com/Xceptance/neodymium-library/wiki/Migrate-to-Neodymium-5)
+
 And now is the time to dive into the features we added to make the most out of it. [Please head over to our Wiki](https://github.com/Xceptance/neodymium-library/wiki/).
 
 ## License
