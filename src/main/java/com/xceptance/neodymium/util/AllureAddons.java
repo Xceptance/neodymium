@@ -1,6 +1,7 @@
 package com.xceptance.neodymium.util;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,6 +13,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -25,6 +27,7 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.apache.commons.io.FileUtils;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.slf4j.Logger;
@@ -44,7 +47,6 @@ import com.xceptance.neodymium.common.ScreenshotWriter;
 
 import io.qameta.allure.Allure;
 import io.qameta.allure.AllureLifecycle;
-import io.qameta.allure.Attachment;
 import io.qameta.allure.Step;
 import io.qameta.allure.model.StepResult;
 
@@ -138,16 +140,21 @@ public class AllureAddons
      * @param filename
      * @throws IOException
      */
-    @Attachment(type = "image/png", value = "{filename}", fileExtension = ".png")
     public static void attachPNG(final String filename) throws IOException
     {
-        if (Neodymium.configuration().enableAdvancedScreenShots() == false)
+        if (Neodymium.configuration().enableAdvancedScreenShots())
         {
-            ((TakesScreenshot) Neodymium.getDriver()).getScreenshotAs(OutputType.BYTES);
+            ScreenshotWriter.doScreenshot(filename);
         }
         else
         {
-            ScreenshotWriter.doScreenshot(filename);
+            // take a screenshot using the driver and write it to a file
+            byte[] screenshot = ((TakesScreenshot) Neodymium.getDriver()).getScreenshotAs(OutputType.BYTES);
+            FileUtils.writeByteArrayToFile(new File(filename), screenshot);
+
+            addAttachmentToStep("Screenshot", "image/png", ".png", new FileInputStream(filename));
+
+            new File(filename).delete();
         }
     }
 
@@ -210,9 +217,17 @@ public class AllureAddons
 
             lifecycle.updateTestCase((result) -> {
                 var stepResult = findCurrentStep(result.getSteps());
-                var attachment = result.getAttachments().get(result.getAttachments().size() - 1);
-                result.getAttachments().remove(result.getAttachments().size() - 1);
-                stepResult.getAttachments().add(attachment);
+
+                Optional<io.qameta.allure.model.Attachment> addedAttachmentInOuterStep = result.getAttachments().stream().filter(a -> a.getName().equals(name))
+                                                                                               .findFirst();
+
+                boolean isAttachmentInCurrentStep = stepResult.getAttachments().stream().anyMatch(a -> a.getName().equals(name));
+                if (!isAttachmentInCurrentStep && addedAttachmentInOuterStep.isPresent())
+                {
+                    stepResult.getAttachments().add(addedAttachmentInOuterStep.get());
+                }
+
+                addedAttachmentInOuterStep.ifPresent(attachment -> result.getAttachments().remove(attachment));
             });
             return true;
         }
@@ -242,8 +257,8 @@ public class AllureAddons
     }
 
     /**
-     * Adds information about environment to the report, if a key is already present in the map the current value will
-     * be kept
+     * Adds information about environment to the report, if a key is already present in the map the current value will be
+     * kept
      * 
      * @param environmentValuesSet
      *            map with environment values
