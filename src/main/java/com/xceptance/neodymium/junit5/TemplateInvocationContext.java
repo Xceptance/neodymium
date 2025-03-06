@@ -43,15 +43,15 @@ public class TemplateInvocationContext implements TestTemplateInvocationContext
     public List<Extension> getAdditionalExtensions()
     {
         Neodymium.clearThreadContext();
-        List<Extension> extentions = new LinkedList<>();
-        extentions.add(new BrowserExecutionCallback(browser, methodName));
+        List<Extension> extensions = new LinkedList<>();
+        extensions.add(new BrowserExecutionCallback(browser, methodName));
         if (dataSet != null)
         {
-            extentions.add(new TestdataCallback(dataSet, testClassInstance));
+            extensions.add(new TestdataCallback(dataSet, testClassInstance));
         }
-        extentions.add(new FilterTestMethodCallback());
-        extentions.add(new WipTestMethodCallback());
-        extentions.add(new NeodymiumAfterTestExecutionCallback());
-        return extentions;
+        extensions.add(new FilterTestMethodCallback());
+        extensions.add(new WipTestMethodCallback());
+        extensions.add(new NeodymiumAfterTestExecutionCallback());
+        return extensions;
     }
-};
+}

@@ -65,6 +65,13 @@ public class MultibrowserConfiguration
         {
             loadPropertiesFromFile(temporaryConfigFile, browserProfileProperties);
         }
+
+        // add default browser to the properties
+        browserProfileProperties.put("browserprofile.Chrome_Default.name", "Chrome Default");
+        browserProfileProperties.put("browserprofile.Chrome_Default.browser", "chrome");
+        browserProfileProperties.put("browserprofile.Chrome_Default.browserResolution", "1920x1080");
+        browserProfileProperties.put("browserprofile.Chrome_Default.arguments", "-ignore-certificate-errors");
+
         parseBrowserProfiles();
     }
 
