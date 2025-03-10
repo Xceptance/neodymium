@@ -99,6 +99,9 @@ public class BrowserConfigurationMapper
         if ("firefox".equals(emulatedBrowser))
         {
             capabilities = new FirefoxOptions();
+            // this is needed with selenium upgrade to version 4.29 
+            // -> fix test DriverArgumentsTest
+            capabilities.setCapability("webSocketUrl", true);
         }
         else if ("chrome".equals(emulatedBrowser))
         {
