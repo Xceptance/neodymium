@@ -99,7 +99,9 @@ public class BrowserConfigurationMapper
         if ("firefox".equals(emulatedBrowser))
         {
             capabilities = new FirefoxOptions();
-            // this is needed with selenium upgrade to version 4.29 
+            // This is needed with selenium upgrade to version 4.29
+            // Removing ChromeDevTools Support For Firefox: https://www.selenium.dev/blog/2025/remove-cdp-firefox/
+            // BiDirectional functionality: https://www.selenium.dev/documentation/webdriver/bidi/
             // -> fix test DriverArgumentsTest
             capabilities.setCapability("webSocketUrl", true);
         }
