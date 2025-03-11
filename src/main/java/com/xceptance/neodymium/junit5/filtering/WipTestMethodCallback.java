@@ -1,6 +1,6 @@
 package com.xceptance.neodymium.junit5.filtering;
 
-import java.util.List;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
@@ -18,13 +18,17 @@ public class WipTestMethodCallback implements ExecutionCondition
     public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context)
     {
         boolean workInProgress = Neodymium.configuration().workInProgress();
-        boolean wipMethod = List.of(context.getRequiredTestClass().getMethods()).stream()
-                                .filter(method -> method.getAnnotation(NeodymiumTest.class) != null)
-                                .anyMatch(method -> method.getAnnotation(WorkInProgress.class) != null);
+        boolean wipMethod = Stream.of(context.getRequiredTestClass().getMethods())
+                                  .filter(method -> method.getAnnotation(NeodymiumTest.class) != null)
+                                  .anyMatch(method -> method.getAnnotation(WorkInProgress.class) != null);
+
+        String testNameFilterMessage = testExecutionRegex != null ? "method or test matching filter: '" + testExecutionRegex + "' " : "";
+
         if (workInProgress && wipMethod && context.getRequiredTestMethod().getAnnotation(WorkInProgress.class) == null)
         {
-            return ConditionEvaluationResult.disabled("not marked as WIP " + testExecutionRegex);
+            return ConditionEvaluationResult.disabled(testNameFilterMessage + "not marked as WIP");
         }
+
         return ConditionEvaluationResult.enabled("");
     }
 }
