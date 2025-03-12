@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.junit.Assert;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.RandomDataSets;
 import com.xceptance.neodymium.common.testdata.SuppressDataSets;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
@@ -13,6 +14,7 @@ import com.xceptance.neodymium.util.DataUtils;
 /**
  * This test may fail but the probability for it is very low
  */
+@SuppressBrowsers
 public class RandomnessOfDataSets
 {
     private static List<String> datasets = new ArrayList<String>();

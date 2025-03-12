@@ -3,12 +3,14 @@ package com.xceptance.neodymium.junit5.testclasses.data.override.classonly;
 import org.junit.Assert;
 import org.junit.runner.RunWith;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.common.testdata.RandomDataSets;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.DataUtils;
 
+@SuppressBrowsers
 @RunWith(NeodymiumRunner.class)
 @DataSet(2)
 @DataSet(4)

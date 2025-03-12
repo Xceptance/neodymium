@@ -3,10 +3,12 @@ package com.xceptance.neodymium.junit4.testclasses.data.override.mixed;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.SuppressDataSets;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 
 @RunWith(NeodymiumRunner.class)
+@SuppressBrowsers
 public class TwoDataSetsTwoMethodsOneWithout
 {
     @Test

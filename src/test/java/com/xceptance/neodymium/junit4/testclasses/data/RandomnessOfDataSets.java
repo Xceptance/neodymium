@@ -7,6 +7,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.RandomDataSets;
 import com.xceptance.neodymium.common.testdata.SuppressDataSets;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
@@ -16,6 +17,7 @@ import com.xceptance.neodymium.util.DataUtils;
  * This test may fail but the probability for it is very low
  */
 @RunWith(NeodymiumRunner.class)
+@SuppressBrowsers
 public class RandomnessOfDataSets
 {
     private static List<String> datasets = new ArrayList<String>();

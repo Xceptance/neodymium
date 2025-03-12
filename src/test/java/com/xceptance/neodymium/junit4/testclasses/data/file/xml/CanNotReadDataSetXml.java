@@ -3,12 +3,14 @@ package com.xceptance.neodymium.junit4.testclasses.data.file.xml;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.DataFile;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.Neodymium;
 
 @RunWith(NeodymiumRunner.class)
 @DataFile("can/not/read/data/set/xml/DoesNotExist.xml")
+@SuppressBrowsers
 public class CanNotReadDataSetXml
 {
     @Test()

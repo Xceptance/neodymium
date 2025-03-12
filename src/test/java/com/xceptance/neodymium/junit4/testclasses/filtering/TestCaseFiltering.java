@@ -4,6 +4,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.SuppressDataSets;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.DataUtils;
@@ -11,6 +12,7 @@ import com.xceptance.neodymium.util.DataUtils;
 import io.cucumber.java.it.Data;
 
 @RunWith(NeodymiumRunner.class)
+@SuppressBrowsers
 public class TestCaseFiltering
 {
     @Test

@@ -2,9 +2,11 @@ package com.xceptance.neodymium.junit5.testclasses.datautils;
 
 import org.junit.jupiter.api.Assertions;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.DataUtils;
 
+@SuppressBrowsers
 public class DataUtilsHelperTests
 {
     @NeodymiumTest

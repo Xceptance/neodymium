@@ -2,9 +2,11 @@ package com.xceptance.neodymium.junit5.testclasses.context;
 
 import org.junit.Assert;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 
+@SuppressBrowsers
 public class isLocaleTest
 {
     @NeodymiumTest
