@@ -61,6 +61,8 @@ public class BrowserConfigurationMapper
     private static final String PREFERENCES = "preferences";
 
     private static final String DOWNLOAD_DIRECTORY = "downloadDirectory";
+    
+    private static final String WEB_SOCKET_URL = "webSocketUrl";
 
     // Appium specific properties
     private static final String APPIUM_VERSION = "appiumVersion";
@@ -96,15 +98,20 @@ public class BrowserConfigurationMapper
         if (emulatedBrowser != null)
             emulatedBrowser = emulatedBrowser.toLowerCase();
 
-        if ("firefox".equals(emulatedBrowser))
-        {
-            capabilities = new FirefoxOptions();
-            // This is needed with selenium upgrade to version 4.29
-            // Removing ChromeDevTools Support For Firefox: https://www.selenium.dev/blog/2025/remove-cdp-firefox/
-            // BiDirectional functionality: https://www.selenium.dev/documentation/webdriver/bidi/
-            // -> fix test DriverArgumentsTest
-            capabilities.setCapability("webSocketUrl", true);
-        }
+		if ("firefox".equals(emulatedBrowser)) {
+			capabilities = new FirefoxOptions();
+			// This is needed with selenium upgrade to version 4.29, because ChromeDevTools
+			// support is removed for Firefox (fix test DriverArgumentsTest)
+			// references:
+			// https://www.selenium.dev/blog/2025/remove-cdp-firefox/
+			// https://www.selenium.dev/documentation/webdriver/bidi/
+			final String webSocketUrl = browserProfileConfiguration.get(WEB_SOCKET_URL);
+			if (!StringUtils.isEmpty(webSocketUrl)) {
+				capabilities.setCapability("webSocketUrl", Boolean.valueOf(webSocketUrl));
+			} else {
+				capabilities.setCapability("webSocketUrl", true);
+			}
+		}
         else if ("chrome".equals(emulatedBrowser))
         {
             capabilities = new ChromeOptions();
