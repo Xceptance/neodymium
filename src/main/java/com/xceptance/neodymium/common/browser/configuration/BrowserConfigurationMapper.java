@@ -87,10 +87,10 @@ public class BrowserConfigurationMapper
      * @param globalBrowserResolution
      * @return created {@link BrowserConfiguration} object
      */
-    public BrowserConfiguration map(Map<String, String> browserProfileConfiguration, String globalHeadless, String globalAcceptInsecureCertificates,
-                                    String globalPageLoadStrategy, String globalBrowserResolution)
+    public BrowserConfiguration map(final Map<String, String> browserProfileConfiguration, final String globalHeadless, final String globalAcceptInsecureCertificates,
+                                    final String globalPageLoadStrategy, final String globalBrowserResolution)
     {
-        BrowserConfiguration browserConfiguration = new BrowserConfiguration();
+        final BrowserConfiguration browserConfiguration = new BrowserConfiguration();
 
         MutableCapabilities capabilities;
 
@@ -136,35 +136,35 @@ public class BrowserConfigurationMapper
         /*
          * SauceLabs/TestingBot/BrowserStack configuration
          */
-        HashMap<String, Object> testEnvironmentProperties = new HashMap<>();
+        final HashMap<String, Object> testEnvironmentProperties = new HashMap<>();
 
-        String emulatedPlatform = browserProfileConfiguration.get(PLATFORM);
+        final String emulatedPlatform = browserProfileConfiguration.get(PLATFORM);
         if (!StringUtils.isEmpty(emulatedPlatform))
         {
             testEnvironmentProperties.put("os", emulatedPlatform);
         }
 
-        String emulatedPlatformName = browserProfileConfiguration.get(PLATFORM_VERSION);
+        final String emulatedPlatformName = browserProfileConfiguration.get(PLATFORM_VERSION);
 
         if (!StringUtils.isEmpty(emulatedPlatformName))
         {
             testEnvironmentProperties.put("osVersion", emulatedPlatformName);
         }
 
-        String emulatedVersion = browserProfileConfiguration.get(BROWSER_VERSION);
+        final String emulatedVersion = browserProfileConfiguration.get(BROWSER_VERSION);
         if (!StringUtils.isEmpty(emulatedVersion))
         {
             testEnvironmentProperties.put(CapabilityType.BROWSER_VERSION, emulatedVersion);
         }
 
-        String emulatedDeviceName = browserProfileConfiguration.get(DEVICE_NAME);
+        final String emulatedDeviceName = browserProfileConfiguration.get(DEVICE_NAME);
         if (!StringUtils.isEmpty(emulatedDeviceName))
         {
             // SauceLabs, TestingBot
             testEnvironmentProperties.put("deviceName", emulatedDeviceName);
         }
 
-        String emulatedDeviceScreenResolution = browserProfileConfiguration.get(SCREEN_RESOLUTION);
+        final String emulatedDeviceScreenResolution = browserProfileConfiguration.get(SCREEN_RESOLUTION);
         if (!StringUtils.isEmpty(emulatedDeviceScreenResolution))
         {
             // SauceLabs
@@ -175,7 +175,7 @@ public class BrowserConfigurationMapper
             testEnvironmentProperties.put("resolution", emulatedDeviceScreenResolution);
         }
 
-        String emulatedMaximumTestDuration = browserProfileConfiguration.get(MAXIMUM_DURATION);
+        final String emulatedMaximumTestDuration = browserProfileConfiguration.get(MAXIMUM_DURATION);
         if (!StringUtils.isEmpty(emulatedMaximumTestDuration))
         {
             int maxDura = 0;
@@ -183,7 +183,7 @@ public class BrowserConfigurationMapper
             {
                 maxDura = Integer.parseInt(emulatedMaximumTestDuration);
             }
-            catch (Exception e)
+            catch (final Exception e)
             {
                 throw new RuntimeException(MAXIMUM_DURATION + " configured within the browser profiles couldn't be parsed into an int value. Given value: \""
                                            + emulatedMaximumTestDuration + "\"", e);
@@ -195,7 +195,7 @@ public class BrowserConfigurationMapper
             // BrowserStack does not support to set this capability (fix value of 2 hours)
         }
 
-        String emulatedIdleTimeout = browserProfileConfiguration.get(IDLE_TIMEOUT);
+        final String emulatedIdleTimeout = browserProfileConfiguration.get(IDLE_TIMEOUT);
         if (!StringUtils.isEmpty(emulatedIdleTimeout))
         {
             int idleTim = 0;
@@ -203,7 +203,7 @@ public class BrowserConfigurationMapper
             {
                 idleTim = Integer.parseInt(emulatedIdleTimeout);
             }
-            catch (Exception e)
+            catch (final Exception e)
             {
                 throw new RuntimeException(IDLE_TIMEOUT + " configured within the browser profiles couldn't be parsed into an int value. Given value: \""
                                            + emulatedIdleTimeout + "\"", e);
@@ -214,7 +214,7 @@ public class BrowserConfigurationMapper
             testEnvironmentProperties.put("idletimeout", idleTim);
         }
 
-        String emulatedSeleniumVersion = browserProfileConfiguration.get(SELENIUM_VERSION);
+        final String emulatedSeleniumVersion = browserProfileConfiguration.get(SELENIUM_VERSION);
         if (!StringUtils.isEmpty(emulatedSeleniumVersion))
         {
             // SauceLabs, BrowserStack
@@ -223,23 +223,23 @@ public class BrowserConfigurationMapper
         }
 
         // appium
-        String appiumVersion = browserProfileConfiguration.get(APPIUM_VERSION);
+        final String appiumVersion = browserProfileConfiguration.get(APPIUM_VERSION);
         if (!StringUtils.isEmpty(appiumVersion))
             testEnvironmentProperties.put(APPIUM_VERSION, appiumVersion);
 
-        String browserName = browserProfileConfiguration.get(BROWSER_NAME);
+        final String browserName = browserProfileConfiguration.get(BROWSER_NAME);
         if (!StringUtils.isEmpty(browserName))
             capabilities.setCapability(BROWSER_NAME, browserName);
 
-        String app = browserProfileConfiguration.get(APP);
+        final String app = browserProfileConfiguration.get(APP);
         if (!StringUtils.isEmpty(app))
             testEnvironmentProperties.put(APP, app);
 
-        String automationName = browserProfileConfiguration.get(AUTOMATION_NAME);
+        final String automationName = browserProfileConfiguration.get(AUTOMATION_NAME);
         if (!StringUtils.isEmpty(automationName))
             testEnvironmentProperties.put("projectName", automationName);
 
-        String emulatedDeviceOrientation = browserProfileConfiguration.get(DEVICE_ORIENTATION);
+        final String emulatedDeviceOrientation = browserProfileConfiguration.get(DEVICE_ORIENTATION);
         if (!StringUtils.isEmpty(emulatedDeviceOrientation))
         {
             testEnvironmentProperties.put(DEVICE_ORIENTATION, emulatedDeviceOrientation);
@@ -248,10 +248,10 @@ public class BrowserConfigurationMapper
         /*
          * Chrome device emulation
          */
-        String chromeEmulationProfile = browserProfileConfiguration.get(CHROME_EMULATION_PROFILE);
+        final String chromeEmulationProfile = browserProfileConfiguration.get(CHROME_EMULATION_PROFILE);
         if (!StringUtils.isEmpty(chromeEmulationProfile))
         {
-            Map<String, String> mobileEmulation = new HashMap<String, String>();
+            final Map<String, String> mobileEmulation = new HashMap<String, String>();
             mobileEmulation.put("deviceName", chromeEmulationProfile);
 
             ((ChromeOptions) capabilities).setExperimentalOption("mobileEmulation", mobileEmulation);
@@ -260,14 +260,14 @@ public class BrowserConfigurationMapper
         /*
          * Explicit test environment check
          */
-        String testEnvironment = browserProfileConfiguration.get(TEST_ENVIRONMENT);
+        final String testEnvironment = browserProfileConfiguration.get(TEST_ENVIRONMENT);
         if (!StringUtils.isEmpty(testEnvironment))
             browserConfiguration.setTestEnvironment(testEnvironment.trim());
 
         /*
          * Browser resolution
          */
-        String browserResolution = browserProfileConfiguration.get(BROWSER_RESOLUTION);
+        final String browserResolution = browserProfileConfiguration.get(BROWSER_RESOLUTION);
         if (!StringUtils.isEmpty(browserResolution))
         {
             setBrowserResolution(browserConfiguration, browserResolution);
@@ -278,7 +278,7 @@ public class BrowserConfigurationMapper
         }
 
         // page load strategy
-        String pageLoadStrategy = browserProfileConfiguration.get(PAGE_LOAD_STRATEGY);
+        final String pageLoadStrategy = browserProfileConfiguration.get(PAGE_LOAD_STRATEGY);
         if (!StringUtils.isEmpty(pageLoadStrategy))
             capabilities.setCapability(CapabilityType.PAGE_LOAD_STRATEGY, pageLoadStrategy);
         else if (!StringUtils.isEmpty(globalPageLoadStrategy))
@@ -287,7 +287,7 @@ public class BrowserConfigurationMapper
         }
 
         // accept insecure certificates
-        String acceptInsecureCerts = browserProfileConfiguration.get(ACCEPT_INSECURE_CERTS);
+        final String acceptInsecureCerts = browserProfileConfiguration.get(ACCEPT_INSECURE_CERTS);
         if (!StringUtils.isEmpty(acceptInsecureCerts))
         {
             capabilities.setCapability(CapabilityType.ACCEPT_INSECURE_CERTS, Boolean.parseBoolean(acceptInsecureCerts));
@@ -298,7 +298,7 @@ public class BrowserConfigurationMapper
         }
 
         // headless
-        String headless = browserProfileConfiguration.get(HEADLESS);
+        final String headless = browserProfileConfiguration.get(HEADLESS);
         if (!StringUtils.isEmpty(headless))
         {
             browserConfiguration.setHeadless(Boolean.valueOf(headless));
@@ -309,12 +309,12 @@ public class BrowserConfigurationMapper
         }
 
         // additional browser arguments
-        String arguments = browserProfileConfiguration.get(ARGUMENTS);
+        final String arguments = browserProfileConfiguration.get(ARGUMENTS);
         if (!StringUtils.isEmpty(arguments))
         {
-            List<String> args = new LinkedList<>();
+            final List<String> args = new LinkedList<>();
 
-            for (String arg : arguments.split(";"))
+            for (final String arg : arguments.split(";"))
             {
                 // cut off trailing/leading whitespace because the browsers can't handle it
                 args.add(arg.trim());
@@ -323,25 +323,25 @@ public class BrowserConfigurationMapper
         }
 
         // additional browser arguments
-        String driverArgs = browserProfileConfiguration.get(DRIVER_ARGS);
+        final String driverArgs = browserProfileConfiguration.get(DRIVER_ARGS);
         if (!StringUtils.isEmpty(driverArgs))
         {
-            var argsList = new ArrayList<>(List.of(driverArgs.split(";")));
+            final var argsList = new ArrayList<>(List.of(driverArgs.split(";")));
             argsList.removeIf(arg -> arg == null || arg.trim().equals(""));
             argsList.replaceAll(String::trim);
             browserConfiguration.setDriverArguments(argsList);
         }
         // additional browser preferences
-        String preferences = browserProfileConfiguration.get(PREFERENCES);
+        final String preferences = browserProfileConfiguration.get(PREFERENCES);
         if (!StringUtils.isEmpty(preferences))
         {
-            for (String pref : preferences.split(";"))
+            for (final String pref : preferences.split(";"))
             {
-                String[] keyVal = pref.split("=");
+                final String[] keyVal = pref.split("=");
                 if (pref.length() > 1)
                 {
-                    String key = keyVal[0].trim();
-                    String val = keyVal[1].trim();
+                    final String key = keyVal[0].trim();
+                    final String val = keyVal[1].trim();
 
                     // differentiate types of preference values to avoid misunderstanding
                     if (val.equals("true") | val.equals("false"))
@@ -360,10 +360,10 @@ public class BrowserConfigurationMapper
             }
         }
 
-        String downloadDirectory = browserProfileConfiguration.get(DOWNLOAD_DIRECTORY);
+        final String downloadDirectory = browserProfileConfiguration.get(DOWNLOAD_DIRECTORY);
         if (!StringUtils.isEmpty(downloadDirectory))
         {
-            String downloadFolder = new File(downloadDirectory).getAbsolutePath();
+            final String downloadFolder = new File(downloadDirectory).getAbsolutePath();
             browserConfiguration.setDownloadDirectory(downloadFolder);
             Neodymium.downloadFolder(downloadFolder);
         }
@@ -376,12 +376,12 @@ public class BrowserConfigurationMapper
         return browserConfiguration;
     }
 
-    private void setBrowserResolution(BrowserConfiguration browserConfiguration, String browserResolution)
+    private void setBrowserResolution(final BrowserConfiguration browserConfiguration, final String browserResolution)
     {
         // split the combined resolution string on every 'x', 'X' or ',' and remove all whitespace
         // e.g: 1920x1080 or 1920, 1080
 
-        String[] browserWidthHeight = browserResolution.replaceAll("[\\s]", "").split("[xX,]");
+        final String[] browserWidthHeight = browserResolution.replaceAll("[\\s]", "").split("[xX,]");
         if (!StringUtils.isEmpty(browserWidthHeight[0]))
         {
             browserConfiguration.setBrowserWidth(Integer.parseInt(browserWidthHeight[0]));
