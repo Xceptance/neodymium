@@ -118,7 +118,7 @@ public class JavaScriptUtils
                               + "');"
                               + " if(popupElement != null)" +
                               " {" +
-                              " popupElement.click();" +
+                              " popupElement.dispatchEvent(new Event('click'));" +
                               " console.log('Popup " + popupSelector.replaceAll("\"", "\\\\\"").replaceAll("'", "\\\\\"") + "closed')" +
                               " }" +
                               "}" +
