@@ -102,30 +102,39 @@ public class PropertiesUtil
     public static Map<String, String> getPropertiesMapForCustomIdentifier(String customIdentifier)
     {
         Map<String, String> dataMap = new HashMap<String, String>();
-        dataMap = PropertiesUtil.addMissingPropertiesFromFile("./config/dev-neodymium.properties", customIdentifier, dataMap);
 
-        Map<String, String> systemEnvMap = new HashMap<String, String>();
-        for (Map.Entry<String, String> entry : System.getenv().entrySet())
-        {
-            String key = entry.getKey();
-            if (key.contains(customIdentifier))
-            {
-                String cleanedKey = key.replace(customIdentifier, "");
-                cleanedKey = cleanedKey.replaceAll("\\.", "");
-                systemEnvMap.put(cleanedKey, entry.getValue());
-            }
-        }
-        dataMap = PropertiesUtil.mapPutAllIfAbsent(dataMap, systemEnvMap);
+        // System properties
         dataMap = PropertiesUtil.mapPutAllIfAbsent(dataMap,
                                                    PropertiesUtil.getDataMapForIdentifier(customIdentifier,
                                                                                           System.getProperties()));
-        dataMap = PropertiesUtil.addMissingPropertiesFromFile("./config/credentials.properties", customIdentifier, dataMap);
-        dataMap = PropertiesUtil.addMissingPropertiesFromFile("./config/neodymium.properties", customIdentifier, dataMap);
+
+        // temporary config file
         dataMap = PropertiesUtil.addMissingPropertiesFromFile(Optional.ofNullable(ConfigFactory.getProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME))
                                                                       .orElse("")
                                                                       .replaceAll("file:", "./"),
                                                               customIdentifier,
                                                               dataMap);
+
+        // config/dev-neodymium.properties
+        dataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "dev-neodymium.properties", customIdentifier,
+                                                              dataMap);
+
+        // System environment variables
+        Properties systemProperties = new Properties();
+        systemProperties.putAll(System.getenv());
+
+        Map<String, String> systemEnvMap = getDataMapForIdentifier(customIdentifier, systemProperties);
+
+        dataMap = PropertiesUtil.mapPutAllIfAbsent(dataMap, systemEnvMap);
+
+        // config/credentials.properties
+        dataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "credentials.properties", customIdentifier,
+                                                              dataMap);
+
+        // config/neodymium.properties
+        dataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "neodymium.properties", customIdentifier,
+                                                              dataMap);
+
         return dataMap;
     }
 }

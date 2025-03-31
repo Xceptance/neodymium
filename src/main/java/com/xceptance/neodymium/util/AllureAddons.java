@@ -1,5 +1,7 @@
 package com.xceptance.neodymium.util;
 
+import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -531,28 +533,8 @@ public class AllureAddons
             LOGGER.info("Custom Environment Data was added.");
             customDataAdded = true;
             String customDataIdentifier = "neodymium.report.environment.custom";
-            environmentDataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "dev-neodymium.properties",
-                                                                             customDataIdentifier, environmentDataMap);
 
-            Map<String, String> systemEnvMap = new HashMap<String, String>();
-            for (Map.Entry<String, String> entry : System.getenv().entrySet())
-            {
-                String key = entry.getKey();
-                if (key.contains(customDataIdentifier))
-                {
-                    String cleanedKey = key.replace(customDataIdentifier, "");
-                    cleanedKey = cleanedKey.replaceAll("\\.", "");
-                    systemEnvMap.put(cleanedKey, entry.getValue());
-                }
-            }
-            environmentDataMap = PropertiesUtil.mapPutAllIfAbsent(environmentDataMap, systemEnvMap);
-            environmentDataMap = PropertiesUtil.mapPutAllIfAbsent(environmentDataMap,
-                                                                  PropertiesUtil.getDataMapForIdentifier(customDataIdentifier,
-                                                                                                         System.getProperties()));
-            environmentDataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "credentials.properties",
-                                                                             customDataIdentifier, environmentDataMap);
-            environmentDataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "neodymium.properties",
-                                                                             customDataIdentifier, environmentDataMap);
+            environmentDataMap.putAll(getPropertiesMapForCustomIdentifier(customDataIdentifier));
         }
 
         if (!environmentDataMap.isEmpty())
