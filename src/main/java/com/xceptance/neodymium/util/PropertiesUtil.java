@@ -9,6 +9,7 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.lang3.StringUtils;
@@ -44,8 +45,10 @@ public class PropertiesUtil
         return keys;
     }
 
-    public static void loadPropertiesFromFile(String path, Properties properties)
+    public static Properties loadPropertiesFromFile(String path)
     {
+        Properties properties = new Properties();
+
         try
         {
             File source = new File(path);
@@ -60,6 +63,8 @@ public class PropertiesUtil
         {
             throw new RuntimeException(e);
         }
+
+        return properties;
     }
 
     public static Map<String, String> getDataMapForIdentifier(String identifier, Properties properties)
@@ -80,20 +85,37 @@ public class PropertiesUtil
 
     public static Map<String, String> mapPutAllIfAbsent(Map<String, String> map, Map<String, String> changeSet)
     {
-        if (!changeSet.isEmpty())
+        if (changeSet.isEmpty())
         {
-            for (Entry<String, String> entry : changeSet.entrySet())
-            {
-                map.putIfAbsent(entry.getKey(), entry.getValue());
-            }
+            return map;
         }
+
+        for (Entry<String, String> entry : changeSet.entrySet())
+        {
+            map.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+
+        return map;
+    }
+
+    public static <T extends Object> Map<T, T> putAllIfAbsent(Map<T, T> map, Map<T, T> changeSet)
+    {
+        if (changeSet.isEmpty())
+        {
+            return map;
+        }
+
+        for (Entry<T, T> entry : changeSet.entrySet())
+        {
+            map.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+
         return map;
     }
 
     public static Map<String, String> addMissingPropertiesFromFile(String fileLocation, String identifier, Map<String, String> dataMap)
     {
-        Properties properties = new Properties();
-        PropertiesUtil.loadPropertiesFromFile(fileLocation, properties);
+        Properties properties = loadPropertiesFromFile(fileLocation);
         return PropertiesUtil.mapPutAllIfAbsent(dataMap,
                                                 PropertiesUtil.getDataMapForIdentifier(identifier,
                                                                                        properties));
@@ -101,40 +123,42 @@ public class PropertiesUtil
 
     public static Map<String, String> getPropertiesMapForCustomIdentifier(String customIdentifier)
     {
-        Map<String, String> dataMap = new HashMap<String, String>();
-
         // System properties
-        dataMap = PropertiesUtil.mapPutAllIfAbsent(dataMap,
-                                                   PropertiesUtil.getDataMapForIdentifier(customIdentifier,
-                                                                                          System.getProperties()));
+        Properties properties = System.getProperties();
 
         // temporary config file
-        dataMap = PropertiesUtil.addMissingPropertiesFromFile(Optional.ofNullable(ConfigFactory.getProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME))
-                                                                      .orElse("")
-                                                                      .replaceAll("file:", "./"),
-                                                              customIdentifier,
-                                                              dataMap);
+        putAllIfAbsent(properties, loadPropertiesFromFile(Optional.ofNullable(ConfigFactory.getProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME))
+                                                                  .orElse("")
+                                                                  .replaceAll("file:", "./")));
 
         // config/dev-neodymium.properties
-        dataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "dev-neodymium.properties", customIdentifier,
-                                                              dataMap);
+        putAllIfAbsent(properties, loadPropertiesFromFile("." + File.separator + "config" + File.separator + "dev-neodymium.properties"));
 
         // System environment variables
         Properties systemProperties = new Properties();
         systemProperties.putAll(System.getenv());
 
-        Map<String, String> systemEnvMap = getDataMapForIdentifier(customIdentifier, systemProperties);
-
-        dataMap = PropertiesUtil.mapPutAllIfAbsent(dataMap, systemEnvMap);
+        putAllIfAbsent(properties, systemProperties);
 
         // config/credentials.properties
-        dataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "credentials.properties", customIdentifier,
-                                                              dataMap);
+        putAllIfAbsent(properties, loadPropertiesFromFile("." + File.separator + "config" + File.separator + "credentials.properties"));
 
         // config/neodymium.properties
-        dataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "neodymium.properties", customIdentifier,
-                                                              dataMap);
+        putAllIfAbsent(properties, loadPropertiesFromFile("." + File.separator + "config" + File.separator + "neodymium.properties"));
 
-        return dataMap;
+        // filter
+        Map<String, String> propertiesMap = properties.entrySet().stream().filter(entry -> ((String) entry.getKey()).startsWith(customIdentifier))
+                                                      .collect(Collectors.toMap(entry -> (String) entry.getKey(), entry -> (String) entry.getValue()));
+
+        // substitute
+        for (Entry<String, String> entry : propertiesMap.entrySet())
+        {
+            if (entry.getValue().startsWith("${"))
+            {
+                entry.setValue((String) properties.getOrDefault(entry.getValue().replace("${", "").replace("}", ""), entry.getValue()));
+            }
+        }
+
+        return propertiesMap;
     }
 }
