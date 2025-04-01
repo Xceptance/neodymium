@@ -1,5 +1,7 @@
 package com.xceptance.neodymium.common.browser;
 
+import static com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration.DEFAULT_BROWSER_ID;
+
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Repeatable;
 import java.lang.reflect.AnnotatedElement;
@@ -80,6 +82,27 @@ public class BrowserData extends Data
         {
             return browserAnnotations;
         }
+    }
+
+    /**
+     * function to check if the given class or a super class has a {@link SuppressBrowsers} annotation
+     * 
+     * @param clazz
+     *            the class to test
+     * @return boolean value depending on {@link SuppressBrowsers} annotation is found
+     */
+    private boolean hasClassOrSuperClassSuppressBrowsersAnnotationLoop(Class<?> clazz)
+    {
+        // iterate to the parent classes until a SuppressBrowsers annotation is found or the class has no super class anymore
+        while (clazz != null)
+        {
+            if (!getDeclaredAnnotations(clazz, SuppressBrowsers.class).isEmpty())
+            {
+                return true;
+            }
+            clazz = clazz.getSuperclass();
+        }
+        return false;
     }
 
     @SuppressWarnings("unchecked")
@@ -203,9 +226,9 @@ public class BrowserData extends Data
         if (systemBrowserFilter != null && !systemBrowserFilter.isEmpty())
         {
             browsersToUse = browsers.stream()
-                           .filter(browserTag -> systemBrowserFilter.contains(browserTag))
-                           .map(browserTag -> addKeepBrowserOpenInformation(browserTag, testMethod))
-                           .collect(Collectors.toList());
+                                    .filter(browserTag -> systemBrowserFilter.contains(browserTag))
+                                    .map(browserTag -> addKeepBrowserOpenInformation(browserTag, testMethod))
+                                    .collect(Collectors.toList());
         }
         else
         {
@@ -215,8 +238,7 @@ public class BrowserData extends Data
         }
 
         // use the default browser if no browser is defined and browsers are not suppressed
-        boolean classHasSuppressBrowsers = Arrays.stream(testMethod.getDeclaringClass().getAnnotations())
-                                                 .anyMatch(annotation -> annotation.annotationType().equals(SuppressBrowsers.class));
+        boolean classHasSuppressBrowsers = hasClassOrSuperClassSuppressBrowsersAnnotationLoop(testMethod.getDeclaringClass());
         boolean methodHasSuppressBrowsers = Arrays.stream(testMethod.getAnnotations())
                                                   .anyMatch(annotation -> annotation.annotationType().equals(SuppressBrowsers.class));
 
@@ -241,7 +263,7 @@ public class BrowserData extends Data
                                                                                .anyMatch(method -> method.getAnnotation(StartNewBrowserForCleanUp.class) != null)
                                                                          || Neodymium.configuration().startNewBrowserForCleanUp());
 
-            browsersToUse.add(new BrowserMethodData("Chrome_Default", Neodymium.configuration()
+            browsersToUse.add(new BrowserMethodData(DEFAULT_BROWSER_ID, Neodymium.configuration()
                                                                                .keepBrowserOpen(), Neodymium.configuration()
                                                                                                             .keepBrowserOpenOnFailure(), shouldStartNewBrowserForSetUp, shouldStartNewBrowserForCleanUp, new ArrayList<Method>()));
         }

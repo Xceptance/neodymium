@@ -9,9 +9,11 @@ import java.io.OutputStreamWriter;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 
+@SuppressBrowsers
 public class LocalizationTest extends AbstractNeodymiumTest
 {
     private static File tempConfigFile;
