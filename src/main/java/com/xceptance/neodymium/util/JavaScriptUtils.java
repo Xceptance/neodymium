@@ -111,16 +111,25 @@ public class JavaScriptUtils
      */
     public static void injectJavascriptPopupBlocker(String popupSelector)
     {
+        String popupSelectorQuoted = popupSelector.replaceAll("\"", "\\\\\"").replaceAll("'", "\\\\\"");
+
         String popupBlocker = "function popupBlocker()" +
                               "{" +
-                              " var popupElement = document.querySelector('" + popupSelector.replaceAll("\"", "\\\\\"").replaceAll("'",
-                                                                                                                                   "\\\\\"")
-                              + "');"
-                              + " if(popupElement != null)" +
-                              " {" +
-                              " popupElement.dispatchEvent(new Event('click'));" +
-                              " console.log('Popup " + popupSelector.replaceAll("\"", "\\\\\"").replaceAll("'", "\\\\\"") + "closed')" +
-                              " }" +
+                              "   var popupElement = document.querySelector(\"" + popupSelectorQuoted + "\");" +
+                              "   if(popupElement != null)" +
+                              "   {" +
+                              "       try {" +
+                              "         popupElement.click();" +
+                              "         console.log('Popup " + popupSelectorQuoted + "closed')" +
+                              "       } catch(error) {}" +
+                              "   }" +
+                              "   if(popupElement != null)" +
+                              "   {" +
+                              "       try {" +
+                              "         popupElement.dispatchEvent(new Event('click'));" +
+                              "         console.log('Popup " + popupSelectorQuoted + "closed')" +
+                              "       } catch(error) {}" +
+                              "   }" +
                               "}" +
                               "" +
                               "setInterval(popupBlocker," + Neodymium.configuration().getPopupBlockerInterval() + ");";
