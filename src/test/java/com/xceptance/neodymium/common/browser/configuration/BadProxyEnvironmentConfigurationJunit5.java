@@ -4,10 +4,8 @@ import java.util.Properties;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 
-@SuppressBrowsers
 public class BadProxyEnvironmentConfigurationJunit5
 {
     @NeodymiumTest

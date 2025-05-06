@@ -1,7 +1,5 @@
 package com.xceptance.neodymium.common.browser;
 
-import static com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration.DEFAULT_BROWSER_ID;
-
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Repeatable;
 import java.lang.reflect.AnnotatedElement;
@@ -91,7 +89,7 @@ public class BrowserData extends Data
      *            the class to test
      * @return boolean value depending on {@link SuppressBrowsers} annotation is found
      */
-    private boolean hasClassOrSuperClassSuppressBrowsersAnnotationLoop(Class<?> clazz)
+    private boolean hasClassOrSuperClassSuppressBrowsersAnnotation(Class<?> clazz)
     {
         // iterate to the parent classes until a SuppressBrowsers annotation is found or the class has no super class anymore
         while (clazz != null)
@@ -197,7 +195,7 @@ public class BrowserData extends Data
 
         if (getAnnotations(testMethod, SuppressBrowsers.class).isEmpty())
         {
-            methodBrowsers = getAnnotations(testMethod, Browser.class).stream().map(annotation -> annotation.value()).distinct()
+            methodBrowsers = getAnnotations(testMethod, Browser.class).stream().map(Browser::value).distinct()
                                                                       .collect(Collectors.toList());
             if (!methodBrowsers.isEmpty())
             {
@@ -235,37 +233,6 @@ public class BrowserData extends Data
             browsersToUse = browsers.stream()
                                     .map(browserTag -> addKeepBrowserOpenInformation(browserTag, testMethod))
                                     .collect(Collectors.toList());
-        }
-
-        // use the default browser if no browser is defined and browsers are not suppressed
-        boolean classHasSuppressBrowsers = hasClassOrSuperClassSuppressBrowsersAnnotationLoop(testMethod.getDeclaringClass());
-        boolean methodHasSuppressBrowsers = Arrays.stream(testMethod.getAnnotations())
-                                                  .anyMatch(annotation -> annotation.annotationType().equals(SuppressBrowsers.class));
-
-        // case no @Browser annotation, so fall back to default browser if the browser is not suppressed
-        if (browsersToUse.isEmpty() && !classHasSuppressBrowsers && !methodHasSuppressBrowsers)
-        {
-            // check if a new browser for setup is needed
-            boolean hasBeforeMethod = Stream.of(testMethod.getDeclaringClass().getMethods())
-                                            .anyMatch(method -> method.getAnnotation(Before.class) != null || method.getAnnotation(BeforeEach.class) != null);
-
-            // only if the class has a before method, the NewBrowserForSetUp property needs to evaluated
-            boolean shouldStartNewBrowserForSetUp = hasBeforeMethod && (Stream.of(testMethod.getDeclaringClass().getMethods())
-                                                                              .anyMatch(method -> method.getAnnotation(StartNewBrowserForSetUp.class) != null)
-                                                                        || Neodymium.configuration().startNewBrowserForSetUp());
-
-            // check if a new browser for cleanup is needed
-            boolean hasAfterMethod = Stream.of(testMethod.getDeclaringClass().getMethods())
-                                           .anyMatch(method -> method.getAnnotation(After.class) != null || method.getAnnotation(AfterEach.class) != null);
-
-            // only if the class has a before method, the NewBrowserForSetUp property needs to evaluated
-            boolean shouldStartNewBrowserForCleanUp = hasAfterMethod && (Stream.of(testMethod.getDeclaringClass().getMethods())
-                                                                               .anyMatch(method -> method.getAnnotation(StartNewBrowserForCleanUp.class) != null)
-                                                                         || Neodymium.configuration().startNewBrowserForCleanUp());
-
-            browsersToUse.add(new BrowserMethodData(DEFAULT_BROWSER_ID, Neodymium.configuration()
-                                                                               .keepBrowserOpen(), Neodymium.configuration()
-                                                                                                            .keepBrowserOpenOnFailure(), shouldStartNewBrowserForSetUp, shouldStartNewBrowserForCleanUp, new ArrayList<Method>()));
         }
 
         return browsersToUse;
@@ -316,10 +283,10 @@ public class BrowserData extends Data
     {
         BrowserMethodData browserMethodData = addKeepBrowserOpenInformationForBeforeOrAfter(browserTag, method);
         boolean junit5 = method.getAnnotation(NeodymiumTest.class) != null;
-        List<Method> afterMethodsWithTestBrowser = List.of(testClass.getMethods()).stream()
-                                                       .filter(classMethod -> (junit5 ? classMethod.getAnnotation(AfterEach.class)
+        List<Method> afterMethodsWithTestBrowser = Stream.of(testClass.getMethods())
+                                                         .filter(classMethod -> (junit5 ? classMethod.getAnnotation(AfterEach.class)
                                                                                       : classMethod.getAnnotation(After.class)) != null)
-                                                       .collect(Collectors.toList());
+                                                         .collect(Collectors.toList());
         if (!(Neodymium.configuration().startNewBrowserForSetUp() && Neodymium.configuration().startNewBrowserForCleanUp()))
         {
             browserMethodData.setAfterMethodsWithTestBrowser(afterMethodsWithTestBrowser);
@@ -333,11 +300,10 @@ public class BrowserData extends Data
         {
             separateBrowserForSetupRequired = Neodymium.configuration().startNewBrowserForSetUp()
                                               && (testClass.getAnnotation(StartNewBrowserForSetUp.class) != null
-                                                  || List.of(testClass.getMethods()).stream()
-                                                         .filter(classMethod -> (junit5 ? classMethod.getAnnotation(BeforeEach.class)
-                                                                                        : classMethod.getAnnotation(Before.class)) != null
-                                                                                && classMethod.getAnnotation(StartNewBrowserForSetUp.class) != null)
-                                                         .findAny().isPresent());
+                                                  || Stream.of(testClass.getMethods())
+                                                           .anyMatch(classMethod -> (junit5 ? classMethod.getAnnotation(BeforeEach.class)
+                                                                                            : classMethod.getAnnotation(Before.class)) != null
+                                                                                    && classMethod.getAnnotation(StartNewBrowserForSetUp.class) != null));
         }
         if (Neodymium.configuration().startNewBrowserForCleanUp())
         {

@@ -2,13 +2,11 @@ package com.xceptance.neodymium.junit5.testclasses.data.override.mixed;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.common.testdata.RandomDataSets;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.DataUtils;
 
-@SuppressBrowsers
 @DataSet(2)
 @DataSet(4)
 @DataSet(6)

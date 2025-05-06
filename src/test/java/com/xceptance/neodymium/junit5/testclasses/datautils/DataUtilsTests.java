@@ -5,12 +5,10 @@ import java.util.List;
 
 import org.junit.jupiter.api.Assertions;
 
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.DataUtils;
 
-@SuppressBrowsers
 public class DataUtilsTests
 {
     private static final String NIL = "not in list";

@@ -4,14 +4,12 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.common.testdata.RandomDataSets;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.DataUtils;
 
 @RunWith(NeodymiumRunner.class)
-@SuppressBrowsers
 @DataSet(2)
 @DataSet(4)
 @DataSet(6)

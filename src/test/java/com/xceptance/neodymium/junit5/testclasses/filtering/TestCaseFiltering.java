@@ -2,14 +2,12 @@ package com.xceptance.neodymium.junit5.testclasses.filtering;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.SuppressDataSets;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.DataUtils;
 
 import io.cucumber.java.it.Data;
 
-@SuppressBrowsers
 public class TestCaseFiltering
 {
     @NeodymiumTest

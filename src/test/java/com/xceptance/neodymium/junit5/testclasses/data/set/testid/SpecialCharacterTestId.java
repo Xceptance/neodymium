@@ -2,11 +2,9 @@ package com.xceptance.neodymium.junit5.testclasses.data.set.testid;
 
 import org.junit.jupiter.api.Assertions;
 
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 
-@SuppressBrowsers
 public class SpecialCharacterTestId
 {
     static int dataSet = 1;

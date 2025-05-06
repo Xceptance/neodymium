@@ -10,10 +10,8 @@ import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.safari.SafariOptions;
 
 import com.xceptance.neodymium.common.browser.BrowserRunnerHelper;
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.util.Neodymium;
 
-@SuppressBrowsers
 public class SetProxyForWebDriver
 {
     @Test

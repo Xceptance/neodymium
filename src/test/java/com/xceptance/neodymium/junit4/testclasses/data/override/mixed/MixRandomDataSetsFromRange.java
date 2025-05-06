@@ -4,7 +4,6 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.common.testdata.RandomDataSets;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
@@ -15,7 +14,6 @@ import com.xceptance.neodymium.util.DataUtils;
 @DataSet(6)
 @DataSet(8)
 @RunWith(NeodymiumRunner.class)
-@SuppressBrowsers
 public class MixRandomDataSetsFromRange
 {
     @Test

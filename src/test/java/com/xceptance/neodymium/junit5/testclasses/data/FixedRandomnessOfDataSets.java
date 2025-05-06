@@ -5,13 +5,11 @@ import java.util.List;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.testdata.RandomDataSets;
 import com.xceptance.neodymium.common.testdata.SuppressDataSets;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.DataUtils;
 
-@SuppressBrowsers
 public class FixedRandomnessOfDataSets
 {
     private static List<String> datasets = new ArrayList<String>();

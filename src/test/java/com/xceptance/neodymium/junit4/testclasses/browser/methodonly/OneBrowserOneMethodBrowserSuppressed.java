@@ -9,7 +9,6 @@ import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 
 @RunWith(NeodymiumRunner.class)
-@SuppressBrowsers
 public class OneBrowserOneMethodBrowserSuppressed
 {
     @Test

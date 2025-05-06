@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import org.junit.Assert;
 
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.NeodymiumConfiguration;
 import com.xceptance.neodymium.util.WebDriverUtils;
@@ -16,7 +15,6 @@ import io.cucumber.java.Before;
 import io.cucumber.java.Scenario;
 import io.cucumber.java.en.Given;
 
-@SuppressBrowsers
 public class CucumberContextSteps
 {
     @Before
