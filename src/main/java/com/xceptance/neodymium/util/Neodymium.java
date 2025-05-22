@@ -21,8 +21,7 @@ import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
 
 /**
- * See our Github wiki: <a href="https://github.com/Xceptance/neodymium-library/wiki/Neodymium-context">Neodymium
- * context</a>
+ * See our Github wiki: <a href="https://github.com/Xceptance/neodymium/wiki/Neodymium-context">Neodymium context</a>
  * 
  * @author m.kaufmann
  * @author m.pfotenhauer
