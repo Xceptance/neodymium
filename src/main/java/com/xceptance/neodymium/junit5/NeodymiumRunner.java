@@ -1,23 +1,20 @@
 package com.xceptance.neodymium.junit5;
 
-import java.lang.reflect.Method;
-import java.util.stream.Stream;
-
-import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumRandom;
-
 import io.qameta.allure.selenide.AllureSelenide;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
+import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.lang.reflect.Method;
+import java.util.stream.Stream;
 
 public class NeodymiumRunner implements TestTemplateInvocationContextProvider
 {
@@ -70,18 +67,6 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
     {
         // clear the context before next child run
         Neodymium.clearThreadContext();
-
-        // reset the random seed so every test starts with the same values for better reproducibility
-        if (Neodymium.configuration().initialRandomValue() != null)
-        {
-            // set the seed from the properties
-            NeodymiumRandom.setSeed(Neodymium.configuration().initialRandomValue());
-        }
-        else
-        {
-            // set the initial random seed again if no seed is given in the property to make also the random seeds reproducible
-            NeodymiumRandom.setSeed(NeodymiumRandom.getSeed());
-        }
 
         Class<?> testClass = context.getRequiredTestClass();
         Method templateMethod = context.getRequiredTestMethod();
