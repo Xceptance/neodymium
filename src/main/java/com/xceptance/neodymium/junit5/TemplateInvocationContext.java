@@ -1,11 +1,5 @@
 package com.xceptance.neodymium.junit5;
 
-import java.util.LinkedList;
-import java.util.List;
-
-import org.junit.jupiter.api.extension.Extension;
-import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
 import com.xceptance.neodymium.common.testdata.TestdataContainer;
 import com.xceptance.neodymium.junit5.browser.BrowserExecutionCallback;
@@ -13,7 +7,13 @@ import com.xceptance.neodymium.junit5.filtering.FilterTestMethodCallback;
 import com.xceptance.neodymium.junit5.filtering.WipTestMethodCallback;
 import com.xceptance.neodymium.junit5.testdata.TestdataCallback;
 import com.xceptance.neodymium.junit5.testend.NeodymiumAfterTestExecutionCallback;
+import com.xceptance.neodymium.junit5.teststart.NeodymiumBeforeTestExecutionCallback;
 import com.xceptance.neodymium.util.Neodymium;
+import org.junit.jupiter.api.extension.Extension;
+import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
+
+import java.util.LinkedList;
+import java.util.List;
 
 public class TemplateInvocationContext implements TestTemplateInvocationContext
 {
@@ -51,6 +51,7 @@ public class TemplateInvocationContext implements TestTemplateInvocationContext
         }
         extentions.add(new FilterTestMethodCallback());
         extentions.add(new WipTestMethodCallback());
+        extentions.add(new NeodymiumBeforeTestExecutionCallback());
         extentions.add(new NeodymiumAfterTestExecutionCallback());
         return extentions;
     }

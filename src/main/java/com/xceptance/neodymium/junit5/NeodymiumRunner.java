@@ -1,22 +1,20 @@
 package com.xceptance.neodymium.junit5;
 
-import java.lang.reflect.Method;
-import java.util.stream.Stream;
-
-import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
-
 import io.qameta.allure.selenide.AllureSelenide;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
+import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.lang.reflect.Method;
+import java.util.stream.Stream;
 
 public class NeodymiumRunner implements TestTemplateInvocationContextProvider
 {

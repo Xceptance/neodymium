@@ -1,10 +1,10 @@
 package com.xceptance.neodymium.util;
 
-import java.util.Random;
-
 import org.apache.commons.text.TextRandomProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Random;
 
 /**
  * Utility class for random numbers and strings.
@@ -84,9 +84,9 @@ public class NeodymiumRandom
         protected InternalRandom initialValue()
         {
             Long configuredInitialValue = Neodymium.configuration().initialRandomValue();
-            long initalValue = configuredInitialValue == null ? System.currentTimeMillis() : configuredInitialValue;
+            long initialValue = configuredInitialValue == null ? System.currentTimeMillis() : configuredInitialValue;
 
-            return new InternalRandom(initalValue);
+            return new InternalRandom(initialValue);
         }
     };
 
@@ -122,6 +122,23 @@ public class NeodymiumRandom
     public static void reseed()
     {
         random.get().reseed();
+    }
+
+    /**
+     * Reinitialize the random seed to the initial one
+     */
+    public static void reinitializeRandomSeed()
+    {
+        if (Neodymium.configuration().initialRandomValue() != null)
+        {
+            // set the seed from the properties
+            NeodymiumRandom.setSeed(Neodymium.configuration().initialRandomValue());
+        }
+        else
+        {
+            // set the initial random seed again if no seed is given in the property to make also the random seeds reproducible
+            NeodymiumRandom.setSeed(NeodymiumRandom.getSeed());
+        }
     }
 
     /**
