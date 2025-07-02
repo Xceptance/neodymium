@@ -113,26 +113,58 @@ public class JavaScriptUtils
     {
         String popupSelectorQuoted = popupSelector.replaceAll("\"", "\\\\\"").replaceAll("'", "\\\\\"");
 
-        String popupBlocker = "function popupBlocker()" +
-                              "{" +
-                              "   var popupElement = document.querySelector(\"" + popupSelectorQuoted + "\");" +
-                              "   if(popupElement != null)" +
-                              "   {" +
-                              "       try {" +
-                              "         popupElement.click();" +
-                              "         console.log('Popup " + popupSelectorQuoted + "closed')" +
-                              "       } catch(error) {}" +
-                              "   }" +
-                              "   if(popupElement != null)" +
-                              "   {" +
-                              "       try {" +
-                              "         popupElement.dispatchEvent(new Event('click'));" +
-                              "         console.log('Popup " + popupSelectorQuoted + "closed')" +
-                              "       } catch(error) {}" +
-                              "   }" +
-                              "}" +
-                              "" +
-                              "setInterval(popupBlocker," + Neodymium.configuration().getPopupBlockerInterval() + ");";
+        String popupBlocker = "(function() {"
+                              + "console.log('Neodymium Popupblocker: Injected');"
+
+                              // initialize popup list
+                              + "  if (typeof window.xcPopupsToBlock === 'undefined') "
+                              + "  {"
+                              + "    window.xcPopupsToBlock = []; "
+                              + "    console.log('Neodymium Popupblocker: xcPopupsToBlock global variable initialized.');"
+                              + "  }"
+                              + "  "
+                              // add pattern to list if not existing
+                              + "  let newPattern = '" + popupSelectorQuoted + "';"
+                              + "  if (window.xcPopupsToBlock.includes(newPattern)) {"
+                              + "    console.log(`Neodymium Popupblocker: Pattern \"${newPattern}\" already exists in xcPopupsToBlock. Skipping addition.`);"
+                              + "  } "
+                              + "  else"
+                              + "  {"
+                              + "    window.xcPopupsToBlock.push(newPattern);"
+                              + "  }"
+                              + "  "
+                              + "  "
+                              // create function if it's not already there
+                              + "  if (typeof window.xcPopupBlocker !== 'function') "
+                              + "  {"
+                              + "     console.log('init xcPopupBlocker function');"
+                              + "     window.xcPopupBlocker = function() "
+                              + "     {"
+                              + "       console.log('run xcPopupBlocker function');"
+                              + "       for (let i = 0; i < window.xcPopupsToBlock.length; i++) {"
+                              + "         const pattern = window.xcPopupsToBlock[i];"
+                              + "         var popupElement = document.querySelector(pattern);"
+                              + "         console.log('Neodymium Popupblocker: Check for Popup ' + pattern);"
+                              + "         if(popupElement != null)"
+                              + "         {"
+                              + "             try {"
+                              + "               popupElement.click();"
+                              + "               console.log('Neodymium Popupblocker: Popup '+pattern+' clicked')"
+                              + "             } catch(error) {}"
+                              + "         }"
+                              + "         if(popupElement != null)"
+                              + "         {"
+                              + "           try {"
+                              + "             popupElement.dispatchEvent(new Event('click'));"
+                              + "             console.log('Neodymium Popupblocker: Popup '+pattern+' event triggered')"
+                              + "           } catch(error) {}"
+                              + "         }"
+                              + "       }"
+                              + "     };"
+                              + "     setInterval(window.xcPopupBlocker," + Neodymium.configuration().getPopupBlockerInterval() + ");"
+                              + "  }"
+                              + "}"
+                              + ")();";
 
         Selenide.executeJavaScript(popupBlocker, "");
     }
