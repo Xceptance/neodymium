@@ -11,39 +11,41 @@ import com.xceptance.neodymium.junit4.testclasses.urlfiltering.ExcludeTest;
 import com.xceptance.neodymium.junit4.testclasses.urlfiltering.IncludeOverExcludeTest;
 import com.xceptance.neodymium.junit4.testclasses.urlfiltering.IncludeTest;
 
-public class URLfilteringTest extends NeodymiumTest
+public class UrlFilteringTest extends NeodymiumTest
 {
     @Test
-    public void testURLsExcluded()
+    public void testUrlsExcluded()
     {
         Map<String, String> properties = new HashMap<>();
-        properties.put("neodymium.url.excludeList", "https://www.google.com/ https://github.com");
+        properties.put("neodymium.url.excludeList",
+                       "https://www.google.com/ https://github.com/ https://www.xceptance.com/en/news/ https://www.xceptance.*onta");
+        properties.put("neodymium.url.includeList", "");
 
         addPropertiesForTest("temp-ExcludeURLsTest-neodymium.properties", properties);
         Result result = JUnitCore.runClasses(ExcludeTest.class);
-        checkFail(result, 2, 0, 2);
+        checkPass(result, 5, 0);
     }
 
     @Test
-    public void testURLsincluded()
+    public void testUrlsIncluded()
     {
         Map<String, String> properties = new HashMap<>();
-        properties.put("neodymium.url.includeList", "https://www.google.com/ https://github.com");
+        properties.put("neodymium.url.includeList", "https://www.google.com/ https://github.com/ https://www.xceptance.*contact");
 
         addPropertiesForTest("temp-ExcludeURLsTest-neodymium.properties", properties);
         Result result = JUnitCore.runClasses(IncludeTest.class);
-        checkFail(result, 2, 0, 1);
+        checkPass(result, 4, 0);
     }
 
     @Test
     public void testIncludeOverExclude()
     {
         Map<String, String> properties = new HashMap<>();
-        properties.put("neodymium.url.excludeList", "https://www.google.com/ https://github.com");
+        properties.put("neodymium.url.excludeList", "https://www.google.com/ https://github.com https://github.com/Xceptance/neodymium");
         properties.put("neodymium.url.includeList", "https://www.google.com/ https://github.com");
 
         addPropertiesForTest("temp-ExcludeURLsTest-neodymium.properties", properties);
         Result result = JUnitCore.runClasses(IncludeOverExcludeTest.class);
-        checkFail(result, 2, 0, 1);
+        checkPass(result, 3, 0);
     }
 }

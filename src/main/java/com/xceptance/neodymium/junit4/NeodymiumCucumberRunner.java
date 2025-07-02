@@ -19,7 +19,7 @@ public class NeodymiumCucumberRunner extends NeodymiumCucumberWrapper
     {
         super(clazz);
         LOGGER.info("This test uses Neodymium Library (version: " + Neodymium.getNeodymiumVersion()
-                    + "), MIT License, more details on https://github.com/Xceptance/neodymium-library");
+                    + "), MIT License, more details on https://github.com/Xceptance/neodymium");
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.xceptance.neodymium.util;
 
 import static com.xceptance.neodymium.common.testdata.TestData.JSONPATH_CONFIGURATION;
 
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -61,7 +62,6 @@ public class LighthouseUtils
                     while ((readerLine = r.readLine()) != null)
                     {
                         readerOutput = readerOutput + readerLine;
-                        continue;
                     }
 
                     checkErrorCodeProcess(p);
@@ -183,7 +183,6 @@ public class LighthouseUtils
                 while ((readerLine = r.readLine()) != null)
                 {
                     readerOutput = readerOutput + readerLine;
-                    continue;
                 }
                 
                 checkErrorCodeProcess(p);
@@ -198,7 +197,6 @@ public class LighthouseUtils
                     while (r.readLine() != null)
                     {
                         readerOutput = readerOutput + readerLine;
-                        continue;
                     }
                     
                     checkErrorCodeProcess(p);
@@ -211,7 +209,6 @@ public class LighthouseUtils
                     while (r.readLine() != null)
                     {
                         readerOutput = readerOutput + readerLine;
-                        continue;
                     }
                     
                     checkErrorCodeProcess(p);
@@ -252,19 +249,19 @@ public class LighthouseUtils
         {
             for (String audit : assertAuditsString.split(" ")) 
             {
-                String jsonPath = ("$.audits." + audit.trim() + ".details.items.length()");
+                String jsonPath = ("$.audits." + audit.trim() + ".score");
                 
                 try 
                 {
-                    long value =  JsonPath.using(JSONPATH_CONFIGURATION).parse(json).read(jsonPath);
-                    if (value > 0) 
+                    float value = Float.parseFloat(JsonPath.using(JSONPATH_CONFIGURATION).parse(json).read(jsonPath).toString());
+                    if (value < 0.5)
                     {
                         errorAudits.add(audit.trim());
                     }
                 }
                 catch (PathNotFoundException e)
                 {
-                    continue;
+                    // left blank intentionally
                 }
                 
             }
@@ -288,8 +285,7 @@ public class LighthouseUtils
      */
     private static Process runProcess(String... params) throws IOException
     {
-        ProcessBuilder builder = new ProcessBuilder();
-        builder = new ProcessBuilder(params);
+        ProcessBuilder builder = new ProcessBuilder(params);
         builder.redirectErrorStream(true);
         
         return builder.start();

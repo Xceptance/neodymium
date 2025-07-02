@@ -1,5 +1,8 @@
 package com.xceptance.neodymium.junit4.testclasses.urlfiltering;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -13,14 +16,36 @@ import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 public class IncludeTest extends NeodymiumTest
 {
     @Test
-    public void testIncludedURLisAllowed()
+    public void testIncludedUrlIsAllowed()
     {
         Selenide.open("https://www.google.com/");
     }
 
     @Test
-    public void testNotIncludedURLisforbidden()
+    public void testLaterIncludedUrlIsAllowed()
     {
-        Selenide.open("https://www.xceptance.com/en/");
+        Selenide.open("https://github.com");
+    }
+
+    @Test
+    public void testNotIncludedUrlIsForbidden()
+    {
+        AssertionError assertionError = assertThrows(AssertionError.class, () -> {
+            Selenide.open("https://www.xceptance.com/en/");
+        });
+        assertEquals("Opened Link was outside permitted URLs: https://www.xceptance.com/en/ ==> expected: <true> but was: <false>",
+                     assertionError.getMessage());
+    }
+
+    @Test
+    public void testIncludedRegexIsAllowed()
+    {
+        Selenide.open("https://www.xceptance.com/en/contact/");
+
+        AssertionError assertionError = assertThrows(AssertionError.class, () -> {
+            Selenide.open("https://www.xceptance.com/en/");
+        });
+        assertEquals("Opened Link was outside permitted URLs: https://www.xceptance.com/en/ ==> expected: <true> but was: <false>",
+                     assertionError.getMessage());
     }
 }
