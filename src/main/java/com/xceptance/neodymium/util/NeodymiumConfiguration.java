@@ -136,35 +136,75 @@ public interface NeodymiumConfiguration extends Mutable
 
     @Key("neodymium.dataUtils.email.domain")
     @DefaultValue("varmail.de")
+    @Deprecated
     public String dataUtilsEmailDomain();
 
     @Key("neodymium.dataUtils.email.local.prefix")
     @DefaultValue("test")
+    @Deprecated
     public String dataUtilsEmailLocalPrefix();
 
     @Key("neodymium.dataUtils.email.randomCharsAmount")
     @DefaultValue("12")
+    @Deprecated
     public int dataUtilsEmailRandomCharsAmount();
 
     @Key("neodymium.dataUtils.password.uppercaseCharAmount")
     @DefaultValue("2")
+    @Deprecated
     public int dataUtilsPasswordUppercaseCharAmount();
 
     @Key("neodymium.dataUtils.password.lowercaseCharAmount")
     @DefaultValue("5")
+    @Deprecated
     public int dataUtilsPasswordLowercaseCharAmount();
 
     @Key("neodymium.dataUtils.password.digitAmount")
     @DefaultValue("2")
+    @Deprecated
     public int dataUtilsPasswordDigitAmount();
 
     @Key("neodymium.dataUtils.password.specialCharAmount")
     @DefaultValue("2")
+    @Deprecated
     public int dataUtilsPasswordSpecialCharAmount();
 
     @Key("neodymium.dataUtils.password.specialChars")
     @DefaultValue("+-#$%&.;,_")
+    @Deprecated
     public String dataUtilsPasswordSpecialChars();
+
+    @Key("neodymium.testData.email.domain")
+    @DefaultValue("${neodymium.dataUtils.email.domain}")
+    public String testDataEmailDomain();
+
+    @Key("neodymium.testData.email.local.prefix")
+    @DefaultValue("${neodymium.dataUtils.email.local.prefix}")
+    public String testDataEmailLocalPrefix();
+
+    @Key("neodymium.testData.email.randomCharsAmount")
+    @DefaultValue("${neodymium.dataUtils.email.randomCharsAmount}")
+    public int testDataEmailRandomCharsAmount();
+
+    @Key("neodymium.testData.password.uppercaseCharAmount")
+    @DefaultValue("${neodymium.dataUtils.password.uppercaseCharAmount}")
+    public int testDataPasswordUppercaseCharAmount();
+
+    @Key("neodymium.testData.password.lowercaseCharAmount")
+    @DefaultValue("${neodymium.dataUtils.password.lowercaseCharAmount}")
+    public int testDataPasswordLowercaseCharAmount();
+
+    @Key("neodymium.testData.password.digitAmount")
+    @DefaultValue("${neodymium.dataUtils.password.digitAmount}")
+    public int testDataPasswordDigitAmount();
+
+    @Key("neodymium.testData.password.specialCharAmount")
+    @DefaultValue("${neodymium.dataUtils.password.specialCharAmount}")
+    public int testDataPasswordSpecialCharAmount();
+
+    @Key("neodymium.testData.password.specialChars")
+    @DefaultValue("${neodymium.dataUtils.password.specialChars}")
+    public String testDataPasswordSpecialChars();
 
     @Key("neodymium.junit.viewmode")
     @DefaultValue("tree")

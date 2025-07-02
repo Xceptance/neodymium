@@ -1,0 +1,81 @@
+[
+	{
+		"testId": "asString",
+		"nullValue": null,
+		"empty": "",
+		"value": "value",
+		"sentence": "containing strange things like spaces and äüø"
+	},
+	{
+		"testId": "asInt",
+		"nullValue": null,
+		"empty": "",
+		"positiveValue": 3,
+		"negativeValue": -3,
+		"zeroValue": 0
+	},
+	{
+		"testId": "asLong",
+		"nullValue": null,
+		"empty": "",
+		"positiveValue": 3,
+		"negativeValue": -3,
+		"zeroValue": 0
+	},
+	{
+		"testId": "asFloat",
+		"nullValue": null,
+		"empty": "",
+		"positiveValue": "3.3f",
+		"negativeValue": -3.3,
+		"zeroValue": 0
+	},
+	{
+		"testId": "asDouble",
+		"nullValue": null,
+		"empty": "",
+		"positiveValue": "3.3d",
+		"negativeValue": -3.3,
+		"zeroValue": 0
+	},
+	{
+		"testId": "asBoolean",
+		"nullValue": null,
+		"empty": "",
+		"positiveValue": true,
+		"negativeValue": false
+	},
+	{
+		"testId": "asObject",
+		"clubCardNumber": 1234567890,
+		"description": "containing strange things like spaces and äüø",
+		"numberValue":12.34,
+		"nullValue":null,
+		"creditCard": {
+			"cardNumber": "4111111111111111",
+			"ccv": "123",
+			"month": "10",
+			"year": "2018"
+		},
+		"age": 23,
+		"names": [
+			"abc",
+			"def",
+			"ghi"
+		],
+		"persons": [
+			{
+				"firstName": "a",
+				"lastName": "b"
+			},
+			{
+				"firstName": "c",
+				"lastName": "d"
+			}
+		],
+		"keyValueMap": {
+			"key": "value"
+		},
+		"level": "HIGH"
+	}
+]

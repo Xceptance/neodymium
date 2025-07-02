@@ -1,6 +1,7 @@
 package com.xceptance.neodymium.util;
 
-import static com.xceptance.neodymium.util.DataUtils.JSONPATH_CONFIGURATION;
+import static com.xceptance.neodymium.common.testdata.TestData.JSONPATH_CONFIGURATION;
+
 
 import java.io.BufferedReader;
 import java.io.File;
