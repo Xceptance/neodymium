@@ -189,6 +189,13 @@ public abstract class NeodymiumTest
         }
     }
 
+    public void checkAssumptionFailure(final Result result, final boolean expectSuccessful, final int expectedRunCount, final int expectedIgnoreCount,
+                                       final int expectedFailCount, final int assumtionFailureCount, final Map<String, String> expectedFailureMessages)
+    {
+        check(result, expectSuccessful, expectedRunCount, expectedIgnoreCount, expectedFailCount, expectedFailureMessages);
+        Assert.assertEquals("Method assumption failure count", assumtionFailureCount, result.getAssumptionFailureCount());
+    }
+
     /**
      * Assert that all tests have passed.
      * 
