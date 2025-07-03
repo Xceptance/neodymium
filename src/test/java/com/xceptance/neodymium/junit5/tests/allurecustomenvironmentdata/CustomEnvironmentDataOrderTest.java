@@ -1,22 +1,21 @@
 package com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata;
 
-import static com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata.XmlToMapUtil.getXmlParameterMap;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.Map;
-
+import com.xceptance.neodymium.junit5.NeodymiumTest;
+import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
+import com.xceptance.neodymium.util.AllureAddons;
+import com.xceptance.neodymium.util.Neodymium;
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.Neodymium;
+import java.io.File;
+import java.io.IOException;
+import java.util.Map;
+
+import static com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata.XmlToMapUtil.getXmlParameterMap;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
 {
@@ -38,6 +37,10 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
     @BeforeAll
     public static void setUpNeodymiumConfiguration() throws IOException
     {
+        File neodymiumConfigFile = new File("./config/neodymium.properties");
+        File backupNeodymiumConfigFile = new File("./config/neodymium-properties.backup");
+        FileUtils.copyFile(neodymiumConfigFile, backupNeodymiumConfigFile);
+
         // enable custom environment data
         System.setProperty("neodymium.report.environment.enableCustomData", "true");
 
@@ -47,10 +50,13 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
         setUpParameterOrderDevNeoProperties();
         setUpParameterOrderCredentialsProperties();
         setUpParameterOrderNeodymiumProperties();
+
+        // set up property substitution
+        setUpPropertySubstitution();
     }
 
     @NeodymiumTest
-    public void test()
+    public void testCustomEnvironmentDataOrder()
     {
         Map<String, String> xmlDataMap = getXmlParameterMap(ENVIRONMENT_XML_PATH);
 
@@ -75,17 +81,48 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
         assertEquals("neodymiumProperties", xmlDataMap.get("neodymium.report.environment.custom.CustomEnvironmentNeoDataTest"));
     }
 
+    @NeodymiumTest
+    public void testPropertySubstitution()
+    {
+        Map<String, String> xmlDataMap = getXmlParameterMap(ENVIRONMENT_XML_PATH);
+
+        // assert property substitution for custom data from another function
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.test"));
+        assertEquals("systemProperties", xmlDataMap.get("neodymium.report.environment.custom.test"));
+
+        // assert property substitution for custom data
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.customData"));
+        assertEquals("customValue", xmlDataMap.get("neodymium.report.environment.custom.customData"));
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.customCustomData"));
+        assertEquals("customValue", xmlDataMap.get("neodymium.report.environment.custom.customCustomData"));
+
+        // assert circular references
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a1"));
+        assertEquals("${neodymium.report.environment.custom.a2}", xmlDataMap.get("neodymium.report.environment.custom.a1"));
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a2"));
+        assertEquals("${neodymium.report.environment.custom.a3}", xmlDataMap.get("neodymium.report.environment.custom.a2"));
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a3"));
+        assertEquals("${neodymium.report.environment.custom.a4}", xmlDataMap.get("neodymium.report.environment.custom.a3"));
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a4"));
+        assertEquals("${neodymium.report.environment.custom.a1}", xmlDataMap.get("neodymium.report.environment.custom.a4"));
+    }
+
     @AfterAll
     public static void afterClass() throws IOException
     {
         // reset neodymium.properties
-        File tempNeodymiumConfigFile = new File("./config/neodymium.temp");
+        File backupNeodymiumConfigFile = new File("./config/neodymium-properties.backup");
         File neodymiumConfigFile = new File("./config/neodymium.properties");
-        FileUtils.copyFile(tempNeodymiumConfigFile, neodymiumConfigFile);
+        FileUtils.copyFile(backupNeodymiumConfigFile, neodymiumConfigFile);
 
-        // delete environment.xml file
+        // delete environment.xml, neodymium-properties.backup and neodymium.temp file
         File environmentXml = new File(ENVIRONMENT_XML_PATH);
         environmentXml.delete();
+
+        backupNeodymiumConfigFile.delete();
+
+        File tempNeodymiumConfigFile = new File("./config/neodymium.temp");
+        tempNeodymiumConfigFile.delete();
 
         // disable custom entries
         System.clearProperty("neodymium.report.environment.enableCustomData");
@@ -119,7 +156,6 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
 
         // config/dev-neodymium.properties
         File devPropertiesFile = new File("./config/dev-neodymium.properties");
-        tempFiles.add(devPropertiesFile);
         writeMapToPropertiesFile(Map.of("neodymium.report.environment.custom.CustomEnvironmentSystemDataTest", "devNeodymiumProperties"), devPropertiesFile);
 
         // System environment variables
@@ -132,9 +168,7 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
                                  credentialsPropertiesFile);
 
         // config/neodymium.properties
-        File tempNeodymiumConfigFile = new File("./config/neodymium.temp");
         File neodymiumConfigFile = new File("./config/neodymium.properties");
-        FileUtils.copyFile(neodymiumConfigFile, tempNeodymiumConfigFile);
         writeMapToPropertiesFile(Map.of("neodymium.report.environment.custom.CustomEnvironmentSystemDataTest", "neodymiumProperties"), neodymiumConfigFile);
     }
 
@@ -159,7 +193,6 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
 
         // config/dev-neodymium.properties
         File devPropertiesFile = new File("./config/dev-neodymium.properties");
-        tempFiles.add(devPropertiesFile);
         writeMapToPropertiesFile(Map.of("neodymium.report.environment.custom.CustomEnvironmentTempDataTest", "devNeodymiumProperties"), devPropertiesFile);
 
         // System environment variables
@@ -172,9 +205,7 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
                                  credentialsPropertiesFile);
 
         // config/neodymium.properties
-        File tempNeodymiumConfigFile = new File("./config/neodymium.temp");
         File neodymiumConfigFile = new File("./config/neodymium.properties");
-        FileUtils.copyFile(neodymiumConfigFile, tempNeodymiumConfigFile);
         writeMapToPropertiesFile(Map.of("neodymium.report.environment.custom.CustomEnvironmentTempDataTest", "neodymiumProperties"), neodymiumConfigFile);
     }
 
@@ -194,7 +225,6 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
 
         // config/dev-neodymium.properties
         File devPropertiesFile = new File("./config/dev-neodymium.properties");
-        tempFiles.add(devPropertiesFile);
         writeMapToPropertiesFile(Map.of("neodymium.report.environment.custom.CustomEnvironmentDevDataTest", "devNeodymiumProperties"), devPropertiesFile);
 
         // System environment variables
@@ -207,9 +237,7 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
                                  credentialsPropertiesFile);
 
         // config/neodymium.properties
-        File tempNeodymiumConfigFile = new File("./config/neodymium.temp");
         File neodymiumConfigFile = new File("./config/neodymium.properties");
-        FileUtils.copyFile(neodymiumConfigFile, tempNeodymiumConfigFile);
         writeMapToPropertiesFile(Map.of("neodymium.report.environment.custom.CustomEnvironmentDevDataTest", "neodymiumProperties"), neodymiumConfigFile);
     }
 
@@ -240,9 +268,7 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
                                  credentialsPropertiesFile);
 
         // config/neodymium.properties
-        File tempNeodymiumConfigFile = new File("./config/neodymium.temp");
         File neodymiumConfigFile = new File("./config/neodymium.properties");
-        FileUtils.copyFile(neodymiumConfigFile, tempNeodymiumConfigFile);
         writeMapToPropertiesFile(Map.of("neodymium.report.environment.custom.CustomEnvironmentCredentialsDataTest", "neodymiumProperties"),
                                  neodymiumConfigFile);
     }
@@ -271,9 +297,22 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
         // skipped here
 
         // config/neodymium.properties
-        File tempNeodymiumConfigFile = new File("./config/neodymium.temp");
         File neodymiumConfigFile = new File("./config/neodymium.properties");
-        FileUtils.copyFile(neodymiumConfigFile, tempNeodymiumConfigFile);
         writeMapToPropertiesFile(Map.of("neodymium.report.environment.custom.CustomEnvironmentNeoDataTest", "neodymiumProperties"), neodymiumConfigFile);
+    }
+
+    private static void setUpPropertySubstitution()
+    {
+        System.setProperty("neodymium.report.environment.custom.test", "${neodymium.report.environment.custom.CustomEnvironmentSystemDataTest}");
+
+        // reference to another custom property
+        System.setProperty("neodymium.report.environment.custom.customData", "customValue");
+        System.setProperty("neodymium.report.environment.custom.customCustomData", "${neodymium.report.environment.custom.customData}");
+
+        // circular references
+        System.setProperty("neodymium.report.environment.custom.a1", "${neodymium.report.environment.custom.a2}");
+        System.setProperty("neodymium.report.environment.custom.a2", "${neodymium.report.environment.custom.a3}");
+        System.setProperty("neodymium.report.environment.custom.a3", "${neodymium.report.environment.custom.a4}");
+        System.setProperty("neodymium.report.environment.custom.a4", "${neodymium.report.environment.custom.a1}");
     }
 }

@@ -1,5 +1,8 @@
 package com.xceptance.neodymium.util;
 
+import org.aeonbits.owner.ConfigFactory;
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.HashMap;
@@ -10,9 +13,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import org.aeonbits.owner.ConfigFactory;
-import org.apache.commons.lang3.StringUtils;
 
 public class PropertiesUtil
 {
@@ -98,7 +98,7 @@ public class PropertiesUtil
         return map;
     }
 
-    public static <T extends Object> Map<T, T> putAllIfAbsent(Map<T, T> map, Map<T, T> changeSet)
+    public static <T> Map<T, T> putAllIfAbsent(Map<T, T> map, Map<T, T> changeSet)
     {
         if (changeSet.isEmpty())
         {
@@ -146,19 +146,93 @@ public class PropertiesUtil
         // config/neodymium.properties
         putAllIfAbsent(properties, loadPropertiesFromFile("." + File.separator + "config" + File.separator + "neodymium.properties"));
 
-        // filter
-        Map<String, String> propertiesMap = properties.entrySet().stream().filter(entry -> ((String) entry.getKey()).startsWith(customIdentifier))
-                                                      .collect(Collectors.toMap(entry -> (String) entry.getKey(), entry -> (String) entry.getValue()));
+        return substituteProperties(properties, customIdentifier);
+    }
 
-        // substitute
-        for (Entry<String, String> entry : propertiesMap.entrySet())
+    private static <T> Map<String, String> substituteProperties(Map<T, T> propertiesMap, String customIdentifier)
+    {
+        // filter properties for the custom identifier
+        Map<String, String> customDataPropertiesMap = propertiesMap.entrySet().stream()
+                                                                   .filter(entry -> ((String) entry.getKey()).startsWith(customIdentifier))
+                                                                   .collect(
+                                                                       Collectors.toMap(entry -> (String) entry.getKey(), entry -> (String) entry.getValue()));
+
+        Map<String, String> substitutedMap = new HashMap<>();
+
+        for (Entry<String, String> entry : customDataPropertiesMap.entrySet())
         {
-            if (entry.getValue().startsWith("${"))
-            {
-                entry.setValue((String) properties.getOrDefault(entry.getValue().replace("${", "").replace("}", ""), entry.getValue()));
-            }
+            substitutedMap.put(entry.getKey(), substitutePropertyValue(entry.getValue(), propertiesMap, new HashSet<>()));
         }
 
-        return propertiesMap;
+        return substitutedMap;
+    }
+
+    private static <T> String substitutePropertyValue(String value, Map<T, T> propertiesMap, Set<String> visitedPlaceholders)
+    {
+        // If the value does not contain any placeholders, return it as is
+        String result = value;
+        boolean changed;
+        int iterationCount = 0;
+        final int MAX_ITERATIONS = 10; // Prevent infinite loops
+
+        do
+        {
+            // Reset the changed flag for this iteration
+            changed = false;
+            // Store the previous result to check if any changes were made
+            String previousResult = result;
+
+            // Find all ${key} patterns in the value
+            int startIndex = result.indexOf("${");
+
+            while (startIndex != -1 && startIndex < result.length() - 1)
+            {
+                int endIndex = result.indexOf("}", startIndex);
+                if (endIndex != -1)
+                {
+                    // Extract the key from ${key}
+                    String placeholder = result.substring(startIndex, endIndex + 1);
+                    String key = result.substring(startIndex + 2, endIndex);
+
+                    // Check for circular dependencies
+                    if (visitedPlaceholders.contains(key))
+                    {
+                        // Circular reference detected, keep the placeholder as is
+                        startIndex = result.indexOf("${", endIndex + 1);
+                        continue;
+                    }
+
+                    // Add this key to the visited set for this substitution chain
+                    visitedPlaceholders.add(key);
+
+                    // Get the replacement value
+                    String replacement = (String) propertiesMap.get(key);
+                    // If no value found, keep the placeholder as is
+                    if (replacement == null)
+                    {
+                        replacement = placeholder;
+                    }
+
+                    result = result.replace(placeholder, replacement);
+                    changed = !result.equals(previousResult);
+
+                    // Continue searching for more placeholders from the beginning since the replacement could have introduced new placeholders
+                    // By resetting startIndex to the beginning of the string, the possible new placeholders will be found
+                    startIndex = result.indexOf("${");
+                }
+                else
+                {
+                    // If we found a starting ${ but no closing }, break
+                    break;
+                }
+            }
+
+            iterationCount++;
+        }
+        while (changed && iterationCount < MAX_ITERATIONS);
+
+        // If we hit the max iterations, it's likely a circular reference that wasn't caught by our visited set (e.g., complex nested substitutions)
+        // In that case the partially substituted result will be returned
+        return result;
     }
 }
