@@ -92,13 +92,20 @@ public class PopupBlockerTestclass extends NeodymiumTest
                         + "e.setAttribute('id','myPopUp3');\r\n"
                         + "e.setAttribute('onclick','this.remove()');\r\n"
                         + "document.body.appendChild(e);";
+        String popup4 = "var e = document.createElement(\"div\");\r\n"
+                        + "e.innerHTML = \"testThing\";\r\n"
+                        + "e.setAttribute('id','myPopUp4');\r\n"
+                        + "e.setAttribute('onclick','this.remove()');\r\n"
+                        + "document.body.appendChild(e);";
         Selenide.executeJavaScript(popup1, "");
-        Selenide.executeJavaScript(popup3, "");
         Selenide.executeJavaScript(popup2, "");
+        Selenide.executeJavaScript(popup3, "");
+        Selenide.executeJavaScript(popup4, "");
         Selenide.sleep(1500);
         $("#myPopUp1").shouldNotBe(visible);
         $("#myPopUp2").shouldNotBe(visible);
         $("#myPopUp3").shouldNotBe(visible);
+        $("#myPopUp4").shouldBe(visible);
     }
 
     @Test
