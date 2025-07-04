@@ -1,6 +1,7 @@
 package com.xceptance.neodymium.junit4.tests.allurecustomenvironmentdata;
 
 import com.xceptance.neodymium.junit4.testclasses.allurecustomenvironmentdata.CustomEnvironmentDataOrderTestClass;
+import com.xceptance.neodymium.junit4.testclasses.allurecustomenvironmentdata.CustomEnvironmentPropertySubstitutionTestClass;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
@@ -15,10 +16,6 @@ import org.junit.runner.Result;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
-
-import static com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata.XmlToMapUtil.getXmlParameterMap;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CustomEnvironmentDataOrderTest extends NeodymiumTest
 {
@@ -68,27 +65,8 @@ public class CustomEnvironmentDataOrderTest extends NeodymiumTest
     @Test
     public void testPropertySubstitution()
     {
-        Map<String, String> xmlDataMap = getXmlParameterMap(ENVIRONMENT_XML_PATH);
-
-        // assert property substitution for custom data from another function
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.test"));
-        assertEquals("systemProperties", xmlDataMap.get("neodymium.report.environment.custom.test"));
-
-        // assert property substitution for custom data
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.customData"));
-        assertEquals("customValue", xmlDataMap.get("neodymium.report.environment.custom.customData"));
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.customCustomData"));
-        assertEquals("customValue", xmlDataMap.get("neodymium.report.environment.custom.customCustomData"));
-
-        // assert circular references
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a1"));
-        assertEquals("${neodymium.report.environment.custom.a2}", xmlDataMap.get("neodymium.report.environment.custom.a1"));
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a2"));
-        assertEquals("${neodymium.report.environment.custom.a3}", xmlDataMap.get("neodymium.report.environment.custom.a2"));
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a3"));
-        assertEquals("${neodymium.report.environment.custom.a4}", xmlDataMap.get("neodymium.report.environment.custom.a3"));
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a4"));
-        assertEquals("${neodymium.report.environment.custom.a1}", xmlDataMap.get("neodymium.report.environment.custom.a4"));
+        Result result = JUnitCore.runClasses(CustomEnvironmentPropertySubstitutionTestClass.class);
+        checkPass(result, 1, 0);
     }
 
     @AfterClass
@@ -117,6 +95,27 @@ public class CustomEnvironmentDataOrderTest extends NeodymiumTest
         System.clearProperty("neodymium.report.environment.CustomEnvironmentDevDataTest");
         System.clearProperty("neodymium.report.environment.CustomEnvironmentCredentialsDataTest");
         System.clearProperty("neodymium.report.environment.CustomEnvironmentNeoDataTest");
+
+        // remove property substitution entries
+        System.clearProperty("neodymium.report.environment.custom.referenceData1_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.referenceData2_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.referenceData3_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.referenceData4_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.neodymiumPropertiesReference_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.tempReference_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.systemReference_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.multipleReference1_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.multipleReference2_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.multipleReference3_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.multipleReference4_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.sameReference1_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.sameReference2_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.sameReference3_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.sameReference4_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.circularReference1_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.circularReference2_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.circularReference3_Junit4");
+        System.clearProperty("neodymium.report.environment.custom.circularReference4_Junit4");
     }
 
     /**
@@ -289,16 +288,44 @@ public class CustomEnvironmentDataOrderTest extends NeodymiumTest
 
     private static void setUpPropertySubstitution()
     {
-        System.setProperty("neodymium.report.environment.custom.test", "${neodymium.report.environment.custom.CustomEnvironmentSystemDataTest}");
+        System.setProperty("neodymium.report.environment.custom.referenceData1_Junit4", "customValue1");
+        System.setProperty("neodymium.report.environment.custom.referenceData2_Junit4", "anotherCustomValue2");
+        System.setProperty("neodymium.report.environment.custom.referenceData3_Junit4", "alleGutenDingeSindDrei3");
+        System.setProperty("neodymium.report.environment.custom.referenceData4_Junit4", "ichHabeAberNur7");
 
-        // reference to another custom property
-        System.setProperty("neodymium.report.environment.custom.customData", "customValue");
-        System.setProperty("neodymium.report.environment.custom.customCustomData", "${neodymium.report.environment.custom.customData}");
+        // reference to another custom property from the same source
+        System.setProperty("neodymium.report.environment.custom.neodymiumPropertiesReference_Junit4",
+                           "${neodymium.report.environment.custom.referenceData1_Junit4}");
+
+        // reference to property source
+        System.setProperty("neodymium.report.environment.custom.tempReference_Junit4", "${neodymium.report.environment.custom.CustomEnvironmentTempDataTest}");
+        System.setProperty("neodymium.report.environment.custom.systemReference_Junit4",
+                           "${neodymium.report.environment.custom.CustomEnvironmentSystemDataTest}");
+
+        // multiple references in one property
+        System.setProperty("neodymium.report.environment.custom.multipleReference1_Junit4",
+                           "${neodymium.report.environment.custom.referenceData1_Junit4}${neodymium.report.environment.custom.referenceData2_Junit4}");
+        System.setProperty("neodymium.report.environment.custom.multipleReference2_Junit4",
+                           "${neodymium.report.environment.custom.referenceData1_Junit4}$${neodymium.report.environment.custom.referenceData2_Junit4}");
+        System.setProperty("neodymium.report.environment.custom.multipleReference3_Junit4",
+                           "${neodymium.report.environment.custom.referenceData1_Junit4} some Text ${neodymium.report.environment.custom.referenceData2_Junit4}");
+        System.setProperty("neodymium.report.environment.custom.multipleReference4_Junit4",
+                           "${neodymium.report.environment.custom.referenceData1_Junit4}, ${neodymium.report.environment.custom.referenceData2_Junit4}, ${neodymium.report.environment.custom.referenceData3_Junit4}, ${neodymium.report.environment.custom.referenceData4_Junit4}");
+
+        // the same reference in one property multiple times
+        System.setProperty("neodymium.report.environment.custom.sameReference1_Junit4",
+                           "${neodymium.report.environment.custom.referenceData1_Junit4}${neodymium.report.environment.custom.referenceData1_Junit4}");
+        System.setProperty("neodymium.report.environment.custom.sameReference2_Junit4",
+                           "${neodymium.report.environment.custom.referenceData1_Junit4}$${neodymium.report.environment.custom.referenceData1_Junit4}");
+        System.setProperty("neodymium.report.environment.custom.sameReference3_Junit4",
+                           "${neodymium.report.environment.custom.referenceData1_Junit4} some Text ${neodymium.report.environment.custom.referenceData1_Junit4}");
+        System.setProperty("neodymium.report.environment.custom.sameReference4_Junit4",
+                           "${neodymium.report.environment.custom.referenceData1_Junit4}, ${neodymium.report.environment.custom.referenceData1_Junit4}, ${neodymium.report.environment.custom.referenceData1_Junit4}, ${neodymium.report.environment.custom.referenceData1_Junit4}");
 
         // circular references
-        System.setProperty("neodymium.report.environment.custom.a1", "${neodymium.report.environment.custom.a2}");
-        System.setProperty("neodymium.report.environment.custom.a2", "${neodymium.report.environment.custom.a3}");
-        System.setProperty("neodymium.report.environment.custom.a3", "${neodymium.report.environment.custom.a4}");
-        System.setProperty("neodymium.report.environment.custom.a4", "${neodymium.report.environment.custom.a1}");
+        System.setProperty("neodymium.report.environment.custom.circularReference1_Junit4", "${neodymium.report.environment.custom.circularReference2_Junit4}");
+        System.setProperty("neodymium.report.environment.custom.circularReference2_Junit4", "${neodymium.report.environment.custom.circularReference3_Junit4}");
+        System.setProperty("neodymium.report.environment.custom.circularReference3_Junit4", "${neodymium.report.environment.custom.circularReference4_Junit4}");
+        System.setProperty("neodymium.report.environment.custom.circularReference4_Junit4", "${neodymium.report.environment.custom.circularReference1_Junit4}");
     }
 }

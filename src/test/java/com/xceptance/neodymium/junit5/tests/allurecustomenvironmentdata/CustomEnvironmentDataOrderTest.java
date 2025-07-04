@@ -22,8 +22,7 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
     private static final String ENVIRONMENT_XML_PATH = AllureAddons.getAllureResultsFolder().getAbsoluteFile() + File.separator + "environment.xml";
 
     /**
-     * The test wants to test the order in which the custom values are written and set. The loading order for these
-     * properties is as follows:
+     * The test wants to test the order in which the custom values are written and set. The loading order for these properties is as follows:
      * <ol>
      * <li>System properties</li>
      * <li>temporary config file</li>
@@ -86,25 +85,69 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
     {
         Map<String, String> xmlDataMap = getXmlParameterMap(ENVIRONMENT_XML_PATH);
 
-        // assert property substitution for custom data from another function
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.test"));
-        assertEquals("systemProperties", xmlDataMap.get("neodymium.report.environment.custom.test"));
+        // assert test data is present
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.referenceData1"));
+        assertEquals("customValue1", xmlDataMap.get("neodymium.report.environment.custom.referenceData1"));
 
-        // assert property substitution for custom data
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.customData"));
-        assertEquals("customValue", xmlDataMap.get("neodymium.report.environment.custom.customData"));
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.customCustomData"));
-        assertEquals("customValue", xmlDataMap.get("neodymium.report.environment.custom.customCustomData"));
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.referenceData2"));
+        assertEquals("anotherCustomValue2", xmlDataMap.get("neodymium.report.environment.custom.referenceData2"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.referenceData3"));
+        assertEquals("alleGutenDingeSindDrei3", xmlDataMap.get("neodymium.report.environment.custom.referenceData3"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.referenceData4"));
+        assertEquals("ichHabeAberNur7", xmlDataMap.get("neodymium.report.environment.custom.referenceData4"));
+
+        // assert property substitution to another custom property from same source
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.neodymiumPropertiesReference"));
+        assertEquals("customValue1", xmlDataMap.get("neodymium.report.environment.custom.neodymiumPropertiesReference"));
+
+        // assert property substitution for custom data from another source
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.tempReference"));
+        assertEquals("tempProperties", xmlDataMap.get("neodymium.report.environment.custom.tempReference"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.systemReference"));
+        assertEquals("systemProperties", xmlDataMap.get("neodymium.report.environment.custom.systemReference"));
+
+        // assert multiple references in one property
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.multipleReference1"));
+        assertEquals("customValue1anotherCustomValue2", xmlDataMap.get("neodymium.report.environment.custom.multipleReference1"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.multipleReference2"));
+        assertEquals("customValue1$anotherCustomValue2", xmlDataMap.get("neodymium.report.environment.custom.multipleReference2"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.multipleReference3"));
+        assertEquals("customValue1 some Text anotherCustomValue2", xmlDataMap.get("neodymium.report.environment.custom.multipleReference3"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.multipleReference4"));
+        assertEquals("customValue1, anotherCustomValue2, alleGutenDingeSindDrei3, ichHabeAberNur7",
+                     xmlDataMap.get("neodymium.report.environment.custom.multipleReference4"));
+
+        // assert same reference in one property multiple times
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.sameReference1"));
+        assertEquals("customValue1customValue1", xmlDataMap.get("neodymium.report.environment.custom.sameReference1"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.sameReference2"));
+        assertEquals("customValue1$customValue1", xmlDataMap.get("neodymium.report.environment.custom.sameReference2"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.sameReference3"));
+        assertEquals("customValue1 some Text customValue1", xmlDataMap.get("neodymium.report.environment.custom.sameReference3"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.sameReference4"));
+        assertEquals("customValue1, customValue1, customValue1, customValue1", xmlDataMap.get("neodymium.report.environment.custom.sameReference4"));
 
         // assert circular references
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a1"));
-        assertEquals("${neodymium.report.environment.custom.a2}", xmlDataMap.get("neodymium.report.environment.custom.a1"));
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a2"));
-        assertEquals("${neodymium.report.environment.custom.a3}", xmlDataMap.get("neodymium.report.environment.custom.a2"));
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a3"));
-        assertEquals("${neodymium.report.environment.custom.a4}", xmlDataMap.get("neodymium.report.environment.custom.a3"));
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.a4"));
-        assertEquals("${neodymium.report.environment.custom.a1}", xmlDataMap.get("neodymium.report.environment.custom.a4"));
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.circularReference1"));
+        assertEquals("${neodymium.report.environment.custom.circularReference2}", xmlDataMap.get("neodymium.report.environment.custom.circularReference1"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.circularReference2"));
+        assertEquals("${neodymium.report.environment.custom.circularReference3}", xmlDataMap.get("neodymium.report.environment.custom.circularReference2"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.circularReference3"));
+        assertEquals("${neodymium.report.environment.custom.circularReference4}", xmlDataMap.get("neodymium.report.environment.custom.circularReference3"));
+
+        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.circularReference4"));
+        assertEquals("${neodymium.report.environment.custom.circularReference1}", xmlDataMap.get("neodymium.report.environment.custom.circularReference4"));
     }
 
     @AfterAll
@@ -133,13 +176,34 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
         System.clearProperty("neodymium.report.environment.CustomEnvironmentDevDataTest");
         System.clearProperty("neodymium.report.environment.CustomEnvironmentCredentialsDataTest");
         System.clearProperty("neodymium.report.environment.CustomEnvironmentNeoDataTest");
+
+        // remove property substitution entries
+        System.clearProperty("neodymium.report.environment.custom.referenceData1");
+        System.clearProperty("neodymium.report.environment.custom.referenceData2");
+        System.clearProperty("neodymium.report.environment.custom.referenceData3");
+        System.clearProperty("neodymium.report.environment.custom.referenceData4");
+        System.clearProperty("neodymium.report.environment.custom.neodymiumPropertiesReference");
+        System.clearProperty("neodymium.report.environment.custom.tempReference");
+        System.clearProperty("neodymium.report.environment.custom.systemReference");
+        System.clearProperty("neodymium.report.environment.custom.multipleReference1");
+        System.clearProperty("neodymium.report.environment.custom.multipleReference2");
+        System.clearProperty("neodymium.report.environment.custom.multipleReference3");
+        System.clearProperty("neodymium.report.environment.custom.multipleReference4");
+        System.clearProperty("neodymium.report.environment.custom.sameReference1");
+        System.clearProperty("neodymium.report.environment.custom.sameReference2");
+        System.clearProperty("neodymium.report.environment.custom.sameReference3");
+        System.clearProperty("neodymium.report.environment.custom.sameReference4");
+        System.clearProperty("neodymium.report.environment.custom.circularReference1");
+        System.clearProperty("neodymium.report.environment.custom.circularReference2");
+        System.clearProperty("neodymium.report.environment.custom.circularReference3");
+        System.clearProperty("neodymium.report.environment.custom.circularReference4");
     }
 
     /**
      * set up custom env entries to test system properties
-     * 
+     *
      * @throws IOException
-     *             when the copy of the neo properties fails
+     *     when the copy of the neo properties fails
      */
     private static void setUpParameterOrderSystemProperties() throws IOException
     {
@@ -176,7 +240,7 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
      * set up custom env entries to test temp properties
      *
      * @throws IOException
-     *             when the copy of the neo properties fails
+     *     when the copy of the neo properties fails
      */
     private static void setUpParameterOrderTempProperties() throws IOException
     {
@@ -213,7 +277,7 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
      * set up custom env entries to test dev neodymium properties
      *
      * @throws IOException
-     *             when the copy of the neo properties fails
+     *     when the copy of the neo properties fails
      */
     private static void setUpParameterOrderDevNeoProperties() throws IOException
     {
@@ -245,7 +309,7 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
      * set up custom env entries to test credentials properties
      *
      * @throws IOException
-     *             when the copy of the neo properties fails
+     *     when the copy of the neo properties fails
      */
     private static void setUpParameterOrderCredentialsProperties() throws IOException
     {
@@ -277,7 +341,7 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
      * set up custom env entries to test neodymium properties
      *
      * @throws IOException
-     *             when the copy of the neo properties fails
+     *     when the copy of the neo properties fails
      */
     private static void setUpParameterOrderNeodymiumProperties() throws IOException
     {
@@ -303,16 +367,42 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
 
     private static void setUpPropertySubstitution()
     {
-        System.setProperty("neodymium.report.environment.custom.test", "${neodymium.report.environment.custom.CustomEnvironmentSystemDataTest}");
+        System.setProperty("neodymium.report.environment.custom.referenceData1", "customValue1");
+        System.setProperty("neodymium.report.environment.custom.referenceData2", "anotherCustomValue2");
+        System.setProperty("neodymium.report.environment.custom.referenceData3", "alleGutenDingeSindDrei3");
+        System.setProperty("neodymium.report.environment.custom.referenceData4", "ichHabeAberNur7");
 
-        // reference to another custom property
-        System.setProperty("neodymium.report.environment.custom.customData", "customValue");
-        System.setProperty("neodymium.report.environment.custom.customCustomData", "${neodymium.report.environment.custom.customData}");
+        // reference to another custom property from the same source
+        System.setProperty("neodymium.report.environment.custom.neodymiumPropertiesReference", "${neodymium.report.environment.custom.referenceData1}");
+
+        // reference to property source
+        System.setProperty("neodymium.report.environment.custom.tempReference", "${neodymium.report.environment.custom.CustomEnvironmentTempDataTest}");
+        System.setProperty("neodymium.report.environment.custom.systemReference", "${neodymium.report.environment.custom.CustomEnvironmentSystemDataTest}");
+
+        // multiple references in one property
+        System.setProperty("neodymium.report.environment.custom.multipleReference1",
+                           "${neodymium.report.environment.custom.referenceData1}${neodymium.report.environment.custom.referenceData2}");
+        System.setProperty("neodymium.report.environment.custom.multipleReference2",
+                           "${neodymium.report.environment.custom.referenceData1}$${neodymium.report.environment.custom.referenceData2}");
+        System.setProperty("neodymium.report.environment.custom.multipleReference3",
+                           "${neodymium.report.environment.custom.referenceData1} some Text ${neodymium.report.environment.custom.referenceData2}");
+        System.setProperty("neodymium.report.environment.custom.multipleReference4",
+                           "${neodymium.report.environment.custom.referenceData1}, ${neodymium.report.environment.custom.referenceData2}, ${neodymium.report.environment.custom.referenceData3}, ${neodymium.report.environment.custom.referenceData4}");
+
+        // the same reference in one property multiple times
+        System.setProperty("neodymium.report.environment.custom.sameReference1",
+                           "${neodymium.report.environment.custom.referenceData1}${neodymium.report.environment.custom.referenceData1}");
+        System.setProperty("neodymium.report.environment.custom.sameReference2",
+                           "${neodymium.report.environment.custom.referenceData1}$${neodymium.report.environment.custom.referenceData1}");
+        System.setProperty("neodymium.report.environment.custom.sameReference3",
+                           "${neodymium.report.environment.custom.referenceData1} some Text ${neodymium.report.environment.custom.referenceData1}");
+        System.setProperty("neodymium.report.environment.custom.sameReference4",
+                           "${neodymium.report.environment.custom.referenceData1}, ${neodymium.report.environment.custom.referenceData1}, ${neodymium.report.environment.custom.referenceData1}, ${neodymium.report.environment.custom.referenceData1}");
 
         // circular references
-        System.setProperty("neodymium.report.environment.custom.a1", "${neodymium.report.environment.custom.a2}");
-        System.setProperty("neodymium.report.environment.custom.a2", "${neodymium.report.environment.custom.a3}");
-        System.setProperty("neodymium.report.environment.custom.a3", "${neodymium.report.environment.custom.a4}");
-        System.setProperty("neodymium.report.environment.custom.a4", "${neodymium.report.environment.custom.a1}");
+        System.setProperty("neodymium.report.environment.custom.circularReference1", "${neodymium.report.environment.custom.circularReference2}");
+        System.setProperty("neodymium.report.environment.custom.circularReference2", "${neodymium.report.environment.custom.circularReference3}");
+        System.setProperty("neodymium.report.environment.custom.circularReference3", "${neodymium.report.environment.custom.circularReference4}");
+        System.setProperty("neodymium.report.environment.custom.circularReference4", "${neodymium.report.environment.custom.circularReference1}");
     }
 }
