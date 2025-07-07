@@ -1,18 +1,17 @@
 package com.xceptance.neodymium.junit4.testclasses.allurecustomenvironmentdata;
 
-import static com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata.XmlToMapUtil.getXmlParameterMap;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
+import com.xceptance.neodymium.util.AllureAddons;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.util.Map;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
-import com.xceptance.neodymium.util.AllureAddons;
+import static com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata.XmlToMapUtil.getXmlParameterMap;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @RunWith(NeodymiumRunner.class)
 public class CustomEnvironmentDataOrderTestClass extends NeodymiumTest

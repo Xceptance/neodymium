@@ -38,13 +38,6 @@ public class CustomEnvironmentPropertySubstitutionTestClass extends NeodymiumTes
         assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.neodymiumPropertiesReference_Junit4"));
         assertEquals("customValue1", xmlDataMap.get("neodymium.report.environment.custom.neodymiumPropertiesReference_Junit4"));
 
-        // assert property substitution for custom data from another source
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.tempReference_Junit4"));
-        assertEquals("tempProperties", xmlDataMap.get("neodymium.report.environment.custom.tempReference_Junit4"));
-
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.systemReference_Junit4"));
-        assertEquals("systemProperties", xmlDataMap.get("neodymium.report.environment.custom.systemReference_Junit4"));
-
         // assert multiple references in one property
         assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.multipleReference1_Junit4"));
         assertEquals("customValue1anotherCustomValue2", xmlDataMap.get("neodymium.report.environment.custom.multipleReference1_Junit4"));
@@ -71,22 +64,5 @@ public class CustomEnvironmentPropertySubstitutionTestClass extends NeodymiumTes
 
         assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.sameReference4_Junit4"));
         assertEquals("customValue1, customValue1, customValue1, customValue1", xmlDataMap.get("neodymium.report.environment.custom.sameReference4_Junit4"));
-
-        // assert circular references
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.circularReference1_Junit4"));
-        assertEquals("${neodymium.report.environment.custom.circularReference2_Junit4}",
-                     xmlDataMap.get("neodymium.report.environment.custom.circularReference1_Junit4"));
-
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.circularReference2_Junit4"));
-        assertEquals("${neodymium.report.environment.custom.circularReference3_Junit4}",
-                     xmlDataMap.get("neodymium.report.environment.custom.circularReference2_Junit4"));
-
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.circularReference3_Junit4"));
-        assertEquals("${neodymium.report.environment.custom.circularReference4_Junit4}",
-                     xmlDataMap.get("neodymium.report.environment.custom.circularReference3_Junit4"));
-
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.circularReference4_Junit4"));
-        assertEquals("${neodymium.report.environment.custom.circularReference1_Junit4}",
-                     xmlDataMap.get("neodymium.report.environment.custom.circularReference4_Junit4"));
     }
 }

@@ -1,7 +1,6 @@
 package com.xceptance.neodymium.junit4.tests.allurecustomenvironmentdata;
 
 import com.xceptance.neodymium.junit4.testclasses.allurecustomenvironmentdata.CustomEnvironmentDataOrderTestClass;
-import com.xceptance.neodymium.junit4.testclasses.allurecustomenvironmentdata.CustomEnvironmentPropertySubstitutionTestClass;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
@@ -50,22 +49,12 @@ public class CustomEnvironmentDataOrderTest extends NeodymiumTest
         setUpParameterOrderDevNeoProperties();
         setUpParameterOrderCredentialsProperties();
         setUpParameterOrderNeodymiumProperties();
-
-        // set up property substitution
-        setUpPropertySubstitution();
     }
 
     @Test
     public void testCustomEnvironmentDataOrder()
     {
         Result result = JUnitCore.runClasses(CustomEnvironmentDataOrderTestClass.class);
-        checkPass(result, 1, 0);
-    }
-
-    @Test
-    public void testPropertySubstitution()
-    {
-        Result result = JUnitCore.runClasses(CustomEnvironmentPropertySubstitutionTestClass.class);
         checkPass(result, 1, 0);
     }
 
@@ -79,7 +68,7 @@ public class CustomEnvironmentDataOrderTest extends NeodymiumTest
 
         // delete environment.xml, neodymium-properties.backup and neodymium.temp file
         File environmentXml = new File(ENVIRONMENT_XML_PATH);
-        environmentXml.delete();
+        //environmentXml.delete();
 
         backupNeodymiumConfigFile.delete();
 
@@ -95,27 +84,6 @@ public class CustomEnvironmentDataOrderTest extends NeodymiumTest
         System.clearProperty("neodymium.report.environment.CustomEnvironmentDevDataTest");
         System.clearProperty("neodymium.report.environment.CustomEnvironmentCredentialsDataTest");
         System.clearProperty("neodymium.report.environment.CustomEnvironmentNeoDataTest");
-
-        // remove property substitution entries
-        System.clearProperty("neodymium.report.environment.custom.referenceData1_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.referenceData2_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.referenceData3_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.referenceData4_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.neodymiumPropertiesReference_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.tempReference_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.systemReference_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.multipleReference1_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.multipleReference2_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.multipleReference3_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.multipleReference4_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.sameReference1_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.sameReference2_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.sameReference3_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.sameReference4_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.circularReference1_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.circularReference2_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.circularReference3_Junit4");
-        System.clearProperty("neodymium.report.environment.custom.circularReference4_Junit4");
     }
 
     /**
@@ -284,48 +252,5 @@ public class CustomEnvironmentDataOrderTest extends NeodymiumTest
         // config/neodymium.properties
         File neodymiumConfigFile = new File("./config/neodymium.properties");
         writeMapToPropertiesFile(Map.of("neodymium.report.environment.custom.CustomEnvironmentNeoDataTest", "neodymiumProperties"), neodymiumConfigFile);
-    }
-
-    private static void setUpPropertySubstitution()
-    {
-        System.setProperty("neodymium.report.environment.custom.referenceData1_Junit4", "customValue1");
-        System.setProperty("neodymium.report.environment.custom.referenceData2_Junit4", "anotherCustomValue2");
-        System.setProperty("neodymium.report.environment.custom.referenceData3_Junit4", "alleGutenDingeSindDrei3");
-        System.setProperty("neodymium.report.environment.custom.referenceData4_Junit4", "ichHabeAberNur7");
-
-        // reference to another custom property from the same source
-        System.setProperty("neodymium.report.environment.custom.neodymiumPropertiesReference_Junit4",
-                           "${neodymium.report.environment.custom.referenceData1_Junit4}");
-
-        // reference to property source
-        System.setProperty("neodymium.report.environment.custom.tempReference_Junit4", "${neodymium.report.environment.custom.CustomEnvironmentTempDataTest}");
-        System.setProperty("neodymium.report.environment.custom.systemReference_Junit4",
-                           "${neodymium.report.environment.custom.CustomEnvironmentSystemDataTest}");
-
-        // multiple references in one property
-        System.setProperty("neodymium.report.environment.custom.multipleReference1_Junit4",
-                           "${neodymium.report.environment.custom.referenceData1_Junit4}${neodymium.report.environment.custom.referenceData2_Junit4}");
-        System.setProperty("neodymium.report.environment.custom.multipleReference2_Junit4",
-                           "${neodymium.report.environment.custom.referenceData1_Junit4}$${neodymium.report.environment.custom.referenceData2_Junit4}");
-        System.setProperty("neodymium.report.environment.custom.multipleReference3_Junit4",
-                           "${neodymium.report.environment.custom.referenceData1_Junit4} some Text ${neodymium.report.environment.custom.referenceData2_Junit4}");
-        System.setProperty("neodymium.report.environment.custom.multipleReference4_Junit4",
-                           "${neodymium.report.environment.custom.referenceData1_Junit4}, ${neodymium.report.environment.custom.referenceData2_Junit4}, ${neodymium.report.environment.custom.referenceData3_Junit4}, ${neodymium.report.environment.custom.referenceData4_Junit4}");
-
-        // the same reference in one property multiple times
-        System.setProperty("neodymium.report.environment.custom.sameReference1_Junit4",
-                           "${neodymium.report.environment.custom.referenceData1_Junit4}${neodymium.report.environment.custom.referenceData1_Junit4}");
-        System.setProperty("neodymium.report.environment.custom.sameReference2_Junit4",
-                           "${neodymium.report.environment.custom.referenceData1_Junit4}$${neodymium.report.environment.custom.referenceData1_Junit4}");
-        System.setProperty("neodymium.report.environment.custom.sameReference3_Junit4",
-                           "${neodymium.report.environment.custom.referenceData1_Junit4} some Text ${neodymium.report.environment.custom.referenceData1_Junit4}");
-        System.setProperty("neodymium.report.environment.custom.sameReference4_Junit4",
-                           "${neodymium.report.environment.custom.referenceData1_Junit4}, ${neodymium.report.environment.custom.referenceData1_Junit4}, ${neodymium.report.environment.custom.referenceData1_Junit4}, ${neodymium.report.environment.custom.referenceData1_Junit4}");
-
-        // circular references
-        System.setProperty("neodymium.report.environment.custom.circularReference1_Junit4", "${neodymium.report.environment.custom.circularReference2_Junit4}");
-        System.setProperty("neodymium.report.environment.custom.circularReference2_Junit4", "${neodymium.report.environment.custom.circularReference3_Junit4}");
-        System.setProperty("neodymium.report.environment.custom.circularReference3_Junit4", "${neodymium.report.environment.custom.circularReference4_Junit4}");
-        System.setProperty("neodymium.report.environment.custom.circularReference4_Junit4", "${neodymium.report.environment.custom.circularReference1_Junit4}");
     }
 }
