@@ -21,6 +21,6 @@ public class PopupBlockerTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-PopupBlockerTest-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(PopupBlockerTestclass.class);
-        checkPass(summary, 4, 0);
+        checkPass(summary, 5, 0);
     }
 }
