@@ -1,7 +1,34 @@
 package com.xceptance.neodymium.util;
 
-import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
+import com.codeborne.selenide.Selenide;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.common.ScreenshotWriter;
+import io.qameta.allure.Allure;
+import io.qameta.allure.AllureLifecycle;
+import io.qameta.allure.Attachment;
+import io.qameta.allure.Step;
+import io.qameta.allure.model.StepResult;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -18,37 +45,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.TakesScreenshot;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-import org.xml.sax.SAXException;
-
-import com.codeborne.selenide.Selenide;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.ScreenshotWriter;
-
-import io.qameta.allure.Allure;
-import io.qameta.allure.AllureLifecycle;
-import io.qameta.allure.Attachment;
-import io.qameta.allure.Step;
-import io.qameta.allure.model.StepResult;
+import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
 
 /**
  * Convenience methods for step definitions
@@ -520,6 +517,7 @@ public class AllureAddons
     public static void initializeEnvironmentInformation()
     {
         Map<String, String> environmentDataMap = new HashMap<String, String>();
+        String customDataIdentifier = "neodymium.report.environment.custom";
 
         if (!neoVersionLogged && Neodymium.configuration().logNeoVersion())
         {
@@ -532,7 +530,6 @@ public class AllureAddons
         {
             LOGGER.info("Custom Environment Data was added.");
             customDataAdded = true;
-            String customDataIdentifier = "neodymium.report.environment.custom";
 
             environmentDataMap.putAll(getPropertiesMapForCustomIdentifier(customDataIdentifier));
         }
@@ -541,8 +538,36 @@ public class AllureAddons
         {
             // These values should be the same for all running JVMs. If there are differences in the values, it would we
             // good to see it in the report
-            AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder().putAll(environmentDataMap).build(), EnvironmentInfoMode.ADD);
+            // AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder().putAll(environmentDataMap).build(), EnvironmentInfoMode.ADD);
+            AllureAddons.addEnvironmentInformation(
+                ImmutableMap.<String, String> builder().putAll(removePrefixFromMap(environmentDataMap, customDataIdentifier)).build(), EnvironmentInfoMode.ADD);
         }
+    }
+
+    /**
+     * Removes the prefix from the keys in the map.
+     *
+     * @param map
+     *     the map to process
+     * @param prefix
+     *     the prefix to remove
+     * @return a new map with the prefix removed from the keys
+     */
+    private static Map<String, String> removePrefixFromMap(Map<String, String> map, String prefix)
+    {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<String, String> entry : map.entrySet())
+        {
+            if (entry.getKey().startsWith(prefix))
+            {
+                result.put(entry.getKey().substring(prefix.length() + 1), entry.getValue());
+            }
+            else
+            {
+                result.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return result;
     }
 
     /**
@@ -560,7 +585,6 @@ public class AllureAddons
         {
             // covert Java object to JSON strings
             dataObjectJson = mapper.setSerializationInclusion(Include.NON_NULL).writeValueAsString(data);
-
         }
         catch (JsonProcessingException e)
         {

@@ -1,17 +1,17 @@
 package com.xceptance.neodymium.junit4.tests.allurecustomenvironmentdata;
 
-import com.xceptance.neodymium.junit4.testclasses.allurecustomenvironmentdata.CustomEnvironmentPropertySubstitutionCircularReferenceTestClass;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.util.AllureAddons;
 import org.apache.commons.io.FileUtils;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
-import org.junit.runner.Result;
 
 import java.io.File;
 import java.io.IOException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CustomEnvironmentSubstitutionCircularReferenceTest extends NeodymiumTest
 {
@@ -35,8 +35,11 @@ public class CustomEnvironmentSubstitutionCircularReferenceTest extends Neodymiu
     @Test
     public void testPropertySubstitution()
     {
-        Result result = JUnitCore.runClasses(CustomEnvironmentPropertySubstitutionCircularReferenceTestClass.class);
-        checkFail(result, 1, 0, 1, "Circular properties reference detected for key: neodymium.report.environment.custom.circularReference2_Junit4. Please check your properties for circular dependencies and remove them.");
+        RuntimeException runtimeException = assertThrows(RuntimeException.class, AllureAddons::initializeEnvironmentInformation);
+
+        assertEquals(
+            "Circular properties reference detected for key: neodymium.report.environment.custom.circularReference2_Junit4. Please check your properties for circular dependencies and remove them.",
+            runtimeException.getMessage());
     }
 
     @AfterClass
@@ -49,7 +52,7 @@ public class CustomEnvironmentSubstitutionCircularReferenceTest extends Neodymiu
 
         // delete environment.xml, neodymium-properties.backup and neodymium.temp file
         File environmentXml = new File(ENVIRONMENT_XML_PATH);
-        //environmentXml.delete();
+        environmentXml.delete();
 
         backupNeodymiumConfigFile.delete();
 

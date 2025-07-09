@@ -68,7 +68,7 @@ public class CustomEnvironmentDataOrderTest extends NeodymiumTest
 
         // delete environment.xml, neodymium-properties.backup and neodymium.temp file
         File environmentXml = new File(ENVIRONMENT_XML_PATH);
-        //environmentXml.delete();
+        environmentXml.delete();
 
         backupNeodymiumConfigFile.delete();
 
@@ -168,8 +168,6 @@ public class CustomEnvironmentDataOrderTest extends NeodymiumTest
      */
     private static void setUpParameterOrderDevNeoProperties() throws IOException
     {
-
-
         // System properties
         // skipped here
 

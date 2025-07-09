@@ -1,11 +1,10 @@
 package com.xceptance.neodymium.junit4.testclasses.datautils;
 
+import com.xceptance.neodymium.common.testdata.TestData;
+import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import com.xceptance.neodymium.common.testdata.TestData;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
 
 @RunWith(NeodymiumRunner.class)
 public class TestDataHelperTests
@@ -25,7 +24,7 @@ public class TestDataHelperTests
     {
         String email = TestData.randomEmail();
         // test fixed random
-        Assert.assertEquals("junit-lwtq5qha2z@varmail.de", email);
+        Assert.assertEquals("junit-01uh2qpree@varmail.de", email);
     }
 
     @Test

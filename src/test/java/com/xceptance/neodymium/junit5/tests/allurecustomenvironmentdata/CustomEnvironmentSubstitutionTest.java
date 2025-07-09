@@ -51,48 +51,48 @@ public class CustomEnvironmentSubstitutionTest extends AbstractNeodymiumTest
         Map<String, String> xmlDataMap = getXmlParameterMap(ENVIRONMENT_XML_PATH);
 
         // assert test data is present
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.referenceData1"));
-        assertEquals("customValue1", xmlDataMap.get("neodymium.report.environment.custom.referenceData1"));
+        assertTrue(xmlDataMap.containsKey("referenceData1"));
+        assertEquals("customValue1", xmlDataMap.get("referenceData1"));
 
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.referenceData2"));
-        assertEquals("anotherCustomValue2", xmlDataMap.get("neodymium.report.environment.custom.referenceData2"));
+        assertTrue(xmlDataMap.containsKey("referenceData2"));
+        assertEquals("anotherCustomValue2", xmlDataMap.get("referenceData2"));
 
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.referenceData3"));
-        assertEquals("alleGutenDingeSindDrei3", xmlDataMap.get("neodymium.report.environment.custom.referenceData3"));
+        assertTrue(xmlDataMap.containsKey("referenceData3"));
+        assertEquals("alleGutenDingeSindDrei3", xmlDataMap.get("referenceData3"));
 
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.referenceData4"));
-        assertEquals("ichHabeAberNur7", xmlDataMap.get("neodymium.report.environment.custom.referenceData4"));
+        assertTrue(xmlDataMap.containsKey("referenceData4"));
+        assertEquals("ichHabeAberNur7", xmlDataMap.get("referenceData4"));
 
         // assert property substitution to another custom property from same source
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.neodymiumPropertiesReference"));
-        assertEquals("customValue1", xmlDataMap.get("neodymium.report.environment.custom.neodymiumPropertiesReference"));
+        assertTrue(xmlDataMap.containsKey("neodymiumPropertiesReference"));
+        assertEquals("customValue1", xmlDataMap.get("neodymiumPropertiesReference"));
 
         // assert multiple references in one property
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.multipleReference1"));
-        assertEquals("customValue1anotherCustomValue2", xmlDataMap.get("neodymium.report.environment.custom.multipleReference1"));
+        assertTrue(xmlDataMap.containsKey("multipleReference1"));
+        assertEquals("customValue1anotherCustomValue2", xmlDataMap.get("multipleReference1"));
 
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.multipleReference2"));
-        assertEquals("customValue1$anotherCustomValue2", xmlDataMap.get("neodymium.report.environment.custom.multipleReference2"));
+        assertTrue(xmlDataMap.containsKey("multipleReference2"));
+        assertEquals("customValue1$anotherCustomValue2", xmlDataMap.get("multipleReference2"));
 
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.multipleReference3"));
-        assertEquals("customValue1 some Text anotherCustomValue2", xmlDataMap.get("neodymium.report.environment.custom.multipleReference3"));
+        assertTrue(xmlDataMap.containsKey("multipleReference3"));
+        assertEquals("customValue1 some Text anotherCustomValue2", xmlDataMap.get("multipleReference3"));
 
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.multipleReference4"));
+        assertTrue(xmlDataMap.containsKey("multipleReference4"));
         assertEquals("customValue1, anotherCustomValue2, alleGutenDingeSindDrei3, ichHabeAberNur7",
-                     xmlDataMap.get("neodymium.report.environment.custom.multipleReference4"));
+                     xmlDataMap.get("multipleReference4"));
 
         // assert same reference in one property multiple times
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.sameReference1"));
-        assertEquals("customValue1customValue1", xmlDataMap.get("neodymium.report.environment.custom.sameReference1"));
+        assertTrue(xmlDataMap.containsKey("sameReference1"));
+        assertEquals("customValue1customValue1", xmlDataMap.get("sameReference1"));
 
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.sameReference2"));
-        assertEquals("customValue1$customValue1", xmlDataMap.get("neodymium.report.environment.custom.sameReference2"));
+        assertTrue(xmlDataMap.containsKey("sameReference2"));
+        assertEquals("customValue1$customValue1", xmlDataMap.get("sameReference2"));
 
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.sameReference3"));
-        assertEquals("customValue1 some Text customValue1", xmlDataMap.get("neodymium.report.environment.custom.sameReference3"));
+        assertTrue(xmlDataMap.containsKey("sameReference3"));
+        assertEquals("customValue1 some Text customValue1", xmlDataMap.get("sameReference3"));
 
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.sameReference4"));
-        assertEquals("customValue1, customValue1, customValue1, customValue1", xmlDataMap.get("neodymium.report.environment.custom.sameReference4"));
+        assertTrue(xmlDataMap.containsKey("sameReference4"));
+        assertEquals("customValue1, customValue1, customValue1, customValue1", xmlDataMap.get("sameReference4"));
     }
 
     @AfterAll

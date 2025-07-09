@@ -57,24 +57,24 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
         Map<String, String> xmlDataMap = getXmlParameterMap(ENVIRONMENT_XML_PATH);
 
         // assert system properties
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.CustomEnvironmentSystemDataTest"));
-        assertEquals("systemProperties", xmlDataMap.get("neodymium.report.environment.custom.CustomEnvironmentSystemDataTest"));
+        assertTrue(xmlDataMap.containsKey("CustomEnvironmentSystemDataTest"));
+        assertEquals("systemProperties", xmlDataMap.get("CustomEnvironmentSystemDataTest"));
 
         // assert temp properties
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.CustomEnvironmentTempDataTest"));
-        assertEquals("tempProperties", xmlDataMap.get("neodymium.report.environment.custom.CustomEnvironmentTempDataTest"));
+        assertTrue(xmlDataMap.containsKey("CustomEnvironmentTempDataTest"));
+        assertEquals("tempProperties", xmlDataMap.get("CustomEnvironmentTempDataTest"));
 
         // assert dev neodymium properties
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.CustomEnvironmentDevDataTest"));
-        assertEquals("devNeodymiumProperties", xmlDataMap.get("neodymium.report.environment.custom.CustomEnvironmentDevDataTest"));
+        assertTrue(xmlDataMap.containsKey("CustomEnvironmentDevDataTest"));
+        assertEquals("devNeodymiumProperties", xmlDataMap.get("CustomEnvironmentDevDataTest"));
 
         // assert credential properties
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.CustomEnvironmentCredentialsDataTest"));
-        assertEquals("credentialsProperties", xmlDataMap.get("neodymium.report.environment.custom.CustomEnvironmentCredentialsDataTest"));
+        assertTrue(xmlDataMap.containsKey("CustomEnvironmentCredentialsDataTest"));
+        assertEquals("credentialsProperties", xmlDataMap.get("CustomEnvironmentCredentialsDataTest"));
 
         // assert neodymium properties
-        assertTrue(xmlDataMap.containsKey("neodymium.report.environment.custom.CustomEnvironmentNeoDataTest"));
-        assertEquals("neodymiumProperties", xmlDataMap.get("neodymium.report.environment.custom.CustomEnvironmentNeoDataTest"));
+        assertTrue(xmlDataMap.containsKey("CustomEnvironmentNeoDataTest"));
+        assertEquals("neodymiumProperties", xmlDataMap.get("CustomEnvironmentNeoDataTest"));
     }
 
     @AfterAll

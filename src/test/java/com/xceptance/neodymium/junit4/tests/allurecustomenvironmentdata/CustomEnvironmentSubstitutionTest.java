@@ -49,7 +49,7 @@ public class CustomEnvironmentSubstitutionTest extends NeodymiumTest
 
         // delete environment.xml, neodymium-properties.backup and neodymium.temp file
         File environmentXml = new File(ENVIRONMENT_XML_PATH);
-        //environmentXml.delete();
+        environmentXml.delete();
 
         backupNeodymiumConfigFile.delete();
 
