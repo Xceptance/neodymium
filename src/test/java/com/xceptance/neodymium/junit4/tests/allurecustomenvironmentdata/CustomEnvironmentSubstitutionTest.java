@@ -3,7 +3,6 @@ package com.xceptance.neodymium.junit4.tests.allurecustomenvironmentdata;
 import com.xceptance.neodymium.junit4.testclasses.allurecustomenvironmentdata.CustomEnvironmentPropertySubstitutionTestClass;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.util.AllureAddons;
-import org.apache.commons.io.FileUtils;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -20,10 +19,6 @@ public class CustomEnvironmentSubstitutionTest extends NeodymiumTest
     @BeforeClass
     public static void setUpNeodymiumConfiguration() throws IOException
     {
-        File neodymiumConfigFile = new File("./config/neodymium.properties");
-        File backupNeodymiumConfigFile = new File("./config/neodymium-properties.backup");
-        FileUtils.copyFile(neodymiumConfigFile, backupNeodymiumConfigFile);
-
         // enable custom environment data
         System.setProperty("neodymium.report.environment.enableCustomData", "true");
 
@@ -42,19 +37,9 @@ public class CustomEnvironmentSubstitutionTest extends NeodymiumTest
     @AfterClass
     public static void afterClass() throws IOException
     {
-        // reset neodymium.properties
-        File backupNeodymiumConfigFile = new File("./config/neodymium-properties.backup");
-        File neodymiumConfigFile = new File("./config/neodymium.properties");
-        FileUtils.copyFile(backupNeodymiumConfigFile, neodymiumConfigFile);
-
         // delete environment.xml, neodymium-properties.backup and neodymium.temp file
         File environmentXml = new File(ENVIRONMENT_XML_PATH);
         environmentXml.delete();
-
-        backupNeodymiumConfigFile.delete();
-
-        File tempNeodymiumConfigFile = new File("./config/neodymium.temp");
-        tempNeodymiumConfigFile.delete();
 
         // disable custom entries
         System.clearProperty("neodymium.report.environment.enableCustomData");

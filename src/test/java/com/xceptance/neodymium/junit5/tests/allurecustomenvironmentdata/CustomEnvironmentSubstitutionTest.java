@@ -3,7 +3,6 @@ package com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 import com.xceptance.neodymium.util.AllureAddons;
-import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -19,25 +18,9 @@ public class CustomEnvironmentSubstitutionTest extends AbstractNeodymiumTest
 {
     private static final String ENVIRONMENT_XML_PATH = AllureAddons.getAllureResultsFolder().getAbsoluteFile() + File.separator + "environment.xml";
 
-    /**
-     * The test wants to test the order in which the custom values are written and set. The loading order for these properties is as follows:
-     * <ol>
-     * <li>System properties</li>
-     * <li>temporary config file</li>
-     * <li>config/dev-neodymium.properties</li>
-     * <li>System environment variables</li>
-     * <li>config/credentials.properties</li>
-     * <li>config/neodymium.properties</li>
-     * </ol>
-     */
-
     @BeforeAll
     public static void setUpNeodymiumConfiguration() throws IOException
     {
-        File neodymiumConfigFile = new File("./config/neodymium.properties");
-        File backupNeodymiumConfigFile = new File("./config/neodymium-properties.backup");
-        FileUtils.copyFile(neodymiumConfigFile, backupNeodymiumConfigFile);
-
         // enable custom environment data
         System.setProperty("neodymium.report.environment.enableCustomData", "true");
 
@@ -98,19 +81,9 @@ public class CustomEnvironmentSubstitutionTest extends AbstractNeodymiumTest
     @AfterAll
     public static void afterClass() throws IOException
     {
-        // reset neodymium.properties
-        File backupNeodymiumConfigFile = new File("./config/neodymium-properties.backup");
-        File neodymiumConfigFile = new File("./config/neodymium.properties");
-        FileUtils.copyFile(backupNeodymiumConfigFile, neodymiumConfigFile);
-
         // delete environment.xml, neodymium-properties.backup and neodymium.temp file
         File environmentXml = new File(ENVIRONMENT_XML_PATH);
         environmentXml.delete();
-
-        backupNeodymiumConfigFile.delete();
-
-        File tempNeodymiumConfigFile = new File("./config/neodymium.temp");
-        tempNeodymiumConfigFile.delete();
 
         // disable custom entries
         System.clearProperty("neodymium.report.environment.enableCustomData");
