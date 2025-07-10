@@ -91,7 +91,7 @@ public class DebugUtilsTest
         Assert.assertEquals(3, eventListener.implicitWaitCount);
 
         // on wait due to find and click
-        $("#text-3 h1").click();
+        $("#content article h1").click();
         Assert.assertEquals(4, eventListener.implicitWaitCount);
 
         // additional one wait due to find and click
