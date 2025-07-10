@@ -1,14 +1,14 @@
 package com.xceptance.neodymium.common;
 
-import static io.qameta.allure.model.Status.PASSED;
+import com.xceptance.neodymium.util.AllureAddons;
+import com.xceptance.neodymium.util.Neodymium;
+import io.qameta.allure.listener.StepLifecycleListener;
+import io.qameta.allure.model.StepResult;
 
 import java.io.IOException;
 
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.Neodymium;
-
-import io.qameta.allure.listener.StepLifecycleListener;
-import io.qameta.allure.model.StepResult;
+import static com.xceptance.neodymium.common.TestStepListener.URL_CHANGED_STEP_MESSAGE;
+import static io.qameta.allure.model.Status.PASSED;
 
 public class AllureTestStepListener implements StepLifecycleListener
 {
@@ -17,26 +17,44 @@ public class AllureTestStepListener implements StepLifecycleListener
     {
         StepLifecycleListener.super.beforeStepStop(result);
 
-        // check if there is an actual page shown and not only an empty browser
-        if ("data:,".equals(Neodymium.getDriver().getCurrentUrl())){
+        // if the configuration is set to not take screenshots per step, we do not need to do anything
+        if (!Neodymium.configuration().screenshotPerStep())
+        {
+            return;
+        }
+
+        if (Neodymium.getDriver() == null)
+        {
             return;
         }
 
         // only take additional screenshots for passing steps other status won't give additional information
-        if (result.getStatus() != PASSED) {
+        if (result.getStatus() != PASSED)
+        {
             return;
         }
 
-        if (Neodymium.configuration().screenshotPerStep())
+        String name = result.getName();
+
+        // safety check for null name
+        if (name == null)
         {
-            try
-            {
-                AllureAddons.attachPNG("beforeStepStop_screenshot");
-            }
-            catch (IOException e)
-            {
-                throw new RuntimeException(e);
-            }
+            return;
+        }
+
+        // skip screenshots for steps with names starting with $(, $$(, $x(, or $$x( or for URL changed steps
+        if (name.startsWith(URL_CHANGED_STEP_MESSAGE) || name.startsWith("$(") || name.startsWith("$$(") || name.startsWith("$x(") || name.startsWith("$$x("))
+        {
+            return;
+        }
+
+        try
+        {
+            AllureAddons.attachPNG("beforeStepStop_screenshot");
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException(e);
         }
     }
 }
