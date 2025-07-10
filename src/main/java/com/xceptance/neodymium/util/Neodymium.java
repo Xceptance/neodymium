@@ -1,11 +1,11 @@
 package com.xceptance.neodymium.util;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-import java.util.WeakHashMap;
-
+import com.browserup.bup.BrowserUpProxy;
+import com.codeborne.selenide.AssertionMode;
+import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.Selenide;
+import com.xceptance.neodymium.common.TestStepListener;
+import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
 import org.aeonbits.owner.ConfigFactory;
 import org.openqa.selenium.By;
 import org.openqa.selenium.Dimension;
@@ -13,12 +13,11 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.remote.RemoteWebDriver;
 
-import com.browserup.bup.BrowserUpProxy;
-import com.codeborne.selenide.AssertionMode;
-import com.codeborne.selenide.Configuration;
-import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.TestStepListener;
-import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
+import java.util.WeakHashMap;
 
 /**
  * See our Github wiki: <a href="https://github.com/Xceptance/neodymium-library/wiki/Neodymium-context">Neodymium
@@ -203,6 +202,17 @@ public class Neodymium
     }
 
     /**
+     * Check if a WebDriver is currently set in the context.
+     *
+     * @return true if a WebDriver is set, false otherwise
+     */
+    public static boolean hasDriver()
+    {
+        final WebDriverStateContainer wDSC = getContext().webDriverStateContainer;
+        return wDSC != null && wDSC.getWebDriver() != null;
+    }
+
+    /**
      * Get the current WebDriver as RemoteWebDriver
      *
      * @return remoteWebDriver
@@ -298,7 +308,11 @@ public class Neodymium
      */
     public static Dimension getWindowSize()
     {
-        return getDriver().manage().window().getSize();
+        if (hasDriver())
+        {
+            return getDriver().manage().window().getSize();
+        }
+        return new Dimension(0, 0);
     }
 
     /**
@@ -599,7 +613,7 @@ public class Neodymium
         {
             return getContext().lastUsedElement.findElement(getContext().lastLocator);
         }
-        else if (getContext().lastLocator != null)
+        else if (getContext().lastLocator != null && hasDriver())
         {
             return getDriver().findElement(getContext().lastLocator);
         }

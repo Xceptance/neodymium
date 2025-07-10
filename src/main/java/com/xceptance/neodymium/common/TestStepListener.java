@@ -1,20 +1,19 @@
 package com.xceptance.neodymium.common;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.WeakHashMap;
-import java.util.regex.Pattern;
-
-import org.junit.jupiter.api.Assertions;
-
 import com.codeborne.selenide.logevents.LogEvent;
 import com.codeborne.selenide.logevents.LogEventListener;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.JavaScriptUtils;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.PropertiesUtil;
+import org.junit.jupiter.api.Assertions;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
+import java.util.regex.Pattern;
 
 public class TestStepListener implements LogEventListener
 {
@@ -57,6 +56,11 @@ public class TestStepListener implements LogEventListener
     @Override
     public void afterEvent(LogEvent currentLog)
     {
+        if (!Neodymium.hasDriver())
+        {
+            return;
+        }
+
         String currentUrl = Neodymium.getDriver().getCurrentUrl();
         String lastUrl = getLastUrl();
         if (lastUrl == null)

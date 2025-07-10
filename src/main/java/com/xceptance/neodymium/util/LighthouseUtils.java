@@ -1,5 +1,16 @@
 package com.xceptance.neodymium.util;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
+import io.qameta.allure.Allure;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.junit.Assert;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WindowType;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -8,20 +19,8 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.junit.Assert;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WindowType;
-
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.PathNotFoundException;
-
-import io.qameta.allure.Allure;
-
 import static com.xceptance.neodymium.util.DataUtils.JSONPATH_CONFIGURATION;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Powered by <a href="https://developer.chrome.com/docs/lighthouse/overview?hl=de">Lighthouse</a> (Copyright Google)
@@ -42,6 +41,9 @@ public class LighthouseUtils
      */
     public static void createLightHouseReport(String reportName) throws Exception 
     {
+        assertTrue(Neodymium.hasDriver(),
+                   "Lighthouse report can only be created if a driver is present in Neodymium, please ensure that a driver is set before calling this method. Maybe the @Browser annotation is missing or @SuppressBrowser is used?");
+
         // validate that lighthouse is installed
         String readerOutput = "";
         try 
