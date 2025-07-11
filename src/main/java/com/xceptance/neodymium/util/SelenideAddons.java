@@ -410,7 +410,7 @@ public class SelenideAddons
     public static void dragAndDrop(SelenideElement elementToMove, int horizontalMovement, int verticalMovement)
     {
         assertTrue(Neodymium.hasDriver(),
-                   "Lighthouse report can only be created if a driver is present in Neodymium, please ensure that a driver is set before calling this method. Maybe the @Browser annotation is missing or @SuppressBrowser is used?");
+                   "Neodymium has no driver, so we can not perform a drag and drop operation. Please check your setup and add the @Browser annotation to your test.");
 
         try
         {
