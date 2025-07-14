@@ -140,6 +140,12 @@ public class AllureAddons
     @Attachment(type = "image/png", value = "{filename}", fileExtension = ".png")
     public static void attachPNG(final String filename) throws IOException
     {
+        // if we are running without a driver, we can't take a screenshot
+        if (!Neodymium.hasDriver())
+        {
+            return;
+        }
+
         if (Neodymium.configuration().enableAdvancedScreenShots() == false)
         {
             ((TakesScreenshot) Neodymium.getDriver()).getScreenshotAs(OutputType.BYTES);

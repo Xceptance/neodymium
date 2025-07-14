@@ -1,8 +1,5 @@
 package com.xceptance.neodymium.util;
 
-import static com.xceptance.neodymium.common.testdata.TestData.JSONPATH_CONFIGURATION;
-
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -10,6 +7,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+
+
+import static com.xceptance.neodymium.util.DataUtils.JSONPATH_CONFIGURATION;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -43,6 +44,9 @@ public class LighthouseUtils
      */
     public static void createLightHouseReport(String reportName) throws Exception 
     {
+        assertTrue(Neodymium.hasDriver(),
+                   "Lighthouse report can only be created if a driver is present in Neodymium, please ensure that a driver is set before calling this method. Maybe the @Browser annotation is missing or @SuppressBrowser is used?");
+
         // validate that lighthouse is installed
         String readerOutput = "";
         try 

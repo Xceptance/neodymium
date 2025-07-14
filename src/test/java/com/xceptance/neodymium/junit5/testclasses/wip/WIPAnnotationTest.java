@@ -4,7 +4,6 @@ import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 
 public class WIPAnnotationTest
-
 {
     @WorkInProgress
     @NeodymiumTest

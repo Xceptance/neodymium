@@ -36,7 +36,7 @@ public class NeodymiumData
                                 .filter(method -> method.getAnnotation(NeodymiumTest.class) != null)
                                 .anyMatch(method -> method.getAnnotation(WorkInProgress.class) != null);
 
-        List<TestTemplateInvocationContext> muliplicationResult = new ArrayList<>();
+        List<TestTemplateInvocationContext> multiplicationResult = new ArrayList<>();
         List<BrowserMethodData> browsers = new ArrayList<BrowserMethodData>();
         List<TestdataContainer> dataSets = new ArrayList<TestdataContainer>();
 
@@ -49,6 +49,7 @@ public class NeodymiumData
         {
             browsers = browserData.createIterationData(templateMethod);
             dataSets = testdataData.getTestDataForMethod(templateMethod);
+
             if (browsers.isEmpty())
             {
                 browsers.add(null);
@@ -62,10 +63,9 @@ public class NeodymiumData
         {
             for (TestdataContainer dataSet : dataSets)
             {
-                muliplicationResult.add(new TemplateInvocationContext(templateMethod.getName(), browser, dataSet, testClass));
+                multiplicationResult.add(new TemplateInvocationContext(templateMethod.getName(), browser, dataSet, testClass));
             }
         }
-        return muliplicationResult.stream();
+        return multiplicationResult.stream();
     }
-
 }
