@@ -45,6 +45,8 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
+
 /**
  * Convenience methods for step definitions
  *
@@ -521,6 +523,7 @@ public class AllureAddons
     public static void initializeEnvironmentInformation()
     {
         Map<String, String> environmentDataMap = new HashMap<String, String>();
+        String customDataIdentifier = "neodymium.report.environment.custom";
 
         if (!neoVersionLogged && Neodymium.configuration().logNeoVersion())
         {
@@ -533,37 +536,44 @@ public class AllureAddons
         {
             LOGGER.info("Custom Environment Data was added.");
             customDataAdded = true;
-            String customDataIdentifier = "neodymium.report.environment.custom";
-            environmentDataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "dev-neodymium.properties",
-                                                                             customDataIdentifier, environmentDataMap);
 
-            Map<String, String> systemEnvMap = new HashMap<String, String>();
-            for (Map.Entry<String, String> entry : System.getenv().entrySet())
-            {
-                String key = entry.getKey();
-                if (key.contains(customDataIdentifier))
-                {
-                    String cleanedKey = key.replace(customDataIdentifier, "");
-                    cleanedKey = cleanedKey.replaceAll("\\.", "");
-                    systemEnvMap.put(cleanedKey, entry.getValue());
-                }
-            }
-            environmentDataMap = PropertiesUtil.mapPutAllIfAbsent(environmentDataMap, systemEnvMap);
-            environmentDataMap = PropertiesUtil.mapPutAllIfAbsent(environmentDataMap,
-                                                                  PropertiesUtil.getDataMapForIdentifier(customDataIdentifier,
-                                                                                                         System.getProperties()));
-            environmentDataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "credentials.properties",
-                                                                             customDataIdentifier, environmentDataMap);
-            environmentDataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "neodymium.properties",
-                                                                             customDataIdentifier, environmentDataMap);
+            environmentDataMap.putAll(getPropertiesMapForCustomIdentifier(customDataIdentifier));
         }
 
         if (!environmentDataMap.isEmpty())
         {
             // These values should be the same for all running JVMs. If there are differences in the values, it would we
             // good to see it in the report
-            AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder().putAll(environmentDataMap).build(), EnvironmentInfoMode.ADD);
+            // AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder().putAll(environmentDataMap).build(), EnvironmentInfoMode.ADD);
+            AllureAddons.addEnvironmentInformation(
+                ImmutableMap.<String, String> builder().putAll(removePrefixFromMap(environmentDataMap, customDataIdentifier)).build(), EnvironmentInfoMode.ADD);
         }
+    }
+
+    /**
+     * Removes the prefix from the keys in the map.
+     *
+     * @param map
+     *     the map to process
+     * @param prefix
+     *     the prefix to remove
+     * @return a new map with the prefix removed from the keys
+     */
+    private static Map<String, String> removePrefixFromMap(Map<String, String> map, String prefix)
+    {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<String, String> entry : map.entrySet())
+        {
+            if (entry.getKey().startsWith(prefix))
+            {
+                result.put(entry.getKey().substring(prefix.length() + 1), entry.getValue());
+            }
+            else
+            {
+                result.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return result;
     }
 
     /**
@@ -581,7 +591,6 @@ public class AllureAddons
         {
             // covert Java object to JSON strings
             dataObjectJson = mapper.setSerializationInclusion(Include.NON_NULL).writeValueAsString(data);
-
         }
         catch (JsonProcessingException e)
         {

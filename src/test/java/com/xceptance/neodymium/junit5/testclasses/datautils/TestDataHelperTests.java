@@ -1,9 +1,8 @@
 package com.xceptance.neodymium.junit5.testclasses.datautils;
 
-import org.junit.jupiter.api.Assertions;
-
 import com.xceptance.neodymium.common.testdata.TestData;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.junit.jupiter.api.Assertions;
 
 public class TestDataHelperTests
 {
@@ -22,7 +21,7 @@ public class TestDataHelperTests
     {
         String email = TestData.randomEmail();
         // test fixed random
-        Assertions.assertEquals("junit-lwtq5qha2z@varmail.de", email);
+        Assertions.assertEquals("junit-01uh2qpree@varmail.de", email);
     }
 
     @NeodymiumTest

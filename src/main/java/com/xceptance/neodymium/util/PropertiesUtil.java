@@ -1,5 +1,8 @@
 package com.xceptance.neodymium.util;
 
+import org.aeonbits.owner.ConfigFactory;
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.HashMap;
@@ -9,12 +12,20 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-
-import org.aeonbits.owner.ConfigFactory;
-import org.apache.commons.lang3.StringUtils;
+import java.util.stream.Collectors;
 
 public class PropertiesUtil
 {
+    /**
+     * Returns a set of subkeys for a given prefix from the provided properties. Removes the prefix from the keys and splits them on the next dot to get the
+     * subkeys.
+     *
+     * @param properties
+     *     the properties to search in
+     * @param prefix
+     *     the prefix to match against keys
+     * @return a set of subkeys that match the prefix
+     */
     public static Set<String> getSubkeysForPrefix(Properties properties, String prefix)
     {
         Set<String> keys = new HashSet<String>();
@@ -44,8 +55,17 @@ public class PropertiesUtil
         return keys;
     }
 
-    public static void loadPropertiesFromFile(String path, Properties properties)
+    /**
+     * Loads properties from a file at the specified path. If the file does not exist, it will not throw an error but return an empty Properties object.
+     *
+     * @param path
+     *     the path to the properties file
+     * @return a Properties object containing the loaded properties
+     */
+    public static Properties loadPropertiesFromFile(String path)
     {
+        Properties properties = new Properties();
+
         try
         {
             File source = new File(path);
@@ -60,8 +80,19 @@ public class PropertiesUtil
         {
             throw new RuntimeException(e);
         }
+
+        return properties;
     }
 
+    /**
+     * Returns a map of properties that match a specific identifier. The identifier is expected to be part of the keys in the properties.
+     *
+     * @param identifier
+     *     the identifier to match against keys
+     * @param properties
+     *     the properties to search in
+     * @return a map containing the properties that match the identifier
+     */
     public static Map<String, String> getDataMapForIdentifier(String identifier, Properties properties)
     {
         Map<String, String> resultMap = new HashMap<String, String>();
@@ -70,62 +101,232 @@ public class PropertiesUtil
             String key = (String) entry.getKey();
             if (key.contains(identifier))
             {
-                String cleanedKey = key.replace(identifier, "");
-                cleanedKey = cleanedKey.replaceAll("\\.", "");
-                resultMap.put(cleanedKey, (String) entry.getValue());
+                resultMap.put(key, (String) entry.getValue());
             }
         }
         return resultMap;
     }
 
+    /**
+     * Merges the provided changeSet into the map, adding entries only if they are not already present.
+     *
+     * @param map
+     *     the map to update
+     * @param changeSet
+     *     the entries to add if absent
+     * @return the updated map
+     */
     public static Map<String, String> mapPutAllIfAbsent(Map<String, String> map, Map<String, String> changeSet)
     {
-        if (!changeSet.isEmpty())
+        if (changeSet.isEmpty())
         {
-            for (Entry<String, String> entry : changeSet.entrySet())
-            {
-                map.putIfAbsent(entry.getKey(), entry.getValue());
-            }
+            return map;
         }
+
+        for (Entry<String, String> entry : changeSet.entrySet())
+        {
+            map.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+
         return map;
     }
 
+    /**
+     * Merges the provided changeSet into the map, adding entries only if they are not already present.
+     *
+     * @param map
+     *     the map to update
+     * @param changeSet
+     *     the entries to add if absent
+     * @param <T>
+     *     the type of keys and values in the changeSet
+     * @return the updated map
+     */
+    public static <T> Map<String, String> putAllIfAbsent(Map<String, String> map, Map<T, T> changeSet)
+    {
+        if (changeSet.isEmpty())
+        {
+            return map;
+        }
+
+        for (Entry<T, T> entry : changeSet.entrySet())
+        {
+            map.putIfAbsent((String) entry.getKey(), (String) entry.getValue());
+        }
+
+        return map;
+    }
+
+    /**
+     * Adds properties from a file to the provided dataMap, only if they are not already present.
+     *
+     * @param fileLocation
+     *     the location of the properties file
+     * @param identifier
+     *     the identifier to match against keys
+     * @param dataMap
+     *     the map to update with properties from the file
+     * @return the updated map with properties added if they were not already present
+     */
     public static Map<String, String> addMissingPropertiesFromFile(String fileLocation, String identifier, Map<String, String> dataMap)
     {
-        Properties properties = new Properties();
-        PropertiesUtil.loadPropertiesFromFile(fileLocation, properties);
+        Properties properties = loadPropertiesFromFile(fileLocation);
         return PropertiesUtil.mapPutAllIfAbsent(dataMap,
                                                 PropertiesUtil.getDataMapForIdentifier(identifier,
                                                                                        properties));
     }
 
+    /**
+     * Retrieves a map of properties for a custom identifier, including system properties, environment variables, and properties from various files. The
+     * properties are filtered to include only those that start with the specified custom identifier. This method combines properties from multiple sources in
+     * the following order:
+     * <ol>
+     *     <li>System properties</li>
+     *     <li>Temporary configuration file specified by the {@code Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME} property</li>
+     *     <li>Configuration file at {@code ./config/dev-neodymium.properties}</li>
+     *     <li>System environment variables</li>
+     *     <li>Configuration file at {@code ./config/credentials.properties}</li>
+     *     <li>Configuration file at {@code ./config/neodymium.properties}</li>
+     * </ol>
+     *
+     * @param customIdentifier
+     *     the custom identifier to filter properties
+     * @return a map containing the properties for the specified custom identifier
+     */
     public static Map<String, String> getPropertiesMapForCustomIdentifier(String customIdentifier)
     {
-        Map<String, String> dataMap = new HashMap<String, String>();
-        dataMap = PropertiesUtil.addMissingPropertiesFromFile("./config/dev-neodymium.properties", customIdentifier, dataMap);
+        // System properties
+        Map<String, String> propertiesMap = System.getProperties().entrySet().stream()
+                                                  .collect(Collectors.toMap(
+                                                      e -> (String) e.getKey(),
+                                                      e -> (String) e.getValue()
+                                                  ));
 
-        Map<String, String> systemEnvMap = new HashMap<String, String>();
-        for (Map.Entry<String, String> entry : System.getenv().entrySet())
+        // temporary config file
+        putAllIfAbsent(propertiesMap, loadPropertiesFromFile(Optional.ofNullable(ConfigFactory.getProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME))
+                                                                     .orElse("")
+                                                                     .replaceAll("file:", "./")));
+
+        // config/dev-neodymium.properties
+        putAllIfAbsent(propertiesMap, loadPropertiesFromFile("." + File.separator + "config" + File.separator + "dev-neodymium.properties"));
+
+        // System environment variables
+        Properties systemProperties = new Properties();
+        systemProperties.putAll(System.getenv());
+
+        putAllIfAbsent(propertiesMap, systemProperties);
+
+        // config/credentials.properties
+        putAllIfAbsent(propertiesMap, loadPropertiesFromFile("." + File.separator + "config" + File.separator + "credentials.properties"));
+
+        // config/neodymium.properties
+        putAllIfAbsent(propertiesMap, loadPropertiesFromFile("." + File.separator + "config" + File.separator + "neodymium.properties"));
+
+        return substituteProperties(propertiesMap, customIdentifier);
+    }
+
+    /**
+     * Substitutes properties in the provided map that start with the custom identifier.
+     *
+     * @param propertiesMap
+     *     the map of properties to process
+     * @param customIdentifier
+     *     the custom identifier to filter and substitute properties
+     * @return a new map with substituted keys and values
+     */
+    private static <T> Map<String, String> substituteProperties(Map<String, String> propertiesMap, String customIdentifier)
+    {
+        // filter properties for the custom identifier
+        Map<String, String> customDataPropertiesMap = propertiesMap.entrySet().stream()
+                                                                   .filter(entry -> entry.getKey().startsWith(customIdentifier))
+                                                                   .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+
+        Map<String, String> substitutedMap = new HashMap<String, String>();
+
+        for (Entry<String, String> entry : customDataPropertiesMap.entrySet())
         {
-            String key = entry.getKey();
-            if (key.contains(customIdentifier))
-            {
-                String cleanedKey = key.replace(customIdentifier, "");
-                cleanedKey = cleanedKey.replaceAll("\\.", "");
-                systemEnvMap.put(cleanedKey, entry.getValue());
-            }
+            substitutedMap.put(entry.getKey(), substitutePropertyValue(entry.getValue(), propertiesMap, new HashSet<>()));
         }
-        dataMap = PropertiesUtil.mapPutAllIfAbsent(dataMap, systemEnvMap);
-        dataMap = PropertiesUtil.mapPutAllIfAbsent(dataMap,
-                                                   PropertiesUtil.getDataMapForIdentifier(customIdentifier,
-                                                                                          System.getProperties()));
-        dataMap = PropertiesUtil.addMissingPropertiesFromFile("./config/credentials.properties", customIdentifier, dataMap);
-        dataMap = PropertiesUtil.addMissingPropertiesFromFile("./config/neodymium.properties", customIdentifier, dataMap);
-        dataMap = PropertiesUtil.addMissingPropertiesFromFile(Optional.ofNullable(ConfigFactory.getProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME))
-                                                                      .orElse("")
-                                                                      .replaceAll("file:", "./"),
-                                                              customIdentifier,
-                                                              dataMap);
-        return dataMap;
+
+        return substitutedMap;
+    }
+
+    /**
+     * Substitutes placeholders in the value using the provided properties map. Handles circular dependencies by tracking visited placeholders.
+     *
+     * @param value
+     *     the value containing placeholders to substitute
+     * @param propertiesMap
+     *     the map of properties to use for substitution
+     * @param visitedPlaceholders
+     *     a set to track visited placeholders to prevent circular dependencies
+     * @return the value with placeholders substituted
+     */
+    private static String substitutePropertyValue(String value, Map<String, String> propertiesMap, Set<String> visitedPlaceholders)
+    {
+        // If the value does not contain any placeholders, return it as is
+        String result = value;
+        boolean changed;
+        int iterationCount = 0;
+        final int MAX_ITERATIONS = 10; // Prevent infinite loops
+
+        do
+        {
+            // Reset the changed flag for this iteration
+            changed = false;
+            // Store the previous result to check if any changes were made
+            String previousResult = result;
+
+            // Find all ${key} patterns in the value
+            int startIndex = result.indexOf("${");
+
+            while (startIndex != -1 && startIndex < result.length() - 1)
+            {
+                int endIndex = result.indexOf("}", startIndex);
+                if (endIndex != -1)
+                {
+                    // Extract the key from ${key}
+                    String placeholder = result.substring(startIndex, endIndex + 1);
+                    String key = result.substring(startIndex + 2, endIndex);
+
+                    // Check for circular dependencies
+                    if (visitedPlaceholders.contains(key))
+                    {
+                        throw new RuntimeException(
+                            "Circular properties reference detected for key: " + key + ". Please check your properties for circular dependencies and remove them.");
+                    }
+
+                    // Add this key to the visited set for this substitution chain
+                    visitedPlaceholders.add(key);
+
+                    // Get the replacement value
+                    String replacement = propertiesMap.get(key);
+                    // If no value found, keep the placeholder as is
+                    if (replacement == null)
+                    {
+                        replacement = placeholder;
+                    }
+
+                    result = result.replace(placeholder, replacement);
+                    changed = !result.equals(previousResult);
+
+                    // Continue searching for more placeholders from the beginning since the replacement could have introduced new placeholders
+                    // By resetting startIndex to the beginning of the string, the possible new placeholders will be found
+                    startIndex = result.indexOf("${");
+                }
+                else
+                {
+                    // If we found a starting ${ but no closing }, break
+                    break;
+                }
+            }
+
+            iterationCount++;
+        }
+        while (changed && iterationCount < MAX_ITERATIONS);
+
+        // If we hit the max iterations, it's likely a circular reference that wasn't caught by our visited set (e.g., complex nested substitutions)
+        // In that case the partially substituted result will be returned
+        return result;
     }
 }
