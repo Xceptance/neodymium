@@ -8,12 +8,15 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.codeborne.selenide.Configuration;
 
 public class MultibrowserConfiguration
 {
@@ -41,6 +44,8 @@ public class MultibrowserConfiguration
 
     private static final String BROWSER_GLOBAL_RESOLUTION = BROWSER_PROFILE_PREFIX + "global.browserResolution";
 
+    public static final String DEFAULT_BROWSER_ID = "Default";
+
     private Map<String, TestEnvironment> testEnvironments;
 
     private Map<String, BrowserConfiguration> browserProfiles;
@@ -65,6 +70,14 @@ public class MultibrowserConfiguration
         {
             loadPropertiesFromFile(temporaryConfigFile, browserProfileProperties);
         }
+
+        // add default browser to the properties
+        browserProfileProperties.put("browserprofile." + DEFAULT_BROWSER_ID + ".name", "Chrome Default");
+        browserProfileProperties.put("browserprofile." + DEFAULT_BROWSER_ID + ".browser", Optional.ofNullable(Configuration.browser).orElse("chrome"));
+        browserProfileProperties.put("browserprofile." + DEFAULT_BROWSER_ID + ".browserResolution",
+                                     Optional.ofNullable(Configuration.browserSize).orElse("1920x1080"));
+        browserProfileProperties.put("browserprofile." + DEFAULT_BROWSER_ID + ".arguments", "-ignore-certificate-errors");
+
         parseBrowserProfiles();
     }
 

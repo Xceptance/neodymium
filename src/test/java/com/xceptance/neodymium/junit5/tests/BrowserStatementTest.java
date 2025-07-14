@@ -32,7 +32,7 @@ import com.xceptance.neodymium.junit5.testclasses.browser.classonly.OneClassBrow
 import com.xceptance.neodymium.junit5.testclasses.browser.classonly.RandomBrowserClassLevel;
 import com.xceptance.neodymium.junit5.testclasses.browser.classonly.TwoClassBrowserOneMethod;
 import com.xceptance.neodymium.junit5.testclasses.browser.classonly.TwoSameClassBrowserOneMethod;
-import com.xceptance.neodymium.junit5.testclasses.browser.inheritance.BrowserOverwrittingChild;
+import com.xceptance.neodymium.junit5.testclasses.browser.inheritance.BrowserOverwritingChild;
 import com.xceptance.neodymium.junit5.testclasses.browser.inheritance.RandomBrowsersChild;
 import com.xceptance.neodymium.junit5.testclasses.browser.inheritance.RandomBrowsersOverwritingChild;
 import com.xceptance.neodymium.junit5.testclasses.browser.methodonly.MethodBrowserSuppressNoBrowserAnnotation;
@@ -461,8 +461,8 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
           "test :: Browser Chrome_1024x768",
           "testParent :: Browser Chrome_1024x768"
         };
-        checkDescription(BrowserOverwrittingChild.class, expected);
-        NeodymiumTestExecutionSummary summary = run(BrowserOverwrittingChild.class);
+        checkDescription(BrowserOverwritingChild.class, expected);
+        NeodymiumTestExecutionSummary summary = run(BrowserOverwritingChild.class);
         checkPass(summary, 2, 0);
     }
 

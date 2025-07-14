@@ -1,5 +1,6 @@
 package com.xceptance.neodymium.common;
 
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -63,6 +64,11 @@ public class TestStepListener implements LogEventListener
     @Override
     public void afterEvent(LogEvent currentLog)
     {
+        if (!Neodymium.hasDriver())
+        {
+            return;
+        }
+
         String currentUrl = Neodymium.getDriver().getCurrentUrl();
         String lastUrl = getLastUrl() != null ? getLastUrl() : "";
 

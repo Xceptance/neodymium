@@ -1,5 +1,34 @@
 package com.xceptance.neodymium.util;
 
+import com.codeborne.selenide.Selenide;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.common.ScreenshotWriter;
+import io.qameta.allure.Allure;
+import io.qameta.allure.AllureLifecycle;
+import io.qameta.allure.Attachment;
+import io.qameta.allure.Step;
+import io.qameta.allure.model.StepResult;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -15,38 +44,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.function.Supplier;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.TakesScreenshot;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-import org.xml.sax.SAXException;
-
-import com.codeborne.selenide.Selenide;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.ScreenshotWriter;
-
-import io.qameta.allure.Allure;
-import io.qameta.allure.AllureLifecycle;
-import io.qameta.allure.Attachment;
-import io.qameta.allure.Step;
-import io.qameta.allure.model.StepResult;
 
 /**
  * Convenience methods for step definitions
@@ -141,6 +138,12 @@ public class AllureAddons
     @Attachment(type = "image/png", value = "{filename}", fileExtension = ".png")
     public static void attachPNG(final String filename) throws IOException
     {
+        // if we are running without a driver, we can't take a screenshot
+        if (!Neodymium.hasDriver())
+        {
+            return;
+        }
+
         if (Neodymium.configuration().enableAdvancedScreenShots() == false)
         {
             ((TakesScreenshot) Neodymium.getDriver()).getScreenshotAs(OutputType.BYTES);

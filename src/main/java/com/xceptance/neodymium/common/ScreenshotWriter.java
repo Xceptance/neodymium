@@ -1,5 +1,24 @@
 package com.xceptance.neodymium.common;
 
+import com.assertthat.selenium_shutterbug.core.Capture;
+import com.assertthat.selenium_shutterbug.core.PageSnapshot;
+import com.assertthat.selenium_shutterbug.core.Shutterbug;
+import com.assertthat.selenium_shutterbug.utils.image.ImageProcessor;
+import com.assertthat.selenium_shutterbug.utils.web.Coordinates;
+import com.codeborne.selenide.ex.UIAssertionError;
+import com.xceptance.neodymium.common.testdata.DataSet;
+import com.xceptance.neodymium.util.AllureAddons;
+import com.xceptance.neodymium.util.Neodymium;
+import org.openqa.selenium.Dimension;
+import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.Point;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.firefox.FirefoxDriver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.imageio.ImageIO;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -13,27 +32,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.Optional;
-
-import javax.imageio.ImageIO;
-
-import org.openqa.selenium.Dimension;
-import org.openqa.selenium.JavascriptExecutor;
-import org.openqa.selenium.NoSuchElementException;
-import org.openqa.selenium.Point;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.firefox.FirefoxDriver;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.assertthat.selenium_shutterbug.core.Capture;
-import com.assertthat.selenium_shutterbug.core.PageSnapshot;
-import com.assertthat.selenium_shutterbug.core.Shutterbug;
-import com.assertthat.selenium_shutterbug.utils.image.ImageProcessor;
-import com.assertthat.selenium_shutterbug.utils.web.Coordinates;
-import com.codeborne.selenide.ex.UIAssertionError;
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.Neodymium;
 
 public class ScreenshotWriter
 {
@@ -114,6 +112,12 @@ public class ScreenshotWriter
 
     public static boolean doScreenshot(String filename, String pathname) throws IOException
     {
+        // If no driver is available, we cannot take a screenshot
+        if (!Neodymium.hasDriver())
+        {
+            return false;
+        }
+
         WebDriver driver = Neodymium.getDriver();
 
         Capture captureMode = getCaptureMode();

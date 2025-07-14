@@ -1,23 +1,5 @@
 package com.xceptance.neodymium.util;
 
-import static com.codeborne.selenide.Condition.not;
-import static com.codeborne.selenide.Selenide.$$;
-import static com.codeborne.selenide.Selenide.open;
-import static com.codeborne.selenide.Selenide.sleep;
-
-import java.util.Base64;
-import java.util.List;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-
-import org.apache.commons.lang3.StringUtils;
-import org.junit.Assert;
-import org.openqa.selenium.By;
-import org.openqa.selenium.StaleElementReferenceException;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.interactions.Actions;
-import org.openqa.selenium.interactions.MoveTargetOutOfBoundsException;
-
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.CheckResult;
 import com.codeborne.selenide.Condition;
@@ -31,6 +13,24 @@ import com.codeborne.selenide.ex.UIAssertionError;
 import com.codeborne.selenide.impl.Html;
 import com.codeborne.selenide.impl.WebElementsCollectionWrapper;
 import com.codeborne.selenide.logevents.SelenideLogger;
+import org.apache.commons.lang3.StringUtils;
+import org.junit.Assert;
+import org.openqa.selenium.By;
+import org.openqa.selenium.StaleElementReferenceException;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.interactions.Actions;
+import org.openqa.selenium.interactions.MoveTargetOutOfBoundsException;
+
+import java.util.Base64;
+import java.util.List;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
+import static com.codeborne.selenide.Condition.not;
+import static com.codeborne.selenide.Selenide.$$;
+import static com.codeborne.selenide.Selenide.open;
+import static com.codeborne.selenide.Selenide.sleep;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Additional helpers for limits chained lookup in Selenide. Contribute that later back to Selenide if it proves to
@@ -409,6 +409,9 @@ public class SelenideAddons
      */
     public static void dragAndDrop(SelenideElement elementToMove, int horizontalMovement, int verticalMovement)
     {
+        assertTrue(Neodymium.hasDriver(),
+                   "Neodymium has no driver, so we can not perform a drag and drop operation. Please check your setup and add the @Browser annotation to your test.");
+
         try
         {
             // perform drag and drop via the standard Selenium way
