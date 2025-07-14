@@ -21,7 +21,7 @@ public class RunWithProxy
     public void testProxyConfiguration()
     {
         Assert.assertThrows(WebDriverException.class, () -> {
-            Selenide.open("https://github.com/Xceptance/neodymium-library/");
+            Selenide.open("https://github.com/Xceptance/neodymium/");
         });
     }
 

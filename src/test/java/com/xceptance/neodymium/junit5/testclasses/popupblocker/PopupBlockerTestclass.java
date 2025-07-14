@@ -40,6 +40,20 @@ public class PopupBlockerTestclass extends AbstractNeodymiumTest
     }
 
     @NeodymiumTest
+    public void testPopUpWithSvgButtonIsBlocked()
+    {
+        Selenide.open("https://www.xceptance.com/");
+        String popup = "var e = document.createElement('svg');"
+                       + "e.innerHTML = 'testThing';"
+                       + "e.setAttribute('id','myWindow');"
+                       + "e.setAttribute('onclick','this.remove()');"
+                       + "document.body.appendChild(e);";
+        Selenide.executeJavaScript(popup, "");
+        Selenide.sleep(1500);
+        $("#myWindow").shouldNotBe(visible);
+    }
+
+    @NeodymiumTest
     public void testPopUpIsNotBlocked()
     {
         Selenide.open("https://www.xceptance.com/");

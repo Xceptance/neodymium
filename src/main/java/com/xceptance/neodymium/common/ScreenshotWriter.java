@@ -39,9 +39,13 @@ public class ScreenshotWriter
 
     private static boolean highlightViewPort()
     {
-        return Neodymium.configuration().enableFullPageCapture()?Neodymium.configuration().enableHighlightViewport():false;
+        return Neodymium.configuration().enableFullPageCapture() ? Neodymium.configuration().enableHighlightViewport() : false;
     }
 
+    private static boolean blurFullPageScreenshot()
+    {
+        return Neodymium.configuration().enableFullPageCapture() ? Neodymium.configuration().blurFullPageScreenshot() : false;
+    }
 
     public static void doScreenshot(String displayName, String testClassName, Optional<Throwable> executionException, Annotation[] annotationList)
         throws IOException
@@ -117,13 +121,14 @@ public class ScreenshotWriter
         WebDriver driver = Neodymium.getDriver();
 
         Capture captureMode = getCaptureMode();
-        
+
         PageSnapshot snapshot = Shutterbug.shootPage(driver, captureMode);
         BufferedImage image = snapshot.getImage();
         Files.createDirectories(Paths.get(pathname));
         String imagePath = pathname + File.separator + filename + ".png";
         File outputfile = new File(imagePath);
-        if (highlightViewPort())
+
+        if (highlightViewPort() || blurFullPageScreenshot())
         {
             double devicePixelRatio = Double.parseDouble(((JavascriptExecutor) driver).executeScript("return window.devicePixelRatio") + "");
             int offsetY = (int) (Double.parseDouble(((JavascriptExecutor) driver)
@@ -140,8 +145,15 @@ public class ScreenshotWriter
             }
             Point currentLocation = new Point(offsetX, offsetY);
             Coordinates coords = new Coordinates(currentLocation, currentLocation, size, new Dimension(0, 0), devicePixelRatio);
-            image = ImageProcessor.blurExceptArea(image, coords);
-            image = highlightScreenShot(image, coords, Color.decode(Neodymium.configuration().fullScreenHighlightColor()));
+
+            if (highlightViewPort())
+            {
+                image = highlightScreenShot(image, coords, Color.decode(Neodymium.configuration().fullScreenHighlightColor()));
+            }
+            if (blurFullPageScreenshot())
+            {
+                image = ImageProcessor.blurExceptArea(image, coords);
+            }
         }
         if (Neodymium.configuration().enableHighlightLastElement() && Neodymium.hasLastUsedElement())
         {

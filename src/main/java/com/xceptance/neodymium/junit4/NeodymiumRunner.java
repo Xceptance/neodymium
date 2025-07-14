@@ -1,15 +1,17 @@
 package com.xceptance.neodymium.junit4;
 
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
+import com.codeborne.selenide.logevents.SelenideLogger;
+import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.common.TestStepListener;
+import com.xceptance.neodymium.common.WorkInProgress;
+import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.junit4.order.DefaultStatementRunOrder;
+import com.xceptance.neodymium.junit4.statement.browser.BrowserRunAfters;
+import com.xceptance.neodymium.junit4.statement.browser.BrowserRunBefores;
+import com.xceptance.neodymium.util.AllureAddons;
+import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
+import com.xceptance.neodymium.util.Neodymium;
+import io.qameta.allure.selenide.AllureSelenide;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -25,25 +27,23 @@ import org.junit.runners.model.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codeborne.selenide.logevents.SelenideLogger;
-import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.TestStepListener;
-import com.xceptance.neodymium.common.WorkInProgress;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit4.order.DefaultStatementRunOrder;
-import com.xceptance.neodymium.junit4.statement.browser.BrowserRunAfters;
-import com.xceptance.neodymium.junit4.statement.browser.BrowserRunBefores;
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
-import com.xceptance.neodymium.util.Neodymium;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
-import io.qameta.allure.selenide.AllureSelenide;
+import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSeed;
 
 /**
  * This class executes {@link JUnit4} test classes (aka JUnit Runner) and adds several features to test execution e.g.
- * multi {@link Browser browser} and
- * <a href="https://github.com/Xceptance/neodymium-library/wiki/Test-data-provider">test data</a>. Vanilla JUnit
- * parameterized tests are supported as well but only with parameter injection (as described here: <a href=
+ * multi {@link Browser browser} and <a href="https://github.com/Xceptance/neodymium/wiki/Test-data-provider">test
+ * data</a>. Vanilla JUnit parameterized tests are supported as well but only with parameter injection (as described
+ * here: <a href=
  * "https://github.com/junit-team/junit4/wiki/parameterized-tests#using-parameter-for-field-injection-instead-of-constructor">Using @Parameter
  * for Field injection instead of Constructor</a>). In order to run a {@link JUnit4} test with this runner the class or
  * its super-class has to be annotated with {@link RunWith}
@@ -100,7 +100,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
             if (!AllureAddons.envFileExists())
             {
                 LOGGER.info("This test uses Neodymium Library (version: " + Neodymium.getNeodymiumVersion()
-                            + "), MIT License, more details on https://github.com/Xceptance/neodymium-library");
+                            + "), MIT License, more details on https://github.com/Xceptance/neodymium");
                 neoVersionLogged = true;
                 AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder()
                                                                    .put("Testing Framework", "Neodymium " + Neodymium.getNeodymiumVersion())
@@ -156,6 +156,9 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
 
             // It's fine, just make sure super.methodBlock is called with this method and return the resulting statement
         }
+
+        // reset the random seed so every test starts with the same values for better reproducibility
+        reinitializeRandomSeed();
 
         return methodStatement;
     }

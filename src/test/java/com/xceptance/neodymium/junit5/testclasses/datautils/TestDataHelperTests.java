@@ -2,15 +2,15 @@ package com.xceptance.neodymium.junit5.testclasses.datautils;
 
 import org.junit.jupiter.api.Assertions;
 
+import com.xceptance.neodymium.common.testdata.TestData;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.DataUtils;
 
-public class DataUtilsHelperTests
+public class TestDataHelperTests
 {
     @NeodymiumTest
     public void testRandomEmail()
     {
-        String email = DataUtils.randomEmail();
+        String email = TestData.randomEmail();
         Assertions.assertNotNull(email);
         Assertions.assertEquals(27, email.length());
         Assertions.assertTrue(email.startsWith("junit-"));
@@ -20,15 +20,15 @@ public class DataUtilsHelperTests
     @NeodymiumTest
     public void testFixedRandomEmail()
     {
-        String email = DataUtils.randomEmail();
+        String email = TestData.randomEmail();
         // test fixed random
-        Assertions.assertEquals("junit-01uh2qpree@varmail.de", email);
+        Assertions.assertEquals("junit-lwtq5qha2z@varmail.de", email);
     }
 
     @NeodymiumTest
     public void testRandomPassword()
     {
-        String password = DataUtils.randomPassword();
+        String password = TestData.randomPassword();
         Assertions.assertNotNull(password);
         Assertions.assertEquals(12, password.length());
 
@@ -46,7 +46,7 @@ public class DataUtilsHelperTests
     @NeodymiumTest
     public void testFixedRandomPassword()
     {
-        String password = DataUtils.randomPassword();
+        String password = TestData.randomPassword();
         // test fixed random
         Assertions.assertEquals("i_S_3Y-7hqZ4", password);
     }

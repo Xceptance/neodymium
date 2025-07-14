@@ -1,4 +1,4 @@
-[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-library.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22com.xceptance%22%20AND%20a:%22neodymium-library%22) [![Join the chat at https://gitter.im/neodymium-library/community](https://badges.gitter.im/neodymium-library/community.svg)](https://gitter.im/neodymium-library/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22com.xceptance%22%20AND%20a:%22neodymium%22) [![Join the chat at https://gitter.im/neodymium/community](https://badges.gitter.im/neodymium/community.svg)](https://gitter.im/neodymium/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 # Neodymium
 
@@ -20,7 +20,8 @@ We combine and use several open source frameworks. Here are some honorable menti
 If you already know what you want to do, you can pick one of the demo test suites or our test suite template. If you are new to Neodymium, please read on. 
 
 * [Neodymium Template](https://github.com/Xceptance/neodymium-template): A template to start a new test automation suite quickly either as Cucumber or as pure Java. 
-* [Neodymium Pure Java Example](https://github.com/Xceptance/neodymium-example): A demo test suite against the Xceptance reference demo store [Posters](https://github.com/Xceptance/neodymium-library/wiki/Posters-demo-store) as pure Java version.  
+* [Neodymium Pure Java Example](https://github.com/Xceptance/neodymium-example): A demo test suite against the Xceptance
+  reference demo store [Posters](https://github.com/Xceptance/neodymium/wiki/Posters-demo-store) as pure Java version.
 * [Neodymium Cucumber Example](https://github.com/Xceptance/neodymium-cucumber-example): For the fans of BDD/Cucumber, this is almost the same test suite as before but driven by BDD syntax.
 * [Neodymium Showcase](https://github.com/Xceptance/neodymium-showcase): This repository contains different showcases. Each of them demonstrates and comments on the usage of a single feature of Neodymium. Feel free to request more examples by creating an issue.
 
@@ -41,7 +42,8 @@ These are our **additions** to make test automation nicer, quicker, and less pai
 ## Getting Started
 We recommend starting with our template instead of writing a suite from scratch. If you need more guidance, you can also start from one of our full demo test suites.
 
-Please hop over to the [Wiki](https://github.com/Xceptance/neodymium-library/wiki/) for a full tour of Neodymium and a Getting Started guide. 
+Please hop over to the [Wiki](https://github.com/Xceptance/neodymium/wiki/) for a full tour of Neodymium and a Getting
+Started guide.
 
 If you are still impatient, here is the quickest way to get Neodymium added to your project. Don't forget to update the version number if you prefer a particular version.
 
@@ -68,11 +70,15 @@ public class MyTests
 }
 
 ```
-Please be aware that Neodymium (starting at version 5.0.0) is using JUnit5. If you want to run your tests with JUnit4 Neodymium still supports this and you can have a look [here](https://github.com/Xceptance/neodymium-library/wiki/).
 
-If your project is already driven by Neodymium but you want to update to the latest version, please, check the [migration notes](https://github.com/Xceptance/neodymium-library/wiki/Migrate-to-Neodymium-5)
+Please be aware that Neodymium (starting at version 5.0.0) is using JUnit5. If you want to run your tests with JUnit4
+Neodymium still supports this and you can have a look [here](https://github.com/Xceptance/neodymium/wiki/).
 
-And now is the time to dive into the features we added to make the most out of it. [Please head over to our Wiki](https://github.com/Xceptance/neodymium-library/wiki/).
+If your project is already driven by Neodymium but you want to update to the latest version, please, check
+the [migration notes](https://github.com/Xceptance/neodymium/wiki/Migrate-to-Neodymium-5)
+
+And now is the time to dive into the features we added to make the most out of
+it. [Please head over to our Wiki](https://github.com/Xceptance/neodymium/wiki/).
 
 ## License
 Neodymium is licensed under the MIT License.

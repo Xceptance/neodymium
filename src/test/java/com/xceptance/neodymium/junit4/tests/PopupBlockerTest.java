@@ -16,12 +16,14 @@ public class PopupBlockerTest extends NeodymiumTest
     {
         Map<String, String> properties = new HashMap<>();
 
-        properties.put("neodymium.popup.custom", "#myWindow");
+        properties.put("neodymium.popup.custom", "#myPopUp1");
+        properties.put("neodymium.popup.second", "#myPopUp2");
+        properties.put("neodymium.popup.third", "#myPopUp3");
         properties.put("neodymium.popup.customWithQuotes", "[data-testid='closeIcon']");
 
         addPropertiesForTest("temp-PopupBlockerTest-neodymium.properties", properties);
 
         Result result = JUnitCore.runClasses(PopupBlockerTestclass.class);
-        checkPass(result, 4, 0);
+        checkPass(result, 7, 0);
     }
 }

@@ -525,7 +525,7 @@ public class AllureAddons
         if (!neoVersionLogged && Neodymium.configuration().logNeoVersion())
         {
             LOGGER.info("This test uses Neodymium Library (version: " + Neodymium.getNeodymiumVersion()
-                        + "), MIT License, more details on https://github.com/Xceptance/neodymium-library");
+                        + "), MIT License, more details on https://github.com/Xceptance/neodymium");
             neoVersionLogged = true;
             environmentDataMap.putIfAbsent("Testing Framework", "Neodymium " + Neodymium.getNeodymiumVersion());
         }

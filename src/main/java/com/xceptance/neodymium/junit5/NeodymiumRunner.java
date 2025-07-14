@@ -1,22 +1,20 @@
 package com.xceptance.neodymium.junit5;
 
-import java.lang.reflect.Method;
-import java.util.stream.Stream;
-
-import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
-
 import io.qameta.allure.selenide.AllureSelenide;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
+import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.lang.reflect.Method;
+import java.util.stream.Stream;
 
 public class NeodymiumRunner implements TestTemplateInvocationContextProvider
 {
@@ -40,7 +38,7 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
             if (!AllureAddons.envFileExists())
             {
                 LOGGER.info("This test uses Neodymium Library (version: " + Neodymium.getNeodymiumVersion()
-                            + "), MIT License, more details on https://github.com/Xceptance/neodymium-library");
+                            + "), MIT License, more details on https://github.com/Xceptance/neodymium");
                 neoVersionLogged = true;
                 AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder()
                                                                    .put("Testing Framework", "Neodymium " + Neodymium.getNeodymiumVersion())

@@ -1,16 +1,5 @@
 package com.xceptance.neodymium.util;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.PathNotFoundException;
-import io.qameta.allure.Allure;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.junit.Assert;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WindowType;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -19,8 +8,22 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
+
 import static com.xceptance.neodymium.util.DataUtils.JSONPATH_CONFIGURATION;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.junit.Assert;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WindowType;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
+
+import io.qameta.allure.Allure;
 
 /**
  * Powered by <a href="https://developer.chrome.com/docs/lighthouse/overview?hl=de">Lighthouse</a> (Copyright Google)
@@ -63,7 +66,6 @@ public class LighthouseUtils
                     while ((readerLine = r.readLine()) != null)
                     {
                         readerOutput = readerOutput + readerLine;
-                        continue;
                     }
 
                     checkErrorCodeProcess(p);
@@ -185,7 +187,6 @@ public class LighthouseUtils
                 while ((readerLine = r.readLine()) != null)
                 {
                     readerOutput = readerOutput + readerLine;
-                    continue;
                 }
                 
                 checkErrorCodeProcess(p);
@@ -200,7 +201,6 @@ public class LighthouseUtils
                     while (r.readLine() != null)
                     {
                         readerOutput = readerOutput + readerLine;
-                        continue;
                     }
                     
                     checkErrorCodeProcess(p);
@@ -213,7 +213,6 @@ public class LighthouseUtils
                     while (r.readLine() != null)
                     {
                         readerOutput = readerOutput + readerLine;
-                        continue;
                     }
                     
                     checkErrorCodeProcess(p);
@@ -254,19 +253,19 @@ public class LighthouseUtils
         {
             for (String audit : assertAuditsString.split(" ")) 
             {
-                String jsonPath = ("$.audits." + audit.trim() + ".details.items.length()");
+                String jsonPath = ("$.audits." + audit.trim() + ".score");
                 
                 try 
                 {
-                    long value =  JsonPath.using(JSONPATH_CONFIGURATION).parse(json).read(jsonPath);
-                    if (value > 0) 
+                    float value = Float.parseFloat(JsonPath.using(JSONPATH_CONFIGURATION).parse(json).read(jsonPath).toString());
+                    if (value < 0.5)
                     {
                         errorAudits.add(audit.trim());
                     }
                 }
                 catch (PathNotFoundException e)
                 {
-                    continue;
+                    // left blank intentionally
                 }
                 
             }
@@ -290,8 +289,7 @@ public class LighthouseUtils
      */
     private static Process runProcess(String... params) throws IOException
     {
-        ProcessBuilder builder = new ProcessBuilder();
-        builder = new ProcessBuilder(params);
+        ProcessBuilder builder = new ProcessBuilder(params);
         builder.redirectErrorStream(true);
         
         return builder.start();
