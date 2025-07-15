@@ -1,6 +1,5 @@
 package com.xceptance.neodymium.common;
 
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -17,11 +16,12 @@ import com.codeborne.selenide.logevents.LogEventListener;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.JavaScriptUtils;
 import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.PropertiesUtil;
 
 public class TestStepListener implements LogEventListener
 {
     public static final String LISTENER_NAME = "end-teststep-listener";
+
+    public static final String URL_CHANGED_STEP_MESSAGE = "URL changed";
 
     private static final Map<Thread, String> LAST_URL = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -81,7 +81,15 @@ public class TestStepListener implements LogEventListener
         // report URL change
         if (Neodymium.configuration().enableStepLinks())
         {
-            AllureAddons.addLinkToReport("URL changed", Neodymium.getDriver().getCurrentUrl());
+            AllureAddons.addLinkToReport(URL_CHANGED_STEP_MESSAGE, Neodymium.getDriver().getCurrentUrl());
+        }
+
+        if (!this.popupMap.isEmpty())
+        {
+            for (String popup : popupMap.values())
+            {
+                JavaScriptUtils.injectJavascriptPopupBlocker(popup);
+            }
         }
 
         // check URL is included
