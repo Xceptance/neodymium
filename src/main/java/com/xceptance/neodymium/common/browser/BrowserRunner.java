@@ -98,6 +98,9 @@ public class BrowserRunner
         finally
         {
             teardown(testFailed, false, browserMethodData, wDSCont);
+
+            // add the test data as JSON to the allure report
+            Neodymium.getData().addAttachmentJson();
         }
     }
 

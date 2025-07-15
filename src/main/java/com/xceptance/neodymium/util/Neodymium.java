@@ -1,10 +1,6 @@
 package com.xceptance.neodymium.util;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-import java.util.WeakHashMap;
+
 
 import org.aeonbits.owner.ConfigFactory;
 import org.openqa.selenium.By;
@@ -13,16 +9,24 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.remote.RemoteWebDriver;
 
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
+import java.util.WeakHashMap;
+
 import com.browserup.bup.BrowserUpProxy;
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
+import com.xceptance.neodymium.common.testdata.TestData;
+
 
 /**
- * See our Github wiki: <a href="https://github.com/Xceptance/neodymium-library/wiki/Neodymium-context">Neodymium
- * context</a>
+ * See our Github wiki: <a href="https://github.com/Xceptance/neodymium/wiki/Neodymium-context">Neodymium context</a>
  * 
  * @author m.kaufmann
  * @author m.pfotenhauer
@@ -55,7 +59,7 @@ public class Neodymium
     private final NeodymiumLocalization localization;
 
     // our data for anywhere access
-    private final Map<String, String> data = new HashMap<>();
+    private final TestData data = new TestData();
 
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "neodymium.temporaryConfigFile";
 
@@ -93,7 +97,6 @@ public class Neodymium
     {
         CONTEXTS.remove(Thread.currentThread());
         TestStepListener.clearLastUrl();
-        DataUtils.clearThreadContext();
     }
 
     /**
@@ -127,13 +130,26 @@ public class Neodymium
     }
 
     /**
-     * Get the complete test data set
+     * Get the complete test data set.<br>
+     * ATTENTION: does NOT set the flag to add the test data to the report. Use with care.
      * 
      * @return dataMap
      */
-    public static Map<String, String> getData()
+    public static TestData getData()
     {
         return getContext().data;
+    }
+
+    /**
+     * Get the complete test data set and add set the flag to attach the test data to the report after the test finished.
+     *
+     * @return dataMap
+     */
+    public static TestData getDataAndAddToReport()
+    {
+        TestData testData = getData();
+        testData.setTestDataUsed();
+        return testData;
     }
 
     /**
@@ -145,7 +161,7 @@ public class Neodymium
      */
     public static String dataValue(final String key)
     {
-        return getData().get(key);
+        return getDataAndAddToReport().get(key);
     }
 
     /**
@@ -200,6 +216,17 @@ public class Neodymium
     {
         final WebDriverStateContainer wDSC = getContext().webDriverStateContainer;
         return wDSC == null ? null : wDSC.getWebDriver();
+    }
+
+    /**
+     * Check if a WebDriver is currently set in the context.
+     *
+     * @return true if a WebDriver is set, false otherwise
+     */
+    public static boolean hasDriver()
+    {
+        final WebDriverStateContainer wDSC = getContext().webDriverStateContainer;
+        return wDSC != null && wDSC.getWebDriver() != null;
     }
 
     /**
@@ -298,7 +325,11 @@ public class Neodymium
      */
     public static Dimension getWindowSize()
     {
-        return getDriver().manage().window().getSize();
+        if (hasDriver())
+        {
+            return getDriver().manage().window().getSize();
+        }
+        return new Dimension(0, 0);
     }
 
     /**
@@ -404,7 +435,7 @@ public class Neodymium
     /**
      * Tablet of any kind?
      * 
-     * @return boolean value boolean value indicating whether it is a tablet device/large phone or not
+     * @return boolean value indicating whether it is a tablet device/large phone or not
      * @see Neodymium
      */
     public static boolean isTablet()
@@ -599,7 +630,7 @@ public class Neodymium
         {
             return getContext().lastUsedElement.findElement(getContext().lastLocator);
         }
-        else if (getContext().lastLocator != null)
+        else if (getContext().lastLocator != null && hasDriver())
         {
             return getDriver().findElement(getContext().lastLocator);
         }

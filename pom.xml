@@ -7,7 +7,7 @@
 	<version>5.2.0</version>
 
 	<name>neodymium-library</name>
-	<url>https://github.com/Xceptance/neodymium-library</url>
+	<url>https://github.com/Xceptance/neodymium</url>
 	<description>A test automation library based on common other best practice
 		open source libraries. It adds missing functionalities but does not
 		reinvent the wheel. Just glues stuff together nicely and adds some
@@ -37,10 +37,10 @@
 	</licenses>
 
 	<scm>
-		<connection>scm:git:git://github.com/Xceptance/neodymium-library.git</connection>
+		<connection>scm:git:git://github.com/Xceptance/neodymium.git</connection>
 		<developerConnection>
-			scm:git:ssh://github.com/Xceptance/neodymium-library.git</developerConnection>
-		<url>https://github.com/Xceptance/neodymium-library/tree/master</url>
+			scm:git:ssh://github.com/Xceptance/neodymium.git</developerConnection>
+		<url>https://github.com/Xceptance/neodymium/tree/master</url>
 	</scm>
 
 	<properties>
@@ -49,9 +49,9 @@
 		<maven.compiler.target.version>17</maven.compiler.target.version>
 		<surefire.version>3.5.2</surefire.version>
 		<allure.version>2.29.1</allure.version>
-		<selenide.version>7.7.1</selenide.version>
+		<selenide.version>7.7.3</selenide.version>
 		<cucumber.version>7.20.1</cucumber.version>
-		<browserup.version>3.0.1</browserup.version>
+		<browserup.version>3.1.2</browserup.version>
 		<log4j.version>2.24.3</log4j.version>
 		<junit.version>4.13.2</junit.version>
 		<junit.jupiter.version>5.11.4</junit.jupiter.version>
@@ -149,6 +149,16 @@
 							<addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
 						</manifest>
 					</archive>
+				</configuration>
+			</plugin>
+			<!-- Checks dependencies for known vulnerabilities. -->
+			<!-- Usage: mvn dependency-check:aggregate -->
+			<plugin>
+				<groupId>org.owasp</groupId>
+				<artifactId>dependency-check-maven</artifactId>
+				<version>12.1.0</version>
+				<configuration>
+					<assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
 				</configuration>
 			</plugin>
 		</plugins>
@@ -281,11 +291,6 @@
 			</exclusions>
 		</dependency>
 
-		<dependency>
-			<groupId>io.github.littleproxy</groupId>
-			<artifactId>littleproxy</artifactId>
-			<version>2.4.0</version>
-		</dependency>
 		<dependency>
 			<groupId>com.github.valfirst.browserup-proxy</groupId>
 			<artifactId>browserup-proxy-mitm</artifactId>

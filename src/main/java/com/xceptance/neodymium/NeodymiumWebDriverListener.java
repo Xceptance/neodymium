@@ -1,15 +1,14 @@
 package com.xceptance.neodymium;
 
+import com.xceptance.neodymium.util.DebugUtils;
+import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.SelenideAddons;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.events.WebDriverListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.xceptance.neodymium.util.DebugUtils;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.SelenideAddons;
 
 public class NeodymiumWebDriverListener implements WebDriverListener
 {
@@ -57,7 +56,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         Neodymium.setLastUsedLocator(element, locator);
         try
         {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements())
+            if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasDriver())
             {
                 DebugUtils.injectHighlightingJs();
                 SelenideAddons.$safe(() -> DebugUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));
@@ -75,7 +74,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         Neodymium.setLastUsedLocator(element, locator);
         try
         {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements())
+            if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasDriver())
             {
                 DebugUtils.injectHighlightingJs();
                 SelenideAddons.$safe(() -> DebugUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));
