@@ -1,0 +1,78 @@
+package com.xceptance.neodymium.common.xtc;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+
+public class SurefireResultParser
+{
+    private int totalTests;
+
+    private int failedTests;
+
+    private int skippedTests;
+
+    private int brokenTests;
+
+    private int passedTests;
+
+    public TestRunStatistics parseResults(String surefireReportPath)
+    {
+        Path reportsPath = Paths.get(surefireReportPath);
+
+        try (Stream<Path> files = Files.walk(reportsPath))
+        {
+            files.filter(Files::isRegularFile)
+                 .filter(path -> path.getFileName().toString().endsWith(".txt"))
+                 .filter(path -> !path.getFileName().toString().startsWith("TEST-"))
+                 .forEach(this::parseTestResultFile);
+        }
+        catch (IOException e)
+        {
+            System.err.println("Error reading reports directory: " + e.getMessage());
+        }
+
+        return new TestRunStatistics(this.totalTests, this.failedTests, this.skippedTests, this.brokenTests, this.passedTests);
+    }
+
+    private void parseTestResultFile(Path filePath)
+    {
+        // Pattern to match test results summary
+        Pattern summaryPattern = Pattern.compile("Tests run: (\\d+), Failures: (\\d+), Errors: (\\d+), Skipped: (\\d+)");
+
+        try
+        {
+            List<String> lines = Files.readAllLines(filePath);
+
+            // process each line of the result file
+            for (String line : lines)
+            {
+                Matcher summaryMatcher = summaryPattern.matcher(line);
+                if (summaryMatcher.find())
+                {
+                    int testsRun = Integer.parseInt(summaryMatcher.group(1));
+                    int failures = Integer.parseInt(summaryMatcher.group(2));
+                    int errors = Integer.parseInt(summaryMatcher.group(3));
+                    int skipped = Integer.parseInt(summaryMatcher.group(4));
+
+                    int passed = testsRun - failures - errors - skipped;
+
+                    this.totalTests += testsRun;
+                    this.failedTests += failures;
+                    this.skippedTests += skipped;
+                    this.brokenTests += errors;
+                    this.passedTests += passed;
+                }
+            }
+        }
+        catch (IOException e)
+        {
+            System.err.println("Error reading file " + filePath + ": " + e.getMessage());
+        }
+    }
+}

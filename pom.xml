@@ -102,11 +102,26 @@
 					<forkCount>4</forkCount>
 					<reuseForks>false</reuseForks>
 					<includes>
-						<include>
-							com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
+						<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
 						<include>com/xceptance/neodymium/common/**/*Test.java</include>
 					</includes>
 				</configuration>
+<!--
+				<executions>
+					<execution>
+						<id>setup</id>
+						<phase>post-integration-test</phase>
+						<goals>
+							<goal>test</goal>
+						</goals>
+						<configuration>
+							<includes>
+								<include>**/XtcApiClient.java</include>
+							</includes>
+						</configuration>
+					</execution>
+				</executions>
+-->
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -160,6 +175,27 @@
 				<configuration>
 					<assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.4.1</version>
+				<executions>
+					<execution>
+						<id>run-xtc-api-client</id>
+						<phase>test-compile</phase>
+						<goals>
+							<goal>java</goal>
+						</goals>
+						<configuration>
+							<mainClass>com.xceptance.neodymium.common.xtc.XtcApiClient</mainClass>
+							<arguments>
+								<argument>${project.build.directory}/surefire-reports</argument>
+								<argument>--allure-dir=${project.build.directory}/allure-results</argument>
+							</arguments>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>
@@ -391,6 +427,11 @@
 			<groupId>com.codeborne</groupId>
 			<artifactId>selenide-proxy</artifactId>
 			<version>${selenide.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-compress</artifactId>
+			<version>1.27.1</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
