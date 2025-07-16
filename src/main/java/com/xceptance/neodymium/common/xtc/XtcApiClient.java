@@ -1,54 +1,37 @@
 package com.xceptance.neodymium.common.xtc;
 
-import com.xceptance.neodymium.common.xtc.config.XtcApiConfiguration;
-import org.aeonbits.owner.ConfigFactory;
-import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
-import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
-
-import java.io.BufferedOutputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.zip.GZIPOutputStream;
 
 public class XtcApiClient
 {
-    public static XtcApiConfiguration configuration = ConfigFactory.create(XtcApiConfiguration.class);
+    public final String org;
 
-    public static final String ORG = "xc";
+    public final String project;
 
-    public static final String PROJECT = "neo-example";
+    public final String encodedOrg;
 
-    public static final String ENCODED_ORG = URLEncoder.encode(configuration.xtcApiOrganization(), StandardCharsets.UTF_8);
-
-    public static final String ENCODED_PROJECT = URLEncoder.encode(configuration.xtcApiProject(), StandardCharsets.UTF_8);
+    public final String encodedProject;
 
     public static final String HOST = "https://xtc.xceptance.com";
 
-    // TODO can I insert the values right away or are there some timing issues?
-    // common part for all requests /public/api/v2/orgs/{org}/projects/{project}/executions
-    // public static final String API_URL = HOST + "/public/api/v2/orgs/";
-    public static final String API_URL = HOST + "/public/api/v2/orgs/" + ENCODED_ORG + "/projects/" + ENCODED_PROJECT + "/executions";
+    // common part for all requests https://xtc.xceptance.com/public/api/v2/orgs/{org}/projects/{project}/executions
+    public final String apiUrl;
 
-    public static final String API_KEY = "6863e1f0da374a1374e6c1cd";
+    public final String apiKey;
 
-    public static final String API_SECRET = "dhttTqYanwR9gvcG1xwMg38SU31VBkIvNjg2M2UxZjBkYTM3NGExMzc0ZTZjMWNk";
+    public final String apiSecret;
 
-    private static String BEARER_TOKEN = "your_bearer_token_here";
+    private String bearerToken = "your_bearer_token_here";
 
-    private static String RUN_ID = "your_run_id_here";
-
-    private static final String teststring = configuration.xtcApiNumberOfRetries() + " " + configuration.xtcApiScope();
+    private String runId = "42";
 
     // TODO check client configuration -> maybe timeout is too short for uploading large reports
     private static HttpClient client = HttpClient.newBuilder()
@@ -70,99 +53,30 @@ public class XtcApiClient
 
     // TODO return status codes or response from API calls?
 
-    // TODO move to ResultProcessor class
-    public static void main(String[] args) throws IOException
+    public XtcApiClient(String org, String project, String apiKey, String apiSecret)
     {
-        System.out.println("XtcApiClient running...");
+        this.org = org;
+        this.project = project;
 
-        System.out.println(teststring);
+        this.encodedOrg = URLEncoder.encode(org, StandardCharsets.UTF_8);
+        this.encodedProject = URLEncoder.encode(project, StandardCharsets.UTF_8);
 
-        // TODO config instead of arguments?
-        if (args.length == 0)
-        {
-            System.out.println("No arguments provided. Please provide test results directories as arguments. Exiting...");
-            System.out.println("--surefire-dir=/path/to/surefire/reports");
-            System.out.println("--allure-dir=/path/to/allure/results");
+        this.apiUrl = HOST + "/public/api/v2/orgs/" + encodedOrg + "/projects/" + encodedProject + "/executions";
 
-            return;
-        }
-
-        System.out.println("Processing test results...");
-        Arrays.stream(args).forEach(arg -> System.out.println("Argument: " + arg));
-
-        String surefireReportsDir = null;
-        String allureResultsDir = null;
-        String allureReportDir = null;
-
-        // Parse arguments
-        for (String arg : args)
-        {
-            if (arg.startsWith("--surefire-dir="))
-            {
-                surefireReportsDir = arg.substring("--surefire-dir=".length());
-            }
-            if (arg.startsWith("--allure-dir="))
-            {
-                allureResultsDir = arg.substring("--allure-dir=".length());
-            }
-            if (arg.startsWith("--allure-report-dir="))
-            {
-                allureReportDir = arg.substring("--allure-report-dir=".length());
-            }
-        }
-
-        System.out.println("Surefire reports directory: " + surefireReportsDir);
-        System.out.println("Allure results directory: " + allureResultsDir);
-        System.out.println("Allure report directory: " + allureReportDir);
-
-        // do the REST calls to the XTC API
-        authenticate();
-
-        createTestRun();
-
-        // update the test run with the statistics from the surefire reports if available
-        if (surefireReportsDir != null)
-        {
-            SurefireResultParser surefireResultParser = new SurefireResultParser();
-            TestRunStatistics statistics = surefireResultParser.parseResults(surefireReportsDir);
-
-            System.out.println(statistics);
-
-            updateTestRun(statistics);
-        }
-
-        // compress and upload the allure report if available
-        if (allureReportDir != null)
-        {
-            System.out.println("Processing Allure results...");
-
-            // check if the allure results directory exists
-            Path allurePath = Path.of(allureReportDir);
-
-            if (!Files.exists(allurePath) || !Files.isDirectory(allurePath))
-            {
-                System.err.println("Invalid allure results directory: " + allureReportDir);
-                return;
-            }
-
-            // compress the allure report directory into a tar.gz archive and set the path to the archive
-            Path archivePath = createTarGzArchive(allurePath, "allure-report.tar.gz");
-            // TODO check if the archive exists?
-
-            uploadReport(archivePath);
-        }
+        this.apiKey = apiKey;
+        this.apiSecret = apiSecret;
     }
 
     /**
      * Authenticates with the XTC API and retrieves a bearer token.
      */
-    public static void authenticate()
+    public void authenticate()
     {
         System.out.println("Authenticating with XTC API...");
 
         // Create the payload for the authentication request
-        String formData = "client_id=" + URLEncoder.encode(API_KEY, StandardCharsets.UTF_8) +
-            "&client_secret=" + URLEncoder.encode(API_SECRET, StandardCharsets.UTF_8) +
+        String formData = "client_id=" + URLEncoder.encode(apiKey, StandardCharsets.UTF_8) +
+            "&client_secret=" + URLEncoder.encode(apiSecret, StandardCharsets.UTF_8) +
             "&grant_type=" + URLEncoder.encode("client_credentials", StandardCharsets.UTF_8) +
             "&scope=" + URLEncoder.encode("TESTEXECUTION_CREATE TESTEXECUTION_FINISH TESTEXECUTION_LIST TESTEXECUTION_REPORT_UPLOAD TESTEXECUTION_UPDATE",
                                           StandardCharsets.UTF_8);
@@ -182,8 +96,8 @@ public class XtcApiClient
             // TODO validate response status code
 
             // Extract access token using string parsing
-            BEARER_TOKEN = extractAccessToken(response.body());
-            System.out.println("Bearer token extracted: " + BEARER_TOKEN);
+            bearerToken = extractAccessToken(response.body());
+            System.out.println("Bearer token extracted: " + bearerToken);
         }
         catch (Exception e)
         {
@@ -196,7 +110,7 @@ public class XtcApiClient
     /**
      * Creates a test run in the XTC API. The request body is parameterized with the current time and other details.
      */
-    public static void createTestRun()
+    public void createTestRun()
     {
         System.out.println("Creating test run in XTC API...");
 
@@ -206,7 +120,7 @@ public class XtcApiClient
         String requestBody = "{\n" +
             "  \"startedAt\": \"" + Instant.now().toString() + "\",\n" +
             "  \"estimatedDuration\": 0,\n" +
-            "  \"name\": \"" + PROJECT + " Test Run\",\n" +
+            "  \"name\": \"" + project + " Test Run\",\n" +
             "  \"testInstance\": \"Neodymium Example Instance\",\n" +
             "  \"profile\": \"default\",\n" +
             "  \"link\": \"https://example.com/test-run-link\",\n" +
@@ -216,13 +130,13 @@ public class XtcApiClient
 
         try
         {
-            System.out.println("Creating test run with URL: " + API_URL);
+            System.out.println("Creating test run with URL: " + apiUrl);
 
             // /public/api/v2/orgs/{org}/projects/{project}/executions
             HttpRequest request = HttpRequest.newBuilder()
-                                             .uri(URI.create(API_URL))
+                                             .uri(URI.create(apiUrl))
                                              .header("Content-Type", "application/json")
-                                             .header("Authorization", "Bearer " + BEARER_TOKEN)
+                                             .header("Authorization", "Bearer " + bearerToken)
                                              .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                                              .build();
 
@@ -239,8 +153,8 @@ public class XtcApiClient
              */
 
             // Extract run ID from the response
-            RUN_ID = extractIndex(response.body());
-            System.out.println("Test run index extracted: " + RUN_ID);
+            runId = extractIndex(response.body());
+            System.out.println("Test run index extracted: " + runId);
         }
         catch (Exception e)
         {
@@ -256,7 +170,7 @@ public class XtcApiClient
      * @param statistics
      *     the statistics to update the test run with
      */
-    public static void updateTestRun(TestRunStatistics statistics)
+    public void updateTestRun(TestRunStatistics statistics)
     {
         System.out.println("Updating test run in XTC API...");
 
@@ -275,14 +189,14 @@ public class XtcApiClient
         try
         {
             // /public/api/v2/orgs/{org}/projects/{project}/executions/{testexecution}
-            String url = API_URL + "/" + RUN_ID;
+            String url = apiUrl + "/" + runId;
 
             System.out.println("Updating test run with URL: " + url);
 
             HttpRequest request = HttpRequest.newBuilder()
                                              .uri(URI.create(url))
                                              .header("Content-Type", "application/json")
-                                             .header("Authorization", "Bearer " + BEARER_TOKEN)
+                                             .header("Authorization", "Bearer " + bearerToken)
                                              .method("PATCH", HttpRequest.BodyPublishers.ofString(requestBody))
                                              .build();
 
@@ -311,21 +225,21 @@ public class XtcApiClient
      * @param file
      *     the path to the report file to upload
      */
-    public static void uploadReport(Path file)
+    public void uploadReport(Path file)
     {
         System.out.println("Uploading report to XTC API...");
 
         try
         {
             // /public/api/v2/orgs/{org}/projects/{project}/executions/{testexecution}/report
-            String url = API_URL + "/" + RUN_ID + "/report";
+            String url = apiUrl + "/" + runId + "/report";
 
             System.out.println("Report upload URL: " + url);
             System.out.println("Uploading report file: " + file.toAbsolutePath());
 
             HttpRequest request = HttpRequest.newBuilder()
                                              .uri(URI.create(url))
-                                             .header("Authorization", "Bearer " + BEARER_TOKEN)
+                                             .header("Authorization", "Bearer " + bearerToken)
                                              .header("Content-Type", "application/gzip")
                                              .POST(HttpRequest.BodyPublishers.ofFile(file))
                                              .build();
@@ -412,50 +326,5 @@ public class XtcApiClient
         }
 
         return jsonResponse.substring(startIndex, endIndex);
-    }
-
-    /**
-     * Creates a tar.gz archive of the specified directory.
-     *
-     * @param sourceDir
-     *     the directory to archive
-     * @param archiveName
-     *     the name of the resulting archive file
-     * @return the path to the created archive
-     * @throws IOException
-     *     if an I/O error occurs
-     */
-    private static Path createTarGzArchive(Path sourceDir, String archiveName) throws IOException
-    {
-        Path archivePath = sourceDir.getParent().resolve(archiveName);
-
-        try (FileOutputStream fos = new FileOutputStream(archivePath.toFile());
-            BufferedOutputStream bos = new BufferedOutputStream(fos);
-            GZIPOutputStream gzos = new GZIPOutputStream(bos);
-            TarArchiveOutputStream taos = new TarArchiveOutputStream(gzos))
-        {
-            taos.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
-
-            // Walk through the source directory and add files to the archive
-            Files.walk(sourceDir)
-                 .filter(Files::isRegularFile)
-                 .forEach(file -> {
-                     try
-                     {
-                         String relativePath = sourceDir.relativize(file).toString();
-                         TarArchiveEntry entry = new TarArchiveEntry(file.toFile(), relativePath);
-                         taos.putArchiveEntry(entry);
-                         Files.copy(file, taos);
-                         taos.closeArchiveEntry();
-                     }
-                     catch (IOException e)
-                     {
-                         throw new RuntimeException("Failed to add file to archive: " + file, e);
-                     }
-                 });
-        }
-
-        System.out.println("Created archive: " + archivePath.toAbsolutePath());
-        return archivePath;
     }
 }
