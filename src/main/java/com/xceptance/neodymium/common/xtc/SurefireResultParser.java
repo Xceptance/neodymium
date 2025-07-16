@@ -21,12 +21,20 @@ public class SurefireResultParser
 
     private int passedTests;
 
+    /**
+     * Parses the results of the Surefire test reports located in the specified directory.
+     *
+     * @param surefireReportPath
+     *     the path to the directory containing the Surefire test reports
+     * @return a TestRunStatistics object containing the parsed and combined statistics
+     */
     public TestRunStatistics parseResults(String surefireReportPath)
     {
         Path reportsPath = Paths.get(surefireReportPath);
 
         try (Stream<Path> files = Files.walk(reportsPath))
         {
+            // Filter for regular files with .txt extension and not starting with "TEST-" and parse them
             files.filter(Files::isRegularFile)
                  .filter(path -> path.getFileName().toString().endsWith(".txt"))
                  .filter(path -> !path.getFileName().toString().startsWith("TEST-"))
@@ -40,6 +48,12 @@ public class SurefireResultParser
         return new TestRunStatistics(this.totalTests, this.failedTests, this.skippedTests, this.brokenTests, this.passedTests);
     }
 
+    /**
+     * Parses a single test result file and updates the statistics.
+     *
+     * @param filePath
+     *     the path to the test result file
+     */
     private void parseTestResultFile(Path filePath)
     {
         // Pattern to match test results summary
