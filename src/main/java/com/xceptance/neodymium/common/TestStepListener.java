@@ -16,6 +16,7 @@ import com.codeborne.selenide.logevents.LogEventListener;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.JavaScriptUtils;
 import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.PropertiesUtil;
 
 public class TestStepListener implements LogEventListener
 {
