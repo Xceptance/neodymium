@@ -594,7 +594,7 @@ public class AllureAddons
                 if (value >= 9007199254740991l ||
                     value <= -9007199254740991l)
                 {
-                    gen.writeString(value.toString() + " (long value outside the JS Number ranges are displayed as String values for accuracy)");
+                    gen.writeString(value.toString() + " (Longs outside JS Number limits are shown as strings)");
                 }
                 else
                 {
