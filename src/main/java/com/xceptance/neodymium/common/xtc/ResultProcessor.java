@@ -77,8 +77,12 @@ public class ResultProcessor
         // do the REST calls to the XTC API
         xtcApiClient.authenticate();
 
-        System.out.println("Creating test run...");
-        xtcApiClient.createTestRun();
+        // TODO get the run number
+        System.out.println("Reading run ID from system properties...");
+
+        String runId = System.getProperty("xtc.run.id");
+        System.out.println("Run ID: " + runId);
+        xtcApiClient.setRunId(runId);
 
         // update the test run with the statistics from the surefire reports if available
         System.out.println("Processing test results...");
@@ -111,6 +115,9 @@ public class ResultProcessor
 
             xtcApiClient.uploadReport(archivePath);
         }
+
+        System.out.println("Remove run ID from system properties on exit...");
+        System.clearProperty("xtc.run.id");
     }
 
     /**

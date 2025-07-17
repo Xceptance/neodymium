@@ -110,7 +110,7 @@ public class XtcApiClient
     /**
      * Creates a test run in the XTC API. The request body is parameterized with the current time and other details.
      */
-    public void createTestRun()
+    public String createTestRun()
     {
         System.out.println("Creating test run in XTC API...");
 
@@ -162,6 +162,8 @@ public class XtcApiClient
             System.err.println("Exception while creating test run: ");
             e.printStackTrace(System.err);
         }
+
+        return runId;
     }
 
     /**
@@ -326,5 +328,10 @@ public class XtcApiClient
         }
 
         return jsonResponse.substring(startIndex, endIndex);
+    }
+
+    public void setRunId(String runId)
+    {
+        this.runId = runId;
     }
 }
