@@ -8,9 +8,9 @@ import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.ScreenshotWriter;
 import io.qameta.allure.Allure;
 import io.qameta.allure.AllureLifecycle;
-import io.qameta.allure.Attachment;
 import io.qameta.allure.Step;
 import io.qameta.allure.model.StepResult;
+import org.apache.commons.io.FileUtils;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.slf4j.Logger;
@@ -47,37 +47,6 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-
-import org.apache.commons.io.FileUtils;
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.TakesScreenshot;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-import org.xml.sax.SAXException;
-
-import com.codeborne.selenide.Selenide;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.ScreenshotWriter;
-
-import io.qameta.allure.Allure;
-import io.qameta.allure.AllureLifecycle;
-import io.qameta.allure.Step;
-import io.qameta.allure.model.StepResult;
 import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
 
 /**
@@ -268,6 +237,46 @@ public class AllureAddons
             return true;
         }
         return false;
+    }
+
+    /**
+     * Adds a step with the given information before the current step
+     *
+     * @param info
+     *     message to be displayed before the step
+     */
+    public static void addInfoBeforeStep(final String info)
+    {
+        AllureLifecycle lifecycle = Allure.getLifecycle();
+
+        lifecycle.updateTestCase((testResult -> {
+            int position = testResult.getSteps().isEmpty() ? 0 : testResult.getSteps().size() - 1;
+
+            testResult.getSteps().add(position, new StepResult()
+                .setName(info)
+                .setStart(System.currentTimeMillis())
+                .setStatus(io.qameta.allure.model.Status.PASSED)
+                .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
+        }));
+    }
+
+    /**
+     * Adds a step with the given information as the first step of the test case.
+     *
+     * @param info
+     *     message to be displayed as the first step
+     */
+    public static void addInfoAsFirstStep(final String info)
+    {
+        AllureLifecycle lifecycle = Allure.getLifecycle();
+
+        lifecycle.updateTestCase((testResult -> {
+            testResult.getSteps().add(0, new StepResult()
+                .setName(info)
+                .setStart(System.currentTimeMillis())
+                .setStatus(io.qameta.allure.model.Status.PASSED)
+                .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
+        }));
     }
 
     /**
