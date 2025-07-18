@@ -77,7 +77,6 @@ public class ResultProcessor
         // do the REST calls to the XTC API
         xtcApiClient.authenticate();
 
-        // TODO get the run number
         System.out.println("Reading run ID from system properties...");
 
         String runId = System.getProperty("xtc.run.id");

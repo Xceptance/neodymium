@@ -29,8 +29,7 @@ public class XtcApiClient
 
     public final String apiSecret;
 
-    private String bearerToken = "your_bearer_token_here";
-
+    // TODO think about if the run ID can cause problems with concurrency
     private String runId = "42";
 
     // TODO check client configuration -> maybe timeout is too short for uploading large reports
@@ -38,20 +37,16 @@ public class XtcApiClient
                                                  .connectTimeout(Duration.ofSeconds(100))
                                                  .build();
 
-    // TODO implement properties file for configuration
-    // fine
+    public final TokenHandler tokenHandler;
 
-    // TODO get Project and Organization from properties file or environment variables
-    // fine
+    // TODO return status codes or response from API calls?
 
     // TODO implement retry logic for API calls
 
     // TODO add error handling and logging
     // logging instead of sout with the common logger (private static final Logger LOGGER = LoggerFactory.getLogger(MultibrowserConfiguration.class);)
 
-    // TODO save run number in properties or sys env when initializing it before the test run
-
-    // TODO return status codes or response from API calls?
+    // TODO create JSON as payload using a library like Jackson or Gson instead of manually creating the JSON strings
 
     public XtcApiClient(String org, String project, String apiKey, String apiSecret)
     {
@@ -65,46 +60,18 @@ public class XtcApiClient
 
         this.apiKey = apiKey;
         this.apiSecret = apiSecret;
+
+        this.tokenHandler = new TokenHandler(apiKey, apiSecret);
     }
 
+    // TODO move to TokenHandler?
     /**
      * Authenticates with the XTC API and retrieves a bearer token.
      */
     public void authenticate()
     {
-        System.out.println("Authenticating with XTC API...");
-
-        // Create the payload for the authentication request
-        String formData = "client_id=" + URLEncoder.encode(apiKey, StandardCharsets.UTF_8) +
-            "&client_secret=" + URLEncoder.encode(apiSecret, StandardCharsets.UTF_8) +
-            "&grant_type=" + URLEncoder.encode("client_credentials", StandardCharsets.UTF_8) +
-            "&scope=" + URLEncoder.encode("TESTEXECUTION_CREATE TESTEXECUTION_FINISH TESTEXECUTION_LIST TESTEXECUTION_REPORT_UPLOAD TESTEXECUTION_UPDATE",
-                                          StandardCharsets.UTF_8);
-
-        try
-        {
-            HttpRequest request = HttpRequest.newBuilder()
-                                             .uri(URI.create(HOST + "/oauth/token"))
-                                             .header("Content-Type", "application/x-www-form-urlencoded")
-                                             .POST(HttpRequest.BodyPublishers.ofString(formData))
-                                             .build();
-
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            System.out.println("Auth response: " + response.body());
-
-            // TODO validate response status code
-
-            // Extract access token using string parsing
-            bearerToken = extractAccessToken(response.body());
-            System.out.println("Bearer token extracted: " + bearerToken);
-        }
-        catch (Exception e)
-        {
-            System.err.println("Authentication failed: " + e.getMessage());
-            System.err.println("Exception while creating test run: ");
-            e.printStackTrace(System.err);
-        }
+        System.out.println("TokenHandler authenticating with XTC API...");
+        tokenHandler.authenticate();
     }
 
     /**
@@ -115,8 +82,6 @@ public class XtcApiClient
         System.out.println("Creating test run in XTC API...");
 
         // TODO parameterize request body
-        // TODO check / ask where to get the values for the request body (testInstance, profile, link, buildNumber, description)
-        // TODO think about how to get the estimated duration
         String requestBody = "{\n" +
             "  \"startedAt\": \"" + Instant.now().toString() + "\",\n" +
             "  \"estimatedDuration\": 0,\n" +
@@ -136,7 +101,7 @@ public class XtcApiClient
             HttpRequest request = HttpRequest.newBuilder()
                                              .uri(URI.create(apiUrl))
                                              .header("Content-Type", "application/json")
-                                             .header("Authorization", "Bearer " + bearerToken)
+                                             .header("Authorization", "Bearer " + tokenHandler.getToken())
                                              .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                                              .build();
 
@@ -166,6 +131,7 @@ public class XtcApiClient
         return runId;
     }
 
+    // TODO rename to finishTestRun when update is implemented and can be used (or a way is found to update the test run in Neo without concurrency issues)
     /**
      * Updates the test run in the XTC API with the provided statistics.
      *
@@ -198,7 +164,7 @@ public class XtcApiClient
             HttpRequest request = HttpRequest.newBuilder()
                                              .uri(URI.create(url))
                                              .header("Content-Type", "application/json")
-                                             .header("Authorization", "Bearer " + bearerToken)
+                                             .header("Authorization", "Bearer " + tokenHandler.getToken())
                                              .method("PATCH", HttpRequest.BodyPublishers.ofString(requestBody))
                                              .build();
 
@@ -241,7 +207,7 @@ public class XtcApiClient
 
             HttpRequest request = HttpRequest.newBuilder()
                                              .uri(URI.create(url))
-                                             .header("Authorization", "Bearer " + bearerToken)
+                                             .header("Authorization", "Bearer " + tokenHandler.getToken())
                                              .header("Content-Type", "application/gzip")
                                              .POST(HttpRequest.BodyPublishers.ofFile(file))
                                              .build();
@@ -265,7 +231,7 @@ public class XtcApiClient
      *     the JSON response string
      * @return the extracted access token
      */
-    private static String extractAccessToken(String jsonResponse)
+    private String extractAccessToken(String jsonResponse)
     {
         String tokenKey = "\"access_token\":\"";
         int startIndex = jsonResponse.indexOf(tokenKey);
@@ -293,7 +259,7 @@ public class XtcApiClient
      *     the JSON response string
      * @return the extracted index
      */
-    private static String extractIndex(String jsonResponse)
+    private String extractIndex(String jsonResponse)
     {
         System.out.println("Extracting index from response: " + jsonResponse);
 
