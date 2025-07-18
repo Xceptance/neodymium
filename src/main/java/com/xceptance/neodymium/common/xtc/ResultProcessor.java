@@ -1,6 +1,8 @@
 package com.xceptance.neodymium.common.xtc;
 
 import com.xceptance.neodymium.common.xtc.config.XtcApiConfiguration;
+import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest;
+import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest.FinishExecution;
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
@@ -10,6 +12,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.zip.GZIPOutputStream;
 
@@ -19,7 +23,7 @@ public class ResultProcessor
 {
     public static XtcApiConfiguration configuration = ConfigFactory.create(XtcApiConfiguration.class);
 
-    public static void main(String[] args) throws IOException
+    public static void main(String[] args) throws IOException, InterruptedException
     {
         if (!configuration.xtcApiIsEnabled())
         {
@@ -75,13 +79,9 @@ public class ResultProcessor
                                                      configuration.xtcApiSecret());
 
         // do the REST calls to the XTC API
-        xtcApiClient.authenticate();
-
         System.out.println("Reading run ID from system properties...");
-
-        String runId = System.getProperty("xtc.run.id");
+        int runId = Integer.parseInt(System.getProperty("xtc.run.id"));
         System.out.println("Run ID: " + runId);
-        xtcApiClient.setRunId(runId);
 
         // update the test run with the statistics from the surefire reports if available
         System.out.println("Processing test results...");
@@ -92,7 +92,17 @@ public class ResultProcessor
 
             System.out.println(statistics);
 
-            xtcApiClient.updateTestRun(statistics);
+            FinishExecution finishExecution = new FinishExecution(Instant.now().truncatedTo(ChronoUnit.MILLIS).toString(),
+                                                                  statistics.getStatus());
+
+            UpdateRunRequest updateRunRequest = new UpdateRunRequest(statistics.getTotalTests(),
+                                                                     statistics.getFailedTests(),
+                                                                     statistics.getSkippedTests(),
+                                                                     statistics.getBrokenTests(),
+                                                                     statistics.getPassedTests(),
+                                                                     finishExecution);
+
+            xtcApiClient.updateTestRun(runId, updateRunRequest);
         }
 
         // compress and upload the allure report if available
@@ -112,7 +122,7 @@ public class ResultProcessor
             Path archivePath = createTarGzArchive(allurePath, "allure-report.tar.gz");
             // TODO check if the archive exists?
 
-            xtcApiClient.uploadReport(archivePath);
+            xtcApiClient.uploadReport(runId, archivePath);
         }
 
         System.out.println("Remove run ID from system properties on exit...");

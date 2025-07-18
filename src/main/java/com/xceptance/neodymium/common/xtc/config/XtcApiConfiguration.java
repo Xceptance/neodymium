@@ -40,6 +40,10 @@ public interface XtcApiConfiguration extends Mutable
     @Key("xtc.api.secret")
     public String xtcApiSecret();
 
+    @Key("xtc.api.name")
+    @DefaultValue("${xtc.api.project} test run ${xtc.api.buildNumber}")
+    public String xtcApiName();
+
     @Key("xtc.api.profile")
     @DefaultValue("default")
     public String xtcApiProfile();
@@ -57,9 +61,9 @@ public interface XtcApiConfiguration extends Mutable
     @Key("xtc.api.description")
     public String xtcApiDescription();
 
-    @Key("xtc.api.expectedDuration")
+    @Key("xtc.api.estimatedDuration")
     @DefaultValue("0")
-    public int xtcApiExpectedDuration();
+    public int xtcApiEstimatedDuration();
 
     @Key("xtc.api.numberOfRetries")
     @DefaultValue("3")

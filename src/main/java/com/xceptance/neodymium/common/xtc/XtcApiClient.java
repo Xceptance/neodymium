@@ -1,5 +1,12 @@
 package com.xceptance.neodymium.common.xtc;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.xceptance.neodymium.common.xtc.dto.CreateRunRequest;
+import com.xceptance.neodymium.common.xtc.dto.CreateRunResponse;
+import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest;
+
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -8,213 +15,152 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
 
 public class XtcApiClient
 {
-    public final String org;
+    private static final String HOST = "https://xtc.xceptance.com";
 
-    public final String project;
+    private final String apiUrl;
 
-    public final String encodedOrg;
+    private final String encodedOrg;
 
-    public final String encodedProject;
+    private final String encodedProject;
 
-    public static final String HOST = "https://xtc.xceptance.com";
-
-    // common part for all requests https://xtc.xceptance.com/public/api/v2/orgs/{org}/projects/{project}/executions
-    public final String apiUrl;
-
-    public final String apiKey;
-
-    public final String apiSecret;
-
-    // TODO think about if the run ID can cause problems with concurrency
-    private String runId = "42";
+    private final TokenManager tokenManager;
 
     // TODO check client configuration -> maybe timeout is too short for uploading large reports
-    private static HttpClient client = HttpClient.newBuilder()
-                                                 .connectTimeout(Duration.ofSeconds(100))
-                                                 .build();
+    private HttpClient client = HttpClient.newBuilder()
+                                          .connectTimeout(Duration.ofSeconds(100))
+                                          .build();
 
-    public final TokenHandler tokenHandler;
-
-    // TODO return status codes or response from API calls?
-
-    // TODO implement retry logic for API calls
+    private final Gson gson = new GsonBuilder().serializeNulls().create();
 
     // TODO add error handling and logging
     // logging instead of sout with the common logger (private static final Logger LOGGER = LoggerFactory.getLogger(MultibrowserConfiguration.class);)
 
-    // TODO create JSON as payload using a library like Jackson or Gson instead of manually creating the JSON strings
-
     public XtcApiClient(String org, String project, String apiKey, String apiSecret)
     {
-        this.org = org;
-        this.project = project;
-
         this.encodedOrg = URLEncoder.encode(org, StandardCharsets.UTF_8);
         this.encodedProject = URLEncoder.encode(project, StandardCharsets.UTF_8);
 
         this.apiUrl = HOST + "/public/api/v2/orgs/" + encodedOrg + "/projects/" + encodedProject + "/executions";
 
-        this.apiKey = apiKey;
-        this.apiSecret = apiSecret;
-
-        this.tokenHandler = new TokenHandler(apiKey, apiSecret);
+        this.tokenManager = new TokenManager(apiKey, apiSecret);
     }
 
-    // TODO move to TokenHandler?
-    /**
-     * Authenticates with the XTC API and retrieves a bearer token.
-     */
-    public void authenticate()
+    public XtcApiClient(String org, String project, TokenManager tokenManager)
     {
-        System.out.println("TokenHandler authenticating with XTC API...");
-        tokenHandler.authenticate();
+        this.encodedOrg = URLEncoder.encode(org, StandardCharsets.UTF_8);
+        this.encodedProject = URLEncoder.encode(project, StandardCharsets.UTF_8);
+
+        this.apiUrl = HOST + "/public/api/v2/orgs/" + encodedOrg + "/projects/" + encodedProject + "/executions";
+
+        this.tokenManager = tokenManager;
     }
 
     /**
-     * Creates a test run in the XTC API. The request body is parameterized with the current time and other details.
+     * Creates a test run in the XTC API with the provided request data.
+     *
+     * @param createRunRequest
+     *     the request data for creating the test run
+     * @return the response containing the created test run details
+     * @throws IOException
+     *     if an I/O error occurs during the request
+     * @throws InterruptedException
+     *     if the thread is interrupted while waiting for the response
      */
-    public String createTestRun()
+    public CreateRunResponse createTestRun(CreateRunRequest createRunRequest) throws IOException, InterruptedException
     {
         System.out.println("Creating test run in XTC API...");
 
-        // TODO parameterize request body
-        String requestBody = "{\n" +
-            "  \"startedAt\": \"" + Instant.now().toString() + "\",\n" +
-            "  \"estimatedDuration\": 0,\n" +
-            "  \"name\": \"" + project + " Test Run\",\n" +
-            "  \"testInstance\": \"Neodymium Example Instance\",\n" +
-            "  \"profile\": \"default\",\n" +
-            "  \"link\": \"https://example.com/test-run-link\",\n" +
-            "  \"buildNumber\": \"1.0.0\",\n" +
-            "  \"description\": \"Test run created by Neodymium XTC API client\"\n" +
-            "}";
+        String jsonRequestBody = gson.toJson(createRunRequest);
 
-        try
+        System.out.println("Request body: " + jsonRequestBody);
+
+        // Create the request to the XTC API
+        HttpRequest request = HttpRequest.newBuilder()
+                                         .uri(URI.create(apiUrl))
+                                         .header("Content-Type", "application/json")
+                                         .header("Authorization", "Bearer " + tokenManager.getToken())
+                                         .POST(HttpRequest.BodyPublishers.ofString(jsonRequestBody))
+                                         .build();
+
+        HttpResponse<String> response = HttpUtils.sendWithRetries(this.client, request);
+        if (response.statusCode() != 200 && response.statusCode() != 201)
         {
-            System.out.println("Creating test run with URL: " + apiUrl);
-
-            // /public/api/v2/orgs/{org}/projects/{project}/executions
-            HttpRequest request = HttpRequest.newBuilder()
-                                             .uri(URI.create(apiUrl))
-                                             .header("Content-Type", "application/json")
-                                             .header("Authorization", "Bearer " + tokenHandler.getToken())
-                                             .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                                             .build();
-
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            System.out.println("Create test run response: " + response.body());
-
-            // TODO validate response status code
-            /*
-            if (response.statusCode() != 201)
-            {
-                throw new RuntimeException("Failed to create test run: " + response.body());
-            }
-             */
-
-            // Extract run ID from the response
-            runId = extractIndex(response.body());
-            System.out.println("Test run index extracted: " + runId);
-        }
-        catch (Exception e)
-        {
-            System.err.println("Failed to create test run: " + e.getMessage());
-            System.err.println("Exception while creating test run: ");
-            e.printStackTrace(System.err);
+            throw new IOException("Failed to create test run. Status code: " + response.statusCode() +
+                                      ", Response: " + response.body());
         }
 
-        return runId;
+        return gson.fromJson(response.body(), CreateRunResponse.class);
     }
 
     // TODO rename to finishTestRun when update is implemented and can be used (or a way is found to update the test run in Neo without concurrency issues)
+
     /**
-     * Updates the test run in the XTC API with the provided statistics.
+     * Updates an existing test run in the XTC API with the provided request data.
      *
-     * @param statistics
-     *     the statistics to update the test run with
+     * @param testRunId
+     *     the ID of the test run to update
+     * @param updateRunRequest
+     *     the request data for updating the test run
+     * @return the response containing the updated test run details
+     * @throws IOException
+     *     if an I/O error occurs during the request
+     * @throws InterruptedException
+     *     if the thread is interrupted while waiting for the response
      */
-    public void updateTestRun(TestRunStatistics statistics)
+    public UpdateRunRequest updateTestRun(int testRunId, UpdateRunRequest updateRunRequest) throws IOException, InterruptedException
     {
         System.out.println("Updating test run in XTC API...");
 
-        String requestBody = "{\n" +
-            "  \"totalTestCases\": " + statistics.getTotalTests() + ",\n" +
-            "  \"failedTestCases\": " + statistics.getFailedTests() + ",\n" +
-            "  \"skippedTestCases\": " + statistics.getSkippedTests() + ",\n" +
-            "  \"brokenTestCases\": " + statistics.getBrokenTests() + ",\n" +
-            "  \"passedTestCases\": " + statistics.getPassedTests() + ",\n" +
-            "  \"finishExecution\": {\n" +
-            "    \"finishedAt\": \"" + Instant.now().toString() + "\",\n" +
-            "    \"finalResult\": \"" + statistics.getStatus() + "\"\n" +
-            "  }\n" +
-            "}";
+        String jsonRequestBody = gson.toJson(updateRunRequest);
 
-        try
+        HttpRequest request = HttpRequest.newBuilder()
+                                         .uri(URI.create(apiUrl + "/" + testRunId))
+                                         .header("Content-Type", "application/json")
+                                         .header("Authorization", "Bearer " + tokenManager.getToken())
+                                         .method("PATCH", HttpRequest.BodyPublishers.ofString(jsonRequestBody))
+                                         .build();
+
+        HttpResponse<String> response = HttpUtils.sendWithRetries(this.client, request);
+        if (response.statusCode() != 200)
         {
-            // /public/api/v2/orgs/{org}/projects/{project}/executions/{testexecution}
-            String url = apiUrl + "/" + runId;
-
-            System.out.println("Updating test run with URL: " + url);
-
-            HttpRequest request = HttpRequest.newBuilder()
-                                             .uri(URI.create(url))
-                                             .header("Content-Type", "application/json")
-                                             .header("Authorization", "Bearer " + tokenHandler.getToken())
-                                             .method("PATCH", HttpRequest.BodyPublishers.ofString(requestBody))
-                                             .build();
-
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            System.out.println("Update test run response: " + response.body());
-
-            /*
-            if (response.statusCode() != 201)
-            {
-                throw new RuntimeException("Failed to create test run: " + response.body());
-            }
-             */
+            throw new IOException("Failed to update test run. Status code: " + response.statusCode() +
+                                      ", Response: " + response.body());
         }
-        catch (Exception e)
-        {
-            System.err.println("Failed to update test run: " + e.getMessage());
-            System.err.println("Exception while creating test run: ");
-            e.printStackTrace(System.err);
-        }
+
+        return gson.fromJson(response.body(), UpdateRunRequest.class);
     }
 
     /**
-     * Uploads the report file to the XTC API.
+     * Uploads the report reportPath to the XTC API.
      *
-     * @param file
-     *     the path to the report file to upload
+     * @param testRunId
+     *     the ID of the test run to which the report should be uploaded
+     * @param reportPath
+     *     the path to the report reportPath to upload
      */
-    public void uploadReport(Path file)
+    public void uploadReport(int testRunId, Path reportPath)
     {
         System.out.println("Uploading report to XTC API...");
 
         try
         {
-            // /public/api/v2/orgs/{org}/projects/{project}/executions/{testexecution}/report
-            String url = apiUrl + "/" + runId + "/report";
-
-            System.out.println("Report upload URL: " + url);
-            System.out.println("Uploading report file: " + file.toAbsolutePath());
-
+            String url = apiUrl + "/" + testRunId + "/report";
             HttpRequest request = HttpRequest.newBuilder()
                                              .uri(URI.create(url))
-                                             .header("Authorization", "Bearer " + tokenHandler.getToken())
+                                             .header("Authorization", "Bearer " + tokenManager.getToken())
                                              .header("Content-Type", "application/gzip")
-                                             .POST(HttpRequest.BodyPublishers.ofFile(file))
+                                             .POST(HttpRequest.BodyPublishers.ofFile(reportPath))
                                              .build();
 
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            System.out.println("Upload report response: " + response.body());
+            HttpResponse<String> response = HttpUtils.sendWithRetries(this.client, request);
+            if (response.statusCode() != 200 && response.statusCode() != 201)
+            {
+                throw new IOException("Failed to upload report. Status code: " + response.statusCode() +
+                                          ", Response: " + response.body());
+            }
         }
         catch (Exception e)
         {
@@ -222,82 +168,5 @@ public class XtcApiClient
             System.err.println("Exception while creating test run: ");
             e.printStackTrace(System.err);
         }
-    }
-
-    /**
-     * Extracts the access token from the JSON response.
-     *
-     * @param jsonResponse
-     *     the JSON response string
-     * @return the extracted access token
-     */
-    private String extractAccessToken(String jsonResponse)
-    {
-        String tokenKey = "\"access_token\":\"";
-        int startIndex = jsonResponse.indexOf(tokenKey);
-
-        if (startIndex == -1)
-        {
-            throw new RuntimeException("Access token not found in response");
-        }
-
-        startIndex += tokenKey.length();
-        int endIndex = jsonResponse.indexOf("\"", startIndex);
-
-        if (endIndex == -1)
-        {
-            throw new RuntimeException("Invalid access token format in response");
-        }
-
-        return jsonResponse.substring(startIndex, endIndex);
-    }
-
-    /**
-     * Extracts the index from the JSON response.
-     *
-     * @param jsonResponse
-     *     the JSON response string
-     * @return the extracted index
-     */
-    private String extractIndex(String jsonResponse)
-    {
-        System.out.println("Extracting index from response: " + jsonResponse);
-
-        String indexKey = "\"index\":";
-        int startIndex = jsonResponse.indexOf(indexKey);
-
-        if (startIndex == -1)
-        {
-            throw new RuntimeException("Index not found in response");
-        }
-
-        startIndex += indexKey.length();
-
-        // Skip any whitespace
-        while (startIndex < jsonResponse.length() && Character.isWhitespace(jsonResponse.charAt(startIndex)))
-        {
-            startIndex++;
-        }
-
-        int endIndex = startIndex;
-
-        // Find the end of the number (next comma or closing brace)
-        while (endIndex < jsonResponse.length() &&
-            Character.isDigit(jsonResponse.charAt(endIndex)))
-        {
-            endIndex++;
-        }
-
-        if (endIndex == startIndex)
-        {
-            throw new RuntimeException("Invalid index format in response");
-        }
-
-        return jsonResponse.substring(startIndex, endIndex);
-    }
-
-    public void setRunId(String runId)
-    {
-        this.runId = runId;
     }
 }
