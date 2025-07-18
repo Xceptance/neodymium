@@ -69,8 +69,12 @@ import org.xml.sax.SAXException;
 
 import com.codeborne.selenide.Selenide;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.ScreenshotWriter;
 
@@ -631,6 +635,38 @@ public class AllureAddons
     public static void addDataAsJsonToReport(String name, Object data)
     {
         ObjectMapper mapper = new ObjectMapper();
+
+        // In case we have a long which is out side the value range of JS' Number, we need to have some special
+        // treatment
+        SimpleModule module = new SimpleModule();
+        JsonSerializer<Long> longSerializer = new JsonSerializer<Long>()
+        {
+            @Override
+            public void serialize(Long value, JsonGenerator gen, SerializerProvider serializers)
+                throws IOException
+            {
+                convertValuesOutsideRangeToString(value, gen);
+            }
+
+            private void convertValuesOutsideRangeToString(Long value, JsonGenerator gen) throws IOException
+            {
+                if (value >= 9007199254740991l ||
+                    value <= -9007199254740991l)
+                {
+                    gen.writeString(value.toString() + " (Longs outside JS Number limits are shown as strings)");
+                }
+                else
+                {
+                    gen.writeNumber(value);
+                }
+            }
+        };
+
+        module.addSerializer(Long.class, longSerializer);
+        module.addSerializer(Long.TYPE, longSerializer);
+
+        mapper.registerModule(module);
+
         String dataObjectJson;
 
         try
