@@ -17,18 +17,18 @@ import java.time.Instant;
 
 public class TokenManager
 {
-    // Dependencies injected via constructor and general configuration
+    // General configuration
     private static final String HOST = "https://xtc.xceptance.com";
 
     private final String apiKey;
 
     private final String apiSecret;
 
-    private String scope;
+    private final String scope;
 
-    private static HttpClient client = HttpClient.newBuilder()
-                                                 .connectTimeout(Duration.ofSeconds(60))
-                                                 .build();
+    private final HttpClient client = HttpClient.newBuilder()
+                                                .connectTimeout(Duration.ofSeconds(60))
+                                                .build();
 
     private final Gson gson = new GsonBuilder().serializeNulls().create();
 
@@ -37,14 +37,13 @@ public class TokenManager
 
     private volatile Instant tokenExpiry;
 
+    /**
+     * Constructs a TokenManager instance, initializing the API key, secret, and scope from the XtcApiContext configuration. This constructor is used to manage
+     * the authentication process with the XTC API. All parameters are taken from the XtcApiContext configuration.
+     */
     public TokenManager()
     {
-        //XtcApiConfiguration configuration = ConfigFactory.create(XtcApiConfiguration.class);
         XtcApiConfiguration configuration = XtcApiContext.configuration;
-
-        System.out.println("xtcApiKey: " + configuration.xtcApiKey());
-        System.out.println("xtcApiSecret: " + configuration.xtcApiSecret());
-        System.out.println("xtcApiScope: " + configuration.xtcApiScope());
 
         this.apiKey = configuration.xtcApiKey();
         this.apiSecret = configuration.xtcApiSecret();
@@ -66,7 +65,8 @@ public class TokenManager
     }
 
     /**
-     * Authenticates with the XTC API and retrieves a bearer token.
+     * Authenticates with the XTC API and retrieves a bearer token. This method sends a POST request to the XTC API's OAuth endpoint with the client credentials
+     * and scope. Mandatory parameters are the client ID, client secret, and scope.
      */
     public void authenticate() throws IOException, InterruptedException
     {
@@ -76,17 +76,14 @@ public class TokenManager
         String formData = "client_id=" + URLEncoder.encode(apiKey, StandardCharsets.UTF_8) +
             "&client_secret=" + URLEncoder.encode(apiSecret, StandardCharsets.UTF_8) +
             "&grant_type=" + URLEncoder.encode("client_credentials", StandardCharsets.UTF_8) +
-            "&scope=" + URLEncoder.encode(scope,
-                                          StandardCharsets.UTF_8);
+            "&scope=" + URLEncoder.encode(scope, StandardCharsets.UTF_8);
 
-        // Create the HTTP request
         HttpRequest request = HttpRequest.newBuilder()
                                          .uri(URI.create(HOST + "/oauth/token"))
                                          .header("Content-Type", "application/x-www-form-urlencoded")
                                          .POST(HttpRequest.BodyPublishers.ofString(formData))
                                          .build();
 
-        // Send the request with retries
         HttpResponse<String> response = HttpUtils.sendWithRetries(this.client, request);
         if (response.statusCode() != 200)
         {
@@ -94,14 +91,12 @@ public class TokenManager
                                       ", Response: " + response.body());
         }
 
-        // Parse the response body to extract the access token
         AuthResponse authResponse = gson.fromJson(response.body(), AuthResponse.class);
         if (authResponse == null || authResponse.getAccessToken() == null)
         {
             throw new IOException("Failed to parse access_token from auth response: " + response.body());
         }
 
-        // Store the token and its expiration time
         this.token = authResponse.getAccessToken();
         this.tokenExpiry = Instant.now().plusSeconds(authResponse.getExpiresIn() - 60); // Subtract 60 seconds for safety
 

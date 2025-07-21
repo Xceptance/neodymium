@@ -12,41 +12,71 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
 import java.util.zip.GZIPOutputStream;
 
 // called from maven
 // parses the results of the tests and uploads them to XTC using the XTC API client
 public class ResultProcessor
 {
+    // The directories for the surefire reports and allure results are set via command line arguments
+    private static String surefireReportsDir;
+
+    private static String allureResultsDir; // not necessary not, but most likely when updating the test run results during the test run
+
+    private static String allureReportDir;
+
+    private static final String DEFAULT_RESULTS_DIRECTORIES = System.lineSeparator() + "--surefire-dir=${project.build.directory}/surefire-reports" +
+        System.lineSeparator() + "--allure-dir=${project.build.directory}/allure-results" +
+        System.lineSeparator() + "--allure-report-dir=${project.build.directory}/site/allure-maven-plugin";
+
     public static void main(String[] args) throws IOException, InterruptedException
     {
-        if (!XtcApiContext.configuration.xtcApiIsEnabled())
-        {
-            System.out.println("XTC API is disabled. Exiting...");
-            return;
-        }
-
         System.out.println("ResultProcessor starting...");
 
-        // TODO config instead of arguments?
+        if (!XtcApiContext.isXtcApiEnabled())
+        {
+            System.out.println("XTC API is disabled. Exiting...");
+            return; // TODO throw an exception?
+        }
+        XtcApiContext.ensureRequiredConfiguration();
+
+        // TODO config instead of arguments? this is probably better, so it is easier to change and can be validated using the XtcApiContext.ensureRequiredConfiguration() method
+        parseArguments(args);
+
+        System.out.println("XtcApiClient starting...");
+        XtcApiClient xtcApiClient = new XtcApiClient();
+
+        // read the run ID from the system properties
+        System.out.println("Reading run ID from system properties...");
+        int runId = Integer.parseInt(System.getProperty("xtc.run.id"));
+        System.out.println("Run ID: " + runId);
+
+        updateTestRunResults(xtcApiClient, runId);
+        uploadAllureReport(xtcApiClient, runId);
+
+        // remove the run ID from the system properties
+        System.out.println("Remove run ID from system properties on exit...");
+        System.clearProperty("xtc.run.id");
+    }
+
+    /**
+     * Parses the command line arguments to set the directories for surefire reports, allure results, and allure report. Will throw an exception if the required
+     * parameters are not provided.
+     *
+     * @param args
+     *     the command line arguments
+     */
+    private static void parseArguments(String[] args)
+    {
         System.out.println("Parsing arguments...");
+
         if (args.length == 0)
         {
-            System.out.println("No arguments provided. Please provide test results directories as arguments. Exiting...");
-            System.out.println("--surefire-dir=/path/to/surefire/reports");
-            System.out.println("--allure-dir=/path/to/allure/results");
-
-            return;
+            throw new RuntimeException(
+                "No arguments provided. Please provide test results directories as arguments. surefire-dir, allure-dir, allure-report-dir must be set. " +
+                    "The correct values are most likely the following:" + DEFAULT_RESULTS_DIRECTORIES);
         }
 
-        Arrays.stream(args).forEach(arg -> System.out.println("Argument: " + arg));
-
-        String surefireReportsDir = null;
-        String allureResultsDir = null;
-        String allureReportDir = null;
-
-        // Parse arguments
         for (String arg : args)
         {
             if (arg.startsWith("--surefire-dir="))
@@ -67,16 +97,29 @@ public class ResultProcessor
         System.out.println("Allure results directory: " + allureResultsDir);
         System.out.println("Allure report directory: " + allureReportDir);
 
-        // initialize
-        System.out.println("XtcApiClient starting...");
-        XtcApiClient xtcApiClient = new XtcApiClient();
+        if (surefireReportsDir == null || allureResultsDir == null || allureReportDir == null)
+        {
+            throw new RuntimeException(
+                "Missing required arguments. Please provide surefire-dir, allure-dir, and allure-report-dir as arguments." +
+                    " The correct values are most likely the following:" + DEFAULT_RESULTS_DIRECTORIES);
+        }
+    }
 
-        // do the REST calls to the XTC API
-        System.out.println("Reading run ID from system properties...");
-        int runId = Integer.parseInt(System.getProperty("xtc.run.id"));
-        System.out.println("Run ID: " + runId);
-
-        // update the test run with the statistics from the surefire reports if available
+    /**
+     * Updates the test run results in XTC using the statistics from the surefire reports. This method reads the surefire reports from the specified directory,
+     * parses the results, and sends an update request to the XTC API with the test run statistics. The directory for the surefire reports needs to be set.
+     *
+     * @param xtcApiClient
+     *     the XTC API client
+     * @param runId
+     *     the ID of the test run to update
+     * @throws IOException
+     *     if an I/O error occurs
+     * @throws InterruptedException
+     *     if the thread is interrupted while waiting for a response from the XTC API
+     */
+    public static void updateTestRunResults(XtcApiClient xtcApiClient, int runId) throws IOException, InterruptedException
+    {
         System.out.println("Processing test results...");
         if (surefireReportsDir != null)
         {
@@ -97,8 +140,23 @@ public class ResultProcessor
 
             xtcApiClient.updateTestRun(runId, updateRunRequest);
         }
+    }
 
-        // compress and upload the allure report if available
+    /**
+     * Uploads the Allure report to XTC. This method compresses the Allure report directory into a tar.gz archive and uploads it to the specified test run in
+     * XTC. The directory for the Allure report needs to be set.
+     *
+     * @param xtcApiClient
+     *     the XTC API client
+     * @param runId
+     *     the ID of the test run to upload the report to
+     * @throws IOException
+     *     if an I/O error occurs while creating the archive or uploading the report
+     * @throws InterruptedException
+     *     if the thread is interrupted while waiting for a response from the XTC API
+     */
+    public static void uploadAllureReport(XtcApiClient xtcApiClient, int runId) throws IOException, InterruptedException
+    {
         System.out.println("Processing Allure results...");
         if (allureReportDir != null)
         {
@@ -117,9 +175,6 @@ public class ResultProcessor
 
             xtcApiClient.uploadReport(runId, archivePath);
         }
-
-        System.out.println("Remove run ID from system properties on exit...");
-        System.clearProperty("xtc.run.id");
     }
 
     /**

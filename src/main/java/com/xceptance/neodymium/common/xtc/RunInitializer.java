@@ -11,15 +11,15 @@ public class RunInitializer
 {
     public static void main(String[] args) throws IOException, InterruptedException
     {
-        if (!XtcApiContext.configuration.xtcApiIsEnabled())
-        {
-            System.out.println("XTC API is disabled. Exiting...");
-            return;
-        }
-
         System.out.println("RunInitializer starting...");
 
-        // initialize
+        if (!XtcApiContext.isXtcApiEnabled())
+        {
+            System.out.println("XTC API is disabled. Exiting...");
+            return; // TODO throw an exception?
+        }
+        XtcApiContext.ensureRequiredConfiguration();
+
         System.out.println("XtcApiClient starting...");
         XtcApiClient xtcApiClient = new XtcApiClient();
 

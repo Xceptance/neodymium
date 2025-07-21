@@ -29,15 +29,19 @@ public class XtcApiClient
     private final TokenManager tokenManager;
 
     // TODO check client configuration -> maybe timeout is too short for uploading large reports
-    private HttpClient client = HttpClient.newBuilder()
-                                          .connectTimeout(Duration.ofSeconds(100))
-                                          .build();
+    private final HttpClient client = HttpClient.newBuilder()
+                                                .connectTimeout(Duration.ofSeconds(120))
+                                                .build();
 
     private final Gson gson = new GsonBuilder().serializeNulls().create();
 
     // TODO add error handling and logging
     // logging instead of sout with the common logger (private static final Logger LOGGER = LoggerFactory.getLogger(MultibrowserConfiguration.class);)
 
+    /**
+     * Constructs an XtcApiClient instance, initializing the API URL and token manager. The organization and project are encoded to ensure they are safe for use
+     * in URLs. All parameters are taken from the XtcApiContext configuration.
+     */
     public XtcApiClient()
     {
         this.encodedOrg = URLEncoder.encode(XtcApiContext.configuration.xtcApiOrganization(), StandardCharsets.UTF_8);
@@ -49,7 +53,7 @@ public class XtcApiClient
     }
 
     /**
-     * Creates a test run in the XTC API with the provided request data.
+     * Creates a test run in the XTC API with the provided request data. Mandatory parameters are {@code startedAt} and {@code name}.
      *
      * @param createRunRequest
      *     the request data for creating the test run
@@ -67,7 +71,6 @@ public class XtcApiClient
 
         System.out.println("Request body: " + jsonRequestBody);
 
-        // Create the request to the XTC API
         HttpRequest request = HttpRequest.newBuilder()
                                          .uri(URI.create(apiUrl))
                                          .header("Content-Type", "application/json")
@@ -86,8 +89,12 @@ public class XtcApiClient
     }
 
     // TODO rename to finishTestRun when update is implemented and can be used (or a way is found to update the test run in Neo without concurrency issues)
+
     /**
-     * Updates an existing test run in the XTC API with the provided request data.
+     * Updates an existing test run in the XTC API with the provided request data. This method allows you to modify the details of a test run after it has been
+     * created. The {@code testRunId} is required to identify which test run to update. Mandatory parameters are {@code totalTestCases}, {@code failedTestCases},
+     * {@code skippedTestCases},{@code brokenTestCases} and {@code passedTestCases}. If {@code finishedAt} is provided, {@code finishedAt} and
+     * {@code finalResult} are also required.
      *
      * @param testRunId
      *     the ID of the test run to update
@@ -123,7 +130,9 @@ public class XtcApiClient
     }
 
     /**
-     * Uploads the report reportPath to the XTC API.
+     * Uploads the report {@code reportPath} to the XTC API. This method is used to upload the report {@code reportPath} of a test run after it has been
+     * created. The {@code reportPath} should be a valid path to the report and is mandatory.  The {@code reportPath} must be in gzip format, and the
+     * Content-Type header must be set to {@code "application/gzip"}. The {@code testRunId} is required to identify which test run to update.
      *
      * @param testRunId
      *     the ID of the test run to which the report should be uploaded
