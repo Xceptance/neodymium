@@ -2,6 +2,8 @@ package com.xceptance.neodymium.common.xtc;
 
 import com.xceptance.neodymium.common.xtc.dto.CreateRunRequest;
 import com.xceptance.neodymium.common.xtc.dto.CreateRunResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -9,22 +11,24 @@ import java.time.temporal.ChronoUnit;
 
 public class RunInitializer
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RunInitializer.class);
+
     public static void main(String[] args) throws IOException, InterruptedException
     {
-        System.out.println("RunInitializer starting...");
+        LOGGER.info("RunInitializer starting...");
 
         if (!XtcApiContext.isXtcApiEnabled())
         {
-            System.out.println("XTC API is disabled. Exiting...");
+            LOGGER.info("XTC API is disabled. Exiting...");
             return; // TODO throw an exception?
         }
         XtcApiContext.ensureRequiredConfiguration();
 
-        System.out.println("XtcApiClient starting...");
+        LOGGER.info("XtcApiClient starting...");
         XtcApiClient xtcApiClient = new XtcApiClient();
 
         // do the REST calls to the XTC API
-        System.out.println("Creating test run...");
+        LOGGER.info("Creating test run...");
 
         CreateRunRequest createRunRequest = new CreateRunRequest(Instant.now().truncatedTo(ChronoUnit.MILLIS).toString(),
                                                                  XtcApiContext.configuration.xtcApiEstimatedDuration(),
@@ -38,7 +42,7 @@ public class RunInitializer
         CreateRunResponse createRunResponse = xtcApiClient.createTestRun(createRunRequest);
         String runId = createRunResponse.getData().getIndex();
 
-        System.out.println("Adding run ID to system properties...");
+        LOGGER.info("Adding run ID to system properties: {}", runId);
         System.setProperty("xtc.run.id", runId);
     }
 }

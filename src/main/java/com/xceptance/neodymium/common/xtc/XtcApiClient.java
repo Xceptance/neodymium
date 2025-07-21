@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.xceptance.neodymium.common.xtc.dto.CreateRunRequest;
 import com.xceptance.neodymium.common.xtc.dto.CreateRunResponse;
 import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
@@ -34,6 +36,8 @@ public class XtcApiClient
                                                 .build();
 
     private final Gson gson = new GsonBuilder().serializeNulls().create();
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(XtcApiClient.class);
 
     // TODO add error handling and logging
     // logging instead of sout with the common logger (private static final Logger LOGGER = LoggerFactory.getLogger(MultibrowserConfiguration.class);)
@@ -65,11 +69,11 @@ public class XtcApiClient
      */
     public CreateRunResponse createTestRun(CreateRunRequest createRunRequest) throws IOException, InterruptedException
     {
-        System.out.println("Creating test run in XTC API...");
+        LOGGER.info("Creating test run in XTC API...");
 
         String jsonRequestBody = gson.toJson(createRunRequest);
 
-        System.out.println("Request body: " + jsonRequestBody);
+        LOGGER.info("Request body: {}", jsonRequestBody);
 
         HttpRequest request = HttpRequest.newBuilder()
                                          .uri(URI.create(apiUrl))
@@ -81,10 +85,12 @@ public class XtcApiClient
         HttpResponse<String> response = HttpUtils.sendWithRetries(this.client, request);
         if (response.statusCode() != 200 && response.statusCode() != 201)
         {
+            LOGGER.error("Failed to create test run. Status code: {}, Response: {}", response.statusCode(), response.body());
             throw new IOException("Failed to create test run. Status code: " + response.statusCode() +
                                       ", Response: " + response.body());
         }
 
+        LOGGER.info("Test run created successfully. Response: {}", response.body());
         return gson.fromJson(response.body(), CreateRunResponse.class);
     }
 
@@ -108,7 +114,7 @@ public class XtcApiClient
      */
     public UpdateRunRequest updateTestRun(int testRunId, UpdateRunRequest updateRunRequest) throws IOException, InterruptedException
     {
-        System.out.println("Updating test run in XTC API...");
+        LOGGER.info("Updating test run in XTC API...");
 
         String jsonRequestBody = gson.toJson(updateRunRequest);
 
@@ -122,10 +128,12 @@ public class XtcApiClient
         HttpResponse<String> response = HttpUtils.sendWithRetries(this.client, request);
         if (response.statusCode() != 200)
         {
+            LOGGER.error("Failed to update test run. Status code: {}, Response: {}", response.statusCode(), response.body());
             throw new IOException("Failed to update test run. Status code: " + response.statusCode() +
                                       ", Response: " + response.body());
         }
 
+        LOGGER.info("Test run updated successfully. Response: {}", response.body());
         return gson.fromJson(response.body(), UpdateRunRequest.class);
     }
 
@@ -141,7 +149,7 @@ public class XtcApiClient
      */
     public void uploadReport(int testRunId, Path reportPath)
     {
-        System.out.println("Uploading report to XTC API...");
+        LOGGER.info("Uploading report to XTC API...");
 
         try
         {
@@ -156,14 +164,18 @@ public class XtcApiClient
             HttpResponse<String> response = HttpUtils.sendWithRetries(this.client, request);
             if (response.statusCode() != 200 && response.statusCode() != 201)
             {
+                LOGGER.error("Failed to upload report. Status code: {}, Response: {}", response.statusCode(), response.body());
                 throw new IOException("Failed to upload report. Status code: " + response.statusCode() +
                                           ", Response: " + response.body());
             }
+
+            LOGGER.info("Report uploaded successfully. Response: {}", response.body());
         }
         catch (Exception e)
         {
-            System.err.println("Failed to upload report: " + e.getMessage());
-            System.err.println("Exception while creating test run: ");
+            LOGGER.error("Failed to upload report: {}", e.getMessage(), e);
+            LOGGER.error("Exception while creating test run: ", e);
+
             e.printStackTrace(System.err);
         }
     }

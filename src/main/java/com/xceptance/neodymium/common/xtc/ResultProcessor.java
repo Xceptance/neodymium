@@ -4,6 +4,8 @@ import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest;
 import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest.FinishExecution;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
@@ -29,33 +31,35 @@ public class ResultProcessor
         System.lineSeparator() + "--allure-dir=${project.build.directory}/allure-results" +
         System.lineSeparator() + "--allure-report-dir=${project.build.directory}/site/allure-maven-plugin";
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ResultProcessor.class);
+
     public static void main(String[] args) throws IOException, InterruptedException
     {
-        System.out.println("ResultProcessor starting...");
+        LOGGER.info("ResultProcessor starting...");
 
         if (!XtcApiContext.isXtcApiEnabled())
         {
-            System.out.println("XTC API is disabled. Exiting...");
-            return; // TODO throw an exception?
+            LOGGER.info("XTC API is disabled. Exiting...");
+            return; // TODO throw an exception or change all exceptions to logger.error() and break the execution?
         }
         XtcApiContext.ensureRequiredConfiguration();
 
         // TODO config instead of arguments? this is probably better, so it is easier to change and can be validated using the XtcApiContext.ensureRequiredConfiguration() method
         parseArguments(args);
 
-        System.out.println("XtcApiClient starting...");
+        LOGGER.info("XtcApiClient starting...");
         XtcApiClient xtcApiClient = new XtcApiClient();
 
         // read the run ID from the system properties
-        System.out.println("Reading run ID from system properties...");
+        LOGGER.info("Reading run ID from system properties...");
         int runId = Integer.parseInt(System.getProperty("xtc.run.id"));
-        System.out.println("Run ID: " + runId);
+        LOGGER.info("Run ID: {}", runId);
 
         updateTestRunResults(xtcApiClient, runId);
         uploadAllureReport(xtcApiClient, runId);
 
         // remove the run ID from the system properties
-        System.out.println("Remove run ID from system properties on exit...");
+        LOGGER.info("Remove run ID from system properties on exit...");
         System.clearProperty("xtc.run.id");
     }
 
@@ -68,10 +72,13 @@ public class ResultProcessor
      */
     private static void parseArguments(String[] args)
     {
-        System.out.println("Parsing arguments...");
+        LOGGER.info("Parsing arguments...");
 
         if (args.length == 0)
         {
+            LOGGER.error(
+                "No arguments provided. Please provide test results directories as arguments. surefire-dir, allure-dir, allure-report-dir must be set. " +
+                    "The correct values are most likely the following: {}", DEFAULT_RESULTS_DIRECTORIES);
             throw new RuntimeException(
                 "No arguments provided. Please provide test results directories as arguments. surefire-dir, allure-dir, allure-report-dir must be set. " +
                     "The correct values are most likely the following:" + DEFAULT_RESULTS_DIRECTORIES);
@@ -93,12 +100,15 @@ public class ResultProcessor
             }
         }
 
-        System.out.println("Surefire reports directory: " + surefireReportsDir);
-        System.out.println("Allure results directory: " + allureResultsDir);
-        System.out.println("Allure report directory: " + allureReportDir);
+        LOGGER.info("Surefire reports directory: {}", surefireReportsDir);
+        LOGGER.info("Allure results directory: {}", allureResultsDir);
+        LOGGER.info("Allure report directory: {}", allureReportDir);
 
         if (surefireReportsDir == null || allureResultsDir == null || allureReportDir == null)
         {
+            LOGGER.error(
+                "Missing required arguments. Please provide surefire-dir, allure-dir, and allure-report-dir as arguments. The correct values are most likely the following: {}",
+                DEFAULT_RESULTS_DIRECTORIES);
             throw new RuntimeException(
                 "Missing required arguments. Please provide surefire-dir, allure-dir, and allure-report-dir as arguments." +
                     " The correct values are most likely the following:" + DEFAULT_RESULTS_DIRECTORIES);
@@ -120,13 +130,14 @@ public class ResultProcessor
      */
     public static void updateTestRunResults(XtcApiClient xtcApiClient, int runId) throws IOException, InterruptedException
     {
-        System.out.println("Processing test results...");
+        LOGGER.info("Processing test results...");
+
         if (surefireReportsDir != null)
         {
             SurefireResultParser surefireResultParser = new SurefireResultParser();
             TestRunStatistics statistics = surefireResultParser.parseResults(surefireReportsDir);
 
-            System.out.println(statistics);
+            LOGGER.info("Test run statistics: {}", statistics);
 
             FinishExecution finishExecution = new FinishExecution(Instant.now().truncatedTo(ChronoUnit.MILLIS).toString(),
                                                                   statistics.getStatus());
@@ -157,7 +168,8 @@ public class ResultProcessor
      */
     public static void uploadAllureReport(XtcApiClient xtcApiClient, int runId) throws IOException, InterruptedException
     {
-        System.out.println("Processing Allure results...");
+        LOGGER.info("Processing Allure results...");
+
         if (allureReportDir != null)
         {
             // check if the allure results directory exists
@@ -165,7 +177,7 @@ public class ResultProcessor
 
             if (!Files.exists(allurePath) || !Files.isDirectory(allurePath))
             {
-                System.err.println("Invalid allure results directory: " + allureReportDir);
+                LOGGER.error("Invalid allure results directory: {}", allureReportDir);
                 return;
             }
 
@@ -213,12 +225,13 @@ public class ResultProcessor
                      }
                      catch (IOException e)
                      {
+                         LOGGER.error("Failed to add file to archive: {}", file, e);
                          throw new RuntimeException("Failed to add file to archive: " + file, e);
                      }
                  });
         }
 
-        System.out.println("Created archive: " + archivePath.toAbsolutePath());
+        LOGGER.info("Created archive: {}", archivePath.toAbsolutePath());
         return archivePath;
     }
 }

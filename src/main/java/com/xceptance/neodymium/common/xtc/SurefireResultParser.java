@@ -1,5 +1,8 @@
 package com.xceptance.neodymium.common.xtc;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +27,8 @@ public class SurefireResultParser
 
     private int passedTests;
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(RunInitializer.class);
+
     /**
      * Parses the results of the Surefire test reports located in the specified directory.
      *
@@ -45,7 +50,7 @@ public class SurefireResultParser
         }
         catch (IOException e)
         {
-            System.err.println("Error reading reports directory: " + e.getMessage());
+            LOGGER.error("Error reading reports directory: {}", e.getMessage(), e);
         }
 
         return new TestRunStatistics(this.totalTests, this.failedTests, this.skippedTests, this.brokenTests, this.passedTests);
@@ -86,7 +91,7 @@ public class SurefireResultParser
         }
         catch (IOException e)
         {
-            System.err.println("Error reading file " + filePath + ": " + e.getMessage());
+            LOGGER.error("Error reading file {}: {}", filePath, e.getMessage(), e);
         }
     }
 }

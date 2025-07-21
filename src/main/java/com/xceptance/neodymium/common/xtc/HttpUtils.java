@@ -1,5 +1,8 @@
 package com.xceptance.neodymium.common.xtc;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -14,6 +17,8 @@ public final class HttpUtils
     private static final int MAX_RETRIES = XtcApiContext.configuration.xtcApiNumberOfRetries();
 
     private static final long INITIAL_RETRY_DELAY_MS = XtcApiContext.configuration.xtcApiRetryDelay();
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(HttpUtils.class);
 
     /**
      * A private constructor to prevent instantiation of this utility class.
@@ -56,10 +61,12 @@ public final class HttpUtils
                     {
                         return response; // Return the last failed response after all retries
                     }
-                    System.err.printf("Request to %s failed with status %d. Retrying in %d ms... (Attempt %d/%d)%n",
-                                      request.uri(), response.statusCode(), delay, attempt, MAX_RETRIES);
+                    LOGGER.warn("Request to {} failed with status {}. Retrying in {} ms... (Attempt {}/{})",
+                                request.uri(), response.statusCode(), delay, attempt, MAX_RETRIES);
+
                     Thread.sleep(delay);
                     delay *= 2; // Exponential backoff
+
                     continue; // Go to the next iteration of the loop
                 }
                 // For any other status (success 2xx, client error 4xx), we return immediately.
@@ -72,14 +79,16 @@ public final class HttpUtils
                 {
                     throw e; // Rethrow the exception if we've exhausted all retries
                 }
-                System.err.printf("Request to %s failed with IOException: %s. Retrying in %d ms... (Attempt %d/%d)%n",
-                                  request.uri(), e.getMessage(), delay, attempt, MAX_RETRIES);
+                LOGGER.warn("Request to {} failed with IOException: {}. Retrying in {} ms... (Attempt {}/{})",
+                            request.uri(), e.getMessage(), delay, attempt, MAX_RETRIES);
+
                 Thread.sleep(delay);
                 delay *= 2; // Exponential backoff
             }
         }
 
         // This line should ideally not be reached, but in case it is, throw an exception.
+        LOGGER.error("Failed to get a successful response for {} after {} attempts.", request.uri(), MAX_RETRIES);
         throw new IOException("Failed to get a successful response for " + request.uri() + " after " + MAX_RETRIES + " attempts.");
     }
 }
