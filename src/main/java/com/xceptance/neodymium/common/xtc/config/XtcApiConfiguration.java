@@ -9,8 +9,8 @@ import org.aeonbits.owner.Mutable;
 @Sources(
     {
         "system:properties",
-        // "${xtc-api.temporaryConfigFile}",
-        // "${neodymium.temporaryConfigFile}",
+        "${xtc-api.temporaryConfigFile}",
+        "${neodymium.temporaryConfigFile}",
         "file:config/dev-xtc-api.properties",
         "file:config/dev-neodymium.properties",
         "system:env",

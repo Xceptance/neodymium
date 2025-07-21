@@ -39,9 +39,6 @@ public class XtcApiClient
 
     private static final Logger LOGGER = LoggerFactory.getLogger(XtcApiClient.class);
 
-    // TODO add error handling and logging
-    // logging instead of sout with the common logger (private static final Logger LOGGER = LoggerFactory.getLogger(MultibrowserConfiguration.class);)
-
     /**
      * Constructs an XtcApiClient instance, initializing the API URL and token manager. The organization and project are encoded to ensure they are safe for use
      * in URLs. All parameters are taken from the XtcApiContext configuration.
@@ -98,9 +95,9 @@ public class XtcApiClient
 
     /**
      * Updates an existing test run in the XTC API with the provided request data. This method allows you to modify the details of a test run after it has been
-     * created. The {@code testRunId} is required to identify which test run to update. Mandatory parameters are {@code totalTestCases}, {@code failedTestCases},
-     * {@code skippedTestCases},{@code brokenTestCases} and {@code passedTestCases}. If {@code finishedAt} is provided, {@code finishedAt} and
-     * {@code finalResult} are also required.
+     * created. The {@code testRunId} is required to identify which test run to update. Mandatory parameters are {@code totalTestCases},
+     * {@code failedTestCases}, {@code skippedTestCases},{@code brokenTestCases} and {@code passedTestCases}. If {@code finishedAt} is provided,
+     * {@code finishedAt} and {@code finalResult} are also required.
      *
      * @param testRunId
      *     the ID of the test run to update
