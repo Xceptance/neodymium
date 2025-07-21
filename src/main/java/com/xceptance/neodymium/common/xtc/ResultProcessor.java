@@ -1,9 +1,7 @@
 package com.xceptance.neodymium.common.xtc;
 
-import com.xceptance.neodymium.common.xtc.config.XtcApiConfiguration;
 import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest;
 import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest.FinishExecution;
-import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 
@@ -21,11 +19,9 @@ import java.util.zip.GZIPOutputStream;
 // parses the results of the tests and uploads them to XTC using the XTC API client
 public class ResultProcessor
 {
-    public static XtcApiConfiguration configuration = ConfigFactory.create(XtcApiConfiguration.class);
-
     public static void main(String[] args) throws IOException, InterruptedException
     {
-        if (!configuration.xtcApiIsEnabled())
+        if (!XtcApiContext.configuration.xtcApiIsEnabled())
         {
             System.out.println("XTC API is disabled. Exiting...");
             return;
@@ -73,10 +69,7 @@ public class ResultProcessor
 
         // initialize
         System.out.println("XtcApiClient starting...");
-        XtcApiClient xtcApiClient = new XtcApiClient(configuration.xtcApiOrganization(),
-                                                     configuration.xtcApiProject(),
-                                                     configuration.xtcApiKey(),
-                                                     configuration.xtcApiSecret());
+        XtcApiClient xtcApiClient = new XtcApiClient();
 
         // do the REST calls to the XTC API
         System.out.println("Reading run ID from system properties...");

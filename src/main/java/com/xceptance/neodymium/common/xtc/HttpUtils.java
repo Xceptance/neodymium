@@ -1,8 +1,5 @@
 package com.xceptance.neodymium.common.xtc;
 
-import com.xceptance.neodymium.common.xtc.config.XtcApiConfiguration;
-import org.aeonbits.owner.ConfigFactory;
-
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -13,12 +10,10 @@ import java.net.http.HttpResponse;
  */
 public final class HttpUtils
 {
-    public static XtcApiConfiguration configuration = ConfigFactory.create(XtcApiConfiguration.class);
-
     // Configuration for the retry mechanism
-    private static final int MAX_RETRIES = configuration.xtcApiNumberOfRetries();
+    private static final int MAX_RETRIES = XtcApiContext.configuration.xtcApiNumberOfRetries();
 
-    private static final long INITIAL_RETRY_DELAY_MS = configuration.xtcApiRetryDelay();
+    private static final long INITIAL_RETRY_DELAY_MS = XtcApiContext.configuration.xtcApiRetryDelay();
 
     /**
      * A private constructor to prevent instantiation of this utility class.

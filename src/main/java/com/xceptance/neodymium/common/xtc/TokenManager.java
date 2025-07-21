@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.xceptance.neodymium.common.xtc.config.XtcApiConfiguration;
 import com.xceptance.neodymium.common.xtc.dto.AuthResponse;
-import org.aeonbits.owner.ConfigFactory;
 
 import java.io.IOException;
 import java.net.URI;
@@ -25,7 +24,7 @@ public class TokenManager
 
     private final String apiSecret;
 
-    private String scope = "TESTEXECUTION_CREATE TESTEXECUTION_FINISH TESTEXECUTION_LIST TESTEXECUTION_REPORT_UPLOAD TESTEXECUTION_UPDATE";
+    private String scope;
 
     private static HttpClient client = HttpClient.newBuilder()
                                                  .connectTimeout(Duration.ofSeconds(60))
@@ -36,34 +35,20 @@ public class TokenManager
     // Internal state for the token and its expiration time
     private volatile String token;
 
-    private volatile Instant tokenExpirationTime;
+    private volatile Instant tokenExpiry;
 
-    // retry configuration
-    private int maxRetries = 3;
-
-    private long retryDelayMs = 1000;
-
-    public TokenManager(String apiKey, String apiSecret)
+    public TokenManager()
     {
-        this.apiKey = apiKey;
-        this.apiSecret = apiSecret;
-    }
+        //XtcApiConfiguration configuration = ConfigFactory.create(XtcApiConfiguration.class);
+        XtcApiConfiguration configuration = XtcApiContext.configuration;
 
-    public TokenManager(String apiKey, String apiSecret, int maxRetries, long retryDelayMs)
-    {
-        this(apiKey, apiSecret);
-        this.maxRetries = maxRetries;
-        this.retryDelayMs = retryDelayMs;
-    }
+        System.out.println("xtcApiKey: " + configuration.xtcApiKey());
+        System.out.println("xtcApiSecret: " + configuration.xtcApiSecret());
+        System.out.println("xtcApiScope: " + configuration.xtcApiScope());
 
-    public void setScope(String scope)
-    {
-        this.scope = scope;
-    }
+        this.apiKey = configuration.xtcApiKey();
+        this.apiSecret = configuration.xtcApiSecret();
 
-    public void setScopeFromConfiguration()
-    {
-        XtcApiConfiguration configuration = ConfigFactory.create(XtcApiConfiguration.class);
         this.scope = configuration.xtcApiScope();
     }
 
@@ -72,7 +57,7 @@ public class TokenManager
      */
     public synchronized String getToken() throws IOException, InterruptedException
     {
-        if (token == null || Instant.now().isAfter(tokenExpirationTime))
+        if (token == null || Instant.now().isAfter(tokenExpiry))
         {
             System.out.println("Token is expired or null. Fetching a new one...");
             authenticate();
@@ -111,16 +96,16 @@ public class TokenManager
 
         // Parse the response body to extract the access token
         AuthResponse authResponse = gson.fromJson(response.body(), AuthResponse.class);
-        if (authResponse == null || authResponse.getAccess_token() == null)
+        if (authResponse == null || authResponse.getAccessToken() == null)
         {
             throw new IOException("Failed to parse access_token from auth response: " + response.body());
         }
 
         // Store the token and its expiration time
-        this.token = authResponse.getAccess_token();
-        this.tokenExpirationTime = Instant.now().plusSeconds(authResponse.getExpires_in() - 60); // Subtract 60 seconds for safety
+        this.token = authResponse.getAccessToken();
+        this.tokenExpiry = Instant.now().plusSeconds(authResponse.getExpiresIn() - 60); // Subtract 60 seconds for safety
 
         System.out.println("Bearer token extracted: " + this.token);
-        System.out.println("Token expires in: " + authResponse.getExpires_in() + " seconds");
+        System.out.println("Token expires in: " + authResponse.getExpiresIn() + " seconds");
     }
 }

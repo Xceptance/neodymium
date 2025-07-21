@@ -11,6 +11,9 @@ import java.util.stream.Stream;
 
 public class SurefireResultParser
 {
+    // Pattern to match test results summary
+    private static final Pattern SUMMARY_PATTERN = Pattern.compile("Tests run: (\\d+), Failures: (\\d+), Errors: (\\d+), Skipped: (\\d+)");
+
     private int totalTests;
 
     private int failedTests;
@@ -56,9 +59,6 @@ public class SurefireResultParser
      */
     private void parseTestResultFile(Path filePath)
     {
-        // Pattern to match test results summary
-        Pattern summaryPattern = Pattern.compile("Tests run: (\\d+), Failures: (\\d+), Errors: (\\d+), Skipped: (\\d+)");
-
         try
         {
             List<String> lines = Files.readAllLines(filePath);
@@ -66,7 +66,7 @@ public class SurefireResultParser
             // process each line of the result file
             for (String line : lines)
             {
-                Matcher summaryMatcher = summaryPattern.matcher(line);
+                Matcher summaryMatcher = SUMMARY_PATTERN.matcher(line);
                 if (summaryMatcher.find())
                 {
                     int testsRun = Integer.parseInt(summaryMatcher.group(1));

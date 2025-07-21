@@ -38,24 +38,14 @@ public class XtcApiClient
     // TODO add error handling and logging
     // logging instead of sout with the common logger (private static final Logger LOGGER = LoggerFactory.getLogger(MultibrowserConfiguration.class);)
 
-    public XtcApiClient(String org, String project, String apiKey, String apiSecret)
+    public XtcApiClient()
     {
-        this.encodedOrg = URLEncoder.encode(org, StandardCharsets.UTF_8);
-        this.encodedProject = URLEncoder.encode(project, StandardCharsets.UTF_8);
+        this.encodedOrg = URLEncoder.encode(XtcApiContext.configuration.xtcApiOrganization(), StandardCharsets.UTF_8);
+        this.encodedProject = URLEncoder.encode(XtcApiContext.configuration.xtcApiProject(), StandardCharsets.UTF_8);
 
         this.apiUrl = HOST + "/public/api/v2/orgs/" + encodedOrg + "/projects/" + encodedProject + "/executions";
 
-        this.tokenManager = new TokenManager(apiKey, apiSecret);
-    }
-
-    public XtcApiClient(String org, String project, TokenManager tokenManager)
-    {
-        this.encodedOrg = URLEncoder.encode(org, StandardCharsets.UTF_8);
-        this.encodedProject = URLEncoder.encode(project, StandardCharsets.UTF_8);
-
-        this.apiUrl = HOST + "/public/api/v2/orgs/" + encodedOrg + "/projects/" + encodedProject + "/executions";
-
-        this.tokenManager = tokenManager;
+        this.tokenManager = new TokenManager();
     }
 
     /**
@@ -96,7 +86,6 @@ public class XtcApiClient
     }
 
     // TODO rename to finishTestRun when update is implemented and can be used (or a way is found to update the test run in Neo without concurrency issues)
-
     /**
      * Updates an existing test run in the XTC API with the provided request data.
      *

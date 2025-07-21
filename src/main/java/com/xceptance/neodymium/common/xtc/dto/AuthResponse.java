@@ -22,12 +22,12 @@ public class AuthResponse
         this.expires_in = expiresIn;
     }
 
-    public String getAccess_token()
+    public String getAccessToken()
     {
         return access_token;
     }
 
-    public String getIssued_token_type()
+    public String getIssuedTokenType()
     {
         return issued_token_type;
     }
@@ -37,12 +37,12 @@ public class AuthResponse
         return scope;
     }
 
-    public String getToken_type()
+    public String getTokenType()
     {
         return token_type;
     }
 
-    public Integer getExpires_in()
+    public Integer getExpiresIn()
     {
         return expires_in;
     }
