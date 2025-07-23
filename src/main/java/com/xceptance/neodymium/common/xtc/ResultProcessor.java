@@ -21,11 +21,11 @@ import java.util.zip.GZIPOutputStream;
 public class ResultProcessor
 {
     // The directories for the surefire reports and allure results are set via command line arguments
-    private static String surefireReportsDir;
+    private static String surefireReportsDir = XtcApiContext.configuration.xtcApiSurefireResultDirectory();
 
-    private static String allureResultsDir; // not necessary not, but most likely when updating the test run results during the test run
+    private static String allureResultsDir = XtcApiContext.configuration.xtcApiAllureResultDirectory(); // not necessary not, but most likely when updating the test run results during the test run
 
-    private static String allureReportDir;
+    private static String allureReportDir = XtcApiContext.configuration.xtcApiAllureReportDirectory();
 
     private static final String DEFAULT_RESULTS_DIRECTORIES = System.lineSeparator() + "--surefire-dir=${project.build.directory}/surefire-reports" +
         System.lineSeparator() + "--allure-dir=${project.build.directory}/allure-results" +
@@ -40,18 +40,25 @@ public class ResultProcessor
         if (!XtcApiContext.isXtcApiEnabled())
         {
             LOGGER.info("XTC API is disabled. Exiting...");
-            return; // TODO throw an exception or change all exceptions to logger.error() and break the execution?
+            return;
         }
-        XtcApiContext.ensureRequiredConfiguration();
 
-        // TODO config instead of arguments? this is probably better, so it is easier to change and can be validated using the XtcApiContext.ensureRequiredConfiguration() method
-        parseArguments(args);
+        LOGGER.info("Surefire reports directory: {}", surefireReportsDir);
+        LOGGER.info("Allure results directory: {}", allureResultsDir);
+        LOGGER.info("Allure report directory: {}", allureReportDir);
 
         LOGGER.info("XtcApiClient starting...");
         XtcApiClient xtcApiClient = new XtcApiClient();
 
         // read the run ID from the system properties
         LOGGER.info("Reading run ID from system properties...");
+
+        if (System.getProperty("xtc.run.id") == null)
+        {
+            LOGGER.error("Run ID is not set in system properties. Please run RunInitializer first to create a test run.");
+            throw new RuntimeException("Run ID is not set in system properties. Please run RunInitializer first to create a test run.");
+        }
+
         int runId = Integer.parseInt(System.getProperty("xtc.run.id"));
         LOGGER.info("Run ID: {}", runId);
 
@@ -61,58 +68,6 @@ public class ResultProcessor
         // remove the run ID from the system properties
         LOGGER.info("Remove run ID from system properties on exit...");
         System.clearProperty("xtc.run.id");
-    }
-
-    /**
-     * Parses the command line arguments to set the directories for surefire reports, allure results, and allure report. Will throw an exception if the required
-     * parameters are not provided.
-     *
-     * @param args
-     *     the command line arguments
-     */
-    private static void parseArguments(String[] args)
-    {
-        LOGGER.info("Parsing arguments...");
-
-        if (args.length == 0)
-        {
-            LOGGER.error(
-                "No arguments provided. Please provide test results directories as arguments. surefire-dir, allure-dir, allure-report-dir must be set. " +
-                    "The correct values are most likely the following: {}", DEFAULT_RESULTS_DIRECTORIES);
-            throw new RuntimeException(
-                "No arguments provided. Please provide test results directories as arguments. surefire-dir, allure-dir, allure-report-dir must be set. " +
-                    "The correct values are most likely the following:" + DEFAULT_RESULTS_DIRECTORIES);
-        }
-
-        for (String arg : args)
-        {
-            if (arg.startsWith("--surefire-dir="))
-            {
-                surefireReportsDir = arg.substring("--surefire-dir=".length());
-            }
-            if (arg.startsWith("--allure-dir="))
-            {
-                allureResultsDir = arg.substring("--allure-dir=".length());
-            }
-            if (arg.startsWith("--allure-report-dir="))
-            {
-                allureReportDir = arg.substring("--allure-report-dir=".length());
-            }
-        }
-
-        LOGGER.info("Surefire reports directory: {}", surefireReportsDir);
-        LOGGER.info("Allure results directory: {}", allureResultsDir);
-        LOGGER.info("Allure report directory: {}", allureReportDir);
-
-        if (surefireReportsDir == null || allureResultsDir == null || allureReportDir == null)
-        {
-            LOGGER.error(
-                "Missing required arguments. Please provide surefire-dir, allure-dir, and allure-report-dir as arguments. The correct values are most likely the following: {}",
-                DEFAULT_RESULTS_DIRECTORIES);
-            throw new RuntimeException(
-                "Missing required arguments. Please provide surefire-dir, allure-dir, and allure-report-dir as arguments." +
-                    " The correct values are most likely the following:" + DEFAULT_RESULTS_DIRECTORIES);
-        }
     }
 
     /**

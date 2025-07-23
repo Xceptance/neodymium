@@ -69,7 +69,6 @@ public class XtcApiClient
         LOGGER.info("Creating test run in XTC API...");
 
         String jsonRequestBody = gson.toJson(createRunRequest);
-
         LOGGER.info("Request body: {}", jsonRequestBody);
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -82,9 +81,13 @@ public class XtcApiClient
         HttpResponse<String> response = HttpUtils.sendWithRetries(this.client, request);
         if (response.statusCode() != 200 && response.statusCode() != 201)
         {
-            LOGGER.error("Failed to create test run. Status code: {}, Response: {}", response.statusCode(), response.body());
-            throw new IOException("Failed to create test run. Status code: " + response.statusCode() +
-                                      ", Response: " + response.body());
+            String errorMessage = String.format("Failed to create test run. Status: %d, Response: %s", response.statusCode(), response.body());
+            LOGGER.error(errorMessage);
+
+            if (XtcApiContext.configuration.xtcApiThrowExceptionForRunCreationError())
+            {
+                throw new IOException(errorMessage);
+            }
         }
 
         LOGGER.info("Test run created successfully. Response: {}", response.body());
@@ -92,7 +95,6 @@ public class XtcApiClient
     }
 
     // TODO rename to finishTestRun when update is implemented and can be used (or a way is found to update the test run in Neo without concurrency issues)
-
     /**
      * Updates an existing test run in the XTC API with the provided request data. This method allows you to modify the details of a test run after it has been
      * created. The {@code testRunId} is required to identify which test run to update. Mandatory parameters are {@code totalTestCases},
@@ -114,6 +116,7 @@ public class XtcApiClient
         LOGGER.info("Updating test run in XTC API...");
 
         String jsonRequestBody = gson.toJson(updateRunRequest);
+        LOGGER.info("Request body: {}", jsonRequestBody);
 
         HttpRequest request = HttpRequest.newBuilder()
                                          .uri(URI.create(apiUrl + "/" + testRunId))
@@ -125,9 +128,13 @@ public class XtcApiClient
         HttpResponse<String> response = HttpUtils.sendWithRetries(this.client, request);
         if (response.statusCode() != 200)
         {
-            LOGGER.error("Failed to update test run. Status code: {}, Response: {}", response.statusCode(), response.body());
-            throw new IOException("Failed to update test run. Status code: " + response.statusCode() +
-                                      ", Response: " + response.body());
+            String errorMessage = String.format("Failed to update test run. Status: %d, Response: %s", response.statusCode(), response.body());
+            LOGGER.error(errorMessage);
+
+            if (XtcApiContext.configuration.xtcApiThrowExceptionForRunUpdateError())
+            {
+                throw new IOException(errorMessage);
+            }
         }
 
         LOGGER.info("Test run updated successfully. Response: {}", response.body());
@@ -161,9 +168,13 @@ public class XtcApiClient
             HttpResponse<String> response = HttpUtils.sendWithRetries(this.client, request);
             if (response.statusCode() != 200 && response.statusCode() != 201)
             {
-                LOGGER.error("Failed to upload report. Status code: {}, Response: {}", response.statusCode(), response.body());
-                throw new IOException("Failed to upload report. Status code: " + response.statusCode() +
-                                          ", Response: " + response.body());
+                String errorMessage = String.format("Failed to upload report. Status: %d, Response: %s", response.statusCode(), response.body());
+                LOGGER.error(errorMessage);
+
+                if (XtcApiContext.configuration.xtcApiThrowExceptionForReportUploadError())
+                {
+                    throw new IOException(errorMessage);
+                }
             }
 
             LOGGER.info("Report uploaded successfully. Response: {}", response.body());

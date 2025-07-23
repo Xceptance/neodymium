@@ -20,9 +20,16 @@ public class RunInitializer
         if (!XtcApiContext.isXtcApiEnabled())
         {
             LOGGER.info("XTC API is disabled. Exiting...");
-            return; // TODO throw an exception?
+
+            if (XtcApiContext.configuration.xtcApiThrowExceptionForRunCreationError())
+            {
+                throw new RuntimeException("XTC API is disabled and exception asserting this is enabled. Please enable the XTC API in the configuration. " +
+                                               "Otherwise, the run will not be created. If this is intended, disable the 'xtc.api.throwExceptionForRunCreationError' " +
+                                               "configuration option.");
+            }
+
+            return;
         }
-        XtcApiContext.ensureRequiredConfiguration();
 
         LOGGER.info("XtcApiClient starting...");
         XtcApiClient xtcApiClient = new XtcApiClient();

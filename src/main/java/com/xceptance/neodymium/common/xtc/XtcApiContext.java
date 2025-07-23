@@ -6,6 +6,9 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static com.xceptance.neodymium.util.Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME;
 
 public class XtcApiContext
@@ -19,6 +22,7 @@ public class XtcApiContext
     static
     {
         initialize();
+        ensureRequiredConfiguration();
     }
 
     /**
@@ -38,11 +42,6 @@ public class XtcApiContext
         configuration = ConfigFactory.create(XtcApiConfiguration.class, System.getProperties(), System.getenv());
     }
 
-    public static boolean isXtcApiEnabled()
-    {
-        return configuration.xtcApiIsEnabled();
-    }
-
     /**
      * Ensures that the required configuration for the XTC API is set. If any required configuration is missing, an {@link IllegalStateException} is thrown.
      */
@@ -53,28 +52,80 @@ public class XtcApiContext
             return;
         }
 
+        List<String> validationErrors = new ArrayList<>();
+
         if (StringUtils.isBlank(configuration.xtcApiOrganization()))
         {
-            LOGGER.error("XTC API organization is not configured.");
-            throw new IllegalStateException("XTC API organization is not configured.");
+            String error = "XTC API organization is not configured.";
+            LOGGER.error(error);
+            validationErrors.add(error);
         }
 
         if (StringUtils.isBlank(configuration.xtcApiProject()))
         {
-            LOGGER.error("XTC API project is not configured.");
-            throw new IllegalStateException("XTC API project is not configured.");
+            String error = "XTC API project is not configured.";
+            LOGGER.error(error);
+            validationErrors.add(error);
         }
 
         if (StringUtils.isBlank(configuration.xtcApiSecret()))
         {
-            LOGGER.error("XTC API secret is not configured.");
-            throw new IllegalStateException("XTC API secret is not configured.");
+            String error = "XTC API secret is not configured.";
+            LOGGER.error(error);
+            validationErrors.add(error);
         }
 
         if (StringUtils.isBlank(configuration.xtcApiKey()))
         {
-            LOGGER.error("XTC API key is not configured.");
-            throw new IllegalStateException("XTC API key is not configured.");
+            String error = "XTC API key is not configured.";
+            LOGGER.error(error);
+            validationErrors.add(error);
         }
+
+        if (StringUtils.isBlank(configuration.xtcApiScope()))
+        {
+            String error = "XTC API scope is not configured.";
+            LOGGER.error(error);
+            validationErrors.add(error);
+        }
+
+        if (StringUtils.isBlank(configuration.xtcApiName()))
+        {
+            String error = "XTC API name is not configured.";
+            LOGGER.error(error);
+            validationErrors.add(error);
+        }
+
+        if (StringUtils.isBlank(configuration.xtcApiSurefireResultDirectory()))
+        {
+            String error = "XTC API surefire result directory is not configured.";
+            LOGGER.error(error);
+            validationErrors.add(error);
+        }
+
+        if (StringUtils.isBlank(configuration.xtcApiAllureResultDirectory()))
+        {
+            String error = "XTC API allure result directory is not configured.";
+            LOGGER.error(error);
+            validationErrors.add(error);
+        }
+
+        if (StringUtils.isBlank(configuration.xtcApiAllureReportDirectory()))
+        {
+            String error = "XTC API allure report directory is not configured.";
+            LOGGER.error(error);
+            validationErrors.add(error);
+        }
+
+        // Only throw exception if toggle is enabled and there are validation errors
+        if (!validationErrors.isEmpty() && configuration.xtcApiValidateConfigurationWithException())
+        {
+            throw new IllegalStateException("Configuration validation failed: " + String.join(", ", validationErrors));
+        }
+    }
+
+    public static boolean isXtcApiEnabled()
+    {
+        return configuration.xtcApiIsEnabled();
     }
 }

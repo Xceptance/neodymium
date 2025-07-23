@@ -40,6 +40,10 @@ public interface XtcApiConfiguration extends Mutable
     @Key("xtc.api.secret")
     public String xtcApiSecret();
 
+    @Key("xtc.api.scope")
+    @DefaultValue("TESTEXECUTION_CREATE TESTEXECUTION_FINISH TESTEXECUTION_LIST TESTEXECUTION_REPORT_UPLOAD TESTEXECUTION_UPDATE")
+    public String xtcApiScope();
+
     @Key("xtc.api.name")
     @DefaultValue("${xtc.api.project} test run ${xtc.api.buildNumber}")
     public String xtcApiName();
@@ -77,7 +81,31 @@ public interface XtcApiConfiguration extends Mutable
     @DefaultValue("30000")
     public int xtcApiTimeout();
 
-    @Key("xtc.api.scope")
-    @DefaultValue("TESTEXECUTION_CREATE TESTEXECUTION_FINISH TESTEXECUTION_LIST TESTEXECUTION_REPORT_UPLOAD TESTEXECUTION_UPDATE")
-    public String xtcApiScope();
+    @Key("xtc.api.throwExceptionForRunCreationError")
+    @DefaultValue("true")
+    public boolean xtcApiThrowExceptionForRunCreationError();
+
+    @Key("xtc.api.throwExceptionForRunUpdateError")
+    @DefaultValue("true")
+    public boolean xtcApiThrowExceptionForRunUpdateError();
+
+    @Key("xtc.api.throwExceptionForReportUploadError")
+    @DefaultValue("true")
+    public boolean xtcApiThrowExceptionForReportUploadError();
+
+    @Key("xtc.api.surefireResultDirectory")
+    @DefaultValue("target/surefire-reports")
+    public String xtcApiSurefireResultDirectory();
+
+    @Key("xtc.api.allureResultDirectory")
+    @DefaultValue("target/allure-results")
+    public String xtcApiAllureResultDirectory();
+
+    @Key("xtc.api.allureReportDirectory")
+    @DefaultValue("target/site/allure-maven-plugin")
+    public String xtcApiAllureReportDirectory();
+
+    @Key("xtc.api.validateConfigurationWithException")
+    @DefaultValue("true")
+    public boolean xtcApiValidateConfigurationWithException();
 }
