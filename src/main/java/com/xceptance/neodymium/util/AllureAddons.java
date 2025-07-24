@@ -3,32 +3,7 @@ package com.xceptance.neodymium.util;
 import com.codeborne.selenide.Selenide;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.ScreenshotWriter;
-import io.qameta.allure.Allure;
-import io.qameta.allure.AllureLifecycle;
-import io.qameta.allure.Step;
-import io.qameta.allure.model.StepResult;
-import org.apache.commons.io.FileUtils;
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.TakesScreenshot;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-import org.xml.sax.SAXException;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -47,6 +22,38 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+
+import org.apache.commons.io.FileUtils;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
+
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.common.ScreenshotWriter;
+
+import io.qameta.allure.Allure;
+import io.qameta.allure.AllureLifecycle;
+import io.qameta.allure.Step;
+import io.qameta.allure.model.StepResult;
 import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
 
 /**
@@ -640,6 +647,38 @@ public class AllureAddons
     public static void addDataAsJsonToReport(String name, Object data)
     {
         ObjectMapper mapper = new ObjectMapper();
+
+        // In case we have a long which is out side the value range of JS' Number, we need to have some special
+        // treatment
+        SimpleModule module = new SimpleModule();
+        JsonSerializer<Long> longSerializer = new JsonSerializer<Long>()
+        {
+            @Override
+            public void serialize(Long value, JsonGenerator gen, SerializerProvider serializers)
+                throws IOException
+            {
+                convertValuesOutsideRangeToString(value, gen);
+            }
+
+            private void convertValuesOutsideRangeToString(Long value, JsonGenerator gen) throws IOException
+            {
+                if (value >= 9007199254740991l ||
+                    value <= -9007199254740991l)
+                {
+                    gen.writeString(value.toString() + " (Longs outside JS Number limits are shown as strings)");
+                }
+                else
+                {
+                    gen.writeNumber(value);
+                }
+            }
+        };
+
+        module.addSerializer(Long.class, longSerializer);
+        module.addSerializer(Long.TYPE, longSerializer);
+
+        mapper.registerModule(module);
+
         String dataObjectJson;
 
         try
