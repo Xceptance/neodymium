@@ -4,6 +4,7 @@ import static com.xceptance.neodymium.common.TestStepListener.URL_CHANGED_STEP_M
 import static io.qameta.allure.model.Status.PASSED;
 
 import java.io.IOException;
+import java.util.Random;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,7 +72,11 @@ public class AllureTestStepListener implements StepLifecycleListener
 
         try
         {
-            AllureAddons.attachPNG("beforeStepStop_screenshot_" + System.currentTimeMillis() + "_" + Neodymium.getRandom().nextLong());
+            // We need to add some randomness here. Using the same filename causes issues with parallel executions
+            // Also we can't use neo random since it will initialize and add a step to allure which will trigger an
+            // endless loop resulting in a stack overflow.
+            // But since it's just about internal file temp handling no need to make this number reproducable
+            AllureAddons.attachPNG("beforeStepStop_screenshot_" + System.currentTimeMillis() + "_" + new Random().nextLong());
         }
         catch (IOException e)
         {
