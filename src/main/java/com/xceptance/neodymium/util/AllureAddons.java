@@ -232,7 +232,6 @@ public class AllureAddons
         {
             if (lifecycle.getCurrentTestCase().isEmpty())
             {
-                System.out.println("can NOT do update allure - lifecycle.getCurrentTestCase().isEmpty()");
                 return false;
             }
 
@@ -244,30 +243,19 @@ public class AllureAddons
 
             if (storage.getTestResult(lifecycle.getCurrentTestCase().get()).isPresent()) //FIXME: is this not working correctly with screens on every step???
             {
-                System.out.println("can do update allure - storage.getTestResult(lifecycle.getCurrentTestCase().get()).isPresent()");
                 // now let's check if there are any steps ins
                 AtomicBoolean hasSteps = new AtomicBoolean(false);
                 lifecycle.updateTestCase((result) -> {
                     hasSteps.set(result.getSteps().isEmpty() == false);
                 });
-                System.out.println("can do update allure? - hasSteps() == " + hasSteps.get());
                 return hasSteps.get();
             }
-            else
-            {
-                System.out.println("can  NOT do update allure - storage.getTestResult(lifecycle.getCurrentTestCase().get()).isPresent() == false");
-
-            }
-            
         }
         catch (NoSuchFieldException | IllegalAccessException e)
         {
             LOGGER.error(e.getMessage(), e);
-            System.out.println("can NOT update allure -> exception");
             return false;
         }
-
-        System.out.println("can NOT update allure ... for reasons???");
         return false;
     }
 
@@ -294,8 +282,6 @@ public class AllureAddons
             lifecycle.addAttachment(name, type, fileExtension, stream);
 
             lifecycle.updateTestCase((result) -> {
-                System.out.println("add attachment to Step " + name);
-
                 var stepResult = findLastStep(result.getSteps());
                 Optional<io.qameta.allure.model.Attachment> addedAttachmentInOuterStep = result.getAttachments().stream().filter(a -> a.getName().equals(name))
                                                                                                .findFirst();
@@ -368,7 +354,6 @@ public class AllureAddons
      */
     private static StepResult findLastStep(List<StepResult> steps)
     {
-        System.out.println("findCurrentStep " + steps);
         var lastStep = steps.get(steps.size() - 1);
         List<StepResult> childStepts = lastStep.getSteps();
         if (childStepts != null && childStepts.isEmpty() == false)
