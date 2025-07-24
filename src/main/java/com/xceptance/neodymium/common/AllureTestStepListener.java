@@ -1,16 +1,19 @@
 package com.xceptance.neodymium.common;
 
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.Neodymium;
-import io.qameta.allure.listener.StepLifecycleListener;
-import io.qameta.allure.model.StepResult;
+import static com.xceptance.neodymium.common.TestStepListener.URL_CHANGED_STEP_MESSAGE;
+import static io.qameta.allure.model.Status.PASSED;
+
+import java.io.IOException;
+import java.util.Random;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
+import com.xceptance.neodymium.util.AllureAddons;
+import com.xceptance.neodymium.util.Neodymium;
 
-import static com.xceptance.neodymium.common.TestStepListener.URL_CHANGED_STEP_MESSAGE;
-import static io.qameta.allure.model.Status.PASSED;
+import io.qameta.allure.listener.StepLifecycleListener;
+import io.qameta.allure.model.StepResult;
 
 public class AllureTestStepListener implements StepLifecycleListener
 {
@@ -69,7 +72,11 @@ public class AllureTestStepListener implements StepLifecycleListener
 
         try
         {
-            AllureAddons.attachPNG("beforeStepStop_screenshot");
+            // We need to add some randomness here. Using the same filename causes issues with parallel executions
+            // Also we can't use neo random since it will initialize and add a step to allure which will trigger an
+            // endless loop resulting in a stack overflow.
+            // But since it's just about internal file temp handling no need to make this number reproducable
+            AllureAddons.attachPNG("beforeStepStop_screenshot_" + System.currentTimeMillis() + "_" + new Random().nextLong());
         }
         catch (IOException e)
         {

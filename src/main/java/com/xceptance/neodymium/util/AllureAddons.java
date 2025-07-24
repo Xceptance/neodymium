@@ -1,14 +1,12 @@
 package com.xceptance.neodymium.util;
 
-import com.codeborne.selenide.Selenide;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.core.JsonProcessingException;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -20,6 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -42,6 +41,9 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
+import com.codeborne.selenide.Selenide;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,6 +55,7 @@ import com.xceptance.neodymium.common.ScreenshotWriter;
 import io.qameta.allure.Allure;
 import io.qameta.allure.AllureLifecycle;
 import io.qameta.allure.Step;
+import io.qameta.allure.internal.AllureStorage;
 import io.qameta.allure.model.StepResult;
 import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
 
@@ -84,6 +87,17 @@ public class AllureAddons
      */
     @Step("INFO: {info}")
     public static void addToReport(String info, Object content)
+    {
+    }
+
+    /**
+     * Define a step without return value. This can be used to transport a simple message from test into the report.
+     *
+     * @param message
+     *            the message to print directly into the report
+     */
+    @Step("{message}")
+    public static void printToReport(String message)
     {
     }
 
@@ -154,7 +168,7 @@ public class AllureAddons
             return;
         }
 
-        if (Neodymium.configuration().enableAdvancedScreenShots() == false)
+        if (Neodymium.configuration().enableAdvancedScreenShots() == true)
         {
             ScreenshotWriter.doScreenshot(filename);
         }
@@ -163,8 +177,9 @@ public class AllureAddons
             // take a screenshot using the driver and write it to a file
             byte[] screenshot = ((TakesScreenshot) Neodymium.getDriver()).getScreenshotAs(OutputType.BYTES);
             FileUtils.writeByteArrayToFile(new File(filename), screenshot);
-
-            addAttachmentToStep("Screenshot", "image/png", ".png", new FileInputStream(filename));
+            //add to the allure report, no need put it into the correct step, since it will be there already during the normal execution context. 
+            // Only on exception we don't know where to put it and that is handled elsewhere
+            Allure.getLifecycle().addAttachment("Screenshot", "image/png", ".png", new FileInputStream(filename));
 
             new File(filename).delete();
         }
@@ -179,11 +194,12 @@ public class AllureAddons
     {
 
         AllureLifecycle lifecycle = Allure.getLifecycle();
+
         // suppress errors if we are running without allure
-        if (lifecycle.getCurrentTestCase().isPresent())
+        if (canUpdateAllureTest())
         {
             lifecycle.updateTestCase((result) -> {
-                var stepResult = findCurrentStep(result.getSteps());
+                var stepResult = findLastStep(result.getSteps());
                 var attachments = stepResult.getAttachments();
                 for (int i = 0; i < attachments.size(); i++)
                 {
@@ -205,6 +221,48 @@ public class AllureAddons
         }
     }
 
+    /**
+     * In before methods we will get a lot of error messages since internally Allure is has the current test not
+     * available.
+     * 
+     * @param lifecycle
+     * @return whether or not we can update the allure test case
+     */
+    public static boolean canUpdateAllureTest()
+    {
+        AllureLifecycle lifecycle = Allure.getLifecycle();
+
+        try
+        {
+            if (lifecycle.getCurrentTestCase().isEmpty())
+            {
+                return false;
+            }
+
+            Field storageField = AllureLifecycle.class.getDeclaredField("storage");
+
+            storageField.setAccessible(true);
+
+            AllureStorage storage = (AllureStorage) storageField.get(lifecycle);
+
+            if (storage.getTestResult(lifecycle.getCurrentTestCase().get()).isPresent()) //FIXME: is this not working correctly with screens on every step???
+            {
+                // now let's check if there are any steps ins
+                AtomicBoolean hasSteps = new AtomicBoolean(false);
+                lifecycle.updateTestCase((result) -> {
+                    hasSteps.set(result.getSteps().isEmpty() == false);
+                });
+                return hasSteps.get();
+            }
+        }
+        catch (NoSuchFieldException | IllegalAccessException e)
+        {
+            LOGGER.error(e.getMessage(), e);
+            return false;
+        }
+        return false;
+    }
+
     /***
      * Add an Allure attachment to the current step instead of to the overall test case.
      * 
@@ -223,13 +281,12 @@ public class AllureAddons
     {
         AllureLifecycle lifecycle = Allure.getLifecycle();
         // suppress errors if we are running without allure
-        if (lifecycle.getCurrentTestCase().isPresent())
+        if (canUpdateAllureTest())
         {
             lifecycle.addAttachment(name, type, fileExtension, stream);
 
             lifecycle.updateTestCase((result) -> {
-                var stepResult = findCurrentStep(result.getSteps());
-
+                var stepResult = findLastStep(result.getSteps());
                 Optional<io.qameta.allure.model.Attachment> addedAttachmentInOuterStep = result.getAttachments().stream().filter(a -> a.getName().equals(name))
                                                                                                .findFirst();
 
@@ -250,40 +307,47 @@ public class AllureAddons
      * Adds a step with the given information before the current step
      *
      * @param info
-     *     message to be displayed before the step
+     *            message to be displayed before the step
      */
     public static void addInfoBeforeStep(final String info)
     {
         AllureLifecycle lifecycle = Allure.getLifecycle();
 
-        lifecycle.updateTestCase((testResult -> {
-            int position = testResult.getSteps().isEmpty() ? 0 : testResult.getSteps().size() - 1;
+        if (canUpdateAllureTest())
+        {
 
-            testResult.getSteps().add(position, new StepResult()
-                .setName(info)
-                .setStart(System.currentTimeMillis())
-                .setStatus(io.qameta.allure.model.Status.PASSED)
-                .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
-        }));
+            lifecycle.updateTestCase((testResult -> {
+                int position = testResult.getSteps().isEmpty() ? 0 : testResult.getSteps().size() - 1;
+
+                testResult.getSteps().add(position, new StepResult()
+                                                                    .setName(info)
+                                                                    .setStart(System.currentTimeMillis())
+                                                                    .setStatus(io.qameta.allure.model.Status.PASSED)
+                                                                    .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
+            }));
+        }
     }
 
     /**
      * Adds a step with the given information as the first step of the test case.
      *
      * @param info
-     *     message to be displayed as the first step
+     *            message to be displayed as the first step
      */
     public static void addInfoAsFirstStep(final String info)
     {
         AllureLifecycle lifecycle = Allure.getLifecycle();
+        if (canUpdateAllureTest())
+        {
 
-        lifecycle.updateTestCase((testResult -> {
-            testResult.getSteps().add(0, new StepResult()
-                .setName(info)
-                .setStart(System.currentTimeMillis())
-                .setStatus(io.qameta.allure.model.Status.PASSED)
-                .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
-        }));
+            lifecycle.updateTestCase((testResult -> {
+                testResult.getSteps().add(0, new StepResult()
+                                                             .setName(info)
+                                                             .setStart(System.currentTimeMillis())
+                                                             .setStatus(io.qameta.allure.model.Status.PASSED)
+                                                             .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
+            }));
+        }
     }
 
     /**
@@ -292,13 +356,13 @@ public class AllureAddons
      * @param steps
      * @return
      */
-    private static StepResult findCurrentStep(List<StepResult> steps)
+    private static StepResult findLastStep(List<StepResult> steps)
     {
         var lastStep = steps.get(steps.size() - 1);
         List<StepResult> childStepts = lastStep.getSteps();
         if (childStepts != null && childStepts.isEmpty() == false)
         {
-            return findCurrentStep(childStepts);
+            return findLastStep(childStepts);
         }
         return lastStep;
     }
@@ -309,8 +373,8 @@ public class AllureAddons
     }
 
     /**
-     * Adds information about environment to the report, if a key is already present in the map the current value will be
-     * kept
+     * Adds information about environment to the report, if a key is already present in the map the current value will
+     * be kept
      * 
      * @param environmentValuesSet
      *            map with environment values
@@ -606,9 +670,12 @@ public class AllureAddons
         {
             // These values should be the same for all running JVMs. If there are differences in the values, it would we
             // good to see it in the report
-            // AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder().putAll(environmentDataMap).build(), EnvironmentInfoMode.ADD);
+            // AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String>
+            // builder().putAll(environmentDataMap).build(), EnvironmentInfoMode.ADD);
             AllureAddons.addEnvironmentInformation(
-                ImmutableMap.<String, String> builder().putAll(removePrefixFromMap(environmentDataMap, customDataIdentifier)).build(), EnvironmentInfoMode.ADD);
+                                                   ImmutableMap.<String, String> builder().putAll(removePrefixFromMap(environmentDataMap, customDataIdentifier))
+                                                               .build(),
+                                                   EnvironmentInfoMode.ADD);
         }
     }
 
@@ -616,9 +683,9 @@ public class AllureAddons
      * Removes the prefix from the keys in the map.
      *
      * @param map
-     *     the map to process
+     *            the map to process
      * @param prefix
-     *     the prefix to remove
+     *            the prefix to remove
      * @return a new map with the prefix removed from the keys
      */
     private static Map<String, String> removePrefixFromMap(Map<String, String> map, String prefix)

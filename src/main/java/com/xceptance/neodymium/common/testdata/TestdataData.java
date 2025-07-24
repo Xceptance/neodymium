@@ -127,7 +127,9 @@ public class TestdataData extends Data
             // take dataSetId (testId) if its set
             if (dataSetId != null && dataSetId.trim().length() > 0)
             {
-                List<TestdataContainer> foundDataSet = avaliableDataSets.stream().filter(dataSet -> dataSet.getDataSet().get(TEST_ID).equals(dataSetId))
+                List<TestdataContainer> foundDataSet = avaliableDataSets.stream()
+                                                                        .filter(dataSet -> dataSet.getDataSet().get(TEST_ID) != null
+                                                                                           && dataSet.getDataSet().get(TEST_ID).equals(dataSetId))
                                                                         .collect(Collectors.toList());
                 if (foundDataSet.isEmpty())
                 {

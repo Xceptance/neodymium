@@ -1,10 +1,10 @@
 package com.xceptance.neodymium.util;
 
+import java.util.Random;
+
 import org.apache.commons.text.TextRandomProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Random;
 
 /**
  * Utility class for random numbers and strings.
@@ -39,7 +39,7 @@ public class NeodymiumRandom
          * Creates a new {@link InternalRandom} and initializes it with the given seed.
          *
          * @param seed
-         *     the seed
+         *            the seed
          */
         public InternalRandom(long seed)
         {
@@ -70,7 +70,8 @@ public class NeodymiumRandom
         }
 
         /**
-         * Reinitializes the current thread's random number generator with a new seed value that is derived from the current seed.
+         * Reinitializes the current thread's random number generator with a new seed value that is derived from the
+         * current seed.
          */
         public synchronized void reseed()
         {
@@ -96,11 +97,12 @@ public class NeodymiumRandom
     };
 
     /**
-     * Reinitializes the current thread's random number generator with the given seed value. Use this method together with {@link #getSeed()} to reset the
-     * random number generator to a defined state in which it will produce the same sequence of random numbers.
+     * Reinitializes the current thread's random number generator with the given seed value. Use this method together
+     * with {@link #getSeed()} to reset the random number generator to a defined state in which it will produce the same
+     * sequence of random numbers.
      *
      * @param seed
-     *     the seed
+     *            the seed
      */
     public static void setSeed(long seed)
     {
@@ -109,8 +111,9 @@ public class NeodymiumRandom
     }
 
     /**
-     * Returns the seed that was used to initialize the current thread's random number generator. Use this method together with {@link #setSeed(long)} to reset
-     * the random number generator to a defined state in which it will produce the same sequence of random numbers.
+     * Returns the seed that was used to initialize the current thread's random number generator. Use this method
+     * together with {@link #setSeed(long)} to reset the random number generator to a defined state in which it will
+     * produce the same sequence of random numbers.
      *
      * @return the seed
      */
@@ -120,7 +123,8 @@ public class NeodymiumRandom
     }
 
     /**
-     * Reinitializes the current thread's random number generator with a new seed value that is derived from the current seed.
+     * Reinitializes the current thread's random number generator with a new seed value that is derived from the current
+     * seed.
      */
     public static void reseed()
     {
@@ -175,8 +179,8 @@ public class NeodymiumRandom
     }
 
     /**
-     * Returns a random boolean value where the probability that <code>true</code> is returned is given as parameter. The probability value has to be specified
-     * in the range of 0-100.
+     * Returns a random boolean value where the probability that <code>true</code> is returned is given as parameter.
+     * The probability value has to be specified in the range of 0-100.
      * <ul>
      * <li>&le; 0 - never returns <code>true</code></li>
      * <li>1..99 - the probability of <code>true</code> being returned</li>
@@ -184,7 +188,7 @@ public class NeodymiumRandom
      * </ul>
      *
      * @param trueCaseProbability
-     *     the probability of <code>true</code> being returned
+     *            the probability of <code>true</code> being returned
      * @return a random boolean value
      */
     public static boolean nextBoolean(final int trueCaseProbability)
@@ -210,7 +214,7 @@ public class NeodymiumRandom
 
     /**
      * @param bytes
-     *     the byte array to fill with random bytes
+     *            the byte array to fill with random bytes
      * @see java.util.Random#nextBytes(byte[])
      */
     public static void nextBytes(final byte[] bytes)
@@ -261,10 +265,11 @@ public class NeodymiumRandom
 
     /**
      * @param n
-     *     upper bound (exclusive)
+     *            upper bound (exclusive)
      * @return a random int value
-     * @see java.util.Random#nextInt(int) <br> ATTENTION: A difference to the standard implementation is that we return 0 for n=0 instead of an
-     *     IllegalArgumentException
+     * @see java.util.Random#nextInt(int) <br>
+     *      ATTENTION: A difference to the standard implementation is that we return 0 for n=0 instead of an
+     *      IllegalArgumentException
      */
     public static int nextInt(final int n)
     {
@@ -303,10 +308,10 @@ public class NeodymiumRandom
      * Returns a random number based on a given array of integers.
      *
      * @param data
-     *     an array with integers to choose from
+     *            an array with integers to choose from
      * @return a random number from the array
      * @throws ArrayIndexOutOfBoundsException
-     *     will be thrown when an empty array is given
+     *             will be thrown when an empty array is given
      */
     public static int getRandom(final int[] data)
     {
@@ -322,12 +327,13 @@ public class NeodymiumRandom
     }
 
     /**
-     * Returns a pseudo-random, uniformly distributed number that lies within the range from [base - deviation, base + deviation].
+     * Returns a pseudo-random, uniformly distributed number that lies within the range from [base - deviation, base +
+     * deviation].
      *
      * @param base
-     *     base integer for the number
+     *            base integer for the number
      * @param deviation
-     *     the maximum deviation from base
+     *            the maximum deviation from base
      * @return a random number
      */
     public static int nextIntWithDeviation(final int base, int deviation)
@@ -351,9 +357,9 @@ public class NeodymiumRandom
      * Returns a pseudo-random, uniformly distributed number that lies within the range from [minimum, maximum].
      *
      * @param minimum
-     *     the minimum value (inclusive)
+     *            the minimum value (inclusive)
      * @param maximum
-     *     the maximum value (inclusive)
+     *            the maximum value (inclusive)
      * @return a random number
      */
     public static int nextInt(final int minimum, final int maximum)
@@ -383,16 +389,28 @@ public class NeodymiumRandom
         {
             case INITIALIZED:
                 String infoText = "INFO: random initialized with seed: " + getSeed();
-
-                AllureAddons.addInfoAsFirstStep(infoText);
+                if (AllureAddons.canUpdateAllureTest())
+                {
+                    AllureAddons.addInfoAsFirstStep(infoText);
+                }
+                else
+                {
+                    AllureAddons.printToReport(infoText);
+                }
                 LOGGER.info(infoText);
                 seedState = SeedState.LOGGED;
                 break;
-                
+
             case RESEEDED:
                 infoText = "INFO: random reseeded with seed: " + getSeed();
-
-                AllureAddons.addInfoBeforeStep(infoText);
+                if (AllureAddons.canUpdateAllureTest())
+                {
+                    AllureAddons.addInfoBeforeStep(infoText);
+                }
+                else
+                {
+                    AllureAddons.printToReport(infoText);
+                }
                 LOGGER.info(infoText);
                 seedState = SeedState.LOGGED;
                 break;
