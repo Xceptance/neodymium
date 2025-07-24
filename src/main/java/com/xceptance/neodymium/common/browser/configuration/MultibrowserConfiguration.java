@@ -77,6 +77,7 @@ public class MultibrowserConfiguration
         browserProfileProperties.put("browserprofile." + DEFAULT_BROWSER_ID + ".browserResolution",
                                      Optional.ofNullable(Configuration.browserSize).orElse("1920x1080"));
         browserProfileProperties.put("browserprofile." + DEFAULT_BROWSER_ID + ".arguments", "-ignore-certificate-errors");
+        browserProfileProperties.put("browserprofile." + DEFAULT_BROWSER_ID + ".preferences", "profile.password_manager_leak_detection=false;");
 
         parseBrowserProfiles();
     }
