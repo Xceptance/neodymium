@@ -185,11 +185,11 @@ public class ScreenshotWriter
             if (AllureAddons.canUpdateAllureTest() && testStage != TestStage.AFTER_EACH)
             {
                 AllureAddons.removeAttachmentFromStepByName("Screenshot");
-                screenshotAdded = AllureAddons.addAttachmentToStep("Screenshot"+Neodymium.getRandom().nextInt(), "image/png", ".png", new FileInputStream(imagePath));
+                screenshotAdded = AllureAddons.addAttachmentToStep("Screenshot", "image/png", ".png", new FileInputStream(imagePath));
             }
             else
             {
-                Allure.getLifecycle().addAttachment("ScreenshotY", "image/png", ".png", new FileInputStream(imagePath));
+                Allure.getLifecycle().addAttachment("Screenshot", "image/png", ".png", new FileInputStream(imagePath));
                 screenshotAdded = true;
             }
 
