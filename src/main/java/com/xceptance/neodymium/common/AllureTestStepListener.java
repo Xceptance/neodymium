@@ -1,16 +1,18 @@
 package com.xceptance.neodymium.common;
 
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.Neodymium;
-import io.qameta.allure.listener.StepLifecycleListener;
-import io.qameta.allure.model.StepResult;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static com.xceptance.neodymium.common.TestStepListener.URL_CHANGED_STEP_MESSAGE;
+import static io.qameta.allure.model.Status.PASSED;
 
 import java.io.IOException;
 
-import static com.xceptance.neodymium.common.TestStepListener.URL_CHANGED_STEP_MESSAGE;
-import static io.qameta.allure.model.Status.PASSED;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.xceptance.neodymium.util.AllureAddons;
+import com.xceptance.neodymium.util.Neodymium;
+
+import io.qameta.allure.listener.StepLifecycleListener;
+import io.qameta.allure.model.StepResult;
 
 public class AllureTestStepListener implements StepLifecycleListener
 {
@@ -69,7 +71,7 @@ public class AllureTestStepListener implements StepLifecycleListener
 
         try
         {
-            AllureAddons.attachPNG("beforeStepStop_screenshot");
+            AllureAddons.attachPNG("beforeStepStop_screenshot_" + System.currentTimeMillis() + "_" + Neodymium.getRandom().nextLong());
         }
         catch (IOException e)
         {
