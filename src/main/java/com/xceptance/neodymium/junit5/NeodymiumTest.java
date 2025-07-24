@@ -8,6 +8,8 @@ import java.lang.annotation.Target;
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import com.xceptance.neodymium.junit5.testend.BeforeEachExceptionHandlerExtension;
+
 import io.qameta.allure.junit5.AllureJunit5;
 
 @Retention(RetentionPolicy.RUNTIME)
@@ -18,7 +20,8 @@ import io.qameta.allure.junit5.AllureJunit5;
 @TestTemplate
 @ExtendWith(
 {
-  NeodymiumRunner.class, AllureJunit5.class
+  NeodymiumRunner.class, AllureJunit5.class, BeforeEachExceptionHandlerExtension.class
+
 })
 public @interface NeodymiumTest
 {
