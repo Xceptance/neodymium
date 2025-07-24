@@ -11,6 +11,7 @@ import com.xceptance.neodymium.junit4.statement.browser.BrowserRunBefores;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.NeodymiumRandom;
 import io.qameta.allure.selenide.AllureSelenide;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
@@ -158,7 +159,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         }
 
         // reset the random seed so every test starts with the same values for better reproducibility
-        reinitializeRandomSeed();
+        reinitializeRandomSeed(NeodymiumRandom.SeedState.INITIALIZED);
 
         return methodStatement;
     }
