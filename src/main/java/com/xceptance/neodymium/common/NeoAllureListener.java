@@ -1,10 +1,9 @@
-package com.xceptance.neodymium.junit5.testend;
+package com.xceptance.neodymium.common;
 
 import java.io.IOException;
 
 import com.codeborne.selenide.ex.UIAssertionError;
 import com.codeborne.selenide.logevents.LogEvent;
-import com.xceptance.neodymium.common.ScreenshotWriter;
 import com.xceptance.neodymium.util.Neodymium;
 
 import io.qameta.allure.selenide.AllureSelenide;
@@ -32,9 +31,6 @@ public class NeoAllureListener extends AllureSelenide
                 throw new RuntimeException("Could not take screenshot", e);
             }
         }
-        else
-        {
-            super.afterEvent(event);
-        }
+        super.afterEvent(event);
     }
 }

@@ -4,7 +4,6 @@ import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 import com.xceptance.neodymium.common.ScreenshotWriter;
-import com.xceptance.neodymium.common.TestStage;
 
 public class NeodymiumAfterTestExecutionCallback implements AfterTestExecutionCallback
 {
@@ -12,6 +11,6 @@ public class NeodymiumAfterTestExecutionCallback implements AfterTestExecutionCa
     public void afterTestExecution(ExtensionContext context) throws Exception
     {
         ScreenshotWriter.doScreenshot(context.getRequiredTestMethod().getName(), context.getRequiredTestClass().getName(), context.getExecutionException(),
-                                      context.getRequiredTestMethod().getAnnotations(), TestStage.TEST);
+                                      context.getRequiredTestMethod().getAnnotations());
     }
 }
