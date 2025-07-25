@@ -81,21 +81,21 @@ public class ScreenshotWriter
             }
 
             String pathName = getFormatedReportsPath() + File.separator + testClassName;
-            if (Neodymium.configuration().enableOnSuccess())
+            if (Neodymium.configuration().enableOnSuccess() && executionException.isEmpty())
             {
                 doScreenshot(imageName, pathName, testStage);
             }
-            else
-            {
-                if (executionException.isPresent())
-                {
-                    Throwable error = executionException.get();
-                    if (error instanceof UIAssertionError)
-                    {
-                        doScreenshot(imageName, pathName, testStage);
-                    }
-                }
-            }
+//            else
+//            {
+//                if (executionException.isPresent())
+//                {
+//                    Throwable error = executionException.get();
+//                    if (error instanceof UIAssertionError)
+//                    {
+//                        doScreenshot(imageName, pathName, testStage);
+//                    }
+//                }
+//            }
         }
     }
 
@@ -182,16 +182,16 @@ public class ScreenshotWriter
             // but for before methods, this is not possible due to allure limitations
             // so we just add it normally when the allure lifecycle does not allow to be altered
             boolean screenshotAdded;
-            if (AllureAddons.canUpdateAllureTest() && testStage != TestStage.AFTER_EACH)
-            {
-                AllureAddons.removeAttachmentFromStepByName("Screenshot");
-                screenshotAdded = AllureAddons.addAttachmentToStep("Screenshot", "image/png", ".png", new FileInputStream(imagePath));
-            }
-            else
-            {
-                Allure.getLifecycle().addAttachment("Screenshot", "image/png", ".png", new FileInputStream(imagePath));
+//            if (AllureAddons.canUpdateAllureTest() && testStage != TestStage.AFTER_EACH)
+//            {
+//                AllureAddons.removeAttachmentFromStepByName("Screenshot");
+//                screenshotAdded = AllureAddons.addAttachmentToStep("Screenshot-"+testStage, "image/png", ".png", new FileInputStream(imagePath));
+//            }
+//            else
+//            {
+                Allure.getLifecycle().addAttachment("Screenshot-"+testStage, "image/png", ".png", new FileInputStream(imagePath));
                 screenshotAdded = true;
-            }
+//            }
 
             // to spare disk space, remove the file if we already used it inside the report
             if (screenshotAdded)
