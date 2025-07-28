@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
@@ -79,6 +80,27 @@ public class BrowserData extends Data
         {
             return browserAnnotations;
         }
+    }
+
+    /**
+     * function to check if the given class or a super class has a {@link SuppressBrowsers} annotation
+     * 
+     * @param clazz
+     *            the class to test
+     * @return boolean value depending on {@link SuppressBrowsers} annotation is found
+     */
+    private boolean hasClassOrSuperClassSuppressBrowsersAnnotation(Class<?> clazz)
+    {
+        // iterate to the parent classes until a SuppressBrowsers annotation is found or the class has no super class anymore
+        while (clazz != null)
+        {
+            if (!getDeclaredAnnotations(clazz, SuppressBrowsers.class).isEmpty())
+            {
+                return true;
+            }
+            clazz = clazz.getSuperclass();
+        }
+        return false;
     }
 
     @SuppressWarnings("unchecked")
@@ -169,9 +191,11 @@ public class BrowserData extends Data
     {
         List<String> browsers = new LinkedList<>();
         List<String> methodBrowsers = new LinkedList<>();
+        List<BrowserMethodData> browsersToUse;
+
         if (getAnnotations(testMethod, SuppressBrowsers.class).isEmpty())
         {
-            methodBrowsers = getAnnotations(testMethod, Browser.class).stream().map(annotation -> annotation.value()).distinct()
+            methodBrowsers = getAnnotations(testMethod, Browser.class).stream().map(Browser::value).distinct()
                                                                       .collect(Collectors.toList());
             if (!methodBrowsers.isEmpty())
             {
@@ -199,14 +223,19 @@ public class BrowserData extends Data
         }
         if (systemBrowserFilter != null && !systemBrowserFilter.isEmpty())
         {
-            return browsers.stream()
-                           .filter(browserTag -> systemBrowserFilter.contains(browserTag))
-                           .map(browserTag -> addKeepBrowserOpenInformation(browserTag, testMethod))
-                           .collect(Collectors.toList());
+            browsersToUse = browsers.stream()
+                                    .filter(browserTag -> systemBrowserFilter.contains(browserTag))
+                                    .map(browserTag -> addKeepBrowserOpenInformation(browserTag, testMethod))
+                                    .collect(Collectors.toList());
         }
-        return browsers.stream()
-                       .map(browserTag -> addKeepBrowserOpenInformation(browserTag, testMethod))
-                       .collect(Collectors.toList());
+        else
+        {
+            browsersToUse = browsers.stream()
+                                    .map(browserTag -> addKeepBrowserOpenInformation(browserTag, testMethod))
+                                    .collect(Collectors.toList());
+        }
+
+        return browsersToUse;
     }
 
     public static BrowserMethodData addKeepBrowserOpenInformationForBeforeOrAfter(String browserTag, Method method)
@@ -254,10 +283,10 @@ public class BrowserData extends Data
     {
         BrowserMethodData browserMethodData = addKeepBrowserOpenInformationForBeforeOrAfter(browserTag, method);
         boolean junit5 = method.getAnnotation(NeodymiumTest.class) != null;
-        List<Method> afterMethodsWithTestBrowser = List.of(testClass.getMethods()).stream()
-                                                       .filter(classMethod -> (junit5 ? classMethod.getAnnotation(AfterEach.class)
+        List<Method> afterMethodsWithTestBrowser = Stream.of(testClass.getMethods())
+                                                         .filter(classMethod -> (junit5 ? classMethod.getAnnotation(AfterEach.class)
                                                                                       : classMethod.getAnnotation(After.class)) != null)
-                                                       .collect(Collectors.toList());
+                                                         .collect(Collectors.toList());
         if (!(Neodymium.configuration().startNewBrowserForSetUp() && Neodymium.configuration().startNewBrowserForCleanUp()))
         {
             browserMethodData.setAfterMethodsWithTestBrowser(afterMethodsWithTestBrowser);
@@ -271,11 +300,10 @@ public class BrowserData extends Data
         {
             separateBrowserForSetupRequired = Neodymium.configuration().startNewBrowserForSetUp()
                                               && (testClass.getAnnotation(StartNewBrowserForSetUp.class) != null
-                                                  || List.of(testClass.getMethods()).stream()
-                                                         .filter(classMethod -> (junit5 ? classMethod.getAnnotation(BeforeEach.class)
-                                                                                        : classMethod.getAnnotation(Before.class)) != null
-                                                                                && classMethod.getAnnotation(StartNewBrowserForSetUp.class) != null)
-                                                         .findAny().isPresent());
+                                                  || Stream.of(testClass.getMethods())
+                                                           .anyMatch(classMethod -> (junit5 ? classMethod.getAnnotation(BeforeEach.class)
+                                                                                            : classMethod.getAnnotation(Before.class)) != null
+                                                                                    && classMethod.getAnnotation(StartNewBrowserForSetUp.class) != null));
         }
         if (Neodymium.configuration().startNewBrowserForCleanUp())
         {

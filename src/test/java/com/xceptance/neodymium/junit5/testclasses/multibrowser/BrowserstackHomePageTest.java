@@ -1,16 +1,15 @@
 package com.xceptance.neodymium.junit5.testclasses.multibrowser;
 
+import com.codeborne.selenide.Selenide;
+import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.junit.jupiter.api.Assertions;
+
 import static com.codeborne.selenide.CollectionCondition.sizeGreaterThan;
 import static com.codeborne.selenide.Condition.matchText;
 import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
-
-import org.junit.jupiter.api.Assertions;
-
-import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
 
 @Browser("Safari_Browserstack")
 public class BrowserstackHomePageTest
@@ -32,10 +31,10 @@ public class BrowserstackHomePageTest
         $("#navigation .navbar-brand a").shouldBe(visible);
 
         // Verifies the Navigation bar is visible
-        $("#navigation .navbar-header ul.nav").shouldBe(visible);
+        $("#navigation ul.nav").shouldBe(visible);
 
         // Asserts there's categories in the nav bar.
-        $$("#navigation .navbar-header ul.nav > li > a").shouldHave(sizeGreaterThan(0));
+        $$("#navigation ul.nav > li > a").shouldHave(sizeGreaterThan(0));
 
         // Asserts the first headline is there.
         $("#main h1").shouldBe(matchText("[A-Z].{3,}"));

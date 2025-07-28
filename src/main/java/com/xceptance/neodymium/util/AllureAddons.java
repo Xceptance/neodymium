@@ -1,6 +1,11 @@
 package com.xceptance.neodymium.util;
 
+import com.codeborne.selenide.Selenide;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.core.JsonProcessingException;
+
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,6 +17,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -25,6 +31,7 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.apache.commons.io.FileUtils;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.slf4j.Logger;
@@ -35,18 +42,19 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
-import com.codeborne.selenide.Selenide;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.ScreenshotWriter;
 
 import io.qameta.allure.Allure;
 import io.qameta.allure.AllureLifecycle;
-import io.qameta.allure.Attachment;
 import io.qameta.allure.Step;
 import io.qameta.allure.model.StepResult;
+import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
 
 /**
  * Convenience methods for step definitions
@@ -138,16 +146,27 @@ public class AllureAddons
      * @param filename
      * @throws IOException
      */
-    @Attachment(type = "image/png", value = "{filename}", fileExtension = ".png")
     public static void attachPNG(final String filename) throws IOException
     {
+        // if we are running without a driver, we can't take a screenshot
+        if (!Neodymium.hasDriver())
+        {
+            return;
+        }
+
         if (Neodymium.configuration().enableAdvancedScreenShots() == false)
         {
-            ((TakesScreenshot) Neodymium.getDriver()).getScreenshotAs(OutputType.BYTES);
+            ScreenshotWriter.doScreenshot(filename);
         }
         else
         {
-            ScreenshotWriter.doScreenshot(filename);
+            // take a screenshot using the driver and write it to a file
+            byte[] screenshot = ((TakesScreenshot) Neodymium.getDriver()).getScreenshotAs(OutputType.BYTES);
+            FileUtils.writeByteArrayToFile(new File(filename), screenshot);
+
+            addAttachmentToStep("Screenshot", "image/png", ".png", new FileInputStream(filename));
+
+            new File(filename).delete();
         }
     }
 
@@ -210,13 +229,61 @@ public class AllureAddons
 
             lifecycle.updateTestCase((result) -> {
                 var stepResult = findCurrentStep(result.getSteps());
-                var attachment = result.getAttachments().get(result.getAttachments().size() - 1);
-                result.getAttachments().remove(result.getAttachments().size() - 1);
-                stepResult.getAttachments().add(attachment);
+
+                Optional<io.qameta.allure.model.Attachment> addedAttachmentInOuterStep = result.getAttachments().stream().filter(a -> a.getName().equals(name))
+                                                                                               .findFirst();
+
+                boolean isAttachmentInCurrentStep = stepResult.getAttachments().stream().anyMatch(a -> a.getName().equals(name));
+                if (!isAttachmentInCurrentStep && addedAttachmentInOuterStep.isPresent())
+                {
+                    stepResult.getAttachments().add(addedAttachmentInOuterStep.get());
+                }
+
+                addedAttachmentInOuterStep.ifPresent(attachment -> result.getAttachments().remove(attachment));
             });
             return true;
         }
         return false;
+    }
+
+    /**
+     * Adds a step with the given information before the current step
+     *
+     * @param info
+     *     message to be displayed before the step
+     */
+    public static void addInfoBeforeStep(final String info)
+    {
+        AllureLifecycle lifecycle = Allure.getLifecycle();
+
+        lifecycle.updateTestCase((testResult -> {
+            int position = testResult.getSteps().isEmpty() ? 0 : testResult.getSteps().size() - 1;
+
+            testResult.getSteps().add(position, new StepResult()
+                .setName(info)
+                .setStart(System.currentTimeMillis())
+                .setStatus(io.qameta.allure.model.Status.PASSED)
+                .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
+        }));
+    }
+
+    /**
+     * Adds a step with the given information as the first step of the test case.
+     *
+     * @param info
+     *     message to be displayed as the first step
+     */
+    public static void addInfoAsFirstStep(final String info)
+    {
+        AllureLifecycle lifecycle = Allure.getLifecycle();
+
+        lifecycle.updateTestCase((testResult -> {
+            testResult.getSteps().add(0, new StepResult()
+                .setName(info)
+                .setStart(System.currentTimeMillis())
+                .setStatus(io.qameta.allure.model.Status.PASSED)
+                .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
+        }));
     }
 
     /**
@@ -242,8 +309,8 @@ public class AllureAddons
     }
 
     /**
-     * Adds information about environment to the report, if a key is already present in the map the current value will
-     * be kept
+     * Adds information about environment to the report, if a key is already present in the map the current value will be
+     * kept
      * 
      * @param environmentValuesSet
      *            map with environment values
@@ -518,11 +585,12 @@ public class AllureAddons
     public static void initializeEnvironmentInformation()
     {
         Map<String, String> environmentDataMap = new HashMap<String, String>();
+        String customDataIdentifier = "neodymium.report.environment.custom";
 
         if (!neoVersionLogged && Neodymium.configuration().logNeoVersion())
         {
             LOGGER.info("This test uses Neodymium Library (version: " + Neodymium.getNeodymiumVersion()
-                        + "), MIT License, more details on https://github.com/Xceptance/neodymium-library");
+                        + "), MIT License, more details on https://github.com/Xceptance/neodymium");
             neoVersionLogged = true;
             environmentDataMap.putIfAbsent("Testing Framework", "Neodymium " + Neodymium.getNeodymiumVersion());
         }
@@ -530,37 +598,44 @@ public class AllureAddons
         {
             LOGGER.info("Custom Environment Data was added.");
             customDataAdded = true;
-            String customDataIdentifier = "neodymium.report.environment.custom";
-            environmentDataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "dev-neodymium.properties",
-                                                                             customDataIdentifier, environmentDataMap);
 
-            Map<String, String> systemEnvMap = new HashMap<String, String>();
-            for (Map.Entry<String, String> entry : System.getenv().entrySet())
-            {
-                String key = entry.getKey();
-                if (key.contains(customDataIdentifier))
-                {
-                    String cleanedKey = key.replace(customDataIdentifier, "");
-                    cleanedKey = cleanedKey.replaceAll("\\.", "");
-                    systemEnvMap.put(cleanedKey, entry.getValue());
-                }
-            }
-            environmentDataMap = PropertiesUtil.mapPutAllIfAbsent(environmentDataMap, systemEnvMap);
-            environmentDataMap = PropertiesUtil.mapPutAllIfAbsent(environmentDataMap,
-                                                                  PropertiesUtil.getDataMapForIdentifier(customDataIdentifier,
-                                                                                                         System.getProperties()));
-            environmentDataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "credentials.properties",
-                                                                             customDataIdentifier, environmentDataMap);
-            environmentDataMap = PropertiesUtil.addMissingPropertiesFromFile("." + File.separator + "config" + File.separator + "neodymium.properties",
-                                                                             customDataIdentifier, environmentDataMap);
+            environmentDataMap.putAll(getPropertiesMapForCustomIdentifier(customDataIdentifier));
         }
 
         if (!environmentDataMap.isEmpty())
         {
             // These values should be the same for all running JVMs. If there are differences in the values, it would we
             // good to see it in the report
-            AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder().putAll(environmentDataMap).build(), EnvironmentInfoMode.ADD);
+            // AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder().putAll(environmentDataMap).build(), EnvironmentInfoMode.ADD);
+            AllureAddons.addEnvironmentInformation(
+                ImmutableMap.<String, String> builder().putAll(removePrefixFromMap(environmentDataMap, customDataIdentifier)).build(), EnvironmentInfoMode.ADD);
         }
+    }
+
+    /**
+     * Removes the prefix from the keys in the map.
+     *
+     * @param map
+     *     the map to process
+     * @param prefix
+     *     the prefix to remove
+     * @return a new map with the prefix removed from the keys
+     */
+    private static Map<String, String> removePrefixFromMap(Map<String, String> map, String prefix)
+    {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<String, String> entry : map.entrySet())
+        {
+            if (entry.getKey().startsWith(prefix))
+            {
+                result.put(entry.getKey().substring(prefix.length() + 1), entry.getValue());
+            }
+            else
+            {
+                result.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return result;
     }
 
     /**
@@ -572,13 +647,44 @@ public class AllureAddons
     public static void addDataAsJsonToReport(String name, Object data)
     {
         ObjectMapper mapper = new ObjectMapper();
+
+        // In case we have a long which is out side the value range of JS' Number, we need to have some special
+        // treatment
+        SimpleModule module = new SimpleModule();
+        JsonSerializer<Long> longSerializer = new JsonSerializer<Long>()
+        {
+            @Override
+            public void serialize(Long value, JsonGenerator gen, SerializerProvider serializers)
+                throws IOException
+            {
+                convertValuesOutsideRangeToString(value, gen);
+            }
+
+            private void convertValuesOutsideRangeToString(Long value, JsonGenerator gen) throws IOException
+            {
+                if (value >= 9007199254740991l ||
+                    value <= -9007199254740991l)
+                {
+                    gen.writeString(value.toString() + " (Longs outside JS Number limits are shown as strings)");
+                }
+                else
+                {
+                    gen.writeNumber(value);
+                }
+            }
+        };
+
+        module.addSerializer(Long.class, longSerializer);
+        module.addSerializer(Long.TYPE, longSerializer);
+
+        mapper.registerModule(module);
+
         String dataObjectJson;
 
         try
         {
             // covert Java object to JSON strings
             dataObjectJson = mapper.setSerializationInclusion(Include.NON_NULL).writeValueAsString(data);
-
         }
         catch (JsonProcessingException e)
         {
