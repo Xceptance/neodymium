@@ -1,6 +1,7 @@
 package com.xceptance.neodymium.junit5;
 
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
+import com.xceptance.neodymium.common.retry.RetryMethodData;
 import com.xceptance.neodymium.common.testdata.TestdataContainer;
 import com.xceptance.neodymium.junit5.browser.BrowserExecutionCallback;
 import com.xceptance.neodymium.junit5.filtering.FilterTestMethodCallback;
@@ -9,6 +10,7 @@ import com.xceptance.neodymium.junit5.testdata.TestdataCallback;
 import com.xceptance.neodymium.junit5.testend.NeodymiumAfterTestExecutionCallback;
 import com.xceptance.neodymium.junit5.teststart.NeodymiumBeforeTestExecutionCallback;
 import com.xceptance.neodymium.util.Neodymium;
+
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
@@ -23,13 +25,17 @@ public class TemplateInvocationContext implements TestTemplateInvocationContext
 
     private TestdataContainer dataSet;
 
+    private RetryMethodData retryMethodData;
+
     private Object testClassInstance;
 
-    public TemplateInvocationContext(String methodName, BrowserMethodData browser, TestdataContainer dataSet, Object testClassInstance)
+    public TemplateInvocationContext(String methodName, BrowserMethodData browser, TestdataContainer dataSet, RetryMethodData retryMethodData,
+        Object testClassInstance)
     {
         this.methodName = methodName;
         this.browser = browser;
         this.dataSet = dataSet;
+        this.retryMethodData = retryMethodData;
         this.testClassInstance = testClassInstance;
     }
 
@@ -44,6 +50,7 @@ public class TemplateInvocationContext implements TestTemplateInvocationContext
     {
         Neodymium.clearThreadContext();
         List<Extension> extensions = new LinkedList<>();
+        extensions.add(new AbortRetryOnSuccess(retryMethodData));
         extensions.add(new BrowserExecutionCallback(browser, methodName));
         if (dataSet != null)
         {

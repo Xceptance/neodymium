@@ -103,42 +103,6 @@ public class BrowserData extends Data
         return false;
     }
 
-    @SuppressWarnings("unchecked")
-    public static <T extends Annotation> List<T> getDeclaredAnnotations(AnnotatedElement object, Class<T> annotationClass)
-    {
-        List<T> annotations = new LinkedList<>();
-        if (object == null || annotationClass == null)
-        {
-            return annotations;
-        }
-
-        // check if the annotation is repeatable
-        Repeatable repeatingAnnotation = annotationClass.getAnnotation(Repeatable.class);
-        Annotation annotation = (repeatingAnnotation == null) ? null : object.getDeclaredAnnotation(repeatingAnnotation.value());
-
-        if (annotation != null)
-        {
-            try
-            {
-                annotations.addAll(Arrays.asList((T[]) annotation.getClass().getMethod("value").invoke(annotation)));
-            }
-            catch (ReflectiveOperationException e)
-            {
-                throw new RuntimeException(e);
-            }
-        }
-        else
-        {
-            T anno = object.getDeclaredAnnotation(annotationClass);
-            if (anno != null)
-            {
-                annotations.add(anno);
-            }
-        }
-
-        return annotations;
-    }
-
     public BrowserData()
     {
         populateBrowserDataWithGlobalInformation();

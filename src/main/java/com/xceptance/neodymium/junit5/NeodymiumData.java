@@ -10,6 +10,8 @@ import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.BrowserData;
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
+import com.xceptance.neodymium.common.retry.RetryData;
+import com.xceptance.neodymium.common.retry.RetryMethodData;
 import com.xceptance.neodymium.common.testdata.TestdataContainer;
 import com.xceptance.neodymium.common.testdata.TestdataData;
 import com.xceptance.neodymium.util.Neodymium;
@@ -39,16 +41,19 @@ public class NeodymiumData
         List<TestTemplateInvocationContext> multiplicationResult = new ArrayList<>();
         List<BrowserMethodData> browsers = new ArrayList<BrowserMethodData>();
         List<TestdataContainer> dataSets = new ArrayList<TestdataContainer>();
+        List<RetryMethodData> retryMethodData = new ArrayList<RetryMethodData>();
 
         if (workInProgress && wipMethod && templateMethod.getAnnotation(WorkInProgress.class) == null)
         {
             browsers.add(null);
             dataSets.add(null);
+            retryMethodData.add(null);
         }
         else
         {
             browsers = browserData.createIterationData(templateMethod);
             dataSets = testdataData.getTestDataForMethod(templateMethod);
+            retryMethodData = new RetryData(templateMethod).createIterationData();
 
             if (browsers.isEmpty())
             {
@@ -63,9 +68,13 @@ public class NeodymiumData
         {
             for (TestdataContainer dataSet : dataSets)
             {
-                multiplicationResult.add(new TemplateInvocationContext(templateMethod.getName(), browser, dataSet, testClass));
+                for (int i = 0; i < retryMethodData.size(); i++)
+                {
+                    multiplicationResult.add(new TemplateInvocationContext(templateMethod.getName(), browser, dataSet, retryMethodData.get(i), testClass));
+                }
             }
         }
         return multiplicationResult.stream();
     }
+
 }

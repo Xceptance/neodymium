@@ -32,7 +32,10 @@ public class BrowserRunBefores extends RunBefores
     @Override
     public void evaluate() throws Throwable
     {
-        BrowserMethodData browserMethodData = method instanceof EnhancedMethod ? (BrowserMethodData) ((EnhancedMethod) method).getData().get(0) : null;
+        BrowserMethodData browserMethodData = method instanceof EnhancedMethod ? (BrowserMethodData) ((EnhancedMethod) method).getData().stream()
+                                                                                                                              .filter(data -> data instanceof BrowserMethodData)
+                                                                                                                              .findFirst().get()
+                                                                               : null;
         boolean startNewBrowserForSetup = browserMethodData != null ? browserMethodData.isStartBrowserOnSetUp() : true;
         setupDone = !startNewBrowserForSetup;
         for (FrameworkMethod before : befores)
