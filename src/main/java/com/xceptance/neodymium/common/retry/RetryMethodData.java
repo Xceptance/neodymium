@@ -57,8 +57,6 @@ public class RetryMethodData
 
     public AllureData getContext()
     {
-        String testSingature = Neodymium.configuration().setProperty("testSignature", "temp");
-        Neodymium.configuration().setProperty("testSignature", testSingature);
         return CONTEXTS.computeIfAbsent(getId(), key -> {
             return new AllureData();
         });

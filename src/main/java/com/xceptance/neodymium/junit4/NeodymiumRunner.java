@@ -292,7 +292,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
                                                                                            .get());
                         int index = enhancedMethod.getData().indexOf(retryMethodData);
                         RetryMethodData retryMethodDataCopy = new RetryMethodData(retryMethodData);
-                        retryMethodDataCopy.setId(name);
+                        retryMethodDataCopy.setId(getTestClass().getJavaClass().getCanonicalName() + " :: " + name);
                         enhancedMethod.getData().set(index, retryMethodDataCopy);
                     }
                 });
