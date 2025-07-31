@@ -36,7 +36,6 @@ public class RetryMethodData
         this.maxExecutions = maxExecutions;
         this.iterationIndex = iterationIndex;
     }
-    
 
     public RetryMethodData(RetryMethodData retryMethodData)
     {
@@ -53,7 +52,7 @@ public class RetryMethodData
 
     private String getId()
     {
-        return StringUtils.isBlank(id) ? Thread.currentThread().getId() + "" : id;
+        return StringUtils.isBlank(id) ? Thread.currentThread().hashCode() + "" : id;
     }
 
     public AllureData getContext()
@@ -82,8 +81,6 @@ public class RetryMethodData
 
     public boolean shouldNotBeRepeated()
     {
-        String testSingature = Neodymium.configuration().setProperty("testSignature", "temp");
-        Neodymium.configuration().setProperty("testSignature", testSingature);
         if (iterationIndex == 0 && Allure.getLifecycle().getCurrentTestCase().isPresent())
         {
             // LogManager.getLogManager().getLogger("io.qameta.allure.AllureLifecycle").setLevel(Level.OFF);

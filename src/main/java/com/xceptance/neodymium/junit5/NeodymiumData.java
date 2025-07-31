@@ -70,7 +70,9 @@ public class NeodymiumData
             {
                 for (int i = 0; i < retryMethodData.size(); i++)
                 {
-                    multiplicationResult.add(new TemplateInvocationContext(templateMethod.getName(), browser, dataSet, retryMethodData.get(i), testClass));
+                    TemplateInvocationContext context = new TemplateInvocationContext(templateMethod.getName(), browser, dataSet, retryMethodData.get(i), testClass);
+                    retryMethodData.get(i).setId(context.getDisplayName(i));
+                    multiplicationResult.add(context);
                 }
             }
         }
