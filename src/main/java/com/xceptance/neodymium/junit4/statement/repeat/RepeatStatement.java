@@ -2,13 +2,17 @@ package com.xceptance.neodymium.junit4.statement.repeat;
 
 import java.util.List;
 
+import org.junit.Assume;
+import org.junit.AssumptionViolatedException;
 import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.Statement;
 import org.junit.runners.model.TestClass;
 
 import com.xceptance.neodymium.common.retry.RetryData;
 import com.xceptance.neodymium.common.retry.RetryMethodData;
+import com.xceptance.neodymium.common.retry.TestFailedAndShouldBeRetired;
 import com.xceptance.neodymium.junit4.StatementBuilder;
+import com.xceptance.neodymium.util.Neodymium;
 
 public class RepeatStatement extends StatementBuilder<RetryMethodData>
 {
@@ -63,9 +67,13 @@ public class RepeatStatement extends StatementBuilder<RetryMethodData>
             }
             catch (Throwable t)
             {
-                retryMethodData.handleTestExecutionException(t);
+                Throwable toThrow = retryMethodData.handleTestExecutionException(t);
                 retryMethodData.testFailed(t);
-                throw t;
+                if (toThrow instanceof TestFailedAndShouldBeRetired)
+                {
+                    throw new AssumptionViolatedException(toThrow.getMessage(), t);
+                }
+                throw toThrow;
             }
         }
     }

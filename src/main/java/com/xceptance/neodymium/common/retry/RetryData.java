@@ -3,11 +3,22 @@ package com.xceptance.neodymium.common.retry;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import com.xceptance.neodymium.common.Data;
 
 public class RetryData
 {
+    public List<String> getExceptions()
+    {
+        return exceptions;
+    }
+
+    public int getMaxExecutions()
+    {
+        return maxExecutions;
+    }
+
     private List<String> exceptions;
 
     private int maxExecutions;

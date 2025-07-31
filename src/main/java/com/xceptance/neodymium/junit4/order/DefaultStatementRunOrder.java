@@ -9,9 +9,9 @@ public class DefaultStatementRunOrder extends StatementRunOrder
 {
     public DefaultStatementRunOrder()
     {
+        runOrder.add(RepeatStatement.class);
         runOrder.add(BrowserStatement.class);
         runOrder.add(ParameterStatement.class);
         runOrder.add(TestdataStatement.class);
-        runOrder.add(RepeatStatement.class);
     }
 }

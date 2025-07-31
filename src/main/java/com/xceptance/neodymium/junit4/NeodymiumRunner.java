@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.retry.RetryMethodData;
 import com.xceptance.neodymium.junit4.order.DefaultStatementRunOrder;
 import com.xceptance.neodymium.junit4.statement.browser.BrowserRunAfters;
 import com.xceptance.neodymium.junit4.statement.browser.BrowserRunBefores;
@@ -278,6 +279,24 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
             testMethods.addAll(buildCrossProduct(testAnnotatedMethod.getMethod(), builderList, builderDataList));
         }
 
+        var test = testMethods.stream().collect(Collectors.groupingBy(FrameworkMethod::getName));
+        for (String name : test.keySet())
+        {
+            test.get(name)
+                .forEach(testIteration -> {
+                    if (testIteration instanceof EnhancedMethod)
+                    {
+                        EnhancedMethod enhancedMethod = (EnhancedMethod) testIteration;
+                        RetryMethodData retryMethodData = ((RetryMethodData) enhancedMethod.getData().stream()
+                                                                                           .filter(data -> data instanceof RetryMethodData).findAny()
+                                                                                           .get());
+                        int index = enhancedMethod.getData().indexOf(retryMethodData);
+                        RetryMethodData retryMethodDataCopy = new RetryMethodData(retryMethodData);
+                        retryMethodDataCopy.setId(name);
+                        enhancedMethod.getData().set(index, retryMethodDataCopy);
+                    }
+                });
+        }
         // filter test methods by regex
         String testExecutionRegex = Neodymium.configuration().getTestNameFilter();
         if (StringUtils.isNotEmpty(testExecutionRegex))
@@ -293,7 +312,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
                                      .collect(Collectors.toList());
         }
 
-        // this list is now final for class execution so make it unmodifiable
+        // this list eis now final for class execution so make it unmodifiable
         computedTestMethods = Collections.unmodifiableList(testMethods);
 
         // compute test descriptions
@@ -394,6 +413,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     {
         // clear the context before next child run
         Neodymium.clearThreadContext();
+        Neodymium.configuration().setProperty("testSignature", getDescription().getDisplayName());
         super.runChild(method, notifier);
     }
 
