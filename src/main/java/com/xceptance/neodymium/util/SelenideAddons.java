@@ -397,13 +397,27 @@ public class SelenideAddons
             {
                 AssertionError e1 = e;
                 SelenideLogger.commitStep(SelenideLogger.step("Assertion error", () -> {
-                    throw UIAssertionError.wrap(driver, e1, 0);
+                    if (driver.getSessionId() != null)
+                    {
+                        throw UIAssertionError.wrap(driver, e1, 0);
+                    }
+                    else
+                    {
+                        throw e1;
+                    }
                 }), e);
             }
             else
             {
                 SelenideLogger.commitStep(SelenideLogger.beginStep("Assertion error", message), e);
-                throw UIAssertionError.wrap(driver, e, 0);
+                if (driver.getSessionId() != null)
+                {
+                    throw UIAssertionError.wrap(driver, e, 0);
+                }
+                else
+                {
+                    throw e;
+                }
             }
         }
     }
