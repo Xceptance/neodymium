@@ -49,10 +49,14 @@ public class BrowserRunAfters extends RunAfters
     @Override
     public void evaluate() throws Throwable
     {
-        BrowserMethodData browserMethodData = method instanceof EnhancedMethod ? (BrowserMethodData) ((EnhancedMethod) method).getData().get(0) : null;
+        BrowserMethodData browserMethodData = method instanceof EnhancedMethod ? (BrowserMethodData) ((EnhancedMethod) method).getData().stream()
+                                                                                                                              .filter(data -> data instanceof BrowserMethodData)
+                                                                                                                              .findFirst().get()
+                                                                               : null;
+        List<Method> afterMethodsToBeExecutedWithTestBrowser = new ArrayList<Method>(browserMethodData.getAfterMethodsWithTestBrowser());
         List<Method> aftersWithTestMethod = Neodymium.configuration().startNewBrowserForCleanUp()
                                                                                                   ? browserMethodData == null ? new ArrayList<Method>()
-                                                                                                                              : browserMethodData.getAfterMethodsWithTestBrowser()
+                                                                                                                              : afterMethodsToBeExecutedWithTestBrowser
                                                                                                   : afters.stream().map(after -> after.getMethod())
                                                                                                           .collect(Collectors.toList());
         boolean tearDownDone = false;
