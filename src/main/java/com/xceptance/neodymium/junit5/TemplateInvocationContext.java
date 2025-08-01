@@ -50,6 +50,7 @@ public class TemplateInvocationContext implements TestTemplateInvocationContext
     {
         Neodymium.clearThreadContext();
         List<Extension> extensions = new LinkedList<>();
+        // important to put it as first extension here to prevent setups if retry has to be skipped
         extensions.add(new AbortRetryOnSuccess(retryMethodData));
         extensions.add(new BrowserExecutionCallback(browser, methodName));
         if (dataSet != null)

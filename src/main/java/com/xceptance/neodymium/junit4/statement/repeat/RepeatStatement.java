@@ -2,7 +2,6 @@ package com.xceptance.neodymium.junit4.statement.repeat;
 
 import java.util.List;
 
-import org.junit.Assume;
 import org.junit.AssumptionViolatedException;
 import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.Statement;
@@ -12,7 +11,8 @@ import com.xceptance.neodymium.common.retry.RetryData;
 import com.xceptance.neodymium.common.retry.RetryMethodData;
 import com.xceptance.neodymium.common.retry.TestFailedAndShouldBeRetired;
 import com.xceptance.neodymium.junit4.StatementBuilder;
-import com.xceptance.neodymium.util.Neodymium;
+
+import io.qameta.allure.Allure;
 
 public class RepeatStatement extends StatementBuilder<RetryMethodData>
 {
@@ -57,7 +57,7 @@ public class RepeatStatement extends StatementBuilder<RetryMethodData>
     @Override
     public void evaluate() throws Throwable
     {
-        boolean toExecute = !retryMethodData.shouldNotBeRepeated();
+        boolean toExecute = !retryMethodData.isShouldBeSkipped();
         if (toExecute)
         {
             try
@@ -68,12 +68,16 @@ public class RepeatStatement extends StatementBuilder<RetryMethodData>
             catch (Throwable t)
             {
                 Throwable toThrow = retryMethodData.handleTestExecutionException(t);
-                retryMethodData.testFailed(t);
-                if (toThrow instanceof TestFailedAndShouldBeRetired)
+                // as in JUnit 4 there is no Allure lifecycle on run in Eclipse, this is used to fix the issue that
+                // Eclipse shows wrong exception thrown on repeat
+                if (Allure.getLifecycle().getCurrentTestCase().isPresent() && toThrow instanceof TestFailedAndShouldBeRetired)
                 {
                     throw new AssumptionViolatedException(toThrow.getMessage(), t);
                 }
-                throw toThrow;
+                else
+                {
+                    throw t;
+                }
             }
         }
     }

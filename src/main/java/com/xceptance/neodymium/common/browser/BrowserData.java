@@ -91,7 +91,8 @@ public class BrowserData extends Data
      */
     private boolean hasClassOrSuperClassSuppressBrowsersAnnotation(Class<?> clazz)
     {
-        // iterate to the parent classes until a SuppressBrowsers annotation is found or the class has no super class anymore
+        // iterate to the parent classes until a SuppressBrowsers annotation is found or the class has no super class
+        // anymore
         while (clazz != null)
         {
             if (!getDeclaredAnnotations(clazz, SuppressBrowsers.class).isEmpty())
@@ -249,7 +250,7 @@ public class BrowserData extends Data
         boolean junit5 = method.getAnnotation(NeodymiumTest.class) != null;
         List<Method> afterMethodsWithTestBrowser = Stream.of(testClass.getMethods())
                                                          .filter(classMethod -> (junit5 ? classMethod.getAnnotation(AfterEach.class)
-                                                                                      : classMethod.getAnnotation(After.class)) != null)
+                                                                                        : classMethod.getAnnotation(After.class)) != null)
                                                          .collect(Collectors.toList());
         if (!(Neodymium.configuration().startNewBrowserForSetUp() && Neodymium.configuration().startNewBrowserForCleanUp()))
         {
@@ -307,5 +308,41 @@ public class BrowserData extends Data
             return browsers.subList(0, randomBrowsersAnnotation.get(0).value());
         }
         return browsers;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T extends Annotation> List<T> getDeclaredAnnotations(AnnotatedElement object, Class<T> annotationClass)
+    {
+        List<T> annotations = new LinkedList<>();
+        if (object == null || annotationClass == null)
+        {
+            return annotations;
+        }
+
+        // check if the annotation is repeatable
+        Repeatable repeatingAnnotation = annotationClass.getAnnotation(Repeatable.class);
+        Annotation annotation = (repeatingAnnotation == null) ? null : object.getDeclaredAnnotation(repeatingAnnotation.value());
+
+        if (annotation != null)
+        {
+            try
+            {
+                annotations.addAll(Arrays.asList((T[]) annotation.getClass().getMethod("value").invoke(annotation)));
+            }
+            catch (ReflectiveOperationException e)
+            {
+                throw new RuntimeException(e);
+            }
+        }
+        else
+        {
+            T anno = object.getDeclaredAnnotation(annotationClass);
+            if (anno != null)
+            {
+                annotations.add(anno);
+            }
+        }
+
+        return annotations;
     }
 }

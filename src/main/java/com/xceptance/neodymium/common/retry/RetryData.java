@@ -1,31 +1,31 @@
 package com.xceptance.neodymium.common.retry;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 import com.xceptance.neodymium.common.Data;
 
+/**
+ * Class to store information about maximal number of retries and expected errors for the specific test. Produces
+ * {@link RetryMethodData} for every possible iteration of the test
+ */
 public class RetryData
 {
-    public List<String> getExceptions()
-    {
-        return exceptions;
-    }
-
-    public int getMaxExecutions()
-    {
-        return maxExecutions;
-    }
-
     private List<String> exceptions;
 
     private int maxExecutions;
 
+    /**
+     * Constructs the {@link RetryData} object
+     * 
+     * @param templateMethod
+     *            - test method
+     */
     public RetryData(Method templateMethod)
     {
-        var testClassRetryAnnotations = Data.getDeclaredAnnotations(templateMethod.getDeclaringClass(), Retry.class);
+        var testClassRetryAnnotations = getDeclaredAnnotations(templateMethod.getDeclaringClass(), Retry.class);
         var methodRetryAnnotations = Data.getAnnotations(templateMethod, Retry.class);
 
         exceptions = new ArrayList<String>();
@@ -54,10 +54,15 @@ public class RetryData
             }
         }
 
-        maxExecutions = !methodRetryAnnotations.isEmpty() ? methodRetryAnnotations.get(0).value()
-                                                          : !testClassRetryAnnotations.isEmpty() ? testClassRetryAnnotations.get(0).value() : 1;
+        maxExecutions = !methodRetryAnnotations.isEmpty() ? methodRetryAnnotations.get(0).maxNumberOfRetries()
+                                                          : !testClassRetryAnnotations.isEmpty() ? testClassRetryAnnotations.get(0).maxNumberOfRetries() : 1;
     }
 
+    /**
+     * Creates {@link RetryMethodData} for every possible iteration of the method
+     * 
+     * @return list of iterations represented by {@link RetryMethodData}
+     */
     public List<RetryMethodData> createIterationData()
     {
         List<RetryMethodData> iterationData = new ArrayList<RetryMethodData>();
@@ -66,5 +71,20 @@ public class RetryData
             iterationData.add(new RetryMethodData(new ArrayList<String>(exceptions), maxExecutions, i));
         }
         return iterationData;
+    }
+
+    private <T extends Annotation> List<T> getDeclaredAnnotations(Class<?> type, Class<T> annotationClass)
+    {
+        List<T> annotations = new ArrayList<T>();
+        while (type != null)
+        {
+            var annotationsOfCurrentType = type.getDeclaredAnnotation(annotationClass);
+            if (annotationsOfCurrentType != null)
+            {
+                annotations.addAll(List.of(annotationsOfCurrentType));
+            }
+            type = type.getSuperclass();
+        }
+        return annotations;
     }
 }
