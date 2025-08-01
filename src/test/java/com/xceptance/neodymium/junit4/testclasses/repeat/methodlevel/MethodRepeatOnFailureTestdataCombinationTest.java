@@ -1,4 +1,4 @@
-package com.xceptance.neodymium.testclasses.repeat.methodlevel;
+package com.xceptance.neodymium.junit4.testclasses.repeat.methodlevel;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -7,25 +7,26 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.junit4.statement.repeat.RepeatOnFailure;
+import com.xceptance.neodymium.util.DataUtils;
 
 @Browser("Chrome_headless")
-@Browser("Chrome_1500x1000_headless")
 @RunWith(NeodymiumRunner.class)
-public class MethodRepeatOnFailureBrowserCombinationTest
+public class MethodRepeatOnFailureTestdataCombinationTest
 {
     public static AtomicInteger val = new AtomicInteger(0);
 
+    @Retry(exceptions =
+    {
+      "Fail"
+    })
     @Test
-    @RepeatOnFailure(10)
     public void testVisitingHomepage()
     {
-        int i = val.getAndIncrement();
-        if (val.get() == 6)
+        if (DataUtils.asString("testId").equals("2"))
         {
-            val.set(0);
+            Assert.fail("Fail " + val.get());
         }
-        Assert.assertFalse("Produce test failure number " + i, i < 5);
     }
 }

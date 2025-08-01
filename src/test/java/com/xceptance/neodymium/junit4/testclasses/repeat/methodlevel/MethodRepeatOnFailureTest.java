@@ -1,4 +1,4 @@
-package com.xceptance.neodymium.testclasses.repeat.methodlevel;
+package com.xceptance.neodymium.junit4.testclasses.repeat.methodlevel;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -6,24 +6,25 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.junit4.statement.repeat.RepeatOnFailure;
 
-@RepeatOnFailure(3)
+@Retry(exceptions =
+{
+  "Parent fail"
+})
 @RunWith(NeodymiumRunner.class)
 public class MethodRepeatOnFailureTest
 {
     public static AtomicInteger val = new AtomicInteger(0);
 
     @Test
-    @RepeatOnFailure(10)
+    @Retry(maxNumberOfRetries = 4, exceptions =
+    {
+      "Child fail"
+    })
     public void testVisitingHomepage()
     {
-        int i = val.getAndIncrement();
-        if (val.get() == 6)
-        {
-            val.set(0);
-        }
-        Assert.assertFalse("Produce test failure number " + i, i < 5);
+        Assert.fail(val.getAndIncrement() < 3 ? "Child fail" : "Parent fail");
     }
 }

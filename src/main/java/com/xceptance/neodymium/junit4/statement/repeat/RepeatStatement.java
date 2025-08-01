@@ -74,7 +74,7 @@ public class RepeatStatement extends StatementBuilder<RetryMethodData>
                 {
                     throw new AssumptionViolatedException(toThrow.getMessage(), t);
                 }
-                else
+                else if(!(toThrow instanceof TestFailedAndShouldBeRetired))
                 {
                     throw t;
                 }
