@@ -26,7 +26,7 @@ public class MethodRepeatOnFailureTestdataCombinationTest
     {
         if (DataUtils.asString("testId").equals("2"))
         {
-            Assert.fail("Fail " + val.get());
+            Assert.fail("Fail " + val.incrementAndGet());
         }
     }
 }

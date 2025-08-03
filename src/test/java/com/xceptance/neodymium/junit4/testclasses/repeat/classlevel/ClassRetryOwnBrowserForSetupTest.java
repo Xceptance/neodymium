@@ -34,9 +34,6 @@ public class ClassRetryOwnBrowserForSetupTest
     @Test
     public void test()
     {
-        if (i.incrementAndGet() < 3)
-        {
-            Assert.fail("Fail");
-        }
+        Assert.fail("Fail "+i.incrementAndGet());
     }
 }

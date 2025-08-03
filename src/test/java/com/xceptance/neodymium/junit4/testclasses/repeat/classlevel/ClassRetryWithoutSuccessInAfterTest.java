@@ -31,6 +31,6 @@ public class ClassRetryWithoutSuccessInAfterTest
     public void after()
     {
         Selenide.open("https://www.xceptance.com/en/");
-        Assert.fail("Fail" + i.incrementAndGet());
+        Assert.fail("Fail " + i.incrementAndGet());
     }
 }

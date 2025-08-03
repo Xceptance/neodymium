@@ -1,5 +1,7 @@
 package com.xceptance.neodymium.junit4.tests;
 
+import java.util.HashMap;
+
 import org.junit.Test;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
@@ -34,21 +36,21 @@ public class RepeatOnFailureAnnotationTest extends NeodymiumTest
     public void testClassRetryOnEveryErrorTest()
     {
         Result result = JUnitCore.runClasses(ClassRetryOnEveryErrorTest.class);
-        checkAssumptionFailure(result, false, 10, 0, 5, 4, null);
+        checkFail(result, 3, 0, 1, "Fail 3");
     }
 
     @Test
     public void testClassRetryOwnBrowserForSetupTest()
     {
         Result result = JUnitCore.runClasses(ClassRetryOwnBrowserForSetupTest.class);
-        checkAssumptionFailure(result, false, 10, 0, 5, 4, null);
+        checkFail(result, 3, 0, 1, "Fail 3");
     }
 
     @Test
     public void testClassNoRetryOnUnexpectedErrorTest()
     {
         Result result = JUnitCore.runClasses(ClassNoRetryOnUnexpectedErrorTest.class);
-        checkAssumptionFailure(result, false, 10, 0, 5, 4, null);
+        checkFail(result, 3, 0, 1, "Shoul not be retried");
     }
 
     @Test
@@ -69,14 +71,14 @@ public class RepeatOnFailureAnnotationTest extends NeodymiumTest
     public void testClassRetryWithoutSuccessInBeforeTest()
     {
         Result result = JUnitCore.runClasses(ClassRetryWithoutSuccessInBeforeTest.class);
-        checkAssumptionFailure(result, false, 10, 0, 5, 4, null);
+        checkFail(result, 3, 0, 1, "Fail 3");
     }
 
     @Test
     public void testClassRetryWithoutSuccessMultiplicationTest()
     {
         Result result = JUnitCore.runClasses(ClassRetryWithoutSuccessMultiplicationTest.class);
-        checkAssumptionFailure(result, false, 10, 0, 5, 4, null);
+        checkFail(result, 8, 0, 1, "Fail 3");
     }
 
     @Test
@@ -90,7 +92,7 @@ public class RepeatOnFailureAnnotationTest extends NeodymiumTest
     public void testClassRetryStopOnUnexpectedFailureTest()
     {
         Result result = JUnitCore.runClasses(ClassRetryStopOnUnexpectedFailureTest.class);
-        checkAssumptionFailure(result, false, 10, 0, 5, 4, null);
+      checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -104,21 +106,21 @@ public class RepeatOnFailureAnnotationTest extends NeodymiumTest
     public void testClassRepeatOnFailureTestdataCombination()
     {
         Result result = JUnitCore.runClasses(ClassRetryTestdataCombinationTest.class);
-        checkAssumptionFailure(result, false, 30, 0, 15, 12, null);
+        checkFail(result, 6, 0, 1, "Fail 3");
     }
 
     @Test
     public void testMethodRepeatOnFailureBrowserCombination()
     {
         Result result = JUnitCore.runClasses(MethodRepeatOnFailureBrowserCombinationTest.class);
-        checkAssumptionFailure(result, false, 20, 0, 10, 8, null);
+        checkFail(result, 8, 0, 2, new HashMap<String, String>(){{put("testWithoutRetry :: Browser Chrome_1500x1000_headless :: ","Fail 1"); put("testWithRetry :: Browser Chrome_1500x1000_headless :: ","Fail 3");}});
     }
 
     @Test
     public void testMethodRepeatOnFailureTestdataCombination()
     {
         Result result = JUnitCore.runClasses(MethodRepeatOnFailureTestdataCombinationTest.class);
-        checkAssumptionFailure(result, false, 30, 0, 15, 12, null);
+        checkFail(result, 6, 0, 1, "Fail 3");
     }
 
     @Test
@@ -132,6 +134,6 @@ public class RepeatOnFailureAnnotationTest extends NeodymiumTest
     public void testOverwriteRetryTest()
     {
         Result result = JUnitCore.runClasses(OverwriteRetryTest.class);
-        checkAssumptionFailure(result, false, 30, 0, 15, 12, null);
+        checkFail(result, 6, 0, 2, new HashMap<String, String>(){{put("testWithoutRetry :: Browser Chrome_1500x1000_headless :: ","Fail 1"); put("testWithRetry :: Browser Chrome_1500x1000_headless :: ","Fail 3");}});
     }
 }

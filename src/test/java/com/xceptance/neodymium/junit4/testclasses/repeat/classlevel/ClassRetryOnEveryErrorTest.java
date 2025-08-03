@@ -20,9 +20,6 @@ public class ClassRetryOnEveryErrorTest
     @Test
     public void test()
     {
-        if (i.incrementAndGet() < 3)
-        {
-            Assert.fail("HERE");
-        }
+        Assert.fail("Fail "+i.incrementAndGet());
     }
 }

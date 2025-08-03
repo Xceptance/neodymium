@@ -16,7 +16,8 @@ import com.xceptance.neodymium.util.Neodymium;
 @RunWith(NeodymiumRunner.class)
 public class MethodRepeatOnFailureBrowserCombinationTest
 {
-    public static AtomicInteger val = new AtomicInteger(0);
+    public static AtomicInteger val1 = new AtomicInteger(0);
+    public static AtomicInteger val2 = new AtomicInteger(0);
 
     @Retry(exceptions =
     {
@@ -27,7 +28,7 @@ public class MethodRepeatOnFailureBrowserCombinationTest
     {
         if (Neodymium.getBrowserProfileName().contains("1500"))
         {
-            Assert.fail("Fail " + val.get());
+            Assert.fail("Fail " + val1.incrementAndGet());
         }
     }
 
@@ -36,7 +37,7 @@ public class MethodRepeatOnFailureBrowserCombinationTest
     {
         if (Neodymium.getBrowserProfileName().contains("1500"))
         {
-            Assert.fail("Fail " + val.get());
+            Assert.fail("Fail " + val2.incrementAndGet());
         }
     }
 }

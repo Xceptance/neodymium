@@ -9,19 +9,13 @@ import com.xceptance.neodymium.common.retry.Retry;
 @Browser("Chrome_headless")
 @Retry(exceptions =
 {
-  "HERE"
+	"Fail Child"
 })
 public class OverwriteRetryTest extends RetryParent
 {
     @Test
     public void childTest()
     {
-        Assert.fail("NOT_HERE");
-    }
-    
-    @Test
-    public void parentTest()
-    {
-        Assert.fail("NOT_HERE");
+        Assert.fail("Fail Child");
     }
 }

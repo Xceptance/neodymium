@@ -11,13 +11,13 @@ import com.xceptance.neodymium.junit4.NeodymiumRunner;
 @Browser("Chrome_headless")
 @Retry(exceptions =
 {
-  "HERE"
+    "Fail Parent"
 })
 public abstract class RetryParent
 {
     @Test
     public void parentTest()
     {
-        Assert.fail("HERE");
+        Assert.fail("Fail Parent");
     }
 }
