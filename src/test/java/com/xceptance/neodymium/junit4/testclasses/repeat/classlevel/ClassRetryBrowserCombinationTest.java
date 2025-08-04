@@ -27,7 +27,7 @@ public class ClassRetryBrowserCombinationTest
     {
         if (Neodymium.getBrowserProfileName().contains("1500"))
         {
-            Assert.fail("Fail " + val.get());
+            Assert.fail("Fail " + val.incrementAndGet());
         }
     }
 }

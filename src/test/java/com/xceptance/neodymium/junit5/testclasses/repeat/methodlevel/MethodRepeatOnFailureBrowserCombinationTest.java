@@ -1,29 +1,27 @@
-package com.xceptance.neodymium.junit4.testclasses.repeat.methodlevel;
+package com.xceptance.neodymium.junit5.testclasses.repeat.methodlevel;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 
 @Browser("Chrome_headless")
 @Browser("Chrome_1500x1000_headless")
-@RunWith(NeodymiumRunner.class)
 public class MethodRepeatOnFailureBrowserCombinationTest
 {
     public static AtomicInteger val1 = new AtomicInteger(0);
+
     public static AtomicInteger val2 = new AtomicInteger(0);
 
     @Retry(exceptions =
     {
       "Fail"
     })
-    @Test
+    @NeodymiumTest
     public void testWithRetry()
     {
         if (Neodymium.getBrowserProfileName().contains("1500"))
@@ -32,7 +30,7 @@ public class MethodRepeatOnFailureBrowserCombinationTest
         }
     }
 
-    @Test
+    @NeodymiumTest
     public void testWithoutRetry()
     {
         if (Neodymium.getBrowserProfileName().contains("1500"))

@@ -7,7 +7,6 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
@@ -30,7 +29,6 @@ public class ClassRetryWithoutSuccessInAfterTest
     @After
     public void after()
     {
-        Selenide.open("https://www.xceptance.com/en/");
-        Assert.fail("Fail" + i.incrementAndGet());
+        Assert.fail("Fail " + i.incrementAndGet());
     }
 }

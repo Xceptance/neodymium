@@ -1,19 +1,16 @@
-package com.xceptance.neodymium.junit4.testclasses.repeat.classlevel;
+package com.xceptance.neodymium.junit5.testclasses.repeat.classlevel;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
 
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.StartNewBrowserForSetUp;
 import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 
-@RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")
 @Retry(exceptions =
 {
@@ -25,13 +22,13 @@ public class ClassRetryOwnBrowserForSetupTest
 
     @StartNewBrowserForSetUp
     @Browser("Chrome_1500x1000_headless")
-    @Before
+    @BeforeEach
     public void before()
     {
         Assert.assertTrue("Separate browser for setup was not started", Neodymium.getBrowserProfileName().contains("1500"));
     }
 
-    @Test
+    @NeodymiumTest
     public void test()
     {
         Assert.fail("Fail "+i.incrementAndGet());

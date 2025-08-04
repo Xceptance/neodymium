@@ -1,30 +1,28 @@
-package com.xceptance.neodymium.junit4.testclasses.repeat.classlevel;
+package com.xceptance.neodymium.junit5.testclasses.repeat.classlevel;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.DataUtils;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
+import com.xceptance.neodymium.util.Neodymium;
 
-@Browser("Chrome_headless")
 @Retry(exceptions =
 {
   "Fail"
 })
-@RunWith(NeodymiumRunner.class)
-public class ClassRetryTestdataCombinationTest
+@Browser("Chrome_headless")
+@Browser("Chrome_1500x1000_headless")
+public class ClassRetryBrowserCombinationTest
 {
     public static AtomicInteger val = new AtomicInteger(0);
 
-    @Test
+    @NeodymiumTest
     public void testVisitingHomepage()
     {
-        if (DataUtils.asString("testId").equals("2"))
+        if (Neodymium.getBrowserProfileName().contains("1500"))
         {
             Assert.fail("Fail " + val.incrementAndGet());
         }

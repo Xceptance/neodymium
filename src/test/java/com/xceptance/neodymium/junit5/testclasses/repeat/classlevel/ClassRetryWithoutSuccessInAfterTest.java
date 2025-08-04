@@ -1,27 +1,30 @@
-package com.xceptance.neodymium.junit4.testclasses.repeat.classlevel;
+package com.xceptance.neodymium.junit5.testclasses.repeat.classlevel;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterEach;
 
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
 
-@RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")
 @Retry(exceptions =
 {
-  "Fail 1"
+  "Fail"
 })
-public class ClassRetryStopOnUnexpectedFailureTest
+public class ClassRetryWithoutSuccessInAfterTest
 {
     static AtomicInteger i = new AtomicInteger();
 
-    @Test
+    @NeodymiumTest
     public void test()
+    {
+    }
+
+    @AfterEach
+    public void after()
     {
         Assert.fail("Fail " + i.incrementAndGet());
     }

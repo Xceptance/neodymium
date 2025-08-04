@@ -1,18 +1,14 @@
-package com.xceptance.neodymium.junit4.testclasses.repeat.classlevel;
+package com.xceptance.neodymium.junit5.testclasses.repeat.classlevel;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
 
-import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
 
-@RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")
 @Retry(exceptions =
 {
@@ -22,13 +18,13 @@ public class ClassRetryWithoutSuccessInBeforeTest
 {
     static AtomicInteger i = new AtomicInteger();
 
-    @Before
+    @BeforeEach
     public void before()
     {
         Assert.fail("Fail " + i.incrementAndGet());
     }
 
-    @Test
+    @NeodymiumTest
     public void test()
     {
         Assert.fail("Test method should not be executed");

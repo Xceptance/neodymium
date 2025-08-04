@@ -1,5 +1,7 @@
 package com.xceptance.neodymium.junit4.testclasses.repeat.mix;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -11,13 +13,15 @@ import com.xceptance.neodymium.junit4.NeodymiumRunner;
 @Browser("Chrome_headless")
 @Retry(exceptions =
 {
-  "HERE"
+    "Fail Parent"
 })
 public abstract class RetryParent
 {
+    static AtomicInteger i = new AtomicInteger();
+
     @Test
     public void parentTest()
     {
-        Assert.fail("HERE");
+        Assert.fail("Fail Parent "+i.incrementAndGet());
     }
 }
