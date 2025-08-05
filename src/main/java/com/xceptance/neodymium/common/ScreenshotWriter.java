@@ -31,6 +31,7 @@ import com.assertthat.selenium_shutterbug.core.Shutterbug;
 import com.assertthat.selenium_shutterbug.utils.image.ImageProcessor;
 import com.assertthat.selenium_shutterbug.utils.web.Coordinates;
 import com.xceptance.neodymium.common.testdata.DataSet;
+import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
 
 import io.qameta.allure.Allure;
@@ -78,10 +79,9 @@ public class ScreenshotWriter
                 testClassName = testClassName.replace('.', File.separatorChar);
             }
 
-            String pathName = getFormatedReportsPath() + File.separator + testClassName;
             if (Neodymium.configuration().enableOnSuccess() && executionException.isEmpty())
             {
-                doScreenshot(imageName, pathName);
+                AllureAddons.attachPNG(imageName);
             }
         }
     }
