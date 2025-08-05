@@ -59,11 +59,11 @@ public class BrowserRunner
     {
         setUpTest(browserMethodData, testName);
         recordingID = UUID.randomUUID().toString();
-        if (FilmTestExecution.getContextGif().filmAutomatically())
+        if (FilmTestExecution.getContextGif().enableFilming() && FilmTestExecution.getContextGif().filmAutomatically())
         {
             FilmTestExecution.startGifRecording(recordingID);
         }
-        if (FilmTestExecution.getContextVideo().filmAutomatically())
+        if (FilmTestExecution.getContextVideo().enableFilming() && FilmTestExecution.getContextVideo().filmAutomatically())
         {
             FilmTestExecution.startVideoRecording(recordingID);
         }
