@@ -13,6 +13,16 @@ public class NeoAllureListener extends AllureSelenide
     @Override
     public void afterEvent(final LogEvent event)
     {
+        // check config, we don't want to have two viewport only screenshots
+        if ((Neodymium.configuration().enableViewportScreenshot() == false)
+            ||
+            (Neodymium.configuration().enableFullPageCapture() == false && Neodymium.configuration().enableAdvancedScreenShots() == true))
+        {
+            this.screenshots(false);
+        }
+
+        super.afterEvent(event);
+
         if (Neodymium.configuration().enableAdvancedScreenShots() && event.getStatus().equals(LogEvent.EventStatus.FAIL))
         {
             try
@@ -31,6 +41,5 @@ public class NeoAllureListener extends AllureSelenide
                 throw new RuntimeException("Could not take screenshot", e);
             }
         }
-        super.afterEvent(event);
     }
 }
