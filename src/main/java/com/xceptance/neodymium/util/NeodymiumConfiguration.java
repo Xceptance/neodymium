@@ -343,6 +343,10 @@ public interface NeodymiumConfiguration extends Mutable
     @DefaultValue("false")
     public boolean enableOnSuccess();
 
+    @Key("neodymium.screenshots.viewport.enable")
+    @DefaultValue("true")
+    public boolean enableViewportScreenshot();
+
     @Key("neodymium.screenshots.fullpagecapture.enable")
     @DefaultValue("false")
     public boolean enableFullPageCapture();

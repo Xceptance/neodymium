@@ -13,7 +13,6 @@ import org.junit.runners.model.MultipleFailureException;
 import org.junit.runners.model.Statement;
 
 import com.xceptance.neodymium.common.ScreenshotWriter;
-import com.xceptance.neodymium.common.TestStage;
 import com.xceptance.neodymium.common.browser.BrowserAfterRunner;
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
 import com.xceptance.neodymium.common.browser.BrowserRunner;
@@ -61,12 +60,12 @@ public class BrowserRunAfters extends RunAfters
         try
         {
             next.evaluate();
-            ScreenshotWriter.doScreenshot(displayName, className, Optional.empty(), annotationList, TestStage.AFTER_EACH);
+            ScreenshotWriter.doScreenshot(displayName, className, Optional.empty(), annotationList);
         }
         catch (Throwable e)
         {
             errors.add(e);
-            ScreenshotWriter.doScreenshot(displayName, className, Optional.of(e), annotationList, TestStage.AFTER_EACH);
+            ScreenshotWriter.doScreenshot(displayName, className, Optional.of(e), annotationList);
         }
         finally
         {

@@ -11,7 +11,6 @@ import org.junit.runners.model.MultipleFailureException;
 import org.junit.runners.model.Statement;
 
 import com.xceptance.neodymium.common.ScreenshotWriter;
-import com.xceptance.neodymium.common.TestStage;
 
 public class ScreenshotRunAfters extends RunAfters
 {
@@ -43,12 +42,12 @@ public class ScreenshotRunAfters extends RunAfters
         try
         {
             next.evaluate();
-            ScreenshotWriter.doScreenshot(displayName, className, Optional.empty(), annotationList, TestStage.AFTER_EACH);
+            ScreenshotWriter.doScreenshot(displayName, className, Optional.empty(), annotationList);
         }
         catch (Throwable e)
         {
             errors.add(e);
-            ScreenshotWriter.doScreenshot(displayName, className, Optional.of(e), annotationList, TestStage.AFTER_EACH);
+            ScreenshotWriter.doScreenshot(displayName, className, Optional.of(e), annotationList);
         }
         finally
         {

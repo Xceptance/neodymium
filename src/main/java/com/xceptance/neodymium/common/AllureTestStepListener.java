@@ -27,60 +27,60 @@ public class AllureTestStepListener implements StepLifecycleListener
         StepLifecycleListener.super.beforeStepStop(result);
 
         // if the configuration is set to not take screenshots per step, we do not need to do anything
-        if (!Neodymium.configuration().screenshotPerStep())
+        if (Neodymium.configuration().screenshotPerStep() == true)
         {
-            return;
-        }
 
-        // if the driver is not set, we do not need to do anything
-        if (Neodymium.getDriver() == null)
-        {
-            if (!driverNullWarningLogged)
+            // if the driver is not set, we do not need to do anything
+            if (Neodymium.getDriver() == null)
             {
-                LOGGER.warn(
-                    "Driver is not set in Neodymium and Selenide driver is used. Skipping screenshot capture for each test step. To enable screenshots per" +
-                        " step, add the @Browser annotation to your test class or method.");
-                driverNullWarningLogged = true;
+                if (!driverNullWarningLogged)
+                {
+                    LOGGER.warn(
+                                "Driver is not set in Neodymium and Selenide driver is used. Skipping screenshot capture for each test step. To enable screenshots per"
+                                +
+                                " step, add the @Browser annotation to your test class or method.");
+                    driverNullWarningLogged = true;
+                }
+                return;
             }
-            return;
-        }
 
-        // only take additional screenshots for passing steps other status won't give additional information
-        if (result.getStatus() != PASSED)
-        {
-            return;
-        }
+            // only take additional screenshots for passing steps other status won't give additional information
+            if (result.getStatus() != PASSED)
+            {
+                return;
+            }
 
-        String name = result.getName();
+            String name = result.getName();
 
-        // safety check for null name
-        if (name == null)
-        {
-            return;
-        }
+            // safety check for null name
+            if (name == null)
+            {
+                return;
+            }
 
-        // skip screenshots for steps with names starting with $(, $$(, $x(, or $$x( or for URL changed steps
-        // but don't skip steps that open a URL, to ensure that we capture the initial page load
-        if (name.startsWith(URL_CHANGED_STEP_MESSAGE)
-            || (name.startsWith("$(") && !name.startsWith("$(\"open\") "))
-            || name.startsWith("$$(")
-            || name.startsWith("$x(")
-            || name.startsWith("$$x("))
-        {
-            return;
-        }
+            // skip screenshots for steps with names starting with $(, $$(, $x(, or $$x( or for URL changed steps
+            // but don't skip steps that open a URL, to ensure that we capture the initial page load
+            if (name.startsWith(URL_CHANGED_STEP_MESSAGE)
+                || (name.startsWith("$(") && !name.startsWith("$(\"open\") "))
+                || name.startsWith("$$(")
+                || name.startsWith("$x(")
+                || name.startsWith("$$x("))
+            {
+                return;
+            }
 
-        try
-        {
-            // We need to add some randomness here. Using the same filename causes issues with parallel executions
-            // Also we can't use neo random since it will initialize and add a step to allure which will trigger an
-            // endless loop resulting in a stack overflow.
-            // But since it's just about internal file temp handling no need to make this number reproducable
-            AllureAddons.attachPNG("beforeStepStop_screenshot_" + System.currentTimeMillis() + "_" + new Random().nextLong());
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
+            try
+            {
+                // We need to add some randomness here. Using the same filename causes issues with parallel executions
+                // Also we can't use neo random since it will initialize and add a step to allure which will trigger an
+                // endless loop resulting in a stack overflow.
+                // But since it's just about internal file temp handling no need to make this number reproducable
+                AllureAddons.attachPNG("beforeStepStop_screenshot_" + System.currentTimeMillis() + "_" + new Random().nextLong());
+            }
+            catch (IOException e)
+            {
+                throw new RuntimeException(e);
+            }
         }
     }
 }
