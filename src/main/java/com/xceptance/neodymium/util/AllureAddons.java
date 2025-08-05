@@ -1,6 +1,8 @@
 package com.xceptance.neodymium.util;
 
 
+import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -43,8 +45,8 @@ import org.xml.sax.SAXException;
 
 import com.codeborne.selenide.Selenide;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
@@ -57,7 +59,6 @@ import io.qameta.allure.AllureLifecycle;
 import io.qameta.allure.Step;
 import io.qameta.allure.internal.AllureStorage;
 import io.qameta.allure.model.StepResult;
-import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
 
 /**
  * Convenience methods for step definitions
@@ -168,11 +169,11 @@ public class AllureAddons
             return;
         }
 
-        if (Neodymium.configuration().enableAdvancedScreenShots() == true)
-        {
-            ScreenshotWriter.doScreenshot(filename);
-        }
-        else
+        // If there's a fullpage screenshot screenshot, we do both, if not we do not want to have two viewport screenshots 
+        // if full page screenshot/advanced screenshotting is disabled we need the default
+        if (Neodymium.configuration().enableViewportScreenshot() == true &&
+            (Neodymium.configuration().enableAdvancedScreenShots() == false || Neodymium.configuration().enableFullPageCapture() == true)
+        )
         {
             // take a screenshot using the driver and write it to a file
             byte[] screenshot = ((TakesScreenshot) Neodymium.getDriver()).getScreenshotAs(OutputType.BYTES);
@@ -182,6 +183,10 @@ public class AllureAddons
             Allure.getLifecycle().addAttachment("Screenshot", "image/png", ".png", new FileInputStream(filename));
 
             new File(filename).delete();
+        }
+        if (Neodymium.configuration().enableAdvancedScreenShots() == true)
+        {
+            ScreenshotWriter.doScreenshot(filename);
         }
     }
 
