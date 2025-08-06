@@ -178,7 +178,7 @@ public class BrowserData extends Data
         // parse test specific browser definitions
         if (!StringUtils.isEmpty(browserDefinitionsProperty))
         {
-            systemBrowserFilter.addAll(Arrays.asList(browserDefinitionsProperty.split(",")));
+            systemBrowserFilter = Arrays.asList(browserDefinitionsProperty.split(","));
         }
     }
 

@@ -25,6 +25,7 @@ import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfigur
 import com.xceptance.neodymium.junit4.testclasses.browser.DisableRandomBrowserAnnotation;
 import com.xceptance.neodymium.junit4.testclasses.browser.RandomBrowsersClassInitialisationException;
 import com.xceptance.neodymium.junit4.testclasses.browser.RandomBrowsersMethodInitialisationException;
+import com.xceptance.neodymium.junit4.testclasses.browser.SystemPropertyBrowserFilter;
 import com.xceptance.neodymium.junit4.testclasses.browser.classonly.ClassBrowserSuppressed;
 import com.xceptance.neodymium.junit4.testclasses.browser.classonly.ClassBrowserSuppressedNoBrowserAnnotation;
 import com.xceptance.neodymium.junit4.testclasses.browser.classonly.ClassBrowserSuppressedWithBefore;
@@ -336,6 +337,15 @@ public class BrowserStatementTest extends NeodymiumTest
         // it should be possible to use different browser profle for clean up (using @Browser annotation)
         Result result = JUnitCore.runClasses(OverwriteBrowserForCleanUp.class);
         checkPass(result, 1, 0);
+    }
+
+    @Test
+    public void testSystemPropertyBrowserFilter() throws Throwable
+    {
+        System.setProperty("browserdefinition", "Chrome_headless");
+        Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
+        checkPass(result, 1, 0);
+        System.setProperty("browserdefinition", "");
     }
 
     @Test
