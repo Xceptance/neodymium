@@ -2,6 +2,7 @@ package com.xceptance.neodymium.junit4;
 
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.common.NeoAllureListener;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.Browser;
@@ -12,7 +13,6 @@ import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.NeodymiumRandom;
-import io.qameta.allure.selenide.AllureSelenide;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -92,7 +92,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     public NeodymiumRunner(Class<?> clazz) throws InitializationError
     {
         super(clazz);
-        SelenideLogger.addListener(LISTENER_NAME, new AllureSelenide());
+        SelenideLogger.addListener(LISTENER_NAME, new NeoAllureListener());
 
         SelenideLogger.addListener(TestStepListener.LISTENER_NAME, new TestStepListener());
 

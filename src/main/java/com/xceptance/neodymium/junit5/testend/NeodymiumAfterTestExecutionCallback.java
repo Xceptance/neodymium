@@ -1,8 +1,9 @@
 package com.xceptance.neodymium.junit5.testend;
 
-import com.xceptance.neodymium.common.ScreenshotWriter;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
+
+import com.xceptance.neodymium.common.ScreenshotWriter;
 
 public class NeodymiumAfterTestExecutionCallback implements AfterTestExecutionCallback
 {
