@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.io.FileUtils;
+import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.platform.launcher.Launcher;
@@ -210,10 +211,9 @@ public abstract class AbstractNeodymiumTest
 
             if (expectedFailureMessages != null)
             {
-                final long failureCount = result.getTotalFailureCount();
-                for (int i = 0; i < failureCount; i++)
+                Assert.assertTrue("Not all failures are described in expectedFailureMessages" ,result.getTotalFailureCount() == expectedFailureMessages.keySet().size());
+                for (String methodName: expectedFailureMessages.keySet())
                 {
-                    final String methodName = result.getDescriptions().get(i);
                     Throwable exception = result.getFailures().stream().filter(failure -> failure.getTestIdentifier().getDisplayName().equals(methodName))
                                                 .collect(Collectors.toList()).get(0).getException();
                     Assertions.assertEquals(expectedFailureMessages.get(methodName),

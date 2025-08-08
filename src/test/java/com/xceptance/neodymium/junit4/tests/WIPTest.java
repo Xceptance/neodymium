@@ -24,7 +24,7 @@ public class WIPTest extends NeodymiumTest
     {
         String[] expected = new String[]
         {
-          "first"
+          "first :: "
         };
         checkDescription(WIPAnnotationTest.class, expected);
 
@@ -37,8 +37,8 @@ public class WIPTest extends NeodymiumTest
     {
         String[] expected = new String[]
         {
-          "first",
-          "third"
+          "first :: ",
+          "third :: "
         };
         checkDescription(WIPAnnotationChildTest.class, expected);
 
@@ -51,10 +51,10 @@ public class WIPTest extends NeodymiumTest
     {
         String[] expected = new String[]
         {
-          "first :: 1 1 / 2 :: Browser Chrome_headless",
-          "first :: 2 2 / 2 :: Browser Chrome_headless",
-          "first :: 1 1 / 2 :: Browser Chrome_1500x1000_headless",
-          "first :: 2 2 / 2 :: Browser Chrome_1500x1000_headless",
+          "first :: 1 1 / 2 :: Browser Chrome_headless :: ",
+          "first :: 2 2 / 2 :: Browser Chrome_headless :: ",
+          "first :: 1 1 / 2 :: Browser Chrome_1500x1000_headless :: ",
+          "first :: 2 2 / 2 :: Browser Chrome_1500x1000_headless :: ",
         };
         checkDescription(WIPMultiplicationTest.class, expected);
         Result result = JUnitCore.runClasses(WIPMultiplicationTest.class);
