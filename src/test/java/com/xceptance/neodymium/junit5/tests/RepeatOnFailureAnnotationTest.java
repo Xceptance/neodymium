@@ -15,6 +15,7 @@ import com.xceptance.neodymium.junit5.testclasses.repeat.classlevel.ClassRetrySt
 import com.xceptance.neodymium.junit5.testclasses.repeat.classlevel.ClassRetryEndWithSuccessTest;
 import com.xceptance.neodymium.junit5.testclasses.repeat.classlevel.ClassRetryOnEveryErrorTest;
 import com.xceptance.neodymium.junit5.testclasses.repeat.classlevel.ClassRetryOwnBrowserForSetupTest;
+import com.xceptance.neodymium.junit5.testclasses.repeat.classlevel.ClassRetryEmptyErrorMessageTest;
 import com.xceptance.neodymium.junit5.testclasses.repeat.classlevel.ClassNoRetryOnUnexpectedErrorTest;
 import com.xceptance.neodymium.junit5.testclasses.repeat.methodlevel.MethodRepeatOnFailureBrowserCombinationTest;
 import com.xceptance.neodymium.junit5.testclasses.repeat.methodlevel.MethodRepeatOnFailureTest;
@@ -36,6 +37,13 @@ public class RepeatOnFailureAnnotationTest extends AbstractNeodymiumTest
     {
         NeodymiumTestExecutionSummary summary = run(ClassRetryOnEveryErrorTest.class);
         checkFail(summary, 3, 0, 1, "java.lang.AssertionError: Fail 3");
+    }
+
+    @Test
+    public void testClassRetryEmptyErrorMessageTest()
+    {
+        NeodymiumTestExecutionSummary summary = run(ClassRetryEmptyErrorMessageTest.class);
+        checkFail(summary, 3, 0, 1, "java.lang.AssertionError");
     }
 
     @Test

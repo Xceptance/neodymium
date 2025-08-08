@@ -104,9 +104,11 @@ public class RetryMethodData
         }
         boolean shouldBeSkipped = (ERROR_CONTEXTS.get(getId()) == null
                                    || !exceptions.isEmpty() && !exceptions.stream()
-                                                                          .anyMatch(expExc -> ERROR_CONTEXTS.get(getId())
-                                                                                                            .getMessage()
-                                                                                                            .contains(expExc)));
+                                                                          .anyMatch(expExc -> (ERROR_CONTEXTS.get(getId())
+                                                                                                             .getMessage() == null ? ""
+                                                                                                                                   : ERROR_CONTEXTS.get(getId())
+                                                                                                                                                   .getMessage())
+                                                                                                                                                                 .contains(expExc)));
 
         // if this is not first run of the test method, adjust its allure properties to bind it to the first run
         if (iterationIndex > 0 && Allure.getLifecycle().getCurrentTestCase().isPresent())
@@ -183,8 +185,9 @@ public class RetryMethodData
         // if it's not the last iteration and the error that caused the failure is expected
         if (iterationIndex < maxExecutions - 1 && (throwable != null && (exceptions.isEmpty()
                                                                          || exceptions.stream()
-                                                                                      .anyMatch(expExc -> throwable.getMessage()
-                                                                                                                   .contains(expExc)))))
+                                                                                      .anyMatch(expExc -> (throwable.getMessage() == null ? ""
+                                                                                                                                          : throwable.getMessage())
+                                                                                                                                                                   .contains(expExc)))))
         {
             // mark test as flaky
             Allure.getLifecycle().updateTestCase(r -> r.setStatusDetails(new StatusDetails().setFlaky(true)));

@@ -7,6 +7,7 @@ import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.junit4.testclasses.repeat.classlevel.ClassRetryBrowserCombinationTest;
+import com.xceptance.neodymium.junit4.testclasses.repeat.classlevel.ClassRetryEmptyErrorMessageTest;
 import com.xceptance.neodymium.junit4.testclasses.repeat.classlevel.ClassRetryTestdataCombinationTest;
 import com.xceptance.neodymium.junit4.testclasses.repeat.classlevel.ClassRetryWithoutSuccessInAfterTest;
 import com.xceptance.neodymium.junit4.testclasses.repeat.classlevel.ClassRetryWithoutSuccessInBeforeTest;
@@ -37,6 +38,13 @@ public class RepeatOnFailureAnnotationTest extends NeodymiumTest
     {
         Result result = JUnitCore.runClasses(ClassRetryOnEveryErrorTest.class);
         checkFail(result, 3, 0, 1, "Fail 3");
+    }
+    
+    @Test
+    public void testClassRetryEmptyErrorMessageTest()
+    {
+        Result result = JUnitCore.runClasses(ClassRetryEmptyErrorMessageTest.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
