@@ -14,6 +14,7 @@ import com.xceptance.neodymium.common.browser.BrowserAfterRunner;
 import com.xceptance.neodymium.common.browser.BrowserBeforeRunner;
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
 import com.xceptance.neodymium.common.browser.BrowserRunner;
+import com.xceptance.neodymium.common.retry.TestFailedAndShouldBeRetired;
 import com.xceptance.neodymium.util.Neodymium;
 
 public class BrowserExecutionCallback implements InvocationInterceptor, BeforeEachCallback, TestWatcher
@@ -160,6 +161,15 @@ public class BrowserExecutionCallback implements InvocationInterceptor, BeforeEa
 
     @Override
     public void testFailed(ExtensionContext context, Throwable cause)
+    {
+        if (!tearDownDone)
+        {
+            browserRunner.teardown(true);
+        }
+    }
+
+    @Override
+    public void testAborted(ExtensionContext context, Throwable cause)
     {
         if (!tearDownDone)
         {
