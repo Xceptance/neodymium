@@ -171,12 +171,9 @@ public class BrowserExecutionCallback implements InvocationInterceptor, BeforeEa
     @Override
     public void testAborted(ExtensionContext context, Throwable cause)
     {
-//        if (cause instanceof TestFailedAndShouldBeRetired)
+        if (!tearDownDone)
         {
-            if (!tearDownDone)
-            {
-                browserRunner.teardown(true);
-            }
+            browserRunner.teardown(true);
         }
     }
 
