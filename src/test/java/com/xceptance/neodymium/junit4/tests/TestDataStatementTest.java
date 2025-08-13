@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
 
+import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit4.testclasses.data.RandomDataSetsException;
 import com.xceptance.neodymium.junit4.testclasses.data.RandomnessOfDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.annotation.InstantiateDtoViaAnnotation;
