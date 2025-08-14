@@ -107,7 +107,7 @@ public class MultibrowserConfiguration
 
         for (String browserProfile : browserProfileKeys)
         {
-            Set<String> subkeysForPrefix = getSubkeysForPrefix(browserProfileProperties, BROWSER_PROFILE_PREFIX + browserProfile + ".");
+            Set<String> subkeysForPrefix = getSubkeysForProfile(browserProfileProperties, BROWSER_PROFILE_PREFIX + browserProfile + ".");
             Map<String, String> browserProfileConfiguration = new HashMap<>();
             browserProfileConfiguration.put("browserTag", browserProfile);
             for (String subkey : subkeysForPrefix)
@@ -119,6 +119,35 @@ public class MultibrowserConfiguration
                                 mapper.map(browserProfileConfiguration, globalHeadless, globalAcceptInsecureCertificates, globalPageLoadStrategy,
                                            globalBrowserResolution));
         }
+    }
+
+    private Set<String> getSubkeysForProfile(Properties properties, String prefix)
+    {
+        Set<String> keys = new HashSet<String>();
+
+        for (Object key : properties.keySet())
+        {
+            String keyString = (String) key;
+            if (keyString.toLowerCase().startsWith(prefix.toLowerCase())) // TODO: lower case compare is wrong!
+            {
+                // cut off prefix
+                keyString = keyString.substring(prefix.length());
+
+                // split on the next dots
+                String[] split = keyString.split("\\.", 1);
+                if (split != null && split.length > 0)
+                {
+                    // the first entry in the resulting array will be the key we are searching for
+                    String newKey = split[0];
+                    if (StringUtils.isNotBlank(newKey))
+                    {
+                        keys.add(newKey);
+                    }
+                }
+            }
+        }
+
+        return keys;
     }
 
     private Set<String> getSubkeysForPrefix(Properties properties, String prefix)
