@@ -1,5 +1,14 @@
 package com.xceptance.neodymium.common.browser;
 
+import com.xceptance.neodymium.common.Data;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
+import com.xceptance.neodymium.util.Neodymium;
+import org.apache.commons.lang3.StringUtils;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Repeatable;
 import java.lang.reflect.AnnotatedElement;
@@ -13,16 +22,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.apache.commons.lang3.StringUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-
-import com.xceptance.neodymium.common.Data;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
-
 public class BrowserData extends Data
 {
     private List<String> classBrowsers;
@@ -34,8 +33,6 @@ public class BrowserData extends Data
     private List<RandomBrowsers> classRandomBrowsersAnnotation;
 
     private Class<?> testClass;
-
-    private static final String SYSTEM_PROPERTY_BROWSERDEFINITION = "browserdefinition";
 
     public BrowserData(Class<?> testClass)
     {
@@ -133,17 +130,15 @@ public class BrowserData extends Data
             System.setProperty("webdriver.edge.driver", edgeDriverPath);
         }
 
-        // TODO: do we need a possibility to define browser tags globaly via system var? Is this opportunity documented?
-
         // get test specific browser definitions (aka browser tag see browser.properties)
         // could be one value or comma separated list of values
-        String browserDefinitionsProperty = System.getProperty(SYSTEM_PROPERTY_BROWSERDEFINITION, "");
-        browserDefinitionsProperty = browserDefinitionsProperty.replaceAll("\\s", "");
+        String browserFilter = Neodymium.configuration().getBrowserFilter();
+        browserFilter = browserFilter.replaceAll("\\s", "");
 
         // parse test specific browser definitions
-        if (!StringUtils.isEmpty(browserDefinitionsProperty))
+        if (!StringUtils.isEmpty(browserFilter))
         {
-            systemBrowserFilter = Arrays.asList(browserDefinitionsProperty.split(","));
+            systemBrowserFilter = Arrays.asList(browserFilter.split(","));
         }
     }
 
