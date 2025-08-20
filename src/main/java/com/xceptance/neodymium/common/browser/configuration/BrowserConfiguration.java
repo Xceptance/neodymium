@@ -1,10 +1,10 @@
 package com.xceptance.neodymium.common.browser.configuration;
 
+import org.openqa.selenium.MutableCapabilities;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.openqa.selenium.MutableCapabilities;
 
 /**
  * POJO class to hold browser configurations
@@ -16,6 +16,8 @@ public class BrowserConfiguration
     private String browserTag;
 
     private String name;
+
+    private String browser;
 
     private MutableCapabilities capabilities;
 
@@ -75,6 +77,16 @@ public class BrowserConfiguration
     protected void setName(String name)
     {
         this.name = name;
+    }
+
+    public String getBrowser()
+    {
+        return browser;
+    }
+
+    public void setBrowser(String browser)
+    {
+        this.browser = browser;
     }
 
     /**

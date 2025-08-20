@@ -1,11 +1,10 @@
 package com.xceptance.neodymium.util;
 
+import com.xceptance.neodymium.junit4.NeodymiumRunner.DescriptionMode;
 import org.aeonbits.owner.Config.LoadPolicy;
 import org.aeonbits.owner.Config.LoadType;
 import org.aeonbits.owner.Config.Sources;
 import org.aeonbits.owner.Mutable;
-
-import com.xceptance.neodymium.junit4.NeodymiumRunner.DescriptionMode;
 
 @LoadPolicy(LoadType.MERGE)
 @Sources(
@@ -328,6 +327,9 @@ public interface NeodymiumConfiguration extends Mutable
 
     @Key("neodymium.webDriver.chrome.pathToBrowser")
     public String getChromeBrowserPath();
+
+    @Key("neodymium.webDriver.chromium.pathToBrowser")
+    public String getChromiumBrowserPath();
 
     @Key("neodymium.webDriver.firefox.pathToBrowser")
     public String getFirefoxBrowserPath();

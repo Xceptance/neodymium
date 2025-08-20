@@ -1,21 +1,31 @@
 package com.xceptance.neodymium.common.browser;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.openqa.selenium.remote.Browser.CHROME;
-import static org.openqa.selenium.remote.Browser.EDGE;
-import static org.openqa.selenium.remote.Browser.FIREFOX;
-import static org.openqa.selenium.remote.Browser.IE;
-import static org.openqa.selenium.remote.Browser.SAFARI;
-
-import java.io.File;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
+import com.browserup.bup.BrowserUpProxy;
+import com.browserup.bup.BrowserUpProxyServer;
+import com.browserup.bup.client.ClientUtil;
+import com.browserup.bup.mitm.CertificateAndKeySource;
+import com.browserup.bup.mitm.KeyStoreFileCertificateSource;
+import com.browserup.bup.mitm.RootCertificateGenerator;
+import com.browserup.bup.mitm.manager.ImpersonatingMitmManager;
+import com.browserup.bup.proxy.auth.AuthType;
+import com.codeborne.selenide.SelenideConfig;
+import com.codeborne.selenide.WebDriverRunner;
+import com.codeborne.selenide.impl.Plugins;
+import com.codeborne.selenide.proxy.SelenideProxyServer;
+import com.codeborne.selenide.proxy.SelenideProxyServerFactory;
+import com.xceptance.neodymium.NeodymiumWebDriverListener;
+import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
+import com.xceptance.neodymium.common.browser.configuration.BrowserConfigurationMapper;
+import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import com.xceptance.neodymium.common.browser.configuration.TestEnvironment;
+import com.xceptance.neodymium.common.browser.wrappers.ChromeBuilder;
+import com.xceptance.neodymium.common.browser.wrappers.ChromiumBuilder;
+import com.xceptance.neodymium.common.browser.wrappers.EdgeBuilder;
+import com.xceptance.neodymium.common.browser.wrappers.GeckoBuilder;
+import com.xceptance.neodymium.common.browser.wrappers.IEBuilder;
+import com.xceptance.neodymium.common.browser.wrappers.SafariBuilder;
+import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.NeodymiumConfiguration;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.openqa.selenium.Dimension;
@@ -45,31 +55,21 @@ import org.openqa.selenium.safari.SafariDriver;
 import org.openqa.selenium.safari.SafariOptions;
 import org.openqa.selenium.support.events.EventFiringDecorator;
 
-import com.browserup.bup.BrowserUpProxy;
-import com.browserup.bup.BrowserUpProxyServer;
-import com.browserup.bup.client.ClientUtil;
-import com.browserup.bup.mitm.CertificateAndKeySource;
-import com.browserup.bup.mitm.KeyStoreFileCertificateSource;
-import com.browserup.bup.mitm.RootCertificateGenerator;
-import com.browserup.bup.mitm.manager.ImpersonatingMitmManager;
-import com.browserup.bup.proxy.auth.AuthType;
-import com.codeborne.selenide.SelenideConfig;
-import com.codeborne.selenide.WebDriverRunner;
-import com.codeborne.selenide.impl.Plugins;
-import com.codeborne.selenide.proxy.SelenideProxyServer;
-import com.codeborne.selenide.proxy.SelenideProxyServerFactory;
-import com.xceptance.neodymium.NeodymiumWebDriverListener;
-import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
-import com.xceptance.neodymium.common.browser.configuration.BrowserConfigurationMapper;
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
-import com.xceptance.neodymium.common.browser.configuration.TestEnvironment;
-import com.xceptance.neodymium.common.browser.wrappers.ChromeBuilder;
-import com.xceptance.neodymium.common.browser.wrappers.EdgeBuilder;
-import com.xceptance.neodymium.common.browser.wrappers.GeckoBuilder;
-import com.xceptance.neodymium.common.browser.wrappers.IEBuilder;
-import com.xceptance.neodymium.common.browser.wrappers.SafariBuilder;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumConfiguration;
+import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.openqa.selenium.remote.Browser.CHROME;
+import static org.openqa.selenium.remote.Browser.EDGE;
+import static org.openqa.selenium.remote.Browser.FIREFOX;
+import static org.openqa.selenium.remote.Browser.IE;
+import static org.openqa.selenium.remote.Browser.SAFARI;
 
 /**
  * Helper class to create webdriver for the test
@@ -86,6 +86,8 @@ public final class BrowserRunnerHelper
 
     private static List<String> chromeBrowsers = new LinkedList<String>();
 
+    private static List<String> chromiumBrowsers = new LinkedList<String>();
+
     private static List<String> firefoxBrowsers = new LinkedList<String>();
 
     private static List<String> internetExplorerBrowsers = new LinkedList<String>();
@@ -99,6 +101,7 @@ public final class BrowserRunnerHelper
     static
     {
         chromeBrowsers.add(CHROME.browserName());
+        chromiumBrowsers.add("chromium");
 
         firefoxBrowsers.add(FIREFOX.browserName());
 
@@ -233,7 +236,8 @@ public final class BrowserRunnerHelper
         final String testEnvironment = config.getTestEnvironment();
         if (StringUtils.isEmpty(testEnvironment) || "local".equalsIgnoreCase(testEnvironment))
         {
-            final String browserName = capabilities.getBrowserName();
+            final String browserName = capabilities.getBrowserName().isEmpty() ? config.getBrowser() : capabilities.getBrowserName();
+
             if (chromeBrowsers.contains(browserName))
             {
                 final ChromeOptions options = new ChromeOptions();
@@ -292,6 +296,64 @@ public final class BrowserRunnerHelper
                 }
 
                 wDSC.setWebDriver(new ChromeDriver(chromeBuilder.build(), options.merge(capabilities)));
+            }
+            else if (chromiumBrowsers.contains(browserName))
+            {
+                final ChromeOptions options = new ChromeOptions();
+                final String driverInPathPath = new ExecutableFinder().find("chromedriver");
+
+                // do we have a custom path?
+                String pathToBrowser = Neodymium.configuration().getChromiumBrowserPath();
+                if (StringUtils.isNotBlank(pathToBrowser))
+                {
+                    options.setBinary(pathToBrowser);
+                }
+                else
+                {
+                    options.setBinary(new ExecutableFinder().find("chromium"));
+                }
+                if (config.isHeadless())
+                {
+                    options.addArguments("--headless");
+                }
+
+                if (config.getArguments() != null && !config.getArguments().isEmpty())
+                {
+                    options.addArguments(config.getArguments());
+                }
+
+                if (config.getPreferences() != null && !config.getPreferences().isEmpty())
+                {
+                    options.setExperimentalOption("prefs", config.getPreferences());
+                }
+
+                if ((config.getPreferences() != null && !config.getPreferences().isEmpty()) ||
+                    StringUtils.isNotBlank(config.getDownloadDirectory()))
+                {
+                    final HashMap<String, Object> prefs = new HashMap<>();
+
+                    // if we have configured prefs, we need to add all to the experimental options
+                    if (config.getPreferences() != null && !config.getPreferences().isEmpty())
+                    {
+                        prefs.putAll(config.getPreferences());
+                    }
+                    // if we have configured a download folder separately, it'll override the general config
+                    if (StringUtils.isNotBlank(config.getDownloadDirectory()))
+                    {
+                        prefs.put("download.default_directory", config.getDownloadDirectory());
+                        prefs.put("plugins.always_open_pdf_externally", true);
+                    }
+
+                    options.setExperimentalOption("prefs", prefs);
+                }
+
+                ChromiumBuilder chromiumBuilder = new ChromiumBuilder(config.getDriverArguments());
+                if (StringUtils.isNotBlank(driverInPathPath))
+                {
+                    chromiumBuilder.usingDriverExecutable(new File(driverInPathPath));
+                }
+
+                wDSC.setWebDriver(new ChromeDriver(options.merge(capabilities)));
             }
             else if (firefoxBrowsers.contains(browserName))
             {
