@@ -102,8 +102,7 @@
 					<forkCount>4</forkCount>
 					<reuseForks>false</reuseForks>
 					<includes>
-						<include>
-							com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
+						<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
 						<include>com/xceptance/neodymium/common/**/*Test.java</include>
 					</includes>
 				</configuration>
@@ -391,6 +390,11 @@
 			<groupId>com.codeborne</groupId>
 			<artifactId>selenide-proxy</artifactId>
 			<version>${selenide.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-compress</artifactId>
+			<version>1.27.1</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
