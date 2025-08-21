@@ -130,6 +130,7 @@ public class BrowserData extends Data
             System.setProperty("webdriver.edge.driver", edgeDriverPath);
         }
 
+        // already filter the list of browsers here to speed up the actual filter later
         // get test specific browser definitions (aka browser tag see browser.properties)
         // could be one value or comma separated list of values
         String browserFilter = Neodymium.configuration().getBrowserFilter();
