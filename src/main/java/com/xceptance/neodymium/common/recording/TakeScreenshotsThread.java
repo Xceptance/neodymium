@@ -1,11 +1,16 @@
 package com.xceptance.neodymium.common.recording;
 
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Date;
 
+import javax.imageio.ImageIO;
+
+import org.openqa.selenium.Dimension;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
@@ -87,7 +92,17 @@ public class TakeScreenshotsThread extends Thread
                     try
                     {
                         File file = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+                        int cropWidth = ((Long) ((JavascriptExecutor) driver).executeScript("return window.innerWidth;")).intValue();
+                        int cropHeight = ((Long) ((JavascriptExecutor) driver).executeScript("return window.innerHeight;")).intValue();
+                        BufferedImage fullImage = ImageIO.read(file);
+                        if (cropWidth > 0 && cropHeight > 0)
+                        {
+                            BufferedImage croppedImage = fullImage.getSubimage(0, 0, cropWidth, cropHeight);
+                            ImageIO.write(croppedImage, "png", file);
+                        }
+
                         writer.compressImageIfNeeded(file, recordingConfigurations.imageScaleFactor(), recordingConfigurations.imageQuality());
+                        duration = new Date().getTime() - start;
                         long delay = recordingConfigurations.oneImagePerMilliseconds() > duration ? recordingConfigurations.oneImagePerMilliseconds()
                                                                                                   : duration;
                         writer.write(file, delay);
