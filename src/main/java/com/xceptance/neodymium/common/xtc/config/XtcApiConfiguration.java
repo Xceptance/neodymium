@@ -11,6 +11,7 @@ import org.aeonbits.owner.Mutable;
         "system:properties",
         "${xtc-api.temporaryConfigFile}",
         "${neodymium.temporaryConfigFile}",
+        "file:config/dev-credentials.properties",
         "file:config/dev-xtc-api.properties",
         "file:config/dev-neodymium.properties",
         "system:env",
