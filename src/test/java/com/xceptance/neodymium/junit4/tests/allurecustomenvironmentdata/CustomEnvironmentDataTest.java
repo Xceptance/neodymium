@@ -37,6 +37,9 @@ public class CustomEnvironmentDataTest extends NeodymiumTest
     @BeforeClass
     public static void setUpNeodymiumConfiguration() throws IOException
     {
+        File environmentXml = new File(ENVIRONMENT_XML_PATH);
+        environmentXml.delete();
+
         File neodymiumConfigFile = new File("./config/neodymium.properties");
         File backupNeodymiumConfigFile = new File("./config/neodymium-properties.backup");
         FileUtils.copyFile(neodymiumConfigFile, backupNeodymiumConfigFile);
