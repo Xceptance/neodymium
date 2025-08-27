@@ -410,14 +410,6 @@ public class SelenideAddons
             else
             {
                 SelenideLogger.commitStep(SelenideLogger.beginStep("Assertion error", message), e);
-                if (driver.getSessionId() != null)
-                {
-                    throw UIAssertionError.wrap(driver, e, 0);
-                }
-                else
-                {
-                    throw e;
-                }
             }
         }
     }
