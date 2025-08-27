@@ -9,16 +9,12 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
-import org.junit.runner.RunWith;
 
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.testclasses.webDriver.DriverCustomCapabilitiesTestClass;
 
-@RunWith(NeodymiumRunner.class)
 public class DriverCustomCapabilitiesTest extends NeodymiumTest
 {
-
     @BeforeClass
     public static void createSettings() throws IOException
     {

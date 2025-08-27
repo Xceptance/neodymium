@@ -18,7 +18,7 @@ import java.util.Map;
 
 public class CustomEnvironmentDataOrderTest extends NeodymiumTest
 {
-    private static final String ENVIRONMENT_XML_PATH = AllureAddons.getAllureResultsFolder().getAbsoluteFile() + File.separator + "environment.xml";
+    private static final String ENVIRONMENT_XML_PATH = AllureAddons.getAllureResultsFolder().getAbsoluteFile() + File.separator + "environment_CustomEnvironmentDataOrderTest.xml";
 
     /**
      * The test wants to test the order in which the custom values are written and set. The loading order for these

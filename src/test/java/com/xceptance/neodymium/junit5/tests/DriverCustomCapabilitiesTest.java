@@ -5,22 +5,16 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.runner.JUnitCore;
-import org.junit.runner.Result;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.junit4.testclasses.webDriver.DriverCustomCapabilitiesTestClass;
-import com.xceptance.neodymium.junit5.testclasses.webDriver.DriverArgumentsConfigTest;
+import com.xceptance.neodymium.junit5.testclasses.webDriver.DriverCustomCapabilitiesTestClass;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 
 public class DriverCustomCapabilitiesTest extends AbstractNeodymiumTest
 {
-
-    @BeforeClass
+    @BeforeAll
     public static void createSettings() throws IOException
     {
         Map<String, String> properties = new HashMap<>();
