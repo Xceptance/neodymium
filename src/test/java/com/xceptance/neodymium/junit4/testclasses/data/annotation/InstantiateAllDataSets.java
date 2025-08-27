@@ -1,6 +1,6 @@
 package com.xceptance.neodymium.junit4.testclasses.data.annotation;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import com.xceptance.neodymium.common.testdata.DataFile;
