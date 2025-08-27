@@ -121,20 +121,20 @@ public class MultibrowserConfiguration
         }
     }
 
-    private Set<String> getSubkeysForProfile(Properties properties, String prefix)
+    private Set<String> getSubkeys(Properties properties, String prefix, boolean firstDot)
     {
         Set<String> keys = new HashSet<String>();
 
         for (Object key : properties.keySet())
         {
             String keyString = (String) key;
-            if (keyString.toLowerCase().startsWith(prefix.toLowerCase())) // TODO: lower case compare is wrong!
+            if (keyString.toLowerCase().startsWith(prefix.toLowerCase()))
             {
                 // cut off prefix
                 keyString = keyString.substring(prefix.length());
 
                 // split on the next dots
-                String[] split = keyString.split("\\.", 1);
+                String[] split = firstDot ? keyString.split("\\.", 1) : keyString.split("\\.");
                 if (split != null && split.length > 0)
                 {
                     // the first entry in the resulting array will be the key we are searching for
@@ -150,33 +150,14 @@ public class MultibrowserConfiguration
         return keys;
     }
 
+    private Set<String> getSubkeysForProfile(Properties properties, String prefix)
+    {
+        return getSubkeys(properties, prefix, true);
+    }
+
     private Set<String> getSubkeysForPrefix(Properties properties, String prefix)
     {
-        Set<String> keys = new HashSet<String>();
-
-        for (Object key : properties.keySet())
-        {
-            String keyString = (String) key;
-            if (keyString.toLowerCase().startsWith(prefix.toLowerCase())) // TODO: lower case compare is wrong!
-            {
-                // cut off prefix
-                keyString = keyString.substring(prefix.length());
-
-                // split on the next dots
-                String[] split = keyString.split("\\.");
-                if (split != null && split.length > 0)
-                {
-                    // the first entry in the resulting array will be the key we are searching for
-                    String newKey = split[0];
-                    if (StringUtils.isNotBlank(newKey))
-                    {
-                        keys.add(newKey);
-                    }
-                }
-            }
-        }
-
-        return keys;
+        return getSubkeys(properties, prefix, false);
     }
 
     public static MultibrowserConfiguration getInstance()

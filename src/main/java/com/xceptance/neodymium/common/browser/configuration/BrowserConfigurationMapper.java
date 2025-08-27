@@ -380,12 +380,15 @@ public class BrowserConfigurationMapper
                                                                                     .collect(java.util.stream.Collectors.toList());
         for (Entry<String, String> capabilityEntry : customCapabilities)
         {
-            MutableCapabilities newCapability = new MutableCapabilities();
-            String capabilityValue = capabilityEntry.getValue();
-            newCapability.setCapability(capabilityEntry.getKey().replace(CAPABILITY + ".", ""),
-                                        capabilityValue.equalsIgnoreCase("true") || capabilityValue.equalsIgnoreCase("false") ? Boolean.valueOf(capabilityValue)
-                                                                                                                              : capabilityValue);
-            capabilities = capabilities.merge(newCapability);
+            if (StringUtils.isNotBlank(capabilityEntry.getKey()) && StringUtils.isNoneBlank(capabilityEntry.getValue()))
+            {
+                MutableCapabilities newCapability = new MutableCapabilities();
+                String capabilityValue = capabilityEntry.getValue();
+                newCapability.setCapability(capabilityEntry.getKey().replace(CAPABILITY + ".", ""),
+                                            capabilityValue.equalsIgnoreCase("true") || capabilityValue.equalsIgnoreCase("false") ? Boolean.valueOf(capabilityValue)
+                                                                                                                                  : capabilityValue);
+                capabilities = capabilities.merge(newCapability);
+            }
         }
         browserConfiguration.setGridProperties(testEnvironmentProperties);
         browserConfiguration.setCapabilities(capabilities);

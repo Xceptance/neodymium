@@ -9,7 +9,7 @@ import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 
-public class DriverCustomCapabilitesTestClass
+public class DriverCustomCapabilitiesTestClass
 {
     @Browser("Chrome_headless")
     @Browser("FF_headless")

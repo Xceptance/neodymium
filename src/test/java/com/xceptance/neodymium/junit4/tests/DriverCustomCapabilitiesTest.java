@@ -1,4 +1,4 @@
-package com.xceptance.neodymium.junit5.tests;
+package com.xceptance.neodymium.junit4.tests;
 
 import java.io.File;
 import java.io.IOException;
@@ -13,11 +13,10 @@ import org.junit.runner.RunWith;
 
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.junit4.testclasses.webDriver.DriverCustomCapabilitesTestClass;
-import com.xceptance.neodymium.junit5.testclasses.webDriver.DriverArgumentsConfigTest;
-import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
+import com.xceptance.neodymium.junit4.testclasses.webDriver.DriverCustomCapabilitiesTestClass;
 
-public class DriverCustomCapabilitesTest extends AbstractNeodymiumTest
+@RunWith(NeodymiumRunner.class)
+public class DriverCustomCapabilitiesTest extends NeodymiumTest
 {
 
     @BeforeClass
@@ -28,7 +27,7 @@ public class DriverCustomCapabilitesTest extends AbstractNeodymiumTest
         properties.put("browserprofile.FF_headless.headless", "true");
         properties.put("browserprofile.FF_headless.browserResolution", "1024x768");
         properties.put("browserprofile.FF_headless.browser", "firefox");
-
+        
         properties.put("browserprofile.FF_with_capability.name", "FF with capability");
         properties.put("browserprofile.FF_with_capability.headless", "true");
         properties.put("browserprofile.FF_with_capability.browserResolution", "1024x768");
@@ -40,7 +39,7 @@ public class DriverCustomCapabilitesTest extends AbstractNeodymiumTest
         properties.put("browserprofile.Chrome_with_capability.browserResolution", "1024x768");
         properties.put("browserprofile.Chrome_with_capability.browser", "chrome");
         properties.put("browserprofile.Chrome_with_capability.capability.unhandledPromptBehavior", "accept");
-        File tempConfigFile = File.createTempFile("driverCustomCapabilitesTest", "", new File("./config/"));
+        File tempConfigFile = File.createTempFile("driverCustomCapabilitiesTest", "", new File("./config/"));
         writeMapToPropertiesFile(properties, tempConfigFile);
         tempFiles.add(tempConfigFile);
 
@@ -52,7 +51,7 @@ public class DriverCustomCapabilitesTest extends AbstractNeodymiumTest
     @Test
     public void test()
     {
-        NeodymiumTestExecutionSummary result = run(DriverCustomCapabilitesTestClass.class);
+        Result result = JUnitCore.runClasses(DriverCustomCapabilitiesTestClass.class);
         checkPass(result, 4, 0);
     }
 }
