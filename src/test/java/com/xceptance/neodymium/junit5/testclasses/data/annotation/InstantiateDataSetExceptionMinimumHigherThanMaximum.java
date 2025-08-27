@@ -17,12 +17,3 @@ public class InstantiateDataSetExceptionMinimumHigherThanMaximum
         // minimum data set index > maximum data set index
     }
 }
-
-// @DataSet(1) // add first data set
-// @DataSet(2) // add second data set
-// @DataSet(3) // add third data set
-// @DataSet(4) // add forth data set
-
-// @DataSet({2, 3}) // adds 2-3 data sets
-// @DataSet({2, 4}) // adds 2-4 data sets
-// @DataSet({3, 4}) // adds 3-4 data sets

@@ -11,6 +11,6 @@ public class InstantiateDataSetExceptionNoDataSetFound
     @DataSet(1)
     public void test1()
     {
-        // there is no sixth data set (out of bounds)
+        // there are no data sets
     }
 }

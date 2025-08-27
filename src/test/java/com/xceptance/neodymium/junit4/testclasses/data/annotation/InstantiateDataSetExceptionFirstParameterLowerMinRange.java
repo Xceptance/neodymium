@@ -17,6 +17,6 @@ public class InstantiateDataSetExceptionFirstParameterLowerMinRange
     })
     public void test1()
     {
-        // there is no sixth data set (out of bounds)
+        // index 0 is not allowed (out of bounds)
     }
 }

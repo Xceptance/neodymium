@@ -13,6 +13,6 @@ public class InstantiateDataSetExceptionOnlyParameterHigherMaxRange
     @DataSet(6)
     public void test1()
     {
-        // index 0 is not allowed (out of bounds)
+        // there is no sixth data set (out of bounds)
     }
 }
