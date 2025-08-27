@@ -107,7 +107,7 @@ public class MultibrowserConfiguration
 
         for (String browserProfile : browserProfileKeys)
         {
-            Set<String> subkeysForPrefix = getSubkeysForPrefix(browserProfileProperties, BROWSER_PROFILE_PREFIX + browserProfile + ".");
+            Set<String> subkeysForPrefix = getSubkeysForProfile(browserProfileProperties, BROWSER_PROFILE_PREFIX + browserProfile + ".");
             Map<String, String> browserProfileConfiguration = new HashMap<>();
             browserProfileConfiguration.put("browserTag", browserProfile);
             for (String subkey : subkeysForPrefix)
@@ -121,20 +121,20 @@ public class MultibrowserConfiguration
         }
     }
 
-    private Set<String> getSubkeysForPrefix(Properties properties, String prefix)
+    private Set<String> getSubkeys(Properties properties, String prefix, boolean firstDot)
     {
         Set<String> keys = new HashSet<String>();
 
         for (Object key : properties.keySet())
         {
             String keyString = (String) key;
-            if (keyString.toLowerCase().startsWith(prefix.toLowerCase())) // TODO: lower case compare is wrong!
+            if (keyString.toLowerCase().startsWith(prefix.toLowerCase()))
             {
                 // cut off prefix
                 keyString = keyString.substring(prefix.length());
 
                 // split on the next dots
-                String[] split = keyString.split("\\.");
+                String[] split = firstDot ? keyString.split("\\.", 1) : keyString.split("\\.");
                 if (split != null && split.length > 0)
                 {
                     // the first entry in the resulting array will be the key we are searching for
@@ -148,6 +148,16 @@ public class MultibrowserConfiguration
         }
 
         return keys;
+    }
+
+    private Set<String> getSubkeysForProfile(Properties properties, String prefix)
+    {
+        return getSubkeys(properties, prefix, true);
+    }
+
+    private Set<String> getSubkeysForPrefix(Properties properties, String prefix)
+    {
+        return getSubkeys(properties, prefix, false);
     }
 
     public static MultibrowserConfiguration getInstance()
