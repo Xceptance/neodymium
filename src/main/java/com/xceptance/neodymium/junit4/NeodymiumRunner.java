@@ -2,9 +2,11 @@ package com.xceptance.neodymium.junit4;
 
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.common.NeoAllureListener;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.retry.RetryMethodData;
 import com.xceptance.neodymium.junit4.order.DefaultStatementRunOrder;
 import com.xceptance.neodymium.junit4.statement.browser.BrowserRunAfters;
 import com.xceptance.neodymium.junit4.statement.browser.BrowserRunBefores;
@@ -12,7 +14,6 @@ import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.NeodymiumRandom;
-import io.qameta.allure.selenide.AllureSelenide;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -35,6 +36,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -92,7 +94,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     public NeodymiumRunner(Class<?> clazz) throws InitializationError
     {
         super(clazz);
-        SelenideLogger.addListener(LISTENER_NAME, new AllureSelenide());
+        SelenideLogger.addListener(LISTENER_NAME, new NeoAllureListener());
 
         SelenideLogger.addListener(TestStepListener.LISTENER_NAME, new TestStepListener());
 
@@ -278,6 +280,45 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
             testMethods.addAll(buildCrossProduct(testAnnotatedMethod.getMethod(), builderList, builderDataList));
         }
 
+        // Here we inject test id for RetryMethodData. It's required to correctly differentiate between different tests
+        // and retries of the same test. Every test multiplication by browser and data set should have unique id but the
+        // ids should be the same for all iterations of the name test multiplication.
+        // That's why the id = name of test class + name of test method + data set tag + browser tag
+
+        // Group tests by their name (name of test method + data set tag + browser tag) to get all iterations of the
+        // same enhanced method mapped to the same key
+        Map<String, List<FrameworkMethod>> testsGroupedByName = testMethods.stream().collect(Collectors.groupingBy(FrameworkMethod::getName));
+
+        // Go over every unique enhanced method
+        for (String name : testsGroupedByName.keySet())
+        {
+            testsGroupedByName.get(name)
+                              // Go over every iteration of the enhanced method
+                              .forEach(testIteration -> {
+                                  if (testIteration instanceof EnhancedMethod)
+                                  {
+                                      EnhancedMethod enhancedMethod = (EnhancedMethod) testIteration;
+                                      // look for RetryMethodData data object
+                                      Optional<Object> retryMethodDataOptional = enhancedMethod.getData().stream()
+                                                                                               .filter(data -> data instanceof RetryMethodData)
+                                                                                               .findAny();
+                                      // if the object is found (should always be the case),
+                                      if (retryMethodDataOptional.isPresent())
+                                      {
+                                          RetryMethodData retryMethodData = ((RetryMethodData) retryMethodDataOptional.get());
+                                          int index = enhancedMethod.getData().indexOf(retryMethodData);
+                                          // copy the object to ensure id will only be changed for the enhanced method
+                                          // it's meant to be changed
+                                          RetryMethodData retryMethodDataCopy = new RetryMethodData(retryMethodData);
+                                          // inject the id
+                                          retryMethodDataCopy.setId(getTestClass().getJavaClass().getCanonicalName() + " :: " + name);
+                                          // replace the old retryMethodData with the new copy with injected id
+                                          enhancedMethod.getData().set(index, retryMethodDataCopy);
+                                      }
+                                  }
+                              });
+        }
+
         // filter test methods by regex
         String testExecutionRegex = Neodymium.configuration().getTestNameFilter();
         if (StringUtils.isNotEmpty(testExecutionRegex))
@@ -293,7 +334,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
                                      .collect(Collectors.toList());
         }
 
-        // this list is now final for class execution so make it unmodifiable
+        // this list eis now final for class execution so make it unmodifiable
         computedTestMethods = Collections.unmodifiableList(testMethods);
 
         // compute test descriptions

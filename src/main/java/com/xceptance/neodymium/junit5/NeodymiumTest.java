@@ -19,6 +19,7 @@ import io.qameta.allure.junit5.AllureJunit5;
 @ExtendWith(
 {
   NeodymiumRunner.class, AllureJunit5.class
+
 })
 public @interface NeodymiumTest
 {

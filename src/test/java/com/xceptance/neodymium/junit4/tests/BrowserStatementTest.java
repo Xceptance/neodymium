@@ -25,6 +25,7 @@ import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfigur
 import com.xceptance.neodymium.junit4.testclasses.browser.DisableRandomBrowserAnnotation;
 import com.xceptance.neodymium.junit4.testclasses.browser.RandomBrowsersClassInitialisationException;
 import com.xceptance.neodymium.junit4.testclasses.browser.RandomBrowsersMethodInitialisationException;
+import com.xceptance.neodymium.junit4.testclasses.browser.SystemPropertyBrowserFilter;
 import com.xceptance.neodymium.junit4.testclasses.browser.classonly.ClassBrowserSuppressed;
 import com.xceptance.neodymium.junit4.testclasses.browser.classonly.ClassBrowserSuppressedNoBrowserAnnotation;
 import com.xceptance.neodymium.junit4.testclasses.browser.classonly.ClassBrowserSuppressedWithBefore;
@@ -339,12 +340,21 @@ public class BrowserStatementTest extends NeodymiumTest
     }
 
     @Test
+    public void testSystemPropertyBrowserFilter() throws Throwable
+    {
+        System.setProperty("browserdefinition", "Chrome_headless");
+        Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
+        checkPass(result, 1, 0);
+        System.setProperty("browserdefinition", "");
+    }
+
+    @Test
     public void testTestBrowser() throws Throwable
     {
         // one test method and one browser annotated on class
         String[] expected = new String[]
         {
-          "first :: Browser chrome"
+          "first :: Browser chrome :: "
         };
         checkDescription(OneClassBrowserOneMethod.class, expected);
     }
@@ -355,7 +365,7 @@ public class BrowserStatementTest extends NeodymiumTest
         //
         String[] expected = new String[]
         {
-          "first"
+          "first :: "
         };
         checkDescription(ClassBrowserSuppressed.class, expected);
     }
@@ -366,8 +376,8 @@ public class BrowserStatementTest extends NeodymiumTest
         //
         String[] expected = new String[]
         {
-          "test1 :: Browser Chrome_1024x768",
-          "test1 :: Browser Chrome_1500x1000"
+          "test1 :: Browser Chrome_1024x768 :: ",
+          "test1 :: Browser Chrome_1500x1000 :: "
         };
         checkDescription(DisableRandomBrowserAnnotation.class, expected);
     }
@@ -377,7 +387,7 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         String[] expected = new String[]
         {
-          "first :: Browser chrome", "first :: Browser firefox"
+          "first :: Browser chrome :: ", "first :: Browser firefox :: "
         };
         checkDescription(TwoClassBrowserOneMethod.class, expected);
     }
@@ -388,7 +398,7 @@ public class BrowserStatementTest extends NeodymiumTest
         // two browser annotated on class, both have same value
         String[] expected = new String[]
         {
-          "first :: Browser chrome"
+          "first :: Browser chrome :: "
         };
         checkDescription(TwoSameClassBrowserOneMethod.class, expected);
     }
@@ -399,7 +409,7 @@ public class BrowserStatementTest extends NeodymiumTest
         // same browser annotated on class and method
         String[] expected = new String[]
         {
-          "first :: Browser chrome"
+          "first :: Browser chrome :: "
         };
         checkDescription(ClassAndMethodSameBrowserOneMethod.class, expected);
     }
@@ -410,7 +420,7 @@ public class BrowserStatementTest extends NeodymiumTest
         // no browser definition but browser suppressed on class
         String[] expected = new String[]
         {
-          "first"
+          "first :: "
         };
         checkDescription(ClassBrowserSuppressedNoBrowserAnnotation.class, expected);
     }
@@ -421,7 +431,7 @@ public class BrowserStatementTest extends NeodymiumTest
         // no browser definition but browser suppressed on method
         String[] expected = new String[]
         {
-          "first"
+          "first :: "
         };
         checkDescription(MethodBrowserSuppressNoBrowserAnnotation.class, expected);
     }
@@ -432,8 +442,8 @@ public class BrowserStatementTest extends NeodymiumTest
         // a browser definition on a method and a suppress browser
         String[] expected = new String[]
         {
-          "first",
-          "second"
+          "first :: ",
+          "second :: "
         };
         checkDescription(OneBrowserOneMethodBrowserSuppressed.class, expected);
     }
@@ -446,12 +456,12 @@ public class BrowserStatementTest extends NeodymiumTest
         anno1.add("@org.junit.Test");
         anno1.add("@com.xceptance.neodymium.common.browser.Browser.*chrome");
         anno1.add("@com.xceptance.neodymium.common.browser.SuppressBrowsers()");
-        expectedAnnotations.put("first", anno1);
+        expectedAnnotations.put("first :: ", anno1);
 
         List<String> anno2 = new ArrayList<String>();
         anno2.add("@org.junit.Test");
         anno2.add("@org.junit.Ignore.*This should be visible");
-        expectedAnnotations.put("second", anno2);
+        expectedAnnotations.put("second :: ", anno2);
         checkAnnotations(OneBrowserOneMethodBrowserSuppressed.class, expectedAnnotations);
     }
 
@@ -476,8 +486,8 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         String[] expected = new String[]
         {
-          "test :: Browser Chrome_1024x768",
-          "testParent :: Browser Chrome_1024x768"
+          "test :: Browser Chrome_1024x768 :: ",
+          "testParent :: Browser Chrome_1024x768 :: "
         };
         checkDescription(BrowserOverwrittingChild.class, expected);
         Result result = JUnitCore.runClasses(BrowserOverwrittingChild.class);

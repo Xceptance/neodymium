@@ -6,12 +6,9 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Date;
 
-import org.openqa.selenium.NoSuchSessionException;
-import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.remote.UnreachableBrowserException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,23 +84,23 @@ public class TakeScreenshotsThread extends Thread
                 {
                     long start = new Date().getTime();
 
-
-                    try 
+                    try
                     {
-                      File file = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-                      writer.compressImageIfNeeded(file, recordingConfigurations.imageScaleFactor(), recordingConfigurations.imageQuality());
-                      long delay = recordingConfigurations.oneImagePerMilliseconds() > duration ? recordingConfigurations.oneImagePerMilliseconds()
-                                                                                                : duration;
-                      writer.write(file, delay);
-                      file.delete();
+                        File file = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+                        writer.compressImageIfNeeded(file, recordingConfigurations.imageScaleFactor(), recordingConfigurations.imageQuality());
+                        long delay = recordingConfigurations.oneImagePerMilliseconds() > duration ? recordingConfigurations.oneImagePerMilliseconds()
+                                                                                                  : duration;
+                        writer.write(file, delay);
+                        file.delete();
 
                     }
-                    catch (NoSuchWindowException | NoSuchSessionException | UnreachableBrowserException e)
+                    catch (Throwable e)
                     {
                         // catching the exception prevents the video from failing
+                        LOGGER.error("Screenshot could not be taken", e);
                     }
-                    
-                    duration = new Date().getTime() - start;                    
+
+                    duration = new Date().getTime() - start;
                     millis += duration;
                     turns++;
                     long sleep = recordingConfigurations.oneImagePerMilliseconds() - duration;

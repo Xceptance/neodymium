@@ -9,7 +9,7 @@ import org.junit.runner.RunWith;
 import java.io.File;
 import java.util.Map;
 
-import static com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata.XmlToMapUtil.getXmlParameterMap;
+import static com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata.CustomEnvironmentDataUtils.getXmlParameterMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

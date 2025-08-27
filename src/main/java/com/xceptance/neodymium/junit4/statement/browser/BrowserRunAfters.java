@@ -49,12 +49,23 @@ public class BrowserRunAfters extends RunAfters
     @Override
     public void evaluate() throws Throwable
     {
-        BrowserMethodData browserMethodData = method instanceof EnhancedMethod ? (BrowserMethodData) ((EnhancedMethod) method).getData().get(0) : null;
-        List<Method> aftersWithTestMethod = Neodymium.configuration().startNewBrowserForCleanUp()
-                                                                                                  ? browserMethodData == null ? new ArrayList<Method>()
-                                                                                                                              : browserMethodData.getAfterMethodsWithTestBrowser()
-                                                                                                  : afters.stream().map(after -> after.getMethod())
-                                                                                                          .collect(Collectors.toList());
+        Optional<Object> browserMethodDataOptional = method instanceof EnhancedMethod ? ((EnhancedMethod) method).getData()
+                                                                                                                 .stream()
+                                                                                                                 .filter(data -> data instanceof BrowserMethodData)
+                                                                                                                 .findFirst()
+                                                                                      : Optional.empty();
+        List<Method> afterMethodsToBeExecutedWithTestBrowser = new ArrayList<Method>();
+        List<Method> aftersWithTestMethod = new ArrayList<Method>();
+        if (browserMethodDataOptional.isPresent())
+        {
+            BrowserMethodData browserMethodData = (BrowserMethodData) browserMethodDataOptional.get();
+            afterMethodsToBeExecutedWithTestBrowser = new ArrayList<Method>(browserMethodData.getAfterMethodsWithTestBrowser());
+            aftersWithTestMethod = Neodymium.configuration().startNewBrowserForCleanUp()
+                                                                                         ? browserMethodData == null ? new ArrayList<Method>()
+                                                                                                                     : afterMethodsToBeExecutedWithTestBrowser
+                                                                                         : afters.stream().map(after -> after.getMethod())
+                                                                                                 .collect(Collectors.toList());
+        }
         boolean tearDownDone = false;
         List<Throwable> errors = new ArrayList<Throwable>();
         try
@@ -73,14 +84,18 @@ public class BrowserRunAfters extends RunAfters
             {
                 if (Neodymium.configuration().startNewBrowserForCleanUp())
                 {
-                    boolean reuseTestBrowserForThisAfter = aftersWithTestMethod.remove(each.getMethod());
-                    if (!tearDownDone && !reuseTestBrowserForThisAfter && aftersWithTestMethod.isEmpty() && browserMethodData != null)
+                    if (browserMethodDataOptional.isPresent())
                     {
-                        new BrowserRunner().teardown(!errors.isEmpty(), browserMethodData, Neodymium.getWebDriverStateContainer());
-                        tearDownDone = true;
-                        if (browserMethodData != null)
+                        BrowserMethodData browserMethodData = (BrowserMethodData) browserMethodDataOptional.get();
+                        boolean reuseTestBrowserForThisAfter = aftersWithTestMethod.remove(each.getMethod());
+                        if (!tearDownDone && !reuseTestBrowserForThisAfter && aftersWithTestMethod.isEmpty() && browserMethodData != null)
                         {
-                            Neodymium.setBrowserProfileName(browserMethodData.getBrowserTag());
+                            new BrowserRunner().teardown(!errors.isEmpty(), browserMethodData, Neodymium.getWebDriverStateContainer());
+                            tearDownDone = true;
+                            if (browserMethodData != null)
+                            {
+                                Neodymium.setBrowserProfileName(browserMethodData.getBrowserTag());
+                            }
                         }
                     }
 

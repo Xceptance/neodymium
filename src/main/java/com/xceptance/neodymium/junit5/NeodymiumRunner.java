@@ -2,6 +2,7 @@ package com.xceptance.neodymium.junit5;
 
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.common.NeoAllureListener;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
@@ -29,7 +30,7 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
 
     public NeodymiumRunner()
     {
-        SelenideLogger.addListener(LISTENER_NAME, new AllureSelenide());
+        SelenideLogger.addListener(LISTENER_NAME, new NeoAllureListener());
 
         SelenideLogger.addListener(TestStepListener.LISTENER_NAME, new TestStepListener());
 

@@ -1,6 +1,9 @@
 package com.xceptance.neodymium.junit4.statement.browser;
 
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.internal.runners.statements.RunBefores;
 import org.junit.runners.model.FrameworkMethod;
@@ -32,8 +35,15 @@ public class BrowserRunBefores extends RunBefores
     @Override
     public void evaluate() throws Throwable
     {
-        BrowserMethodData browserMethodData = method instanceof EnhancedMethod ? (BrowserMethodData) ((EnhancedMethod) method).getData().get(0) : null;
-        boolean startNewBrowserForSetup = browserMethodData != null ? browserMethodData.isStartBrowserOnSetUp() : true;
+        Optional<Object> browserMethodDataOptional = method instanceof EnhancedMethod ? ((EnhancedMethod) method).getData()
+                                                                                                                 .stream()
+                                                                                                                 .filter(data -> data instanceof BrowserMethodData)
+                                                                                                                 .findFirst()
+                                                                                      : Optional.empty();
+        List<Method> afterMethodsToBeExecutedWithTestBrowser = new ArrayList<Method>();
+        List<Method> aftersWithTestMethod = new ArrayList<Method>();
+        boolean startNewBrowserForSetup = browserMethodDataOptional.isPresent() ? ((BrowserMethodData) browserMethodDataOptional.get()).isStartBrowserOnSetUp()
+                                                                                : true;
         setupDone = !startNewBrowserForSetup;
         for (FrameworkMethod before : befores)
         {
@@ -43,6 +53,7 @@ public class BrowserRunBefores extends RunBefores
                 boolean isSuppressed = BrowserBeforeRunner.isSuppressed(before.getMethod());
                 if (!startForThisBefore && !isSuppressed)
                 {
+                    BrowserMethodData browserMethodData = (BrowserMethodData) browserMethodDataOptional.get();
                     new BrowserRunner().setUpTest(browserMethodData, method.getDeclaringClass().toString());
                     setupDone = true;
                     invokeMethod(before);
@@ -71,9 +82,9 @@ public class BrowserRunBefores extends RunBefores
                 invokeMethod(before);
             }
         }
-        if (!setupDone && browserMethodData != null)
+        if (!setupDone && browserMethodDataOptional.isPresent())
         {
-            new BrowserRunner().setUpTest(browserMethodData, method.getDeclaringClass().toString());
+            new BrowserRunner().setUpTest((BrowserMethodData) browserMethodDataOptional.get(), method.getDeclaringClass().toString());
         }
         next.evaluate();
 
