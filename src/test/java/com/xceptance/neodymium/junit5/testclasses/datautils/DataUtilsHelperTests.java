@@ -22,7 +22,7 @@ public class DataUtilsHelperTests
     {
         String email = DataUtils.randomEmail();
         // test fixed random
-        Assertions.assertEquals("junit-01uh2qpree@varmail.de", email);
+        Assertions.assertEquals("junit-5v2h60pqee@varmail.de", email);
     }
 
     @NeodymiumTest

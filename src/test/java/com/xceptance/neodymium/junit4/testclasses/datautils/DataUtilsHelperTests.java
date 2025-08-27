@@ -25,7 +25,7 @@ public class DataUtilsHelperTests
     {
         String email = DataUtils.randomEmail();
         // test fixed random
-        Assert.assertEquals("junit-01uh2qpree@varmail.de", email);
+        Assert.assertEquals("junit-5v2h60pqee@varmail.de", email);
     }
 
     @Test
