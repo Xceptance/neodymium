@@ -57,6 +57,7 @@ import io.qameta.allure.Allure;
 import io.qameta.allure.AllureLifecycle;
 import io.qameta.allure.Step;
 import io.qameta.allure.internal.AllureStorage;
+import io.qameta.allure.model.Attachment;
 import io.qameta.allure.model.StepResult;
 
 /**
@@ -204,8 +205,8 @@ public class AllureAddons
         if (canUpdateAllureTest())
         {
             lifecycle.updateTestCase((result) -> {
-                var stepResult = findLastStep(result.getSteps());
-                var attachments = stepResult.getAttachments();
+                StepResult stepResult = findLastStep(result.getSteps());
+                List<Attachment> attachments = stepResult.getAttachments();
                 for (int i = 0; i < attachments.size(); i++)
                 {
                     io.qameta.allure.model.Attachment attachment = attachments.get(i);
@@ -230,7 +231,6 @@ public class AllureAddons
      * In before methods we will get a lot of error messages since internally Allure is has the current test not
      * available.
      * 
-     * @param lifecycle
      * @return whether or not we can update the allure test case
      */
     public static boolean canUpdateAllureTest()
@@ -293,7 +293,7 @@ public class AllureAddons
             lifecycle.addAttachment(name, type, fileExtension, stream);
 
             lifecycle.updateTestCase((result) -> {
-                var stepResult = findLastStep(result.getSteps());
+                StepResult stepResult = findLastStep(result.getSteps());
                 Optional<io.qameta.allure.model.Attachment> addedAttachmentInOuterStep = result.getAttachments().stream().filter(a -> a.getName().equals(name))
                                                                                                .findFirst();
 
@@ -365,9 +365,9 @@ public class AllureAddons
      */
     private static StepResult findLastStep(List<StepResult> steps)
     {
-        var lastStep = steps.get(steps.size() - 1);
-        List<StepResult> childStepts = lastStep.getSteps();
-        if (childStepts != null && childStepts.isEmpty() == false)
+         StepResult lastStep = steps.get(steps.size() - 1);
+         List<StepResult> childStepts = lastStep.getSteps();
+         if (childStepts != null && childStepts.isEmpty() == false)
         {
             return findLastStep(childStepts);
         }
