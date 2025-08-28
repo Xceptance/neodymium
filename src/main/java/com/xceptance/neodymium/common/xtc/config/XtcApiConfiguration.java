@@ -80,12 +80,16 @@ public interface XtcApiConfiguration extends Mutable
     @DefaultValue("30000")
     public int xtcApiTimeout();
 
+    @Key("xtc.api.throwExceptionForRunInitialization")
+    @DefaultValue("false")
+    public boolean xtcApiThrowExceptionForRunInitialization();
+
     @Key("xtc.api.throwExceptionForRunCreationError")
     @DefaultValue("true")
     public boolean xtcApiThrowExceptionForRunCreationError();
 
     @Key("xtc.api.throwExceptionForRunUpdateError")
-    @DefaultValue("true")
+    @DefaultValue("false")
     public boolean xtcApiThrowExceptionForRunUpdateError();
 
     @Key("xtc.api.throwExceptionForReportUploadError")

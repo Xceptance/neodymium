@@ -31,7 +31,7 @@ public class XtcApiClient
     private final TokenManager tokenManager;
 
     private final HttpClient client = HttpClient.newBuilder()
-                                                .connectTimeout(Duration.ofSeconds(300))
+                                                .connectTimeout(Duration.ofMillis(XtcApiContext.configuration.xtcApiTimeout()))
                                                 .build();
 
     private final Gson gson = new GsonBuilder().serializeNulls().create();
