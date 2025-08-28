@@ -1,17 +1,14 @@
-package com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata;
+package com.xceptance.neodymium.junit5.testclasses.allure.customenvironmentdata;
 
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 import com.xceptance.neodymium.util.AllureAddons;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-
-import java.io.File;
-import java.io.IOException;
-
-import static com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata.CustomEnvironmentDataUtils.forceAllureAddonsCustomDataAddedFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import java.io.File;
+import java.io.IOException;
 
 public class CustomEnvironmentSubstitutionCircularReferenceTest extends AbstractNeodymiumTest
 {
@@ -25,19 +22,17 @@ public class CustomEnvironmentSubstitutionCircularReferenceTest extends Abstract
 
         // set up property substitution
         setUpPropertySubstitution();
-
-        // force customDataAdded to be false
-        forceAllureAddonsCustomDataAddedFalse();
     }
 
     @Test
     public void testPropertySubstitution()
     {
-        RuntimeException runtimeException = assertThrows(RuntimeException.class, AllureAddons::initializeEnvironmentInformation);
+        RuntimeException runtimeException = assertThrows(RuntimeException.class,
+                                                         AllureAddons::initializeEnvironmentInformation);
 
         assertEquals(
-            "Circular properties reference detected for key: neodymium.report.environment.custom.circularReference1. Please check your properties for circular dependencies and remove them.",
-            runtimeException.getMessage());
+                     "Circular properties reference detected for key: neodymium.report.environment.custom.circularReference1. Please check your properties for circular dependencies and remove them.",
+                     runtimeException.getMessage());
     }
 
     @AfterAll

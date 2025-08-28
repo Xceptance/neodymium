@@ -63,7 +63,7 @@ public class ScreenshotWriter
                 {
                     DataSet set = (DataSet) a;
                     dataSetName += "_DataSet";
-                    if (set.value() > 0)
+                    if (set.value().length > 0)
                     {
                         dataSetName += "_" + set.value();
                     }
