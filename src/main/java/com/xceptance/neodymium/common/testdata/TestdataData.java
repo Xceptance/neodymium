@@ -191,7 +191,7 @@ public class TestdataData extends Data
     {
         if (dataSetIndex <= 0 || dataSetIndex > availableDataSets.size())
         {
-            String msg = MessageFormat.format("Method ''{0}'' is marked to be run with data set index {1}, but there are only 1-{2} available.",
+            String msg = MessageFormat.format("Method ''{0}'' is marked to be run with data set index {1}, but there are only {2} available.",
                                               method.getName(), dataSetIndex, availableDataSets.size());
             throw new IllegalArgumentException(msg);
         }

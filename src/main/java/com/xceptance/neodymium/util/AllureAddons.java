@@ -1,6 +1,5 @@
 package com.xceptance.neodymium.util;
 
-
 import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
 
 import java.io.File;
@@ -76,6 +75,8 @@ public class AllureAddons
     private static boolean customDataAdded = false;
 
     private static final int MAX_RETRY_COUNT = 10;
+
+    static String ALLURE_ENV_FILENAME = "environment-xml";
 
     /**
      * Define a step without return value. This can be used to transport data (information) from test into the report.
@@ -169,16 +170,17 @@ public class AllureAddons
             return;
         }
 
-        // If there's a fullpage screenshot screenshot, we do both, if not we do not want to have two viewport screenshots 
+        // If there's a fullpage screenshot screenshot, we do both, if not we do not want to have two viewport
+        // screenshots
         // if full page screenshot/advanced screenshotting is disabled we need the default
         if (Neodymium.configuration().enableViewportScreenshot() == true &&
-            (Neodymium.configuration().enableAdvancedScreenShots() == false || Neodymium.configuration().enableFullPageCapture() == true)
-        )
+            (Neodymium.configuration().enableAdvancedScreenShots() == false || Neodymium.configuration().enableFullPageCapture() == true))
         {
             // take a screenshot using the driver and write it to a file
             byte[] screenshot = ((TakesScreenshot) Neodymium.getDriver()).getScreenshotAs(OutputType.BYTES);
             FileUtils.writeByteArrayToFile(new File(filename), screenshot);
-            //add to the allure report, no need put it into the correct step, since it will be there already during the normal execution context. 
+            // add to the allure report, no need put it into the correct step, since it will be there already during the
+            // normal execution context.
             // Only on exception we don't know where to put it and that is handled elsewhere
             Allure.getLifecycle().addAttachment("Screenshot", "image/png", ".png", new FileInputStream(filename));
 
@@ -250,7 +252,9 @@ public class AllureAddons
 
             AllureStorage storage = (AllureStorage) storageField.get(lifecycle);
 
-            if (storage.getTestResult(lifecycle.getCurrentTestCase().get()).isPresent()) //FIXME: is this not working correctly with screens on every step???
+            if (storage.getTestResult(lifecycle.getCurrentTestCase().get()).isPresent()) // FIXME: is this not working
+                                                                                         // correctly with screens on
+                                                                                         // every step???
             {
                 // now let's check if there are any steps ins
                 AtomicBoolean hasSteps = new AtomicBoolean(false);

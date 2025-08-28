@@ -18,7 +18,6 @@ import com.xceptance.neodymium.junit4.testclasses.data.inheritance.child.Package
 import com.xceptance.neodymium.junit4.testclasses.data.inheritance.child.grandchild.GrandChildPackageTestDataInheritance;
 import com.xceptance.neodymium.junit4.testclasses.data.inheritance.child.grandchild.set.DataSetOverridesPackageData;
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassDefaultValueEmptyDataSets;
-import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassDefaultValueNoDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassDefaultValueOneDataSet;
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassDefaultValueTwoDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassExplicitDefaultValueTwoDataSets;
@@ -26,7 +25,6 @@ import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassM
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassRandomDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassRandomDataSetsFromRange;
 import com.xceptance.neodymium.junit4.testclasses.data.override.methodonly.MethodDefaultEmptyDataSets;
-import com.xceptance.neodymium.junit4.testclasses.data.override.methodonly.MethodDefaultNoDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.override.methodonly.MethodDefaultOneDataSet;
 import com.xceptance.neodymium.junit4.testclasses.data.override.methodonly.MethodDefaultTwoDataSet;
 import com.xceptance.neodymium.junit4.testclasses.data.override.methodonly.MethodExplicitDefaultTwoDataSets;
@@ -165,25 +163,12 @@ public class TestDataStatementTest extends NeodymiumTest
     // Class level override
 
     @Test
-    public void testClassDefaultValueNoDataSets() throws Throwable
-    {
-        // No data set file and @Testdata() on class
-        String[] expected = new String[]
-        {
-          "test1 :: "
-        };
-        checkDescription(ClassDefaultValueNoDataSets.class, expected);
-    }
-
-    @Test
     public void testClassDefaultValueEmptyDataSets() throws Throwable
     {
         // Empty data sets (only one key but no value) and @Testdata() on class
-        String[] expected = new String[]
-        {
-          "test1 :: "
-        };
-        checkDescription(ClassDefaultValueEmptyDataSets.class, expected);
+        Result result = JUnitCore.runClasses(ClassDefaultValueEmptyDataSets.class);
+        checkFail(result, 1, 0, 1,
+                  "java.lang.IllegalArgumentException: No data sets were found at all regarding your test case, please make sure to reference everything correctly.");
     }
 
     @Test
@@ -239,22 +224,10 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testMethodDefaultEmptyDataSets() throws Throwable
     {
         // Empty data sets (only one key but no value) and @Testdata() on method
-        String[] expected = new String[]
-        {
-          "test1 :: "
-        };
-        checkDescription(MethodDefaultEmptyDataSets.class, expected);
-    }
+        Result result = JUnitCore.runClasses(MethodDefaultEmptyDataSets.class);
+        checkFail(result, 1, 0, 1,
+                  "java.lang.IllegalArgumentException: No data sets were found at all regarding your test case, please make sure to reference everything correctly.");
 
-    @Test
-    public void testMethodDefaultNoDataSets() throws Throwable
-    {
-        // No data set file and @Testdata on method
-        String[] expected = new String[]
-        {
-          "test1 :: "
-        };
-        checkDescription(MethodDefaultNoDataSets.class, expected);
     }
 
     @Test
@@ -361,7 +334,7 @@ public class TestDataStatementTest extends NeodymiumTest
     {
         Result result = JUnitCore.runClasses(ForceOfNoneDataSets.class);
         checkFail(result, 1, 0, 1,
-                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 2, but there are only 0 available");
+                  "java.lang.IllegalArgumentException: No data sets were found at all regarding your test case, please make sure to reference everything correctly.");
     }
 
     @Test

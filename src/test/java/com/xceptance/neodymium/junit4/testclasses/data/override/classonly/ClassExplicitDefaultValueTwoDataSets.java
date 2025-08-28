@@ -7,7 +7,7 @@ import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 
 @RunWith(NeodymiumRunner.class)
-@DataSet(0)
+@DataSet()
 public class ClassExplicitDefaultValueTwoDataSets
 {
     @Test
