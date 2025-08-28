@@ -21,10 +21,10 @@ public class RunInitializer
         {
             LOGGER.info("XTC API is disabled. Exiting...");
 
-            if (XtcApiContext.configuration.xtcApiThrowExceptionForRunCreationError())
+            if (XtcApiContext.configuration.xtcApiThrowExceptionForRunInitialization())
             {
                 throw new RuntimeException("XTC API is disabled and exception asserting this is enabled. Please enable the XTC API in the configuration. " +
-                                               "Otherwise, the run will not be created. If this is intended, disable the 'xtc.api.throwExceptionForRunCreationError' " +
+                                               "Otherwise, the run will not be created. If this is intended, disable the 'xtc.api.xtcApiThrowExceptionForRunInitialization' " +
                                                "configuration option.");
             }
 

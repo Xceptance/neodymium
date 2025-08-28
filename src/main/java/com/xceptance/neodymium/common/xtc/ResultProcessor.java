@@ -20,16 +20,11 @@ import java.util.zip.GZIPOutputStream;
 // parses the results of the tests and uploads them to XTC using the XTC API client
 public class ResultProcessor
 {
-    // The directories for the surefire reports and allure results are set via command line arguments
     private static String surefireReportsDir = XtcApiContext.configuration.xtcApiSurefireResultDirectory();
 
-    private static String allureResultsDir = XtcApiContext.configuration.xtcApiAllureResultDirectory(); // not necessary not, but most likely when updating the test run results during the test run
+    private static String allureResultsDir = XtcApiContext.configuration.xtcApiAllureResultDirectory(); // not necessary now, but most likely when updating the test results during the test run
 
     private static String allureReportDir = XtcApiContext.configuration.xtcApiAllureReportDirectory();
-
-    private static final String DEFAULT_RESULTS_DIRECTORIES = System.lineSeparator() + "--surefire-dir=${project.build.directory}/surefire-reports" +
-        System.lineSeparator() + "--allure-dir=${project.build.directory}/allure-results" +
-        System.lineSeparator() + "--allure-report-dir=${project.build.directory}/site/allure-maven-plugin";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ResultProcessor.class);
 
@@ -43,6 +38,15 @@ public class ResultProcessor
             return;
         }
 
+        if (System.getProperty("xtc.run.id") == null)
+        {
+            LOGGER.error("Run ID is not set in system properties. Please run RunInitializer first to create a test run.");
+            throw new RuntimeException("Run ID is not set in system properties. Please run RunInitializer first to create a test run.");
+        }
+
+        int runId = Integer.parseInt(System.getProperty("xtc.run.id"));
+        LOGGER.info("Run ID: {}", runId);
+
         LOGGER.info("Surefire reports directory: {}", surefireReportsDir);
         LOGGER.info("Allure results directory: {}", allureResultsDir);
         LOGGER.info("Allure report directory: {}", allureReportDir);
@@ -52,15 +56,6 @@ public class ResultProcessor
 
         // read the run ID from the system properties
         LOGGER.info("Reading run ID from system properties...");
-
-        if (System.getProperty("xtc.run.id") == null)
-        {
-            LOGGER.error("Run ID is not set in system properties. Please run RunInitializer first to create a test run.");
-            throw new RuntimeException("Run ID is not set in system properties. Please run RunInitializer first to create a test run.");
-        }
-
-        int runId = Integer.parseInt(System.getProperty("xtc.run.id"));
-        LOGGER.info("Run ID: {}", runId);
 
         updateTestRunResults(xtcApiClient, runId);
         uploadAllureReport(xtcApiClient, runId);
