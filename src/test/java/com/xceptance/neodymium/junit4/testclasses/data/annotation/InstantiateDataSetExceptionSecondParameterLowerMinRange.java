@@ -13,6 +13,6 @@ public class InstantiateDataSetExceptionSecondParameterLowerMinRange
     @DataSet({1, 0})
     public void test1()
     {
-        // there is no sixth data set (out of bounds)
+        // the 2nd parameter must be greater than the 1st
     }
 }
