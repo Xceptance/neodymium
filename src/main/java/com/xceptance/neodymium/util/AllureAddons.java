@@ -72,11 +72,9 @@ public class AllureAddons
 
     private static boolean neoVersionLogged = false;
 
-    private static boolean customDataAdded = false;
+    static boolean customDataAdded = false;
 
     private static final int MAX_RETRY_COUNT = 10;
-
-    static String ALLURE_ENV_FILENAME = "environment-xml";
 
     /**
      * Define a step without return value. This can be used to transport data (information) from test into the report.

@@ -218,6 +218,9 @@
 								<include>
 									com/xceptance/neodymium/util/**/*Test.java</include>
 							</includes>
+							<excludes>
+                <exclude>com/xceptance/neodymium/util/**/*JUnit5Test.java</exclude>
+              </excludes>
 						</configuration>
 						<dependencies>
 							<dependency>
@@ -241,6 +244,7 @@
 							<includes>
 								<include>
 									com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
+							  <include> com/xceptance/neodymium/util/**/*JUnit5Test.java </include>
 							</includes>
 						</configuration>
 					</plugin>

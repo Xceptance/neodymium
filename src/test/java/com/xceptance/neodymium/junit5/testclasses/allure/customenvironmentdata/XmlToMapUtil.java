@@ -1,18 +1,17 @@
-package com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata;
+package com.xceptance.neodymium.junit5.testclasses.allure.customenvironmentdata;
 
-import com.xceptance.neodymium.util.AllureAddons;
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import java.io.File;
-import java.lang.reflect.Field;
-import java.util.HashMap;
-import java.util.Map;
-
-public class CustomEnvironmentDataUtils
+public class XmlToMapUtil
 {
     /**
      * Get the key value pairs of all parameter nodes as map.<br>
@@ -54,28 +53,5 @@ public class CustomEnvironmentDataUtils
         }
 
         return map;
-    }
-
-    public static void forceAllureAddonsCustomDataAddedFalse()
-    {
-        try
-        {
-            // Get the class object for the internal handler
-            Class<?> targetClass = AllureAddons.class;
-
-            // Get the 'customDataAdded' field
-            Field field = targetClass.getDeclaredField("customDataAdded");
-
-            // Make it accessible
-            field.setAccessible(true);
-
-            // Set its value back to false. Use 'null' for the first argument because it's a static field.
-            field.set(null, false);
-
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
     }
 }

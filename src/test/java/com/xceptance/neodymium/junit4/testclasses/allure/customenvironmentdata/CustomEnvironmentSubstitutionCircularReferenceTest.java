@@ -1,4 +1,4 @@
-package com.xceptance.neodymium.junit4.tests.allurecustomenvironmentdata;
+package com.xceptance.neodymium.junit4.testclasses.allure.customenvironmentdata;
 
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.util.AllureAddons;
@@ -9,7 +9,6 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 
-import static com.xceptance.neodymium.junit5.tests.allurecustomenvironmentdata.CustomEnvironmentDataUtils.forceAllureAddonsCustomDataAddedFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -25,9 +24,6 @@ public class CustomEnvironmentSubstitutionCircularReferenceTest extends Neodymiu
 
         // set up property substitution
         setUpPropertySubstitution();
-
-        // force customDataAdded to be false
-        forceAllureAddonsCustomDataAddedFalse();
     }
 
 
