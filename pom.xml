@@ -49,7 +49,7 @@
 		<maven.compiler.target.version>17</maven.compiler.target.version>
 		<surefire.version>3.5.3</surefire.version>
 		<allure.version>2.29.1</allure.version>
-		<selenide.version>7.10.0</selenide.version>
+		<selenide.version>7.9.4</selenide.version>
 		<cucumber.version>7.26.0</cucumber.version>
 		<browserup.version>3.2.0</browserup.version>
 		<log4j.version>2.25.1</log4j.version>

@@ -28,7 +28,6 @@ import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.edge.EdgeOptions;
-import org.openqa.selenium.firefox.FirefoxBinary;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.firefox.FirefoxProfile;
@@ -162,36 +161,17 @@ public final class BrowserRunnerHelper
     }
 
     /**
-     * Creates a {@link FirefoxBinary} object and sets the path, but only if the path is not blank.
-     * 
-     * @param pathToBrowser
-     *            the path to the browser binary
-     * @return the Firefox binary
-     */
-    private static FirefoxBinary createFirefoxBinary(final String pathToBrowser)
-    {
-        if (StringUtils.isNotBlank(pathToBrowser))
-        {
-            return new FirefoxBinary(new File(pathToBrowser));
-        }
-        else
-        {
-            return new FirefoxBinary();
-        }
-    }
-
-    /**
      * Instantiate the {@link WebDriver} according to the configuration read from {@link Browser} annotations.
      * 
      * @param config
      *            {@link BrowserConfiguration} that describes the desired browser instance
      * @param testClassInstance
      *            {@link String} name of the test to display on test environment
-     * @return {@link WebDriverStateContainer} the instance of the browser described in {@link BrowserConfiguration} and in
-     *         {@link NeodymiumConfiguration}
+     * @return {@link WebDriverStateContainer} the instance of the browser described in {@link BrowserConfiguration} and
+     *         in {@link NeodymiumConfiguration}
      * @throws MalformedURLException
-     *             if <a href="https://github.com/Xceptance/neodymium/wiki/Selenium-grid">Selenium grid</a> is used and the
-     *             given grid URL is invalid
+     *             if <a href="https://github.com/Xceptance/neodymium/wiki/Selenium-grid">Selenium grid</a> is used and
+     *             the given grid URL is invalid
      */
     public static WebDriverStateContainer createWebDriverStateContainer(final BrowserConfiguration config, final String testClassInstance)
         throws MalformedURLException
@@ -221,10 +201,11 @@ public final class BrowserRunnerHelper
             final SelenideProxyServerFactory selenideProxyServerFactory = Plugins.inject(SelenideProxyServerFactory.class);
             selenideProxyServer = selenideProxyServerFactory.create(new SelenideConfig(),
                                                                     (Proxy) capabilities.getCapability(CapabilityType.PROXY));
-            final var proxy = selenideProxyServer.getSeleniumProxy();
+            final Proxy proxy = selenideProxyServer.getSeleniumProxy();
             capabilities.setCapability(CapabilityType.PROXY, proxy);
         }
-        else {
+        else
+        {
             // no proxy should be used, so set the proxy to null
             // makes it possible to run some test with temp proxy and some without during a single test run
             capabilities.setCapability(CapabilityType.PROXY, (Object) null);
@@ -251,7 +232,7 @@ public final class BrowserRunnerHelper
                 }
 
                 // find a free port for each chrome session (important for lighthouse)
-                var remoteDebuggingPort = PortProber.findFreePort();
+                int remoteDebuggingPort = PortProber.findFreePort();
                 Neodymium.setRemoteDebuggingPort(remoteDebuggingPort);
                 options.addArguments("--remote-debugging-port=" + remoteDebuggingPort);
 
@@ -296,8 +277,17 @@ public final class BrowserRunnerHelper
             else if (firefoxBrowsers.contains(browserName))
             {
                 final FirefoxOptions options = new FirefoxOptions();
+                new ExecutableFinder().find("firefox");
                 final String driverInPathPath = new ExecutableFinder().find("geckodriver");
-                options.setBinary(createFirefoxBinary(Neodymium.configuration().getFirefoxBrowserPath()));
+
+                if (StringUtils.isNotBlank(Neodymium.configuration().getFirefoxBrowserPath()))
+                {
+                    options.setBinary(new File(Neodymium.configuration().getFirefoxBrowserPath()).toPath());
+                }
+                else
+                {
+                    options.setBinary(new ExecutableFinder().find("firefox"));
+                }
                 if (config.isHeadless())
                 {
                     options.addArguments("--headless");
