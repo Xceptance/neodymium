@@ -58,17 +58,6 @@
 		<junit.vintage.version>6.0.0-M2</junit.vintage.version>
 	</properties>
 
-	<repositories>
-		<repository>
-			<id>xceptance-public</id>
-			<url>https://lab.xceptance.de/nexus/content/repositories/public/</url>
-		</repository>
-		<repository>
-			<id>qameta</id>
-			<url>https://dl.bintray.com/qameta/maven</url>
-		</repository>
-	</repositories>
-
 	<build>
 		<plugins>
 			<plugin>
@@ -177,16 +166,12 @@
             <configuration>
               <artifacts>
                 <artifact>
-                  <file>${project.artifactId}-${project.version}-javadoc.jar</file>
+                  <file>target/${project.artifactId}-${project.version}-javadoc.jar</file>
                   <classifier>javadoc</classifier>
                 </artifact>
                 <artifact>
-                  <file>${project.artifactId}-${project.version}-sources.jar</file>
+                  <file>target/${project.artifactId}-${project.version}-sources.jar</file>
                   <classifier>sources</classifier>
-                </artifact>
-                <artifact>
-                  <file>${project.artifactId}-${project.version}.zip</file>
-                  <type>zip</type>
                 </artifact>
               </artifacts>
             </configuration>
@@ -223,7 +208,7 @@
           <plugin>
             <groupId>org.sonatype.central</groupId>
             <artifactId>central-publishing-maven-plugin</artifactId>
-            <version>0.7.0</version>
+            <version>0.8.0</version>
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
