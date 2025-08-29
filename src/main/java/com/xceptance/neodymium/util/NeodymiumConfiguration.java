@@ -1,11 +1,10 @@
 package com.xceptance.neodymium.util;
 
+import com.xceptance.neodymium.junit4.NeodymiumRunner.DescriptionMode;
 import org.aeonbits.owner.Config.LoadPolicy;
 import org.aeonbits.owner.Config.LoadType;
 import org.aeonbits.owner.Config.Sources;
 import org.aeonbits.owner.Mutable;
-
-import com.xceptance.neodymium.junit4.NeodymiumRunner.DescriptionMode;
 
 @LoadPolicy(LoadType.MERGE)
 @Sources(
@@ -277,6 +276,10 @@ public interface NeodymiumConfiguration extends Mutable
     @Key("neodymium.webDriver.maxReuse")
     @DefaultValue("-1")
     public int maxWebDriverReuse();
+
+    @Key("neodymium.webDriver.browserFilter")
+    @DefaultValue("")
+    public String getBrowserFilter();
 
     @Key("neodymium.webDriver.startNewBrowserForSetUp")
     @DefaultValue("true")
