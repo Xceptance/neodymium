@@ -18,10 +18,10 @@ import java.lang.annotation.Target;
  * then it will override suppression and enforce the method to run with <b>all</b> data sets
  * <p>
  * Examples:
- * <pre>
- * @DataSet(1) -> executes only the first data set
- * @DataSet({1, 5}) -> executes the first 5 data sets
- * </pre>
+ * <p>
+ * {@code @DataSet(1)} -> executes only the first data set
+ * {@code @DataSet({1, 5})} -> executes the first 5 data sets
+ * </p>
  */
 @Retention(RUNTIME)
 @Target(

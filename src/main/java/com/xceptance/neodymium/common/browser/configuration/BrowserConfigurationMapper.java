@@ -334,7 +334,7 @@ public class BrowserConfigurationMapper
         final String driverArgs = browserProfileConfiguration.get(DRIVER_ARGS);
         if (!StringUtils.isEmpty(driverArgs))
         {
-            final var argsList = new ArrayList<>(List.of(driverArgs.split(";")));
+            final ArrayList<String> argsList = new ArrayList<>(List.of(driverArgs.split(";")));
             argsList.removeIf(arg -> arg == null || arg.trim().equals(""));
             argsList.replaceAll(String::trim);
             browserConfiguration.setDriverArguments(argsList);
