@@ -1,36 +1,21 @@
 package com.xceptance.neodymium.util;
 
-import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.Field;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
-import java.nio.channels.OverlappingFileLockException;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-
+import com.codeborne.selenide.Selenide;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.common.ScreenshotWriter;
+import io.qameta.allure.Allure;
+import io.qameta.allure.AllureLifecycle;
+import io.qameta.allure.Step;
+import io.qameta.allure.internal.AllureStorage;
+import io.qameta.allure.model.Attachment;
+import io.qameta.allure.model.StepResult;
 import org.apache.commons.io.FileUtils;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
@@ -42,23 +27,40 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
-import com.codeborne.selenide.Selenide;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonSerializer;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.ScreenshotWriter;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.net.URL;
+import java.net.URLConnection;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
-import io.qameta.allure.Allure;
-import io.qameta.allure.AllureLifecycle;
-import io.qameta.allure.Step;
-import io.qameta.allure.internal.AllureStorage;
-import io.qameta.allure.model.Attachment;
-import io.qameta.allure.model.StepResult;
+import static com.xceptance.neodymium.util.PropertiesUtil.getPropertiesMapForCustomIdentifier;
 
 /**
  * Convenience methods for step definitions
@@ -77,14 +79,19 @@ public class AllureAddons
 
     private static final int MAX_RETRY_COUNT = 10;
 
+    // The local path where we want to save the script.
+    // This will save it in a 'js' subdirectory in the report directory.
+    public static final String JSON_VIEWER_SCRIPT_PATH = "js/json-viewer.min.js";
+
+    private static boolean scriptDownloaded = false;
+
     /**
      * Define a step without return value. This can be used to transport data (information) from test into the report.
      *
      * @param info
-     *            the info of the information (maybe the information itself if short enough), used in the description of
-     *            this step
+     *     the info of the information (maybe the information itself if short enough), used in the description of this step
      * @param content
-     *            further information that need to be passed to the report
+     *     further information that need to be passed to the report
      */
     @Step("INFO: {info}")
     public static void addToReport(String info, Object content)
@@ -95,7 +102,7 @@ public class AllureAddons
      * Define a step without return value. This can be used to transport a simple message from test into the report.
      *
      * @param message
-     *            the message to print directly into the report
+     *     the message to print directly into the report
      */
     @Step("{message}")
     public static void printToReport(String message)
@@ -106,9 +113,9 @@ public class AllureAddons
      * Define a step without return value. This is good for complete and encapsulated test steps.
      *
      * @param description
-     *            the proper description of this step
+     *     the proper description of this step
      * @param actions
-     *            what to do as Lambda
+     *     what to do as Lambda
      * @throws IOException
      */
     @Step("{description}")
@@ -131,11 +138,11 @@ public class AllureAddons
      * Define a step with a return value. This is good for complete and encapsulated test steps.
      *
      * @param <T>
-     *            generic return type
+     *     generic return type
      * @param description
-     *            the proper description of this step
+     *     the proper description of this step
      * @param actions
-     *            what to do as Lambda
+     *     what to do as Lambda
      * @return T
      * @throws IOException
      */
@@ -157,7 +164,7 @@ public class AllureAddons
 
     /**
      * Takes screenshot and converts it to byte stream
-     * 
+     *
      * @param filename
      * @throws IOException
      */
@@ -193,7 +200,7 @@ public class AllureAddons
 
     /**
      * Removes an already attached attachment from the allure report.
-     * 
+     *
      * @param name
      */
     public static void removeAttachmentFromStepByName(final String name)
@@ -228,9 +235,8 @@ public class AllureAddons
     }
 
     /**
-     * In before methods we will get a lot of error messages since internally Allure is has the current test not
-     * available.
-     * 
+     * In before methods we will get a lot of error messages since internally Allure is has the current test not available.
+     *
      * @return whether or not we can update the allure test case
      */
     public static boolean canUpdateAllureTest()
@@ -251,8 +257,8 @@ public class AllureAddons
             AllureStorage storage = (AllureStorage) storageField.get(lifecycle);
 
             if (storage.getTestResult(lifecycle.getCurrentTestCase().get()).isPresent()) // FIXME: is this not working
-                                                                                         // correctly with screens on
-                                                                                         // every step???
+            // correctly with screens on
+            // every step???
             {
                 // now let's check if there are any steps ins
                 AtomicBoolean hasSteps = new AtomicBoolean(false);
@@ -272,7 +278,7 @@ public class AllureAddons
 
     /***
      * Add an Allure attachment to the current step instead of to the overall test case.
-     * 
+     *
      * @param name
      *            the name of attachment
      * @param type
@@ -314,7 +320,7 @@ public class AllureAddons
      * Adds a step with the given information before the current step
      *
      * @param info
-     *            message to be displayed before the step
+     *     message to be displayed before the step
      */
     public static void addInfoBeforeStep(final String info)
     {
@@ -327,10 +333,10 @@ public class AllureAddons
                 int position = testResult.getSteps().isEmpty() ? 0 : testResult.getSteps().size() - 1;
 
                 testResult.getSteps().add(position, new StepResult()
-                                                                    .setName(info)
-                                                                    .setStart(System.currentTimeMillis())
-                                                                    .setStatus(io.qameta.allure.model.Status.PASSED)
-                                                                    .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
+                    .setName(info)
+                    .setStart(System.currentTimeMillis())
+                    .setStatus(io.qameta.allure.model.Status.PASSED)
+                    .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
             }));
         }
     }
@@ -339,7 +345,7 @@ public class AllureAddons
      * Adds a step with the given information as the first step of the test case.
      *
      * @param info
-     *            message to be displayed as the first step
+     *     message to be displayed as the first step
      */
     public static void addInfoAsFirstStep(final String info)
     {
@@ -349,25 +355,25 @@ public class AllureAddons
 
             lifecycle.updateTestCase((testResult -> {
                 testResult.getSteps().add(0, new StepResult()
-                                                             .setName(info)
-                                                             .setStart(System.currentTimeMillis())
-                                                             .setStatus(io.qameta.allure.model.Status.PASSED)
-                                                             .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
+                    .setName(info)
+                    .setStart(System.currentTimeMillis())
+                    .setStatus(io.qameta.allure.model.Status.PASSED)
+                    .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
             }));
         }
     }
 
     /**
      * Finds the last active step of a list of steps.
-     * 
+     *
      * @param steps
      * @return
      */
     private static StepResult findLastStep(List<StepResult> steps)
     {
-         StepResult lastStep = steps.get(steps.size() - 1);
-         List<StepResult> childStepts = lastStep.getSteps();
-         if (childStepts != null && childStepts.isEmpty() == false)
+        StepResult lastStep = steps.get(steps.size() - 1);
+        List<StepResult> childStepts = lastStep.getSteps();
+        if (childStepts != null && childStepts.isEmpty() == false)
         {
             return findLastStep(childStepts);
         }
@@ -380,11 +386,10 @@ public class AllureAddons
     }
 
     /**
-     * Adds information about environment to the report, if a key is already present in the map the current value will
-     * be kept
-     * 
+     * Adds information about environment to the report, if a key is already present in the map the current value will be kept
+     *
      * @param environmentValuesSet
-     *            map with environment values
+     *     map with environment values
      */
     public static synchronized void addEnvironmentInformation(ImmutableMap<String, String> environmentValuesSet)
     {
@@ -393,12 +398,12 @@ public class AllureAddons
 
     /**
      * Adds information about environment to the report
-     * 
+     *
      * @param environmentValuesSet
-     *            map with environment values
+     *     map with environment values
      * @param mode
-     *            if a key is already present in the map, should we replace the it with the new value, or should we add
-     *            another line with the same key but different values or append the new value to the old value
+     *     if a key is already present in the map, should we replace the it with the new value, or should we add another line with the same key but different
+     *     values or append the new value to the old value
      */
     public static synchronized void addEnvironmentInformation(ImmutableMap<String, String> environmentValuesSet, EnvironmentInfoMode mode)
     {
@@ -601,9 +606,8 @@ public class AllureAddons
 
     /**
      * Check if allure-reprot environment.xml file exists
-     * 
-     * @return false - if doesn't exist <br>
-     *         true - if exists
+     *
+     * @return false - if doesn't exist <br> true - if exists
      */
     public static boolean envFileExists()
     {
@@ -631,22 +635,22 @@ public class AllureAddons
 
     /**
      * Get path to allure-results folder (default or configured in pom)
-     * 
+     *
      * @return File with path to the allure-results folder
      */
     public static File getAllureResultsFolder()
     {
         return new File(System.getProperty("allure.results.directory", System.getProperty("user.dir")
-                                                                       + File.separator + "target" + File.separator + "allure-results"));
+            + File.separator + "target" + File.separator + "allure-results"));
     }
 
     /**
      * Add a step to the report which contains a clickable url
      *
      * @param message
-     *            message to be displayed before link
+     *     message to be displayed before link
      * @param url
-     *            url for the link
+     *     url for the link
      */
     @Step("{message}: {url}")
     public static void addLinkToReport(String message, String url)
@@ -661,7 +665,7 @@ public class AllureAddons
         if (!neoVersionLogged && Neodymium.configuration().logNeoVersion())
         {
             LOGGER.info("This test uses Neodymium Library (version: " + Neodymium.getNeodymiumVersion()
-                        + "), MIT License, more details on https://github.com/Xceptance/neodymium");
+                            + "), MIT License, more details on https://github.com/Xceptance/neodymium");
             neoVersionLogged = true;
             environmentDataMap.putIfAbsent("Testing Framework", "Neodymium " + Neodymium.getNeodymiumVersion());
         }
@@ -680,9 +684,9 @@ public class AllureAddons
             // AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String>
             // builder().putAll(environmentDataMap).build(), EnvironmentInfoMode.ADD);
             AllureAddons.addEnvironmentInformation(
-                                                   ImmutableMap.<String, String> builder().putAll(removePrefixFromMap(environmentDataMap, customDataIdentifier))
-                                                               .build(),
-                                                   EnvironmentInfoMode.ADD);
+                ImmutableMap.<String, String> builder().putAll(removePrefixFromMap(environmentDataMap, customDataIdentifier))
+                            .build(),
+                EnvironmentInfoMode.ADD);
         }
     }
 
@@ -690,9 +694,9 @@ public class AllureAddons
      * Removes the prefix from the keys in the map.
      *
      * @param map
-     *            the map to process
+     *     the map to process
      * @param prefix
-     *            the prefix to remove
+     *     the prefix to remove
      * @return a new map with the prefix removed from the keys
      */
     private static Map<String, String> removePrefixFromMap(Map<String, String> map, String prefix)
@@ -714,9 +718,9 @@ public class AllureAddons
 
     /**
      * @param name
-     *            of the attachment
+     *     of the attachment
      * @param data
-     *            that needs to be added as an attachment
+     *     that needs to be added as an attachment
      */
     public static void addDataAsJsonToReport(String name, Object data)
     {
@@ -766,5 +770,78 @@ public class AllureAddons
         }
 
         Allure.addAttachment(name, "text/html", DataUtils.convertJsonToHtml(dataObjectJson), "html");
+    }
+
+    public static void downloadJsonViewerScript()
+    {
+        if (scriptDownloaded)
+        {
+            return;
+        }
+
+        String scriptUrl = "https://cdn.jsdelivr.net/npm/@textea/json-viewer@3";
+
+        try
+        {
+            LOGGER.info("Starting download from: {}", scriptUrl);
+            downloadFileFromUrl(scriptUrl, JSON_VIEWER_SCRIPT_PATH);
+            LOGGER.info("Download complete! Script saved to: {}", JSON_VIEWER_SCRIPT_PATH);
+        }
+        catch (IOException e)
+        {
+            LOGGER.error("An error occurred during download: {}", e.getMessage());
+            LOGGER.error(e.getMessage(), e);
+        }
+
+        scriptDownloaded = true;
+    }
+
+    /**
+     * Downloads a file from a given URL and saves it to a local destination path.
+     *
+     * @param urlString
+     *     The URL of the file to download.
+     * @param destinationPath
+     *     The local file path (including directory and filename) to save the file to.
+     * @throws IOException
+     *     If a network or file system error occurs.
+     */
+    static void downloadFileFromUrl(String urlString, String destinationPath) throws IOException
+    {
+        // Create a Path object from the destination string.
+        Path destination = Paths.get(destinationPath);
+
+        // If the file is found return
+        if (Files.exists(destination))
+        {
+            LOGGER.info("File already exists. Skipping download.");
+            return;
+        }
+
+        // --- Important: Ensure the parent directory exists ---
+        // If the destination is "js/script.js", this will create the "js" directory
+        // if it does not already exist. This prevents a common file system error.
+        Path parentDir = destination.getParent();
+        if (parentDir != null && !Files.exists(parentDir))
+        {
+            LOGGER.info("Creating directory: {}", parentDir);
+            Files.createDirectories(parentDir);
+        }
+
+        // Create a URL object from the string.
+        URL url = new URL(urlString);
+
+        // Open a connection to the URL.
+        URLConnection connection = url.openConnection();
+
+        // Use a try-with-resources statement to automatically close the input stream.
+        // This is a modern and safe way to handle I/O resources.
+        try (InputStream in = connection.getInputStream())
+        {
+            // Copy the data from the input stream (the web) to the destination file.
+            // StandardCopyOption.REPLACE_EXISTING ensures that if the file already
+            // exists, it will be overwritten with the new version.
+            Files.copy(in, destination, StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 }

@@ -7,6 +7,7 @@ import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.retry.RetryMethodData;
+import com.xceptance.neodymium.common.xtc.XtcApiContext;
 import com.xceptance.neodymium.junit4.order.DefaultStatementRunOrder;
 import com.xceptance.neodymium.junit4.statement.browser.BrowserRunAfters;
 import com.xceptance.neodymium.junit4.statement.browser.BrowserRunBefores;
@@ -52,7 +53,7 @@ import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSee
  * its super-class has to be annotated with {@link RunWith}
  * <p>
  * <b>Example</b>
- * 
+ *
  * <pre>
  * &#64;RunWith(NeodymiumRunner.class)
  * public class MyTests
@@ -63,9 +64,9 @@ import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSee
  *     }
  * }
  * </pre>
- * 
+ *
  * <b>Example</b>
- * 
+ *
  * <pre>
  * public class MyTests extends BaseTestClass
  * {
@@ -74,13 +75,13 @@ import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSee
  *     {
  *     }
  * }
- * 
+ *
  * &#64;RunWith(NeodymiumRunner.class)
  * public class BaseTestClass
  * {
  * }
  * </pre>
- * 
+ *
  * @author m.kaufmann
  */
 public class NeodymiumRunner extends BlockJUnit4ClassRunner
@@ -112,6 +113,11 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
             }
         }
         AllureAddons.initializeEnvironmentInformation();
+
+        if (XtcApiContext.isXtcApiEnabled())
+        {
+            AllureAddons.downloadJsonViewerScript();
+        }
     }
 
     public enum DescriptionMode

@@ -8,13 +8,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.zip.GZIPOutputStream;
+
+import static com.xceptance.neodymium.util.AllureAddons.JSON_VIEWER_SCRIPT_PATH;
 
 // called from maven
 // parses the results of the tests and uploads them to XTC using the XTC API client
@@ -131,11 +136,37 @@ public class ResultProcessor
                 return;
             }
 
+            // insert the JSON viewer script
+            moveFileToReportDirectory(Path.of(JSON_VIEWER_SCRIPT_PATH));
+
             // compress the allure report directory into a tar.gz archive and set the path to the archive
             Path archivePath = createTarGzArchive(allurePath, "allure-report.tar.gz");
             // TODO check if the archive exists?
 
             xtcApiClient.uploadReport(runId, archivePath);
+        }
+    }
+
+    private static void moveFileToReportDirectory(Path source)
+    {
+        Path destination = Paths.get(allureReportDir + File.separator + source);
+
+        try
+        {
+            // Ensure the parent directory exists
+            Path parentDir = destination.getParent();
+            if (parentDir != null && !Files.exists(parentDir))
+            {
+                LOGGER.info("Creating directory: {}", parentDir);
+                Files.createDirectories(parentDir);
+            }
+
+            Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+        }
+        catch (IOException e)
+        {
+            LOGGER.error("Moving the JSON-Viewer script failed.\nSource: {} \nDestination: {}", source, destination, e);
+            throw new RuntimeException("Moving the JSON-Viewer script failed.\nSource: " + source + " \nDestination: " + destination, e);
         }
     }
 
