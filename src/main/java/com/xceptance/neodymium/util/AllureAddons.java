@@ -772,7 +772,7 @@ public class AllureAddons
         Allure.addAttachment(name, "text/html", DataUtils.convertJsonToHtml(dataObjectJson), "html");
     }
 
-    public static void downloadJsonViewerScript()
+    public static synchronized void downloadJsonViewerScript()
     {
         if (scriptDownloaded)
         {
@@ -781,19 +781,32 @@ public class AllureAddons
 
         String scriptUrl = "https://cdn.jsdelivr.net/npm/@textea/json-viewer@3";
 
-        try
+        int retry = 1;
+        while (!scriptDownloaded && retry < 4)
         {
-            LOGGER.info("Starting download from: {}", scriptUrl);
-            downloadFileFromUrl(scriptUrl, JSON_VIEWER_SCRIPT_PATH);
-            LOGGER.info("Download complete! Script saved to: {}", JSON_VIEWER_SCRIPT_PATH);
-        }
-        catch (IOException e)
-        {
-            LOGGER.error("An error occurred during download: {}", e.getMessage());
-            LOGGER.error(e.getMessage(), e);
+            try
+            {
+                LOGGER.info("Downloading JSON viewer script attempt: {}", retry);
+                LOGGER.info("Starting download from: {}", scriptUrl);
+                downloadFileFromUrl(scriptUrl, JSON_VIEWER_SCRIPT_PATH);
+                LOGGER.info("Download complete! Script saved to: {}", JSON_VIEWER_SCRIPT_PATH);
+                scriptDownloaded = true;
+            }
+            catch (Exception e)
+            {
+                LOGGER.error("An error occurred during download: {}", e.getMessage());
+                LOGGER.error(e.getMessage(), e);
+            }
+            finally
+            {
+                retry++;
+            }
         }
 
-        scriptDownloaded = true;
+        if (retry >= 4)
+        {
+            LOGGER.info("Max number of retries reached");
+        }
     }
 
     /**

@@ -7,7 +7,6 @@ import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.retry.RetryMethodData;
-import com.xceptance.neodymium.common.xtc.XtcApiContext;
 import com.xceptance.neodymium.junit4.order.DefaultStatementRunOrder;
 import com.xceptance.neodymium.junit4.statement.browser.BrowserRunAfters;
 import com.xceptance.neodymium.junit4.statement.browser.BrowserRunBefores;
@@ -113,11 +112,6 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
             }
         }
         AllureAddons.initializeEnvironmentInformation();
-
-        if (XtcApiContext.isXtcApiEnabled())
-        {
-            AllureAddons.downloadJsonViewerScript();
-        }
     }
 
     public enum DescriptionMode

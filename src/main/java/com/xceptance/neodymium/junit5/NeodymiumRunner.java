@@ -4,7 +4,6 @@ import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.NeoAllureListener;
 import com.xceptance.neodymium.common.TestStepListener;
-import com.xceptance.neodymium.common.xtc.XtcApiContext;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
@@ -48,11 +47,6 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
             }
         }
         AllureAddons.initializeEnvironmentInformation();
-
-        if (XtcApiContext.isXtcApiEnabled())
-        {
-            AllureAddons.downloadJsonViewerScript();
-        }
     }
 
     public enum DescriptionMode

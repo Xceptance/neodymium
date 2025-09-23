@@ -2,6 +2,7 @@ package com.xceptance.neodymium.common.xtc;
 
 import com.xceptance.neodymium.common.xtc.dto.CreateRunRequest;
 import com.xceptance.neodymium.common.xtc.dto.CreateRunResponse;
+import com.xceptance.neodymium.util.AllureAddons;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +31,9 @@ public class RunInitializer
 
             return;
         }
+        
+        LOGGER.info("Downloading JSON viewer script...");
+        AllureAddons.downloadJsonViewerScript();
 
         LOGGER.info("XtcApiClient starting...");
         XtcApiClient xtcApiClient = new XtcApiClient();
