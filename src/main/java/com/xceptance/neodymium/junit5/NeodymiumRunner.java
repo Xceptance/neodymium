@@ -7,7 +7,6 @@ import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
-import io.qameta.allure.selenide.AllureSelenide;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
@@ -48,7 +47,6 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
             }
         }
         AllureAddons.initializeEnvironmentInformation();
-
     }
 
     public enum DescriptionMode
