@@ -29,7 +29,7 @@ public class NeoAllureListener extends AllureSelenide
             // if super.afterEvent(event) is called before advanced screenshot may impact the view port)
             if (Neodymium.configuration().enableFullPageCapture() && Neodymium.configuration().enableViewportScreenshot())
             {
-                Allure.addAttachment("View port screenshot",
+                Allure.addAttachment("Viewport Screenshot",
                                      new ByteArrayInputStream(((TakesScreenshot) WebDriverRunner.getWebDriver()).getScreenshotAs(OutputType.BYTES)));
             }
             if (event.getStatus().equals(LogEvent.EventStatus.FAIL))
