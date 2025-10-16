@@ -1,22 +1,22 @@
 package com.xceptance.neodymium.common.recording;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.util.Date;
-
+import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
+import com.xceptance.neodymium.common.recording.writers.Writer;
+import com.xceptance.neodymium.util.AllureAddons;
+import io.qameta.allure.Allure;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
-import com.xceptance.neodymium.common.recording.writers.Writer;
-import com.xceptance.neodymium.util.AllureAddons;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.util.Date;
 
-import io.qameta.allure.Allure;
+import static org.openqa.selenium.support.ui.ExpectedConditions.alertIsPresent;
 
 /**
  * Background thread to take screenshots and write them to the files using {@link Writer}.
@@ -86,6 +86,12 @@ public class TakeScreenshotsThread extends Thread
 
                     try
                     {
+                        // taking a screenshot while an alert is open will throw an exception and closes the alert, so it is checked here
+                        if (alertIsPresent().apply(driver) != null)
+                        {
+                            return;
+                        }
+
                         File file = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
                         writer.compressImageIfNeeded(file, recordingConfigurations.imageScaleFactor(), recordingConfigurations.imageQuality());
                         long delay = recordingConfigurations.oneImagePerMilliseconds() > duration ? recordingConfigurations.oneImagePerMilliseconds()
