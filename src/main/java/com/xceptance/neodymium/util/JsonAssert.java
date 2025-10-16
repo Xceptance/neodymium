@@ -1,10 +1,9 @@
 package com.xceptance.neodymium.util;
 
+import io.qameta.allure.Allure;
 import org.json.JSONException;
 import org.skyscreamer.jsonassert.JSONAssert;
 import org.skyscreamer.jsonassert.JSONCompareMode;
-
-import io.qameta.allure.Allure;
 
 /**
  * Utility class for JSON comparison and assertion operations, that provides methods to compare two JSON strings.
@@ -184,7 +183,7 @@ public class JsonAssert
         catch (AssertionError | JSONException e)
         {
 
-            Allure.addAttachment("Json View", "text/html", DataUtils.convertJsonToHtml(expectedJson), "html");
+            Allure.addAttachment("Json View", "text/html", Neodymium.getData().convertJsonToHtml(expectedJson), "html");
 
             throw e;
         }

@@ -1,14 +1,13 @@
 package com.xceptance.neodymium.junit5.testclasses.data;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.junit.Assert;
-
 import com.xceptance.neodymium.common.testdata.RandomDataSets;
 import com.xceptance.neodymium.common.testdata.SuppressDataSets;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.DataUtils;
+import com.xceptance.neodymium.util.Neodymium;
+import org.junit.Assert;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * This test may fail but the probability for it is very low
@@ -22,8 +21,8 @@ public class RandomnessOfDataSets
     public void testChoosingRandomDataSets()
     {
         // assert test data is available for the test
-        Assert.assertTrue(DataUtils.asString("key1").contains("val"));
-        datasets.add(DataUtils.asString("key1"));
+        Assert.assertTrue(Neodymium.getData().asString("key1").contains("val"));
+        datasets.add(Neodymium.getData().asString("key1"));
     }
 
     @NeodymiumTest
