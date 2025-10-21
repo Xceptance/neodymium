@@ -50,42 +50,6 @@ public class ScreenshotWriter
         return Neodymium.configuration().enableFullPageCapture() ? Neodymium.configuration().blurFullPageScreenshot() : false;
     }
 
-    public static void doScreenshot(String displayName, String testClassName, Optional<Throwable> executionException, Annotation[] annotationList)
-        throws IOException
-    {
-        if (Neodymium.configuration().enableAdvancedScreenShots())
-        {
-            String timeStamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new java.util.Date());
-            String dataSetName = "";
-            for (Annotation a : annotationList)
-            {
-                if (a.annotationType().equals(DataSet.class))
-                {
-                    DataSet set = (DataSet) a;
-                    dataSetName += "_DataSet";
-                    if (set.value().length > 0)
-                    {
-                        dataSetName += "_" + set.value();
-                    }
-                    if (!set.id().isEmpty())
-                    {
-                        dataSetName += "_" + set.id();
-                    }
-                }
-            }
-            String imageName = displayName + '_' + Neodymium.getBrowserProfileName() + dataSetName + '_' + timeStamp;
-            if (Neodymium.configuration().enableTreeDirectoryStructure())
-            {
-                testClassName = testClassName.replace('.', File.separatorChar);
-            }
-
-            if (Neodymium.configuration().enableOnSuccess() && executionException.isEmpty())
-            {
-                AllureAddons.attachPNG(imageName);
-            }
-        }
-    }
-
     private static Capture getCaptureMode()
     {
         return Neodymium.configuration().enableFullPageCapture() ? Capture.FULL : Capture.VIEWPORT;
