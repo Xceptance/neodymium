@@ -310,7 +310,13 @@
 				</exclusion>
 			</exclusions>
 		</dependency>
-
+		<!-- Override vulnerable transitive dependency for CVE-2025-4641 -->
+		<dependency>
+			<groupId>io.github.bonigarcia</groupId>
+			<artifactId>webdrivermanager</artifactId>
+			<version>6.3.2</version>
+		</dependency>
+		
 		<dependency>
 			<groupId>com.github.valfirst.browserup-proxy</groupId>
 			<artifactId>browserup-proxy-mitm</artifactId>
