@@ -14,17 +14,17 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.util.Date;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 import static org.openqa.selenium.support.ui.ExpectedConditions.alertIsPresent;
 
 /**
  * Background thread to take screenshots and write them to the files using {@link Writer}.
  * <p>
- * This class constructs the required writer on its own, it's only needed to pass the {@link Writer} class it should
- * use. It also requires configuration object of type {@link RecordingConfigurations} and the name of the result file
- * (will also be created by the class itself)
- * 
+ * This class constructs the required writer on its own, it's only needed to pass the {@link Writer} class it should use. It also requires configuration object
+ * of type {@link RecordingConfigurations} and the name of the result file (will also be created by the class itself)
+ *
  * @author olha
  */
 public class TakeScreenshotsThread extends Thread
@@ -44,12 +44,13 @@ public class TakeScreenshotsThread extends Thread
     private Writer writer;
 
     public TakeScreenshotsThread(WebDriver driver, Class<? extends Writer> writerClass, RecordingConfigurations recordingConfigurations,
-        String testName) throws IOException, NoSuchMethodException, SecurityException, InstantiationException, IllegalAccessException, IllegalArgumentException,
+                                 String testName)
+        throws IOException, NoSuchMethodException, SecurityException, InstantiationException, IllegalAccessException, IllegalArgumentException,
         InvocationTargetException
     {
         this.recordingConfigurations = recordingConfigurations;
         fileName = recordingConfigurations.tempFolderToStoreRecording()
-                   + testName.replaceAll("\\s", "-").replaceAll(":", "-").replaceAll("/", "_") + "." + recordingConfigurations.format();
+            + testName.replaceAll("\\s", "-").replaceAll(":", "-").replaceAll("/", "_") + "." + recordingConfigurations.format();
         this.writer = Writer.instantiate(writerClass, recordingConfigurations, fileName);
         File directory = new File(recordingConfigurations.tempFolderToStoreRecording());
         if (!directory.exists())
@@ -70,6 +71,17 @@ public class TakeScreenshotsThread extends Thread
         // in the run method
         if (writer != null)
         {
+            File lastFrameTempFile = null; // store the last good frame
+            try
+            {
+                // Create a temp file to hold the last frame
+                lastFrameTempFile = File.createTempFile("last_frame_", ".png");
+            }
+            catch (IOException e)
+            {
+                LOGGER.error("Could not create temp file for last screenshot, alert handling for test recording will be disabled.", e);
+            }
+
             try
             {
                 // try to start writer
@@ -78,27 +90,38 @@ public class TakeScreenshotsThread extends Thread
 
                 long turns = 0;
                 long millis = 0;
-                long duration = 200;
+                long duration = 0;
+
                 // start screenshot loop
                 while (run)
                 {
-                    long start = new Date().getTime();
+                    long start = System.currentTimeMillis();
 
                     try
                     {
+                        long delay = Math.max(recordingConfigurations.oneImagePerMilliseconds(), duration);
+
                         // taking a screenshot while an alert is open will throw an exception and closes the alert, so it is checked here
                         if (alertIsPresent().apply(driver) != null)
                         {
-                            return;
+                            // write the last successful frame again, if it exists
+                            if (lastFrameTempFile != null && lastFrameTempFile.exists() && lastFrameTempFile.length() > 0)
+                            {
+                                writer.write(lastFrameTempFile, delay);
+                            }
                         }
+                        else
+                        {
+                            File file = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+                            writer.compressImageIfNeeded(file, recordingConfigurations.imageScaleFactor(), recordingConfigurations.imageQuality());
+                            writer.write(file, delay);
 
-                        File file = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-                        writer.compressImageIfNeeded(file, recordingConfigurations.imageScaleFactor(), recordingConfigurations.imageQuality());
-                        long delay = recordingConfigurations.oneImagePerMilliseconds() > duration ? recordingConfigurations.oneImagePerMilliseconds()
-                                                                                                  : duration;
-                        writer.write(file, delay);
-                        file.delete();
-
+                            // move this new frame to our temp file for the next iteration
+                            if (lastFrameTempFile != null)
+                            {
+                                Files.move(file.toPath(), lastFrameTempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            }
+                        }
                     }
                     catch (Throwable e)
                     {
@@ -106,13 +129,13 @@ public class TakeScreenshotsThread extends Thread
                         LOGGER.error("Screenshot could not be taken", e);
                     }
 
-                    duration = new Date().getTime() - start;
+                    duration = System.currentTimeMillis() - start;
                     millis += duration;
                     turns++;
-                    long sleep = recordingConfigurations.oneImagePerMilliseconds() - duration;
+
                     try
                     {
-                        Thread.sleep(sleep > 0 ? sleep : 0);
+                        Thread.sleep(Math.max(recordingConfigurations.oneImagePerMilliseconds() - duration, 0));
                     }
                     catch (InterruptedException e)
                     {
@@ -120,11 +143,12 @@ public class TakeScreenshotsThread extends Thread
                     }
 
                 }
+
                 boolean isGif = recordingConfigurations.format().equals("gif");
                 if (recordingConfigurations.logInformationAboutRecording())
                 {
                     AllureAddons.addToReport("average " + (isGif ? "gif" : "video") + " sequence recording creation duration = " + millis + " / " + turns + "="
-                                             + millis / turns, "");
+                                                 + millis / turns, "");
                 }
                 writer.stop();
                 try
@@ -150,15 +174,22 @@ public class TakeScreenshotsThread extends Thread
             {
                 throw new RuntimeException(e1);
             }
+            finally
+            {
+                // Clean up the temp file
+                if (lastFrameTempFile != null)
+                {
+                    lastFrameTempFile.delete();
+                }
+            }
         }
     }
 
     /**
      * Stops screenshot loop. Please, don't forget to call {@link Thread#join()} method after this to kill the thread
-     * 
+     *
      * @param testFailed
-     *            {@link Boolean} if the filmed test failed (needed to decide whether the record should be attached to
-     *            the allure report)
+     *     {@link Boolean} if the filmed test failed (needed to decide whether the record should be attached to the allure report)
      */
     public void stopRun(boolean testFailed)
     {
