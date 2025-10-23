@@ -1,15 +1,14 @@
 package com.xceptance.neodymium.junit4.testclasses.repeat.classlevel;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
+import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.retry.Retry;
+import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import com.xceptance.neodymium.util.Neodymium;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.DataUtils;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Browser("Chrome_headless")
 @Retry(exceptions =
@@ -24,7 +23,7 @@ public class ClassRetryTestdataCombinationTest
     @Test
     public void testVisitingHomepage()
     {
-        if (DataUtils.asString("testId").equals("2"))
+        if (Neodymium.getData().asString("testId").equals("2"))
         {
             Assert.fail("Fail " + val.incrementAndGet());
         }

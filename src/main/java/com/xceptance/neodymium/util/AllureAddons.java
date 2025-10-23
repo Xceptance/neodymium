@@ -769,7 +769,7 @@ public class AllureAddons
             throw new RuntimeException(e);
         }
 
-        Allure.addAttachment(name, "text/html", DataUtils.convertJsonToHtml(dataObjectJson), "html");
+        Allure.addAttachment(name, "text/html", Neodymium.getData().convertJsonToHtml(dataObjectJson), "html");
     }
 
     public static synchronized void downloadJsonViewerScript()

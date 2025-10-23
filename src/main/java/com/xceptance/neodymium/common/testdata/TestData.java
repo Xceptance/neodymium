@@ -12,6 +12,7 @@ import com.jayway.jsonpath.PathNotFoundException;
 import com.jayway.jsonpath.spi.json.GsonJsonProvider;
 import com.jayway.jsonpath.spi.mapper.GsonMappingProvider;
 import com.xceptance.neodymium.common.xtc.XtcApiContext;
+import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
 import io.qameta.allure.Allure;
 import org.apache.commons.lang3.ArrayUtils;
@@ -20,6 +21,7 @@ import org.apache.commons.text.RandomStringGenerator;
 import org.apache.commons.text.TextRandomProvider;
 
 import java.io.Serial;
+import java.lang.reflect.Type;
 import java.util.HashMap;
 
 import static com.xceptance.neodymium.util.AllureAddons.JSON_VIEWER_SCRIPT_PATH;
@@ -132,7 +134,7 @@ public class TestData extends HashMap<String, String>
             }
         }
 
-        testDataUsed = true;
+        setTestDataUsed();
 
         return jsonObject;
     }
@@ -150,7 +152,7 @@ public class TestData extends HashMap<String, String>
     public <T> T get(final Class<T> clazz)
     {
         String dataObjectJson = getDataAsJsonObject().toString();
-        testDataUsed = true;
+        setTestDataUsed();
 
         return GSON.fromJson(dataObjectJson, clazz);
     }
@@ -180,8 +182,28 @@ public class TestData extends HashMap<String, String>
     {
         try
         {
-            T dataObject = JsonPath.using(JSONPATH_CONFIGURATION).parse(getDataAsJsonObject()).read(jsonPath, clazz);
-            testDataUsed = true;
+            T dataObject = (T) JsonPath.using(JSONPATH_CONFIGURATION).parse(getDataAsJsonObject()).read(jsonPath, clazz);
+            if (testDataUsed)
+            {
+                AllureAddons.addDataAsJsonToReport("Testdata (" + jsonPath + ")", dataObject);
+            }
+            return dataObject;
+        }
+        catch (PathNotFoundException e)
+        {
+            return null;
+        }
+    }
+
+    public <T> T get(final String jsonPath, final Type type)
+    {
+        try
+        {
+            T dataObject = GSON.fromJson(JsonPath.using(JSONPATH_CONFIGURATION).parse(getDataAsJsonObject()).read(jsonPath).toString(), type);
+            if (testDataUsed)
+            {
+                AllureAddons.addDataAsJsonToReport("Testdata (" + jsonPath + ")", dataObject);
+            }
             return dataObject;
         }
         catch (PathNotFoundException e)
@@ -241,7 +263,7 @@ public class TestData extends HashMap<String, String>
             throw new IllegalArgumentException("Test data could not be found for key: " + key);
         }
 
-        testDataUsed = true;
+        setTestDataUsed();
 
         return value;
     }
