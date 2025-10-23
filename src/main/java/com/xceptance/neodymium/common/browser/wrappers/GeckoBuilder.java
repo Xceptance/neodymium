@@ -79,11 +79,11 @@ public class GeckoBuilder extends Builder
             {
                 wsPort = Integer.parseInt(wsPorts.get(wsPorts.size() - 1).replace("--websocket-port=", ""));
                 arguments.removeAll(wsPorts);
-                args.remove(args.stream().filter(arg -> arg.contains("--websocket-port=")).findFirst().get());
+                args.stream().filter(arg -> arg.contains("--websocket-port=")).findFirst().ifPresent(args::remove);
                 args.remove("--allow-origins");
-                args.remove(args.stream().filter(arg -> arg.contains("http://127.0.0.1:")).findFirst().get());
-                args.remove(args.stream().filter(arg -> arg.contains("http://localhost:")).findFirst().get());
-                args.remove(args.stream().filter(arg -> arg.contains("http://[::1]:")).findFirst().get());
+                args.stream().filter(arg -> arg.contains("http://127.0.0.1:")).findFirst().ifPresent(args::remove);
+                args.stream().filter(arg -> arg.contains("http://localhost:")).findFirst().ifPresent(args::remove);
+                args.stream().filter(arg -> arg.contains("http://[::1]:")).findFirst().ifPresent(args::remove);
                 args.add(String.format("--websocket-port=%d", wsPort));
                 args.add("--allow-origins");
                 args.add(String.format("http://127.0.0.1:%d", wsPort));
