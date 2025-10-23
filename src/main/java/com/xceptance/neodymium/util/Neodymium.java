@@ -1,21 +1,5 @@
 package com.xceptance.neodymium.util;
 
-
-
-import org.aeonbits.owner.ConfigFactory;
-import org.openqa.selenium.By;
-import org.openqa.selenium.Dimension;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.remote.RemoteWebDriver;
-
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-import java.util.WeakHashMap;
-
 import com.browserup.bup.BrowserUpProxy;
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
@@ -23,6 +7,21 @@ import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
 import com.xceptance.neodymium.common.testdata.TestData;
+import org.aeonbits.owner.ConfigFactory;
+import org.apache.commons.lang3.StringUtils;
+import org.openqa.selenium.By;
+import org.openqa.selenium.Dimension;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.remote.RemoteWebDriver;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.WeakHashMap;
 
 
 /**
@@ -43,6 +42,8 @@ public class Neodymium
     
     // keep our current browser name
     private String browserName;
+
+    private static List<String> browserFilter = generateBrowserFilter();
     
     // keep our current remote debugging port
     private int remoteDebuggingPort;
@@ -75,6 +76,26 @@ public class Neodymium
         }
         configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
         localization = NeodymiumLocalization.build(configuration.localizationFile());
+    }
+
+    private static List<String> generateBrowserFilter()
+    {
+        // get test specific browser definitions (aka browser tag see browser.properties)
+        // could be one value or comma separated list of values
+        String filter = Neodymium.configuration().getBrowserFilter();
+        filter = filter.replaceAll("\\s", "");
+
+        // parse test specific browser definitions
+        if (!StringUtils.isEmpty(filter))
+        {
+            return Arrays.asList(filter.split(","));
+        }
+        return new ArrayList<String>();
+    }
+
+    public static List<String> getBrowserFilter()
+    {
+        return browserFilter;
     }
 
     /**
