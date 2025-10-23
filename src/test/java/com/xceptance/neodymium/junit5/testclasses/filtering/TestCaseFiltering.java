@@ -1,12 +1,10 @@
 package com.xceptance.neodymium.junit5.testclasses.filtering;
 
-import org.junit.Assert;
-
 import com.xceptance.neodymium.common.testdata.SuppressDataSets;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.DataUtils;
-
+import com.xceptance.neodymium.util.Neodymium;
 import io.cucumber.java.it.Data;
+import org.junit.Assert;
 
 public class TestCaseFiltering
 {
@@ -16,7 +14,7 @@ public class TestCaseFiltering
     {
         Assert.assertTrue("This test should be executed", true);
         Assert.assertEquals("This test should only be executed for data set with id 'executable'", "executable",
-                            DataUtils.asString("testId"));
+                            Neodymium.getData().asString("testId"));
     }
 
     @NeodymiumTest
@@ -30,6 +28,6 @@ public class TestCaseFiltering
     public void shouldBeExecutedForDataSetWithExecutableId()
     {
         Assert.assertEquals("This test should only be executed for data set with id 'executable'", "executable",
-                            DataUtils.asString("testId"));
+                            Neodymium.getData().asString("testId"));
     }
 }
