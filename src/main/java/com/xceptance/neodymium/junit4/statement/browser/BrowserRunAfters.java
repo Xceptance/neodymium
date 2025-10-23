@@ -1,5 +1,6 @@
 package com.xceptance.neodymium.junit4.statement.browser;
 
+import java.io.ByteArrayInputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -11,13 +12,19 @@ import org.junit.internal.runners.statements.RunAfters;
 import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.MultipleFailureException;
 import org.junit.runners.model.Statement;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
 
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.common.ScreenshotWriter;
 import com.xceptance.neodymium.common.browser.BrowserAfterRunner;
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
 import com.xceptance.neodymium.common.browser.BrowserRunner;
 import com.xceptance.neodymium.junit4.EnhancedMethod;
 import com.xceptance.neodymium.util.Neodymium;
+
+import io.qameta.allure.Allure;
 
 public class BrowserRunAfters extends RunAfters
 {
@@ -71,12 +78,21 @@ public class BrowserRunAfters extends RunAfters
         try
         {
             next.evaluate();
-            ScreenshotWriter.doScreenshot(displayName, className, Optional.empty(), annotationList);
+            // covering only screenshots on success because
+            // screenshots on failure are covered within NeoAllureListener
+            if (Neodymium.configuration().enableOnSuccess())
+            {
+                if (Neodymium.configuration().enableFullPageCapture() && Neodymium.configuration().enableViewportScreenshot())
+                {
+                    Allure.addAttachment("Viewport Screenshot",
+                                         new ByteArrayInputStream(((TakesScreenshot) WebDriverRunner.getWebDriver()).getScreenshotAs(OutputType.BYTES)));
+                }
+                ScreenshotWriter.doScreenshot("Advanced Screenshot");
+            }
         }
         catch (Throwable e)
         {
             errors.add(e);
-            ScreenshotWriter.doScreenshot(displayName, className, Optional.of(e), annotationList);
         }
         finally
         {

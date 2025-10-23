@@ -58,28 +58,6 @@
 		<junit.vintage.version>6.0.0-M2</junit.vintage.version>
 	</properties>
 
-	<repositories>
-		<repository>
-			<id>xceptance-public</id>
-			<url>https://lab.xceptance.de/nexus/content/repositories/public/</url>
-		</repository>
-		<repository>
-			<id>qameta</id>
-			<url>https://dl.bintray.com/qameta/maven</url>
-		</repository>
-	</repositories>
-
-	<distributionManagement>
-		<repository>
-			<id>ossrh</id>
-			<url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-		</repository>
-		<snapshotRepository>
-			<id>ossrh</id>
-			<url>https://oss.sonatype.org/content/repositories/snapshots</url>
-		</snapshotRepository>
-	</distributionManagement>
-
 	<build>
 		<plugins>
 			<plugin>
@@ -102,8 +80,7 @@
 					<forkCount>4</forkCount>
 					<reuseForks>false</reuseForks>
 					<includes>
-						<include>
-							com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
+						<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
 						<include>com/xceptance/neodymium/common/**/*Test.java</include>
 					</includes>
 				</configuration>
@@ -134,7 +111,7 @@
 					</execution>
 				</executions>
 				<configuration>
-					<source>8</source>
+					<source>16</source>
 					<detectJavaApiLink>false</detectJavaApiLink>
 				</configuration>
 			</plugin>
@@ -182,26 +159,63 @@
 							<forkCount>1</forkCount>
 						</configuration>
 					</plugin>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-gpg-plugin</artifactId>
-						<version>3.2.8</version>
-						<configuration>
-							<gpgArguments>
-								<arg>--pinentry-mode</arg>
-								<arg>loopback</arg>
-							</gpgArguments>
-						</configuration>
-						<executions>
-							<execution>
-								<id>sign-artifacts</id>
-								<phase>verify</phase>
-								<goals>
-									<goal>sign</goal>
-								</goals>
-							</execution>
-						</executions>
-					</plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>3.6.1</version>
+            <configuration>
+              <artifacts>
+                <artifact>
+                  <file>target/${project.artifactId}-${project.version}-javadoc.jar</file>
+                  <classifier>javadoc</classifier>
+                </artifact>
+                <artifact>
+                  <file>target/${project.artifactId}-${project.version}-sources.jar</file>
+                  <classifier>sources</classifier>
+                </artifact>
+              </artifacts>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-artifacts</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>attach-artifact</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.8</version>
+            <configuration>
+              <gpgArguments>
+                <arg>--pinentry-mode</arg>
+                <arg>loopback</arg>
+              </gpgArguments>
+            </configuration>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.8.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+              <waitUntil>published</waitUntil>
+            </configuration>
+          </plugin>
 				</plugins>
 			</build>
 		</profile>
@@ -219,6 +233,9 @@
 								<include>
 									com/xceptance/neodymium/util/**/*Test.java</include>
 							</includes>
+							<excludes>
+                <exclude>com/xceptance/neodymium/util/**/*JUnit5Test.java</exclude>
+              </excludes>
 						</configuration>
 						<dependencies>
 							<dependency>
@@ -242,6 +259,7 @@
 							<includes>
 								<include>
 									com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
+							  <include> com/xceptance/neodymium/util/**/*JUnit5Test.java </include>
 							</includes>
 						</configuration>
 					</plugin>
@@ -292,7 +310,13 @@
 				</exclusion>
 			</exclusions>
 		</dependency>
-
+		<!-- Override vulnerable transitive dependency for CVE-2025-4641 -->
+		<dependency>
+			<groupId>io.github.bonigarcia</groupId>
+			<artifactId>webdrivermanager</artifactId>
+			<version>6.3.2</version>
+		</dependency>
+		
 		<dependency>
 			<groupId>com.github.valfirst.browserup-proxy</groupId>
 			<artifactId>browserup-proxy-mitm</artifactId>
@@ -402,6 +426,11 @@
 			<groupId>com.codeborne</groupId>
 			<artifactId>selenide-proxy</artifactId>
 			<version>${selenide.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-compress</artifactId>
+			<version>1.28.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
