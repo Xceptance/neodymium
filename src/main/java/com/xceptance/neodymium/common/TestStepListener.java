@@ -1,5 +1,13 @@
 package com.xceptance.neodymium.common;
 
+import com.codeborne.selenide.logevents.LogEvent;
+import com.codeborne.selenide.logevents.LogEventListener;
+import com.xceptance.neodymium.util.AllureAddons;
+import com.xceptance.neodymium.util.JavaScriptUtils;
+import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.PropertiesUtil;
+import org.junit.jupiter.api.Assertions;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -9,14 +17,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.regex.Pattern;
 
-import org.junit.jupiter.api.Assertions;
-
-import com.codeborne.selenide.logevents.LogEvent;
-import com.codeborne.selenide.logevents.LogEventListener;
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.JavaScriptUtils;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.PropertiesUtil;
+import static org.openqa.selenium.support.ui.ExpectedConditions.alertIsPresent;
 
 public class TestStepListener implements LogEventListener
 {
@@ -38,7 +39,8 @@ public class TestStepListener implements LogEventListener
         {
             this.includeList = Arrays.asList(Neodymium.configuration().getIncludeList().split("\\s+"));
         }
-        if(!Neodymium.configuration().getExcludeList().isEmpty()) {
+        if (!Neodymium.configuration().getExcludeList().isEmpty())
+        {
             this.excludeList = new ArrayList<>(Arrays.asList(Neodymium.configuration().getExcludeList().split("\\s+")));
 
             // remove all explicitly allowed URLs from the exclude list
@@ -66,6 +68,12 @@ public class TestStepListener implements LogEventListener
     public void afterEvent(LogEvent currentLog)
     {
         if (!Neodymium.hasDriver())
+        {
+            return;
+        }
+
+        // getting the current URL while an alert is open will throw an exception and closes the alert, so it is checked here
+        if (alertIsPresent().apply(Neodymium.getDriver()) != null)
         {
             return;
         }
