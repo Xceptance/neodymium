@@ -36,6 +36,7 @@ import org.openqa.selenium.ie.InternetExplorerDriver;
 import org.openqa.selenium.ie.InternetExplorerOptions;
 import org.openqa.selenium.net.PortProber;
 import org.openqa.selenium.os.ExecutableFinder;
+import org.openqa.selenium.remote.Augmenter;
 import org.openqa.selenium.remote.CapabilityType;
 import org.openqa.selenium.remote.HttpCommandExecutor;
 import org.openqa.selenium.remote.RemoteWebDriver;
@@ -388,7 +389,8 @@ public final class BrowserRunnerHelper
             }
             else
             {
-                wDSC.setWebDriver(new RemoteWebDriver(capabilities.merge(capabilities)));
+            	// Fixed usage of Augmenter - https://selenide.org/2025/10/04/selenide-7.11.1/
+                wDSC.setWebDriver(new Augmenter().augment(new RemoteWebDriver(capabilities.merge(capabilities))));
             }
 
         }
@@ -433,7 +435,8 @@ public final class BrowserRunnerHelper
                     capabilities.setCapability(optionsTag, config.getGridProperties());
                 }
             }
-            wDSC.setWebDriver(new RemoteWebDriver(new HttpCommandExecutor(new HashMap<>(), configClient, new NeodymiumProxyHttpClientFactory(testEnvironmentProperties)), capabilities));
+            // Fixed usage of Augmenter - https://selenide.org/2025/10/04/selenide-7.11.1/
+            wDSC.setWebDriver(new Augmenter().augment(new RemoteWebDriver(new HttpCommandExecutor(new HashMap<>(), configClient, new NeodymiumProxyHttpClientFactory(testEnvironmentProperties)), capabilities)));
         }
         final WebDriver decoratedDriver = new EventFiringDecorator<WebDriver>(new NeodymiumWebDriverListener()).decorate(wDSC.getWebDriver());
         wDSC.setDecoratedWebDriver(decoratedDriver);
