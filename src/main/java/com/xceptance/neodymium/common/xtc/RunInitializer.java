@@ -3,10 +3,14 @@ package com.xceptance.neodymium.common.xtc;
 import com.xceptance.neodymium.common.xtc.dto.CreateRunRequest;
 import com.xceptance.neodymium.common.xtc.dto.CreateRunResponse;
 import com.xceptance.neodymium.util.AllureAddons;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
@@ -31,7 +35,7 @@ public class RunInitializer
 
             return;
         }
-        
+
         LOGGER.info("Downloading JSON viewer script...");
         AllureAddons.downloadJsonViewerScript();
 
@@ -55,5 +59,12 @@ public class RunInitializer
 
         LOGGER.info("Adding run ID to system properties: {}", runId);
         System.setProperty("xtc.run.id", runId);
+
+        String filePath = StringUtils.isNotBlank(XtcApiContext.configuration.xtcApiRunIdStorageFilePath())
+            ? XtcApiContext.configuration.xtcApiRunIdStorageFilePath()
+            : System.getProperty("build.dir") + File.separator + "temp_run_id.txt";
+
+        FileUtils.writeStringToFile(new File(filePath), runId, StandardCharsets.UTF_8);
+        LOGGER.info("Created temp file for run ID: {} to {}", runId, filePath);
     }
 }

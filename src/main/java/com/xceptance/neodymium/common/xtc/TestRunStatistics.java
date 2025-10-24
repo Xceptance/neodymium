@@ -52,7 +52,7 @@ public class TestRunStatistics
         {
             return "FAILED";
         }
-        else if (passedTests == totalTests)
+        else if (passedTests == totalTests + skippedTests)
         {
             return "PASSED";
         }
