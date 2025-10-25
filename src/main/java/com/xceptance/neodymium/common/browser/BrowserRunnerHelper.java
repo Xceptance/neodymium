@@ -334,7 +334,8 @@ public final class BrowserRunnerHelper
                 }
 
 				Builder geckoBuilder;
-				final List<String> driverArguments = config.getDriverArguments();
+				// Make a defensive copy to avoid modifying the internal list of the configuration object
+				final List<String> driverArguments = config.getDriverArguments() != null ? new java.util.ArrayList<>(config.getDriverArguments()) : null;
 				if (driverArguments != null) {
 					int webSocketPort;
 					final List<String> wsPorts = driverArguments.stream()
