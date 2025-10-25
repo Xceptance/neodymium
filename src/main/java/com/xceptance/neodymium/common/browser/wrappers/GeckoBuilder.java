@@ -73,23 +73,7 @@ public class GeckoBuilder extends Builder
                 arguments.remove(indexOfProfileRoot);
                 arguments.remove(indexOfProfileRoot + 1);
             }
-            int wsPort;
-            List<String> wsPorts = arguments.stream().filter(arg -> arg.contains("--websocket-port=")).collect(Collectors.toList());
-            if (!wsPorts.isEmpty())
-            {
-                wsPort = Integer.parseInt(wsPorts.get(wsPorts.size() - 1).replace("--websocket-port=", ""));
-                arguments.removeAll(wsPorts);
-                args.remove(args.stream().filter(arg -> arg.contains("--websocket-port=")).findFirst().get());
-                args.remove("--allow-origins");
-                args.remove(args.stream().filter(arg -> arg.contains("http://127.0.0.1:")).findFirst().get());
-                args.remove(args.stream().filter(arg -> arg.contains("http://localhost:")).findFirst().get());
-                args.remove(args.stream().filter(arg -> arg.contains("http://[::1]:")).findFirst().get());
-                args.add(String.format("--websocket-port=%d", wsPort));
-                args.add("--allow-origins");
-                args.add(String.format("http://127.0.0.1:%d", wsPort));
-                args.add(String.format("http://localhost:%d", wsPort));
-                args.add(String.format("http://[::1]:%d", wsPort));
-            }
+
             int indexOfAllowOrings = arguments.indexOf("--allow-origins");
             if (indexOfAllowOrings > -1)
             {
