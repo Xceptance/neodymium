@@ -333,7 +333,7 @@ public final class BrowserRunnerHelper
                     options.setProfile(profile);
                 }
 
-				Builder geckoBuilder = null;
+				Builder geckoBuilder;
 				final List<String> driverArguments = config.getDriverArguments();
 				if (driverArguments != null) {
 					int webSocketPort;
