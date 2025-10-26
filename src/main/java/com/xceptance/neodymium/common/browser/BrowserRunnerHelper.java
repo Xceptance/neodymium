@@ -343,10 +343,8 @@ public final class BrowserRunnerHelper
 					if (!wsPorts.isEmpty()) {
 						webSocketPort = Integer
 								.parseInt(wsPorts.get(wsPorts.size() - 1).replace("--websocket-port=", ""));
-						driverArguments.stream()
-								.filter(arg -> arg.contains("--websocket-port="))
-								.findFirst()
-								.ifPresent(driverArguments::remove);
+						// Remove the first occurrence of the websocket port argument using the wsPorts list
+						driverArguments.remove(wsPorts.get(0));
 						geckoBuilder = new GeckoBuilder(driverArguments).withAllowHosts("localhost")
 								.withWebSocketPort(webSocketPort);
 					} else {
