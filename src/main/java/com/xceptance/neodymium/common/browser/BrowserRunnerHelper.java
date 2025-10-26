@@ -334,8 +334,11 @@ public final class BrowserRunnerHelper
                 }
 
 				Builder geckoBuilder;
-				// Make a defensive copy to avoid modifying the internal list of the configuration object
-				final List<String> driverArguments = config.getDriverArguments() != null ? new java.util.ArrayList<>(config.getDriverArguments()) : null;
+				// Make a defensive copy to avoid modifying the internal list of the
+				// configuration object
+				final List<String> driverArguments = config.getDriverArguments() != null
+						? new java.util.ArrayList<>(config.getDriverArguments())
+						: null;
 				if (driverArguments != null) {
 					int webSocketPort;
 					final List<String> wsPorts = driverArguments.stream()
@@ -343,7 +346,8 @@ public final class BrowserRunnerHelper
 					if (!wsPorts.isEmpty()) {
 						webSocketPort = Integer
 								.parseInt(wsPorts.get(wsPorts.size() - 1).replace("--websocket-port=", ""));
-						// Remove the first occurrence of the websocket port argument using the wsPorts list
+						// Remove the first occurrence of the websocket port argument using the wsPorts
+						// list
 						driverArguments.remove(wsPorts.get(0));
 						geckoBuilder = new GeckoBuilder(driverArguments).withAllowHosts("localhost")
 								.withWebSocketPort(webSocketPort);
