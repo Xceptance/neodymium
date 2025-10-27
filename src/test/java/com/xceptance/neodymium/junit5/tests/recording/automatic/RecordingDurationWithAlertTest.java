@@ -7,6 +7,7 @@ import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Assert;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
@@ -18,7 +19,9 @@ import java.util.Map;
 
 public class RecordingDurationWithAlertTest extends AbstractNeodymiumTest
 {
-    public double runTest(boolean isGif, String oneImagePerMilliseconds) throws IOException
+    private File recordingFile;
+
+    public double runTest(boolean isGif, String oneImagePerMilliseconds) throws IOException, InterruptedException
     {
         CustomRecordingWithAlertTest.isGif = isGif;
         String format = isGif ? "gif" : "video";
@@ -40,12 +43,15 @@ public class RecordingDurationWithAlertTest extends AbstractNeodymiumTest
         run(CustomRecordingWithAlertTest.class);
 
         RecordingConfigurations config = isGif ? FilmTestExecution.getContextGif() : FilmTestExecution.getContextVideo();
-        File recordingFile = new File(config.tempFolderToStoreRecording() + CustomRecordingWithAlertTest.uuid + "." + config.format());
-        recordingFile.deleteOnExit();
+        recordingFile = new File(config.tempFolderToStoreRecording() + CustomRecordingWithAlertTest.uuid + "." + config.format());
+
+        for (int i = 0; i < 3 && !recordingFile.exists(); i++)
+        {
+            Thread.sleep(1000);
+        }
 
         Assert.assertTrue("the recording file doesn't exist", recordingFile.exists());
-        ProcessBuilder pb = new ProcessBuilder("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1",
-                                               recordingFile.getAbsolutePath());
+        ProcessBuilder pb = new ProcessBuilder("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", recordingFile.getAbsolutePath());
         pb.redirectErrorStream(true);
         Process p = pb.start();
 
@@ -61,30 +67,39 @@ public class RecordingDurationWithAlertTest extends AbstractNeodymiumTest
     }
 
     @Test
-    public void testVideoRecording() throws IOException
+    public void testVideoRecording() throws IOException, InterruptedException
     {
         double run100 = runTest(false, "100");
         double run1000 = runTest(false, "1000");
 
         Assert.assertEquals("Videos with different oneImagePerMilliseconds value should have approximaty the same length (1/100 = " + run1000
-                                + ", 1/1000 = " + run100 + ")", run1000, run1000, 5.0);
+                            + ", 1/1000 = " + run100 + ")", run1000, run1000, 5.0);
     }
 
     @Test
-    public void testGifRecording() throws IOException
+    public void testGifRecording() throws IOException, InterruptedException
     {
         double run100 = runTest(true, "100");
         double run1000 = runTest(true, "1000");
         Assert.assertEquals("Gifs with different oneImagePerMilliseconds value should have approximaty the same length (1/100 = " + run100 + ", 1/1000 = "
-                                + run1000 + ")", run100, run1000, 5.0);
+                            + run1000 + ")", run100, run1000, 5.0);
     }
 
     @Test
-    public void testMixedRecording() throws IOException
+    public void testMixedRecording() throws IOException, InterruptedException
     {
         double runVideo1000 = runTest(false, "1000");
         double runGif1000 = runTest(true, "1000");
         Assert.assertEquals("Gifs with different oneImagePerMilliseconds value should have approximaty the same length (video = " + runVideo1000 + ", gif = "
-                                + runGif1000 + ")", runVideo1000, runGif1000, 5.0);
+                            + runGif1000 + ")", runVideo1000, runGif1000, 5.0);
+    }
+
+    @AfterEach
+    public void cleanup()
+    {
+        if (recordingFile != null)
+        {
+            recordingFile.delete();
+        }
     }
 }
