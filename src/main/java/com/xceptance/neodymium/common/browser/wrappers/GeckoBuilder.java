@@ -30,15 +30,11 @@ public class GeckoBuilder extends Builder
             usingPort(Integer.parseInt(portArgs.get(portArgs.size() - 1).replace("--port=", "")));
             this.arguments.removeAll(portArgs);
         }
-		final List<String> wsPorts = this.arguments.stream()
-				.filter(arg -> arg.contains("--websocket-port=")).collect(Collectors.toList());
+		final List<String> wsPorts = this.arguments.stream().filter(arg -> arg.contains("--websocket-port="))
+				.collect(Collectors.toList());
 		if (!wsPorts.isEmpty()) {
-			int webSocketPort = Integer
-					.parseInt(wsPorts.get(wsPorts.size() - 1).replace("--websocket-port=", ""));
-			// Remove the first occurrence of the websocket port argument using the wsPorts
-			// list
-			this.arguments.remove(wsPorts.get(0));
-			withWebSocketPort(webSocketPort);
+			withWebSocketPort(Integer.parseInt(wsPorts.get(wsPorts.size() - 1).replace("--websocket-port=", "")));
+			this.arguments.removeAll(wsPorts);
 		}
     }
 
