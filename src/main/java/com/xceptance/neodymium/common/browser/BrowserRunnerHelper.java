@@ -15,8 +15,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
-
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.openqa.selenium.Dimension;
@@ -333,34 +331,11 @@ public final class BrowserRunnerHelper
                     options.setProfile(profile);
                 }
 
-				Builder geckoBuilder;
-				// Make a defensive copy to avoid modifying the internal list of the
-				// configuration object
-				final List<String> driverArguments = config.getDriverArguments() != null
-						? new java.util.ArrayList<>(config.getDriverArguments())
-						: null;
-				if (driverArguments != null) {
-					int webSocketPort;
-					final List<String> wsPorts = driverArguments.stream()
-							.filter(arg -> arg.contains("--websocket-port=")).collect(Collectors.toList());
-					if (!wsPorts.isEmpty()) {
-						webSocketPort = Integer
-								.parseInt(wsPorts.get(wsPorts.size() - 1).replace("--websocket-port=", ""));
-						// Remove the first occurrence of the websocket port argument using the wsPorts
-						// list
-						driverArguments.remove(wsPorts.get(0));
-						geckoBuilder = new GeckoBuilder(driverArguments).withAllowHosts("localhost")
-								.withWebSocketPort(webSocketPort);
-					} else {
-						geckoBuilder = new GeckoBuilder(driverArguments).withAllowHosts("localhost");
-					}
-				} else {
-					geckoBuilder = new GeckoBuilder(null).withAllowHosts("localhost");
-				}
-
-				if (StringUtils.isNotBlank(driverInPathPath)) {
-					geckoBuilder.usingDriverExecutable(new File(driverInPathPath));
-				}
+                Builder geckoBuilder = new GeckoBuilder(config.getDriverArguments()).withAllowHosts("localhost");
+                if (StringUtils.isNotBlank(driverInPathPath))
+                {
+                    geckoBuilder.usingDriverExecutable(new File(driverInPathPath));
+                }
 
                 wDSC.setWebDriver(new FirefoxDriver(geckoBuilder.build(), options.merge(capabilities)));
             }
