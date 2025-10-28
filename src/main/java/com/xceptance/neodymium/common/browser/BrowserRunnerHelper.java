@@ -15,7 +15,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.openqa.selenium.Dimension;
@@ -221,7 +220,7 @@ public final class BrowserRunnerHelper
                 final String driverInPathPath = new ExecutableFinder().find("chromedriver");
 
                 // do we have a custom path?
-                String pathToBrowser = Neodymium.configuration().getChromeBrowserPath();
+                final String pathToBrowser = Neodymium.configuration().getChromeBrowserPath();
                 if (StringUtils.isNotBlank(pathToBrowser))
                 {
                     options.setBinary(pathToBrowser);
@@ -232,7 +231,7 @@ public final class BrowserRunnerHelper
                 }
 
                 // find a free port for each chrome session (important for lighthouse)
-                int remoteDebuggingPort = PortProber.findFreePort();
+                final int remoteDebuggingPort = PortProber.findFreePort();
                 Neodymium.setRemoteDebuggingPort(remoteDebuggingPort);
                 options.addArguments("--remote-debugging-port=" + remoteDebuggingPort);
 
@@ -266,7 +265,7 @@ public final class BrowserRunnerHelper
                     options.setExperimentalOption("prefs", prefs);
                 }
 
-                ChromeBuilder chromeBuilder = new ChromeBuilder(config.getDriverArguments());
+                final ChromeBuilder chromeBuilder = new ChromeBuilder(config.getDriverArguments());
                 if (StringUtils.isNotBlank(driverInPathPath))
                 {
                     chromeBuilder.usingDriverExecutable(new File(driverInPathPath));
@@ -351,7 +350,7 @@ public final class BrowserRunnerHelper
                         options.addCommandSwitches(argument);
                     }
                 }
-                IEBuilder ieBuilder = new IEBuilder(config.getDriverArguments());
+                final IEBuilder ieBuilder = new IEBuilder(config.getDriverArguments());
                 if (StringUtils.isNotBlank(driverInPathPath))
                 {
                     ieBuilder.usingDriverExecutable(new File(driverInPathPath));
@@ -370,7 +369,7 @@ public final class BrowserRunnerHelper
                     options.addArguments(config.getArguments());
                 }
 
-                EdgeBuilder edgeBuilder = new EdgeBuilder(config.getDriverArguments());
+                final EdgeBuilder edgeBuilder = new EdgeBuilder(config.getDriverArguments());
                 if (StringUtils.isNotBlank(driverInPathPath))
                 {
                     edgeBuilder.usingDriverExecutable(new File(driverInPathPath));
