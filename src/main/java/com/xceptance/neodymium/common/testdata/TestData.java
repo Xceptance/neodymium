@@ -11,7 +11,6 @@ import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 import com.jayway.jsonpath.spi.json.GsonJsonProvider;
 import com.jayway.jsonpath.spi.mapper.GsonMappingProvider;
-import com.xceptance.neodymium.common.xtc.XtcApiContext;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
 import io.qameta.allure.Allure;
@@ -219,19 +218,20 @@ public class TestData extends HashMap<String, String>
      */
     public String convertJsonToHtml(String json)
     {
-        String jsonViewerScriptInjection = ""
-            + "<div id='json-viewer'></div>";
+        return ""
+            + "<div id=\"json-viewer\"></div>"
 
-        if (XtcApiContext.isXtcApiEnabled())
-        {
-            jsonViewerScriptInjection += "<script src='../../" + JSON_VIEWER_SCRIPT_PATH + "'></script>";
-        }
-        else
-        {
-            jsonViewerScriptInjection += "<script src=\"https://cdn.jsdelivr.net/npm/@textea/json-viewer@3\"></script>";
-        }
+            // Attempt to load the script from the CDN
+            + "<script src=\"https://cdn.jsdelivr.net/npm/@textea/json-viewer@3\"></script>"
 
-        return jsonViewerScriptInjection + "<script>new JsonViewer({value:" + json + "}).render('#json-viewer')</script>";
+            // Check if window.JsonViewer exists. If not, write a new tag to load the local file.
+            + "<script>"
+            + "  window.JsonViewer || document.write('<script src=\"../../" + JSON_VIEWER_SCRIPT_PATH + "\">\\x3C/script>')"
+            + "</script>"
+
+            + "<script>"
+            + "  new JsonViewer({value:" + json + "}).render('#json-viewer')"
+            + "</script>";
     }
 
     /**
