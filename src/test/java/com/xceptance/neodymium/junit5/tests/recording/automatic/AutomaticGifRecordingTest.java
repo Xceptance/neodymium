@@ -1,9 +1,8 @@
 package com.xceptance.neodymium.junit5.tests.recording.automatic;
 
-import org.junit.jupiter.api.BeforeAll;
-
 import com.xceptance.neodymium.common.recording.config.GifRecordingConfigurations;
-import com.xceptance.neodymium.junit4.tests.recording.AbstractRecordingTest;
+import com.xceptance.neodymium.junit5.tests.recording.AbstractRecordingTest;
+import org.junit.jupiter.api.BeforeAll;
 
 public class AutomaticGifRecordingTest extends AbstractRecordingTest
 {
