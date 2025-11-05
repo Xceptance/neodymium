@@ -22,6 +22,8 @@ public abstract interface RecordingConfigurations extends Mutable
 
     public boolean deleteRecordingsAfterAddingToAllureReport();
 
+    public boolean deleteTempRecordings();
+
     public boolean appendAllRecordingsToAllureReport();
 
     public double imageQuality();
