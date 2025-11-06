@@ -176,7 +176,7 @@ public class AllureAddons
             return;
         }
 
-        // If there's a fullpage screenshot screenshot, we do both, if not we do not want to have two viewport
+        // If there's a full page screenshot, we do both, if not we do not want to have two viewport
         // screenshots
         // if full page screenshot/advanced screenshotting is disabled we need the default
         if (Neodymium.configuration().enableViewportScreenshot() == true &&

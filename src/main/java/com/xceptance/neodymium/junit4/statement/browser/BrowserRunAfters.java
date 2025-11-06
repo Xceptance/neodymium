@@ -1,30 +1,21 @@
 package com.xceptance.neodymium.junit4.statement.browser;
 
-import java.io.ByteArrayInputStream;
+import com.xceptance.neodymium.common.browser.BrowserAfterRunner;
+import com.xceptance.neodymium.common.browser.BrowserMethodData;
+import com.xceptance.neodymium.common.browser.BrowserRunner;
+import com.xceptance.neodymium.junit4.EnhancedMethod;
+import com.xceptance.neodymium.util.Neodymium;
+import org.junit.internal.runners.statements.RunAfters;
+import org.junit.runners.model.FrameworkMethod;
+import org.junit.runners.model.MultipleFailureException;
+import org.junit.runners.model.Statement;
+
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
-import org.junit.internal.runners.statements.RunAfters;
-import org.junit.runners.model.FrameworkMethod;
-import org.junit.runners.model.MultipleFailureException;
-import org.junit.runners.model.Statement;
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.TakesScreenshot;
-
-import com.codeborne.selenide.Selenide;
-import com.codeborne.selenide.WebDriverRunner;
-import com.xceptance.neodymium.common.ScreenshotWriter;
-import com.xceptance.neodymium.common.browser.BrowserAfterRunner;
-import com.xceptance.neodymium.common.browser.BrowserMethodData;
-import com.xceptance.neodymium.common.browser.BrowserRunner;
-import com.xceptance.neodymium.junit4.EnhancedMethod;
-import com.xceptance.neodymium.util.Neodymium;
-
-import io.qameta.allure.Allure;
 
 public class BrowserRunAfters extends RunAfters
 {
@@ -75,65 +66,44 @@ public class BrowserRunAfters extends RunAfters
         }
         boolean tearDownDone = false;
         List<Throwable> errors = new ArrayList<Throwable>();
-        try
+
+        for (FrameworkMethod each : afters)
         {
-            next.evaluate();
-            // covering only screenshots on success because
-            // screenshots on failure are covered within NeoAllureListener
-            if (Neodymium.configuration().enableOnSuccess())
+            if (Neodymium.configuration().startNewBrowserForCleanUp())
             {
-                if (Neodymium.configuration().enableFullPageCapture() && Neodymium.configuration().enableViewportScreenshot())
+                if (browserMethodDataOptional.isPresent())
                 {
-                    Allure.addAttachment("Viewport Screenshot",
-                                         new ByteArrayInputStream(((TakesScreenshot) WebDriverRunner.getWebDriver()).getScreenshotAs(OutputType.BYTES)));
-                }
-                ScreenshotWriter.doScreenshot("Advanced Screenshot");
-            }
-        }
-        catch (Throwable e)
-        {
-            errors.add(e);
-        }
-        finally
-        {
-            for (FrameworkMethod each : afters)
-            {
-                if (Neodymium.configuration().startNewBrowserForCleanUp())
-                {
-                    if (browserMethodDataOptional.isPresent())
+                    BrowserMethodData browserMethodData = (BrowserMethodData) browserMethodDataOptional.get();
+                    boolean reuseTestBrowserForThisAfter = aftersWithTestMethod.remove(each.getMethod());
+                    if (!tearDownDone && !reuseTestBrowserForThisAfter && aftersWithTestMethod.isEmpty() && browserMethodData != null)
                     {
-                        BrowserMethodData browserMethodData = (BrowserMethodData) browserMethodDataOptional.get();
-                        boolean reuseTestBrowserForThisAfter = aftersWithTestMethod.remove(each.getMethod());
-                        if (!tearDownDone && !reuseTestBrowserForThisAfter && aftersWithTestMethod.isEmpty() && browserMethodData != null)
+                        new BrowserRunner().teardown(!errors.isEmpty(), browserMethodData, Neodymium.getWebDriverStateContainer());
+                        tearDownDone = true;
+                        if (browserMethodData != null)
                         {
-                            new BrowserRunner().teardown(!errors.isEmpty(), browserMethodData, Neodymium.getWebDriverStateContainer());
-                            tearDownDone = true;
-                            if (browserMethodData != null)
-                            {
-                                Neodymium.setBrowserProfileName(browserMethodData.getBrowserTag());
-                            }
+                            Neodymium.setBrowserProfileName(browserMethodData.getBrowserTag());
                         }
                     }
-
-                    new BrowserAfterRunner().run(() -> {
-                        try
-                        {
-                            invokeMethod(each);
-                        }
-                        catch (Throwable e)
-                        {
-                            return e;
-                        }
-                        return null;
-                    }, each.getMethod(), false);
-
                 }
-                else
-                {
-                    invokeMethod(each);
-                }
+
+                new BrowserAfterRunner().run(() -> {
+                    try
+                    {
+                        invokeMethod(each);
+                    }
+                    catch (Throwable e)
+                    {
+                        return e;
+                    }
+                    return null;
+                }, each.getMethod(), false);
+            }
+            else
+            {
+                invokeMethod(each);
             }
         }
+
         MultipleFailureException.assertEmpty(errors);
     }
 }
