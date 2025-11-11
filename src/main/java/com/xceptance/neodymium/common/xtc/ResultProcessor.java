@@ -4,6 +4,8 @@ import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest;
 import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest.FinishExecution;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,6 +13,7 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -43,13 +46,28 @@ public class ResultProcessor
             return;
         }
 
-        if (System.getProperty("xtc.run.id") == null)
+        String runIdRaw = System.getProperty("xtc.run.id");
+
+        if (StringUtils.isBlank(runIdRaw))
         {
-            LOGGER.error("Run ID is not set in system properties. Please run RunInitializer first to create a test run.");
-            throw new RuntimeException("Run ID is not set in system properties. Please run RunInitializer first to create a test run.");
+            LOGGER.info("XTC run ID system property not found. Checking temp run id file.");
+
+            String filePath = StringUtils.isNotBlank(XtcApiContext.configuration.xtcApiRunIdStorageFilePath())
+                ? XtcApiContext.configuration.xtcApiRunIdStorageFilePath()
+                : System.getProperty("build.dir") + File.separator + "temp_run_id.txt";
+
+            runIdRaw = FileUtils.readFileToString(new File(filePath), StandardCharsets.UTF_8);
         }
 
-        int runId = Integer.parseInt(System.getProperty("xtc.run.id"));
+        if (StringUtils.isBlank(runIdRaw))
+        {
+            LOGGER.error(
+                "Run ID is not set in system properties or temp run id file. Please run RunInitializer first to create a test run and make sure to that either the property or the file is written.");
+            throw new RuntimeException(
+                "Run ID is not set in system properties or temp run id file. Please run RunInitializer first to create a test run and make sure to that either the property or the file is written.");
+        }
+
+        int runId = Integer.parseInt(runIdRaw);
         LOGGER.info("Run ID: {}", runId);
 
         LOGGER.info("Surefire reports directory: {}", surefireReportsDir);

@@ -111,4 +111,8 @@ public interface XtcApiConfiguration extends Mutable
     @Key("xtc.api.validateConfigurationWithException")
     @DefaultValue("true")
     public boolean xtcApiValidateConfigurationWithException();
+
+    @Key("xtc.api.runIdStorageFilePath")
+    @DefaultValue("target/temp_run_id.txt")
+    public String xtcApiRunIdStorageFilePath();
 }
