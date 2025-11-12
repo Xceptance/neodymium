@@ -1,7 +1,6 @@
 package com.xceptance.neodymium.common.browser;
 
 import com.browserup.bup.BrowserUpProxy;
-import com.codeborne.selenide.WebDriverRunner;
 import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.ScreenshotWriter;
 import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
@@ -10,15 +9,11 @@ import com.xceptance.neodymium.common.recording.FilmTestExecution;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
-import io.qameta.allure.Allure;
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.LinkedList;
@@ -284,14 +279,9 @@ public class BrowserRunner
     private void takeScreenshotAtTestEnd()
     {
         // covering only screenshots on success because
-        // screenshots on failure are covered within NeoAllureListener
+        // screenshots on steps are covered within AllureTestStepListener
         if (Neodymium.configuration().enableOnSuccess())
         {
-            if (Neodymium.configuration().enableFullPageCapture() && Neodymium.configuration().enableViewportScreenshot())
-            {
-                Allure.addAttachment("View Port Screenshot",
-                                     new ByteArrayInputStream(((TakesScreenshot) WebDriverRunner.getWebDriver()).getScreenshotAs(OutputType.BYTES)));
-            }
             try
             {
                 ScreenshotWriter.doScreenshot("Advanced Screenshot");
