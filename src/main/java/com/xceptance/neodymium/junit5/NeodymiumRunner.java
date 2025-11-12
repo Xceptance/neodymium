@@ -2,11 +2,11 @@ package com.xceptance.neodymium.junit5;
 
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.NeoAllureListener;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
+import io.qameta.allure.selenide.AllureSelenide;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
@@ -29,8 +29,12 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
 
     public NeodymiumRunner()
     {
-        SelenideLogger.addListener(LISTENER_NAME, new NeoAllureListener());
+        AllureSelenide allureSelenide = new AllureSelenide();
 
+        // if advanced screenshots are enabled, Selenide screenshots should be disabled
+        allureSelenide.screenshots(!Neodymium.configuration().enableAdvancedScreenShots());
+
+        SelenideLogger.addListener(LISTENER_NAME, allureSelenide);
         SelenideLogger.addListener(TestStepListener.LISTENER_NAME, new TestStepListener());
 
         if (!neoVersionLogged && Neodymium.configuration().logNeoVersion())
@@ -53,7 +57,7 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
     {
         flat,
         tree,
-    };
+    }
 
     @Override
     public boolean supportsTestTemplate(ExtensionContext context)

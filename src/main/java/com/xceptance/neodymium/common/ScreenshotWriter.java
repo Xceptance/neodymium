@@ -1,21 +1,12 @@
 package com.xceptance.neodymium.common;
 
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.lang.annotation.Annotation;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.text.SimpleDateFormat;
-import java.util.Optional;
-
-import javax.imageio.ImageIO;
-
+import com.assertthat.selenium_shutterbug.core.Capture;
+import com.assertthat.selenium_shutterbug.core.PageSnapshot;
+import com.assertthat.selenium_shutterbug.core.Shutterbug;
+import com.assertthat.selenium_shutterbug.utils.image.ImageProcessor;
+import com.assertthat.selenium_shutterbug.utils.web.Coordinates;
+import com.xceptance.neodymium.util.Neodymium;
+import io.qameta.allure.Allure;
 import org.openqa.selenium.Dimension;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NoSuchElementException;
@@ -25,16 +16,17 @@ import org.openqa.selenium.firefox.FirefoxDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.assertthat.selenium_shutterbug.core.Capture;
-import com.assertthat.selenium_shutterbug.core.PageSnapshot;
-import com.assertthat.selenium_shutterbug.core.Shutterbug;
-import com.assertthat.selenium_shutterbug.utils.image.ImageProcessor;
-import com.assertthat.selenium_shutterbug.utils.web.Coordinates;
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.Neodymium;
-
-import io.qameta.allure.Allure;
+import javax.imageio.ImageIO;
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public class ScreenshotWriter
 {
@@ -67,6 +59,36 @@ public class ScreenshotWriter
 
     public static boolean doScreenshot(String filename, String pathname) throws IOException
     {
+        return doScreenshot(filename, pathname, false);
+    }
+
+    public static boolean doScreenshot(String filename, boolean didSelenideScreenshot) throws IOException
+    {
+        return doScreenshot(filename, getFormatedReportsPath(), didSelenideScreenshot);
+    }
+
+    public static boolean doScreenshot(String filename, String pathname, boolean didSelenideScreenshot) throws IOException
+    {
+        boolean errorDuringScreenshots = false;
+
+        // do viewport first otherwise the screen may be moved
+        // viewport: !didSelenideScreenshot && enableViewportScreenshot
+        if (!didSelenideScreenshot && Neodymium.configuration().enableViewportScreenshot())
+        {
+            errorDuringScreenshots = takeScreenshot(filename, pathname, Capture.VIEWPORT);
+        }
+
+        // full page logic block
+        if (Neodymium.configuration().enableAdvancedScreenShots() && Neodymium.configuration().enableFullPageCapture())
+        {
+            errorDuringScreenshots = takeScreenshot(filename, pathname, Capture.FULL) && errorDuringScreenshots;
+        }
+
+        return errorDuringScreenshots;
+    }
+
+    private static boolean takeScreenshot(String filename, String pathname, Capture captureMode) throws IOException
+    {
         // If no driver is available, we cannot take a screenshot
         if (!Neodymium.hasDriver())
         {
@@ -75,23 +97,23 @@ public class ScreenshotWriter
 
         WebDriver driver = Neodymium.getDriver();
 
-        Capture captureMode = getCaptureMode();
-
         PageSnapshot snapshot = Shutterbug.shootPage(driver, captureMode);
         BufferedImage image = snapshot.getImage();
         Files.createDirectories(Paths.get(pathname));
         String imagePath = pathname + File.separator + filename + ".png";
         File outputfile = new File(imagePath);
 
-        if (highlightViewPort() || blurFullPageScreenshot())
+        if (captureMode == Capture.FULL && (highlightViewPort() || blurFullPageScreenshot()))
         {
             double devicePixelRatio = Double.parseDouble(((JavascriptExecutor) driver).executeScript("return window.devicePixelRatio") + "");
             int offsetY = (int) (Double.parseDouble(((JavascriptExecutor) driver)
-                                                                                 .executeScript("return Math.round(Math.max(document.documentElement.scrollTop, document.body.scrollTop))")
-                                                                                 .toString()));
+                                                        .executeScript(
+                                                            "return Math.round(Math.max(document.documentElement.scrollTop, document.body.scrollTop))")
+                                                        .toString()));
             int offsetX = (int) (Double.parseDouble(((JavascriptExecutor) driver)
-                                                                                 .executeScript("return Math.round(Math.max(document.documentElement.scrollLeft, document.body.scrollLeft))")
-                                                                                 .toString()));
+                                                        .executeScript(
+                                                            "return Math.round(Math.max(document.documentElement.scrollLeft, document.body.scrollLeft))")
+                                                        .toString()));
 
             Dimension size = Neodymium.getViewportSize();
             if (driver instanceof FirefoxDriver)
@@ -142,6 +164,7 @@ public class ScreenshotWriter
                 outputfile.delete();
             }
         }
+
         return result;
     }
 
@@ -156,13 +179,12 @@ public class ScreenshotWriter
         g.setPaint(color);
         g.setStroke(new BasicStroke(lineWith));
         g.drawRoundRect(
-                        Math.max(coords.getX() + lineWith / 2, 0),
-                        Math.max(coords.getY() + lineWith / 2, 0),
-                        Math.min(coords.getWidth() - lineWith / 2, maxWidth),
-                        Math.min(coords.getHeight() - lineWith / 2, maxHeigt),
-                        5, 5);
+            Math.max(coords.getX() + lineWith / 2, 0),
+            Math.max(coords.getY() + lineWith / 2, 0),
+            Math.min(coords.getWidth() - lineWith / 2, maxWidth),
+            Math.min(coords.getHeight() - lineWith / 2, maxHeigt),
+            5, 5);
         g.dispose();
         return sourceImage;
     }
-
 }
