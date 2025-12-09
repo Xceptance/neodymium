@@ -276,7 +276,6 @@ public final class BrowserRunnerHelper
             else if (firefoxBrowsers.contains(browserName))
             {
                 final FirefoxOptions options = new FirefoxOptions();
-                new ExecutableFinder().find("firefox");
                 final String driverInPathPath = new ExecutableFinder().find("geckodriver");
 
                 if (StringUtils.isNotBlank(Neodymium.configuration().getFirefoxBrowserPath()))
@@ -285,7 +284,14 @@ public final class BrowserRunnerHelper
                 }
                 else
                 {
-                    options.setBinary(new ExecutableFinder().find("firefox"));
+                    if (new ExecutableFinder().find("firefox") != null)
+                    {
+                        options.setBinary(new ExecutableFinder().find("firefox"));
+                    }
+                    else
+                    {
+                        options.configureFromEnv();
+                    }
                 }
                 if (config.isHeadless())
                 {
