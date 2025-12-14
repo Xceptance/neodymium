@@ -1,4 +1,5 @@
-[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22com.xceptance%22%20AND%20a:%22neodymium%22) [![Join the chat at https://gitter.im/neodymium/community](https://badges.gitter.im/neodymium/community.svg)](https://gitter.im/neodymium/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-library
+)](https://mvnrepository.com/artifact/com.xceptance/neodymium-library) 
 
 # Neodymium
 
