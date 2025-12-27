@@ -41,6 +41,11 @@ public interface VideoRecordingConfigurations extends RecordingConfigurations
     public boolean deleteRecordingsAfterAddingToAllureReport();
 
     @Override
+    @Key("video.deleteTempRecordings")
+    @DefaultValue("true")
+    public boolean deleteTempRecordings();
+
+    @Override
     @Key("video.appendAllRecordingsToAllureReport")
     @DefaultValue("true")
     public boolean appendAllRecordingsToAllureReport();
