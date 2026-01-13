@@ -7,6 +7,8 @@ Neodymium tries to solve your typical and most pressing UI test automation probl
 
 Neodymium is basically the combination of state of the art open source test libraries with additional glue to make it stick reliably together.
 
+**Note**: We are in the process of migrating the documentation to https://docs.xceptance.com/neodymium with a base repository at https://github.com/Xceptance/xlt-documentation.
+
 ## Included Projects
 We combine and use several open source frameworks. Here are some honorable mentions:
 
