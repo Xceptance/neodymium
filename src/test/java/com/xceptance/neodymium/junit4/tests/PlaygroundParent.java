@@ -1,11 +1,10 @@
 package com.xceptance.neodymium.junit4.tests;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.DataUtils;
+import com.xceptance.neodymium.util.Neodymium;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 @RunWith(NeodymiumRunner.class)
 public class PlaygroundParent
@@ -16,6 +15,6 @@ public class PlaygroundParent
     @Test
     public void test()
     {
-        System.out.println(DataUtils.asString("id"));
+        System.out.println(Neodymium.getData().asString("id"));
     }
 }

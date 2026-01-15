@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
 
+import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit4.testclasses.data.RandomDataSetsException;
 import com.xceptance.neodymium.junit4.testclasses.data.RandomnessOfDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.annotation.InstantiateDtoViaAnnotation;
@@ -17,7 +18,6 @@ import com.xceptance.neodymium.junit4.testclasses.data.inheritance.child.Package
 import com.xceptance.neodymium.junit4.testclasses.data.inheritance.child.grandchild.GrandChildPackageTestDataInheritance;
 import com.xceptance.neodymium.junit4.testclasses.data.inheritance.child.grandchild.set.DataSetOverridesPackageData;
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassDefaultValueEmptyDataSets;
-import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassDefaultValueNoDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassDefaultValueOneDataSet;
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassDefaultValueTwoDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassExplicitDefaultValueTwoDataSets;
@@ -25,7 +25,6 @@ import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassM
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassRandomDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.override.classonly.ClassRandomDataSetsFromRange;
 import com.xceptance.neodymium.junit4.testclasses.data.override.methodonly.MethodDefaultEmptyDataSets;
-import com.xceptance.neodymium.junit4.testclasses.data.override.methodonly.MethodDefaultNoDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.override.methodonly.MethodDefaultOneDataSet;
 import com.xceptance.neodymium.junit4.testclasses.data.override.methodonly.MethodDefaultTwoDataSet;
 import com.xceptance.neodymium.junit4.testclasses.data.override.methodonly.MethodExplicitDefaultTwoDataSets;
@@ -164,25 +163,12 @@ public class TestDataStatementTest extends NeodymiumTest
     // Class level override
 
     @Test
-    public void testClassDefaultValueNoDataSets() throws Throwable
-    {
-        // No data set file and @Testdata() on class
-        String[] expected = new String[]
-        {
-          "test1"
-        };
-        checkDescription(ClassDefaultValueNoDataSets.class, expected);
-    }
-
-    @Test
     public void testClassDefaultValueEmptyDataSets() throws Throwable
     {
         // Empty data sets (only one key but no value) and @Testdata() on class
-        String[] expected = new String[]
-        {
-          "test1"
-        };
-        checkDescription(ClassDefaultValueEmptyDataSets.class, expected);
+        Result result = JUnitCore.runClasses(ClassDefaultValueEmptyDataSets.class);
+        checkFail(result, 1, 0, 1,
+                  "java.lang.IllegalArgumentException: No data sets were found at all regarding your test case, please make sure to reference everything correctly.");
     }
 
     @Test
@@ -191,7 +177,7 @@ public class TestDataStatementTest extends NeodymiumTest
         // One data set and @Testdata() on class
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 1"
+          "test1 :: Data set 1 / 1 :: "
         };
         checkDescription(ClassDefaultValueOneDataSet.class, expected);
     }
@@ -202,8 +188,8 @@ public class TestDataStatementTest extends NeodymiumTest
         // Two data sets and @Testdata() on class
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 2",
-          "test1 :: Data set 2 / 2"
+          "test1 :: Data set 1 / 2 :: ",
+          "test1 :: Data set 2 / 2 :: "
         };
         checkDescription(ClassDefaultValueTwoDataSets.class, expected);
     }
@@ -214,8 +200,8 @@ public class TestDataStatementTest extends NeodymiumTest
         // Two data sets and explicit @Testdata(-1) on class
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 2",
-          "test1 :: Data set 2 / 2"
+          "test1 :: Data set 1 / 2 :: ",
+          "test1 :: Data set 2 / 2 :: "
         };
         checkDescription(ClassExplicitDefaultValueTwoDataSets.class, expected);
     }
@@ -226,8 +212,8 @@ public class TestDataStatementTest extends NeodymiumTest
         // One data set which is enforced on the class to perform two executions
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 1, run #1",
-          "test1 :: Data set 1 / 1, run #2"
+          "test1 :: Data set 1 / 1, run #1 :: ",
+          "test1 :: Data set 1 / 1, run #2 :: "
         };
         checkDescription(ClassMultipleSameDataSet.class, expected);
     }
@@ -238,22 +224,10 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testMethodDefaultEmptyDataSets() throws Throwable
     {
         // Empty data sets (only one key but no value) and @Testdata() on method
-        String[] expected = new String[]
-        {
-          "test1"
-        };
-        checkDescription(MethodDefaultEmptyDataSets.class, expected);
-    }
+        Result result = JUnitCore.runClasses(MethodDefaultEmptyDataSets.class);
+        checkFail(result, 1, 0, 1,
+                  "java.lang.IllegalArgumentException: No data sets were found at all regarding your test case, please make sure to reference everything correctly.");
 
-    @Test
-    public void testMethodDefaultNoDataSets() throws Throwable
-    {
-        // No data set file and @Testdata on method
-        String[] expected = new String[]
-        {
-          "test1"
-        };
-        checkDescription(MethodDefaultNoDataSets.class, expected);
     }
 
     @Test
@@ -262,7 +236,7 @@ public class TestDataStatementTest extends NeodymiumTest
         // One data set and @Testdata on method
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 1"
+          "test1 :: Data set 1 / 1 :: "
         };
         checkDescription(MethodDefaultOneDataSet.class, expected);
     }
@@ -273,8 +247,8 @@ public class TestDataStatementTest extends NeodymiumTest
         // Two data sets and @Testdata on method
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 2",
-          "test1 :: Data set 2 / 2"
+          "test1 :: Data set 1 / 2 :: ",
+          "test1 :: Data set 2 / 2 :: "
         };
         checkDescription(MethodDefaultTwoDataSet.class, expected);
     }
@@ -285,8 +259,8 @@ public class TestDataStatementTest extends NeodymiumTest
         // Two data sets and explicit @Testdata(-1) on method
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 2",
-          "test1 :: Data set 2 / 2"
+          "test1 :: Data set 1 / 2 :: ",
+          "test1 :: Data set 2 / 2 :: "
         };
         checkDescription(MethodExplicitDefaultTwoDataSets.class, expected);
     }
@@ -297,8 +271,8 @@ public class TestDataStatementTest extends NeodymiumTest
         // One data set, one method, method enforced to run data set twice
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 1, run #1",
-          "test1 :: Data set 1 / 1, run #2"
+          "test1 :: Data set 1 / 1, run #1 :: ",
+          "test1 :: Data set 1 / 1, run #2 :: "
         };
         checkDescription(MethodMultipleSameDataSet.class, expected);
     }
@@ -311,8 +285,8 @@ public class TestDataStatementTest extends NeodymiumTest
         // One data set, two methods, one method with @Testdata(0)
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 1",
-          "test2"
+          "test1 :: Data set 1 / 1 :: ",
+          "test2 :: "
         };
         checkDescription(OneDataSetTwoMethodsOneWithout.class, expected);
     }
@@ -323,9 +297,9 @@ public class TestDataStatementTest extends NeodymiumTest
         // One data set, two methods, one method with @Testdata(0)
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 2",
-          "test1 :: Data set 2 / 2",
-          "test2"
+          "test1 :: Data set 1 / 2 :: ",
+          "test1 :: Data set 2 / 2 :: ",
+          "test2 :: "
         };
         checkDescription(TwoDataSetsTwoMethodsOneWithout.class, expected);
     }
@@ -336,9 +310,9 @@ public class TestDataStatementTest extends NeodymiumTest
         // One data set, two methods, one method with @Testdata(0)
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 2",
-          "test1 :: Data set 2 / 2",
-          "test2 :: Data set 1 / 2"
+          "test1 :: Data set 1 / 2 :: ",
+          "test1 :: Data set 2 / 2 :: ",
+          "test2 :: Data set 1 / 2 :: "
         };
         checkDescription(TwoDataSetsTwoMethodsOneForced.class, expected);
     }
@@ -349,8 +323,8 @@ public class TestDataStatementTest extends NeodymiumTest
         // One data set, two methods, one method with @Testdata(0)
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 1",
-          "test2"
+          "test1 :: Data set 1 / 1 :: ",
+          "test2 :: "
         };
         checkDescription(ClassWithoutTwoMethodsOneForced.class, expected);
     }
@@ -360,7 +334,7 @@ public class TestDataStatementTest extends NeodymiumTest
     {
         Result result = JUnitCore.runClasses(ForceOfNoneDataSets.class);
         checkFail(result, 1, 0, 1,
-                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 2, but there are only 0 available");
+                  "java.lang.IllegalArgumentException: No data sets were found at all regarding your test case, please make sure to reference everything correctly.");
     }
 
     @Test
@@ -368,7 +342,7 @@ public class TestDataStatementTest extends NeodymiumTest
     {
         String[] expected = new String[]
         {
-          "test1 :: Data set 1 / 1",
+          "test1 :: Data set 1 / 1 :: ",
         };
         checkDescription(OnlyImplicitOneDataSet.class, expected);
     }
@@ -437,8 +411,8 @@ public class TestDataStatementTest extends NeodymiumTest
         // One data set, two methods, one method with @Testdata(0)
         String[] expected = new String[]
         {
-          "test :: Data set 1 / 2",
-          "test :: Data set 2 / 2",
+          "test :: Data set 1 / 2 :: ",
+          "test :: Data set 2 / 2 :: ",
         };
         checkDescription(OverrideClassRandomDataSetsOnMethodLevel.class, expected);
     }

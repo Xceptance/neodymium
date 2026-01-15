@@ -1,24 +1,5 @@
 package com.xceptance.neodymium.common;
 
-import com.assertthat.selenium_shutterbug.core.Capture;
-import com.assertthat.selenium_shutterbug.core.PageSnapshot;
-import com.assertthat.selenium_shutterbug.core.Shutterbug;
-import com.assertthat.selenium_shutterbug.utils.image.ImageProcessor;
-import com.assertthat.selenium_shutterbug.utils.web.Coordinates;
-import com.codeborne.selenide.ex.UIAssertionError;
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.Neodymium;
-import org.openqa.selenium.Dimension;
-import org.openqa.selenium.JavascriptExecutor;
-import org.openqa.selenium.NoSuchElementException;
-import org.openqa.selenium.Point;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.firefox.FirefoxDriver;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.imageio.ImageIO;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -33,6 +14,28 @@ import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.Optional;
 
+import javax.imageio.ImageIO;
+
+import org.openqa.selenium.Dimension;
+import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.Point;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.firefox.FirefoxDriver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.assertthat.selenium_shutterbug.core.Capture;
+import com.assertthat.selenium_shutterbug.core.PageSnapshot;
+import com.assertthat.selenium_shutterbug.core.Shutterbug;
+import com.assertthat.selenium_shutterbug.utils.image.ImageProcessor;
+import com.assertthat.selenium_shutterbug.utils.web.Coordinates;
+import com.xceptance.neodymium.common.testdata.DataSet;
+import com.xceptance.neodymium.util.AllureAddons;
+import com.xceptance.neodymium.util.Neodymium;
+
+import io.qameta.allure.Allure;
+
 public class ScreenshotWriter
 {
     private static final Logger log = LoggerFactory.getLogger(ScreenshotWriter.class);
@@ -45,54 +48,6 @@ public class ScreenshotWriter
     private static boolean blurFullPageScreenshot()
     {
         return Neodymium.configuration().enableFullPageCapture() ? Neodymium.configuration().blurFullPageScreenshot() : false;
-    }
-
-    public static void doScreenshot(String displayName, String testClassName, Optional<Throwable> executionException, Annotation[] annotationList)
-        throws IOException
-    {
-        if (Neodymium.configuration().enableAdvancedScreenShots())
-        {
-            String timeStamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new java.util.Date());
-            String dataSetName = "";
-            for (Annotation a : annotationList)
-            {
-                if (a.annotationType().equals(DataSet.class))
-                {
-                    DataSet set = (DataSet) a;
-                    dataSetName += "_DataSet";
-                    if (set.value() > 0)
-                    {
-                        dataSetName += "_" + set.value();
-                    }
-                    if (!set.id().isEmpty())
-                    {
-                        dataSetName += "_" + set.id();
-                    }
-                }
-            }
-            String imageName = displayName + '_' + Neodymium.getBrowserProfileName() + dataSetName + '_' + timeStamp;
-            if (Neodymium.configuration().enableTreeDirectoryStructure())
-            {
-                testClassName = testClassName.replace('.', File.separatorChar);
-            }
-
-            String pathName = getFormatedReportsPath() + File.separator + testClassName;
-            if (Neodymium.configuration().enableOnSuccess())
-            {
-                doScreenshot(imageName, pathName);
-            }
-            else
-            {
-                if (executionException.isPresent())
-                {
-                    Throwable error = executionException.get();
-                    if (error instanceof UIAssertionError)
-                    {
-                        doScreenshot(imageName, pathName);
-                    }
-                }
-            }
-        }
     }
 
     private static Capture getCaptureMode()
@@ -174,8 +129,12 @@ public class ScreenshotWriter
         boolean result = ImageIO.write(image, "png", outputfile);
         if (result)
         {
-            AllureAddons.removeAttachmentFromStepByName("Screenshot");
-            boolean screenshotAdded = AllureAddons.addAttachmentToStep("Screenshot", "image/png", ".png", new FileInputStream(imagePath));
+            // The idea is to put the screenshot to the best place in the report,
+            // but for before methods, this is not possible due to allure limitations
+            // so we just add it normally when the allure lifecycle does not allow to be altered
+            boolean screenshotAdded;
+            Allure.getLifecycle().addAttachment("Screenshot", "image/png", ".png", new FileInputStream(imagePath));
+            screenshotAdded = true;
 
             // to spare disk space, remove the file if we already used it inside the report
             if (screenshotAdded)

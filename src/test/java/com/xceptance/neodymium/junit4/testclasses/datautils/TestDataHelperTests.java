@@ -24,7 +24,7 @@ public class TestDataHelperTests
     {
         String email = TestData.randomEmail();
         // test fixed random
-        Assert.assertEquals("junit-01uh2qpree@varmail.de", email);
+        Assert.assertEquals("junit-5v2h60pqee@varmail.de", email);
     }
 
     @Test
@@ -50,6 +50,6 @@ public class TestDataHelperTests
     {
         String password = TestData.randomPassword();
         // test fixed random
-        Assert.assertEquals("i_S_3Y-7hqZ4", password);
+        Assert.assertEquals("i-S-3Y*7hqZ4", password);
     }
 }

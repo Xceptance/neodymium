@@ -1,10 +1,9 @@
 package com.xceptance.neodymium.junit5.testclasses.data.override.methodonly;
 
-import org.junit.Assert;
-
 import com.xceptance.neodymium.common.testdata.RandomDataSets;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.DataUtils;
+import com.xceptance.neodymium.util.Neodymium;
+import org.junit.Assert;
 
 public class MethodRandomDataSets
 {
@@ -13,6 +12,6 @@ public class MethodRandomDataSets
     public void test()
     {
         // assert test data is available for the test
-        Assert.assertTrue(DataUtils.asString("key1").contains("val"));
+        Assert.assertTrue(Neodymium.getData().asString("key1").contains("val"));
     }
 }

@@ -18,7 +18,7 @@ public class TestdataData extends Data
 {
     private static final String TEST_ID = "testId";
 
-    private List<TestdataContainer> avaliableDataSets;
+    private List<TestdataContainer> availableDataSets;
 
     private List<DataSet> classDataSetAnnotations;
 
@@ -61,7 +61,7 @@ public class TestdataData extends Data
         {
             // we couldn't find any data sets
         }
-        avaliableDataSets = iterations;
+        availableDataSets = iterations;
         classDataSetAnnotations = getAnnotations(testClass, DataSet.class);
         classRandomDataSetAnnotation = testClass.getAnnotation(RandomDataSets.class);
         classSuppressDataSetAnnotation = testClass.getAnnotation(SuppressDataSets.class);
@@ -92,7 +92,7 @@ public class TestdataData extends Data
         }
         else
         {
-            fixedIterations.addAll(avaliableDataSets);
+            fixedIterations.addAll(availableDataSets);
         }
 
         // get the desired number of data sets (highest priority on method level)
@@ -119,15 +119,20 @@ public class TestdataData extends Data
 
     private List<TestdataContainer> applyAnnotationFilter(List<DataSet> dataSetAnnotationFilter, Method method)
     {
+      if (availableDataSets.size() == 0) 
+      {
+          throw new IllegalArgumentException("No data sets were found at all regarding your test case, please make sure to reference everything correctly.");
+      }
+      
         List<TestdataContainer> iterations = new LinkedList<>();
         for (DataSet dataSetAnnotation : dataSetAnnotationFilter)
         {
-            int dataSetIndex = dataSetAnnotation.value();
+            int[] dataSetIndex = dataSetAnnotation.value();
             String dataSetId = dataSetAnnotation.id();
             // take dataSetId (testId) if its set
             if (dataSetId != null && dataSetId.trim().length() > 0)
             {
-                List<TestdataContainer> foundDataSet = avaliableDataSets.stream().filter(dataSet -> dataSet.getDataSet().get(TEST_ID).equals(dataSetId))
+                List<TestdataContainer> foundDataSet = availableDataSets.stream().filter(dataSet -> dataSet.getDataSet().get(TEST_ID).equals(dataSetId))
                                                                         .collect(Collectors.toList());
                 if (foundDataSet.isEmpty())
                 {
@@ -139,29 +144,57 @@ public class TestdataData extends Data
             }
             else
             {
-                // use index
-                if (dataSetIndex <= 0)
+                if (dataSetIndex.length == 0)
                 {
-                    // add all data sets
-                    iterations.addAll(avaliableDataSets);
+                    iterations.addAll(availableDataSets);
+                }
+                // make sure to only use 1 or 2 parameters > 0 for DataSet
+                else if (dataSetIndex.length > 2)
+                {
+                    throw new IllegalArgumentException("Only a range of 1-2 parameters are permitted using the DataSet annotation, please adjust your DataSet annotation accordingly.");
                 }
                 else
                 {
-                    if (dataSetIndex > avaliableDataSets.size())
+                    // make sure to add the specified single data set
+                    if (dataSetIndex.length == 1) 
                     {
-                        String msg = MessageFormat.format("Method ''{0}'' is marked to be run with data set index {1}, but there are only {2} available",
-                                                          method.getName(), dataSetIndex, iterations.size());
-                        throw new IllegalArgumentException(msg);
+                        checkIfDataSetIndexIsOutOfBounds(dataSetIndex[0], method);
+                        iterations.add(availableDataSets.get(dataSetIndex[0] - 1));
                     }
-                    else
+                    // make sure to add the specified data set range
+                    else 
                     {
-                        iterations.add(avaliableDataSets.get(dataSetIndex - 1));
+                        checkIfDataSetIndexIsOutOfBounds(dataSetIndex[0], method);
+                        checkIfDataSetIndexIsOutOfBounds(dataSetIndex[1], method);
+                        if (dataSetIndex[0] > dataSetIndex[1] == false) 
+                        {
+                            for (int i = dataSetIndex[0]; i <= dataSetIndex[1]; i++) 
+                            {
+                                iterations.add(availableDataSets.get(i - 1));
+                            }
+                        }
+                        else 
+                        {
+                            String msg = MessageFormat.format("The minimum value ''{0}'' happens to be greater than the maximum value ''{1}'', please adjust.",
+                                                              dataSetIndex[0], dataSetIndex[1]);
+                            throw new IllegalArgumentException(msg);
+                        }
                     }
                 }
             }
         }
 
         return processDuplicates(iterations);
+    }
+    
+    private void checkIfDataSetIndexIsOutOfBounds(int dataSetIndex, Method method) 
+    {
+        if (dataSetIndex <= 0 || dataSetIndex > availableDataSets.size())
+        {
+            String msg = MessageFormat.format("Method ''{0}'' is marked to be run with data set index {1}, but there are only {2} available.",
+                                              method.getName(), dataSetIndex, availableDataSets.size());
+            throw new IllegalArgumentException(msg);
+        }
     }
 
     private List<TestdataContainer> processDuplicates(List<TestdataContainer> iterations)

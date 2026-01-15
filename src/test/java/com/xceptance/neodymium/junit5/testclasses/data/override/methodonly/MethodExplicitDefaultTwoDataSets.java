@@ -6,7 +6,7 @@ import com.xceptance.neodymium.junit5.NeodymiumTest;
 public class MethodExplicitDefaultTwoDataSets
 {
     @NeodymiumTest
-    @DataSet(0)
+    @DataSet()
     public void test1() throws Exception
     {
 
