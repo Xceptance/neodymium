@@ -65,6 +65,8 @@ public class BrowserConfigurationMapper
 
     private static final String DOWNLOAD_DIRECTORY = "downloadDirectory";
 
+    private static final String SUPPRESS_PASSWORD_LEAKAGE_WARNING = "suppressPasswordLeakageWarning";
+
     private static final String WEB_SOCKET_URL = "webSocketUrl";
 
     // Appium specific properties
@@ -375,6 +377,17 @@ public class BrowserConfigurationMapper
             browserConfiguration.setDownloadDirectory(downloadFolder);
             Neodymium.downloadFolder(downloadFolder);
         }
+
+        final String suppressPasswordLeakageWarning = browserProfileConfiguration.get(SUPPRESS_PASSWORD_LEAKAGE_WARNING);
+        if (!StringUtils.isEmpty(suppressPasswordLeakageWarning))
+        {
+            browserConfiguration.setSuppressPasswordLeakageWarning(Boolean.valueOf(suppressPasswordLeakageWarning));
+        }
+        else
+        {
+            browserConfiguration.setSuppressPasswordLeakageWarning(true);
+        }
+
         List<Entry<String, String>> customCapabilities = browserProfileConfiguration.entrySet().stream()
                                                                                     .filter(e -> e.getKey().startsWith(CAPABILITY))
                                                                                     .collect(java.util.stream.Collectors.toList());
