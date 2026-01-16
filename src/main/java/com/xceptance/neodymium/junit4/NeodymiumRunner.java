@@ -6,6 +6,7 @@ import com.xceptance.neodymium.common.NeoAllureListener;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.BrowserData;
 import com.xceptance.neodymium.common.retry.RetryMethodData;
 import com.xceptance.neodymium.junit4.order.DefaultStatementRunOrder;
 import com.xceptance.neodymium.junit4.statement.browser.BrowserRunAfters;
@@ -31,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -320,8 +322,20 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         }
 
         // filter test methods by regex
-        String testExecutionRegex = Neodymium.configuration().getTestNameFilter();
-        if (StringUtils.isNotEmpty(testExecutionRegex))
+        final List<String> browserFilter = new ArrayList<String>();
+        String browserDefinitionsProperty = System.getProperty(BrowserData.SYSTEM_PROPERTY_BROWSERDEFINITION, "");
+        browserDefinitionsProperty = browserDefinitionsProperty.replaceAll("\\s", "");
+        if (!StringUtils.isEmpty(browserDefinitionsProperty))
+        {
+            browserFilter.addAll(Arrays.asList(browserDefinitionsProperty.split(",")));
+        }
+        else if (!StringUtils.isEmpty(Neodymium.configuration().getBrowserFilter()))
+        {
+            browserFilter.addAll(Arrays.asList(Neodymium.configuration().getBrowserFilter().replaceAll("\\s", "").split(",")));
+        }
+        String testExecutionRegex = browserFilter.isEmpty() ? Neodymium.configuration().getTestNameFilter() : ".*";
+
+        if (StringUtils.isNotEmpty(testExecutionRegex) || !browserFilter.isEmpty())
         {
             testMethods = testMethods.stream()
                                      .filter(testMethod -> {
@@ -329,7 +343,8 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
                                                                + testMethod.getName();
                                          return Pattern.compile(testExecutionRegex)
                                                        .matcher(functionName)
-                                                       .find();
+                                                       .find()
+                                                && browserFilter.stream().anyMatch(functionName::contains);
                                      })
                                      .collect(Collectors.toList());
         }

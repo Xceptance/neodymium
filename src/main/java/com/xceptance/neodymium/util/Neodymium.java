@@ -43,8 +43,6 @@ public class Neodymium
     // keep our current browser name
     private String browserName;
 
-    private static List<String> browserFilter = generateBrowserFilter();
-    
     // keep our current remote debugging port
     private int remoteDebuggingPort;
 
@@ -91,11 +89,6 @@ public class Neodymium
             return Arrays.asList(filter.split(","));
         }
         return new ArrayList<String>();
-    }
-
-    public static List<String> getBrowserFilter()
-    {
-        return browserFilter;
     }
 
     /**

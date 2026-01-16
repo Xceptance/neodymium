@@ -345,8 +345,43 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         System.setProperty("browserdefinition", "Chrome_headless");
         NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
-        checkPass(summary, 1, 0);
+        checkPass(summary, 1, 1);
         System.setProperty("browserdefinition", "");
+    }
+
+    @Test
+    public void testSystemPropertyBrowserFilterWithNoResults() throws Throwable
+    {
+        System.setProperty("browserdefinition", "Chrome_notExisting");
+        NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
+        checkPass(summary, 0, 2);
+        System.setProperty("browserdefinition", "");
+    }
+
+    @Test
+    public void testNeodymiumPropertyBrowserFilter()
+    {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("neodymium.webDriver.browserFilter", "Chrome_headless");
+
+        addPropertiesForTest("temp-NeodymiumPropertyBrowserFilter-neodymium.properties", properties);
+        // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
+        NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
+        checkPass(summary, 1, 1);
+        ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
+    }
+
+    @Test
+    public void testNeodymiumPropertyBrowserFilterNoResults()
+    {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("neodymium.webDriver.browserFilter", "Chrome_notExisting");
+
+        addPropertiesForTest("temp-NeodymiumPropertyBrowserFilter-neodymium.properties", properties);
+        // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
+        NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
+        checkPass(summary, 0, 2);
+        ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
     }
 
     @Test
