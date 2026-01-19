@@ -193,6 +193,9 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         {
             String testExecutionRegex = Neodymium.configuration().getTestNameFilter();
 
+            // required to clear context for the thread containing class with no tests (usually done in runChild but as
+            // runChild is not triggered for any method in the class in this case, we need to trigger it here)
+            Neodymium.clearThreadContext();
             // only throw exception if test class has no execution methods accidentally
             if (StringUtils.isNotEmpty(testExecutionRegex))
             {

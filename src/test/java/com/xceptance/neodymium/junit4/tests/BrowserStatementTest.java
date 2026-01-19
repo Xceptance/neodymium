@@ -345,20 +345,19 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         System.setProperty("browserdefinition", "Chrome_headless");
         Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
-        checkPass(result, 1, 0);
         System.setProperty("browserdefinition", "");
+        checkPass(result, 1, 0);
     }
-    
 
     @Test
     public void testSystemPropertyBrowserFilterWithNoResults() throws Throwable
     {
         System.setProperty("browserdefinition", "Chrome_notExisting");
         Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
-        checkPass(result, 0, 0);
         System.setProperty("browserdefinition", "");
+        checkPass(result, 0, 0);
     }
-    
+
     @Test
     public void testNeodymiumPropertyBrowserFilter()
     {
@@ -368,8 +367,8 @@ public class BrowserStatementTest extends NeodymiumTest
         addPropertiesForTest("temp-NeodymiumPropertyBrowserFilter-neodymium.properties", properties);
         // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
         Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
-        checkPass(result, 1, 0);
         ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
+        checkPass(result, 1, 0);
     }
 
     @Test
@@ -378,11 +377,11 @@ public class BrowserStatementTest extends NeodymiumTest
         Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.browserFilter", "Chrome_notExisting");
 
-        addPropertiesForTest("temp-NeodymiumPropertyBrowserFilter-neodymium.properties", properties);
+        addPropertiesForTest("temp-NeodymiumPropertyBrowserFilterNoResults-neodymium.properties", properties);
         // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
         Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
-        checkPass(result, 0, 0);
         ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
+        checkPass(result, 0, 0);
     }
 
     @Test

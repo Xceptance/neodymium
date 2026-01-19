@@ -136,20 +136,20 @@ public class BrowserData extends Data
         // already filter the list of browsers here to speed up the actual filter later
         // get test specific browser definitions (aka browser tag see browser.properties)
         // could be one value or comma separated list of values
-//        String browserFilter = Neodymium.configuration().getBrowserFilter();
-//        browserFilter = browserFilter.replaceAll("\\s", "");
-//        String browserDefinitionsProperty = System.getProperty(SYSTEM_PROPERTY_BROWSERDEFINITION, "");
-//        browserDefinitionsProperty = browserDefinitionsProperty.replaceAll("\\s", "");
-//        // parse test specific browser definitions
-//        if (!StringUtils.isEmpty(browserFilter))
-//        {
-//            systemBrowserFilter = Arrays.asList(browserFilter.split(","));
-//        }
+        String browserFilter = Neodymium.configuration().getBrowserFilter();
+        String browserDefinitionsProperty = System.getProperty(SYSTEM_PROPERTY_BROWSERDEFINITION, "");
+        // parse test specific browser definitions
+        if (!StringUtils.isEmpty(browserFilter))
+        {
+            browserFilter = browserFilter.replaceAll("\\s", "");
+            systemBrowserFilter = Arrays.asList(browserFilter.split(","));
+        }
 
-//        if (!StringUtils.isEmpty(browserDefinitionsProperty))
-//        {
-//            systemBrowserFilter = Arrays.asList(browserDefinitionsProperty.split(","));
-//        }
+        if (!StringUtils.isEmpty(browserDefinitionsProperty))
+        {
+            browserDefinitionsProperty = browserDefinitionsProperty.replaceAll("\\s", "");
+            systemBrowserFilter = Arrays.asList(browserDefinitionsProperty.split(","));
+        }
     }
 
     public List<BrowserMethodData> getBrowserTags()
