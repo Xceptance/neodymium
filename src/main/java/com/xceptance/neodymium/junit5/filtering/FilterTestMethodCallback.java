@@ -39,7 +39,7 @@ public class FilterTestMethodCallback implements ExecutionCondition
             if (!Pattern.compile(testExecutionRegex)
                         .matcher(fullMethodName)
                         .find()
-                || browserFilter.stream().noneMatch(fullMethodName::contains))
+                || (!browserFilter.isEmpty() && browserFilter.stream().noneMatch(fullMethodName::contains)))
             {
                 return ConditionEvaluationResult.disabled("not matching the test name filter " + testExecutionRegex);
             }

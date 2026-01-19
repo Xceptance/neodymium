@@ -347,7 +347,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
                                          return Pattern.compile(testExecutionRegex)
                                                        .matcher(functionName)
                                                        .find()
-                                                && browserFilter.stream().anyMatch(functionName::contains);
+                                                && (browserFilter.isEmpty() || browserFilter.stream().anyMatch(functionName::contains));
                                      })
                                      .collect(Collectors.toList());
         }
