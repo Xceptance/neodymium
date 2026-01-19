@@ -228,7 +228,13 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
 
         // Since this method is called at least two times and is somewhat expensive, we cache the result
         if (computedTestMethods != null)
+        {
+            // we need to clear context here because no test method will be executed and context will not be cleared in runChild
+            if(computedTestMethods.isEmpty()) {
+                Neodymium.clearThreadContext();
+            }
             return computedTestMethods;
+        }
 
         // That list will contain all methods that need to be run for the class
         List<FrameworkMethod> testMethods = new LinkedList<>();
@@ -451,9 +457,9 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     @Override
     protected void runChild(FrameworkMethod method, RunNotifier notifier)
     {
-        // clear the context before next child run
-        Neodymium.clearThreadContext();
         super.runChild(method, notifier);
+        // clear the context after child run
+        Neodymium.clearThreadContext();
     }
 
     private <T> List<FrameworkMethod> buildCrossProduct(Method method, List<StatementBuilder<?>> builderList, List<List<?>> builderDataList)
