@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.commons.lang3.StringUtils;
 import org.openqa.selenium.MutableCapabilities;
@@ -56,12 +57,16 @@ public class BrowserConfigurationMapper
 
     private static final String ARGUMENTS = "arguments";
 
+    private static final String CAPABILITY = "capability";
+
     private static final String DRIVER_ARGS = "driverArgs";
 
     private static final String PREFERENCES = "preferences";
 
     private static final String DOWNLOAD_DIRECTORY = "downloadDirectory";
-    
+
+    private static final String SUPPRESS_PASSWORD_LEAKAGE_WARNING = "suppressPasswordLeakageWarning";
+
     private static final String WEB_SOCKET_URL = "webSocketUrl";
 
     // Appium specific properties
@@ -87,7 +92,8 @@ public class BrowserConfigurationMapper
      * @param globalBrowserResolution
      * @return created {@link BrowserConfiguration} object
      */
-    public BrowserConfiguration map(final Map<String, String> browserProfileConfiguration, final String globalHeadless, final String globalAcceptInsecureCertificates,
+    public BrowserConfiguration map(final Map<String, String> browserProfileConfiguration, final String globalHeadless,
+                                    final String globalAcceptInsecureCertificates,
                                     final String globalPageLoadStrategy, final String globalBrowserResolution)
     {
         final BrowserConfiguration browserConfiguration = new BrowserConfiguration();
@@ -98,20 +104,24 @@ public class BrowserConfigurationMapper
         if (emulatedBrowser != null)
             emulatedBrowser = emulatedBrowser.toLowerCase();
 
-		if ("firefox".equals(emulatedBrowser)) {
-			capabilities = new FirefoxOptions();
-			// This is needed with selenium upgrade to version 4.29, because ChromeDevTools
-			// support is removed for Firefox (fix test DriverArgumentsTest)
-			// references:
-			// https://www.selenium.dev/blog/2025/remove-cdp-firefox/
-			// https://www.selenium.dev/documentation/webdriver/bidi/
-			final String webSocketUrl = browserProfileConfiguration.get(WEB_SOCKET_URL);
-			if (!StringUtils.isEmpty(webSocketUrl)) {
-				capabilities.setCapability("webSocketUrl", Boolean.valueOf(webSocketUrl));
-			} else {
-				capabilities.setCapability("webSocketUrl", true);
-			}
-		}
+        if ("firefox".equals(emulatedBrowser))
+        {
+            capabilities = new FirefoxOptions();
+            // This is needed with selenium upgrade to version 4.29, because ChromeDevTools
+            // support is removed for Firefox (fix test DriverArgumentsTest)
+            // references:
+            // https://www.selenium.dev/blog/2025/remove-cdp-firefox/
+            // https://www.selenium.dev/documentation/webdriver/bidi/
+            final String webSocketUrl = browserProfileConfiguration.get(WEB_SOCKET_URL);
+            if (!StringUtils.isEmpty(webSocketUrl))
+            {
+                capabilities.setCapability("webSocketUrl", Boolean.valueOf(webSocketUrl));
+            }
+            else
+            {
+                capabilities.setCapability("webSocketUrl", true);
+            }
+        }
         else if ("chrome".equals(emulatedBrowser))
         {
             capabilities = new ChromeOptions();
@@ -326,7 +336,7 @@ public class BrowserConfigurationMapper
         final String driverArgs = browserProfileConfiguration.get(DRIVER_ARGS);
         if (!StringUtils.isEmpty(driverArgs))
         {
-            final var argsList = new ArrayList<>(List.of(driverArgs.split(";")));
+            final ArrayList<String> argsList = new ArrayList<>(List.of(driverArgs.split(";")));
             argsList.removeIf(arg -> arg == null || arg.trim().equals(""));
             argsList.replaceAll(String::trim);
             browserConfiguration.setDriverArguments(argsList);
@@ -368,6 +378,31 @@ public class BrowserConfigurationMapper
             Neodymium.downloadFolder(downloadFolder);
         }
 
+        final String suppressPasswordLeakageWarning = browserProfileConfiguration.get(SUPPRESS_PASSWORD_LEAKAGE_WARNING);
+        if (!StringUtils.isEmpty(suppressPasswordLeakageWarning))
+        {
+            browserConfiguration.setSuppressPasswordLeakageWarning(Boolean.valueOf(suppressPasswordLeakageWarning));
+        }
+        else
+        {
+            browserConfiguration.setSuppressPasswordLeakageWarning(true);
+        }
+
+        List<Entry<String, String>> customCapabilities = browserProfileConfiguration.entrySet().stream()
+                                                                                    .filter(e -> e.getKey().startsWith(CAPABILITY))
+                                                                                    .collect(java.util.stream.Collectors.toList());
+        for (Entry<String, String> capabilityEntry : customCapabilities)
+        {
+            if (StringUtils.isNotBlank(capabilityEntry.getKey()) && StringUtils.isNoneBlank(capabilityEntry.getValue()))
+            {
+                MutableCapabilities newCapability = new MutableCapabilities();
+                String capabilityValue = capabilityEntry.getValue();
+                newCapability.setCapability(capabilityEntry.getKey().replace(CAPABILITY + ".", ""),
+                                            capabilityValue.equalsIgnoreCase("true") || capabilityValue.equalsIgnoreCase("false") ? Boolean.valueOf(capabilityValue)
+                                                                                                                                  : capabilityValue);
+                capabilities = capabilities.merge(newCapability);
+            }
+        }
         browserConfiguration.setGridProperties(testEnvironmentProperties);
         browserConfiguration.setCapabilities(capabilities);
         browserConfiguration.setConfigTag(browserProfileConfiguration.get("browserTag"));

@@ -25,8 +25,8 @@ public class RetryData
      */
     public RetryData(Method templateMethod)
     {
-        var testClassRetryAnnotations = getDeclaredAnnotations(templateMethod.getDeclaringClass(), Retry.class);
-        var methodRetryAnnotations = Data.getAnnotations(templateMethod, Retry.class);
+         List<Retry> testClassRetryAnnotations = getDeclaredAnnotations(templateMethod.getDeclaringClass(), Retry.class);
+         List<Retry> methodRetryAnnotations = Data.getAnnotations(templateMethod, Retry.class);
 
         exceptions = new ArrayList<String>();
         if (!testClassRetryAnnotations.isEmpty())
@@ -78,7 +78,7 @@ public class RetryData
         List<T> annotations = new ArrayList<T>();
         while (type != null)
         {
-            var annotationsOfCurrentType = type.getDeclaredAnnotation(annotationClass);
+            T annotationsOfCurrentType = type.getDeclaredAnnotation(annotationClass);
             if (annotationsOfCurrentType != null)
             {
                 annotations.addAll(List.of(annotationsOfCurrentType));

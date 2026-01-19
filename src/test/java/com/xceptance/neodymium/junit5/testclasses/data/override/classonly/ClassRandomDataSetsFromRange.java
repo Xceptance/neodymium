@@ -1,13 +1,12 @@
 package com.xceptance.neodymium.junit5.testclasses.data.override.classonly;
 
-import org.junit.Assert;
-import org.junit.runner.RunWith;
-
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.common.testdata.RandomDataSets;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.DataUtils;
+import com.xceptance.neodymium.util.Neodymium;
+import org.junit.Assert;
+import org.junit.runner.RunWith;
 
 @RunWith(NeodymiumRunner.class)
 @DataSet(2)
@@ -21,7 +20,7 @@ public class ClassRandomDataSetsFromRange
     public void test()
     {
         // assert test data is available for the test
-        String key = DataUtils.asString("key1");
+        String key = Neodymium.getData().asString("key1");
         Assert.assertTrue("Unexpected test data", key.contains("val"));
         Assert.assertTrue("Random data set is not selected from range", Integer.valueOf(key.replace("val", "")) % 2 == 0);
     }

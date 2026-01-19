@@ -21,7 +21,7 @@ public class TestDataHelperTests
     {
         String email = TestData.randomEmail();
         // test fixed random
-        Assertions.assertEquals("junit-01uh2qpree@varmail.de", email);
+        Assertions.assertEquals("junit-5v2h60pqee@varmail.de", email);
     }
 
     @NeodymiumTest
@@ -47,6 +47,6 @@ public class TestDataHelperTests
     {
         String password = TestData.randomPassword();
         // test fixed random
-        Assertions.assertEquals("i_S_3Y-7hqZ4", password);
+        Assertions.assertEquals("i-S-3Y*7hqZ4", password);
     }
 }

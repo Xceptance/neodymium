@@ -1,16 +1,15 @@
 package com.xceptance.neodymium.junit4.testclasses.data;
 
-import java.util.ArrayList;
-import java.util.List;
-
+import com.xceptance.neodymium.common.testdata.RandomDataSets;
+import com.xceptance.neodymium.common.testdata.SuppressDataSets;
+import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import com.xceptance.neodymium.util.Neodymium;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.xceptance.neodymium.common.testdata.RandomDataSets;
-import com.xceptance.neodymium.common.testdata.SuppressDataSets;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.DataUtils;
+import java.util.ArrayList;
+import java.util.List;
 
 @RunWith(NeodymiumRunner.class)
 public class FixedRandomnessOfDataSets
@@ -22,8 +21,8 @@ public class FixedRandomnessOfDataSets
     public void test1()
     {
         // assert test data is available for the test
-        Assert.assertTrue(DataUtils.asString("key1").contains("val"));
-        datasets.add(DataUtils.asString("key1"));
+        Assert.assertTrue(Neodymium.getData().asString("key1").contains("val"));
+        datasets.add(Neodymium.getData().asString("key1"));
     }
 
     @Test

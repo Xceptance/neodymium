@@ -54,7 +54,7 @@ import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSee
  * its super-class has to be annotated with {@link RunWith}
  * <p>
  * <b>Example</b>
- * 
+ *
  * <pre>
  * &#64;RunWith(NeodymiumRunner.class)
  * public class MyTests
@@ -65,9 +65,9 @@ import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSee
  *     }
  * }
  * </pre>
- * 
+ *
  * <b>Example</b>
- * 
+ *
  * <pre>
  * public class MyTests extends BaseTestClass
  * {
@@ -76,13 +76,13 @@ import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSee
  *     {
  *     }
  * }
- * 
+ *
  * &#64;RunWith(NeodymiumRunner.class)
  * public class BaseTestClass
  * {
  * }
  * </pre>
- * 
+ *
  * @author m.kaufmann
  */
 public class NeodymiumRunner extends BlockJUnit4ClassRunner

@@ -1,0 +1,22 @@
+[
+  {
+    "testId": "1",
+    "email": "john1@varmail.de"
+  },
+  {
+    "testId": "2",
+    "email": "john2@varmail.de"
+  },
+  {
+    "testId": "3",
+    "email": "john3@varmail.de"
+  },
+  {
+    "testId": "4",
+    "email": "john4@varmail.de"
+  },
+  {
+    "testId": "5",
+    "email": "john5@varmail.de"
+  }
+]

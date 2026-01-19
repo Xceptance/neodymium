@@ -1,15 +1,5 @@
 package com.xceptance.neodymium.common.browser;
 
-import java.net.MalformedURLException;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.UUID;
-
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.remote.RemoteWebDriver;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.browserup.bup.BrowserUpProxy;
 import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
@@ -18,6 +8,15 @@ import com.xceptance.neodymium.common.recording.FilmTestExecution;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.remote.RemoteWebDriver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.net.MalformedURLException;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.UUID;
 
 public class BrowserRunner
 {
@@ -37,11 +36,11 @@ public class BrowserRunner
 
     /**
      * Create browser runner for test
-     * 
+     *
      * @param browserTag
-     *            {@link BrowserMethodData} browser tag
+     *     {@link BrowserMethodData} browser tag
      * @param testName
-     *            {@link String} test name
+     *     {@link String} test name
      */
     public BrowserRunner(BrowserMethodData browserTag, String testName)
     {
@@ -97,20 +96,25 @@ public class BrowserRunner
         }
         finally
         {
-            teardown(testFailed, false, browserMethodData, wDSCont);
-
-            // add the test data as JSON to the allure report
-            Neodymium.getData().addAttachmentJson();
+            try
+            {
+                teardown(testFailed, false, browserMethodData, wDSCont);
+            }
+            finally
+            {
+                // add the test data as JSON to the allure report
+                Neodymium.getData().addAttachmentJson();
+            }
         }
     }
 
     /**
      * Sets the test instance up.
-     * 
+     *
      * @param browserTag
-     *            name of the browser corresponding to the browser.properties
+     *     name of the browser corresponding to the browser.properties
      * @param testName
-     *            name of the test to set up
+     *     name of the test to set up
      */
     public void setUpTest(BrowserMethodData browserTag, String testName)
     {
@@ -156,7 +160,7 @@ public class BrowserRunner
         else
         {
             throw new RuntimeException("Could not create driver for browsertag: " + browserConfiguration.getConfigTag() +
-                                       ". Please check your browserconfigurations.");
+                                           ". Please check your browserconfigurations.");
         }
     }
 
@@ -219,14 +223,14 @@ public class BrowserRunner
     private boolean keepOpen(boolean testFailed, BrowserMethodData browserMethodData, BrowserConfiguration browserConfiguration)
     {
         return (browserConfiguration != null && !browserConfiguration.isHeadless())
-               && (((browserMethodData.isKeepBrowserOpenOnFailure()) && testFailed) ||
-                   (browserMethodData.isKeepBrowserOpen() && !browserMethodData.isKeepBrowserOpenOnFailure()));
+            && (((browserMethodData.isKeepBrowserOpenOnFailure()) && testFailed) ||
+            (browserMethodData.isKeepBrowserOpen() && !browserMethodData.isKeepBrowserOpenOnFailure()));
     }
 
     private boolean canReuse(boolean preventReuse, WebDriverStateContainer webDriverStateContainer)
     {
         boolean maxReuseReached = (Neodymium.configuration().maxWebDriverReuse() > 0)
-                                  && (webDriverStateContainer.getUsedCount() >= Neodymium.configuration().maxWebDriverReuse());
+            && (webDriverStateContainer.getUsedCount() >= Neodymium.configuration().maxWebDriverReuse());
         return Neodymium.configuration().reuseWebDriver() && !preventReuse && !maxReuseReached && isWebDriverStillOpen(webDriverStateContainer.getWebDriver());
     }
 

@@ -9,11 +9,16 @@ import java.lang.annotation.Target;
 
 /**
  * Annotation to mark flaky tests that often fail due to the same error but for which there is a hope that they may
- * succeed on retry. </br>
- * Use it as the following: @Retry(maxNumberOfRetries = 4, exceptions = { "HERE" })</br>
- * </br>
- * It's possible to let the definition of maxNumberOfRetries out, then it will be set to the default value - 3. </br>
+ * succeed on retry.
+ * <p>
+ * Use it as the following: {@code @Retry(maxNumberOfRetries = 4, exceptions = { "HERE" })}
+ * </p>
+ * <p>
+ * It's possible to let the definition of maxNumberOfRetries out, then it will be set to the default value - 3.
+ * </p>
+ * <p>
  * If you let out the definition of exceptions, test will be retried on every error
+ * </p>
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(

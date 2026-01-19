@@ -12,33 +12,39 @@ import org.openqa.selenium.firefox.GeckoDriverService.Builder;
 
 public class GeckoBuilder extends Builder
 {
-    private List<String> arguments;
+    private final List<String> arguments;
 
-    public GeckoBuilder(List<String> args)
+    public GeckoBuilder(final List<String> args)
     {
         this.arguments = args != null ? new ArrayList<String>(args) : new ArrayList<String>();
-        List<String> logPaths = arguments.stream().filter(arg -> arg.contains("--log-path=")).collect(Collectors.toList());
+        final List<String> logPaths = arguments.stream().filter(arg -> arg.contains("--log-path=")).collect(Collectors.toList());
         if (!logPaths.isEmpty())
         {
-            String logPath = logPaths.get(logPaths.size() - 1);
+            final String logPath = logPaths.get(logPaths.size() - 1);
             withLogFile(new File(logPath.replace("--log-path=", "")));
             arguments.remove(arguments.indexOf(logPath));
         }
-        List<String> portArgs = this.arguments.stream().filter(arg -> arg.contains("--port=")).collect(Collectors.toList());
+        final List<String> portArgs = this.arguments.stream().filter(arg -> arg.contains("--port=")).collect(Collectors.toList());
         if (!portArgs.isEmpty())
         {
             usingPort(Integer.parseInt(portArgs.get(portArgs.size() - 1).replace("--port=", "")));
             this.arguments.removeAll(portArgs);
         }
+		final List<String> wsPorts = this.arguments.stream().filter(arg -> arg.contains("--websocket-port="))
+				.collect(Collectors.toList());
+		if (!wsPorts.isEmpty()) {
+			withWebSocketPort(Integer.parseInt(wsPorts.get(wsPorts.size() - 1).replace("--websocket-port=", "")));
+			this.arguments.removeAll(wsPorts);
+		}
     }
 
     @Override
     protected List<String> createArgs()
     {
-        List<String> args = new ArrayList<>();
+        final List<String> args = new ArrayList<>();
         if (arguments != null && !arguments.isEmpty())
         {
-            int indexOfLogs = arguments.indexOf("--log");
+            final int indexOfLogs = arguments.indexOf("--log");
             if (indexOfLogs > -1)
             {
                 withLogLevel(FirefoxDriverLogLevel.fromString(arguments.get(indexOfLogs + 1)));
@@ -47,11 +53,11 @@ public class GeckoBuilder extends Builder
             }
 
             args.addAll(super.createArgs());
-            int indexOfAllowHosts = arguments.indexOf("--allow-hosts");
+            final int indexOfAllowHosts = arguments.indexOf("--allow-hosts");
             if (indexOfAllowHosts > -1)
             {
-                int indexOfOriginalAllowHosts = args.indexOf("--allow-hosts");
-                int initArgsSize = arguments.size();
+                final int indexOfOriginalAllowHosts = args.indexOf("--allow-hosts");
+                final int initArgsSize = arguments.size();
                 arguments.remove(indexOfAllowHosts);
                 for (int i = indexOfAllowHosts; i < initArgsSize - indexOfAllowHosts && !arguments.get(indexOfAllowHosts).contains("-"); ++i)
                 {
@@ -59,10 +65,10 @@ public class GeckoBuilder extends Builder
                     arguments.remove(indexOfAllowHosts);
                 }
             }
-            int indexOfProfileRoot = arguments.indexOf("--profile-root");
+            final int indexOfProfileRoot = arguments.indexOf("--profile-root");
             if (indexOfProfileRoot > -1)
             {
-                int indexOfOriginalProfileRoot = args.indexOf("--profile-root");
+                final int indexOfOriginalProfileRoot = args.indexOf("--profile-root");
                 if (indexOfOriginalProfileRoot > -1)
                 {
                     args.remove(indexOfOriginalProfileRoot);
@@ -73,28 +79,12 @@ public class GeckoBuilder extends Builder
                 arguments.remove(indexOfProfileRoot);
                 arguments.remove(indexOfProfileRoot + 1);
             }
-            int wsPort;
-            List<String> wsPorts = arguments.stream().filter(arg -> arg.contains("--websocket-port=")).collect(Collectors.toList());
-            if (!wsPorts.isEmpty())
-            {
-                wsPort = Integer.parseInt(wsPorts.get(wsPorts.size() - 1).replace("--websocket-port=", ""));
-                arguments.removeAll(wsPorts);
-                args.remove(args.stream().filter(arg -> arg.contains("--websocket-port=")).findFirst().get());
-                args.remove("--allow-origins");
-                args.remove(args.stream().filter(arg -> arg.contains("http://127.0.0.1:")).findFirst().get());
-                args.remove(args.stream().filter(arg -> arg.contains("http://localhost:")).findFirst().get());
-                args.remove(args.stream().filter(arg -> arg.contains("http://[::1]:")).findFirst().get());
-                args.add(String.format("--websocket-port=%d", wsPort));
-                args.add("--allow-origins");
-                args.add(String.format("http://127.0.0.1:%d", wsPort));
-                args.add(String.format("http://localhost:%d", wsPort));
-                args.add(String.format("http://[::1]:%d", wsPort));
-            }
-            int indexOfAllowOrings = arguments.indexOf("--allow-origins");
+
+            final int indexOfAllowOrings = arguments.indexOf("--allow-origins");
             if (indexOfAllowOrings > -1)
             {
-                int indexOfOriginalAllowOrings = args.indexOf("--allow-origins");
-                int initArgsSize = arguments.size();
+                final int indexOfOriginalAllowOrings = args.indexOf("--allow-origins");
+                final int initArgsSize = arguments.size();
                 arguments.remove(indexOfAllowOrings);
                 for (int i = indexOfAllowOrings; i < initArgsSize - indexOfAllowOrings && !arguments.get(indexOfAllowOrings).contains("-"); ++i)
                 {
