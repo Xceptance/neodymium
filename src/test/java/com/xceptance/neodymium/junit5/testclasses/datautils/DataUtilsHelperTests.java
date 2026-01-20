@@ -1,9 +1,8 @@
 package com.xceptance.neodymium.junit5.testclasses.datautils;
 
-import org.junit.jupiter.api.Assertions;
-
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.DataUtils;
+import org.junit.jupiter.api.Assertions;
 
 public class DataUtilsHelperTests
 {
@@ -22,7 +21,7 @@ public class DataUtilsHelperTests
     {
         String email = DataUtils.randomEmail();
         // test fixed random
-        Assertions.assertEquals("junit-01uh2qpree@varmail.de", email);
+        Assertions.assertEquals("junit-5v2h60pqee@varmail.de", email);
     }
 
     @NeodymiumTest
@@ -48,6 +47,6 @@ public class DataUtilsHelperTests
     {
         String password = DataUtils.randomPassword();
         // test fixed random
-        Assertions.assertEquals("i_S_3Y-7hqZ4", password);
+        Assertions.assertEquals("i-S-3Y*7hqZ4", password);
     }
 }

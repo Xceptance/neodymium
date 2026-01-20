@@ -15,7 +15,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.openqa.selenium.Dimension;
@@ -28,7 +27,6 @@ import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.edge.EdgeOptions;
-import org.openqa.selenium.firefox.FirefoxBinary;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.firefox.FirefoxProfile;
@@ -162,36 +160,17 @@ public final class BrowserRunnerHelper
     }
 
     /**
-     * Creates a {@link FirefoxBinary} object and sets the path, but only if the path is not blank.
-     * 
-     * @param pathToBrowser
-     *            the path to the browser binary
-     * @return the Firefox binary
-     */
-    private static FirefoxBinary createFirefoxBinary(final String pathToBrowser)
-    {
-        if (StringUtils.isNotBlank(pathToBrowser))
-        {
-            return new FirefoxBinary(new File(pathToBrowser));
-        }
-        else
-        {
-            return new FirefoxBinary();
-        }
-    }
-
-    /**
      * Instantiate the {@link WebDriver} according to the configuration read from {@link Browser} annotations.
      * 
      * @param config
      *            {@link BrowserConfiguration} that describes the desired browser instance
      * @param testClassInstance
      *            {@link String} name of the test to display on test environment
-     * @return {@link WebDriverStateContainer} the instance of the browser described in {@link BrowserConfiguration} and in
-     *         {@link NeodymiumConfiguration}
+     * @return {@link WebDriverStateContainer} the instance of the browser described in {@link BrowserConfiguration} and
+     *         in {@link NeodymiumConfiguration}
      * @throws MalformedURLException
-     *             if <a href="https://github.com/Xceptance/neodymium/wiki/Selenium-grid">Selenium grid</a> is used and the
-     *             given grid URL is invalid
+     *             if <a href="https://github.com/Xceptance/neodymium/wiki/Selenium-grid">Selenium grid</a> is used and
+     *             the given grid URL is invalid
      */
     public static WebDriverStateContainer createWebDriverStateContainer(final BrowserConfiguration config, final String testClassInstance)
         throws MalformedURLException
@@ -221,10 +200,11 @@ public final class BrowserRunnerHelper
             final SelenideProxyServerFactory selenideProxyServerFactory = Plugins.inject(SelenideProxyServerFactory.class);
             selenideProxyServer = selenideProxyServerFactory.create(new SelenideConfig(),
                                                                     (Proxy) capabilities.getCapability(CapabilityType.PROXY));
-            final var proxy = selenideProxyServer.getSeleniumProxy();
+            final Proxy proxy = selenideProxyServer.getSeleniumProxy();
             capabilities.setCapability(CapabilityType.PROXY, proxy);
         }
-        else {
+        else
+        {
             // no proxy should be used, so set the proxy to null
             // makes it possible to run some test with temp proxy and some without during a single test run
             capabilities.setCapability(CapabilityType.PROXY, (Object) null);
@@ -240,7 +220,7 @@ public final class BrowserRunnerHelper
                 final String driverInPathPath = new ExecutableFinder().find("chromedriver");
 
                 // do we have a custom path?
-                String pathToBrowser = Neodymium.configuration().getChromeBrowserPath();
+                final String pathToBrowser = Neodymium.configuration().getChromeBrowserPath();
                 if (StringUtils.isNotBlank(pathToBrowser))
                 {
                     options.setBinary(pathToBrowser);
@@ -250,8 +230,20 @@ public final class BrowserRunnerHelper
                     options.addArguments("--headless");
                 }
 
+                if (config.isSuppressPasswordLeakageWarning())
+                {
+                    // actually doesn't really seem to help suppressing waring but let's leave for the safety
+                    options.addArguments("--disable-features=PasswordLeakDetection", "--disable-save-password-bubble");
+
+                    // only profile.password_manager_leak_detection seems to be sufficient but let's add others too for
+                    // safety
+                    config.addPreference("profile.password_manager_leak_detection", false);
+                    config.addPreference("credentials_enable_service", false);
+                    config.addPreference("profile.password_manager_enabled", false);
+                }
+
                 // find a free port for each chrome session (important for lighthouse)
-                var remoteDebuggingPort = PortProber.findFreePort();
+                final int remoteDebuggingPort = PortProber.findFreePort();
                 Neodymium.setRemoteDebuggingPort(remoteDebuggingPort);
                 options.addArguments("--remote-debugging-port=" + remoteDebuggingPort);
 
@@ -285,7 +277,7 @@ public final class BrowserRunnerHelper
                     options.setExperimentalOption("prefs", prefs);
                 }
 
-                ChromeBuilder chromeBuilder = new ChromeBuilder(config.getDriverArguments());
+                final ChromeBuilder chromeBuilder = new ChromeBuilder(config.getDriverArguments());
                 if (StringUtils.isNotBlank(driverInPathPath))
                 {
                     chromeBuilder.usingDriverExecutable(new File(driverInPathPath));
@@ -297,7 +289,22 @@ public final class BrowserRunnerHelper
             {
                 final FirefoxOptions options = new FirefoxOptions();
                 final String driverInPathPath = new ExecutableFinder().find("geckodriver");
-                options.setBinary(createFirefoxBinary(Neodymium.configuration().getFirefoxBrowserPath()));
+
+                if (StringUtils.isNotBlank(Neodymium.configuration().getFirefoxBrowserPath()))
+                {
+                    options.setBinary(new File(Neodymium.configuration().getFirefoxBrowserPath()).toPath());
+                }
+                else
+                {
+                    if (new ExecutableFinder().find("firefox") != null)
+                    {
+                        options.setBinary(new ExecutableFinder().find("firefox"));
+                    }
+                    else
+                    {
+                        options.configureFromEnv();
+                    }
+                }
                 if (config.isHeadless())
                 {
                     options.addArguments("--headless");
@@ -361,7 +368,7 @@ public final class BrowserRunnerHelper
                         options.addCommandSwitches(argument);
                     }
                 }
-                IEBuilder ieBuilder = new IEBuilder(config.getDriverArguments());
+                final IEBuilder ieBuilder = new IEBuilder(config.getDriverArguments());
                 if (StringUtils.isNotBlank(driverInPathPath))
                 {
                     ieBuilder.usingDriverExecutable(new File(driverInPathPath));
@@ -380,7 +387,7 @@ public final class BrowserRunnerHelper
                     options.addArguments(config.getArguments());
                 }
 
-                EdgeBuilder edgeBuilder = new EdgeBuilder(config.getDriverArguments());
+                final EdgeBuilder edgeBuilder = new EdgeBuilder(config.getDriverArguments());
                 if (StringUtils.isNotBlank(driverInPathPath))
                 {
                     edgeBuilder.usingDriverExecutable(new File(driverInPathPath));

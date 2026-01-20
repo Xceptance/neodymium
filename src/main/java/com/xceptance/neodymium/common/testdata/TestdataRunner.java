@@ -1,16 +1,14 @@
 package com.xceptance.neodymium.common.testdata;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
+import com.xceptance.neodymium.util.Neodymium;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.xceptance.neodymium.util.DataUtils;
-import com.xceptance.neodymium.util.Neodymium;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class TestdataRunner
 {
@@ -49,21 +47,22 @@ public class TestdataRunner
                 {
                     if (!StringUtils.isBlank(dataAnnotation.value()))
                     {
-                        field.set(testClassInstance, DataUtils.get(dataAnnotation.value(), field.getType()));
+                        field.set(testClassInstance, Neodymium.getData().get(dataAnnotation.value(), field.getType()));
                     }
-                    else if (DataUtils.exists(field.getName()))
+                    else if (Neodymium.getData().exists(field.getName()))
                     {
-                        field.set(testClassInstance, DataUtils.get("$." + field.getName(), field.getType()));
+                        field.set(testClassInstance, Neodymium.getData().get("$." + field.getName(), field.getType()));
                     }
-                    else if (DataUtils.getDataAsJsonObject().isJsonPrimitive() == (field.getType().isPrimitive() || field.getType().equals(String.class)))
+                    else if (Neodymium.getData().getDataAsJsonObject().isJsonPrimitive() == (field.getType().isPrimitive() || field.getType()
+                                                                                                                                   .equals(String.class)))
                     {
-                        field.set(testClassInstance, DataUtils.get(field.getType()));
+                        field.set(testClassInstance, Neodymium.getData().get(field.getType()));
                     }
                 }
                 catch (Exception e)
                 {
                     throw new RuntimeException("Something went wrong while test data value injection for field:'" + field.getName() + "' in class:'"
-                                               + testClassInstance.getClass().getName() + "'", e);
+                                                   + testClassInstance.getClass().getName() + "'", e);
                 }
                 finally
                 {
