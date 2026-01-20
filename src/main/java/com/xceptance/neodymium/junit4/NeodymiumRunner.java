@@ -460,7 +460,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         // clear the context before child run
         Neodymium.clearThreadContext();
         super.runChild(method, notifier);
-        // clear the context after child run
+        // clear the context after child run as the next test may be suppressed due to test filtering
         Neodymium.clearThreadContext();
     }
 
