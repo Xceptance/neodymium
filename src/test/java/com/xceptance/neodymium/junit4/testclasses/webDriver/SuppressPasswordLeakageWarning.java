@@ -24,6 +24,7 @@ public class SuppressPasswordLeakageWarning
     {
         Assume.assumeTrue(shouldBeSuppressed ? Neodymium.getBrowserProfileName().equals("Chrome_SuppressPasswordLeakageWarningTest")
                                              : Neodymium.getBrowserProfileName().equals("Chrome_DoNotSuppressPasswordLeakageWarningTest"));
+        System.out.println(Neodymium.getRemoteWebDriver().getCapabilities().getBrowserVersion());
         Selenide.open("https://www.saucedemo.com/");
         Selenide.$("[data-test='username']").val("standard_user");
         Selenide.$("[data-test='password']").val("secret_sauce");
