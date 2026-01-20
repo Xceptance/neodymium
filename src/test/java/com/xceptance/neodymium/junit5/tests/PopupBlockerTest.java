@@ -15,12 +15,14 @@ public class PopupBlockerTest extends AbstractNeodymiumTest
     {
         Map<String, String> properties = new HashMap<>();
 
-        properties.put("neodymium.popup.custom", "#myWindow");
+        properties.put("neodymium.popup.custom", "#myPopUp1");
+        properties.put("neodymium.popup.second", "#myPopUp2");
+        properties.put("neodymium.popup.third", "#myPopUp3");
         properties.put("neodymium.popup.customWithQuotes", "[data-testid='closeIcon']");
 
         addPropertiesForTest("temp-PopupBlockerTest-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(PopupBlockerTestclass.class);
-        checkPass(summary, 5, 0);
+        checkPass(summary, 7, 0);
     }
 }

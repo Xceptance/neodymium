@@ -30,7 +30,7 @@ public class SuppressPasswordLeakageWarningTest extends NeodymiumTest
         properties.put("browserprofile.Chrome_DoNotSuppressPasswordLeakageWarningTest", "DoNotSuppressPasswordLeakageWarningTest");
         properties.put("browserprofile.Chrome_DoNotSuppressPasswordLeakageWarningTest.browserResolution", "1024x768");
         properties.put("browserprofile.Chrome_DoNotSuppressPasswordLeakageWarningTest.browser", "chrome");
-        properties.put("browserprofile.Chrome_DoNotSuppressPasswordLeakageWarningTest.arguments", "--headless");
+        properties.put("browserprofile.Chrome_DoNotSuppressPasswordLeakageWarningTest.arguments", "--headless=new");
         properties.put("browserprofile.Chrome_DoNotSuppressPasswordLeakageWarningTest.suppressPasswordLeakageWarning", "false");
         File tempConfigFile = File.createTempFile("driverArgumentsTest", "", new File("./config/"));
         writeMapToPropertiesFile(properties, tempConfigFile);

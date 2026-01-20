@@ -15,17 +15,22 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.lang3.Range;
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 import org.junit.runner.RunWith;
 import org.openqa.selenium.StaleElementReferenceException;
 
+import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import com.codeborne.selenide.ex.ElementNotFound;
 import com.codeborne.selenide.ex.ElementShould;
 import com.codeborne.selenide.ex.UIAssertionError;
+import com.codeborne.selenide.junit.SoftAsserts;
 import com.codeborne.selenide.logevents.LogEvent;
 import com.codeborne.selenide.logevents.LogEvent.EventStatus;
 import com.codeborne.selenide.logevents.LogEventListener;
@@ -39,6 +44,9 @@ import com.xceptance.neodymium.junit4.NeodymiumRunner;
 @Browser("Chrome_headless")
 public class SelenideAddonsTest
 {
+    @Rule
+    public SoftAsserts softAsserts = new SoftAsserts();
+
     private List<Runnable> runArrayWithSEREinMessage = new ArrayList<Runnable>()
     {
         private static final long serialVersionUID = 1L;
@@ -272,9 +280,9 @@ public class SelenideAddonsTest
         Neodymium.softAssertions(true);
         try
         {
-            SelenideAddons.wrapAssertionError(() -> {
+            Assertions.assertAll(() -> SelenideAddons.wrapAssertionError(() -> {
                 Assert.assertTrue(Selenide.title().startsWith("MyPageTitle"));
-            });
+            }));
         }
         finally
         {
