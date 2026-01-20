@@ -457,6 +457,8 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     @Override
     protected void runChild(FrameworkMethod method, RunNotifier notifier)
     {
+        // clear the context before child run
+        Neodymium.clearThreadContext();
         super.runChild(method, notifier);
         // clear the context after child run
         Neodymium.clearThreadContext();
