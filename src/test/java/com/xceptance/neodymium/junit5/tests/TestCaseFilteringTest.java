@@ -34,6 +34,8 @@ public class TestCaseFilteringTest extends AbstractNeodymiumTest
     @Test
     public void testTestCaseFiltering()
     {
+        // the test from RandomBrowserChild should run 2 times, as the corresponding annotations should be inherited
+        // from the RandomBrowserParent class
         NeodymiumTestExecutionSummary summary = run(TestCaseFiltering.class);
         checkPass(summary, 2, 3);
     }
