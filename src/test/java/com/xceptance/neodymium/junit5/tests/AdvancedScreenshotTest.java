@@ -1,4 +1,4 @@
-package com.xceptance.neodymium.util;
+package com.xceptance.neodymium.junit5.tests;
 
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBuffer;
@@ -15,13 +15,12 @@ import java.util.List;
 import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.ScreenshotWriter;
 import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumRunner;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
+import com.xceptance.neodymium.util.Neodymium;
 
 import io.qameta.allure.Allure;
 import io.qameta.allure.AllureLifecycle;
@@ -29,7 +28,6 @@ import io.qameta.allure.model.Attachment;
 import io.qameta.allure.model.ExecutableItem;
 import io.qameta.allure.model.StepResult;
 
-@ExtendWith(NeodymiumRunner.class)
 @Browser("Chrome_1024x768")
 public class AdvancedScreenshotTest
 {
@@ -41,7 +39,7 @@ public class AdvancedScreenshotTest
         // take not blurred screenshot
         try
         {
-            Allure.step("test", () -> ScreenshotWriter.doScreenshot("blurredScreenshot"));
+            Allure.step("test", () -> ScreenshotWriter.doScreenshot("notblurredScreenshot"));
         }
         catch (Exception e)
         {
