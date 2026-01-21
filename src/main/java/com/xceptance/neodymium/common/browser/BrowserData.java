@@ -2,6 +2,7 @@ package com.xceptance.neodymium.common.browser;
 
 import com.xceptance.neodymium.common.Data;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
+import com.xceptance.neodymium.junit5.filtering.FilterTestMethodCallback;
 import com.xceptance.neodymium.util.Neodymium;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
@@ -24,6 +25,8 @@ import java.util.stream.Stream;
 
 public class BrowserData extends Data
 {
+    public static final String SYSTEM_PROPERTY_BROWSERDEFINITION = "browserdefinition";
+
     private List<String> classBrowsers;
 
     private List<String> systemBrowserFilter;
@@ -134,12 +137,18 @@ public class BrowserData extends Data
         // get test specific browser definitions (aka browser tag see browser.properties)
         // could be one value or comma separated list of values
         String browserFilter = Neodymium.configuration().getBrowserFilter();
-        browserFilter = browserFilter.replaceAll("\\s", "");
-
+        String browserDefinitionsProperty = System.getProperty(SYSTEM_PROPERTY_BROWSERDEFINITION, "");
         // parse test specific browser definitions
         if (!StringUtils.isEmpty(browserFilter))
         {
+            browserFilter = browserFilter.replaceAll("\\s", "");
             systemBrowserFilter = Arrays.asList(browserFilter.split(","));
+        }
+
+        if (!StringUtils.isEmpty(browserDefinitionsProperty))
+        {
+            browserDefinitionsProperty = browserDefinitionsProperty.replaceAll("\\s", "");
+            systemBrowserFilter = Arrays.asList(browserDefinitionsProperty.split(","));
         }
     }
 
