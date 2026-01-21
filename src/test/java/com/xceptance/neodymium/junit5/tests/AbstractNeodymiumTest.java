@@ -206,13 +206,14 @@ public abstract class AbstractNeodymiumTest
         {
             Assertions.assertEquals(expectSuccessful, result.getTotalFailureCount() == 0, "Test successful");
             Assertions.assertEquals(expectedRunCount, result.getTestsFoundCount(), "Method run count");
-            Assertions.assertEquals(result.getTestsSkippedCount(), expectedIgnoreCount, "Method ignore count");
-            Assertions.assertEquals(result.getTotalFailureCount(), expectedFailCount, "Method fail count");
+            Assertions.assertEquals(expectedIgnoreCount, result.getTestsSkippedCount(), "Method ignore count");
+            Assertions.assertEquals(expectedFailCount, result.getTotalFailureCount(), "Method fail count");
 
             if (expectedFailureMessages != null)
             {
-                Assert.assertTrue("Not all failures are described in expectedFailureMessages" ,result.getTotalFailureCount() == expectedFailureMessages.keySet().size());
-                for (String methodName: expectedFailureMessages.keySet())
+                Assert.assertTrue("Not all failures are described in expectedFailureMessages",
+                                  result.getTotalFailureCount() == expectedFailureMessages.keySet().size());
+                for (String methodName : expectedFailureMessages.keySet())
                 {
                     Throwable exception = result.getFailures().stream().filter(failure -> failure.getTestIdentifier().getDisplayName().equals(methodName))
                                                 .collect(Collectors.toList()).get(0).getException();

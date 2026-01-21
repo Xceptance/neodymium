@@ -55,6 +55,7 @@ import com.xceptance.neodymium.junit4.testclasses.browser.mixed.OverwriteBrowser
 import com.xceptance.neodymium.junit4.testclasses.browser.mixed.RandomBrowserMixed;
 import com.xceptance.neodymium.junit4.testclasses.browser.mixed.StartBrowserForCleanUp;
 import com.xceptance.neodymium.junit4.testclasses.browser.mixed.StartBrowserForSetUp;
+import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 import com.xceptance.neodymium.util.Neodymium;
 
 public class BrowserStatementTest extends NeodymiumTest
@@ -344,8 +345,43 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         System.setProperty("browserdefinition", "Chrome_headless");
         Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
-        checkPass(result, 1, 0);
         System.setProperty("browserdefinition", "");
+        checkPass(result, 1, 0);
+    }
+
+    @Test
+    public void testSystemPropertyBrowserFilterWithNoResults() throws Throwable
+    {
+        System.setProperty("browserdefinition", "Chrome_notExisting");
+        Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
+        System.setProperty("browserdefinition", "");
+        checkPass(result, 0, 0);
+    }
+
+    @Test
+    public void testNeodymiumPropertyBrowserFilter()
+    {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("neodymium.webDriver.browserFilter", "Chrome_headless");
+
+        addPropertiesForTest("temp-NeodymiumPropertyBrowserFilter-neodymium.properties", properties);
+        // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
+        Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
+        ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
+        checkPass(result, 1, 0);
+    }
+
+    @Test
+    public void testNeodymiumPropertyBrowserFilterNoResults()
+    {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("neodymium.webDriver.browserFilter", "Chrome_notExisting");
+
+        addPropertiesForTest("temp-NeodymiumPropertyBrowserFilterNoResults-neodymium.properties", properties);
+        // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
+        Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
+        ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
+        checkPass(result, 0, 0);
     }
 
     @Test
