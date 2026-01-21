@@ -39,23 +39,31 @@ public class SuppressPasswordLeakageWarning
         Selenide.$("[data-test='username']").val("standard_user");
         Selenide.$("[data-test='password']").val("secret_sauce");
         Selenide.$("[data-test='login-button']").click();
-        Selenide.Wait().withMessage("Alert is " + (shouldBeSuppressed ? "" : "not ") + "fired").withTimeout(Duration.ofMillis(30000)).until((driver) -> {
-            Object hasFocus = Selenide.executeJavaScript("return document.hasFocus();");
-            return hasFocus != null && hasFocus instanceof Boolean && shouldBeSuppressed == ((Boolean) hasFocus);
-        });
         try
         {
-            Rectangle screenRect = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
-            BufferedImage capture = new Robot().createScreenCapture(screenRect);
-            ImageIO.write(capture, "png", new File(Neodymium.getBrowserProfileName()));
+            Selenide.Wait().withMessage("Alert is " + (shouldBeSuppressed ? "" : "not ") + "fired").withTimeout(Duration.ofMillis(30000)).until((driver) -> {
+                Object hasFocus = Selenide.executeJavaScript("return document.hasFocus();");
+                return hasFocus != null && hasFocus instanceof Boolean && shouldBeSuppressed == ((Boolean) hasFocus);
+            });
+
         }
-        catch (Exception e)
+        catch (Throwable e)
         {
-            e.printStackTrace();
-        }
-        if (!shouldBeSuppressed)
-        {
-            sendImageToWebhook(new File(Neodymium.getBrowserProfileName()), "https://webhook.site/c6521652-601f-4ab0-a22e-5f4bfd7f6a7d");
+            try
+            {
+                Rectangle screenRect = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
+                BufferedImage capture = new Robot().createScreenCapture(screenRect);
+                ImageIO.write(capture, "png", new File(Neodymium.getBrowserProfileName()));
+            }
+            catch (Exception e1)
+            {
+                e1.printStackTrace();
+            }
+            if (!shouldBeSuppressed)
+            {
+                sendImageToWebhook(new File(Neodymium.getBrowserProfileName()), "https://webhook.site/c6521652-601f-4ab0-a22e-5f4bfd7f6a7d");
+            }
+            throw e;
         }
     }
 
