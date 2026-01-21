@@ -130,10 +130,8 @@ public class ScreenshotWriter
                                                                                      .toString()));
 
                 Dimension size = Neodymium.getViewportSize();
-                if (driver instanceof FirefoxDriver)
-                {
-                    size = new Dimension(size.width - (int) (15 * devicePixelRatio), size.height - (int) (15 * devicePixelRatio));
-                }
+                size = new Dimension(Math.min(size.width - (int) (15 * devicePixelRatio),
+                                              image.getWidth()), Math.min(size.height - (int) (15 * devicePixelRatio), image.getHeight()));
                 Point currentLocation = new Point(offsetX, offsetY);
                 Coordinates coords = new Coordinates(currentLocation, currentLocation, size, new Dimension(0, 0), devicePixelRatio);
 
