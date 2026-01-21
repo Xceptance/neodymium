@@ -5,7 +5,7 @@ import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import org.junit.Assert;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;

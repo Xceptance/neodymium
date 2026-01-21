@@ -1,6 +1,6 @@
 package com.xceptance.neodymium.util;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
 
