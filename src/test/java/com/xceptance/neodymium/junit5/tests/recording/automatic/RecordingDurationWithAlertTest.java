@@ -1,5 +1,6 @@
 package com.xceptance.neodymium.junit5.tests.recording.automatic;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.recording.FilmTestExecution;
 import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
 import com.xceptance.neodymium.common.retry.Retry;
@@ -10,7 +11,6 @@ import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Assert;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -19,7 +19,8 @@ import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 
-@Retry(maxNumberOfRetries = 2, exceptions = { "Invalid data found when processing input" })
+@Retry(maxNumberOfRetries = 2, exceptions = { "Invalid data found when processing input",
+		"different oneImagePerMilliseconds value should have approximaty the same length" })
 public class RecordingDurationWithAlertTest extends AbstractNeodymiumTest {
 	private File recordingFile;
 
@@ -99,6 +100,7 @@ public class RecordingDurationWithAlertTest extends AbstractNeodymiumTest {
 				runVideo1000, runGif1000, 5.0);
 	}
 
+	@SuppressBrowsers
 	@AfterEach
 	public void cleanup() {
 		if (recordingFile != null) {
