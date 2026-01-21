@@ -39,8 +39,6 @@ public class TestCaseFilteringTest extends NeodymiumTest
     @Test
     public void testTestCaseFiltering()
     {
-        // the test from RandomBrowserChild should run 2 times, as the corresponding annotations should be inherited
-        // from the RandomBrowserParent class
         Result result = JUnitCore.runClasses(TestCaseFiltering.class);
         checkPass(result, 2, 0);
     }
