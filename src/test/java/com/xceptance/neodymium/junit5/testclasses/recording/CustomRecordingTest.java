@@ -18,6 +18,11 @@ public class CustomRecordingTest
     @NeodymiumTest
     public void test() throws IOException
     {
+        // open different page first to warm up browser
+        // as the empty page on browser warm up may sometimes land in video/gif sequence and influence duration
+        // we in return want to keep the executions as identical as possible to ensure duration is the same for
+        // identical tests
+        Selenide.open("https://www.google.com/");
         uuid = UUID.randomUUID().toString();
         if (isGif)
         {

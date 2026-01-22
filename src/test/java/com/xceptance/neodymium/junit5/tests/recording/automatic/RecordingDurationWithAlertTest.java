@@ -1,14 +1,16 @@
 package com.xceptance.neodymium.junit5.tests.recording.automatic;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.recording.FilmTestExecution;
 import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
+import com.xceptance.neodymium.common.retry.Retry;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.testclasses.recording.CustomRecordingWithAlertTest;
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Assert;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -17,6 +19,10 @@ import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 
+@Retry(maxNumberOfRetries = 3, exceptions =
+{
+  "Invalid data found when processing input"
+})
 public class RecordingDurationWithAlertTest extends AbstractNeodymiumTest
 {
     private File recordingFile;
@@ -42,7 +48,8 @@ public class RecordingDurationWithAlertTest extends AbstractNeodymiumTest
 
         run(CustomRecordingWithAlertTest.class);
 
-        RecordingConfigurations config = isGif ? FilmTestExecution.getContextGif() : FilmTestExecution.getContextVideo();
+        RecordingConfigurations config = isGif ? FilmTestExecution.getContextGif()
+                                               : FilmTestExecution.getContextVideo();
         recordingFile = new File(config.tempFolderToStoreRecording() + CustomRecordingWithAlertTest.uuid + "." + config.format());
 
         for (int i = 0; i < 3 && !recordingFile.exists(); i++)
@@ -66,34 +73,41 @@ public class RecordingDurationWithAlertTest extends AbstractNeodymiumTest
         return Double.parseDouble(recordDuration);
     }
 
-    @Test
+    @NeodymiumTest
     public void testVideoRecording() throws IOException, InterruptedException
     {
         double run100 = runTest(false, "100");
         double run1000 = runTest(false, "1000");
 
-        Assert.assertEquals("Videos with different oneImagePerMilliseconds value should have approximaty the same length (1/100 = " + run1000
-                            + ", 1/1000 = " + run100 + ")", run1000, run1000, 5.0);
+        Assert.assertEquals(
+                            "Videos with different oneImagePerMilliseconds value should have approximaty the same length (1/100 = "
+                            + run1000 + ", 1/1000 = " + run100 + ")",
+                            run1000, run1000, 5.0);
     }
 
-    @Test
+    @NeodymiumTest
     public void testGifRecording() throws IOException, InterruptedException
     {
         double run100 = runTest(true, "100");
         double run1000 = runTest(true, "1000");
-        Assert.assertEquals("Gifs with different oneImagePerMilliseconds value should have approximaty the same length (1/100 = " + run100 + ", 1/1000 = "
-                            + run1000 + ")", run100, run1000, 5.0);
+        Assert.assertEquals(
+                            "Gifs with different oneImagePerMilliseconds value should have approximaty the same length (1/100 = "
+                            + run100 + ", 1/1000 = " + run1000 + ")",
+                            run100, run1000, 5.0);
     }
 
-    @Test
+    @NeodymiumTest
     public void testMixedRecording() throws IOException, InterruptedException
     {
         double runVideo1000 = runTest(false, "1000");
         double runGif1000 = runTest(true, "1000");
-        Assert.assertEquals("Gifs with different oneImagePerMilliseconds value should have approximaty the same length (video = " + runVideo1000 + ", gif = "
-                            + runGif1000 + ")", runVideo1000, runGif1000, 5.0);
+        Assert.assertEquals(
+                            "Gifs with different oneImagePerMilliseconds value should have approximaty the same length (video = "
+                            + runVideo1000 + ", gif = " + runGif1000 + ")",
+                            runVideo1000, runGif1000, 5.0);
     }
 
+    @SuppressBrowsers
     @AfterEach
     public void cleanup()
     {

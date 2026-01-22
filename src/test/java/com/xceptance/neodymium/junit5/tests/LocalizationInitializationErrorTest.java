@@ -42,8 +42,17 @@ public class LocalizationInitializationErrorTest extends AbstractNeodymiumTest
     @Test
     public void testAssertionErrorWhenKeyIsUnknown()
     {
-        Assertions.assertThrows(RuntimeException.class, () -> {
+        Throwable exception = null;
+        try
+        {
             Neodymium.localizedText("key1");
-        });
+        }
+        catch (Throwable e)
+        {
+            exception = e;
+        }
+        Assertions.assertNotNull(exception, "No exception was thrown");
+        Assertions.assertEquals("Localization keys must be of type String. (e.g. use \"Yes\" instead of Yes as key. This is due to YAML auto conversion.)",
+                                exception.getCause().getMessage());
     }
 }
