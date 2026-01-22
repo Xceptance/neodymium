@@ -55,7 +55,6 @@ import com.xceptance.neodymium.junit4.testclasses.browser.mixed.OverwriteBrowser
 import com.xceptance.neodymium.junit4.testclasses.browser.mixed.RandomBrowserMixed;
 import com.xceptance.neodymium.junit4.testclasses.browser.mixed.StartBrowserForCleanUp;
 import com.xceptance.neodymium.junit4.testclasses.browser.mixed.StartBrowserForSetUp;
-import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 import com.xceptance.neodymium.util.Neodymium;
 
 public class BrowserStatementTest extends NeodymiumTest

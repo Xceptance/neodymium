@@ -11,7 +11,7 @@ import org.junit.Test;
 
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
 
-public class BrowserStatementConfigurationTestError extends NeodymiumTest
+public class BrowserStatementConfigurationErrorTest extends NeodymiumTest
 {
 
     File tempConfigFile;
