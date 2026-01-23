@@ -60,7 +60,7 @@ public class TestDataSetTest extends NeodymiumTest
     {
         Result result = JUnitCore.runClasses(InstantiateDataSetExceptionOnlyParameterLowerMinRange.class);
         checkFail(result, 1, 0, 1,
-                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 0, but there are only 5 available.");
+                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 0, but there are only 1-5 available.");
     }
 
     @Test
@@ -68,7 +68,7 @@ public class TestDataSetTest extends NeodymiumTest
     {
         Result result = JUnitCore.runClasses(InstantiateDataSetExceptionOnlyParameterHigherMaxRange.class);
         checkFail(result, 1, 0, 1,
-                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 6, but there are only 5 available.");
+                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 6, but there are only 1-5 available.");
     }
 
     @Test
@@ -76,7 +76,7 @@ public class TestDataSetTest extends NeodymiumTest
     {
         Result result = JUnitCore.runClasses(InstantiateDataSetExceptionFirstParameterLowerMinRange.class);
         checkFail(result, 1, 0, 1,
-                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 0, but there are only 5 available.");
+                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 0, but there are only 1-5 available.");
     }
 
     @Test
@@ -84,7 +84,7 @@ public class TestDataSetTest extends NeodymiumTest
     {
         Result result = JUnitCore.runClasses(InstantiateDataSetExceptionFirstParameterHigherMaxRange.class);
         checkFail(result, 1, 0, 1,
-                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 6, but there are only 5 available.");
+                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 6, but there are only 1-5 available.");
     }
 
     @Test
@@ -92,7 +92,7 @@ public class TestDataSetTest extends NeodymiumTest
     {
         Result result = JUnitCore.runClasses(InstantiateDataSetExceptionSecondParameterLowerMinRange.class);
         checkFail(result, 1, 0, 1,
-                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 0, but there are only 5 available.");
+                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 0, but there are only 1-5 available.");
     }
 
     @Test
@@ -100,6 +100,6 @@ public class TestDataSetTest extends NeodymiumTest
     {
         Result result = JUnitCore.runClasses(InstantiateDataSetExceptionSecondParameterHigherMaxRange.class);
         checkFail(result, 1, 0, 1,
-                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 6, but there are only 5 available.");
+                  "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 6, but there are only 1-5 available.");
     }
 }
