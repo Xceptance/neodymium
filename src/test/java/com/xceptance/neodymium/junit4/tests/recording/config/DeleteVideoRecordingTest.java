@@ -23,15 +23,6 @@ public class DeleteVideoRecordingTest extends AbstractRecordingDeletionTest
         configurationsClass = VideoRecordingConfigurations.class;
     }
 
-    /*
-    @Override
-    @Test
-    public void test()
-    {
-        super.test();
-    }
-     */
-
     @AfterClass
     public static void assertLogFileExists()
     {
