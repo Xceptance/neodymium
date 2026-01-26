@@ -25,6 +25,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 
@@ -41,6 +42,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.net.URI;
 import java.net.URL;
@@ -404,50 +406,6 @@ public class AllureAddons
         addEnvironmentInformation(environmentValuesSet, EnvironmentInfoMode.REPLACE);
     }
 
-    public static void sendImageToWebhook(File imageFile, String webhookUrl)
-    {
-        try
-        {
-            String boundary = "Boundary-" + UUID.randomUUID().toString();
-            byte[] fileContent = Files.readAllBytes(imageFile.toPath());
-
-            // Build multipart body
-            byte[] body = createMultipartBody(boundary, imageFile.getName(), fileContent);
-
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                                             .uri(URI.create(webhookUrl))
-                                             .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                                             .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-                                             .build();
-
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            System.out.println("Jenkins Debug: Image sent to Webhook. HTTP Status: " + response.statusCode());
-        }
-        catch (Exception e)
-        {
-            System.err.println("Jenkins Debug: Failed to send image: " + e.getMessage());
-        }
-    }
-
-    private static byte[] createMultipartBody(String boundary, String fileName, byte[] fileBytes) throws Exception
-    {
-        String start = "--" + boundary + "\r\n" +
-                       "Content-Disposition: form-data; name=\"file\"; filename=\"" + fileName + "\"\r\n" +
-                       "Content-Type: image/png\r\n\r\n";
-        String end = "\r\n--" + boundary + "--\r\n";
-
-        byte[] startBytes = start.getBytes();
-        byte[] endBytes = end.getBytes();
-        byte[] total = new byte[startBytes.length + fileBytes.length + endBytes.length];
-
-        System.arraycopy(startBytes, 0, total, 0, startBytes.length);
-        System.arraycopy(fileBytes, 0, total, startBytes.length, fileBytes.length);
-        System.arraycopy(endBytes, 0, total, startBytes.length + fileBytes.length, endBytes.length);
-
-        return total;
-    }
-
     /**
      * Adds information about environment to the report
      *
@@ -507,8 +465,16 @@ public class AllureAddons
                     }
                     catch (SAXParseException e)
                     {
-                        sendImageToWebhook(getEnvFile(), "https://webhook.site/c6521652-601f-4ab0-a22e-5f4bfd7f6a7d");
-                        throw e;
+                        // fix environment xml in case there were some collisions that lead to invalid file
+                        String brokenXml = Files.readString(getEnvFile().toPath());
+                        String closingTag = "</environment>";
+                        int index = brokenXml.indexOf(closingTag);
+                        if (index != -1)
+                        {
+                            brokenXml = brokenXml.substring(0, index + closingTag.length());
+                        }
+                        doc = docBuilder.parse(new InputSource(new StringReader(brokenXml)));
+                        isFileAccessNeeded = true;
                     }
                     for (Map.Entry<String, String> entry : environmentValuesSet.entrySet())
                     {
