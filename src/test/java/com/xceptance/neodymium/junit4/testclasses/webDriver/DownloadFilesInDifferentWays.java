@@ -4,6 +4,7 @@ import static com.codeborne.selenide.Condition.attribute;
 import static com.codeborne.selenide.Condition.enabled;
 import static com.codeborne.selenide.Condition.exactText;
 import static com.codeborne.selenide.Condition.exist;
+import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
 
@@ -18,11 +19,13 @@ import org.junit.runner.RunWith;
 import com.codeborne.selenide.ClickOptions;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.SelenideElement;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.SelenideAddons;
 
 /**
  * Class with tests verifying that download folder configuration works for any download type
@@ -56,10 +59,14 @@ public class DownloadFilesInDifferentWays extends NeodymiumTest
     {
         fileName = new File("target/png2pdf.pdf");
         Selenide.open("https://png2pdf.com/");
-        $(".fc-cta-consent").click();
-        $("#fileSelector").uploadFile(new File("src/test/resources/2020-in-one-picture.png"));
-        $("button[aria-label='COMBINED']").shouldBe(enabled, Duration.ofMillis(9000));
-        $("button[aria-label='COMBINED']").click(ClickOptions.usingJavaScript());
+        SelenideElement acceptCookiesButton = $(".fc-cta-consent");
+        if (SelenideAddons.optionalWaitUntilCondition(acceptCookiesButton, visible, 9000))
+        {
+            $(".fc-cta-consent").click();
+        }
+        $("#fileSelector, #uploadBtn input").uploadFile(new File("src/test/resources/2020-in-one-picture.png"));
+        $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled);
+        $("button[aria-label='COMBINED'], #downloadAllBtn").click(ClickOptions.usingJavaScript());
         waitForFileDownloading();
         validateFilePresentInDownloadHistory();
     }
