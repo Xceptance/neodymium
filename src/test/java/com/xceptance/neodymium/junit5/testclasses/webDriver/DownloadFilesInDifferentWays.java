@@ -29,7 +29,6 @@ import com.xceptance.neodymium.util.SelenideAddons;
  * Class with tests verifying that download folder configuration works for any download type
  */
 
-// @Browser("Chrome_1500x1000")
 @Browser("chrome_download")
 @Browser("firefox_download")
 public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
@@ -64,7 +63,7 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
         }
         $("#fileSelector, #uploadBtn input").uploadFile(new File("src/test/resources/2020-in-one-picture.png"));
         $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled);
-        $("button[aria-label='COMBINED'], #downloadAllBtn").click(ClickOptions.usingJavaScript());
+        $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled, Duration.ofMillis(30000)).click(ClickOptions.usingJavaScript());
         waitForFileDownloading();
         validateFilePresentInDownloadHistory();
     }
