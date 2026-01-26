@@ -4,6 +4,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -65,9 +67,30 @@ public class RecordingDurationTest extends NeodymiumTest
     @Test
     public void testGifRecording() throws IOException
     {
+        Instant start = Instant.now();
+        double run100 = runTest(true, "100");
+        double run100Duration = Duration.between(start, Instant.now()).toMillis() / 1000.0;
+        start = Instant.now();
+        Assert.assertEquals(
+                            "Gif 1/100 for the test run of " + run100Duration
+                            + " has duration " + run100,
+                            run100, run100Duration, 5.0);
         double run1000 = runTest(true, "1000");
-        double run1500 = runTest(true, "1500");
-        Assert.assertEquals("Gifs with different oneImagePerMilliseconds value should have approximaty the same length (1/1000 = " + run1000 + ", 1/1500 = "
-                            + run1500 + ")", run1000, run1500, 5.0);
+        double run1000Duration = Duration.between(start, Instant.now()).toMillis() / 1000.0;
+        Assert.assertEquals(
+                            "Gif 1/1000 for the test run of " + run100Duration
+                            + " has duration " + run1000,
+                            run1000, run1000Duration, 5.0);
+    }
+
+    @Test
+    public void testMixedRecording() throws IOException, InterruptedException
+    {
+        double runVideo1000 = runTest(false, "1000");
+        double runGif1000 = runTest(true, "1000");
+        Assert.assertEquals(
+                            "Gifs with different oneImagePerMilliseconds value should have approximaty the same length (video = "
+                            + runVideo1000 + ", gif = " + runGif1000 + ")",
+                            runVideo1000, runGif1000, 5.0);
     }
 }
