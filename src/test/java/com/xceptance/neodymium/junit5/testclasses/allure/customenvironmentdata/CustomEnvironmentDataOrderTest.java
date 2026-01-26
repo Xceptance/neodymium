@@ -53,7 +53,7 @@ public class CustomEnvironmentDataOrderTest extends AbstractNeodymiumTest
     public void testCustomEnvironmentDataOrder()
     {
         NeodymiumTestExecutionSummary summary = run(CustomEnvironmentDataOrderTestClass.class);
-        checkPass(summary, 0, 1);
+        checkPass(summary, 1, 0);
     }
 
     @AfterAll

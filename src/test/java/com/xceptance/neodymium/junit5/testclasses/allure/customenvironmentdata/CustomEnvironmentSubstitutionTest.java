@@ -28,7 +28,7 @@ public class CustomEnvironmentSubstitutionTest extends AbstractNeodymiumTest
     public void testPropertySubstitution()
     {
         NeodymiumTestExecutionSummary summary = run(CustomEnvironmentPropertySubstitutionTestClass.class);
-        checkPass(summary, 0, 1);
+        checkPass(summary, 1, 0);
     }
 
     @AfterAll
@@ -47,8 +47,6 @@ public class CustomEnvironmentSubstitutionTest extends AbstractNeodymiumTest
         System.clearProperty("neodymium.report.environment.custom.referenceData3");
         System.clearProperty("neodymium.report.environment.custom.referenceData4");
         System.clearProperty("neodymium.report.environment.custom.neodymiumPropertiesReference");
-        System.clearProperty("neodymium.report.environment.custom.tempReference");
-        System.clearProperty("neodymium.report.environment.custom.systemReference");
         System.clearProperty("neodymium.report.environment.custom.multipleReference1");
         System.clearProperty("neodymium.report.environment.custom.multipleReference2");
         System.clearProperty("neodymium.report.environment.custom.multipleReference3");

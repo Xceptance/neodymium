@@ -1,7 +1,6 @@
 package com.xceptance.neodymium.junit5.testclasses.allure.customenvironmentdata;
 
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 import com.xceptance.neodymium.util.AllureAddons;
 
 import java.io.File;
@@ -11,7 +10,7 @@ import static com.xceptance.neodymium.junit5.testclasses.allure.customenvironmen
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class CustomEnvironmentDataOrderTestClass extends AbstractNeodymiumTest
+public class CustomEnvironmentDataOrderTestClass
 {
     @NeodymiumTest
     public void test()
