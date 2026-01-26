@@ -230,6 +230,18 @@ public final class BrowserRunnerHelper
                     options.addArguments("--headless");
                 }
 
+                if (config.isSuppressPasswordLeakageWarning())
+                {
+                    // actually doesn't really seem to help suppressing waring but let's leave for the safety
+                    options.addArguments("--disable-features=PasswordLeakDetection", "--disable-save-password-bubble");
+
+                    // only profile.password_manager_leak_detection seems to be sufficient but let's add others too for
+                    // safety
+                    config.addPreference("profile.password_manager_leak_detection", false);
+                    config.addPreference("credentials_enable_service", false);
+                    config.addPreference("profile.password_manager_enabled", false);
+                }
+
                 // find a free port for each chrome session (important for lighthouse)
                 final int remoteDebuggingPort = PortProber.findFreePort();
                 Neodymium.setRemoteDebuggingPort(remoteDebuggingPort);
@@ -276,7 +288,6 @@ public final class BrowserRunnerHelper
             else if (firefoxBrowsers.contains(browserName))
             {
                 final FirefoxOptions options = new FirefoxOptions();
-                new ExecutableFinder().find("firefox");
                 final String driverInPathPath = new ExecutableFinder().find("geckodriver");
 
                 if (StringUtils.isNotBlank(Neodymium.configuration().getFirefoxBrowserPath()))
@@ -285,7 +296,14 @@ public final class BrowserRunnerHelper
                 }
                 else
                 {
-                    options.setBinary(new ExecutableFinder().find("firefox"));
+                    if (new ExecutableFinder().find("firefox") != null)
+                    {
+                        options.setBinary(new ExecutableFinder().find("firefox"));
+                    }
+                    else
+                    {
+                        options.configureFromEnv();
+                    }
                 }
                 if (config.isHeadless())
                 {

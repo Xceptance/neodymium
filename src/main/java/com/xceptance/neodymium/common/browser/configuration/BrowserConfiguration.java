@@ -36,6 +36,8 @@ public class BrowserConfiguration
     private Map<String, Object> preferences;
 
     private String downloadDirectory;
+    
+    private boolean suppressPasswordLeakageWarning;
 
     /**
      * get config tag
@@ -259,5 +261,15 @@ public class BrowserConfiguration
     public void setDownloadDirectory(String downloadDirectory)
     {
         this.downloadDirectory = downloadDirectory;
+    }
+
+    public boolean isSuppressPasswordLeakageWarning()
+    {
+        return suppressPasswordLeakageWarning;
+    }
+
+    public void setSuppressPasswordLeakageWarning(boolean suppressPasswordLeakageWarning)
+    {
+        this.suppressPasswordLeakageWarning = suppressPasswordLeakageWarning;
     }
 }

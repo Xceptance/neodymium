@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.BrowserData;
 import com.xceptance.neodymium.common.retry.RetryMethodData;
 import com.xceptance.neodymium.junit4.order.DefaultStatementRunOrder;
 import com.xceptance.neodymium.junit4.statement.browser.BrowserRunAfters;
@@ -31,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -191,6 +193,9 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         {
             String testExecutionRegex = Neodymium.configuration().getTestNameFilter();
 
+            // required to clear context for the thread containing class with no tests (usually done in runChild but as
+            // runChild is not triggered for any method in the class in this case, we need to trigger it here)
+            Neodymium.clearThreadContext();
             // only throw exception if test class has no execution methods accidentally
             if (StringUtils.isNotEmpty(testExecutionRegex))
             {
@@ -223,7 +228,13 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
 
         // Since this method is called at least two times and is somewhat expensive, we cache the result
         if (computedTestMethods != null)
+        {
+            // we need to clear context here because no test method will be executed and context will not be cleared in runChild
+            if(computedTestMethods.isEmpty()) {
+                Neodymium.clearThreadContext();
+            }
             return computedTestMethods;
+        }
 
         // That list will contain all methods that need to be run for the class
         List<FrameworkMethod> testMethods = new LinkedList<>();
@@ -320,15 +331,28 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         }
 
         // filter test methods by regex
-        String testExecutionRegex = Neodymium.configuration().getTestNameFilter();
-        if (StringUtils.isNotEmpty(testExecutionRegex))
+        final List<String> browserFilter = new ArrayList<String>();
+        String browserDefinitionsProperty = System.getProperty(BrowserData.SYSTEM_PROPERTY_BROWSERDEFINITION, "");
+        browserDefinitionsProperty = browserDefinitionsProperty.replaceAll("\\s", "");
+        if (!StringUtils.isEmpty(browserDefinitionsProperty))
+        {
+            browserFilter.addAll(Arrays.asList(browserDefinitionsProperty.split(",")));
+        }
+        else if (!StringUtils.isEmpty(Neodymium.configuration().getBrowserFilter()))
+        {
+            browserFilter.addAll(Arrays.asList(Neodymium.configuration().getBrowserFilter().replaceAll("\\s", "").split(",")));
+        }
+        String testExecutionRegex = browserFilter.isEmpty() ? Neodymium.configuration().getTestNameFilter() : ".*";
+
+        if (StringUtils.isNotEmpty(testExecutionRegex) || !browserFilter.isEmpty())
         {
             testMethods = testMethods.stream()
                                      .filter(testMethod -> {
                                          String functionName = testMethod.getMethod().getDeclaringClass().getName() + "#" + testMethod.getName();
                                          return Pattern.compile(testExecutionRegex)
                                                        .matcher(functionName)
-                                                       .find();
+                                                       .find()
+                                                && (browserFilter.isEmpty() || browserFilter.stream().anyMatch(functionName::contains));
                                      })
                                      .collect(Collectors.toList());
         }
@@ -432,9 +456,11 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     @Override
     protected void runChild(FrameworkMethod method, RunNotifier notifier)
     {
-        // clear the context before next child run
+        // clear the context before child run
         Neodymium.clearThreadContext();
         super.runChild(method, notifier);
+        // clear the context after child run as the next test may be suppressed due to test filtering
+        Neodymium.clearThreadContext();
     }
 
     private <T> List<FrameworkMethod> buildCrossProduct(Method method, List<StatementBuilder<?>> builderList, List<List<?>> builderDataList)
