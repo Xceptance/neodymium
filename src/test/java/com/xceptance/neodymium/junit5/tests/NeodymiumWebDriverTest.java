@@ -320,7 +320,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-LocalProxyUsingSelfCreatedCertificates-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(LocalProxyUsingSelfCreatedCertificates.class);
-        checkPass(summary, 1, 0);
+        checkPass(summary, 3, 0);
     }
 
     @Test

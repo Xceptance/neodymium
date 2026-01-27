@@ -62,8 +62,8 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
             $(".fc-cta-consent").click();
         }
         $("#fileSelector, #uploadBtn input").uploadFile(new File("src/test/resources/2020-in-one-picture.png"));
-        $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled);
-        $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled, Duration.ofMillis(30000)).click(ClickOptions.usingJavaScript());
+        $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled, Duration.ofMillis(30000));
+        $("button[aria-label='COMBINED'], #downloadAllBtn").click(ClickOptions.usingJavaScript());
         waitForFileDownloading();
         validateFilePresentInDownloadHistory();
     }
