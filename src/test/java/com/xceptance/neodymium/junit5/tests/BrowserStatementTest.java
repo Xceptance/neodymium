@@ -337,7 +337,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         // it should be possible to use different browser profle for clean up (using @Browser annotation)
         NeodymiumTestExecutionSummary summary = run(OverwriteBrowserForCleanUp.class);
-        checkPass(summary, 1, 0);
+        checkPass(summary, 3, 0);
     }
 
     @Test
