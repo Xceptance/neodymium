@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-@Retry(maxNumberOfRetries = 3, exceptions =
+@Retry(maxNumberOfRetries = 5, exceptions =
 {
   "Invalid data found when processing input"
 })
