@@ -416,14 +416,19 @@ public class AllureAddons
     {
         try
         {
-            Path path = Paths.get("environment.xml.lock");
+            Path lockFilePath =Paths.get(getAllureResultsFolder().getAbsoluteFile() + File.separator +"environment.xml.lock");
             boolean lock = false;
             int retries = 0;
             do
             {
+                if (retries > 0)
+                {
+                    Selenide.sleep(100);
+                }
                 try
                 {
-                    Files.createFile(path);
+                    Files.createFile(lockFilePath);
+                    lockFilePath.toFile().deleteOnExit();
                     lock = true;
                     // If we reach here, we successfully "won" the race and created the file.
                 }
@@ -431,8 +436,9 @@ public class AllureAddons
                 {
                     // Another VM created it first. Wait and try again.
                 }
+                retries++;
             }
-            while (retries < MAX_RETRY_COUNT && lock);
+            while (retries < MAX_RETRY_COUNT && !lock);
             if (lock)
             {
                 DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
@@ -454,7 +460,23 @@ public class AllureAddons
                 // in this case we need to append our values to it
                 if (getEnvFile().length() != 0)
                 {
-                    doc = docBuilder.parse(getEnvFile());
+                    try
+                    {
+                        doc = docBuilder.parse(getEnvFile());
+                    }
+                    catch (SAXParseException e)
+                    {
+                        // fix environment xml in case there were some collisions that lead to invalid file
+                        String brokenXml = Files.readString(getEnvFile().toPath());
+                        String closingTag = "</environment>";
+                        int index = brokenXml.indexOf(closingTag);
+                        if (index != -1)
+                        {
+                            brokenXml = brokenXml.substring(0, index + closingTag.length());
+                        }
+                        doc = docBuilder.parse(new InputSource(new StringReader(brokenXml)));
+                        isFileAccessNeeded = true;
+                    }
                     for (Map.Entry<String, String> entry : environmentValuesSet.entrySet())
                     {
                         Node environment = doc.getDocumentElement();
@@ -594,7 +616,7 @@ public class AllureAddons
                         transformer.transform(source, result);
                     }
                 }
-                Files.delete(path);
+                Files.delete(lockFilePath);
             }
             else
             {
