@@ -25,7 +25,9 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -40,6 +42,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLConnection;
@@ -449,7 +452,23 @@ public class AllureAddons
                 // in this case we need to append our values to it
                 if (getEnvFile().length() != 0)
                 {
-                    doc = docBuilder.parse(getEnvFile());
+                    try
+                    {
+                        doc = docBuilder.parse(getEnvFile());
+                    }
+                    catch (SAXParseException e)
+                    {
+                        // fix environment xml in case there were some collisions that lead to invalid file
+                        String brokenXml = Files.readString(getEnvFile().toPath());
+                        String closingTag = "</environment>";
+                        int index = brokenXml.indexOf(closingTag);
+                        if (index != -1)
+                        {
+                            brokenXml = brokenXml.substring(0, index + closingTag.length());
+                        }
+                        doc = docBuilder.parse(new InputSource(new StringReader(brokenXml)));
+                        isFileAccessNeeded = true;
+                    }
                     for (Map.Entry<String, String> entry : environmentValuesSet.entrySet())
                     {
                         Node environment = doc.getDocumentElement();
