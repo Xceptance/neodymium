@@ -27,12 +27,12 @@ public class DownloadFilesExecutorTest extends NeodymiumTest
         properties.put("browserprofile.chrome_download.browser", "chrome");
 
         // needed to enable validation of chrome://downloads/ page
-        properties.put("browserprofile.chrome_download.headless", "false");
+        properties.put("browserprofile.chrome_download.arguments", "--headless=new");
         properties.put("browserprofile.chrome_download.downloadDirectory", "target");
 
         properties.put("browserprofile.firefox_download.name", "firefox_download");
         properties.put("browserprofile.firefox_download.browser", "firefox");
-        properties.put("browserprofile.firefox_download.headless", "true");
+        properties.put("browserprofile.firefox_download.arguments", "--headless=new");
         properties.put("browserprofile.firefox_download.downloadDirectory", "target");
 
         File tempConfigFile = File.createTempFile("browserDownloadFilesExecutorTest", "", new File("./config/"));

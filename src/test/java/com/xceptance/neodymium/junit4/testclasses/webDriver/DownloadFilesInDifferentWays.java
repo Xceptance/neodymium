@@ -65,7 +65,8 @@ public class DownloadFilesInDifferentWays extends NeodymiumTest
             $(".fc-cta-consent").click();
         }
         $("#fileSelector, #uploadBtn input").uploadFile(new File("src/test/resources/2020-in-one-picture.png"));
-        $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled, Duration.ofMillis(30000));
+        $(".file-button").shouldHave(exactText("DOWNLOAD"), Duration.ofMillis(60000));
+        $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled, Duration.ofMillis(60000));
         $("button[aria-label='COMBINED'], #downloadAllBtn").click(ClickOptions.usingJavaScript());
         waitForFileDownloading();
         validateFilePresentInDownloadHistory();
@@ -91,7 +92,7 @@ public class DownloadFilesInDifferentWays extends NeodymiumTest
 
     private void waitForFileDownloading()
     {
-        Selenide.Wait().withMessage("File was not downloaded").withTimeout(Duration.ofMillis(9000)).until((driver) -> {
+        Selenide.Wait().withMessage("File was not downloaded").withTimeout(Duration.ofMillis(30000)).until((driver) -> {
             return fileName.exists() && fileName.canRead();
         });
     }

@@ -14,7 +14,6 @@ import java.time.Duration;
 
 import org.junit.jupiter.api.AfterEach;
 
-import com.codeborne.selenide.ClickOptions;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
@@ -38,7 +37,7 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
     /**
      * Verify file saved to the correct directory when downloaded via link
      */
-    @NeodymiumTest
+     @NeodymiumTest
     public void downloadViaLink()
     {
         fileName = new File("target/02_2020-Java_aktuell-Autor-Rene_Schwietzke-High-Performance-Java-Hinter-den-Kulissen-von-Java.pdf");
@@ -62,8 +61,9 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
             $(".fc-cta-consent").click();
         }
         $("#fileSelector, #uploadBtn input").uploadFile(new File("src/test/resources/2020-in-one-picture.png"));
-        $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled, Duration.ofMillis(30000));
-        $("button[aria-label='COMBINED'], #downloadAllBtn").click(ClickOptions.usingJavaScript());
+        $(".file-button").shouldHave(exactText("DOWNLOAD"), Duration.ofMillis(60000));
+        $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled, Duration.ofMillis(60000));
+        $("button[aria-label='COMBINED'], #downloadAllBtn").click();
         waitForFileDownloading();
         validateFilePresentInDownloadHistory();
     }
@@ -71,7 +71,7 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
     /**
      * Verify file saved to the correct directory when downloaded via link
      */
-    @NeodymiumTest
+     @NeodymiumTest
     public void downloadPerLinkWithSelenide() throws FileNotFoundException
     {
         Selenide.open("https://blog.xceptance.com/2020/02/28/ijug-magazin-java-aktuell-high-performance-java/");
@@ -88,7 +88,7 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
 
     private void waitForFileDownloading()
     {
-        Selenide.Wait().withMessage("File was not downloaded").withTimeout(Duration.ofMillis(6000)).until((driver) -> {
+        Selenide.Wait().withMessage("File was not downloaded").withTimeout(Duration.ofMillis(30000)).until((driver) -> {
             return fileName.exists() && fileName.canRead();
         });
     }
