@@ -60,7 +60,7 @@ public class ProxyConfigurationTest extends AbstractNeodymiumTest
     {
         // test proxy configuration as far as possible without setting up a proxy
         NeodymiumTestExecutionSummary summary = run(RunWithProxy.class);
-        checkPass(summary, 2, 0);
+        checkPass(summary, 6, 0);
     }
 
     @Test
@@ -68,6 +68,6 @@ public class ProxyConfigurationTest extends AbstractNeodymiumTest
     {
         // test adding proxy configuration to different WebDriver options and validate them
         NeodymiumTestExecutionSummary summary = run(SetProxyForWebDriver.class);
-        checkPass(summary, 4, 0);
+        checkPass(summary, 12, 0);
     }
 }

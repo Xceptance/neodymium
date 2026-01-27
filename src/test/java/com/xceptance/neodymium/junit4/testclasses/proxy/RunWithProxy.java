@@ -10,8 +10,9 @@ import org.openqa.selenium.WebDriverException;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
-
+@Retry(exceptions = "Could not start a new session. Response code 500")
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")
 public class RunWithProxy
