@@ -3,6 +3,7 @@ package com.xceptance.neodymium.junit5.testclasses.webDriver;
 import static com.codeborne.selenide.Condition.attribute;
 import static com.codeborne.selenide.Condition.enabled;
 import static com.codeborne.selenide.Condition.visible;
+import static com.codeborne.selenide.Condition.exist;
 
 import static com.codeborne.selenide.Condition.exactText;
 import static com.codeborne.selenide.Selenide.$;
@@ -60,7 +61,7 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
         {
             $(".fc-cta-consent").click();
         }
-        $("#fileSelector, #uploadBtn input").uploadFile(new File("src/test/resources/2020-in-one-picture.png"));
+        $("#fileSelector, #uploadBtn input").should(exist, Duration.ofMillis(60000)).uploadFile(new File("src/test/resources/2020-in-one-picture.png"));
         $(".file-button").shouldHave(exactText("DOWNLOAD"), Duration.ofMillis(60000));
         $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled, Duration.ofMillis(60000));
         $("button[aria-label='COMBINED'], #downloadAllBtn").click();
