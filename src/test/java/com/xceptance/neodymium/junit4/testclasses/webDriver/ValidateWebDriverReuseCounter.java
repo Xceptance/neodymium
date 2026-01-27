@@ -17,6 +17,7 @@ import com.browserup.bup.BrowserUpProxy;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.WebDriverCache;
 import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
@@ -25,6 +26,7 @@ import com.xceptance.neodymium.util.Neodymium;
 /*
  * Validate that the reuse of a web driver is counted correctly.
  */
+@Retry(exceptions = "Could not start a new session. Response code 500")
 @RunWith(NeodymiumRunner.class)
 public class ValidateWebDriverReuseCounter
 {

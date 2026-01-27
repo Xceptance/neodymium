@@ -46,7 +46,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-ValidateWebDriverClosed-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(ValidateWebDriverClosed.class);
-        checkPass(summary, 2, 0);
+        checkPass(summary, 6, 0);
     }
 
     @Test
@@ -59,7 +59,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-ValidateReuseWebDriver-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(ValidateReuseWebDriver.class);
-        checkPass(summary, 2, 0);
+        checkPass(summary, 6, 0);
     }
 
     @Test
@@ -73,7 +73,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-ValidateWebDriverReuseCounter-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(ValidateWebDriverReuseCounter.class);
-        checkPass(summary, 6, 0);
+        checkPass(summary, 18, 0);
     }
 
     @Test
@@ -86,7 +86,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-ValidateWebDriverMaxReuse-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(ValidateWebDriverMaxReuse.class);
-        checkPass(summary, 5, 0);
+        checkPass(summary, 15, 0);
     }
 
     @Test
@@ -100,7 +100,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-ValidateWebDriverMaxReuseWithTwoWebDrivers-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(ValidateWebDriverMaxReuseWithTwoWebDrivers.class);
-        checkPass(summary, 9, 0);
+        checkPass(summary, 27, 0);
     }
 
     @Test
@@ -113,7 +113,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-ValidateClearReuseWebDriverCache-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(ValidateClearReuseWebDriverCache.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 9, 0);
     }
 
     @Test
@@ -126,7 +126,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-ValidatePreventReuseWebDriver-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(ValidatePreventReuseWebDriver.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 9, 0);
     }
 
     @Test
@@ -141,7 +141,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
 
         // XVFB or a display needed
         NeodymiumTestExecutionSummary summary = run(ValidateKeepWebDriverOpen.class);
-        checkFail(summary, 3, 0, 1);
+        checkFail(summary, 9, 0, 1);
     }
 
     @Test
@@ -156,7 +156,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
 
         // XVFB or a display needed
         NeodymiumTestExecutionSummary summary = run(ValidateKeepWebDriverOpenOnFailure.class);
-        checkFail(summary, 3, 0, 1);
+        checkFail(summary, 9, 0, 1);
     }
 
     @Test
@@ -171,7 +171,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
 
         // XVFB or a display needed
         NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationClassDoesntInterfereWithConfig.class);
-        checkFail(result, 3, 0, 1);
+        checkFail(result, 9, 0, 1);
     }
 
     @Test
@@ -186,7 +186,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
 
         // XVFB or a display needed
         NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationClassDoesntInterfereWithConfig.class);
-        checkFail(result, 3, 0, 1);
+        checkFail(result, 9, 0, 1);
     }
 
     @Test
@@ -201,7 +201,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
 
         // XVFB or a display needed
         NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationMethodDoesntInterfereWithConfig.class);
-        checkFail(result, 3, 0, 1);
+        checkFail(result, 9, 0, 1);
     }
 
     @Test
@@ -216,7 +216,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
 
         // XVFB or a display needed
         NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationMethodDoesntInterfereWithConfig.class);
-        checkFail(result, 3, 0, 1);
+        checkFail(result, 9, 0, 1);
     }
 
     @Test
@@ -231,7 +231,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
 
         // XVFB or a display needed
         NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationClassOverridesConfig.class);
-        checkFail(result, 3, 0, 1);
+        checkFail(result, 9, 0, 1);
     }
 
     @Test
@@ -246,7 +246,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
 
         // XVFB or a display needed
         NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationClassOverridesConfig.class);
-        checkFail(result, 3, 0, 1);
+        checkFail(result, 9, 0, 1);
     }
 
     @Test
@@ -261,7 +261,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
 
         // XVFB or a display needed
         NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationMethodOverridesConfig.class);
-        checkFail(result, 3, 0, 1);
+        checkFail(result, 9, 0, 1);
     }
 
     @Test
@@ -276,7 +276,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
 
         // XVFB or a display needed
         NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationMethodOverridesConfig.class);
-        checkFail(result, 3, 0, 1);
+        checkFail(result, 9, 0, 1);
     }
 
     @Test
@@ -291,7 +291,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
 
         // XVFB or a display needed
         NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationMethodOverridesClass.class);
-        checkFail(result, 3, 0, 1);
+        checkFail(result, 9, 0, 1);
     }
 
     @Test
@@ -307,7 +307,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-LocalProxyTrustAllServers-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(LocalProxyTrustAllServers.class);
-        checkPass(summary, 1, 0);
+        checkPass(summary, 3, 0);
     }
 
     @Test
@@ -338,7 +338,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-LocalProxyUsingProvidedCertificates-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(LocalProxyUsingProvidedCertificates.class);
-        checkPass(summary, 1, 0);
+        checkPass(summary, 3, 0);
     }
 
     @Test
@@ -352,7 +352,7 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-LocalProxyUsingProvidedCertificatesRuntimeException-neodymium.properties", properties);
 
         NeodymiumTestExecutionSummary summary = run(LocalProxyUsingProvidedCertificatesRuntimeException.class);
-        checkFail(summary, 1, 0, 1,
+        checkFail(summary, 3, 0, 1,
                   "java.lang.RuntimeException: The local proxy certificate isn't fully configured. Please check: certificate archive type, certificate archive file, certificate name and certificate password.");
     }
 

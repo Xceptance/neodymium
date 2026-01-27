@@ -11,6 +11,7 @@ import com.browserup.bup.BrowserUpProxy;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.WebDriverCache;
 import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.util.Neodymium;
@@ -19,6 +20,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Validate that a web driver can be reused.
  * This is the minimal test setup for this feature. 
  */
+@Retry(exceptions = "Could not start a new session. Response code 500")
 public class ValidateReuseWebDriver
 {
     private static WebDriver webDriver1;

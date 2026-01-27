@@ -10,6 +10,7 @@ import org.openqa.selenium.WebDriver;
 import com.browserup.bup.BrowserUpProxy;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.WebDriverCache;
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.util.Neodymium;
@@ -20,6 +21,7 @@ import com.xceptance.neodymium.util.WebDriverUtils;
  reuse of a web driver could be prevented programmatically.
  * Validate that the other web driver is not reused.
  */
+@Retry(exceptions = "Could not start a new session. Response code 500")
 public class ValidatePreventReuseWebDriver
 {
     private static WebDriver webDriver1;

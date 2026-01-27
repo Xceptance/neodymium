@@ -15,6 +15,7 @@ import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.StartNewBrowserForCleanUp;
 import com.xceptance.neodymium.common.browser.StartNewBrowserForSetUp;
 import com.xceptance.neodymium.common.browser.WebDriverCache;
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.util.Neodymium;
@@ -24,6 +25,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Validate that the web driver is not reused.
  * Attention: this test needs to use browsers that are not headless.
  */
+@Retry(exceptions = "Could not start a new session. Response code 500")
 @StartNewBrowserForSetUp
 @StartNewBrowserForCleanUp
 public class ValidateKeepWebDriverOpen

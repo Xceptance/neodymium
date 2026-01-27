@@ -15,10 +15,11 @@ import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.KeepBrowserOpen;
 import com.xceptance.neodymium.common.browser.WebDriverCache;
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.util.Neodymium;
-
+@Retry(exceptions = "Could not start a new session. Response code 500")
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 @RunWith(NeodymiumRunner.class)
 @KeepBrowserOpen(onlyOnFailure = false)
