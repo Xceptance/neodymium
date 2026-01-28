@@ -2,6 +2,7 @@ package com.xceptance.neodymium.junit4.testclasses.multibrowser;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import org.junit.Assert;
 import org.junit.Test;
@@ -12,7 +13,7 @@ import static com.codeborne.selenide.Condition.matchText;
 import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
-
+@Retry(exceptions = "Could not start a new session")
 @RunWith(NeodymiumRunner.class)
 @Browser("Safari_Browserstack")
 public class BrowserstackHomePageTest

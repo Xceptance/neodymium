@@ -132,7 +132,7 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         // an empty browser tag (@Browser({""})) should raise an error
         Result result = JUnitCore.runClasses(RandomBrowserClassLevel.class);
-        checkPass(result, 2, 0);
+        checkPass(result, 6, 0);
     }
 
     @Test
@@ -140,21 +140,21 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         // an empty browser tag (@Browser({""})) should raise an error
         Result result = JUnitCore.runClasses(RandomBrowserMethodLevel.class);
-        checkPass(result, 2, 0);
+        checkPass(result, 6, 0);
     }
 
     @Test
     public void testMethodBrowserAnnotationOverwritesClassRandomBrowser()
     {
         Result result = JUnitCore.runClasses(MethodBrowserAnnotationOverwritesClassRandomBrowser.class);
-        checkPass(result, 3, 0);
+        checkPass(result, 9, 0);
     }
 
     @Test
     public void testRandomBrowserMixed()
     {
         Result result = JUnitCore.runClasses(RandomBrowserMixed.class);
-        checkPass(result, 2, 0);
+        checkPass(result, 6, 0);
     }
 
     @Test
@@ -163,7 +163,7 @@ public class BrowserStatementTest extends NeodymiumTest
         // the test from RandomBrowserChild should be run 2 times, as the corresponding annotations should be inherited
         // from the RandomBrowserParent class
         Result result = JUnitCore.runClasses(RandomBrowsersChild.class);
-        checkPass(result, 2, 0);
+        checkPass(result, 6, 0);
     }
 
     @Test
@@ -172,7 +172,7 @@ public class BrowserStatementTest extends NeodymiumTest
         // the test from RandomBrowsersOverwritingChild should be run 3 times, as the corresponding annotations from
         // RandomBrowserParent class should be overwritten
         Result result = JUnitCore.runClasses(RandomBrowsersOverwritingChild.class);
-        checkPass(result, 3, 0);
+        checkPass(result, 9, 0);
     }
 
     @Test
@@ -210,7 +210,7 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         // by default, new browser is started for each @Before
         Result result = JUnitCore.runClasses(StartBrowserForSetUp.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -218,7 +218,7 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         // by default, new browser is started for each @After
         Result result = JUnitCore.runClasses(NewBrowserIsNotStartedForOneOfSetUps.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -230,7 +230,7 @@ public class BrowserStatementTest extends NeodymiumTest
         addPropertiesForTest("temp-testNewBrowserIsNotStartedForSetUp-neodymium.properties", properties);
         // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
         Result result = JUnitCore.runClasses(NewBrowserIsNotStartedForSetUp.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
         ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
     }
 
@@ -254,7 +254,7 @@ public class BrowserStatementTest extends NeodymiumTest
         // if test class, marked to run without browser but it's not marked that no new browser should be started for
         // @After method, Runtime Exception should be thrown
         Result result = JUnitCore.runClasses(StartNewBrowserForOneOfTheBefores.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -263,7 +263,7 @@ public class BrowserStatementTest extends NeodymiumTest
         // although test class is marked to be run without browser, if @After method is annotated with @Browser, the
         // browser should be started for clean up
         Result result = JUnitCore.runClasses(ClassBrowserSuppressedBeforeWithBrowser.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -271,7 +271,7 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         // it should be possible to use different browser profle for clean up (using @Browser annotation)
         Result result = JUnitCore.runClasses(OverwriteBrowserForSetUp.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -279,7 +279,7 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         // by default, new browser is started for each @After
         Result result = JUnitCore.runClasses(StartBrowserForCleanUp.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -287,7 +287,7 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         // by default, new browser is started for each @After
         Result result = JUnitCore.runClasses(NewBrowserIsNotStartedForOneOfCleanUps.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -319,7 +319,7 @@ public class BrowserStatementTest extends NeodymiumTest
         // if test class, marked to run without browser but it's not marked that no new browser should be started for
         // @After method, Runtime Exception should be thrown
         Result result = JUnitCore.runClasses(StartNewBrowserForOneOfTheAfters.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -328,7 +328,7 @@ public class BrowserStatementTest extends NeodymiumTest
         // although test class is marked to be run without browser, if @After method is annotated with @Browser, the
         // browser should be started for clean up
         Result result = JUnitCore.runClasses(ClassBrowserSuppressedAfterWithBrowser.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -336,7 +336,7 @@ public class BrowserStatementTest extends NeodymiumTest
     {
         // it should be possible to use different browser profle for clean up (using @Browser annotation)
         Result result = JUnitCore.runClasses(OverwriteBrowserForCleanUp.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -345,7 +345,7 @@ public class BrowserStatementTest extends NeodymiumTest
         System.setProperty("browserdefinition", "Chrome_headless");
         Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
         System.setProperty("browserdefinition", "");
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -367,7 +367,7 @@ public class BrowserStatementTest extends NeodymiumTest
         // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
         Result result = JUnitCore.runClasses(SystemPropertyBrowserFilter.class);
         ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 
     @Test

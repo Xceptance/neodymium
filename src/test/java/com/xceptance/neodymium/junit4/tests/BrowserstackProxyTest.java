@@ -56,6 +56,6 @@ public class BrowserstackProxyTest extends NeodymiumTest
     public void testBrowserstackProxySuccess()
     {
         Result result = JUnitCore.runClasses(BrowserstackHomePageTest.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 }
