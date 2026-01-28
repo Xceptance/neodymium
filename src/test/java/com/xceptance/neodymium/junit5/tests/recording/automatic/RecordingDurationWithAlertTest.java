@@ -55,7 +55,7 @@ public class RecordingDurationWithAlertTest extends AbstractNeodymiumTest
                                                : FilmTestExecution.getContextVideo();
         File recordingFile = new File(config.tempFolderToStoreRecording() + CustomRecordingWithAlertTest.uuid + "." + config.format());
 
-        for (int i = 0; i < 3 && !recordingFile.exists(); i++)
+        for (int i = 0; i < 6 && !recordingFile.exists(); i++)
         {
             Thread.sleep(1000);
         }

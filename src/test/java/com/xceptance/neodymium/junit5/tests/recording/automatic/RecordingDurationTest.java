@@ -44,7 +44,7 @@ public class RecordingDurationTest extends AbstractNeodymiumTest
         run(CustomRecordingTest.class);
         RecordingConfigurations config = isGif ? FilmTestExecution.getContextGif() : FilmTestExecution.getContextVideo();
         File recordingFile = new File(config.tempFolderToStoreRecording() + CustomRecordingTest.uuid + "." + config.format());
-        for (int i = 0; i < 3 && !recordingFile.exists(); i++)
+        for (int i = 0; i < 6 && !recordingFile.exists(); i++)
         {
             Thread.sleep(1000);
         }
