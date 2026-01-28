@@ -9,10 +9,8 @@ import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.safari.SafariOptions;
 
 import com.xceptance.neodymium.common.browser.BrowserRunnerHelper;
-import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
-@Retry(exceptions = "Could not start a new session. Response code 500")
 public class SetProxyForWebDriver
 {
     @NeodymiumTest

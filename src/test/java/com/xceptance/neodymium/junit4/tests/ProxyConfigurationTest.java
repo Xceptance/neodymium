@@ -69,6 +69,6 @@ public class ProxyConfigurationTest extends NeodymiumTest
     {
         // test adding proxy configuration to different WebDriver options and validate them
         Result result = JUnitCore.runClasses(SetProxyForWebDriver.class);
-        checkPass(result, 12, 0);
+        checkPass(result, 4, 0);
     }
 }
