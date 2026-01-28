@@ -50,6 +50,6 @@ public class BrowserstackTest extends AbstractNeodymiumTest
     public void testBrowserstack()
     {
         NeodymiumTestExecutionSummary summary = run(BrowserstackHomePageTest.class);
-        checkPass(summary, 1, 0);
+        checkPass(summary, 3, 0);
     }
 }

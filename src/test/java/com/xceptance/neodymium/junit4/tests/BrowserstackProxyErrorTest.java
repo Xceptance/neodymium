@@ -56,6 +56,6 @@ public class BrowserstackProxyErrorTest extends NeodymiumTest
     public void testBrowserstackProxyAuthError()
     {
         Result result = JUnitCore.runClasses(BrowserstackHomePageTest.class);
-        checkFail(result, 1, 0, 1);
+        checkFail(result, 3, 0, 1);
     }
 }

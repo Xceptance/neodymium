@@ -50,6 +50,6 @@ public class BrowserstackTest extends NeodymiumTest
     public void testBrowserstack()
     {
         Result result = JUnitCore.runClasses(BrowserstackHomePageTest.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 3, 0);
     }
 }
