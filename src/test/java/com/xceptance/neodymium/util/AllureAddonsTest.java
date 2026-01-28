@@ -151,8 +151,9 @@ public class AllureAddonsTest
     {
         DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
         DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
+        AllureAddons.lockEnvironmentInformationFile();
         Document doc = docBuilder.parse(getEnvFile());
-
+        AllureAddons.unlockEnvironmentFile();
         Node environment = doc.getDocumentElement();
         Assert.assertEquals("Wrong root node name in environments-test.xml", "environment", environment.getNodeName());
 

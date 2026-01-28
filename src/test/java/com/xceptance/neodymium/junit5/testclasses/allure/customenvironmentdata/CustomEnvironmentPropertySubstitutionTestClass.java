@@ -6,7 +6,7 @@ import com.xceptance.neodymium.util.AllureAddons;
 import java.io.File;
 import java.util.Map;
 
-import static com.xceptance.neodymium.junit5.testclasses.allure.customenvironmentdata.XmlToMapUtil.getXmlParameterMap;
+import static com.xceptance.neodymium.util.XmlToMapUtil.getXmlParameterMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

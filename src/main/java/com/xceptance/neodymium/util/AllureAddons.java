@@ -403,6 +403,39 @@ public class AllureAddons
         addEnvironmentInformation(environmentValuesSet, EnvironmentInfoMode.REPLACE);
     }
 
+    static synchronized boolean lockEnvironmentInformationFile() throws IOException
+    {
+        Path lockFilePath = getEnvironmentLockFile();
+        boolean lock = false;
+        int retries = 0;
+        do
+        {
+            if (retries > 0)
+            {
+                Selenide.sleep(100);
+            }
+            try
+            {
+                Files.createFile(lockFilePath);
+                lockFilePath.toFile().deleteOnExit();
+                lock = true;
+                // If we reach here, we successfully "won" the race and created the file.
+            }
+            catch (FileAlreadyExistsException e)
+            {
+                // Another VM created it first. Wait and try again.
+            }
+            retries++;
+        }
+        while (retries < MAX_RETRY_COUNT && !lock);
+        return lock;
+    }
+
+    private static Path getEnvironmentLockFile()
+    {
+        return Paths.get(getAllureResultsFolder().getAbsoluteFile() + File.separator + "environment.xml.lock");
+    }
+
     /**
      * Adds information about environment to the report
      *
@@ -416,30 +449,7 @@ public class AllureAddons
     {
         try
         {
-            Path lockFilePath =Paths.get(getAllureResultsFolder().getAbsoluteFile() + File.separator +"environment.xml.lock");
-            boolean lock = false;
-            int retries = 0;
-            do
-            {
-                if (retries > 0)
-                {
-                    Selenide.sleep(100);
-                }
-                try
-                {
-                    Files.createFile(lockFilePath);
-                    lockFilePath.toFile().deleteOnExit();
-                    lock = true;
-                    // If we reach here, we successfully "won" the race and created the file.
-                }
-                catch (FileAlreadyExistsException e)
-                {
-                    // Another VM created it first. Wait and try again.
-                }
-                retries++;
-            }
-            while (retries < MAX_RETRY_COUNT && !lock);
-            if (lock)
+            if (lockEnvironmentInformationFile())
             {
                 DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
                 DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
@@ -600,7 +610,7 @@ public class AllureAddons
                         transformer.transform(source, result);
                     }
                 }
-                Files.delete(lockFilePath);
+                unlockEnvironmentFile();
             }
             else
             {
@@ -613,6 +623,11 @@ public class AllureAddons
         {
             LOGGER.warn("Failed to add information about environment to Allure report", e);
         }
+    }
+
+    static void unlockEnvironmentFile() throws IOException
+    {
+        Files.delete(getEnvironmentLockFile());
     }
 
     /**
