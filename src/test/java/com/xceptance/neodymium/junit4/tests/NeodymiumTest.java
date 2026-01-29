@@ -23,7 +23,7 @@ import org.apache.commons.io.FileUtils;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.runner.Description;
-
+import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
 import org.junit.runner.notification.Failure;
 import org.junit.runners.model.FrameworkMethod;
@@ -337,7 +337,7 @@ public abstract class NeodymiumTest {
 	}
 
 	public Result run(Class<?> testClass) {
-		Result result = run(testClass);
+		Result result = JUnitCore.runClasses(testClass);
 		for (int i = 0; i < 3 && result != null && result.getFailures() != null && !result.getFailures().isEmpty()
 				&& result.getFailures().stream()
 						.anyMatch(e -> e.getException() != null && e.getException().getMessage() != null
