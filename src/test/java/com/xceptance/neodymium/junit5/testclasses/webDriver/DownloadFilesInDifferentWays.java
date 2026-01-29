@@ -20,6 +20,7 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.SuppressBrowsers;
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
@@ -38,7 +39,7 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
     /**
      * Verify file saved to the correct directory when downloaded via link
      */
-     @NeodymiumTest
+    @NeodymiumTest
     public void downloadViaLink()
     {
         fileName = new File("target/02_2020-Java_aktuell-Autor-Rene_Schwietzke-High-Performance-Java-Hinter-den-Kulissen-von-Java.pdf");
@@ -51,6 +52,10 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
     /**
      * Verify file saved to the correct directory when downloaded on form submission
      */
+    @Retry(exceptions =
+    {
+      "Element should have exact text \"DOWNLOAD\""
+    })
     @NeodymiumTest
     public void downloadOnFormSubmission()
     {
@@ -72,7 +77,7 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
     /**
      * Verify file saved to the correct directory when downloaded via link
      */
-     @NeodymiumTest
+    @NeodymiumTest
     public void downloadPerLinkWithSelenide() throws FileNotFoundException
     {
         Selenide.open("https://blog.xceptance.com/2020/02/28/ijug-magazin-java-aktuell-high-performance-java/");

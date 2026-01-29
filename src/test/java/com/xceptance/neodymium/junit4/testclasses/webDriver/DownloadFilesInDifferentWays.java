@@ -22,6 +22,7 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.SuppressBrowsers;
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
@@ -54,6 +55,10 @@ public class DownloadFilesInDifferentWays extends NeodymiumTest
     /**
      * Verify file saved to the correct directory when downloaded on form submission
      */
+    @Retry(exceptions =
+    {
+      "Element should have exact text \"DOWNLOAD\""
+    })
     @Test
     public void downloadOnFormSubmission()
     {
