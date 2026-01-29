@@ -13,11 +13,9 @@ import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.KeepBrowserOpen;
 import com.xceptance.neodymium.common.browser.WebDriverCache;
-import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.util.Neodymium;
-@Retry(exceptions = "Could not start a new session. Response code 500")
 @TestMethodOrder(MethodOrderer.MethodName.class)
 @Browser("Chrome_1024x768")
 public class ValidateKeepBrowserOpenAnnotationMethodDoesntInterfereWithConfig

@@ -6,7 +6,7 @@ import org.aeonbits.owner.ConfigFactory;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import java.io.File;
@@ -39,7 +39,7 @@ public class TestCaseFilteringTest extends NeodymiumTest
     @Test
     public void testTestCaseFiltering()
     {
-        Result result = JUnitCore.runClasses(TestCaseFiltering.class);
+        Result result = run(TestCaseFiltering.class);
         checkPass(result, 2, 0);
     }
 

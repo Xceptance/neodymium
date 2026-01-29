@@ -11,7 +11,7 @@ import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Assert;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.RunWith;
 
 import com.xceptance.neodymium.common.recording.FilmTestExecution;
@@ -53,7 +53,7 @@ public class RecordingDurationTest extends NeodymiumTest
         writeMapToPropertiesFile(properties1, tempConfigFile1);
         ConfigFactory.setProperty(FilmTestExecution.TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:" + fileLocation);
         tempFiles.add(tempConfigFile1);
-        JUnitCore.runClasses(AutomaticRecordingTest.class);
+        run(AutomaticRecordingTest.class);
         RecordingConfigurations config = isGif || isMixed ? FilmTestExecution.getContextGif() : FilmTestExecution.getContextVideo();
         recordingFile100 = new File(config.tempFolderToStoreRecording() + AutomaticRecordingTest.uuid_100 + "." + config.format());
         recordingFile1000 = new File((isMixed ? FilmTestExecution.getContextVideo().tempFolderToStoreRecording() : config.tempFolderToStoreRecording())

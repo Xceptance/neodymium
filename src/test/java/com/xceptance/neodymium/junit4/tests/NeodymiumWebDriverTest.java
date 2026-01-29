@@ -5,7 +5,7 @@ import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.remote.RemoteWebDriver;
@@ -46,8 +46,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
 
         addPropertiesForTest("temp-ValidateWebDriverClosed-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(ValidateWebDriverClosed.class);
-        checkPass(result, 6, 0);
+        Result result = run(ValidateWebDriverClosed.class);
+        checkPass(result, 2, 0);
     }
 
     @Test
@@ -59,8 +59,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
 
         addPropertiesForTest("temp-ValidateReuseWebDriver-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(ValidateReuseWebDriver.class);
-        checkPass(result, 6, 0);
+        Result result = run(ValidateReuseWebDriver.class);
+        checkPass(result, 2, 0);
     }
 
     @Test
@@ -73,8 +73,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
 
         addPropertiesForTest("temp-ValidateWebDriverReuseCounter-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(ValidateWebDriverReuseCounter.class);
-        checkPass(result, 18, 0);
+        Result result = run(ValidateWebDriverReuseCounter.class);
+        checkPass(result, 6, 0);
     }
 
     @Test
@@ -86,8 +86,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
 
         addPropertiesForTest("temp-ValidateWebDriverMaxReuse-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(ValidateWebDriverMaxReuse.class);
-        checkPass(result, 15, 0);
+        Result result = run(ValidateWebDriverMaxReuse.class);
+        checkPass(result, 5, 0);
     }
 
     @Test
@@ -100,8 +100,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
 
         addPropertiesForTest("temp-ValidateWebDriverMaxReuseWithTwoWebDrivers-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(ValidateWebDriverMaxReuseWithTwoWebDrivers.class);
-        checkPass(result, 27, 0);
+        Result result = run(ValidateWebDriverMaxReuseWithTwoWebDrivers.class);
+        checkPass(result, 9, 0);
     }
 
     @Test
@@ -113,8 +113,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
 
         addPropertiesForTest("temp-ValidateClearReuseWebDriverCache-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(ValidateClearReuseWebDriverCache.class);
-        checkPass(result, 9, 0);
+        Result result = run(ValidateClearReuseWebDriverCache.class);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -126,8 +126,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
 
         addPropertiesForTest("temp-ValidatePreventReuseWebDriver-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(ValidatePreventReuseWebDriver.class);
-        checkPass(result, 9, 0);
+        Result result = run(ValidatePreventReuseWebDriver.class);
+        checkPass(result, 3, 0);
     }
 
     @Test
@@ -141,8 +141,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
         addPropertiesForTest("temp-ValidateKeepWebDriverOpen-neodymium.properties", properties);
 
         // XVFB or a display needed
-        Result result = JUnitCore.runClasses(ValidateKeepWebDriverOpen.class);
-        checkFail(result, 9, 0, 1);
+        Result result = run(ValidateKeepWebDriverOpen.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -156,8 +156,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
         addPropertiesForTest("temp-ValidateKeepWebDriverOpenOnFailure-neodymium.properties", properties);
 
         // XVFB or a display needed
-        Result result = JUnitCore.runClasses(ValidateKeepWebDriverOpenOnFailure.class);
-        checkFail(result, 9, 0, 1);
+        Result result = run(ValidateKeepWebDriverOpenOnFailure.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -171,8 +171,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationClassDoesntInterfereWithConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        Result result = JUnitCore.runClasses(ValidateKeepBrowserOpenAnnotationClassDoesntInterfereWithConfig.class);
-        checkFail(result, 9, 0, 1);
+        Result result = run(ValidateKeepBrowserOpenAnnotationClassDoesntInterfereWithConfig.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -186,8 +186,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
         addPropertiesForTest("temp-ValidateKeepBrowserOpenOnFailureAnnotationClassDoesntInterfereWithConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        Result result = JUnitCore.runClasses(ValidateKeepBrowserOpenOnFailureAnnotationClassDoesntInterfereWithConfig.class);
-        checkFail(result, 9, 0, 1);
+        Result result = run(ValidateKeepBrowserOpenOnFailureAnnotationClassDoesntInterfereWithConfig.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -201,8 +201,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationMethodDoesntInterfereWithConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        Result result = JUnitCore.runClasses(ValidateKeepBrowserOpenAnnotationMethodDoesntInterfereWithConfig.class);
-        checkFail(result, 9, 0, 1);
+        Result result = run(ValidateKeepBrowserOpenAnnotationMethodDoesntInterfereWithConfig.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -216,8 +216,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
         addPropertiesForTest("temp-ValidateKeepBrowserOpenOnFailureAnnotationMethodDoesntInterfereWithConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        Result result = JUnitCore.runClasses(ValidateKeepBrowserOpenOnFailureAnnotationMethodDoesntInterfereWithConfig.class);
-        checkFail(result, 9, 0, 1);
+        Result result = run(ValidateKeepBrowserOpenOnFailureAnnotationMethodDoesntInterfereWithConfig.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -231,8 +231,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationClassOverridesConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        Result result = JUnitCore.runClasses(ValidateKeepBrowserOpenAnnotationClassOverridesConfig.class);
-        checkFail(result, 9, 0, 1);
+        Result result = run(ValidateKeepBrowserOpenAnnotationClassOverridesConfig.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -246,8 +246,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
         addPropertiesForTest("temp-ValidateKeepBrowserOpenOnFailureAnnotationClassOverridesConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        Result result = JUnitCore.runClasses(ValidateKeepBrowserOpenOnFailureAnnotationClassOverridesConfig.class);
-        checkFail(result, 9, 0, 1);
+        Result result = run(ValidateKeepBrowserOpenOnFailureAnnotationClassOverridesConfig.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -261,8 +261,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationMethodOverridesConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        Result result = JUnitCore.runClasses(ValidateKeepBrowserOpenAnnotationMethodOverridesConfig.class);
-        checkFail(result, 9, 0, 1);
+        Result result = run(ValidateKeepBrowserOpenAnnotationMethodOverridesConfig.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -276,8 +276,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationMethodOverridesConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        Result result = JUnitCore.runClasses(ValidateKeepBrowserOpenOnFailureAnnotationMethodOverridesConfig.class);
-        checkFail(result, 9, 0, 1);
+        Result result = run(ValidateKeepBrowserOpenOnFailureAnnotationMethodOverridesConfig.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -291,8 +291,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationMethodOverridesConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        Result result = JUnitCore.runClasses(ValidateKeepBrowserOpenAnnotationMethodOverridesClass.class);
-        checkFail(result, 9, 0, 1);
+        Result result = run(ValidateKeepBrowserOpenAnnotationMethodOverridesClass.class);
+        checkFail(result, 3, 0, 1);
     }
 
     @Test
@@ -307,8 +307,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
 
         addPropertiesForTest("temp-LocalProxyTrustAllServers-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(LocalProxyTrustAllServers.class);
-        checkPass(result, 3, 0);
+        Result result = run(LocalProxyTrustAllServers.class);
+        checkPass(result, 1, 0);
     }
 
     @Test
@@ -320,8 +320,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
 
         addPropertiesForTest("temp-LocalProxyUsingSelfCreatedCertificates-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(LocalProxyUsingSelfCreatedCertificates.class);
-        checkPass(result, 3, 0);
+        Result result = run(LocalProxyUsingSelfCreatedCertificates.class);
+        checkPass(result, 1, 0);
     }
 
     @Test
@@ -338,8 +338,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
 
         addPropertiesForTest("temp-LocalProxyUsingProvidedCertificates-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(LocalProxyUsingProvidedCertificates.class);
-        checkPass(result, 3, 0);
+        Result result = run(LocalProxyUsingProvidedCertificates.class);
+        checkPass(result, 1, 0);
     }
 
     @Test
@@ -352,8 +352,8 @@ public class NeodymiumWebDriverTest extends NeodymiumTest
 
         addPropertiesForTest("temp-LocalProxyUsingProvidedCertificatesRuntimeException-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(LocalProxyUsingProvidedCertificatesRuntimeException.class);
-        checkFail(result, 3, 0, 1,
+        Result result = run(LocalProxyUsingProvidedCertificatesRuntimeException.class);
+        checkFail(result, 1, 0, 1,
                   "The local proxy certificate isn't fully configured. Please check: certificate archive type, certificate archive file, certificate name and certificate password.");
     }
 

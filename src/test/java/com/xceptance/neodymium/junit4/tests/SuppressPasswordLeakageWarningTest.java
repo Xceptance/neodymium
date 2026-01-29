@@ -8,7 +8,7 @@ import java.util.Map;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
@@ -44,7 +44,7 @@ public class SuppressPasswordLeakageWarningTest extends NeodymiumTest
     public void testSuppressPasswordLeakageWarning() throws IOException
     {
         SuppressPasswordLeakageWarning.shouldBeSuppressed = true;
-        Result result = JUnitCore.runClasses(SuppressPasswordLeakageWarning.class);
+        Result result = run(SuppressPasswordLeakageWarning.class);
         checkPass(result, 2, 0);
     }
 
@@ -53,7 +53,7 @@ public class SuppressPasswordLeakageWarningTest extends NeodymiumTest
     public void testDoNotSuppressPasswordLeakageWarning() throws IOException
     {
         SuppressPasswordLeakageWarning.shouldBeSuppressed = false;
-        Result result = JUnitCore.runClasses(SuppressPasswordLeakageWarning.class);
+        Result result = run(SuppressPasswordLeakageWarning.class);
         checkPass(result, 2, 0);
     }
 }

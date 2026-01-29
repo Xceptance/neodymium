@@ -2,7 +2,6 @@ package com.xceptance.neodymium.junit5.testclasses.multibrowser;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import org.junit.jupiter.api.Assertions;
 
@@ -12,7 +11,6 @@ import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
 
-@Retry(exceptions = "Could not start a new session")
 @Browser("Safari_Browserstack")
 public class BrowserstackHomePageTest
 {

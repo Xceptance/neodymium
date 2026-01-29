@@ -8,7 +8,7 @@ import org.apache.commons.io.FileUtils;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import java.io.File;
@@ -53,7 +53,7 @@ public class CustomEnvironmentDataOrderTest extends NeodymiumTest
     @Test
     public void testCustomEnvironmentDataOrder()
     {
-        Result result = JUnitCore.runClasses(CustomEnvironmentDataOrderTestClass.class);
+        Result result = run(CustomEnvironmentDataOrderTestClass.class);
         checkPass(result, 1, 0);
     }
 

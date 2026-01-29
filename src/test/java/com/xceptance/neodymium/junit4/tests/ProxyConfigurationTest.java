@@ -6,7 +6,7 @@ import com.xceptance.neodymium.util.Neodymium;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import java.io.File;
@@ -60,7 +60,7 @@ public class ProxyConfigurationTest extends NeodymiumTest
     public void testExecutionWithProxy()
     {
         // test proxy configuration as far as possible without setting up a proxy
-        Result result = JUnitCore.runClasses(RunWithProxy.class);
+        Result result = run(RunWithProxy.class);
         checkPass(result, 6, 0);
     }
 
@@ -68,7 +68,7 @@ public class ProxyConfigurationTest extends NeodymiumTest
     public void testSettingOfProxyForWebdriver()
     {
         // test adding proxy configuration to different WebDriver options and validate them
-        Result result = JUnitCore.runClasses(SetProxyForWebDriver.class);
+        Result result = run(SetProxyForWebDriver.class);
         checkPass(result, 4, 0);
     }
 }

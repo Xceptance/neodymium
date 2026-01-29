@@ -9,10 +9,8 @@ import org.junit.runner.RunWith;
 import com.browserup.bup.proxy.auth.AuthType;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.Neodymium;
-@Retry(exceptions = "Could not start a new session. Response code 500")
 @RunWith(NeodymiumRunner.class)
 public class LocalProxyUsingProvidedCertificates
 {

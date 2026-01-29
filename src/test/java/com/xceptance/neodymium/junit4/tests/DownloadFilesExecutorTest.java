@@ -7,7 +7,7 @@ import java.util.Map;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
@@ -47,7 +47,7 @@ public class DownloadFilesExecutorTest extends NeodymiumTest
     @Test
     public void test()
     {
-        Result result = JUnitCore.runClasses(DownloadFilesInDifferentWays.class);
+        Result result = run(DownloadFilesInDifferentWays.class);
         checkPass(result, 10, 0);
     }
 }

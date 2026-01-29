@@ -12,8 +12,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.runner.JUnitCore;
-import org.junit.runner.Result;
 import org.openqa.selenium.MutableCapabilities;
 import org.openqa.selenium.remote.CapabilityType;
 
@@ -132,7 +130,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         // an empty browser tag (@Browser({""})) should raise an error
         NeodymiumTestExecutionSummary summary = run(RandomBrowserClassLevel.class);
-        checkPass(summary, 6, 0);
+        checkPass(summary, 2, 0);
     }
 
     @Test
@@ -140,21 +138,21 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         // an empty browser tag (@Browser({""})) should raise an error
         NeodymiumTestExecutionSummary summary = run(RandomBrowserMethodLevel.class);
-        checkPass(summary, 6, 0);
+        checkPass(summary, 2, 0);
     }
 
     @Test
     public void testMethodBrowserAnnotationOverwritesClassRandomBrowser()
     {
         NeodymiumTestExecutionSummary summary = run(MethodBrowserAnnotationOverwritesClassRandomBrowser.class);
-        checkPass(summary, 9, 0);
+        checkPass(summary, 3, 0);
     }
 
     @Test
     public void testRandomBrowserMixed()
     {
         NeodymiumTestExecutionSummary summary = run(RandomBrowserMixed.class);
-        checkPass(summary, 6, 0);
+        checkPass(summary, 2, 0);
     }
 
     @Test
@@ -163,7 +161,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         // the test from RandomBrowserChild should be run 2 times, as the corresponding annotations should be inherited
         // from the RandomBrowserParent class
         NeodymiumTestExecutionSummary summary = run(RandomBrowsersChild.class);
-        checkPass(summary, 6, 0);
+        checkPass(summary, 2, 0);
     }
 
     @Test
@@ -172,7 +170,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         // the test from RandomBrowsersOverwritingChild should be run 3 times, as the corresponding annotations from
         // RandomBrowserParent class should be overwritten
         NeodymiumTestExecutionSummary summary = run(RandomBrowsersOverwritingChild.class);
-        checkPass(summary, 9, 0);
+        checkPass(summary, 3, 0);
     }
 
     @Test
@@ -210,7 +208,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         // by default, new browser is started for each @Before
         NeodymiumTestExecutionSummary summary = run(StartBrowserForSetUp.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -218,7 +216,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         // by default, new browser is started for each @After
         NeodymiumTestExecutionSummary summary = run(NewBrowserIsNotStartedForOneOfSetUps.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -230,7 +228,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-testNewBrowserIsNotStartedForSetUp-neodymium.properties", properties);
         // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
         NeodymiumTestExecutionSummary summary = run(NewBrowserIsNotStartedForSetUp.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
         ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
     }
 
@@ -254,7 +252,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         // if test class, marked to run without browser but it's not marked that no new browser should be started for
         // @After method, Runtime Exception should be thrown
         NeodymiumTestExecutionSummary summary = run(StartNewBrowserForOneOfTheBefores.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -263,7 +261,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         // although test class is marked to be run without browser, if @After method is annotated with @Browser, the
         // browser should be started for clean up
         NeodymiumTestExecutionSummary summary = run(ClassBrowserSuppressedBeforeWithBrowser.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -271,7 +269,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         // it should be possible to use different browser profle for clean up (using @Browser annotation)
         NeodymiumTestExecutionSummary summary = run(OverwriteBrowserForSetUp.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -279,7 +277,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         // by default, new browser is started for each @After
         NeodymiumTestExecutionSummary summary = run(StartBrowserForCleanUp.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -287,7 +285,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         // by default, new browser is started for each @After
         NeodymiumTestExecutionSummary summary = run(NewBrowserIsNotStartedForOneOfCleanUps.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -299,7 +297,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         addPropertiesForTest("temp-NewBrowserIsNotStartedForCleanUp-neodymium.properties", properties);
         // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
         NeodymiumTestExecutionSummary summary = run(NewBrowserIsNotStartedForCleanUp.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
         ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
     }
 
@@ -320,7 +318,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         // if test class, marked to run without browser but it's not marked that no new browser should be started for
         // @After method, Runtime Exception should be thrown
         NeodymiumTestExecutionSummary summary = run(StartNewBrowserForOneOfTheAfters.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -329,7 +327,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         // although test class is marked to be run without browser, if @After method is annotated with @Browser, the
         // browser should be started for clean up
         NeodymiumTestExecutionSummary summary = run(ClassBrowserSuppressedAfterWithBrowser.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -337,7 +335,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         // it should be possible to use different browser profle for clean up (using @Browser annotation)
         NeodymiumTestExecutionSummary summary = run(OverwriteBrowserForCleanUp.class);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -346,7 +344,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         System.setProperty("browserdefinition", "Chrome_headless");
         NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
         System.setProperty("browserdefinition", "");
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -355,7 +353,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         System.setProperty("browserdefinition", "Chrome_notExisting");
         NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
         System.setProperty("browserdefinition", "");
-        checkPass(summary, 0, 3);
+        checkPass(summary, 0, 1);
     }
 
     @Test
@@ -368,7 +366,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
         NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
         ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
-        checkPass(summary, 3, 0);
+        checkPass(summary, 1, 0);
     }
 
     @Test
@@ -381,7 +379,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
         NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
         ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
-        checkPass(summary, 0, 3);
+        checkPass(summary, 0, 1);
     }
 
     @Test

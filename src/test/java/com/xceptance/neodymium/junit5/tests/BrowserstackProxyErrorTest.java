@@ -56,6 +56,6 @@ public class BrowserstackProxyErrorTest extends AbstractNeodymiumTest
     public void testBrowserstackProxyAuthError()
     {
         NeodymiumTestExecutionSummary result = run(BrowserstackHomePageTest.class);
-        checkFail(result, 3, 0, 1);
+        checkFail(result, 1, 0, 1);
     }
 }

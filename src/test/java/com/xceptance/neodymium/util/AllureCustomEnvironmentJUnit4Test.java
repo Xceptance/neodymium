@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.util;
 
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
@@ -15,7 +15,7 @@ public class AllureCustomEnvironmentJUnit4Test extends NeodymiumTest
     public void testCustomEnvironmentDataOrderTest()
     {
         AllureAddons.customDataAdded = false;
-        Result result = JUnitCore.runClasses(CustomEnvironmentDataOrderTest.class);
+        Result result = run(CustomEnvironmentDataOrderTest.class);
         checkPass(result, 1, 0);
     }
 
@@ -23,7 +23,7 @@ public class AllureCustomEnvironmentJUnit4Test extends NeodymiumTest
     public void testCustomEnvironmentSubstitutionCircularReferenceTest()
     {
         AllureAddons.customDataAdded = false;
-        Result result = JUnitCore.runClasses(CustomEnvironmentSubstitutionCircularReferenceTest.class);
+        Result result = run(CustomEnvironmentSubstitutionCircularReferenceTest.class);
         checkPass(result, 1, 0);
     }
 
@@ -31,7 +31,7 @@ public class AllureCustomEnvironmentJUnit4Test extends NeodymiumTest
     public void testCustomEnvironmentSubstitutionTest()
     {
         AllureAddons.customDataAdded = false;
-        Result result = JUnitCore.runClasses(CustomEnvironmentSubstitutionTest.class);
+        Result result = run(CustomEnvironmentSubstitutionTest.class);
         checkPass(result, 1, 0);
     }
 }

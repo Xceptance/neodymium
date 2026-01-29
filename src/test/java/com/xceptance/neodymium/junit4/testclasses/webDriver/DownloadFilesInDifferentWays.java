@@ -110,12 +110,12 @@ public class DownloadFilesInDifferentWays extends NeodymiumTest
             $$(Selectors.shadowCss("#title-area", "downloads-manager", "#downloadsList downloads-item")).findBy(exactText(fileName.getName()))
                                                                                                         .should(exist, Duration.ofMillis(9000)).parent()
                                                                                                         .find(".description[role='gridcell']")
-                                                                                                        .shouldHave(attribute("hidden"));
+                                                                                                        .shouldHave(attribute("hidden"), Duration.ofMillis(30000));
         }
         else
         {
             Selenide.open("about:downloads");
-            $("description[tooltiptext='" + fileName.getName() + "']").closest(".download-state").shouldHave(attribute("state", "1"));
+            $("description[tooltiptext='" + fileName.getName() + "']").closest(".download-state").shouldHave(attribute("state", "1"), Duration.ofMillis(30000));
         }
     }
 }

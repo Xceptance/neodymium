@@ -9,11 +9,9 @@ import org.openqa.selenium.WebDriver;
 
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.StartNewBrowserForSetUp;
-import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.util.Neodymium;
-@Retry(exceptions = "Could not start a new session. Response code 500")
 @StartNewBrowserForSetUp
 @RunWith(NeodymiumRunner.class)
 @Browser("chrome")
