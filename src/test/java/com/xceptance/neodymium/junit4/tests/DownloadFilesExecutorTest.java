@@ -48,6 +48,6 @@ public class DownloadFilesExecutorTest extends NeodymiumTest
     public void test()
     {
         Result result = JUnitCore.runClasses(DownloadFilesInDifferentWays.class);
-        checkPass(result, 6, 0);
+        checkPass(result, 10, 0);
     }
 }

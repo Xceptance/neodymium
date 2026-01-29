@@ -29,7 +29,6 @@ import com.xceptance.neodymium.util.SelenideAddons;
 /**
  * Class with tests verifying that download folder configuration works for any download type
  */
-
 @Browser("chrome_download")
 @Browser("firefox_download")
 public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
@@ -66,7 +65,7 @@ public class DownloadFilesInDifferentWays extends AbstractNeodymiumTest
         {
             $(".fc-cta-consent").click();
         }
-        $("#fileSelector, #uploadBtn input").should(exist, Duration.ofMillis(60000)).uploadFile(new File("src/test/resources/2020-in-one-picture.png"));
+        $("#fileSelector, #uploadBtn input").should(exist, Duration.ofMillis(60000)).uploadFile(new File("src/test/resources/xceptance_bugs.png"));
         $(".file-button").shouldHave(exactText("DOWNLOAD"), Duration.ofMillis(60000));
         $("button[aria-label='COMBINED'], #downloadAllBtn").shouldBe(enabled, Duration.ofMillis(60000));
         $("button[aria-label='COMBINED'], #downloadAllBtn").click();

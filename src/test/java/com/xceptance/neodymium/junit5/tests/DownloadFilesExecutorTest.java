@@ -48,6 +48,6 @@ public class DownloadFilesExecutorTest extends AbstractNeodymiumTest
     public void test()
     {
         NeodymiumTestExecutionSummary result = run(DownloadFilesInDifferentWays.class);
-        checkPass(result, 6, 0);
+        checkPass(result, 10, 0);
     }
 }
