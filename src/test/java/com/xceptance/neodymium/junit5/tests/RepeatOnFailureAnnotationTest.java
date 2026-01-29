@@ -126,7 +126,7 @@ public class RepeatOnFailureAnnotationTest extends AbstractNeodymiumTest
         checkFail(summary, 6, 0, 1, new HashMap<String, String>()
         {
             {
-                put("testVisitingHomepage :: 2 :: Browser Chrome_headless", "java.lang.AssertionError: Fail 3");
+                put("testVisitingHomepage :: 2", "java.lang.AssertionError: Fail 3");
             }
         });
     }
@@ -151,7 +151,7 @@ public class RepeatOnFailureAnnotationTest extends AbstractNeodymiumTest
         checkFail(summary, 6, 0, 1, new HashMap<String, String>()
         {
             {
-                put("testVisitingHomepage :: 2 :: Browser Chrome_headless", "java.lang.AssertionError: Fail 3");
+                put("testVisitingHomepage :: 2", "java.lang.AssertionError: Fail 3");
             }
         });
     }
