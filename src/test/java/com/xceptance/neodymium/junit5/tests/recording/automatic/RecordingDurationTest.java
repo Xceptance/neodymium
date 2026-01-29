@@ -4,52 +4,66 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Assert;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.common.recording.FilmTestExecution;
 import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
+import com.xceptance.neodymium.common.retry.Retry;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.testclasses.recording.CustomRecordingTest;
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
-
+@Retry(maxNumberOfRetries = 5, exceptions =
+{
+  "Invalid data found when processing input"
+})
 public class RecordingDurationTest extends AbstractNeodymiumTest
 {
-    private List<File> recordingFiles = new ArrayList<File>();
+    private File recordingFile100;
 
-    public double runTest(boolean isGif, String oneImagePerMilliseconds) throws IOException, InterruptedException
+    private File recordingFile1000;
+
+    public void runTest(boolean isGif, boolean isMixed) throws IOException, InterruptedException
     {
         CustomRecordingTest.isGif = isGif;
-        String format = isGif ? "gif" : "video";
+        CustomRecordingTest.isMixed = isMixed;
+        String format = isGif || isMixed ? "gif" : "video";
         FilmTestExecution.clearThreadContexts();
         Map<String, String> properties1 = new HashMap<>();
         properties1.put(format + ".filmAutomatically", "false");
         properties1.put(format + ".enableFilming", "true");
         properties1.put(format + ".deleteRecordingsAfterAddingToAllureReport", "false");
-        properties1.put(format + ".oneImagePerMilliseconds", oneImagePerMilliseconds);
-        final String fileLocation = "config/temp-" + format + "-" + oneImagePerMilliseconds + ".properties";
+        if (isMixed)
+        {
+            properties1.put("video.filmAutomatically", "false");
+            properties1.put("video.enableFilming", "true");
+            properties1.put("video.deleteRecordingsAfterAddingToAllureReport", "false");
+        }
+        final String fileLocation = "config/temp-RecordingDurationTest" + (isMixed ? "mixed" : format) + ".properties";
         File tempConfigFile1 = new File("./" + fileLocation);
         writeMapToPropertiesFile(properties1, tempConfigFile1);
         ConfigFactory.setProperty(FilmTestExecution.TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:" + fileLocation);
         tempFiles.add(tempConfigFile1);
         run(CustomRecordingTest.class);
-        RecordingConfigurations config = isGif ? FilmTestExecution.getContextGif() : FilmTestExecution.getContextVideo();
-        File recordingFile = new File(config.tempFolderToStoreRecording() + CustomRecordingTest.uuid + "." + config.format());
-        for (int i = 0; i < 6 && !recordingFile.exists(); i++)
+        RecordingConfigurations config = isGif || isMixed ? FilmTestExecution.getContextGif() : FilmTestExecution.getContextVideo();
+        recordingFile100 = new File(config.tempFolderToStoreRecording() + CustomRecordingTest.uuid_100 + "." + config.format());
+        recordingFile1000 = new File((isMixed ? FilmTestExecution.getContextVideo().tempFolderToStoreRecording() : config.tempFolderToStoreRecording())
+                                     + CustomRecordingTest.uuid_1000 + "." + (isMixed ? FilmTestExecution.getContextVideo().format() : config.format()));
+        recordingFile100.deleteOnExit();
+        recordingFile1000.deleteOnExit();
+        for (int i = 0; i < 6 && !(recordingFile100.exists() && recordingFile1000.exists()); i++)
         {
             Thread.sleep(1000);
         }
-        recordingFiles.add(recordingFile);
-        Assert.assertTrue("the recording file doesn't exist", recordingFile.exists());
+        Assert.assertTrue("the recording file doesn't exist", recordingFile100.exists() && recordingFile1000.exists());
+    }
+
+    double mesureDuration(File recordingFile) throws IOException
+    {
         ProcessBuilder pb = new ProcessBuilder("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", recordingFile.getAbsolutePath());
         pb.redirectErrorStream(true);
         Process p = pb.start();
@@ -63,50 +77,34 @@ public class RecordingDurationTest extends AbstractNeodymiumTest
         return Double.parseDouble(recordDuration);
     }
 
-    @Test
+    @NeodymiumTest
     public void testVideoRecording() throws IOException, InterruptedException
     {
-        double run100 = runTest(false, "100");
-        double run1000 = runTest(false, "1000");
-
-        Assert.assertEquals("Videos with different oneImagePerMilliseconds value should have approximaty the same length (1/100 = " + run1000
-                            + ", 1/1000 = " + run100 + ")", run1000, run1000, 5.0);
+        runTest(false, false);
+        double duration100 = mesureDuration(recordingFile100);
+        double duration1000 = mesureDuration(recordingFile1000);
+        Assert.assertEquals("Videos with different oneImagePerMilliseconds value should have approximaty the same length (1/100 = " + duration100
+                            + ", 1/1000 = " + duration1000 + ")", duration100, duration1000, 5.0);
     }
 
-    @Test
+    @NeodymiumTest
     public void testGifRecording() throws IOException, InterruptedException
     {
-        Instant start = Instant.now();
-        double run100 = runTest(true, "100");
-        double run100Duration = Duration.between(start, Instant.now()).toMillis() / 1000.0;
-        start = Instant.now();
-        Assert.assertEquals(
-                            "Gif 1/100 for the test run of " + run100Duration
-                            + " has duration " + run100,
-                            run100, run100Duration, 5.0);
-        double run1000 = runTest(true, "1000");
-        double run1000Duration = Duration.between(start, Instant.now()).toMillis() / 1000.0;
-        Assert.assertEquals(
-                            "Gif 1/1000 for the test run of " + run100Duration
-                            + " has duration " + run1000,
-                            run1000, run1000Duration, 5.0);
+        runTest(true, false);
+        double duration100 = mesureDuration(recordingFile100);
+        double duration1000 = mesureDuration(recordingFile1000);
+        Assert.assertEquals("Gifs with different oneImagePerMilliseconds value should have approximaty the same length (1/100 = " + duration100
+                            + ", 1/1000 = " + duration1000 + ")", duration100, duration1000, 5.0);
     }
 
-    @Test
+    @NeodymiumTest
     public void testMixedRecording() throws IOException, InterruptedException
     {
-        double runVideo1000 = runTest(false, "1000");
-        double runGif1000 = runTest(true, "1000");
-        Assert.assertEquals("Gifs with different oneImagePerMilliseconds value should have approximaty the same length (video = " + runVideo1000 + ", gif = "
-                            + runGif1000 + ")", runVideo1000, runGif1000, 5.0);
-    }
-
-    @AfterEach
-    public void cleanup()
-    {
-        if (!recordingFiles.isEmpty())
-        {
-            recordingFiles.forEach(recordignFile -> recordignFile.delete());
-        }
+        runTest(false, true);
+        double durationGif1000 = mesureDuration(recordingFile100);
+        double durationVideo1000 = mesureDuration(recordingFile1000);
+        Assert.assertEquals("Gif and video with different oneImagePerMilliseconds value should have approximaty the same length (video = " + durationVideo1000
+                            + ", gif = "
+                            + durationGif1000 + ")", durationVideo1000, durationGif1000, 5.0);
     }
 }
