@@ -100,5 +100,8 @@ public class ValidateKeepBrowserOpenOnFailureAnnotationClassDoesntInterfereWithC
         webDriver2.quit();
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver1);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver2);
+        webDriver1=null;
+        webDriver2=null;
+        webDriver3=null;
     }
 }

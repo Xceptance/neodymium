@@ -110,5 +110,8 @@ public class ValidateKeepBrowserOpenAnnotationMethodOverridesClass
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver1);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver2);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver3);
+        webDriver1=null;
+        webDriver2=null;
+        webDriver3=null;
     }
 }

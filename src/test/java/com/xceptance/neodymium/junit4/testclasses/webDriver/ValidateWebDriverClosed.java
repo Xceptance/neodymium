@@ -133,7 +133,10 @@ public class ValidateWebDriverClosed
 
         NeodymiumWebDriverTest.assertProxyStopped(proxy1);
         NeodymiumWebDriverTest.assertProxyStopped(proxy2);
-
+        webDriver1=null;
+        webDriver2=null;
+        proxy1=null;      
+        proxy2=null;
         NeodymiumTest.deleteTempFile(tempConfigFile);
     }
 }

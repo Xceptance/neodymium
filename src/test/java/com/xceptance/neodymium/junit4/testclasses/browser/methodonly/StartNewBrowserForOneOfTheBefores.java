@@ -59,5 +59,8 @@ public class StartNewBrowserForOneOfTheBefores
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriverTest);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriverBefore);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriverBefore1);
+        webDriverTest=null;
+        webDriverBefore=null;
+        webDriverBefore1=null;
     }
 }

@@ -54,5 +54,7 @@ public class StartNewBrowserForOneOfTheAfters
     {
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver1);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver2);
+        webDriver1=null;
+        webDriver2=null;
     }
 }

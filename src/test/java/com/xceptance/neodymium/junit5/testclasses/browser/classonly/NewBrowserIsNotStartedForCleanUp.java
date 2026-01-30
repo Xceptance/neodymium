@@ -64,5 +64,8 @@ public class NewBrowserIsNotStartedForCleanUp
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriverTest);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriverAfter);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriverAfter1);
+        webDriverTest=null;
+        webDriverAfter=null;
+        webDriverAfter1=null;
     }
 }
