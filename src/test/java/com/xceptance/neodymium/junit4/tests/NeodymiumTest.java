@@ -342,7 +342,7 @@ public abstract class NeodymiumTest {
 				&& result.getFailures().stream()
 						.anyMatch(e -> e.getException() != null && e.getException().getMessage() != null
 								&& e.getException().getMessage().contains("Could not start a new session")); i++) {
-			result = run(testClass);
+			result = JUnitCore.runClasses(testClass);
 		}
 		return result;
 	}

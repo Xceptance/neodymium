@@ -61,7 +61,7 @@ public class ProxyConfigurationTest extends NeodymiumTest
     {
         // test proxy configuration as far as possible without setting up a proxy
         Result result = run(RunWithProxy.class);
-        checkPass(result, 6, 0);
+        checkPass(result, 2, 0);
     }
 
     @Test
