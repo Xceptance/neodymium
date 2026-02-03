@@ -1,13 +1,6 @@
 package com.xceptance.neodymium.common.xtc;
 
-import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest;
-import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest.FinishExecution;
-import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
-import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static com.xceptance.neodymium.util.AllureAddons.JSON_VIEWER_SCRIPT_PATH;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -20,9 +13,18 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.zip.GZIPOutputStream;
 
-import static com.xceptance.neodymium.util.AllureAddons.JSON_VIEWER_SCRIPT_PATH;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest;
+import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest.FinishExecution;
 
 // called from maven
 // parses the results of the tests and uploads them to XTC using the XTC API client
@@ -155,7 +157,7 @@ public class ResultProcessor
             }
 
             // insert the JSON viewer script
-            moveFileToReportDirectory(Path.of(JSON_VIEWER_SCRIPT_PATH));
+            copyFileToReportDirectory(Path.of(JSON_VIEWER_SCRIPT_PATH));
 
             // compress the allure report directory into a tar.gz archive and set the path to the archive
             Path archivePath = createTarGzArchive(allurePath, "allure-report.tar.gz");
@@ -165,7 +167,7 @@ public class ResultProcessor
         }
     }
 
-    private static void moveFileToReportDirectory(Path source)
+    private static void copyFileToReportDirectory(Path source)
     {
         Path destination = Paths.get(allureReportDir + File.separator + source);
 
@@ -173,18 +175,69 @@ public class ResultProcessor
         {
             // Ensure the parent directory exists
             Path parentDir = destination.getParent();
-            if (parentDir != null && !Files.exists(parentDir))
-            {
-                LOGGER.info("Creating directory: {}", parentDir);
-                Files.createDirectories(parentDir);
-            }
 
-            Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+            if (parentDir != null)
+            {
+                if (!Files.exists(parentDir))
+                {
+                    LOGGER.info("Creating directory: {}", parentDir);
+                    Files.createDirectories(parentDir);
+                }
+
+                // Retry logic
+                int maxRetries = 3;
+                for (int i = 0; i < maxRetries; i++)
+                {
+                    // Create a temp file to write to first, then atomic move to destination
+                    // This ensures that if multiple JVMs try to write to the same file, we don't get corrupted files
+                    Path tempFile = null;
+                    try
+                    {
+                        tempFile = Files.createTempFile(parentDir, "copy-temp-file", ".tmp");
+                        Files.copy(source, tempFile, StandardCopyOption.REPLACE_EXISTING);
+                        Files.move(tempFile, destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                        break;
+                    }
+                    catch (IOException e)
+                    {
+                        if (i == maxRetries - 1)
+                        {
+                            throw e;
+                        }
+
+                        try
+                        {
+                            // Wait between 10ms and 200ms
+                            long sleepTime = ThreadLocalRandom.current().nextLong(10, 201);
+                            Thread.sleep(sleepTime);
+                        }
+                        catch (InterruptedException ie)
+                        {
+                            Thread.currentThread().interrupt();
+                            throw new IOException(ie);
+                        }
+                    }
+                    finally
+                    {
+                        if (tempFile != null)
+                        {
+                            try
+                            {
+                                Files.deleteIfExists(tempFile);
+                            }
+                            catch (IOException e)
+                            {
+                                // ignore
+                            }
+                        }
+                    }
+                }
+            }
         }
         catch (IOException e)
         {
-            LOGGER.error("Moving the JSON-Viewer script failed.\nSource: {} \nDestination: {}", source, destination, e);
-            throw new RuntimeException("Moving the JSON-Viewer script failed.\nSource: " + source + " \nDestination: " + destination, e);
+            LOGGER.error("Copying the JSON-Viewer script failed.\nSource: {} \nDestination: {}", source, destination, e);
+            throw new RuntimeException("Copying the JSON-Viewer script failed.\nSource: " + source + " \nDestination: " + destination, e);
         }
     }
 
@@ -202,8 +255,9 @@ public class ResultProcessor
     private static Path createTarGzArchive(Path sourceDir, String archiveName) throws IOException
     {
         Path archivePath = sourceDir.getParent().resolve(archiveName);
+        Path tempArchive = Files.createTempFile(sourceDir.getParent(), "allure-report-", ".tar.gz.tmp");
 
-        try (FileOutputStream fos = new FileOutputStream(archivePath.toFile());
+        try (FileOutputStream fos = new FileOutputStream(tempArchive.toFile());
             BufferedOutputStream bos = new BufferedOutputStream(fos);
             GZIPOutputStream gzos = new GZIPOutputStream(bos);
             TarArchiveOutputStream taos = new TarArchiveOutputStream(gzos))
@@ -229,7 +283,13 @@ public class ResultProcessor
                      }
                  });
         }
+        catch (Exception e)
+        {
+            Files.deleteIfExists(tempArchive);
+            throw e;
+        }
 
+        Files.move(tempArchive, archivePath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         LOGGER.info("Created archive: {}", archivePath.toAbsolutePath());
         return archivePath;
     }
