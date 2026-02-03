@@ -1,19 +1,18 @@
-package com.xceptance.neodymium.junit5.tests.recording.automatic;
+package com.xceptance.neodymium.junit5.tests.recording.config;
 
 import com.xceptance.neodymium.common.recording.FilmTestExecution;
 import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.junit5.tests.recording.AbstractRecordingTest;
+import com.xceptance.neodymium.junit5.tests.recording.AbstractRecordingDeletionTest;
 import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 
 import java.io.File;
-import java.io.IOException;
 
-public class AutomaticVideoRecordingTest extends AbstractRecordingTest
+public class DeleteVideoRecordingTest extends AbstractRecordingDeletionTest
 {
-    public AutomaticVideoRecordingTest()
+    public DeleteVideoRecordingTest()
     {
         super(false);
     }
@@ -33,9 +32,8 @@ public class AutomaticVideoRecordingTest extends AbstractRecordingTest
     }
 
     @AfterAll
-    public static void assertLogFileExists() throws IOException
+    public static void assertLogFileExists()
     {
-        assertRecordingFileExists();
         File logFile = new File(FilmTestExecution.getContextVideo().ffmpegLogFile());
         Assert.assertTrue("the logfile for the automatic video recording test exists", logFile.exists());
         logFile.delete();
