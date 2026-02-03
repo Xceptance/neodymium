@@ -202,7 +202,7 @@ public class ResultProcessor
                     {
                         if (i == maxRetries - 1)
                         {
-                            throw e;
+                            LOGGER.error("error occurred during copying files to the report", e.toString());
                         }
 
                         try
@@ -214,7 +214,7 @@ public class ResultProcessor
                         catch (InterruptedException ie)
                         {
                             Thread.currentThread().interrupt();
-                            throw new IOException(ie);
+                            LOGGER.error("error occurred during copying files to the report", ie.toString());
                         }
                     }
                     finally
@@ -236,8 +236,7 @@ public class ResultProcessor
         }
         catch (IOException e)
         {
-            LOGGER.error("Copying the JSON-Viewer script failed.\nSource: {} \nDestination: {}", source, destination, e);
-            throw new RuntimeException("Copying the JSON-Viewer script failed.\nSource: " + source + " \nDestination: " + destination, e);
+            LOGGER.error("Copying the files to the report failed.\nSource: {} \nDestination: {}", source, destination, e);
         }
     }
 
@@ -279,14 +278,13 @@ public class ResultProcessor
                      catch (IOException e)
                      {
                          LOGGER.error("Failed to add file to archive: {}", file, e);
-                         throw new RuntimeException("Failed to add file to archive: " + file, e);
                      }
                  });
         }
         catch (Exception e)
         {
             Files.deleteIfExists(tempArchive);
-            throw e;
+            LOGGER.error("error occurred during creating the report archive", e.toString());
         }
 
         Files.move(tempArchive, archivePath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
