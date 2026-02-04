@@ -7,12 +7,18 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.PosixFileAttributes;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.zip.GZIPOutputStream;
 
@@ -167,9 +173,16 @@ public class ResultProcessor
         }
     }
 
+    /**
+     * Copies a file to the Allure report directory, ensuring that the parent directories exist. Implements retry logic to handle potential file access
+     * conflicts.
+     *
+     * @param source
+     *     the path of the source file to copy
+     */
     private static void copyFileToReportDirectory(Path source)
     {
-        Path destination = Paths.get(allureReportDir + File.separator + source);
+        Path destination = Paths.get(allureReportDir).resolve(source.getFileName());
 
         try
         {
@@ -263,32 +276,109 @@ public class ResultProcessor
         {
             taos.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
 
-            // Walk through the source directory and add files to the archive
-            Files.walk(sourceDir)
-                 .filter(Files::isRegularFile)
-                 .forEach(file -> {
-                     try
-                     {
-                         String relativePath = sourceDir.relativize(file).toString();
-                         TarArchiveEntry entry = new TarArchiveEntry(file.toFile(), relativePath);
-                         taos.putArchiveEntry(entry);
-                         Files.copy(file, taos);
-                         taos.closeArchiveEntry();
-                     }
-                     catch (IOException e)
-                     {
-                         LOGGER.error("Failed to add file to archive: {}", file, e);
-                     }
-                 });
+            Files.walkFileTree(sourceDir, new SimpleFileVisitor<Path>()
+            {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                {
+                    // Filter out non-regular files
+                    if (!attrs.isRegularFile())
+                        return FileVisitResult.CONTINUE;
+
+                    try
+                    {
+                        // 1. Create the entry
+                        String relativePath = sourceDir.relativize(file).toString().replace('\\', '/');
+                        TarArchiveEntry entry = new TarArchiveEntry(file.toFile(), relativePath);
+
+                        // 2. copy execution bits (POSIX)
+                        // This block checks if we are on a system that supports Unix permissions (Linux/Mac)
+                        if (attrs instanceof PosixFileAttributes)
+                        {
+                            Set<PosixFilePermission> perms = ((PosixFileAttributes) attrs).permissions();
+                            int mode = getMode(perms);
+                            entry.setMode(mode);
+                        }
+                        else if (File.separatorChar == '\\')
+                        {
+                            // Fallback for Windows: manually set 755 for known scripts if needed
+                            String name = file.getFileName().toString().toLowerCase();
+                            if (name.endsWith(".sh") || name.endsWith(".bat") || name.endsWith(".cmd"))
+                            {
+                                entry.setMode(0755);
+                            }
+                        }
+
+                        // 3. Write data
+                        taos.putArchiveEntry(entry);
+                        Files.copy(file, taos);
+                        taos.closeArchiveEntry();
+                    }
+                    catch (IOException e)
+                    {
+                        LOGGER.error("Failed to add file to archive: {}", file, e);
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFileFailed(Path file, IOException exc)
+                {
+                    LOGGER.error("Could not access file during archive traversal: {}", file, exc);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
         }
         catch (Exception e)
         {
             Files.deleteIfExists(tempArchive);
-            LOGGER.error("error occurred during creating the report archive", e.toString());
+            LOGGER.error("Error occurred during creating the report archive", e);
+            throw new IOException("Failed to create archive", e);
         }
 
         Files.move(tempArchive, archivePath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         LOGGER.info("Created archive: {}", archivePath.toAbsolutePath());
         return archivePath;
+    }
+
+    private static int getMode(Set<PosixFilePermission> perms)
+    {
+        int mode = 0;
+
+        // Map Java permissions to Tar integer mode
+        for (PosixFilePermission p : perms)
+        {
+            switch (p)
+            {
+                case OWNER_READ:
+                    mode |= 0400;
+                    break;
+                case OWNER_WRITE:
+                    mode |= 0200;
+                    break;
+                case OWNER_EXECUTE:
+                    mode |= 0100;
+                    break;
+                case GROUP_READ:
+                    mode |= 0040;
+                    break;
+                case GROUP_WRITE:
+                    mode |= 0020;
+                    break;
+                case GROUP_EXECUTE:
+                    mode |= 0010;
+                    break;
+                case OTHERS_READ:
+                    mode |= 0004;
+                    break;
+                case OTHERS_WRITE:
+                    mode |= 0002;
+                    break;
+                case OTHERS_EXECUTE:
+                    mode |= 0001;
+                    break;
+            }
+        }
+        return mode;
     }
 }
