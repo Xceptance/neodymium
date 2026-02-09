@@ -4,7 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.junit4.testclasses.popupblocker.PopupBlockerTestclass;
@@ -23,7 +23,7 @@ public class PopupBlockerTest extends NeodymiumTest
 
         addPropertiesForTest("temp-PopupBlockerTest-neodymium.properties", properties);
 
-        Result result = JUnitCore.runClasses(PopupBlockerTestclass.class);
+        Result result = run(PopupBlockerTestclass.class);
         checkPass(result, 7, 0);
     }
 }

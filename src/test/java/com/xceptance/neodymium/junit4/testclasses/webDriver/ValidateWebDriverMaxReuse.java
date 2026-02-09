@@ -186,5 +186,10 @@ public class ValidateWebDriverMaxReuse
 
         NeodymiumTest.deleteTempFile(tempConfigFile);
         WebDriverCache.quitCachedBrowsers();
+        webDriver1=null;
+        webDriver2=null;
+        webDriver3=null;
+        webDriver4=null;
+        webDriver5=null;
     }
 }

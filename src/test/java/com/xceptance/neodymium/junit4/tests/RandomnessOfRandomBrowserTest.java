@@ -7,7 +7,7 @@ import java.util.Map;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
@@ -38,7 +38,7 @@ public class RandomnessOfRandomBrowserTest extends NeodymiumTest
     @Test
     public void testRandomnessOfRandomBrowser()
     {
-        Result result = JUnitCore.runClasses(RandomnessOfRandomBrowser.class);
+        Result result = run(RandomnessOfRandomBrowser.class);
         checkPass(result, 11, 0);
     }
 }

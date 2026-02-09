@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit4.tests;
 
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.junit4.testclasses.parameter.GeneratorAutoTypeConversion;
@@ -24,7 +24,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testParameterFieldWithoutGenerator()
     {
         // test parameter annotated class members without an generator function (@Parameters)
-        Result result = JUnitCore.runClasses(ParameterFieldButNoGenerator.class);
+        Result result = run(ParameterFieldButNoGenerator.class);
         checkPass(result, 1, 0);
     }
 
@@ -32,7 +32,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testNonStaticGeneratorVoidReturn()
     {
         // test a non static generator
-        Result result = JUnitCore.runClasses(NonStaticGeneratorVoidReturn.class);
+        Result result = run(NonStaticGeneratorVoidReturn.class);
         checkFail(result, 1, 0, 1, "java.lang.Exception: No public static parameters method on class " +
                                    NonStaticGeneratorVoidReturn.class.getCanonicalName());
     }
@@ -41,7 +41,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testGeneratorVoidReturn()
     {
         // test generator void return type
-        Result result = JUnitCore.runClasses(GeneratorVoidReturn.class);
+        Result result = run(GeneratorVoidReturn.class);
         checkFail(result, 1, 0, 1, "java.lang.RuntimeException: java.lang.Exception: " + GeneratorVoidReturn.class.getCanonicalName() +
                                    ".createData() must return an Iterable of arrays.");
     }
@@ -50,7 +50,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testGeneratorObjectReturn()
     {
         // test generator returning object is not accidently castet to correct type
-        Result result = JUnitCore.runClasses(GeneratorObjectReturn.class);
+        Result result = run(GeneratorObjectReturn.class);
         checkFail(result, 1, 0, 1, "java.lang.RuntimeException: java.lang.Exception: " + GeneratorObjectReturn.class.getCanonicalName() +
                                    ".createData() must return an Iterable of arrays.");
     }
@@ -59,7 +59,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testGeneratorIterableReturnOne()
     {
         // one test data element, one test iteration
-        Result result = JUnitCore.runClasses(GeneratorIterableReturnOne.class);
+        Result result = run(GeneratorIterableReturnOne.class);
         checkPass(result, 1, 0);
     }
 
@@ -67,7 +67,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testGeneratorTooFewElements()
     {
         // one test iteration with two parameter fields, but just one data set
-        Result result = JUnitCore.runClasses(GeneratorTooFewElements.class);
+        Result result = run(GeneratorTooFewElements.class);
         checkFail(result, 1, 0, 1, "Number of parameters (1) and fields (2) annotated with @Parameter must match!");
     }
 
@@ -75,7 +75,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testGeneratorTooMuchElements()
     {
         // one test iteration with one data field, but two data sets
-        Result result = JUnitCore.runClasses(GeneratorTooMuchElements.class);
+        Result result = run(GeneratorTooMuchElements.class);
         checkFail(result, 1, 0, 1, "Number of parameters (2) and fields (1) annotated with @Parameter must match!");
     }
 
@@ -83,7 +83,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testGeneratorAutoTypeConversion()
     {
         // test auto type conversion from string to various data types, as well as arbitrary type injection
-        Result result = JUnitCore.runClasses(GeneratorAutoTypeConversion.class);
+        Result result = run(GeneratorAutoTypeConversion.class);
         checkPass(result, 1, 0);
     }
 
@@ -91,7 +91,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testGeneratorAutoTypeConversionCanNotHandleArbitraryTypes()
     {
         // test that auto type conversion from string to an arbitrary type fails
-        Result result = JUnitCore.runClasses(GeneratorAutoTypeConversionCanNotHandleArbitraryTypes.class);
+        Result result = run(GeneratorAutoTypeConversionCanNotHandleArbitraryTypes.class);
         checkFail(result, 1, 0, 1,
                   "Could not set parameter of type class java.lang.String to field \"browser\" of type class com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration. Value: a string can not be parsed to an arbitrary type");
     }
@@ -100,7 +100,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testGeneratorCanSetStaticField()
     {
         // test that a static field can be set
-        Result result = JUnitCore.runClasses(GeneratorCanSetStaticField.class);
+        Result result = run(GeneratorCanSetStaticField.class);
         checkPass(result, 1, 0);
     }
 
@@ -108,7 +108,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testGeneratorCanNotSetFinalField()
     {
         // test that a final field can not be set
-        Result result = JUnitCore.runClasses(GeneratorCanNotSetFinalField.class);
+        Result result = run(GeneratorCanNotSetFinalField.class);
         checkFail(result, 1, 0, 1, "Could not set parameter due to it is not public or it is final");
     }
 
@@ -116,7 +116,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testGeneratorCanNotSetPrivateSField()
     {
         // test that a private field can not be set
-        Result result = JUnitCore.runClasses(GeneratorCanNotSetPrivateField.class);
+        Result result = run(GeneratorCanNotSetPrivateField.class);
         checkFail(result, 1, 0, 1, "Could not set parameter due to it is not public or it is final");
     }
 
@@ -124,7 +124,7 @@ public class ParameterStatementTest extends NeodymiumTest
     public void testGeneratorAutoTypeConversionFailsOnWrongInputData()
     {
         // test that auto type conversion from string fails if string content can not match
-        Result result = JUnitCore.runClasses(GeneratorAutoTypeConversionFailsOnWrongInputData.class);
+        Result result = run(GeneratorAutoTypeConversionFailsOnWrongInputData.class);
         checkFail(result, 1, 0, 1, "An error occurred during conversion of input string \"true\" to type double for field \"aDouble\"");
     }
 }

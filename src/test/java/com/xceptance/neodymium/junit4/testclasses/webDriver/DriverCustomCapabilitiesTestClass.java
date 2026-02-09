@@ -31,13 +31,15 @@ public class DriverCustomCapabilitiesTestClass
     }
 
     public void provokeUnhandledAlertException()
-    {
+    {                                       
         Selenide.open("https://www.xceptance.com/");
         String elementToProvokeAlert = "var e = document.createElement('div');"
                                        + " e.innerHTML = 'testThing'; "
                                        + "e.setAttribute('data-testid','closeIcon');"
-                                       + " e.setAttribute('onclick',\"alert(\\\"I am a JS Alert\\\")\");"
-                                       + " document.body.appendChild(e);";
+                                       + " document.body.appendChild(e);"
+                                       + "e.addEventListener('click', function() {\n"
+                                       + "        alert(\"I am a JS Alert\");\n"
+                                       + "});";
         Selenide.executeJavaScript(elementToProvokeAlert);
         Selenide.sleep(1500);
         // could only reproduce with pure Selenium calls, Selenide logs the exception but doesn't throw is

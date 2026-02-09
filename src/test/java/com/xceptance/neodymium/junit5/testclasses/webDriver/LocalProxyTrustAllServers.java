@@ -8,7 +8,6 @@ import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
-
 public class LocalProxyTrustAllServers
 {
     @NeodymiumTest

@@ -59,7 +59,7 @@ public class JavaScriptUtilsTest
     public void testWaitingJQueryIsRequired()
     {
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.jQueryIsRequired", "true");
-        Neodymium.configuration().setProperty("neodymium.javaScriptUtils.timeout", "10000");
+        Neodymium.configuration().setProperty("neodymium.javaScriptUtils.timeout", "20000");
 
         Selenide.open("https://www.google.com/");
         final long start = System.currentTimeMillis();

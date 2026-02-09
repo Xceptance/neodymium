@@ -1,10 +1,7 @@
-package com.xceptance.neodymium.junit4.testclasses.allure.customenvironmentdata;
+package com.xceptance.neodymium.junit5.testclasses.allure.customenvironmentdata;
 
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.AllureAddons;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.util.Map;
@@ -13,10 +10,9 @@ import static com.xceptance.neodymium.util.XmlToMapUtil.getXmlParameterMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(NeodymiumRunner.class)
-public class CustomEnvironmentDataOrderTestClass extends NeodymiumTest
+public class CustomEnvironmentDataOrderTestClass
 {
-    @Test
+    @NeodymiumTest
     public void test()
     {
         Map<String, String> xmlDataMap = getXmlParameterMap(AllureAddons.getAllureResultsFolder().getAbsoluteFile() + File.separator + "environment.xml");

@@ -2,7 +2,7 @@ package com.xceptance.neodymium.junit4.tests;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.junit4.testclasses.wip.WIPAnnotationChildTest;
@@ -28,7 +28,7 @@ public class WIPTest extends NeodymiumTest
         };
         checkDescription(WIPAnnotationTest.class, expected);
 
-        Result result = JUnitCore.runClasses(WIPAnnotationTest.class);
+        Result result = run(WIPAnnotationTest.class);
         checkPass(result, 1, 0);
     }
 
@@ -42,7 +42,7 @@ public class WIPTest extends NeodymiumTest
         };
         checkDescription(WIPAnnotationChildTest.class, expected);
 
-        Result result = JUnitCore.runClasses(WIPAnnotationChildTest.class);
+        Result result = run(WIPAnnotationChildTest.class);
         checkPass(result, 2, 0);
     }
 
@@ -57,7 +57,7 @@ public class WIPTest extends NeodymiumTest
           "first :: 2 2 / 2 :: Browser Chrome_1500x1000_headless :: ",
         };
         checkDescription(WIPMultiplicationTest.class, expected);
-        Result result = JUnitCore.runClasses(WIPMultiplicationTest.class);
+        Result result = run(WIPMultiplicationTest.class);
         checkPass(result, 4, 0);
     }
 }

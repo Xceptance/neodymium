@@ -7,7 +7,6 @@ import org.junit.runner.RunWith;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.Neodymium;
-
 @Browser("Chrome_1024x768")
 @Browser("Chrome_headless")
 @RunWith(NeodymiumRunner.class)

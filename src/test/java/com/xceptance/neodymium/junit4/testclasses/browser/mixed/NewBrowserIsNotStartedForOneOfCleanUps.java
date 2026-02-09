@@ -13,7 +13,6 @@ import com.xceptance.neodymium.common.browser.StartNewBrowserForCleanUp;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.util.Neodymium;
-
 @RunWith(NeodymiumRunner.class)
 @Browser("chrome")
 public class NewBrowserIsNotStartedForOneOfCleanUps
@@ -59,5 +58,8 @@ public class NewBrowserIsNotStartedForOneOfCleanUps
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver1);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver2);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver3);
+        webDriver1=null;
+        webDriver2=null;
+        webDriver3=null;
     }
 }

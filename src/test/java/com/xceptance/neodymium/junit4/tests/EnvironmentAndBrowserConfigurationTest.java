@@ -7,7 +7,7 @@ import java.util.Map;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.common.browser.configuration.BadProxyEnvironmentConfigurationJunit4;
@@ -132,7 +132,7 @@ public class EnvironmentAndBrowserConfigurationTest extends NeodymiumTest
     public void testOverridingEnvironmentsAndBrowsers()
     {
         // test environment configuration
-        Result result = JUnitCore.runClasses(EnvironmentAndBrowserConfiguration.class);
+        Result result = run(EnvironmentAndBrowserConfiguration.class);
         checkPass(result, 6, 0);
     }
 
@@ -140,7 +140,7 @@ public class EnvironmentAndBrowserConfigurationTest extends NeodymiumTest
     public void testConfigureBadEnvironmentProxies()
     {
         // test environment configuration
-        Result result = JUnitCore.runClasses(BadProxyEnvironmentConfigurationJunit4.class);
+        Result result = run(BadProxyEnvironmentConfigurationJunit4.class);
         checkPass(result, 3, 0);
     }
 
@@ -148,7 +148,7 @@ public class EnvironmentAndBrowserConfigurationTest extends NeodymiumTest
     public void testRunningABrowserWithoutAEnvironmentConfiguration()
     {
         // test environment configuration
-        Result result = JUnitCore.runClasses(BrowserWithoutAvailableEnvironment.class);
+        Result result = run(BrowserWithoutAvailableEnvironment.class);
         checkFail(result, 1, 0, 1, "No properties found for test environment: \"" + ENVIRONMENTNAME + "\"");
     }
 }

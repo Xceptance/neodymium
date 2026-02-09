@@ -8,7 +8,7 @@ import com.xceptance.neodymium.util.NeodymiumRandom;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import java.io.File;
@@ -55,7 +55,7 @@ public class DataUtilsTest extends NeodymiumTest
     {
         // test the data utils helper functions
         // test fixed random support
-        Result result = JUnitCore.runClasses(DataUtilsHelperTests.class);
+        Result result = run(DataUtilsHelperTests.class);
         checkPass(result, 4, 0);
     }
 
@@ -63,7 +63,7 @@ public class DataUtilsTest extends NeodymiumTest
     public void testDataUtils() throws Exception
     {
         // test the data utils using JSON data
-        Result result = JUnitCore.runClasses(DataUtilsTests.class);
+        Result result = run(DataUtilsTests.class);
         checkPass(result, 10, 0);
     }
 
@@ -71,7 +71,7 @@ public class DataUtilsTest extends NeodymiumTest
     public void testDataUtilsXml() throws Exception
     {
         // test the data utils using XML data
-        Result result = JUnitCore.runClasses(DataUtilsTestsXml.class);
+        Result result = run(DataUtilsTestsXml.class);
         checkPass(result, 10, 0);
     }
 }

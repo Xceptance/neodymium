@@ -9,7 +9,6 @@ import org.openqa.selenium.WebDriverException;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-
 @Browser("Chrome_headless")
 public class RunWithProxy
 {
