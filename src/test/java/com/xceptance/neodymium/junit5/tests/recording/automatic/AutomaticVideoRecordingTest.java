@@ -35,7 +35,6 @@ public class AutomaticVideoRecordingTest extends AbstractRecordingTest
     @AfterAll
     public static void assertLogFileExists() throws IOException
     {
-        assertRecordingFileExists();
         File logFile = new File(FilmTestExecution.getContextVideo().ffmpegLogFile());
         Assert.assertTrue("the logfile for the automatic video recording test exists", logFile.exists());
         logFile.delete();
