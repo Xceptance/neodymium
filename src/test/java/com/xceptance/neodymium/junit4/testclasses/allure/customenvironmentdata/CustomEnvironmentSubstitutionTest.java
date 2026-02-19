@@ -5,7 +5,7 @@ import com.xceptance.neodymium.util.AllureAddons;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import java.io.File;
@@ -29,7 +29,7 @@ public class CustomEnvironmentSubstitutionTest extends NeodymiumTest
     @Test
     public void testPropertySubstitution()
     {
-        Result result = JUnitCore.runClasses(CustomEnvironmentPropertySubstitutionTestClass.class);
+        Result result = run(CustomEnvironmentPropertySubstitutionTestClass.class);
         checkPass(result, 1, 0);
     }
 

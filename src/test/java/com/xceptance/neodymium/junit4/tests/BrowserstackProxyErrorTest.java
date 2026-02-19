@@ -8,7 +8,7 @@ import java.util.Map;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
@@ -55,7 +55,7 @@ public class BrowserstackProxyErrorTest extends NeodymiumTest
     @Test
     public void testBrowserstackProxyAuthError()
     {
-        Result result = JUnitCore.runClasses(BrowserstackHomePageTest.class);
+        Result result = run(BrowserstackHomePageTest.class);
         checkFail(result, 1, 0, 1);
     }
 }

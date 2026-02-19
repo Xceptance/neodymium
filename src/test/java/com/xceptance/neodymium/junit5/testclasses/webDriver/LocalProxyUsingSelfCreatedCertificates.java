@@ -2,6 +2,7 @@ package com.xceptance.neodymium.junit5.testclasses.webDriver;
 
 import static com.codeborne.selenide.Condition.visible;
 
+
 import org.junit.jupiter.api.Assertions;
 
 import com.browserup.bup.proxy.auth.AuthType;

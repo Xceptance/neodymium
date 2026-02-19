@@ -198,5 +198,9 @@ public class ValidateWebDriverReuseCounter
 
         NeodymiumTest.deleteTempFile(tempConfigFile);
         WebDriverCache.quitCachedBrowsers();
+        webDriver1=null;
+        webDriver2=null;
+        proxy1=null;
+        proxy2=null;
     }
 }

@@ -10,7 +10,6 @@ import com.xceptance.neodymium.common.browser.StartNewBrowserForSetUp;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
-
 @StartNewBrowserForSetUp
 @Browser("Chrome_headless")
 public class StartBrowserForSetUp

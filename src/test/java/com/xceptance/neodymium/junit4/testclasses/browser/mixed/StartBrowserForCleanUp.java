@@ -12,7 +12,6 @@ import com.xceptance.neodymium.common.browser.StartNewBrowserForCleanUp;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.util.Neodymium;
-
 @StartNewBrowserForCleanUp
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")

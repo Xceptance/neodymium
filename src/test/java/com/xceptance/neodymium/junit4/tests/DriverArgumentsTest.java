@@ -8,7 +8,7 @@ import java.util.UUID;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
@@ -59,7 +59,7 @@ public class DriverArgumentsTest extends NeodymiumTest
     @Test
     public void test()
     {
-        Result result = JUnitCore.runClasses(DriverArgumentsConfigTest.class);
+        Result result = run(DriverArgumentsConfigTest.class);
         checkPass(result, 2, 0);
     }
 }

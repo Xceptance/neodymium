@@ -13,15 +13,15 @@ import com.xceptance.neodymium.junit4.testclasses.data.annotation.InstantiateDat
 import com.xceptance.neodymium.junit4.testclasses.data.annotation.InstantiateDataSetExceptionSecondParameterLowerMinRange;
 import com.xceptance.neodymium.junit4.testclasses.data.annotation.InstantiateMultipleDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.annotation.InstantiateSingleDataSet;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
-public class TestDataSet extends NeodymiumTest
+public class TestDataSetTest extends NeodymiumTest
 {
     @Test
     public void testNoDataSetsFound()
     {
-        Result result = JUnitCore.runClasses(InstantiateDataSetExceptionNoDataSetFound.class);
+        Result result = run(InstantiateDataSetExceptionNoDataSetFound.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: No data sets were found at all regarding your test case, please make sure to reference everything correctly.");
     }
@@ -29,28 +29,28 @@ public class TestDataSet extends NeodymiumTest
     @Test
     public void testInstantiateAllDataSets()
     {
-        Result result = JUnitCore.runClasses(InstantiateAllDataSets.class);
+        Result result = run(InstantiateAllDataSets.class);
         checkPass(result, 10, 0);
     }
 
     @Test
     public void testInstantiateSingleDataSet()
     {
-        Result result = JUnitCore.runClasses(InstantiateSingleDataSet.class);
+        Result result = run(InstantiateSingleDataSet.class);
         checkPass(result, 10, 0);
     }
 
     @Test
     public void testInstantiateMultipleDataSets()
     {
-        Result result = JUnitCore.runClasses(InstantiateMultipleDataSets.class);
+        Result result = run(InstantiateMultipleDataSets.class);
         checkPass(result, 10, 0);
     }
 
     @Test
     public void testDataSetExceptionMoreThanTwoParameters()
     {
-        Result result = JUnitCore.runClasses(InstantiateDataSetExceptionMoreThanTwoParameters.class);
+        Result result = run(InstantiateDataSetExceptionMoreThanTwoParameters.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: Only a range of 1-2 parameters are permitted using the DataSet annotation, please adjust your DataSet annotation accordingly.");
     }
@@ -58,7 +58,7 @@ public class TestDataSet extends NeodymiumTest
     @Test
     public void testDataSetExceptionOnlyParameterLowerMinRange()
     {
-        Result result = JUnitCore.runClasses(InstantiateDataSetExceptionOnlyParameterLowerMinRange.class);
+        Result result = run(InstantiateDataSetExceptionOnlyParameterLowerMinRange.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 0, but there are only 1-5 available.");
     }
@@ -66,7 +66,7 @@ public class TestDataSet extends NeodymiumTest
     @Test
     public void testDataSetExceptionOnlyParameterHigherMaxRange()
     {
-        Result result = JUnitCore.runClasses(InstantiateDataSetExceptionOnlyParameterHigherMaxRange.class);
+        Result result = run(InstantiateDataSetExceptionOnlyParameterHigherMaxRange.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 6, but there are only 1-5 available.");
     }
@@ -74,7 +74,7 @@ public class TestDataSet extends NeodymiumTest
     @Test
     public void testDataSetExceptionFirstParameterLowerMinRange()
     {
-        Result result = JUnitCore.runClasses(InstantiateDataSetExceptionFirstParameterLowerMinRange.class);
+        Result result = run(InstantiateDataSetExceptionFirstParameterLowerMinRange.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 0, but there are only 1-5 available.");
     }
@@ -82,7 +82,7 @@ public class TestDataSet extends NeodymiumTest
     @Test
     public void testDataSetExceptionFirstParameterHigherMaxRange()
     {
-        Result result = JUnitCore.runClasses(InstantiateDataSetExceptionFirstParameterHigherMaxRange.class);
+        Result result = run(InstantiateDataSetExceptionFirstParameterHigherMaxRange.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 6, but there are only 1-5 available.");
     }
@@ -90,7 +90,7 @@ public class TestDataSet extends NeodymiumTest
     @Test
     public void testDataSetExceptionSecondParameterLowerMinRange()
     {
-        Result result = JUnitCore.runClasses(InstantiateDataSetExceptionSecondParameterLowerMinRange.class);
+        Result result = run(InstantiateDataSetExceptionSecondParameterLowerMinRange.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 0, but there are only 1-5 available.");
     }
@@ -98,7 +98,7 @@ public class TestDataSet extends NeodymiumTest
     @Test
     public void testDataSetExceptionSecondParameterHigherMaxRange()
     {
-        Result result = JUnitCore.runClasses(InstantiateDataSetExceptionSecondParameterHigherMaxRange.class);
+        Result result = run(InstantiateDataSetExceptionSecondParameterHigherMaxRange.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: Method 'test1' is marked to be run with data set index 6, but there are only 1-5 available.");
     }

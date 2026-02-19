@@ -16,7 +16,6 @@ import com.xceptance.neodymium.common.browser.WebDriverCache;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.util.Neodymium;
-
 @TestMethodOrder(MethodOrderer.MethodName.class)
 @KeepBrowserOpen(onlyOnFailure = true)
 @Browser("Chrome_1024x768")
@@ -102,5 +101,8 @@ public class ValidateKeepBrowserOpenOnFailureAnnotationClassOverridesConfig
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver1);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver2);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver3);
+        webDriver1=null;
+        webDriver2=null;
+        webDriver3=null;
     }
 }

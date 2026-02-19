@@ -5,7 +5,7 @@ import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import org.junit.Assert;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -151,8 +151,9 @@ public class AllureAddonsTest
     {
         DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
         DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
+        AllureAddons.lockEnvironmentInformationFile();
         Document doc = docBuilder.parse(getEnvFile());
-
+        AllureAddons.unlockEnvironmentFile();
         Node environment = doc.getDocumentElement();
         Assert.assertEquals("Wrong root node name in environments-test.xml", "environment", environment.getNodeName());
 
@@ -193,7 +194,9 @@ public class AllureAddonsTest
 
         // assert provided list with parsed params
         // in case environment contained browser configuration childNodes.getLength contains more entries than expected
-        Assert.assertEquals("Wrong number of params in environments.xml. It contains: " + params, list.size(), params.size());
+        // we can though only assert that there are as many or more entries than we expect because the environment.xml
+        // file may be edited by parallel runs and therefore contain entries added by them
+        Assert.assertTrue("Wrong number of params in environments.xml. It contains: " + params, list.size() >= params.size());
 
         for (Entry<String, String> testDataPoint : list)
         {

@@ -8,7 +8,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import java.io.File;
@@ -52,7 +52,7 @@ public class FixedRandomnessOfRandomBrowserTest extends NeodymiumTest
     public void testFixedRandomnessOfRandomBrowser()
     {
         // test fixed random browser support
-        Result result = JUnitCore.runClasses(FixedRandomnessOfRandomBrowser.class);
+        Result result = run(FixedRandomnessOfRandomBrowser.class);
         checkPass(result, 3, 0);
     }
 }

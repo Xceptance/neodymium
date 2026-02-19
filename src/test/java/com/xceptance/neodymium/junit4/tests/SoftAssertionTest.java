@@ -4,7 +4,7 @@ import com.xceptance.neodymium.junit4.testclasses.softassertion.UseSoftAssertion
 import com.xceptance.neodymium.util.Neodymium;
 import org.junit.After;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 public class SoftAssertionTest extends NeodymiumTest
@@ -12,7 +12,7 @@ public class SoftAssertionTest extends NeodymiumTest
     @Test
     public void validateSoftAssertion()
     {
-        Result result = JUnitCore.runClasses(UseSoftAssertions.class);
+        Result result = run(UseSoftAssertions.class);
         checkFail(result, 1, 0, 1);
     }
 

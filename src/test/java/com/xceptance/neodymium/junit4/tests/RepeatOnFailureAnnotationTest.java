@@ -3,7 +3,7 @@ package com.xceptance.neodymium.junit4.tests;
 import java.util.HashMap;
 
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.junit4.testclasses.repeat.classlevel.ClassRetryBrowserCombinationTest;
@@ -29,98 +29,98 @@ public class RepeatOnFailureAnnotationTest extends NeodymiumTest
     @Test
     public void testClassRetryEndWithSuccessTest()
     {
-        Result result = JUnitCore.runClasses(ClassRetryEndWithSuccessTest.class);
+        Result result = run(ClassRetryEndWithSuccessTest.class);
         checkPass(result, 3, 0);
     }
 
     @Test
     public void testClassRetryOnEveryErrorTest()
     {
-        Result result = JUnitCore.runClasses(ClassRetryOnEveryErrorTest.class);
+        Result result = run(ClassRetryOnEveryErrorTest.class);
         checkFail(result, 3, 0, 1, "Fail 3");
     }
     
     @Test
     public void testClassRetryEmptyErrorMessageTest()
     {
-        Result result = JUnitCore.runClasses(ClassRetryEmptyErrorMessageTest.class);
+        Result result = run(ClassRetryEmptyErrorMessageTest.class);
         checkFail(result, 3, 0, 1);
     }
 
     @Test
     public void testClassRetryOwnBrowserForSetupTest()
     {
-        Result result = JUnitCore.runClasses(ClassRetryOwnBrowserForSetupTest.class);
+        Result result = run(ClassRetryOwnBrowserForSetupTest.class);
         checkFail(result, 3, 0, 1, "Fail 3");
     }
 
     @Test
     public void testClassNoRetryOnUnexpectedErrorTest()
     {
-        Result result = JUnitCore.runClasses(ClassNoRetryOnUnexpectedErrorTest.class);
+        Result result = run(ClassNoRetryOnUnexpectedErrorTest.class);
         checkFail(result, 3, 0, 1, "Shoul not be retried");
     }
 
     @Test
     public void testClassRetryStopOnSuccessTest()
     {
-        Result result = JUnitCore.runClasses(ClassRetryStopOnSuccessTest.class);
+        Result result = run(ClassRetryStopOnSuccessTest.class);
         checkPass(result, 3, 0);
     }
 
     @Test
     public void testClassRetryWithoutSuccessInAfterTest()
     {
-        Result result = JUnitCore.runClasses(ClassRetryWithoutSuccessInAfterTest.class);
+        Result result = run(ClassRetryWithoutSuccessInAfterTest.class);
         checkFail(result, 3, 0, 1, "Fail 3");
     }
 
     @Test
     public void testClassRetryWithoutSuccessInBeforeTest()
     {
-        Result result = JUnitCore.runClasses(ClassRetryWithoutSuccessInBeforeTest.class);
+        Result result = run(ClassRetryWithoutSuccessInBeforeTest.class);
         checkFail(result, 3, 0, 1, "Fail 3");
     }
 
     @Test
     public void testClassRetryWithoutSuccessMultiplicationTest()
     {
-        Result result = JUnitCore.runClasses(ClassRetryWithoutSuccessMultiplicationTest.class);
+        Result result = run(ClassRetryWithoutSuccessMultiplicationTest.class);
         checkFail(result, 12, 0, 1, "Fail 3");
     }
 
     @Test
     public void testClassRetryWithoutSuccessTest()
     {
-        Result result = JUnitCore.runClasses(ClassRetryWithoutSuccessTest.class);
+        Result result = run(ClassRetryWithoutSuccessTest.class);
         checkFail(result, 3, 0, 1, "Fail 3");
     }
 
     @Test
     public void testClassRetryStopOnUnexpectedFailureTest()
     {
-        Result result = JUnitCore.runClasses(ClassRetryStopOnUnexpectedFailureTest.class);
+        Result result = run(ClassRetryStopOnUnexpectedFailureTest.class);
         checkFail(result, 3, 0, 1, "Fail 2");
     }
 
     @Test
     public void testClassRepeatOnFailureBrowserCombination()
     {
-        Result result = JUnitCore.runClasses(ClassRetryBrowserCombinationTest.class);
+        Result result = run(ClassRetryBrowserCombinationTest.class);
         checkFail(result, 6, 0, 1, "Fail 3");
     }
 
     @Test
     public void testClassRepeatOnFailureTestdataCombination()
     {
-        Result result = JUnitCore.runClasses(ClassRetryTestdataCombinationTest.class);
+        Result result = run(ClassRetryTestdataCombinationTest.class);
         checkFail(result, 6, 0, 1, "Fail 3");
     }
 
     @Test
     public void testMethodRepeatOnFailureBrowserCombination()
     {
-        Result result = JUnitCore.runClasses(MethodRepeatOnFailureBrowserCombinationTest.class);
+        Result result = run(MethodRepeatOnFailureBrowserCombinationTest.class);
         checkFail(result, 8, 0, 2, new HashMap<String, String>()
         {
             {
@@ -133,21 +133,21 @@ public class RepeatOnFailureAnnotationTest extends NeodymiumTest
     @Test
     public void testMethodRepeatOnFailureTestdataCombination()
     {
-        Result result = JUnitCore.runClasses(MethodRepeatOnFailureTestdataCombinationTest.class);
+        Result result = run(MethodRepeatOnFailureTestdataCombinationTest.class);
         checkFail(result, 6, 0, 1, "Fail 3");
     }
 
     @Test
     public void testMethodRepeatOnFailureTest()
     {
-        Result result = JUnitCore.runClasses(MethodRepeatOnFailureTest.class);
+        Result result = run(MethodRepeatOnFailureTest.class);
         checkFail(result, 4, 0, 1, "Parent fail");
     }
 
     @Test
     public void testOverwriteRetryTest()
     {
-        Result result = JUnitCore.runClasses(OverwriteRetryTest.class);
+        Result result = run(OverwriteRetryTest.class);
         checkFail(result, 6, 0, 2, new HashMap<String, String>()
         {
             {

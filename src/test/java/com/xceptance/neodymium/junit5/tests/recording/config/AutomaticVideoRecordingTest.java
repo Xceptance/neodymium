@@ -1,14 +1,13 @@
 package com.xceptance.neodymium.junit5.tests.recording.config;
 
-import java.io.File;
-
+import com.xceptance.neodymium.common.recording.FilmTestExecution;
+import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
+import com.xceptance.neodymium.junit5.tests.recording.AbstractRecordingTest;
 import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
-import com.xceptance.neodymium.junit4.tests.recording.AbstractRecordingTest;
+import java.io.File;
 
 public class AutomaticVideoRecordingTest extends AbstractRecordingTest
 {

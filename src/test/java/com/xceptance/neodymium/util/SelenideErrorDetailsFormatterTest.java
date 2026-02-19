@@ -7,16 +7,24 @@ import static com.codeborne.selenide.Selenide.open;
 
 import java.time.Duration;
 
+import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
+import org.junit.runner.RunWith;
 
 import com.codeborne.selenide.CollectionCondition;
 import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import com.xceptance.neodymium.common.retry.Retry;
+import com.xceptance.neodymium.junit4.NeodymiumRunner;
 
+@Retry(exceptions =
+{
+  "SessionNotCreated Could not start a new session"
+})
+@RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")
 public class SelenideErrorDetailsFormatterTest
 {
-    @NeodymiumTest
+    @Test
     public void testErrorDetailesDeactivated()
     {
         Neodymium.configuration().setProperty("neodymium.report.showSelenideErrorDetails", "false");
@@ -36,7 +44,7 @@ public class SelenideErrorDetailsFormatterTest
         }
     }
 
-    @NeodymiumTest
+    @Test
     public void testErrorDetailesActivated()
     {
         Neodymium.configuration().setProperty("neodymium.report.showSelenideErrorDetails", "true");
@@ -59,7 +67,7 @@ public class SelenideErrorDetailsFormatterTest
         }
     }
 
-    @NeodymiumTest
+    @Test
     public void testCollectionErrorDetailesDeactivated()
     {
         Neodymium.configuration().setProperty("neodymium.report.showSelenideErrorDetails", "false");
@@ -78,7 +86,7 @@ public class SelenideErrorDetailsFormatterTest
         }
     }
 
-    @NeodymiumTest
+    @Test
     public void testCollectionErrorDetailesActivated()
     {
         Neodymium.configuration().setProperty("neodymium.report.showSelenideErrorDetails", "true");

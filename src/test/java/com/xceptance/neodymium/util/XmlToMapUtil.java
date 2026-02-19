@@ -1,8 +1,14 @@
-package com.xceptance.neodymium.junit5.testclasses.allure.customenvironmentdata;
+package com.xceptance.neodymium.util;
 
 import java.io.File;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -10,6 +16,8 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
+
+import com.xceptance.neodymium.util.AllureAddons;
 
 public class XmlToMapUtil
 {
@@ -31,8 +39,9 @@ public class XmlToMapUtil
             File xmlFile = new File(filePath);
             DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
             DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+            AllureAddons.lockEnvironmentInformationFile();
             Document doc = dBuilder.parse(xmlFile);
-
+            AllureAddons.unlockEnvironmentFile();
             doc.getDocumentElement().normalize();
 
             NodeList parameterList = doc.getElementsByTagName("parameter");

@@ -11,7 +11,6 @@ import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.Neodymium;
-
 @RunWith(NeodymiumRunner.class)
 public class LocalProxyUsingProvidedCertificates
 {

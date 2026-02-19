@@ -15,7 +15,7 @@ import com.xceptance.neodymium.junit5.testclasses.data.annotation.InstantiateMul
 import com.xceptance.neodymium.junit5.testclasses.data.annotation.InstantiateSingleDataSet;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 
-public class TestDataSet extends AbstractNeodymiumTest
+public class TestDataSetTest extends AbstractNeodymiumTest
 {
     @Test
     public void testNoDataSetsFound()

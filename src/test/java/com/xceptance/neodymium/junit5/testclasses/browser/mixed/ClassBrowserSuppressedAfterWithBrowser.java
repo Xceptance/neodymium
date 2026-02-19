@@ -8,7 +8,6 @@ import com.xceptance.neodymium.common.browser.StartNewBrowserForCleanUp;
 import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
-
 @Browser("Chrome_headless")
 @SuppressBrowsers
 public class ClassBrowserSuppressedAfterWithBrowser

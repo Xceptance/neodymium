@@ -91,20 +91,23 @@ public class DebugUtilsTest
         Assert.assertEquals(3, eventListener.implicitWaitCount);
 
         // on wait due to find and click
-        $("#content article h1").click();
+        $("#content article h1").scrollIntoView(true);
         Assert.assertEquals(4, eventListener.implicitWaitCount);
+
+        $("#content article h1").click();
+        Assert.assertEquals(5, eventListener.implicitWaitCount);
 
         // additional one wait due to find and click
         $("#masthead .search-toggle").click();
-        Assert.assertEquals(5, eventListener.implicitWaitCount);
+        Assert.assertEquals(6, eventListener.implicitWaitCount);
 
         // one wait due to find and change value
         $("#search-container .search-form input.search-field").val("abc");
-        Assert.assertEquals(6, eventListener.implicitWaitCount);
+        Assert.assertEquals(7, eventListener.implicitWaitCount);
 
         // one wait due to find and press enter
         $("#search-container .search-form input.search-field").pressEnter();
-        Assert.assertEquals(7, eventListener.implicitWaitCount);
+        Assert.assertEquals(8, eventListener.implicitWaitCount);
     }
 
     @Test
@@ -116,16 +119,17 @@ public class DebugUtilsTest
         Selenide.open("https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_select");
 
         // check if the cookie banner is present and accept it if so
-        SelenideElement acceptCookiesButton = $("#snigel-cmp-framework #accept-choices");
-        
-        SelenideAddons.optionalWaitUntilCondition(acceptCookiesButton, visible);
-        if (acceptCookiesButton.isDisplayed())
+        SelenideElement acceptCookiesButtonFrame = $("#fast-cmp-iframe");
+
+        SelenideAddons.optionalWaitUntilCondition(acceptCookiesButtonFrame, visible);
+        if (acceptCookiesButtonFrame.isDisplayed())
         {
-            acceptCookiesButton.click();
+            Neodymium.getDriver().switchTo().frame(acceptCookiesButtonFrame);
+            $(".fast-cmp-button-primary").click();
+            Neodymium.getDriver().switchTo().defaultContent();
         }
 
         Neodymium.getDriver().switchTo().frame("iframeResult");
-
         SelenideElement body = $("body");
         body.click();
         assertJsSuccessfullyInjected();

@@ -177,6 +177,7 @@ public class TakeScreenshotsThread extends Thread
                 writer.stop();
                 try
                 {
+                    File tempRecording = new File(fileName);
                     if (recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed)
                     {
 
@@ -185,8 +186,14 @@ public class TakeScreenshotsThread extends Thread
 
                         if (recordingConfigurations.deleteRecordingsAfterAddingToAllureReport())
                         {
-                            new File(fileName).delete();
+                            tempRecording.delete();
                         }
+                    }
+
+                    // delete the file when configured and only if it wasn't deleted already
+                    if (recordingConfigurations.deleteTempRecordings() && tempRecording.exists())
+                    {
+                        tempRecording.delete();
                     }
                 }
                 catch (IOException e)

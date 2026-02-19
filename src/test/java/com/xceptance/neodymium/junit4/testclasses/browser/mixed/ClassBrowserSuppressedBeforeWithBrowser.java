@@ -10,7 +10,6 @@ import com.xceptance.neodymium.common.browser.StartNewBrowserForSetUp;
 import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.Neodymium;
-
 @RunWith(NeodymiumRunner.class)
 @Browser("chrome")
 @SuppressBrowsers

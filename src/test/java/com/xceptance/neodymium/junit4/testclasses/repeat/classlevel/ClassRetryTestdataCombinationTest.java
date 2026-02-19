@@ -1,6 +1,5 @@
 package com.xceptance.neodymium.junit4.testclasses.repeat.classlevel;
 
-import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.Neodymium;
@@ -10,7 +9,6 @@ import org.junit.runner.RunWith;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-@Browser("Chrome_headless")
 @Retry(exceptions =
 {
   "Fail"
