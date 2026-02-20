@@ -201,7 +201,7 @@ public class ScreenshotWriter
                 // but for before methods, this is not possible due to allure limitations
                 // so we just add it normally when the allure lifecycle does not allow to be altered
                 boolean screenshotAdded;
-                Allure.getLifecycle().addAttachment("Screenshot", "image/png", ".png", new FileInputStream(imagePath));
+                Allure.getLifecycle().addAttachment(captureMode == Capture.FULL? "Screenshot" : "View Port Screenshot", "image/png", ".png", new FileInputStream(imagePath));
                 screenshotAdded = true;
 
                 // to spare disk space, remove the file if we already used it inside the report
