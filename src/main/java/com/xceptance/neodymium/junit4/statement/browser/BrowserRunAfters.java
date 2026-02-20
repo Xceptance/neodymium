@@ -66,7 +66,14 @@ public class BrowserRunAfters extends RunAfters
         }
         boolean tearDownDone = false;
         List<Throwable> errors = new ArrayList<Throwable>();
-
+        try
+        {
+            next.evaluate();
+        }
+        catch (Throwable e)
+        {
+            errors.add(e);
+        }
         for (FrameworkMethod each : afters)
         {
             if (Neodymium.configuration().startNewBrowserForCleanUp())
