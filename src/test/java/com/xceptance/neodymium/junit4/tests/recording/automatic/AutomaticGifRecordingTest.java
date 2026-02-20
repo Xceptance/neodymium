@@ -16,6 +16,6 @@ public class AutomaticGifRecordingTest extends AbstractRecordingTest
     public static void form()
     {
         beforeClass("gif", true);
-        configurationsClass = GifRecordingConfigurations.class;
+        configurationsClass.put(Thread.currentThread(), GifRecordingConfigurations.class);
     }
 }

@@ -20,7 +20,7 @@ public class ManualGifRecordingTest extends AbstractRecordingTest
     public static void form()
     {
         beforeClass("gif", false);
-        configurationsClass = GifRecordingConfigurations.class;
+        configurationsClass.put(Thread.currentThread(), GifRecordingConfigurations.class);
     }
 
     @BeforeEach
@@ -32,6 +32,6 @@ public class ManualGifRecordingTest extends AbstractRecordingTest
     @AfterEach
     public void finishFilming()
     {
-        FilmTestExecution.finishGifFilming(uuid, false);
+        FilmTestExecution.finishGifFilming(uuid.get(Thread.currentThread()), false);
     }
 }

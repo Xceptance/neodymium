@@ -1,20 +1,5 @@
 package com.xceptance.neodymium.util;
 
-import com.browserup.bup.BrowserUpProxy;
-import com.codeborne.selenide.AssertionMode;
-import com.codeborne.selenide.Configuration;
-import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.TestStepListener;
-import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
-import com.xceptance.neodymium.common.testdata.TestData;
-import org.aeonbits.owner.ConfigFactory;
-import org.apache.commons.lang3.StringUtils;
-import org.openqa.selenium.By;
-import org.openqa.selenium.Dimension;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.remote.RemoteWebDriver;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -23,6 +8,21 @@ import java.util.Map;
 import java.util.Random;
 import java.util.WeakHashMap;
 
+import org.aeonbits.owner.ConfigFactory;
+import org.apache.commons.lang3.StringUtils;
+import org.openqa.selenium.By;
+import org.openqa.selenium.Dimension;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.remote.RemoteWebDriver;
+
+import com.browserup.bup.BrowserUpProxy;
+import com.codeborne.selenide.AssertionMode;
+import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.Selenide;
+import com.xceptance.neodymium.common.TestStepListener;
+import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
+import com.xceptance.neodymium.common.testdata.TestData;
 
 /**
  * See our Github wiki: <a href="https://github.com/Xceptance/neodymium/wiki/Neodymium-context">Neodymium context</a>

@@ -1,8 +1,6 @@
 package com.xceptance.neodymium.junit5.tests.recording.config;
 
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
 import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.recording.AbstractRecordingDeletionTest;
 import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
@@ -21,20 +19,14 @@ public class DeleteVideoRecordingTest extends AbstractRecordingDeletionTest
     public static void form()
     {
         beforeClass("video", true);
-        configurationsClass = VideoRecordingConfigurations.class;
-    }
-
-    @Override
-    @NeodymiumTest
-    public void test()
-    {
-        super.test();
+        configurationsClass.put(Thread.currentThread(), VideoRecordingConfigurations.class);
     }
 
     @AfterAll
     public static void assertLogFileExists()
     {
-        File logFile = new File(FilmTestExecution.getContextVideo().ffmpegLogFile());
+        System.out.println("logFilePath: " + logFilePath.get(Thread.currentThread()));
+        File logFile = new File(logFilePath.get(Thread.currentThread()));
         Assert.assertTrue("the logfile for the automatic video recording test exists", logFile.exists());
         logFile.delete();
         Assert.assertFalse("the logfile for the automatic video recording test wasn't deleted", logFile.exists());

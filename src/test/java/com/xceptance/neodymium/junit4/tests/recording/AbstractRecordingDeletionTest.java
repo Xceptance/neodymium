@@ -16,14 +16,17 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Browser("Chrome_headless")
 @RunWith(NeodymiumRunner.class)
 public abstract class AbstractRecordingDeletionTest extends NeodymiumTest
 {
-    protected static String uuid;
+    protected static Map<Thread, String> uuid = new HashMap<>();
 
-    public static Class<? extends RecordingConfigurations> configurationsClass;
+    protected static Map<Thread, String> logFilePath = new HashMap<>();
+
+    public static  Map<Thread,Class<? extends RecordingConfigurations>> configurationsClass = new HashMap<>();
 
     private boolean isGif;
 
@@ -42,7 +45,7 @@ public abstract class AbstractRecordingDeletionTest extends NeodymiumTest
         properties1.put(format + ".deleteRecordingsAfterAddingToAllureReport", "false");
         properties1.put(format + ".deleteTempRecordings", "true");
 
-        final String fileLocation = "config/temp-" + format + "-" + filmAutomatically + ".properties";
+        final String fileLocation = "config/temp-" + format + "-delete-" + filmAutomatically +UUID.randomUUID()+ ".properties";
         File tempConfigFile1 = new File("./" + fileLocation);
 
         writeMapToPropertiesFile(properties1, tempConfigFile1);
@@ -55,16 +58,16 @@ public abstract class AbstractRecordingDeletionTest extends NeodymiumTest
     {
         List<String> uuids = isGif ? FilmTestExecution.getNamesOfAllCurrentGifRecordings() : FilmTestExecution.getNamesOfAllCurrentVideoRecordings();
         Assert.assertEquals(1, uuids.size());
-        uuid = uuids.get(0);
+        uuid.put(Thread.currentThread(), uuids.get(0));
         Selenide.open("https://www.xceptance.com/en/");
-        Selenide.sleep(FilmTestExecution.getContext(configurationsClass).oneImagePerMilliseconds());
+        Selenide.sleep(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).oneImagePerMilliseconds());
     }
 
     @AfterClass
     public static void assertRecordingFileWasDeleted()
     {
-        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass).tempFolderToStoreRecording() + uuid + "."
-                                          + FilmTestExecution.getContext(configurationsClass).format());
+        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid + "."
+            + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
         Assert.assertFalse("the recording file wasn't deleted", recordingFile.exists());
     }
 }

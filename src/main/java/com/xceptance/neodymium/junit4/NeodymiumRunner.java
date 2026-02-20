@@ -2,7 +2,6 @@ package com.xceptance.neodymium.junit4;
 
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.NeoAllureListener;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.Browser;
@@ -15,6 +14,7 @@ import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.NeodymiumRandom;
+import io.qameta.allure.selenide.AllureSelenide;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -45,16 +45,14 @@ import java.util.stream.Collectors;
 import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSeed;
 
 /**
- * This class executes {@link JUnit4} test classes (aka JUnit Runner) and adds several features to test execution e.g.
- * multi {@link Browser browser} and <a href="https://github.com/Xceptance/neodymium/wiki/Test-data-provider">test
- * data</a>. Vanilla JUnit parameterized tests are supported as well but only with parameter injection (as described
- * here: <a href=
- * "https://github.com/junit-team/junit4/wiki/parameterized-tests#using-parameter-for-field-injection-instead-of-constructor">Using @Parameter
- * for Field injection instead of Constructor</a>). In order to run a {@link JUnit4} test with this runner the class or
- * its super-class has to be annotated with {@link RunWith}
+ * This class executes {@link JUnit4} test classes (aka JUnit Runner) and adds several features to test execution e.g. multi {@link Browser browser} and <a
+ * href="https://github.com/Xceptance/neodymium/wiki/Test-data-provider">test data</a>. Vanilla JUnit parameterized tests are supported as well but only with
+ * parameter injection (as described here: <a href=
+ * "https://github.com/junit-team/junit4/wiki/parameterized-tests#using-parameter-for-field-injection-instead-of-constructor">Using @Parameter for Field
+ * injection instead of Constructor</a>). In order to run a {@link JUnit4} test with this runner the class or its super-class has to be annotated with
+ * {@link RunWith}
  * <p>
  * <b>Example</b>
- *
  * <pre>
  * &#64;RunWith(NeodymiumRunner.class)
  * public class MyTests
@@ -65,9 +63,7 @@ import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSee
  *     }
  * }
  * </pre>
- *
  * <b>Example</b>
- *
  * <pre>
  * public class MyTests extends BaseTestClass
  * {
@@ -76,7 +72,6 @@ import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSee
  *     {
  *     }
  * }
- *
  * &#64;RunWith(NeodymiumRunner.class)
  * public class BaseTestClass
  * {
@@ -96,8 +91,13 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     public NeodymiumRunner(Class<?> clazz) throws InitializationError
     {
         super(clazz);
-        SelenideLogger.addListener(LISTENER_NAME, new NeoAllureListener());
 
+        AllureSelenide allureSelenide = new AllureSelenide();
+
+        // if advanced screenshots are enabled, Selenide screenshots should be disabled
+        allureSelenide.screenshots(!Neodymium.configuration().enableAdvancedScreenShots());
+
+        SelenideLogger.addListener(LISTENER_NAME, allureSelenide);
         SelenideLogger.addListener(TestStepListener.LISTENER_NAME, new TestStepListener());
 
         if (!neoVersionLogged && Neodymium.configuration().logNeoVersion())
@@ -105,7 +105,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
             if (!AllureAddons.envFileExists())
             {
                 LOGGER.info("This test uses Neodymium Library (version: " + Neodymium.getNeodymiumVersion()
-                            + "), MIT License, more details on https://github.com/Xceptance/neodymium");
+                                + "), MIT License, more details on https://github.com/Xceptance/neodymium");
                 neoVersionLogged = true;
                 AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder()
                                                                    .put("Testing Framework", "Neodymium " + Neodymium.getNeodymiumVersion())
@@ -120,7 +120,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     {
         flat,
         tree,
-    };
+    }
 
     private List<FrameworkMethod> computedTestMethods;
 
@@ -208,9 +208,9 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
                 // for the case, when the property was set accidentally, inform the user about such behavior reason via
                 // warning in logs
                 LOGGER.warn("The test class " + getName() + " will not be executed as none of its methods match regex '"
-                            + testExecutionRegex + "'. In case this is not the behaviour you expected,"
-                            + " please check your neodymium.properties for neodymium.testNameFilter configuration"
-                            + " and your maven surefire settings for the corresponding system property");
+                                + testExecutionRegex + "'. In case this is not the behaviour you expected,"
+                                + " please check your neodymium.properties for neodymium.testNameFilter configuration"
+                                + " and your maven surefire settings for the corresponding system property");
             }
         }
     }
@@ -348,8 +348,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         {
             testMethods = testMethods.stream()
                                      .filter(testMethod -> {
-                                         String functionName = testMethod.getMethod().getDeclaringClass().getName() + "#"
-                                                               + testMethod.getName();
+                                         String functionName = testMethod.getMethod().getDeclaringClass().getName() + "#" + testMethod.getName();
                                          return Pattern.compile(testExecutionRegex)
                                                        .matcher(functionName)
                                                        .find()
@@ -512,21 +511,17 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     protected Statement withBefores(FrameworkMethod method, Object target,
                                     Statement statement)
     {
-        List<FrameworkMethod> befores = getTestClass().getAnnotatedMethods(
-                                                                           Before.class);
-        return befores.isEmpty() ? statement
-                                 : Neodymium.configuration().startNewBrowserForSetUp() ? new BrowserRunBefores(method, statement, befores, target)
-                                                                                       : new RunBefores(statement, befores, target);
+        List<FrameworkMethod> befores = getTestClass().getAnnotatedMethods(Before.class);
+        return befores.isEmpty() ? statement : Neodymium.configuration().startNewBrowserForSetUp() ? new BrowserRunBefores(method, statement, befores, target)
+            : new RunBefores(statement, befores, target);
     }
 
     @Override
     protected Statement withAfters(FrameworkMethod method, Object target,
                                    Statement statement)
     {
-        List<FrameworkMethod> afters = getTestClass().getAnnotatedMethods(
-                                                                          After.class);
-        return afters.isEmpty() ? statement
-                                : new BrowserRunAfters(method, statement, afters, target);
+        List<FrameworkMethod> afters = getTestClass().getAnnotatedMethods(After.class);
+        return afters.isEmpty() ? statement : new BrowserRunAfters(method, statement, afters, target);
     }
 
     @Override

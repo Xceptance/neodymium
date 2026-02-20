@@ -1,5 +1,8 @@
 package com.xceptance.neodymium.junit5.tests;
 
+import static com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest.tempFiles;
+import static com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest.writeMapToPropertiesFile;
+
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBuffer;
 import java.awt.image.DataBufferByte;
@@ -9,12 +12,16 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import javax.imageio.ImageIO;
 
+import org.aeonbits.owner.ConfigFactory;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.ScreenshotWriter;
@@ -31,31 +38,42 @@ import io.qameta.allure.model.StepResult;
 @Browser("Chrome_1024x768")
 public class AdvancedScreenshotTest
 {
+    @BeforeAll
+    public static void setUpNeodymiumConfiguration() throws IOException
+    {
+        // set up a temp-neodymium.properties
+        final String fileLocation = "config/temp-AdvancedScreenshotTest-neodymium.properties";
+        File tempConfigFile = new File("./" + fileLocation);
+
+        tempFiles.add(tempConfigFile);
+
+        Map<String, String> properties = new HashMap<>();
+
+        properties.put("neodymium.screenshots.enableAdvancedScreenshots", "true");
+        properties.put("neodymium.screenshots.fullpagecapture.enable", "true");
+        properties.put("neodymium.screenshots.viewport.enable", "false");
+
+        // set the new properties
+        for (String key : properties.keySet())
+        {
+            Neodymium.configuration().setProperty(key, properties.get(key));
+        }
+
+        writeMapToPropertiesFile(properties, tempConfigFile);
+        ConfigFactory.setProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:" + fileLocation);
+    }
+
     @NeodymiumTest
     public void testFullPageScreenshot() throws IOException
     {
         Selenide.open("https://www.xceptance.com/en/");
 
         // take not blurred screenshot
-        try
-        {
-            Allure.step("test", () -> ScreenshotWriter.doScreenshot("notblurredScreenshot"));
-        }
-        catch (Exception e)
-        {
-            // intentionally blank
-        }
+        Allure.step("test", () -> ScreenshotWriter.doScreenshot("notblurredScreenshot"));
 
         // take blurred screenshot
         Neodymium.configuration().setProperty("neodymium.screenshots.blurFullPageScreenshot", "true");
-        try
-        {
-            Allure.step("test", () -> ScreenshotWriter.doScreenshot("blurredScreenshot"));
-        }
-        catch (Exception e)
-        {
-            // intentionally blank
-        }
+        Allure.step("test", () -> ScreenshotWriter.doScreenshot("blurredScreenshot"));
 
         // compare them
         List<Attachment> attachments = getAllureResultAttachments();

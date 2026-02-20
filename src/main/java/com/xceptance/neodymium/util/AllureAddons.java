@@ -16,18 +16,13 @@ import io.qameta.allure.Step;
 import io.qameta.allure.internal.AllureStorage;
 import io.qameta.allure.model.Attachment;
 import io.qameta.allure.model.StepResult;
-import org.apache.commons.io.FileUtils;
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.TakesScreenshot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
-import org.xml.sax.SAXParseException;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -38,29 +33,22 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLConnection;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
-import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
@@ -121,22 +109,11 @@ public class AllureAddons
      *            the proper description of this step
      * @param actions
      *            what to do as Lambda
-     * @throws IOException
      */
     @Step("{description}")
-    public static void step(final String description, final Runnable actions) throws IOException
+    public static void step(final String description, final Runnable actions)
     {
-        try
-        {
-            actions.run();
-        }
-        finally
-        {
-            if (Neodymium.configuration().screenshotPerStep())
-            {
-                attachPNG(UUID.randomUUID().toString() + ".png");
-            }
-        }
+        actions.run();
     }
 
     /**
@@ -149,22 +126,11 @@ public class AllureAddons
      * @param actions
      *            what to do as Lambda
      * @return T
-     * @throws IOException
      */
     @Step("{description}")
-    public static <T> T step(final String description, final Supplier<T> actions) throws IOException
+    public static <T> T step(final String description, final Supplier<T> actions)
     {
-        try
-        {
-            return actions.get();
-        }
-        finally
-        {
-            if (Neodymium.configuration().screenshotPerStep())
-            {
-                attachPNG(UUID.randomUUID().toString() + ".png");
-            }
-        }
+        return actions.get();
     }
 
     /**
@@ -175,32 +141,7 @@ public class AllureAddons
      */
     public static void attachPNG(final String filename) throws IOException
     {
-        // if we are running without a driver, we can't take a screenshot
-        if (!Neodymium.hasDriver())
-        {
-            return;
-        }
-
-        // If there's a fullpage screenshot screenshot, we do both, if not we do not want to have two viewport
-        // screenshots
-        // if full page screenshot/advanced screenshotting is disabled we need the default
-        if (Neodymium.configuration().enableViewportScreenshot() == true &&
-            (Neodymium.configuration().enableAdvancedScreenShots() == false || Neodymium.configuration().enableFullPageCapture() == true))
-        {
-            // take a screenshot using the driver and write it to a file
-            byte[] screenshot = ((TakesScreenshot) Neodymium.getDriver()).getScreenshotAs(OutputType.BYTES);
-            FileUtils.writeByteArrayToFile(new File(filename), screenshot);
-            // add to the allure report, no need put it into the correct step, since it will be there already during the
-            // normal execution context.
-            // Only on exception we don't know where to put it and that is handled elsewhere
-            Allure.getLifecycle().addAttachment("Screenshot", "image/png", ".png", new FileInputStream(filename));
-
-            new File(filename).delete();
-        }
-        if (Neodymium.configuration().enableAdvancedScreenShots() == true)
-        {
-            ScreenshotWriter.doScreenshot(filename);
-        }
+        ScreenshotWriter.doScreenshot(filename);
     }
 
     /**
@@ -384,6 +325,39 @@ public class AllureAddons
             return findLastStep(childStepts);
         }
         return lastStep;
+    }
+
+    /**
+     * Checks if the currently executing Allure step has any child steps.
+     *
+     * @return true if the current step has one or more child steps, false otherwise.
+     */
+    public static boolean currentStepHasChildren()
+    {
+
+        // Get the UUID of the currently executing step
+        String currentStepUuid = Allure.getLifecycle().getCurrentTestCaseOrStep().orElse(null);
+
+        if (currentStepUuid == null)
+        {
+            // We are not inside a step, so it cannot have children
+            return false;
+        }
+
+        // Access the step's data.
+        // Use AtomicBoolean because we need to set a value from inside the lambda.
+        AtomicBoolean hasChildren = new AtomicBoolean(false);
+
+        Allure.getLifecycle().updateStep(currentStepUuid, stepResult -> {
+
+            // Get the list of child steps and check if it's not empty
+            if (stepResult.getSteps() != null && !stepResult.getSteps().isEmpty())
+            {
+                hasChildren.set(true);
+            }
+        });
+
+        return hasChildren.get();
     }
 
     public static enum EnvironmentInfoMode

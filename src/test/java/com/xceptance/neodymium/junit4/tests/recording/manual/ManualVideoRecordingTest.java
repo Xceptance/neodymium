@@ -24,7 +24,7 @@ public class ManualVideoRecordingTest extends AbstractRecordingTest
     public static void form()
     {
         beforeClass("video", false);
-        configurationsClass = VideoRecordingConfigurations.class;
+        configurationsClass.put(Thread.currentThread(),VideoRecordingConfigurations.class);
     }
 
     @Before
@@ -36,7 +36,7 @@ public class ManualVideoRecordingTest extends AbstractRecordingTest
     @After
     public void finishFilming()
     {
-        FilmTestExecution.finishVideoFilming(uuid, false);
+        FilmTestExecution.finishVideoFilming(uuid.get(Thread.currentThread()), false);
     }
 
     @AfterClass
