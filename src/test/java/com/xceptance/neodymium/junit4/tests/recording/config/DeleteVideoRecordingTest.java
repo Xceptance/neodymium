@@ -20,7 +20,7 @@ public class DeleteVideoRecordingTest extends AbstractRecordingDeletionTest
     public static void form()
     {
         beforeClass("video", true);
-        configurationsClass = VideoRecordingConfigurations.class;
+        configurationsClass.put(Thread.currentThread(),VideoRecordingConfigurations.class);
     }
 
     @AfterClass
