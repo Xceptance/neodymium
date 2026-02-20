@@ -22,9 +22,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
-import org.xml.sax.SAXParseException;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -38,19 +36,14 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLConnection;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
-import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -116,7 +109,6 @@ public class AllureAddons
      *            the proper description of this step
      * @param actions
      *            what to do as Lambda
-     * @throws IOException
      */
     @Step("{description}")
     public static void step(final String description, final Runnable actions)
@@ -134,7 +126,6 @@ public class AllureAddons
      * @param actions
      *            what to do as Lambda
      * @return T
-     * @throws IOException
      */
     @Step("{description}")
     public static <T> T step(final String description, final Supplier<T> actions)
