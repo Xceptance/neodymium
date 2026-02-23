@@ -13,7 +13,6 @@ import com.xceptance.neodymium.common.browser.StartNewBrowserForSetUp;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.util.Neodymium;
-
 @RunWith(NeodymiumRunner.class)
 @Browser("chrome")
 public class StartNewBrowserForOneOfTheBefores
@@ -60,5 +59,8 @@ public class StartNewBrowserForOneOfTheBefores
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriverTest);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriverBefore);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriverBefore1);
+        webDriverTest=null;
+        webDriverBefore=null;
+        webDriverBefore1=null;
     }
 }

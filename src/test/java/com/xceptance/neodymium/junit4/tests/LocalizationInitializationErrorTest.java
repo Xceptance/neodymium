@@ -5,9 +5,11 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.junit4.testclasses.localization.LocalizationInitializationErrorTestClass;
@@ -42,7 +44,8 @@ public class LocalizationInitializationErrorTest extends NeodymiumTest
     @Test
     public void testAssertionErrorWhenKeyIsUnknown()
     {
-        Result result = JUnitCore.runClasses(LocalizationInitializationErrorTestClass.class);
-        checkFail(result, 1, 0, 1, "Localization keys must be of type String. (e.g. use \"Yes\" instead of Yes as key. This is due to YAML auto conversion.)");
+        Result result = run(LocalizationInitializationErrorTestClass.class);
+        checkFail(result, 1, 0, 1);
+        Assert.assertEquals("Localization keys must be of type String. (e.g. use \"Yes\" instead of Yes as key. This is due to YAML auto conversion.)", result.getFailures().get(0).getException().getCause().getMessage());
     }
 }

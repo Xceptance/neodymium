@@ -2,6 +2,7 @@ package com.xceptance.neodymium.common.browser;
 
 import com.browserup.bup.BrowserUpProxy;
 import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.common.ScreenshotWriter;
 import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.common.recording.FilmTestExecution;
@@ -13,6 +14,7 @@ import org.openqa.selenium.remote.RemoteWebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.LinkedList;
 import java.util.List;
@@ -177,6 +179,8 @@ public class BrowserRunner
 
     public void teardown(boolean testFailed, boolean preventReuse, BrowserMethodData browserMethodData, WebDriverStateContainer webDriverStateContainer)
     {
+        takeScreenshotAtTestEnd();
+
         BrowserConfiguration browserConfiguration = multibrowserConfiguration.getBrowserProfiles().get(Neodymium.getBrowserProfileName());
         // keep browser open
         if (keepOpen(testFailed, browserMethodData, browserConfiguration))
@@ -266,6 +270,26 @@ public class BrowserRunner
         if (!getBrowserTags().contains(browserTag))
         {
             throw new IllegalArgumentException("Can not find browser configuration with tag: " + browserTag);
+        }
+    }
+
+    /**
+     * take a screenshot at the end of the test when neodymium.screenshots.enableOnSuccess is true
+     */
+    private void takeScreenshotAtTestEnd()
+    {
+        // covering only screenshots on success because
+        // screenshots on steps are covered within AllureTestStepListener
+        if (Neodymium.configuration().enableOnSuccess())
+        {
+            try
+            {
+                ScreenshotWriter.doScreenshot("Advanced Screenshot");
+            }
+            catch (IOException e)
+            {
+                throw new RuntimeException("Failed to take screenshot after successful run", e);
+            }
         }
     }
 }

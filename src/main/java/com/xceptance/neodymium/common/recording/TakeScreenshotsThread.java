@@ -1,9 +1,13 @@
 package com.xceptance.neodymium.common.recording;
 
+import java.awt.image.BufferedImage;
 import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
 import com.xceptance.neodymium.common.recording.writers.Writer;
 import com.xceptance.neodymium.util.AllureAddons;
 import io.qameta.allure.Allure;
+import javax.imageio.ImageIO;
+
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
@@ -22,8 +26,9 @@ import static org.openqa.selenium.support.ui.ExpectedConditions.alertIsPresent;
 /**
  * Background thread to take screenshots and write them to the files using {@link Writer}.
  * <p>
- * This class constructs the required writer on its own, it's only needed to pass the {@link Writer} class it should use. It also requires configuration object
- * of type {@link RecordingConfigurations} and the name of the result file (will also be created by the class itself)
+ * This class constructs the required writer on its own, it's only needed to pass the {@link Writer} class it should
+ * use. It also requires configuration object of type {@link RecordingConfigurations} and the name of the result file
+ * (will also be created by the class itself)
  *
  * @author olha
  */
@@ -44,13 +49,13 @@ public class TakeScreenshotsThread extends Thread
     private Writer writer;
 
     public TakeScreenshotsThread(WebDriver driver, Class<? extends Writer> writerClass, RecordingConfigurations recordingConfigurations,
-                                 String testName)
+        String testName)
         throws IOException, NoSuchMethodException, SecurityException, InstantiationException, IllegalAccessException, IllegalArgumentException,
         InvocationTargetException
     {
         this.recordingConfigurations = recordingConfigurations;
         fileName = recordingConfigurations.tempFolderToStoreRecording()
-            + testName.replaceAll("\\s", "-").replaceAll(":", "-").replaceAll("/", "_") + "." + recordingConfigurations.format();
+                   + testName.replaceAll("\\s", "-").replaceAll(":", "-").replaceAll("/", "_") + "." + recordingConfigurations.format();
         this.writer = Writer.instantiate(writerClass, recordingConfigurations, fileName);
         File directory = new File(recordingConfigurations.tempFolderToStoreRecording());
         if (!directory.exists())
@@ -84,6 +89,16 @@ public class TakeScreenshotsThread extends Thread
 
             try
             {
+                // Create a temp file to hold the last frame
+                lastFrameTempFile = File.createTempFile("last_frame_", ".png");
+            }
+            catch (IOException e)
+            {
+                LOGGER.error("Could not create temp file for last screenshot, alert handling for test recording will be disabled.", e);
+            }
+
+            try
+            {
                 // try to start writer
                 // in case writer start fails, the run method will exit
                 writer.start();
@@ -101,7 +116,8 @@ public class TakeScreenshotsThread extends Thread
                     {
                         long delay = Math.max(recordingConfigurations.oneImagePerMilliseconds(), duration);
 
-                        // taking a screenshot while an alert is open will throw an exception and closes the alert, so it is checked here
+                        // taking a screenshot while an alert is open will throw an exception and closes the alert, so
+                        // it is checked here
                         if (alertIsPresent().apply(driver) != null)
                         {
                             // write the last successful frame again, if it exists
@@ -113,6 +129,14 @@ public class TakeScreenshotsThread extends Thread
                         else
                         {
                             File file = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+                            int cropWidth = ((Long) ((JavascriptExecutor) driver).executeScript("return window.innerWidth;")).intValue();
+                            int cropHeight = ((Long) ((JavascriptExecutor) driver).executeScript("return window.innerHeight;")).intValue();
+                            BufferedImage fullImage = ImageIO.read(file);
+                            if (cropWidth > 0 && cropHeight > 0)
+                            {
+                                BufferedImage croppedImage = fullImage.getSubimage(0, 0, cropWidth, cropHeight);
+                                ImageIO.write(croppedImage, "png", file);
+                            }
                             writer.compressImageIfNeeded(file, recordingConfigurations.imageScaleFactor(), recordingConfigurations.imageQuality());
                             writer.write(file, delay);
 
@@ -148,11 +172,12 @@ public class TakeScreenshotsThread extends Thread
                 if (recordingConfigurations.logInformationAboutRecording())
                 {
                     AllureAddons.addToReport("average " + (isGif ? "gif" : "video") + " sequence recording creation duration = " + millis + " / " + turns + "="
-                                                 + millis / turns, "");
+                                             + millis / turns, "");
                 }
                 writer.stop();
                 try
                 {
+                    File tempRecording = new File(fileName);
                     if (recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed)
                     {
 
@@ -161,8 +186,14 @@ public class TakeScreenshotsThread extends Thread
 
                         if (recordingConfigurations.deleteRecordingsAfterAddingToAllureReport())
                         {
-                            new File(fileName).delete();
+                            tempRecording.delete();
                         }
+                    }
+
+                    // delete the file when configured and only if it wasn't deleted already
+                    if (recordingConfigurations.deleteTempRecordings() && tempRecording.exists())
+                    {
+                        tempRecording.delete();
                     }
                 }
                 catch (IOException e)
@@ -189,7 +220,8 @@ public class TakeScreenshotsThread extends Thread
      * Stops screenshot loop. Please, don't forget to call {@link Thread#join()} method after this to kill the thread
      *
      * @param testFailed
-     *     {@link Boolean} if the filmed test failed (needed to decide whether the record should be attached to the allure report)
+     *            {@link Boolean} if the filmed test failed (needed to decide whether the record should be attached to
+     *            the allure report)
      */
     public void stopRun(boolean testFailed)
     {

@@ -8,7 +8,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import java.io.File;
@@ -52,7 +52,7 @@ public class FixedRandomnessOfDataSetsTests extends NeodymiumTest
     public void testFixedRandomnessOfDataSets()
     {
         // test fixed random data sets support
-        Result result = JUnitCore.runClasses(FixedRandomnessOfDataSets.class);
+        Result result = run(FixedRandomnessOfDataSets.class);
         checkPass(result, 5, 0);
     }
 }

@@ -6,7 +6,7 @@ import org.aeonbits.owner.ConfigFactory;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import java.io.File;
@@ -39,9 +39,7 @@ public class TestCaseFilteringTest extends NeodymiumTest
     @Test
     public void testTestCaseFiltering()
     {
-        // the test from RandomBrowserChild should run 2 times, as the corresponding annotations should be inherited
-        // from the RandomBrowserParent class
-        Result result = JUnitCore.runClasses(TestCaseFiltering.class);
+        Result result = run(TestCaseFiltering.class);
         checkPass(result, 2, 0);
     }
 

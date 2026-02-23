@@ -2,10 +2,10 @@ package com.xceptance.neodymium.junit4;
 
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.NeoAllureListener;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.BrowserData;
 import com.xceptance.neodymium.common.retry.RetryMethodData;
 import com.xceptance.neodymium.junit4.order.DefaultStatementRunOrder;
 import com.xceptance.neodymium.junit4.statement.browser.BrowserRunAfters;
@@ -14,6 +14,7 @@ import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.NeodymiumRandom;
+import io.qameta.allure.selenide.AllureSelenide;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -31,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -43,16 +45,14 @@ import java.util.stream.Collectors;
 import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSeed;
 
 /**
- * This class executes {@link JUnit4} test classes (aka JUnit Runner) and adds several features to test execution e.g.
- * multi {@link Browser browser} and <a href="https://github.com/Xceptance/neodymium/wiki/Test-data-provider">test
- * data</a>. Vanilla JUnit parameterized tests are supported as well but only with parameter injection (as described
- * here: <a href=
- * "https://github.com/junit-team/junit4/wiki/parameterized-tests#using-parameter-for-field-injection-instead-of-constructor">Using @Parameter
- * for Field injection instead of Constructor</a>). In order to run a {@link JUnit4} test with this runner the class or
- * its super-class has to be annotated with {@link RunWith}
+ * This class executes {@link JUnit4} test classes (aka JUnit Runner) and adds several features to test execution e.g. multi {@link Browser browser} and <a
+ * href="https://github.com/Xceptance/neodymium/wiki/Test-data-provider">test data</a>. Vanilla JUnit parameterized tests are supported as well but only with
+ * parameter injection (as described here: <a href=
+ * "https://github.com/junit-team/junit4/wiki/parameterized-tests#using-parameter-for-field-injection-instead-of-constructor">Using @Parameter for Field
+ * injection instead of Constructor</a>). In order to run a {@link JUnit4} test with this runner the class or its super-class has to be annotated with
+ * {@link RunWith}
  * <p>
  * <b>Example</b>
- *
  * <pre>
  * &#64;RunWith(NeodymiumRunner.class)
  * public class MyTests
@@ -63,9 +63,7 @@ import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSee
  *     }
  * }
  * </pre>
- *
  * <b>Example</b>
- *
  * <pre>
  * public class MyTests extends BaseTestClass
  * {
@@ -74,7 +72,6 @@ import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSee
  *     {
  *     }
  * }
- *
  * &#64;RunWith(NeodymiumRunner.class)
  * public class BaseTestClass
  * {
@@ -94,8 +91,13 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     public NeodymiumRunner(Class<?> clazz) throws InitializationError
     {
         super(clazz);
-        SelenideLogger.addListener(LISTENER_NAME, new NeoAllureListener());
 
+        AllureSelenide allureSelenide = new AllureSelenide();
+
+        // if advanced screenshots are enabled, Selenide screenshots should be disabled
+        allureSelenide.screenshots(!Neodymium.configuration().enableAdvancedScreenShots());
+
+        SelenideLogger.addListener(LISTENER_NAME, allureSelenide);
         SelenideLogger.addListener(TestStepListener.LISTENER_NAME, new TestStepListener());
 
         if (!neoVersionLogged && Neodymium.configuration().logNeoVersion())
@@ -103,7 +105,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
             if (!AllureAddons.envFileExists())
             {
                 LOGGER.info("This test uses Neodymium Library (version: " + Neodymium.getNeodymiumVersion()
-                            + "), MIT License, more details on https://github.com/Xceptance/neodymium");
+                                + "), MIT License, more details on https://github.com/Xceptance/neodymium");
                 neoVersionLogged = true;
                 AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder()
                                                                    .put("Testing Framework", "Neodymium " + Neodymium.getNeodymiumVersion())
@@ -118,7 +120,7 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     {
         flat,
         tree,
-    };
+    }
 
     private List<FrameworkMethod> computedTestMethods;
 
@@ -191,6 +193,9 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         {
             String testExecutionRegex = Neodymium.configuration().getTestNameFilter();
 
+            // required to clear context for the thread containing class with no tests (usually done in runChild but as
+            // runChild is not triggered for any method in the class in this case, we need to trigger it here)
+            Neodymium.clearThreadContext();
             // only throw exception if test class has no execution methods accidentally
             if (StringUtils.isNotEmpty(testExecutionRegex))
             {
@@ -203,9 +208,9 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
                 // for the case, when the property was set accidentally, inform the user about such behavior reason via
                 // warning in logs
                 LOGGER.warn("The test class " + getName() + " will not be executed as none of its methods match regex '"
-                            + testExecutionRegex + "'. In case this is not the behaviour you expected,"
-                            + " please check your neodymium.properties for neodymium.testNameFilter configuration"
-                            + " and your maven surefire settings for the corresponding system property");
+                                + testExecutionRegex + "'. In case this is not the behaviour you expected,"
+                                + " please check your neodymium.properties for neodymium.testNameFilter configuration"
+                                + " and your maven surefire settings for the corresponding system property");
             }
         }
     }
@@ -223,7 +228,13 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
 
         // Since this method is called at least two times and is somewhat expensive, we cache the result
         if (computedTestMethods != null)
+        {
+            // we need to clear context here because no test method will be executed and context will not be cleared in runChild
+            if(computedTestMethods.isEmpty()) {
+                Neodymium.clearThreadContext();
+            }
             return computedTestMethods;
+        }
 
         // That list will contain all methods that need to be run for the class
         List<FrameworkMethod> testMethods = new LinkedList<>();
@@ -320,16 +331,28 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         }
 
         // filter test methods by regex
-        String testExecutionRegex = Neodymium.configuration().getTestNameFilter();
-        if (StringUtils.isNotEmpty(testExecutionRegex))
+        final List<String> browserFilter = new ArrayList<String>();
+        String browserDefinitionsProperty = System.getProperty(BrowserData.SYSTEM_PROPERTY_BROWSERDEFINITION, "");
+        browserDefinitionsProperty = browserDefinitionsProperty.replaceAll("\\s", "");
+        if (!StringUtils.isEmpty(browserDefinitionsProperty))
+        {
+            browserFilter.addAll(Arrays.asList(browserDefinitionsProperty.split(",")));
+        }
+        else if (!StringUtils.isEmpty(Neodymium.configuration().getBrowserFilter()))
+        {
+            browserFilter.addAll(Arrays.asList(Neodymium.configuration().getBrowserFilter().replaceAll("\\s", "").split(",")));
+        }
+        String testExecutionRegex = browserFilter.isEmpty() ? Neodymium.configuration().getTestNameFilter() : ".*";
+
+        if (StringUtils.isNotEmpty(testExecutionRegex) || !browserFilter.isEmpty())
         {
             testMethods = testMethods.stream()
                                      .filter(testMethod -> {
-                                         String functionName = testMethod.getMethod().getDeclaringClass().getName() + "#"
-                                                               + testMethod.getName();
+                                         String functionName = testMethod.getMethod().getDeclaringClass().getName() + "#" + testMethod.getName();
                                          return Pattern.compile(testExecutionRegex)
                                                        .matcher(functionName)
-                                                       .find();
+                                                       .find()
+                                                && (browserFilter.isEmpty() || browserFilter.stream().anyMatch(functionName::contains));
                                      })
                                      .collect(Collectors.toList());
         }
@@ -433,9 +456,11 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     @Override
     protected void runChild(FrameworkMethod method, RunNotifier notifier)
     {
-        // clear the context before next child run
+        // clear the context before child run
         Neodymium.clearThreadContext();
         super.runChild(method, notifier);
+        // clear the context after child run as the next test may be suppressed due to test filtering
+        Neodymium.clearThreadContext();
     }
 
     private <T> List<FrameworkMethod> buildCrossProduct(Method method, List<StatementBuilder<?>> builderList, List<List<?>> builderDataList)
@@ -486,21 +511,17 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
     protected Statement withBefores(FrameworkMethod method, Object target,
                                     Statement statement)
     {
-        List<FrameworkMethod> befores = getTestClass().getAnnotatedMethods(
-                                                                           Before.class);
-        return befores.isEmpty() ? statement
-                                 : Neodymium.configuration().startNewBrowserForSetUp() ? new BrowserRunBefores(method, statement, befores, target)
-                                                                                       : new RunBefores(statement, befores, target);
+        List<FrameworkMethod> befores = getTestClass().getAnnotatedMethods(Before.class);
+        return befores.isEmpty() ? statement : Neodymium.configuration().startNewBrowserForSetUp() ? new BrowserRunBefores(method, statement, befores, target)
+            : new RunBefores(statement, befores, target);
     }
 
     @Override
     protected Statement withAfters(FrameworkMethod method, Object target,
                                    Statement statement)
     {
-        List<FrameworkMethod> afters = getTestClass().getAnnotatedMethods(
-                                                                          After.class);
-        return afters.isEmpty() ? statement
-                                : new BrowserRunAfters(method, statement, afters, target);
+        List<FrameworkMethod> afters = getTestClass().getAnnotatedMethods(After.class);
+        return afters.isEmpty() ? statement : new BrowserRunAfters(method, statement, afters, target);
     }
 
     @Override

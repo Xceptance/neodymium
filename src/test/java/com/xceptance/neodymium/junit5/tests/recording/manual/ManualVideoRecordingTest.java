@@ -1,17 +1,16 @@
 package com.xceptance.neodymium.junit5.tests.recording.manual;
 
-import java.io.File;
-import java.util.UUID;
-
+import com.xceptance.neodymium.common.recording.FilmTestExecution;
+import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
+import com.xceptance.neodymium.junit5.tests.recording.AbstractRecordingTest;
 import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
-import com.xceptance.neodymium.junit4.tests.recording.AbstractRecordingTest;
+import java.io.File;
+import java.util.UUID;
 
 public class ManualVideoRecordingTest extends AbstractRecordingTest
 {
@@ -24,7 +23,7 @@ public class ManualVideoRecordingTest extends AbstractRecordingTest
     public static void form()
     {
         beforeClass("video", false);
-        configurationsClass = VideoRecordingConfigurations.class;
+        configurationsClass.put(Thread.currentThread(), VideoRecordingConfigurations.class);
     }
 
     @BeforeEach
@@ -36,13 +35,13 @@ public class ManualVideoRecordingTest extends AbstractRecordingTest
     @AfterEach
     public void finishFilming()
     {
-        FilmTestExecution.finishVideoFilming(uuid, false);
+        FilmTestExecution.finishVideoFilming(uuid.get(Thread.currentThread()), false);
     }
 
     @AfterAll
     public static void assertLogFileExists()
     {
-        File logFile = new File(FilmTestExecution.getContextVideo().ffmpegLogFile());
+        File logFile = new File(logFilePath.get(Thread.currentThread()));
         Assert.assertTrue("the logfile for the manual video recording test exists", logFile.exists());
         logFile.delete();
         Assert.assertFalse("the logfile for the manual video recording test wasn't deleted", logFile.exists());

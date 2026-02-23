@@ -8,7 +8,7 @@ import java.util.Map;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
@@ -49,7 +49,7 @@ public class BrowserstackTest extends NeodymiumTest
     @Test
     public void testBrowserstack()
     {
-        Result result = JUnitCore.runClasses(BrowserstackHomePageTest.class);
+        Result result = run(BrowserstackHomePageTest.class);
         checkPass(result, 1, 0);
     }
 }

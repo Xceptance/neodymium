@@ -132,7 +132,8 @@ public class ValidateClearReuseWebDriverCache
 
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver1);
         NeodymiumWebDriverTest.assertProxyStopped(proxy1);
-
+        webDriver1=null;
+        proxy1=null;
         NeodymiumTest.deleteTempFile(tempConfigFile);
     }
 }

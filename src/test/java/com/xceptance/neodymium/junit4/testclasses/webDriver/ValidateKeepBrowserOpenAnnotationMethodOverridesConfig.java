@@ -19,7 +19,6 @@ import com.xceptance.neodymium.common.browser.WebDriverCache;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.util.Neodymium;
-
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_1024x768")
@@ -118,5 +117,8 @@ public class ValidateKeepBrowserOpenAnnotationMethodOverridesConfig
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver1);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver2);
         NeodymiumWebDriverTest.assertWebDriverClosed(webDriver3);
+        webDriver1=null;
+        webDriver2=null;
+        webDriver3=null;
     }
 }

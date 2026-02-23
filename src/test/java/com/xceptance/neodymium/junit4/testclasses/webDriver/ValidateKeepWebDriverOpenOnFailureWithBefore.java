@@ -147,7 +147,14 @@ public class ValidateKeepWebDriverOpenOnFailureWithBefore
         NeodymiumWebDriverTest.assertProxyStopped(proxyTest1);
         proxyTest2.stop();
         NeodymiumWebDriverTest.assertProxyStopped(proxyTest2);
-
+        webDriverTest1=null;
+        webDriverTest2=null;
+        webDriverBeforeForTest1=null;
+        webDriverBeforeForTest2=null;
+        proxyTest1=null;
+        proxyTest2=null;
+        proxyBeforeForTest1=null;
+        proxyBeforeForTest2=null;
         NeodymiumTest.deleteTempFile(tempConfigFile);
     }
 }

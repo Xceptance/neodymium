@@ -12,8 +12,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.runner.JUnitCore;
-import org.junit.runner.Result;
 import org.openqa.selenium.MutableCapabilities;
 import org.openqa.selenium.remote.CapabilityType;
 
@@ -345,8 +343,43 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
     {
         System.setProperty("browserdefinition", "Chrome_headless");
         NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
-        checkPass(summary, 1, 0);
         System.setProperty("browserdefinition", "");
+        checkPass(summary, 1, 0);
+    }
+
+    @Test
+    public void testSystemPropertyBrowserFilterWithNoResults() throws Throwable
+    {
+        System.setProperty("browserdefinition", "Chrome_notExisting");
+        NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
+        System.setProperty("browserdefinition", "");
+        checkPass(summary, 0, 1);
+    }
+
+    @Test
+    public void testNeodymiumPropertyBrowserFilter()
+    {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("neodymium.webDriver.browserFilter", "Chrome_headless");
+
+        addPropertiesForTest("temp-NeodymiumPropertyBrowserFilter-neodymium.properties", properties);
+        // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
+        NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
+        ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
+        checkPass(summary, 1, 0);
+    }
+
+    @Test
+    public void testNeodymiumPropertyBrowserFilterNoResults()
+    {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("neodymium.webDriver.browserFilter", "Chrome_notExisting");
+
+        addPropertiesForTest("temp-NeodymiumPropertyBrowserFilter-neodymium.properties", properties);
+        // if test class is annotated with @@StartNewBrowserForCleanUp(false), no new browser is started for cleanup
+        NeodymiumTestExecutionSummary summary = run(SystemPropertyBrowserFilter.class);
+        ConfigFactory.clearProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME);
+        checkPass(summary, 0, 1);
     }
 
     @Test

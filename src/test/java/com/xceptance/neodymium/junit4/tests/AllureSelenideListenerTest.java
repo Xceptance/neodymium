@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit4.tests;
 
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.junit4.testclasses.allure.AllureSelenideListenerIsActiveForJava;
@@ -12,14 +12,14 @@ public class AllureSelenideListenerTest extends NeodymiumTest
     @Test
     public void testAllureSelenideListenerIsActiveForCucumber()
     {
-        Result result = JUnitCore.runClasses(CucumberValidateAllureSelenideListenerIsActive.class);
+        Result result = run(CucumberValidateAllureSelenideListenerIsActive.class);
         checkPass(result, 1, 0);
     }
 
     @Test
     public void testAllureSelenideListenerIsActiveForJava()
     {
-        Result result = JUnitCore.runClasses(AllureSelenideListenerIsActiveForJava.class);
+        Result result = run(AllureSelenideListenerIsActiveForJava.class);
         checkPass(result, 1, 0);
     }
 }

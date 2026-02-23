@@ -33,8 +33,13 @@ import com.codeborne.selenide.logevents.SelenideLog;
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.SuppressBrowsers;
+import com.xceptance.neodymium.common.retry.Retry;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 
+@Retry(exceptions =
+{
+  "SessionNotCreated Could not start a new session"
+})
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")
 public class SelenideAddonsTest

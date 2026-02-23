@@ -177,6 +177,12 @@ public class ValidatePreventReuseWebDriver
         Assert.assertEquals(1, WebDriverCache.instance.getWebDriverStateContainerCacheSize());
 
         WebDriverCache.quitCachedBrowsers();
+        webDriver1=null;
+        webDriver2=null;
+        webDriver3=null;
+        proxy1=null;
+        proxy2=null;
+        proxy3=null;
         NeodymiumTest.deleteTempFile(tempConfigFile);
     }
 }

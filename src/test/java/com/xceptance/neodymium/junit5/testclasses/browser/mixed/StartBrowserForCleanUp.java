@@ -10,7 +10,6 @@ import com.xceptance.neodymium.common.browser.StartNewBrowserForCleanUp;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
-
 @StartNewBrowserForCleanUp
 @Browser("chrome")
 public class StartBrowserForCleanUp

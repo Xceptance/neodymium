@@ -4,7 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.junit4.testclasses.urlfiltering.ExcludeTest;
@@ -22,7 +22,7 @@ public class UrlFilteringTest extends NeodymiumTest
         properties.put("neodymium.url.includeList", "");
 
         addPropertiesForTest("temp-ExcludeURLsTest-neodymium.properties", properties);
-        Result result = JUnitCore.runClasses(ExcludeTest.class);
+        Result result = run(ExcludeTest.class);
         checkPass(result, 5, 0);
     }
 
@@ -33,7 +33,7 @@ public class UrlFilteringTest extends NeodymiumTest
         properties.put("neodymium.url.includeList", "https://www.google.com/ https://github.com/ https://www.xceptance.*contact");
 
         addPropertiesForTest("temp-ExcludeURLsTest-neodymium.properties", properties);
-        Result result = JUnitCore.runClasses(IncludeTest.class);
+        Result result = run(IncludeTest.class);
         checkPass(result, 4, 0);
     }
 
@@ -45,7 +45,7 @@ public class UrlFilteringTest extends NeodymiumTest
         properties.put("neodymium.url.includeList", "https://www.google.com/ https://github.com");
 
         addPropertiesForTest("temp-ExcludeURLsTest-neodymium.properties", properties);
-        Result result = JUnitCore.runClasses(IncludeOverExcludeTest.class);
+        Result result = run(IncludeOverExcludeTest.class);
         checkPass(result, 3, 0);
     }
 }

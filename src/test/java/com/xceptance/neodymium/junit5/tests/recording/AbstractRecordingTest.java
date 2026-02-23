@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.Assert;
@@ -19,9 +20,11 @@ import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 @Browser("Chrome_headless")
 public abstract class AbstractRecordingTest extends AbstractNeodymiumTest
 {
-    protected static String uuid;
+    protected static Map<Thread, String> uuid = new HashMap<>();
 
-    public static Class<? extends RecordingConfigurations> configurationsClass;
+    protected static Map<Thread, String> logFilePath = new HashMap<>();
+
+    public static  Map<Thread,Class<? extends RecordingConfigurations>> configurationsClass = new HashMap<>();
 
     private boolean isGif;
 
@@ -36,8 +39,12 @@ public abstract class AbstractRecordingTest extends AbstractNeodymiumTest
         Map<String, String> properties1 = new HashMap<>();
         properties1.put(format + ".filmAutomatically", Boolean.toString(filmAutomatically));
         properties1.put(format + ".enableFilming", "true");
+        logFilePath.put(Thread.currentThread(),"target/ffmpeg_output_msg"+UUID.randomUUID()+".txt");
+        if("video".equals(format)) {
+            properties1.put("video.ffmpegLogFile",logFilePath.get(Thread.currentThread()));
+        }
         properties1.put(format + ".deleteRecordingsAfterAddingToAllureReport", "false");
-        final String fileLocation = "config/temp-" + format + "-" + filmAutomatically + ".properties";
+        final String fileLocation = "config/temp-" + format + "-" + filmAutomatically +UUID.randomUUID()+ ".properties";
         File tempConfigFile1 = new File("./" + fileLocation);
         writeMapToPropertiesFile(properties1, tempConfigFile1);
         ConfigFactory.setProperty(FilmTestExecution.TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:" + fileLocation);
@@ -49,16 +56,16 @@ public abstract class AbstractRecordingTest extends AbstractNeodymiumTest
     {
         List<String> uuids = isGif ? FilmTestExecution.getNamesOfAllCurrentGifRecordings() : FilmTestExecution.getNamesOfAllCurrentVideoRecordings();
         Assert.assertEquals(1, uuids.size());
-        uuid = uuids.get(0);
+        uuid.put(Thread.currentThread(), uuids.get(0));
         Selenide.open("https://www.xceptance.com/en/");
-        Selenide.sleep(FilmTestExecution.getContext(configurationsClass).oneImagePerMilliseconds());
+        Selenide.sleep(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).oneImagePerMilliseconds());
     }
 
     @AfterAll
     public static void assertRecordingFileExists()
     {
-        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass).tempFolderToStoreRecording() + uuid + "."
-                                      + FilmTestExecution.getContext(configurationsClass).format());
+        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid.get(Thread.currentThread()) + "."
+                                      + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
         Assert.assertTrue("the recording file doesn't exist", recordingFile.exists());
         recordingFile.delete();
         Assert.assertFalse("the recording file wasn't deleted", recordingFile.exists());

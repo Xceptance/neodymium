@@ -1,7 +1,27 @@
 package com.xceptance.neodymium.common.xtc;
 
-import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest;
-import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest.FinishExecution;
+import static com.xceptance.neodymium.util.AllureAddons.JSON_VIEWER_SCRIPT_PATH;
+
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.PosixFileAttributes;
+import java.nio.file.attribute.PosixFilePermission;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.zip.GZIPOutputStream;
+
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.io.FileUtils;
@@ -9,20 +29,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.zip.GZIPOutputStream;
-
-import static com.xceptance.neodymium.util.AllureAddons.JSON_VIEWER_SCRIPT_PATH;
+import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest;
+import com.xceptance.neodymium.common.xtc.dto.UpdateRunRequest.FinishExecution;
 
 // called from maven
 // parses the results of the tests and uploads them to XTC using the XTC API client
@@ -155,7 +163,7 @@ public class ResultProcessor
             }
 
             // insert the JSON viewer script
-            moveFileToReportDirectory(Path.of(JSON_VIEWER_SCRIPT_PATH));
+            copyFileToReportDirectory(Path.of(JSON_VIEWER_SCRIPT_PATH));
 
             // compress the allure report directory into a tar.gz archive and set the path to the archive
             Path archivePath = createTarGzArchive(allurePath, "allure-report.tar.gz");
@@ -165,26 +173,83 @@ public class ResultProcessor
         }
     }
 
-    private static void moveFileToReportDirectory(Path source)
+    /**
+     * Copies a file to the Allure report directory, ensuring that the parent directories exist. Implements retry logic to handle potential file access
+     * conflicts.
+     *
+     * @param source
+     *     the path of the source file to copy
+     */
+    private static void copyFileToReportDirectory(Path source)
     {
-        Path destination = Paths.get(allureReportDir + File.separator + source);
+        Path destination = Paths.get(allureReportDir).resolve(source.getFileName());
 
         try
         {
             // Ensure the parent directory exists
             Path parentDir = destination.getParent();
-            if (parentDir != null && !Files.exists(parentDir))
-            {
-                LOGGER.info("Creating directory: {}", parentDir);
-                Files.createDirectories(parentDir);
-            }
 
-            Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+            if (parentDir != null)
+            {
+                if (!Files.exists(parentDir))
+                {
+                    LOGGER.info("Creating directory: {}", parentDir);
+                    Files.createDirectories(parentDir);
+                }
+
+                // Retry logic
+                int maxRetries = 3;
+                for (int i = 0; i < maxRetries; i++)
+                {
+                    // Create a temp file to write to first, then atomic move to destination
+                    // This ensures that if multiple JVMs try to write to the same file, we don't get corrupted files
+                    Path tempFile = null;
+                    try
+                    {
+                        tempFile = Files.createTempFile(parentDir, "copy-temp-file", ".tmp");
+                        Files.copy(source, tempFile, StandardCopyOption.REPLACE_EXISTING);
+                        Files.move(tempFile, destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                        break;
+                    }
+                    catch (IOException e)
+                    {
+                        if (i == maxRetries - 1)
+                        {
+                            LOGGER.error("error occurred during copying files to the report", e.toString());
+                        }
+
+                        try
+                        {
+                            // Wait between 10ms and 200ms
+                            long sleepTime = ThreadLocalRandom.current().nextLong(10, 201);
+                            Thread.sleep(sleepTime);
+                        }
+                        catch (InterruptedException ie)
+                        {
+                            Thread.currentThread().interrupt();
+                            LOGGER.error("error occurred during copying files to the report", ie.toString());
+                        }
+                    }
+                    finally
+                    {
+                        if (tempFile != null)
+                        {
+                            try
+                            {
+                                Files.deleteIfExists(tempFile);
+                            }
+                            catch (IOException e)
+                            {
+                                // ignore
+                            }
+                        }
+                    }
+                }
+            }
         }
         catch (IOException e)
         {
-            LOGGER.error("Moving the JSON-Viewer script failed.\nSource: {} \nDestination: {}", source, destination, e);
-            throw new RuntimeException("Moving the JSON-Viewer script failed.\nSource: " + source + " \nDestination: " + destination, e);
+            LOGGER.error("Copying the files to the report failed.\nSource: {} \nDestination: {}", source, destination, e);
         }
     }
 
@@ -202,35 +267,118 @@ public class ResultProcessor
     private static Path createTarGzArchive(Path sourceDir, String archiveName) throws IOException
     {
         Path archivePath = sourceDir.getParent().resolve(archiveName);
+        Path tempArchive = Files.createTempFile(sourceDir.getParent(), "allure-report-", ".tar.gz.tmp");
 
-        try (FileOutputStream fos = new FileOutputStream(archivePath.toFile());
+        try (FileOutputStream fos = new FileOutputStream(tempArchive.toFile());
             BufferedOutputStream bos = new BufferedOutputStream(fos);
             GZIPOutputStream gzos = new GZIPOutputStream(bos);
             TarArchiveOutputStream taos = new TarArchiveOutputStream(gzos))
         {
             taos.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
 
-            // Walk through the source directory and add files to the archive
-            Files.walk(sourceDir)
-                 .filter(Files::isRegularFile)
-                 .forEach(file -> {
-                     try
-                     {
-                         String relativePath = sourceDir.relativize(file).toString();
-                         TarArchiveEntry entry = new TarArchiveEntry(file.toFile(), relativePath);
-                         taos.putArchiveEntry(entry);
-                         Files.copy(file, taos);
-                         taos.closeArchiveEntry();
-                     }
-                     catch (IOException e)
-                     {
-                         LOGGER.error("Failed to add file to archive: {}", file, e);
-                         throw new RuntimeException("Failed to add file to archive: " + file, e);
-                     }
-                 });
+            Files.walkFileTree(sourceDir, new SimpleFileVisitor<Path>()
+            {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                {
+                    // Filter out non-regular files
+                    if (!attrs.isRegularFile())
+                        return FileVisitResult.CONTINUE;
+
+                    try
+                    {
+                        // 1. Create the entry
+                        String relativePath = sourceDir.relativize(file).toString().replace('\\', '/');
+                        TarArchiveEntry entry = new TarArchiveEntry(file.toFile(), relativePath);
+
+                        // 2. copy execution bits (POSIX)
+                        // This block checks if we are on a system that supports Unix permissions (Linux/Mac)
+                        if (attrs instanceof PosixFileAttributes)
+                        {
+                            Set<PosixFilePermission> perms = ((PosixFileAttributes) attrs).permissions();
+                            int mode = getMode(perms);
+                            entry.setMode(mode);
+                        }
+                        else if (File.separatorChar == '\\')
+                        {
+                            // Fallback for Windows: manually set 755 for known scripts if needed
+                            String name = file.getFileName().toString().toLowerCase();
+                            if (name.endsWith(".sh") || name.endsWith(".bat") || name.endsWith(".cmd"))
+                            {
+                                entry.setMode(0755);
+                            }
+                        }
+
+                        // 3. Write data
+                        taos.putArchiveEntry(entry);
+                        Files.copy(file, taos);
+                        taos.closeArchiveEntry();
+                    }
+                    catch (IOException e)
+                    {
+                        LOGGER.error("Failed to add file to archive: {}", file, e);
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFileFailed(Path file, IOException exc)
+                {
+                    LOGGER.error("Could not access file during archive traversal: {}", file, exc);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        }
+        catch (Exception e)
+        {
+            Files.deleteIfExists(tempArchive);
+            LOGGER.error("Error occurred during creating the report archive", e);
+            throw new IOException("Failed to create archive", e);
         }
 
+        Files.move(tempArchive, archivePath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         LOGGER.info("Created archive: {}", archivePath.toAbsolutePath());
         return archivePath;
+    }
+
+    private static int getMode(Set<PosixFilePermission> perms)
+    {
+        int mode = 0;
+
+        // Map Java permissions to Tar integer mode
+        for (PosixFilePermission p : perms)
+        {
+            switch (p)
+            {
+                case OWNER_READ:
+                    mode |= 0400;
+                    break;
+                case OWNER_WRITE:
+                    mode |= 0200;
+                    break;
+                case OWNER_EXECUTE:
+                    mode |= 0100;
+                    break;
+                case GROUP_READ:
+                    mode |= 0040;
+                    break;
+                case GROUP_WRITE:
+                    mode |= 0020;
+                    break;
+                case GROUP_EXECUTE:
+                    mode |= 0010;
+                    break;
+                case OTHERS_READ:
+                    mode |= 0004;
+                    break;
+                case OTHERS_WRITE:
+                    mode |= 0002;
+                    break;
+                case OTHERS_EXECUTE:
+                    mode |= 0001;
+                    break;
+            }
+        }
+        return mode;
     }
 }

@@ -2,7 +2,7 @@ package com.xceptance.neodymium.junit4.tests;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
+
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.common.testdata.DataSet;
@@ -63,7 +63,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testCanReadPackageDataCSV()
     {
         // test package test data csv is read
-        Result result = JUnitCore.runClasses(CanReadPackageDataCSV.class);
+        Result result = run(CanReadPackageDataCSV.class);
         checkPass(result, 1, 0);
     }
 
@@ -71,7 +71,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testCanReadPackageDataJson()
     {
         // test package test data json is read
-        Result result = JUnitCore.runClasses(CanReadPackageDataJson.class);
+        Result result = run(CanReadPackageDataJson.class);
         checkPass(result, 1, 0);
     }
 
@@ -79,7 +79,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testCanReadPackageDataProperties()
     {
         // test package test data properties is read
-        Result result = JUnitCore.runClasses(CanReadPackageDataProperties.class);
+        Result result = run(CanReadPackageDataProperties.class);
         checkPass(result, 1, 0);
     }
 
@@ -87,7 +87,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testCanReadPackageDataXML()
     {
         // test package test data xml is read
-        Result result = JUnitCore.runClasses(CanReadPackageDataXML.class);
+        Result result = run(CanReadPackageDataXML.class);
         checkPass(result, 1, 0);
     }
 
@@ -95,7 +95,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testCanReadDataSetCSV()
     {
         // test data set csv is read
-        Result result = JUnitCore.runClasses(CanReadDataSetCSV.class);
+        Result result = run(CanReadDataSetCSV.class);
         checkPass(result, 1, 0);
     }
 
@@ -103,7 +103,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testCanReadDataSetJson()
     {
         // test data set json is read
-        Result result = JUnitCore.runClasses(CanReadDataSetJson.class);
+        Result result = run(CanReadDataSetJson.class);
         checkPass(result, 1, 0);
     }
 
@@ -111,7 +111,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testCanReadDataSetXML()
     {
         // test data set xml is read
-        Result result = JUnitCore.runClasses(CanReadDataSetXML.class);
+        Result result = run(CanReadDataSetXML.class);
         checkPass(result, 1, 0);
     }
 
@@ -119,7 +119,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testPackageTestDataInheritance()
     {
         // test inheritance of package test data
-        Result result = JUnitCore.runClasses(PackageTestDataInheritance.class);
+        Result result = run(PackageTestDataInheritance.class);
         checkPass(result, 1, 0);
     }
 
@@ -127,7 +127,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testGrandChildPackageTestDataInheritance()
     {
         // test multiple inheritance of package test data
-        Result result = JUnitCore.runClasses(GrandChildPackageTestDataInheritance.class);
+        Result result = run(GrandChildPackageTestDataInheritance.class);
         checkPass(result, 1, 0);
     }
 
@@ -135,7 +135,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testDataSetOverridesPackageData()
     {
         // test that data set overrides package test data
-        Result result = JUnitCore.runClasses(DataSetOverridesPackageData.class);
+        Result result = run(DataSetOverridesPackageData.class);
         checkPass(result, 1, 0);
     }
 
@@ -143,7 +143,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testDuplicateTestId() throws Exception
     {
         // more than one entry with the same "testId"
-        Result result = JUnitCore.runClasses(DuplicateTestId.class);
+        Result result = run(DuplicateTestId.class);
         checkPass(result, 6, 0);
     }
 
@@ -152,7 +152,7 @@ public class TestDataStatementTest extends NeodymiumTest
     {
         // special characters in testId
         // parenthesis will be converted to to brackets
-        Result result = JUnitCore.runClasses(SpecialCharacterTestId.class);
+        Result result = run(SpecialCharacterTestId.class);
         checkPass(result, 7, 0);
     }
 
@@ -166,7 +166,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testClassDefaultValueEmptyDataSets() throws Throwable
     {
         // Empty data sets (only one key but no value) and @Testdata() on class
-        Result result = JUnitCore.runClasses(ClassDefaultValueEmptyDataSets.class);
+        Result result = run(ClassDefaultValueEmptyDataSets.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: No data sets were found at all regarding your test case, please make sure to reference everything correctly.");
     }
@@ -224,7 +224,7 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testMethodDefaultEmptyDataSets() throws Throwable
     {
         // Empty data sets (only one key but no value) and @Testdata() on method
-        Result result = JUnitCore.runClasses(MethodDefaultEmptyDataSets.class);
+        Result result = run(MethodDefaultEmptyDataSets.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: No data sets were found at all regarding your test case, please make sure to reference everything correctly.");
 
@@ -332,7 +332,7 @@ public class TestDataStatementTest extends NeodymiumTest
     @Test
     public void testForceOfNoneDataSets() throws Exception
     {
-        Result result = JUnitCore.runClasses(ForceOfNoneDataSets.class);
+        Result result = run(ForceOfNoneDataSets.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: No data sets were found at all regarding your test case, please make sure to reference everything correctly.");
     }
@@ -351,14 +351,14 @@ public class TestDataStatementTest extends NeodymiumTest
     public void testDataFileAnnotation() throws Exception
     {
         // test package test data csv is read
-        Result result = JUnitCore.runClasses(com.xceptance.neodymium.junit4.testclasses.data.file.json.CanReadDataSetJson.class);
+        Result result = run(com.xceptance.neodymium.junit4.testclasses.data.file.json.CanReadDataSetJson.class);
         checkPass(result, 1, 0);
     }
 
     @Test
     public void testDataFileAnnotationException() throws Exception
     {
-        Result result = JUnitCore.runClasses(CanNotReadDataSetXml.class);
+        Result result = run(CanNotReadDataSetXml.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.RuntimeException: The data file:\"can/not/read/data/set/xml/DoesNotExist.xml\" provided within the test class:\"CanNotReadDataSetXml\" can't be read.");
     }
@@ -366,42 +366,42 @@ public class TestDataStatementTest extends NeodymiumTest
     @Test
     public void testClassRandomDataSet()
     {
-        Result result = JUnitCore.runClasses(ClassRandomDataSets.class);
+        Result result = run(ClassRandomDataSets.class);
         checkPass(result, 4, 0);
     }
 
     @Test
     public void testMethodRandomDataSet()
     {
-        Result result = JUnitCore.runClasses(MethodRandomDataSets.class);
+        Result result = run(MethodRandomDataSets.class);
         checkPass(result, 4, 0);
     }
 
     @Test
     public void testMixRandomAndValueDataSets()
     {
-        Result result = JUnitCore.runClasses(MixRandomAndValueDataSets.class);
+        Result result = run(MixRandomAndValueDataSets.class);
         checkPass(result, 2, 0);
     }
 
     @Test
     public void testClassRandomDataSetSelectedFromRange()
     {
-        Result result = JUnitCore.runClasses(ClassRandomDataSetsFromRange.class);
+        Result result = run(ClassRandomDataSetsFromRange.class);
         checkPass(result, 4, 0);
     }
 
     @Test
     public void testMethodRandomDataSetSelectedFromRange()
     {
-        Result result = JUnitCore.runClasses(MethodRandomDataSetsFromRange.class);
+        Result result = run(MethodRandomDataSetsFromRange.class);
         checkPass(result, 4, 0);
     }
 
     @Test
     public void testMixRandomAndValueDataSetsSelectedFromRange()
     {
-        Result result = JUnitCore.runClasses(MixRandomDataSetsFromRange.class);
+        Result result = run(MixRandomDataSetsFromRange.class);
         checkPass(result, 4, 0);
     }
 
@@ -420,14 +420,14 @@ public class TestDataStatementTest extends NeodymiumTest
     @Test
     public void testRandomnessOfDataSetsTest()
     {
-        Result result = JUnitCore.runClasses(RandomnessOfDataSets.class);
+        Result result = run(RandomnessOfDataSets.class);
         checkPass(result, 11, 0);
     }
 
     @Test
     public void testRandomDataSetsException()
     {
-        Result result = JUnitCore.runClasses(RandomDataSetsException.class);
+        Result result = run(RandomDataSetsException.class);
         checkFail(result, 1, 0, 1,
                   "java.lang.IllegalArgumentException: Method 'test' is marked to be run with 4 random data sets, but there are only 2 available");
     }
@@ -435,35 +435,35 @@ public class TestDataStatementTest extends NeodymiumTest
     @Test
     public void canInstantiateFieldViaAnnotation()
     {
-        Result result = JUnitCore.runClasses(InstantiateFieldViaAnnotation.class);
+        Result result = run(InstantiateFieldViaAnnotation.class);
         checkPass(result, 2, 0);
     }
 
     @Test
     public void canInstantiateDtoViaJsonPathInAnnotation()
     {
-        Result result = JUnitCore.runClasses(InstantiateDtoViaJsonPathInAnnotation.class);
+        Result result = run(InstantiateDtoViaJsonPathInAnnotation.class);
         checkPass(result, 4, 0);
     }
 
     @Test
     public void canInstantiateDtoViaAnnotation()
     {
-        Result result = JUnitCore.runClasses(InstantiateDtoViaAnnotation.class);
+        Result result = run(InstantiateDtoViaAnnotation.class);
         checkPass(result, 2, 0);
     }
 
     @Test
     public void canInheritDtoViaAnnotation()
     {
-        Result result = JUnitCore.runClasses(ChildInheritingDtoFromAnnotation.class);
+        Result result = run(ChildInheritingDtoFromAnnotation.class);
         checkPass(result, 2, 0);
     }
 
     @Test
     public void canInheritValuesViaAnnotation()
     {
-        Result result = JUnitCore.runClasses(ChildInheritingValuesFromAnnotation.class);
+        Result result = run(ChildInheritingValuesFromAnnotation.class);
         checkPass(result, 2, 0);
     }
 }

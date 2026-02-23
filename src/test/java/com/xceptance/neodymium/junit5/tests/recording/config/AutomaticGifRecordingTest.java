@@ -1,9 +1,8 @@
 package com.xceptance.neodymium.junit5.tests.recording.config;
 
-import org.junit.jupiter.api.BeforeAll;
-
 import com.xceptance.neodymium.common.recording.config.GifRecordingConfigurations;
-import com.xceptance.neodymium.junit4.tests.recording.AbstractRecordingTest;
+import com.xceptance.neodymium.junit5.tests.recording.AbstractRecordingTest;
+import org.junit.jupiter.api.BeforeAll;
 
 public class AutomaticGifRecordingTest extends AbstractRecordingTest
 {
@@ -16,6 +15,6 @@ public class AutomaticGifRecordingTest extends AbstractRecordingTest
     public static void form()
     {
         beforeClass("gif", true);
-        configurationsClass = GifRecordingConfigurations.class;
+        configurationsClass.put(Thread.currentThread(), GifRecordingConfigurations.class);
     }
 }

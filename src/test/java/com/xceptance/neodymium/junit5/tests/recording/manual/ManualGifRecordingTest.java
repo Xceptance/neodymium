@@ -1,14 +1,13 @@
 package com.xceptance.neodymium.junit5.tests.recording.manual;
 
-import java.util.UUID;
-
+import com.xceptance.neodymium.common.recording.FilmTestExecution;
+import com.xceptance.neodymium.common.recording.config.GifRecordingConfigurations;
+import com.xceptance.neodymium.junit5.tests.recording.AbstractRecordingTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.GifRecordingConfigurations;
-import com.xceptance.neodymium.junit4.tests.recording.AbstractRecordingTest;
+import java.util.UUID;
 
 public class ManualGifRecordingTest extends AbstractRecordingTest
 {
@@ -21,7 +20,7 @@ public class ManualGifRecordingTest extends AbstractRecordingTest
     public static void form()
     {
         beforeClass("gif", false);
-        configurationsClass = GifRecordingConfigurations.class;
+        configurationsClass.put(Thread.currentThread(), GifRecordingConfigurations.class);
     }
 
     @BeforeEach
@@ -33,6 +32,6 @@ public class ManualGifRecordingTest extends AbstractRecordingTest
     @AfterEach
     public void finishFilming()
     {
-        FilmTestExecution.finishGifFilming(uuid, false);
+        FilmTestExecution.finishGifFilming(uuid.get(Thread.currentThread()), false);
     }
 }

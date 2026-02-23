@@ -41,6 +41,11 @@ public interface GifRecordingConfigurations extends RecordingConfigurations
     public boolean deleteRecordingsAfterAddingToAllureReport();
 
     @Override
+    @Key("gif.deleteTempRecordings")
+    @DefaultValue("true")
+    public boolean deleteTempRecordings();
+
+    @Override
     @Key("gif.appendAllRecordingsToAllureReport")
     @DefaultValue("true")
     public boolean appendAllRecordingsToAllureReport();
