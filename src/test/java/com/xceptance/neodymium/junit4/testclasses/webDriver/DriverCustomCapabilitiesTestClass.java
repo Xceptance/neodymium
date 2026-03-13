@@ -6,7 +6,9 @@ import org.junit.runner.RunWith;
 import org.openqa.selenium.By;
 import org.openqa.selenium.UnhandledAlertException;
 
+import com.codeborne.selenide.ScrollIntoViewOptions;
 import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.ScrollIntoViewOptions.Block;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.Neodymium;
@@ -42,6 +44,8 @@ public class DriverCustomCapabilitiesTestClass
                                        + "});";
         Selenide.executeJavaScript(elementToProvokeAlert);
         Selenide.sleep(1500);
+        Selenide.$("[data-testid='closeIcon']").scrollIntoView(ScrollIntoViewOptions.instant().block(Block.start));
+        
         // could only reproduce with pure Selenium calls, Selenide logs the exception but doesn't throw is
         Neodymium.getDriver().findElement(By.cssSelector("[data-testid='closeIcon']")).click();
         Neodymium.getDriver().findElement(By.cssSelector(".navbar-brand")).click();
