@@ -30,7 +30,7 @@ public class BrowserstackHomePageTest
 
         // basic validation
         // Verifies the company Logo and name are visible.
-        $(".navbar-brand a").shouldBe(visible);
+        $("a.navbar-brand").shouldBe(visible);
 
         // Verifies the Navigation bar is visible
         $(".navbar-nav").shouldBe(visible);
