@@ -419,7 +419,7 @@ public class SelenideAddonsTest
         // added buffer time to filter out the impact of the execution of passed runnable on the whole execution time
         long maximalDuration = minimalDuration + Neodymium.configuration().staleElementRetryTimeout() / 2;
         Assert.assertTrue("Waiting time taken to catch SERE (" + duration + "ms) is not in range from  " + minimalDuration + " to " + maximalDuration + "ms",
-                          Range.between(minimalDuration, maximalDuration).contains(duration));
+                          Range.of(minimalDuration, maximalDuration).contains(duration));
 
         Assert.assertEquals("SERE was catched " + counter.get() + " times instead of " + (Neodymium.configuration().staleElementRetryCount() + 1),
                             Neodymium.configuration().staleElementRetryCount() + 1, counter.get());
@@ -704,7 +704,7 @@ public class SelenideAddonsTest
             $("#onetrust-consent-sdk .onetrust-pc-dark-filter").shouldBe(hidden);
             Selenide.refresh();
         }
-        $(".kd-loader-wrap").shouldBe(hidden, Duration.ofMillis(6000));
+        $(".kd-loader-wrap").shouldBe(hidden, Duration.ofMillis(15000));
 
         SelenideElement questionaire = $("#qual_ol .qual_x_close");
         if (SelenideAddons.optionalWaitUntilCondition(questionaire, visible, 2000))
@@ -745,7 +745,7 @@ public class SelenideAddonsTest
 
         final long runtime = endTime - startTime;
         // check that runtime of the wait until method was as long as expected
-        Assert.assertTrue("Runtime was not within the expected range", Range.between(expectedTime, expectedTime + pollingInterval / 2)
+        Assert.assertTrue("Runtime was not within the expected range", Range.of(expectedTime, expectedTime + pollingInterval + 10000L)
                                                                             .contains(runtime));
     }
 

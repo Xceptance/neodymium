@@ -1,20 +1,19 @@
 package com.xceptance.neodymium.junit4;
 
-import com.codeborne.selenide.logevents.SelenideLogger;
-import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.TestStepListener;
-import com.xceptance.neodymium.common.WorkInProgress;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.BrowserData;
-import com.xceptance.neodymium.common.retry.RetryMethodData;
-import com.xceptance.neodymium.junit4.order.DefaultStatementRunOrder;
-import com.xceptance.neodymium.junit4.statement.browser.BrowserRunAfters;
-import com.xceptance.neodymium.junit4.statement.browser.BrowserRunBefores;
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumRandom;
-import io.qameta.allure.selenide.AllureSelenide;
+import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSeed;
+
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -30,19 +29,23 @@ import org.junit.runners.model.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import com.codeborne.selenide.logevents.SelenideLogger;
+import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.ai.core.AiBrowser;
+import com.xceptance.neodymium.common.TestStepListener;
+import com.xceptance.neodymium.common.WorkInProgress;
+import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.BrowserData;
+import com.xceptance.neodymium.common.retry.RetryMethodData;
+import com.xceptance.neodymium.junit4.order.DefaultStatementRunOrder;
+import com.xceptance.neodymium.junit4.statement.browser.BrowserRunAfters;
+import com.xceptance.neodymium.junit4.statement.browser.BrowserRunBefores;
+import com.xceptance.neodymium.util.AllureAddons;
+import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
+import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.NeodymiumRandom;
 
-import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSeed;
+import io.qameta.allure.selenide.AllureSelenide;
 
 /**
  * This class executes {@link JUnit4} test classes (aka JUnit Runner) and adds several features to test execution e.g. multi {@link Browser browser} and <a
@@ -165,7 +168,31 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         // reset the random seed so every test starts with the same values for better reproducibility
         reinitializeRandomSeed(NeodymiumRandom.SeedState.INITIALIZED);
 
-        return methodStatement;
+        // Initialize and Close the ai browser
+        final Statement finalMethodStatement = methodStatement;
+        final Object finalTestClassInstance = testClassInstance;
+
+        return new Statement()
+        {
+            @Override
+            public void evaluate() throws Throwable
+            {
+                // Initialize AiBrowser
+                Neodymium.setAiBrowser(new AiBrowser(finalTestClassInstance));
+                try
+                {
+                    finalMethodStatement.evaluate();
+                }
+                finally
+                {
+                    AiBrowser aiBrowser = Neodymium.ai();
+                    if (aiBrowser != null)
+                    {
+                        aiBrowser.close();
+                    }
+                }
+            }
+        };
     }
 
     @Override

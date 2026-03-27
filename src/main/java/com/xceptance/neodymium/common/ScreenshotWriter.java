@@ -64,47 +64,53 @@ public class ScreenshotWriter
         return Path.of(System.getProperty("java.io.tmpdir") + Neodymium.configuration().reportsPath()).normalize().toString();
     }
 
-    public static boolean doScreenshot(String filename) throws IOException
+    public static String doScreenshot(String filename) throws IOException
     {
         return doScreenshot(filename, getFormatedReportsPath());
     }
 
-    public static boolean doScreenshot(String filename, String pathname) throws IOException
+    public static String doScreenshot(String filename, String pathname) throws IOException
     {
         return doScreenshot(filename, pathname, false);
     }
 
-    public static boolean doScreenshot(String filename, boolean didSelenideScreenshot) throws IOException
+    public static String doScreenshot(String filename, boolean didSelenideScreenshot) throws IOException
     {
         return doScreenshot(filename, getFormatedReportsPath(), didSelenideScreenshot);
     }
 
-    public static boolean doScreenshot(String filename, String pathname, boolean didSelenideScreenshot) throws IOException
+    public static String doScreenshot(String filename, String pathname, boolean didSelenideScreenshot) throws IOException
     {
-        boolean errorDuringScreenshots = false;
+        String base64Image = null;
 
         // do viewport first otherwise the screen may be moved
         // viewport: !didSelenideScreenshot && enableViewportScreenshot
         if (!didSelenideScreenshot && Neodymium.configuration().enableViewportScreenshot())
         {
-            errorDuringScreenshots = takeScreenshot(filename, pathname, Capture.VIEWPORT);
+            String vpBase64 = takeScreenshot(filename, pathname, Capture.VIEWPORT);
+            if (vpBase64 != null) {
+                base64Image = vpBase64;
+            }
         }
 
         // full page logic block
         if (Neodymium.configuration().enableAdvancedScreenShots() && Neodymium.configuration().enableFullPageCapture())
         {
-            errorDuringScreenshots = takeScreenshot(filename, pathname, Capture.FULL) && errorDuringScreenshots;
+            String fpBase64 = takeScreenshot(filename, pathname, Capture.FULL);
+            if (fpBase64 != null) {
+                base64Image = fpBase64;
+            }
         }
 
-        return errorDuringScreenshots;
+        return base64Image;
     }
 
-    private static boolean takeScreenshot(String filename, String pathname, Capture captureMode) throws IOException
+    private static String takeScreenshot(String filename, String pathname, Capture captureMode) throws IOException
     {
         // If no driver is available, we cannot take a screenshot
         if (!Neodymium.hasDriver())
         {
-            return false;
+            return null;
         }
 
         WebDriver driver = Neodymium.getDriver();
@@ -194,14 +200,18 @@ public class ScreenshotWriter
             }
             log.info("captured Screenshot to: " + imagePath);
 
-            boolean result = ImageIO.write(image, "png", outputfile);
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            boolean result = ImageIO.write(image, "png", baos);
             if (result)
             {
+                byte[] imageBytes = baos.toByteArray();
+                java.nio.file.Files.write(outputfile.toPath(), imageBytes);
+
                 // The idea is to put the screenshot to the best place in the report,
                 // but for before methods, this is not possible due to allure limitations
                 // so we just add it normally when the allure lifecycle does not allow to be altered
                 boolean screenshotAdded;
-                Allure.getLifecycle().addAttachment(captureMode == Capture.FULL? "Screenshot" : "View Port Screenshot", "image/png", ".png", new FileInputStream(imagePath));
+                Allure.getLifecycle().addAttachment(captureMode == Capture.FULL? "Screenshot" : "View Port Screenshot", "image/png", ".png", new java.io.ByteArrayInputStream(imageBytes));
                 screenshotAdded = true;
 
                 // to spare disk space, remove the file if we already used it inside the report
@@ -209,11 +219,13 @@ public class ScreenshotWriter
                 {
                     outputfile.delete();
                 }
+
+                return java.util.Base64.getEncoder().encodeToString(imageBytes);
             }
-            return result;
+            return null;
         }
 
-        return false;
+        return null;
     }
 
     public static <WD extends WebDriver & HasDevTools & JavascriptExecutor, ResultType> Optional<ResultType> takeScreenshot(

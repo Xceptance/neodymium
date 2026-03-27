@@ -1,10 +1,10 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.xceptance</groupId>
 	<artifactId>neodymium-library</artifactId>
-	<version>5.3.0</version>
+	<version>5.4.0-SNAPSHOT</version>
 
 	<name>neodymium-library</name>
 	<url>https://github.com/Xceptance/neodymium</url>
@@ -56,6 +56,7 @@
 		<junit.version>4.13.2</junit.version>
 		<junit.jupiter.version>6.1.0-M1</junit.jupiter.version>
 		<junit.vintage.version>6.1.0-M1</junit.vintage.version>
+		<langchain4j.version>1.0.0-beta1</langchain4j.version>
 	</properties>
 
 	<build>
@@ -489,6 +490,16 @@
 			<groupId>org.skyscreamer</groupId>
 			<artifactId>jsonassert</artifactId>
 			<version>2.0-rc1</version>
+		</dependency>
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-google-ai-gemini</artifactId>
+			<version>${langchain4j.version}</version>
 		</dependency>
     <dependency>
       <groupId>org.seleniumhq.selenium</groupId>

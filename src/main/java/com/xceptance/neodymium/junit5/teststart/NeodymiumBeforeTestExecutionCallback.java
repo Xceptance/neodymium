@@ -1,5 +1,7 @@
 package com.xceptance.neodymium.junit5.teststart;
 
+import com.xceptance.neodymium.ai.core.AiBrowser;
+import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.NeodymiumRandom;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -13,5 +15,8 @@ public class NeodymiumBeforeTestExecutionCallback implements BeforeTestExecution
     {
         // reset the random seed so every test starts with the same values for better reproducibility
         reinitializeRandomSeed(NeodymiumRandom.SeedState.INITIALIZED);
+        
+        // Initialize AiBrowser
+        Neodymium.setAiBrowser(new AiBrowser(context.getRequiredTestInstance()));
     }
 }

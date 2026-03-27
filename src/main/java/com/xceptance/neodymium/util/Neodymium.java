@@ -20,6 +20,8 @@ import com.browserup.bup.BrowserUpProxy;
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
+import com.xceptance.neodymium.ai.config.AiConfiguration;
+import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
 import com.xceptance.neodymium.common.testdata.TestData;
@@ -36,6 +38,9 @@ public class Neodymium
 
     // keep our current WebDriver state
     private WebDriverStateContainer webDriverStateContainer;
+
+    // keep our current AiBrowser instance
+    private AiBrowser aiBrowser;
 
     // keep our current browser profile name
     private String browserProfileName;
@@ -56,6 +61,9 @@ public class Neodymium
     // our global configuration
     private final NeodymiumConfiguration configuration;
 
+    // our AI configuration
+    private final AiConfiguration aiConfiguration;
+
     // localization
     private final NeodymiumLocalization localization;
 
@@ -75,6 +83,7 @@ public class Neodymium
             ConfigFactory.setProperty(TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:this/path/should/never/exist/noOneShouldCreateMe.properties");
         }
         configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
+        aiConfiguration = ConfigFactory.create(AiConfiguration.class, System.getProperties(), System.getenv());
         localization = NeodymiumLocalization.build(configuration.localizationFile());
     }
 
@@ -196,6 +205,16 @@ public class Neodymium
     }
 
     /**
+     * Get the current AiConfiguration instance
+     * 
+     * @return aiConfiguration
+     */
+    public static AiConfiguration aiConfiguration()
+    {
+        return getContext().aiConfiguration;
+    }
+
+    /**
      * Get access to the current Random instance of Neodymium. This can be used to have a fixed random setup to repeat
      * runs from CI executions.
      * 
@@ -293,6 +312,28 @@ public class Neodymium
     public static void setBrowserProfileName(String browserProfileName)
     {
         getContext().browserProfileName = browserProfileName;
+    }
+
+    /**
+     * Get the current AiBrowser instance
+     * 
+     * @return aiBrowser
+     */
+    public static AiBrowser ai()
+    {
+        return getContext().aiBrowser;
+    }
+
+    /**
+     * Set the current AiBrowser instance.<br>
+     * <b>Attention:</b> This function is mainly used to set information within the context internally.
+     * 
+     * @param aiBrowser
+     *            the AiBrowser to set
+     */
+    public static void setAiBrowser(AiBrowser aiBrowser)
+    {
+        getContext().aiBrowser = aiBrowser;
     }
 
     /**

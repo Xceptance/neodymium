@@ -147,7 +147,7 @@ public class PopupBlockerTestclass extends NeodymiumTest
         $("#myPopUp1").shouldNotBe(visible);
 
         // next page by click
-        $$(".blogroll > li > a").findBy(exactText("XLT")).click();
+        $$("a").findBy(exactText("XLT")).click();
         Selenide.executeJavaScript(popup1, "");
         Selenide.sleep(1500);
         $("#myPopUp1").shouldNotBe(visible);
