@@ -29,7 +29,6 @@ import org.junit.runner.notification.Failure;
 import org.junit.runners.model.FrameworkMethod;
 
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.junit4.testclasses.datautils.TestDataTests;
 import com.xceptance.neodymium.util.Neodymium;
 
 public abstract class NeodymiumTest {
