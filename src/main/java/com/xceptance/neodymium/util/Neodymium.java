@@ -44,12 +44,12 @@ public class Neodymium
 
     // keep our current browser profile name
     private String browserProfileName;
-    
+
     // keep our current browser name
     private String browserName;
 
     private static List<String> browserFilter = generateBrowserFilter();
-    
+
     // keep our current remote debugging port
     private int remoteDebuggingPort;
 
@@ -171,7 +171,8 @@ public class Neodymium
     }
 
     /**
-     * Get the complete test data set and add set the flag to attach the test data to the report after the test finished.
+     * Get the complete test data set and add set the flag to attach the test data to the report after the test
+     * finished.
      *
      * @return dataMap
      */
@@ -357,7 +358,7 @@ public class Neodymium
     {
         getContext().browserName = browserName;
     }
-    
+
     /**
      * Remote debugging port of the current bowser
      * 
@@ -367,7 +368,7 @@ public class Neodymium
     {
         return getContext().remoteDebuggingPort;
     }
-    
+
     /**
      * Set the remote debugging port of the current browser.<br>
      * <b>Attention:</b> This function is mainly used to set information within the context internally.
@@ -688,25 +689,31 @@ public class Neodymium
      */
     public static WebElement getLastUsedElement()
     {
-        if (getContext().lastUsedElement != null && getContext().lastLocator != null)
+        try
         {
-            return getContext().lastUsedElement.findElement(getContext().lastLocator);
+            if (getContext().lastUsedElement != null && getContext().lastLocator != null)
+            {
+                return getContext().lastUsedElement.findElement(getContext().lastLocator);
+            }
+            else if (getContext().lastLocator != null && hasDriver())
+            {
+                return getDriver().findElement(getContext().lastLocator);
+            }
+            else
+            {
+                return null;
+            }
         }
-        else if (getContext().lastLocator != null && hasDriver())
+        catch (Throwable t)
         {
-            return getDriver().findElement(getContext().lastLocator);
-        }
-        else
-        {
+            // if this breaks something upfront was already broken so we want the original error instead of this one
+            // covring up
             return null;
         }
     }
 
     /**
-     * Checks if the test already looked up any element. 
-     *
-     * return whether there is a last element stored
-     *
+     * Checks if the test already looked up any element. return whether there is a last element stored
      */
     public static boolean hasLastUsedElement()
     {

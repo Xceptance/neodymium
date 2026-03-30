@@ -31,5 +31,11 @@ embeddedLocalProxySelfSignedRootCertificate.p12
 /bin/
 /allure-results/
 
-# intellij project directory
+
+# IDE/AI helper folders
 .idea
+/.agents/
+/.gemini/
+/.specify/
+/.vscode/
+/specs/

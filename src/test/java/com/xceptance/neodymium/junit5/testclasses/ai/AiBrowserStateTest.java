@@ -1,7 +1,6 @@
 package com.xceptance.neodymium.junit5.testclasses.ai;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;

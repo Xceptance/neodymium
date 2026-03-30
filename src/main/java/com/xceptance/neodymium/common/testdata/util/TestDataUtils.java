@@ -25,7 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.xceptance.neodymium.common.testdata.DataFile;
-
+import com.xceptance.neodymium.common.testdata.DataFolder;
 /**
  * Utility class for test data handling.
  * 
@@ -51,46 +51,174 @@ public final class TestDataUtils
      */
     public static List<Map<String, String>> getDataSets(final Class<?> testClass) throws FileNotFoundException, IOException
     {
-        // no specific file -> try the usual suspects
-        final Set<String> fileNames = new LinkedHashSet<String>();
+        DataFile[] dataFiles = testClass.getAnnotationsByType(DataFile.class);
+        DataFolder[] dataFolders = testClass.getAnnotationsByType(DataFolder.class);
 
-        DataFile dataFile = testClass.getAnnotation(DataFile.class);
-        String filePath = dataFile != null ? dataFile.value() : null;
+        List<Map<String, String>> resultDataSets = new LinkedList<>();
+        Map<String, String> testIdToFileName = new HashMap<>();
 
-        if (StringUtils.isBlank(filePath))
+        if (dataFiles.length == 0 && dataFolders.length == 0)
         {
+            // no specific file -> try the usual suspects
+            final Set<String> fileNames = new LinkedHashSet<String>();
+
             final String dottedName = testClass.getName();
             final String slashedName = dottedName.replace('.', '/');
 
             String[] filetype = new String[]
             {
-              ".csv", ".json", ".xml"
+              ".yaml", ".yml", ".json", ".csv", ".xml", ".properties"
             };
             for (final String fileExtension : filetype)
             {
                 fileNames.add(slashedName + fileExtension);
                 fileNames.add(dottedName + fileExtension);
             }
+
+            List<File> dataSetFileDirs = new LinkedList<>();
+            dataSetFileDirs.add(new File("."));
+
+            List<Map<String, String>> fileDataSets = getDataSets(dataSetFileDirs, fileNames, testClass);
+            
+            appendDataSetsAndCheckIDs(resultDataSets, fileDataSets, dataSetFileDirs.get(0).getName(), testIdToFileName);
+            
+            return resultDataSets;
         }
-        else
+
+
+        for (DataFile dataFile : dataFiles)
         {
-            InputStream inputStream = testClass.getResourceAsStream("/" + filePath);
-            if (inputStream != null)
+            String filePath = dataFile.value();
+            if (StringUtils.isBlank(filePath))
             {
-                fileNames.add(filePath);
+                continue;
             }
-            else
+
+            InputStream inputStream = testClass.getResourceAsStream("/" + filePath);
+            if (inputStream == null)
             {
                 throw new RuntimeException("The data file:\"" + filePath + "\" provided within the test class:\"" + testClass.getSimpleName()
                                            + "\" can't be read.");
             }
+
+            Set<String> fileNames = new LinkedHashSet<>();
+            fileNames.add(filePath);
+
+            List<File> dataSetFileDirs = new LinkedList<>();
+            dataSetFileDirs.add(new File("."));
+
+            List<Map<String, String>> fileDataSets = getDataSets(dataSetFileDirs, fileNames, testClass);
+
+            appendDataSetsAndCheckIDs(resultDataSets, fileDataSets, filePath, testIdToFileName);
         }
 
-        List<File> dataSetFileDirs = new LinkedList<>();
-        dataSetFileDirs.add(new File("."));
+        for (DataFolder dataFolder : dataFolders)
+        {
+            String folderPath = dataFolder.value();
+            if (StringUtils.isBlank(folderPath))
+            {
+                continue;
+            }
 
-        // look for such a file in the usual directories
-        return getDataSets(dataSetFileDirs, fileNames, testClass);
+            File folder = new File("src/test/resources/" + folderPath);
+            if (!folder.exists() || !folder.isDirectory())
+            {
+                java.net.URL url = testClass.getResource("/" + folderPath);
+                if (url != null && "file".equals(url.getProtocol()))
+                {
+                    try
+                    {
+                        folder = new File(url.toURI());
+                    }
+                    catch (Exception e)
+                    {
+                        LOGGER.warn("Failed to convert URI for folder: " + folderPath, e);
+                    }
+                }
+            }
+
+            if (folder.exists() && folder.isDirectory())
+            {
+                List<File> fileList = new LinkedList<>();
+                collectFilesRecursively(folder, fileList);
+                // Sort to ensure determinism
+                fileList.sort((f1, f2) -> f1.getAbsolutePath().compareTo(f2.getAbsolutePath()));
+
+                for (File file : fileList)
+                {
+                    if (file.isDirectory())
+                    {
+                        continue;
+                    }
+
+                    if (!isSupportedExtension(file.getName()))
+                    {
+                        LOGGER.warn("Unsupported or ignored test data file: " + file.getAbsolutePath());
+                        continue;
+                    }
+
+                    List<Map<String, String>> fileDataSets = readDataSetsFromFile(file);
+
+                    appendDataSetsAndCheckIDs(resultDataSets, fileDataSets, file.getAbsolutePath(), testIdToFileName);
+                }
+            }
+            else
+            {
+                throw new RuntimeException("The data folder:\"" + folderPath + "\" provided within the test class:\"" + testClass.getSimpleName()
+                                           + "\" does not exist or is not a directory.");
+            }
+        }
+
+        return resultDataSets;
+    }
+
+    private static void collectFilesRecursively(File folder, List<File> fileList)
+    {
+        File[] files = folder.listFiles();
+        if (files == null) return;
+        
+        for (File f : files)
+        {
+            if (f.isDirectory())
+            {
+                collectFilesRecursively(f, fileList);
+            }
+            else
+            {
+                fileList.add(f);
+            }
+        }
+    }
+
+    private static boolean isSupportedExtension(String fileName)
+    {
+        String lowerCaseName = fileName.toLowerCase();
+        return lowerCaseName.endsWith(".csv") || lowerCaseName.endsWith(".xml") 
+            || lowerCaseName.endsWith(".json") || lowerCaseName.endsWith(".yaml") 
+            || lowerCaseName.endsWith(".yml") || lowerCaseName.endsWith(".properties");
+    }
+
+    private static void appendDataSetsAndCheckIDs(List<Map<String, String>> result, List<Map<String, String>> newDataSets, String sourceName, Map<String, String> testIdToFileName)
+    {
+        for (Map<String, String> dataSet : newDataSets)
+        {
+            String testId = dataSet.get("testId");
+            if (StringUtils.isBlank(testId))
+            {
+                testId = dataSet.get("TEST_ID");
+            }
+
+            if (StringUtils.isNotBlank(testId))
+            {
+                if (testIdToFileName.containsKey(testId))
+                {
+                    throw new RuntimeException("Duplicate test dataset ID '" + testId + "' found in file '" + sourceName + "'. Already defined in '" + testIdToFileName.get(testId) + "'.");
+                }
+                testIdToFileName.put(testId, sourceName);
+            }
+
+            result.add(dataSet);
+        }
     }
 
     /**
@@ -183,6 +311,10 @@ public final class TestDataUtils
 
             case "json":
                 return JsonFileReader.readFile(dataSetsFile);
+
+            case "yaml":
+            case "yml":
+                return YamlFileReader.readFile(dataSetsFile);
 
             case "properties":
                 return PropertyFileReader.readFile(dataSetsFile);
@@ -302,6 +434,20 @@ public final class TestDataUtils
         {
             InputStream is = null;
             String path;
+
+            path = base + "yaml";
+            is = clazz.getResourceAsStream(path);
+            if (is != null)
+            {
+                return getFirstDataSetFromFile(YamlFileReader.readFile(is), path);
+            }
+
+            path = base + "yml";
+            is = clazz.getResourceAsStream(path);
+            if (is != null)
+            {
+                return getFirstDataSetFromFile(YamlFileReader.readFile(is), path);
+            }
 
             path = base + "csv";
             is = clazz.getResourceAsStream(path);

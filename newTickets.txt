@@ -1,0 +1,218 @@
+
+## Quick Description ##
+
+PROXY KRAAAAAAM
+
+In  our BrowserRunnerHelper.java we have checks which proxy to enable. These however do not check if we are inside an external execution environment like Browserstack. If we are, locally started proxies would not work. We should add a test and according checks here.
+
+## Actual Behaviour ##
+If I have a test extending a super class where both classes define different browser annotations, the browsers of the super and the actual class are both used.
+
+## Expected Behaviour ##
+If I have a test extending a super class where both classes define different browser annotations, only the browser configuration of  the actual should be used while the configuration of the super class should be ignored..
+
+## Steps to reproduce ##
+
+
+---
+
+
+
+## Quick Description ##
+Having the need to have FFMpeg as a binary to create videos is a bit
+
+## User Story ##
+As a test automation engineer,
+I want to use neodymium without installing additional software
+so that I don't have to work worry about installation, maintenance and version conflicts.
+
+## Functional Requirements ##
+
+- [ ] Replace the usage of the FFMpeg binary with a Java Only version.
+- [ ] Add a more mordern video format like webm.
+- [ ] Make video recording default over gif.
+
+## Documentation Requirements ##
+- [ ] Adapt the Wiki as needed.
+
+## Test Requirements ##
+- [ ] Manual tests via external test suites
+- [ ] Adapt unit tests
+
+
+
+
+
+----
+
+## Quick Description ##
+Currently our PopUp blocker is not able to handle PopUps inside an iframe. Also we should check if elements inside shadow doms are supported.
+
+## User Story ##
+As a test automation engineer,
+I want to use the PopUp blocker also if the PopUp is inside an iframe or a ShadowDom
+so that I don't have to care about
+
+## Functional Requirements ##
+
+- [ ] Enable PopUp Blocker to be used in iFrames
+- [ ] Check if PopUps inside ShadowDom elements are supported, if not implement it
+
+## Documentation Requirements ##
+- [ ] If we need another way of defining our locators, we will need to update our wiki as well.
+
+## Test Requirements ##
+- [ ] Write additional unit test
+
+
+
+
+
+## Quick Description ##
+Some Issues on websites are not reproducable or sometimes flaky. Giving the developers additional data like session ids from the cookies could help significantly to tackle those, since some of those information might be find the server log files.
+
+## User Story ##
+As a Developer,
+I want to get client side information for issues on the page
+so that I can look up the issue in my log files.
+
+## Functional Requirements ##
+
+- [ ] Add the posibility to append specific session data to the Report in case of a failure.
+- [ ] Add a configuration to define which values are printed out (e.g. cookie name)
+- [ ] Check posibilities if this could be done easiliy for local storage data as well.
+
+## Documentation Requirements ##
+- [ ] Document the new feature in the wikis reporting section.
+
+## Test Requirements ##
+- [ ] Add unit tests
+- [ ] Smoke test this with an external test suite
+
+
+
+
+
+
+## Quick Description ##
+Some customers requests to completely block URLs of their tracking system. This could be added to our feature set.
+
+## User Story ##
+As a user of test automation,
+I want to be sure, that the test automation does not interfere with my tracking data
+so that the tracking is clean
+
+## Functional Requirements ##
+
+- [ ] Add a blocking mechanism for background calls.
+- [ ] Do this in form a blocklist and an allow list.
+- [ ] If not possible otherwise, usitlize the dev tool API.
+- [ ] Add configuration properties for both lists.
+- [ ] Make sure the naming is easiliy to differentiate from the current blocking/allow list.
+
+## Documentation Requirements ##
+- [ ] Document the new feature in the wiki
+
+## Test Requirements ##
+- [ ] Add Unit tests if possible
+- [ ] Run manual smoke tests on an external test suite
+
+
+
+
+## Quick Description ##
+Currently the default of our full page screenshots is to blurr the parts outside the viewport for a better highlighting (if the highlighting is enabled). Downside of this approach is, that we might have made it diffuculty to read small error message outside the viewport.
+The blurring should be configurable.
+
+## User Story ##
+As a report reviewer,
+I want to be able to see the parts of the screenshots which are not in the viewport unblurred, but still see the highlighting where the viewport was
+so that I can see error messages which are displayed outside the viewport more easily.
+
+## Functional Requirements ##
+
+- [ ] Add configuration toggle for blurring the fullpage screenshots.
+- [ ] Make the non blurred way the default.
+
+## Documentation Requirements ##
+- [ ] Document the new toggle.
+
+## Test Requirements ##
+- [ ] Smoke test this feature in an external test suite.
+
+
+
+
+
+
+## Quick Description ##
+If issues are not easily identifiable on the server side, it might help to give the network data of the specific run as additional information to the developers for investigation purposes.
+It would be benefitial to add the network traffic data as a file to the report.
+
+## User Story ##
+As a developer,
+I want to get network data from my automation reports for flaky tests,
+so that I can rule out client side issues, identify response errors or other timing/network related issues.
+
+## Functional Requirements ##
+
+- [ ] In a failure case, retrieve the network data from the current browser and add it as a har file to the report.
+- [ ] Add a config toglle to disable this, but make it enabled as default.
+
+## Documentation Requirements ##
+- [ ] Document the toggle and the feature in the wikis reporting section.
+
+## Test Requirements ##
+- [ ] Create unit tests if a har attachment is created
+- [ ] Do a smoke test on an external test suite
+
+
+
+
+## Quick Description ##
+Different customers asked for a slack integration of our reporting. We should transform the gegerated custom builds into an integrated feature.
+
+## User Story ##
+As a report reviewer,
+I want to get notified via slack about a new test report, and see a breif overview on the results.
+so that I can see on a first glance if further investigations are needed.
+
+## Functional Requirements ##
+
+- [ ] Add a Slack integration
+- [ ] Include a simple graph of the results
+- [ ] Include the link to the report
+- [ ] Include a short textual summary on the results
+- [ ] Add a possibly to utilize the JUnit tags and categories annotations to group results
+
+## Documentation Requirements ##
+- [ ] Document the usage of this in the wiki
+
+## Test Requirements ##
+- [ ] Smoke test the feature by using an external test suite
+
+
+
+
+
+
+
+## Quick Description ##
+some fancy text
+
+## User Story ##
+As a < type of user >,
+I want < some goal >
+so that < some reason >
+
+## Functional Requirements ##
+
+- [ ] Do stuff
+
+## Documentation Requirements ##
+- [ ] Document stuff
+
+## Test Requirements ##
+- [ ] Test Stuff
+
+## Additional Information ##
