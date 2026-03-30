@@ -1,0 +1,125 @@
+package com.xceptance.neodymium.common.testdata.util;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+
+import org.yaml.snakeyaml.Yaml;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+public class YamlFileReader
+{
+    private final static Gson GSON = new GsonBuilder().serializeNulls().create();
+
+    public static List<Map<String, String>> readFile(InputStream inputStream)
+    {
+        List<Map<String, String>> resultData = new LinkedList<>();
+        Yaml yaml = new Yaml();
+        
+        try
+        {
+            Object data = yaml.load(inputStream);
+            
+            if (data == null)
+            {
+                return resultData;
+            }
+
+            List<?> iterationList = null;
+            String prompt = null;
+
+            // Scenario 1: The root is a map (complex structure, e.g., AI integration with 'prompt' and 'data')
+            if (data instanceof Map)
+            {
+                Map<?, ?> rootMap = (Map<?, ?>) data;
+                if (rootMap.containsKey("prompt"))
+                {
+                    prompt = String.valueOf(rootMap.get("prompt"));
+                }
+                
+                if (rootMap.containsKey("data") && rootMap.get("data") instanceof List)
+                {
+                    iterationList = (List<?>) rootMap.get("data");
+                }
+                else
+                {
+                    // Treat the map itself as a single iteration if it does not match the 'data' array format
+                    iterationList = List.of(rootMap);
+                }
+            }
+            // Scenario 2: The root is a list directly
+            else if (data instanceof List)
+            {
+                iterationList = (List<?>) data;
+            }
+            else
+            {
+                throw new RuntimeException("YAML root must be a List or a Map containing a 'data' List.");
+            }
+
+            // Map each element into Map<String, String> preserving JSON-style serialization for nesting
+            if (iterationList != null)
+            {
+                for (Object item : iterationList)
+                {
+                    if (item instanceof Map)
+                    {
+                        Map<?, ?> dataset = (Map<?, ?>) item;
+                        Map<String, String> newDataSet = new HashMap<>();
+                        
+                        for (Map.Entry<?, ?> entry : dataset.entrySet())
+                        {
+                            Object value = entry.getValue();
+                            if (value == null)
+                            {
+                                newDataSet.put(entry.getKey().toString(), null);
+                            }
+                            else if (value instanceof Map || value instanceof List)
+                            {
+                                // Serialize nested objects back to JSON string for consistent @DataItem parsing
+                                newDataSet.put(entry.getKey().toString(), GSON.toJson(value));
+                            }
+                            else
+                            {
+                                newDataSet.put(entry.getKey().toString(), String.valueOf(value));
+                            }
+                        }
+                        
+                        // Inject the AI global prompt into every iteration context transparently if not locally overridden
+                        if (prompt != null && !newDataSet.containsKey("prompt"))
+                        {
+                            newDataSet.put("prompt", prompt);
+                        }
+                        
+                        resultData.add(newDataSet);
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            throw new RuntimeException("Error parsing YAML file", e);
+        }
+        
+        return resultData;
+    }
+
+    public static List<Map<String, String>> readFile(File file)
+    {
+        try
+        {
+            return readFile(new FileInputStream(file));
+        }
+        catch (FileNotFoundException e)
+        {
+            throw new RuntimeException("File not found: " + file.getAbsolutePath(), e);
+        }
+    }
+}

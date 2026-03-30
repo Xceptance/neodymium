@@ -10,7 +10,11 @@ import com.xceptance.neodymium.junit5.testclasses.data.annotation.InstantiateDto
 import com.xceptance.neodymium.junit5.testclasses.data.annotation.InstantiateFieldViaAnnotation;
 import com.xceptance.neodymium.junit5.testclasses.data.annotation.inheritance.ChildInheritingDtoFromAnnotation;
 import com.xceptance.neodymium.junit5.testclasses.data.annotation.inheritance.ChildInheritingValuesFromAnnotation;
+import com.xceptance.neodymium.junit5.testclasses.data.annotation.InstantiateDtoViaYamlAnnotation;
 import com.xceptance.neodymium.junit5.testclasses.data.file.json.CanReadDataSetJson;
+import com.xceptance.neodymium.junit5.testclasses.data.file.yaml.CanReadDataSetYaml;
+import com.xceptance.neodymium.junit5.testclasses.data.file.yaml.CanReadDataSetYamlMulti;
+import com.xceptance.neodymium.junit5.testclasses.data.file.yaml.YamlOverridesJson;
 import com.xceptance.neodymium.junit5.testclasses.data.file.xml.CanNotReadDataSetXml;
 import com.xceptance.neodymium.junit5.testclasses.data.inheritance.child.PackageTestDataInheritance;
 import com.xceptance.neodymium.junit5.testclasses.data.inheritance.child.grandchild.GrandChildPackageTestDataInheritance;
@@ -47,6 +51,9 @@ import com.xceptance.neodymium.junit5.testclasses.data.set.testid.DuplicateTestI
 import com.xceptance.neodymium.junit5.testclasses.data.set.testid.SpecialCharacterTestId;
 import com.xceptance.neodymium.junit5.testclasses.data.set.xml.CanReadDataSetXML;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
+import com.xceptance.neodymium.junit5.testclasses.data.folder.ValidDataFolder;
+import com.xceptance.neodymium.junit5.testclasses.data.folder.InvalidIdDataFolder;
+import com.xceptance.neodymium.junit5.testclasses.data.folder.UnsupportedFileDataFolder;
 import com.xceptance.neodymium.util.Neodymium;
 
 public class TestDataStatementTest extends AbstractNeodymiumTest
@@ -106,6 +113,38 @@ public class TestDataStatementTest extends AbstractNeodymiumTest
     }
 
     @Test
+    public void testCanReadDataSetYaml()
+    {
+        // test data set yaml is read seamlessly including prompt integration
+        NeodymiumTestExecutionSummary summary = run(CanReadDataSetYaml.class);
+        checkPass(summary, 1, 0);
+    }
+
+    @Test
+    public void testCanReadDataSetYamlMulti()
+    {
+        // test multi data sets executing uniquely mapping dynamically swapped properties
+        NeodymiumTestExecutionSummary summary = run(CanReadDataSetYamlMulti.class);
+        checkPass(summary, 2, 0); // 2 iteration cycles
+    }
+
+    @Test
+    public void testYamlOverridesJson()
+    {
+        // test yaml precedence resolution against json fallback
+        NeodymiumTestExecutionSummary summary = run(YamlOverridesJson.class);
+        checkPass(summary, 1, 0);
+    }
+
+    @Test
+    public void testInstantiateDtoViaYamlAnnotation()
+    {
+        // test complex object unmarshalling against SnakeYAML and Gson logic
+        NeodymiumTestExecutionSummary summary = run(InstantiateDtoViaYamlAnnotation.class);
+        checkPass(summary, 1, 0);
+    }
+
+    @Test
     public void testCanReadDataSetXML()
     {
         // test data set xml is read
@@ -152,6 +191,27 @@ public class TestDataStatementTest extends AbstractNeodymiumTest
         // parenthesis will be converted to to brackets
         NeodymiumTestExecutionSummary summary = run(SpecialCharacterTestId.class);
         checkPass(summary, 7, 0);
+    }
+
+    @Test
+    public void testValidDataFolder()
+    {
+        NeodymiumTestExecutionSummary summary = run(ValidDataFolder.class);
+        checkPass(summary, 3, 0);
+    }
+
+    @Test
+    public void testInvalidIdDataFolder()
+    {
+        NeodymiumTestExecutionSummary summary = run(InvalidIdDataFolder.class);
+        checkFail(summary, 1, 0, 1, "java.lang.RuntimeException: Duplicate test dataset ID 'same_id' found in file");
+    }
+
+    @Test
+    public void testUnsupportedFileDataFolder()
+    {
+        NeodymiumTestExecutionSummary summary = run(UnsupportedFileDataFolder.class);
+        checkPass(summary, 1, 0);
     }
 
     ///////////////////////

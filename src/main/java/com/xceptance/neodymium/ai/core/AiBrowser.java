@@ -74,6 +74,17 @@ public class AiBrowser implements AutoCloseable {
     }
 
     /**
+     * Executes natural language test instructions derived implicitly from the active test dataset.
+     * Expects a `prompt` variable to be defined within the currently injected dataset (e.g. via YAML).
+     */
+    public void execute() {
+        if (!Neodymium.getData().exists("prompt")) {
+            throw new IllegalArgumentException("Cannot execute AI instruction implicitly: 'prompt' property is missing from the test dataset.");
+        }
+        execute(Neodymium.getData().asString("prompt"));
+    }
+
+    /**
      * Closes the browser and releases resources.
      */
     @Override

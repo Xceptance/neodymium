@@ -5,7 +5,6 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,6 +20,7 @@ import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.Point;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chromium.HasCdp;
 import org.openqa.selenium.devtools.DevTools;
 import org.openqa.selenium.devtools.HasDevTools;
@@ -186,16 +186,21 @@ public class ScreenshotWriter
 
             if (Neodymium.configuration().enableHighlightLastElement() && Neodymium.hasLastUsedElement())
             {
-                try
+                WebElement lastUsedElement = Neodymium.getLastUsedElement();
+                if (lastUsedElement != null)
                 {
-                    double devicePixelRatio = Double.parseDouble("" + ((JavascriptExecutor) driver).executeScript("return window.devicePixelRatio"));
-                    image = highlightScreenShot(image, new Coordinates(Neodymium.getLastUsedElement(), devicePixelRatio),
-                                                Color.decode(Neodymium.configuration().screenshotElementHighlightColor()));
-                }
-                catch (NoSuchElementException e)
-                {
-                    // If the test is breaking because we can't find an element, we also can't highlight this element...
-                    // so a NoSuchElementException is expected and can be ignored.
+                    try
+                    {
+                        double devicePixelRatio = Double.parseDouble("" + ((JavascriptExecutor) driver).executeScript("return window.devicePixelRatio"));
+                        image = highlightScreenShot(image, new Coordinates(lastUsedElement, devicePixelRatio),
+                                                    Color.decode(Neodymium.configuration().screenshotElementHighlightColor()));
+                    }
+                    catch (NoSuchElementException e)
+                    {
+                        // If the test is breaking because we can't find an element, we also can't highlight this
+                        // element...
+                        // so a NoSuchElementException is expected and can be ignored.
+                    }
                 }
             }
             log.info("captured Screenshot to: " + imagePath);
