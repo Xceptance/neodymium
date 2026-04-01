@@ -249,7 +249,8 @@ public class PageAnalyzer
     public String captureScreenshot(String title) throws IOException
     {
         LOG.debug("Capturing screenshot for: {}", title);
-        return ScreenshotWriter.doScreenshot(title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)));
+        return ScreenshotWriter.doScreenshot(title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)),
+                                             ScreenshotWriter.getFormatedReportsPath(), false, false);
     }
 
     /**
