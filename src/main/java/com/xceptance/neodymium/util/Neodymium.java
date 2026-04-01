@@ -150,6 +150,20 @@ public class Neodymium
      *
      * @param key
      *            key to lookup
+     * @return localized text or the key if no localization is found
+     */
+    public static String tryLocalizedText(final String key)
+    {
+        return getContext().localization.tryGetText(key);
+    }
+
+    /**
+     * Shortcut for localized text access. Will fail with an assertion if the key cannot be found.<br>
+     * Looks up the key in the localization setup starting the configured full locale e.g. 'en_US', falls back to the
+     * language 'en' if not found, fallback to default, and finally break with an assertion if the key can't be found.
+     *
+     * @param key
+     *            key to lookup
      * @param locale
      *            locale to lookup the key with
      * @return localized text
@@ -157,6 +171,22 @@ public class Neodymium
     public static String localizedText(final String key, final String locale)
     {
         return getContext().localization.getText(key, locale);
+    }
+
+    /**
+     * Shortcut for localized text access. Will fail with an assertion if the key cannot be found.<br>
+     * Looks up the key in the localization setup starting the configured full locale e.g. 'en_US', falls back to the
+     * language 'en' if not found, fallback to default, and finally break with an assertion if the key can't be found.
+     *
+     * @param key
+     *            key to lookup
+     * @param locale
+     *            locale to lookup the key with
+     * @return localized text or key of no localization is found
+     */
+    public static String tryLocalizedText(final String key, final String locale)
+    {
+        return getContext().localization.tryGetText(key, locale);
     }
 
     /**

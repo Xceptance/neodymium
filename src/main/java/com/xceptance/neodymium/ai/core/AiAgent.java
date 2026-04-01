@@ -66,7 +66,7 @@ public class AiAgent
     private final int maxRetries;
     private final boolean screenshotBeforeAction;
     private final AiConfiguration config;
-    private final StringBuilder executionLog = new StringBuilder();
+    private AiDiscussionLogger executionLog;
 
     private static final int NO_ACTIONS_MAX_RETRIES = 15;
 
@@ -97,9 +97,7 @@ public class AiAgent
             Assertions.fail("AI API key not configured. Set in your ai.properties, neodymium.properties or as an evironment variable.");
         }
 
-        executionLog.setLength(0);
-        executionLog.append("# AI Agent Execution Log\n\n");
-        executionLog.append("## Instructions\n").append(instructions).append("\n\n");
+        executionLog = new AiDiscussionLogger(instructions);
 
         LOG.debug("═══════════════════════════════════════════════════════════");
         LOG.debug("AI Agent: Processing instructions");
@@ -117,9 +115,9 @@ public class AiAgent
                 LOG.debug("Step [{}/{}]: {}", i + 1, steps.length, step);
                 LOG.debug("───────────────────────────────────────────────────────────");
 
-                executionLog.append("--- \n### Step [").append(i + 1).append("/").append(steps.length).append("]: ")
-                            .append(step).append("\n\n");
+                executionLog.startStep(i + 1, steps.length, step);
                 executeStep(step);
+                executionLog.endStep();
             }
 
             LOG.debug("═══════════════════════════════════════════════════════════");
@@ -130,7 +128,7 @@ public class AiAgent
         {
             if (config.attachFullDiscussionToReport())
             {
-                Allure.addAttachment("AI Discussion", "text/markdown", executionLog.toString(), ".md");
+                Allure.addAttachment("AI Discussion", "text/html", executionLog.generateHtml(), ".html");
             }
             if (config.attachTokenUsageToReport())
             {
@@ -238,7 +236,7 @@ public class AiAgent
             final String attemptLabel = lastWasNoActions ? "Retry (No Actions) " + noActionsCount
                                                          : (lastError != null ? "Retry (Error) " + errorCount : "Initial Attempt");
 
-            executionLog.append("#### ").append(attemptLabel).append("\n\n");
+            executionLog.startAttempt(attemptLabel);
 
             try
             {
@@ -269,8 +267,7 @@ public class AiAgent
 
                 // 3. Send to LLM
                 LOG.debug("Full user prompt:\n{}", userPrompt);
-                executionLog.append("<details><summary>AI Prompt</summary>\n\n")
-                            .append(userPrompt).append("\n\n</details>\n\n");
+                executionLog.logPrompt(userPrompt);
 
                 LOG.debug("Sending prompt to LLM...");
                 final String llmResponse;
@@ -292,15 +289,14 @@ public class AiAgent
                     throw new ActionExecutionException("LLM call failed or timed out: " + e.getMessage(), e);
                 }
 
-                executionLog.append("<details><summary>AI Response</summary>\n\n```json\n")
-                            .append(llmResponse).append("\n```\n\n</details>\n\n");
+                executionLog.logResponse(llmResponse);
 
                 // Log reasoning
                 final String reasoning = actionParser.getReasoning(llmResponse);
                 if (!reasoning.isEmpty())
                 {
                     LOG.debug("LLM reasoning: {}", reasoning);
-                    executionLog.append("**Reasoning:** ").append(reasoning).append("\n\n");
+                    executionLog.logReasoning(reasoning);
                 }
 
                 // Check if the LLM reported failure (e.g. a verification that didn't pass)
@@ -311,7 +307,7 @@ public class AiAgent
                                                            ? "LLM reported failure for: " + instruction
                                                            : "Verification failed: " + error;
                     LOG.error(message);
-                    executionLog.append("> [!CAUTION]\n> ").append(message).append("\n\n");
+                    executionLog.logError(message);
                     throw new ActionExecutionException(message, null);
                 }
 
@@ -324,8 +320,7 @@ public class AiAgent
                 catch (final ActionParser.ActionParserException e)
                 {
                     LOG.warn("JSON parsing failed: {}", e.getMessage());
-                    executionLog.append("> [!WARNING]\n> JSON parsing failed: ").append(e.getMessage())
-                                .append(". Retrying...\n\n");
+                    executionLog.logWarning("JSON parsing failed: " + e.getMessage() + ". Retrying...");
                     throw new ActionExecutionException(e.getMessage(), e);
                 }
                 if (actions.isEmpty())
@@ -333,7 +328,7 @@ public class AiAgent
                     noActionsCount++;
                     if (noActionsCount > NO_ACTIONS_MAX_RETRIES)
                     {
-                        executionLog.append("> [!IMPORTANT]\n> Max retries for empty response reached.\n\n");
+                        executionLog.logError("Max retries for empty response reached.");
                         SelenideAddons.wrapAssertionError(() -> {
                             throw new AssertionError("could not fulfill '" + instruction + "' retried "
                                                      + NO_ACTIONS_MAX_RETRIES + " times (no actions returned)");
@@ -342,26 +337,21 @@ public class AiAgent
                     LOG.warn(
                              "LLM returned no actions for instruction: {}. Retrying with pressure prompt (attempt {}/{})",
                              instruction, noActionsCount, NO_ACTIONS_MAX_RETRIES);
-                    executionLog.append("> [!WARNING]\n> No actions returned. Retrying...\n\n");
+                    executionLog.logWarning("No actions returned. Retrying...");
                     lastWasNoActions = true;
                     lastError = null;
                     sleep(1000);
                     continue;
                 }
 
-                executionLog.append("**Actions:**\n");
-                for (Action a : actions)
-                {
-                    executionLog.append("- ").append(a.getDescription()).append(" (").append(a.getType()).append(")\n");
-                }
-                executionLog.append("\n");
+                executionLog.logActions(actions);
 
                 // 5. Execute actions
                 actionExecutor.executeAll(actions);
 
                 // Success — exit retry loop
                 LOG.debug("Step completed successfully");
-                executionLog.append("Step completed successfully.\n\n");
+                executionLog.logSuccess("Step completed successfully.");
                 return;
             }
             catch (final ActionExecutionException e)
@@ -371,12 +361,12 @@ public class AiAgent
                 lastThrowable = e.getCause() != null ? e.getCause() : e;
                 lastWasNoActions = false;
                 LOG.warn("Action failed: {} (Attempt {}/{})", lastError, errorCount, maxRetries);
-                executionLog.append("> [!WARNING]\n> Action failed: ").append(lastError).append(". Retrying...\n\n");
+                executionLog.logWarning("Action failed: " + lastError + ". Retrying...");
 
                 if (errorCount > maxRetries)
                 {
                     final Throwable finalThrowable = lastThrowable;
-                    executionLog.append("> [!IMPORTANT]\n> Max retries for errors reached.\n\n");
+                    executionLog.logError("Max retries for errors reached.");
                     SelenideAddons.wrapAssertionError(() -> {
                         throw new AssertionError("Instruction '" + instruction + "' failed (" + maxRetries
                                                  + " tries):\n\n" + finalThrowable.getMessage(), finalThrowable);
@@ -392,6 +382,10 @@ public class AiAgent
                 SelenideAddons.wrapAssertionError(() -> {
                     throw new AiAgentException("Unexpected error executing step: " + instruction, e);
                 });
+            }
+            finally
+            {
+                executionLog.endAttempt();
             }
         }
     }
