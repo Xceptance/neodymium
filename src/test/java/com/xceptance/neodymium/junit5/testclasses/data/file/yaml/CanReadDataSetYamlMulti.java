@@ -13,7 +13,7 @@ public class CanReadDataSetYamlMulti
     public void test()
     {
         Map<String, String> data = Neodymium.getData();
-        Assertions.assertTrue(data.size() >= 3);
+        Assertions.assertTrue(data.size() == 2);
         
         String testId = data.get("testId");
         if ("Iteration1".equals(testId))

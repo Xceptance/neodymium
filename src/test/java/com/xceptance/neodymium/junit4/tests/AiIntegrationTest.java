@@ -53,4 +53,10 @@ public class AiIntegrationTest extends NeodymiumTest {
                 Result result = run(AiBrowserDirectExecutionTest.class);
                 checkPass(result, 5, 0);
         }
+
+        @Test
+        public void testAiDataResolution() {
+                Result result = run(com.xceptance.neodymium.junit4.testclasses.ai.AiBrowserDataResolutionTest.class);
+                checkPass(result, 4, 0);
+        }
 }
