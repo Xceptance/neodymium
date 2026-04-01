@@ -71,15 +71,15 @@ public class ScreenshotWriter
 
     public static String doScreenshot(String filename, String pathname) throws IOException
     {
-        return doScreenshot(filename, pathname, false);
+        return doScreenshot(filename, pathname, false, true);
     }
 
     public static String doScreenshot(String filename, boolean didSelenideScreenshot) throws IOException
     {
-        return doScreenshot(filename, getFormatedReportsPath(), didSelenideScreenshot);
+        return doScreenshot(filename, getFormatedReportsPath(), didSelenideScreenshot, true);
     }
 
-    public static String doScreenshot(String filename, String pathname, boolean didSelenideScreenshot) throws IOException
+    public static String doScreenshot(String filename, String pathname, boolean didSelenideScreenshot, boolean attach) throws IOException
     {
         String base64Image = null;
 
@@ -87,7 +87,7 @@ public class ScreenshotWriter
         // viewport: !didSelenideScreenshot && enableViewportScreenshot
         if (!didSelenideScreenshot && Neodymium.configuration().enableViewportScreenshot())
         {
-            String vpBase64 = takeScreenshot(filename, pathname, Capture.VIEWPORT);
+            String vpBase64 = takeScreenshot(filename, pathname, Capture.VIEWPORT, attach);
             if (vpBase64 != null) {
                 base64Image = vpBase64;
             }
@@ -96,7 +96,7 @@ public class ScreenshotWriter
         // full page logic block
         if (Neodymium.configuration().enableAdvancedScreenShots() && Neodymium.configuration().enableFullPageCapture())
         {
-            String fpBase64 = takeScreenshot(filename, pathname, Capture.FULL);
+            String fpBase64 = takeScreenshot(filename, pathname, Capture.FULL, attach);
             if (fpBase64 != null) {
                 base64Image = fpBase64;
             }
@@ -105,7 +105,7 @@ public class ScreenshotWriter
         return base64Image;
     }
 
-    private static String takeScreenshot(String filename, String pathname, Capture captureMode) throws IOException
+    private static String takeScreenshot(String filename, String pathname, Capture captureMode, boolean attach) throws IOException
     {
         // If no driver is available, we cannot take a screenshot
         if (!Neodymium.hasDriver())
@@ -216,7 +216,12 @@ public class ScreenshotWriter
                 // but for before methods, this is not possible due to allure limitations
                 // so we just add it normally when the allure lifecycle does not allow to be altered
                 boolean screenshotAdded;
-                Allure.getLifecycle().addAttachment(captureMode == Capture.FULL? "Screenshot" : "View Port Screenshot", "image/png", ".png", new java.io.ByteArrayInputStream(imageBytes));
+                if (attach)
+                {
+                    Allure.getLifecycle().addAttachment(captureMode == Capture.FULL ? "Screenshot" : "View Port Screenshot", "image/png", ".png",
+                                                        new java.io.ByteArrayInputStream(imageBytes));
+                }
+                // This will still be set to true, since the attach mode just wants to return a screenshot
                 screenshotAdded = true;
 
                 // to spare disk space, remove the file if we already used it inside the report
