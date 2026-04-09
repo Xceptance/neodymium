@@ -82,6 +82,9 @@ public class AiBrowser implements AutoCloseable {
         if (!Neodymium.getData().exists("prompt")) {
             throw new IllegalArgumentException("Cannot execute AI instruction implicitly: 'prompt' property is missing from the test dataset.");
         }
+        // retrieve all data once, to only have ONE test data attachment
+        Neodymium.getDataAndAddToReport();
+
         execute(Neodymium.getData().asString("prompt"));
     }
 
@@ -216,5 +219,15 @@ public class AiBrowser implements AutoCloseable {
         }
 
         return Neodymium.tryLocalizedText(value);
+    }
+
+    /**
+     * Returns the current test case instance
+     * 
+     * @return
+     */
+    public Object getTest()
+    {
+        return test;
     }
 }

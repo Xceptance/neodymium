@@ -22,6 +22,8 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.ai.core.AiBrowser;
+import com.xceptance.neodymium.ai.playbook.Playbook;
+import com.xceptance.neodymium.ai.playbook.PlaybookManager;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
 import com.xceptance.neodymium.common.testdata.TestData;
@@ -42,11 +44,16 @@ public class Neodymium
     // keep our current AiBrowser instance
     private AiBrowser aiBrowser;
 
+    // keep our active AI Playbook instance
+    private Playbook activeAiPlaybook;
+
     // keep our current browser profile name
     private String browserProfileName;
 
     // keep our current browser name
     private String browserName;
+
+    private String testName;
 
     private static List<String> browserFilter = generateBrowserFilter();
 
@@ -368,6 +375,27 @@ public class Neodymium
     }
 
     /**
+     * Get the current active AI Playbook instance
+     * 
+     * @return playbook
+     */
+    public static Playbook getAiPlaybook()
+    {
+        return getContext().activeAiPlaybook;
+    }
+
+    /**
+     * Set the current active AI Playbook instance
+     * 
+     * @param playbook
+     *            the Playbook to set
+     */
+    public static void setAiPlaybook(Playbook playbook)
+    {
+        getContext().activeAiPlaybook = playbook;
+    }
+
+    /**
      * Name of the current browser
      * 
      * @return browser name
@@ -375,6 +403,16 @@ public class Neodymium
     public static String getBrowserName()
     {
         return getContext().browserName;
+    }
+
+    public static String getTestName()
+    {
+        return getContext().testName;
+    }
+
+    public static void setTestName(String testName)
+    {
+        getContext().testName = testName;
     }
 
     /**
@@ -758,6 +796,28 @@ public class Neodymium
         else
         {
             return false;
+        }
+    }
+
+    public static void initializePlaybook()
+    {
+        Playbook playbook = Neodymium.getAiPlaybook();
+        if (playbook == null)
+        {
+            String playbookId = getTestName();
+
+            playbook = PlaybookManager.loadPlaybook(playbookId);
+
+            if (playbook != null)
+            {
+                playbook.setRecording(false);
+                Neodymium.setAiPlaybook(playbook);
+            }
+            else
+            {
+                playbook = new Playbook(playbookId);
+                Neodymium.setAiPlaybook(playbook);
+            }
         }
     }
 }

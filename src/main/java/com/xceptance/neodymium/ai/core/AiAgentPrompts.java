@@ -198,4 +198,66 @@ public final class AiAgentPrompts {
         .replace("{instruction}", instruction)
         .replace("{domContext}", domContext);
   }
+
+  /**
+   * System prompt that instructs the LLM to self-heal a broken playbook step.
+   */
+  public static final String SYSTEM_HEALING_PROMPT = SYSTEM_PROMPT + """
+
+      ## SELF-HEALING MODE
+      You are now evaluating a failed automation step. The test script expected to interact with an element, 
+      but the target could not be found or interacted with on the current page.
+
+      Evaluate the new page state:
+      - Is the desired functionality critically broken? If it's a clear core BUG preventing progress, return {"status": "BUG", "reasoning": "...", "actions": []}.
+      - Is it merely a valid UI change (e.g., button renamed, ID changed, moved, temporarily obscured)? If so, generate the new actions to accomplish the goal: {"status": "FIX", "actions": [...], "reasoning": "..."}.
+      
+      Your response MUST MATCH this exact JSON structure:
+      {
+        "status": "BUG" or "FIX",
+        "reasoning": "Explain why it is a bug or explain how the UI changed and how you fix it",
+        "actions": [ ... list of actions if FIX ... ]
+      }
+      """;
+
+  /**
+   * Template for the user healing prompt.
+   */
+  public static final String HEALING_PROMPT_TEMPLATE = """
+      ## Failed Instruction
+      {instruction}
+      
+      ## Original Reasoning (When it last worked)
+      {originalReasoning}
+
+      ## Original Element Context (What the target used to look like)
+      {elementContext}
+
+      ## Execution Error
+      {error}
+
+      ## Current Page State (DOM)
+      {domContext}
+
+      Please analyze the DOM. Is this a BUG or a UI change that can be FIXED?
+      """;
+
+  public static String buildHealingPrompt(final String instruction, final String originalReasoning, 
+      final String domContext, final String error, final com.xceptance.neodymium.ai.playbook.PlaybookStep step) {
+      
+      String elemCtx = "None";
+      if (step != null && step.getActions() != null && !step.getActions().isEmpty()) {
+          java.util.Map<String, String> ctx = step.getActions().get(0).getElementContext();
+          if (ctx != null) {
+              elemCtx = ctx.toString();
+          }
+      }
+
+      return HEALING_PROMPT_TEMPLATE
+          .replace("{instruction}", instruction)
+          .replace("{originalReasoning}", originalReasoning != null ? originalReasoning : "None")
+          .replace("{elementContext}", elemCtx)
+          .replace("{error}", error != null ? error : "Unknown error")
+          .replace("{domContext}", domContext);
+  }
 }

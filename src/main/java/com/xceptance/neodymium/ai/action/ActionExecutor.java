@@ -5,6 +5,7 @@ import static com.codeborne.selenide.Selenide.$x;
 
 import java.lang.reflect.Method;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -26,9 +27,8 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebElementCondition;
 import com.codeborne.selenide.ex.ElementShould;
-import com.xceptance.neodymium.util.AllureAddons;
 
-import io.qameta.allure.Allure;
+import io.qameta.allure.Step;
 
 /**
  * Translates {@link Action} objects into Selenium WebDriver calls. Uses smart
@@ -52,64 +52,66 @@ public class ActionExecutor {
     /**
      * Executes a single action.
      *
-     * @param action the action to execute
-     * @throws ActionExecutionException if the action fails
+     * @param action
+     *               the action to execute
+     * @throws ActionExecutionException
+     *                                  if the action fails
      */
+    @Step("{action.description}  - {action.type} {action.replay} ")
     public void execute(final Action action) {
-        Allure.step(action.getDescription() + "(" + action.getType() + ")", () -> {
-            LOG.debug("▶ {} — {}", action.getType(), action.getDescription());
+        LOG.debug("▶ {} — {}", action.getType(), action.getDescription());
 
-            switch (action.getType()) {
-                case NAVIGATE:
-                    executeNavigate(action);
-                    break;
-                case CLICK:
-                    executeClick(action);
-                    break;
-                case TYPE:
-                    executeType(action);
-                    break;
-                case CLEAR:
-                    executeClear(action);
-                    break;
-                case SELECT:
-                    executeSelect(action);
-                    break;
-                case ASSERT:
-                    executeAssert(action);
-                    break;
-                case WAIT:
-                    executeWait(action);
-                    break;
-                case SCROLL:
-                    executeScroll(action);
-                    break;
-                case HOVER:
-                    executeHover(action);
-                    break;
-                case KEY_PRESS:
-                    executeKeyPress(action);
-                    break;
-                case BACK:
-                    executeBack(action);
-                    break;
-                case FORWARD:
-                    executeForward(action);
-                    break;
-                case REFRESH:
-                    executeRefresh(action);
-                    break;
-                case CLEAR_COOKIES:
-                    executeClearCookies(action);
-                    break;
-                case JAVA_METHOD:
-                    executeJavaMethod(action);
-                    break;
-                default:
-                    LOG.warn("Unsupported action type: {}", action.getType());
-            }
-            AllureAddons.addDataAsJsonToReport("Action", action);
-        });
+        preCheckAction(action);
+
+        switch (action.getType()) {
+            case NAVIGATE:
+                executeNavigate(action);
+                break;
+            case CLICK:
+                executeClick(action);
+                break;
+            case TYPE:
+                executeType(action);
+                break;
+            case CLEAR:
+                executeClear(action);
+                break;
+            case SELECT:
+                executeSelect(action);
+                break;
+            case ASSERT:
+                executeAssert(action);
+                break;
+            case WAIT:
+                executeWait(action);
+                break;
+            case SCROLL:
+                executeScroll(action);
+                break;
+            case HOVER:
+                executeHover(action);
+                break;
+            case KEY_PRESS:
+                executeKeyPress(action);
+                break;
+            case BACK:
+                executeBack(action);
+                break;
+            case FORWARD:
+                executeForward(action);
+                break;
+            case REFRESH:
+                executeRefresh(action);
+                break;
+            case CLEAR_COOKIES:
+                executeClearCookies(action);
+                break;
+            case JAVA_METHOD:
+                executeJavaMethod(action);
+                break;
+            default:
+                LOG.warn("Unsupported action type: {}", action.getType());
+        }
     }
 
     /**
@@ -124,6 +126,7 @@ public class ActionExecutor {
         for (int i = 0; i < actions.size(); i++) {
             final Action action = actions.get(i);
             LOG.debug("Action [{}/{}]", i + 1, actions.size());
+
             execute(action);
 
             // Small pause between actions for page stability
@@ -148,6 +151,7 @@ public class ActionExecutor {
 
     private void executeClick(final Action action) {
         final SelenideElement element = findElement(action);
+        action.setElementContext(extractElementContext(element));
         scrollIntoView(element);
         try {
             element.click();
@@ -182,6 +186,7 @@ public class ActionExecutor {
 
     private void executeType(final Action action) {
         final SelenideElement element = findElement(action);
+        action.setElementContext(extractElementContext(element));
         scrollIntoView(element);
         try {
             element.clear();
@@ -202,6 +207,7 @@ public class ActionExecutor {
 
     private void executeClear(final Action action) {
         final SelenideElement element = findElement(action);
+        action.setElementContext(extractElementContext(element));
         try {
             element.clear();
         } catch (final ElementNotInteractableException e) {
@@ -219,6 +225,7 @@ public class ActionExecutor {
 
     private void executeSelect(final Action action) {
         final SelenideElement element = findElement(action);
+        action.setElementContext(extractElementContext(element));
         scrollIntoView(element);
         try {
             element.selectOption(action.getValue());
@@ -246,45 +253,42 @@ public class ActionExecutor {
             return;
         }
 
-
         try {
-            if ("visible".equals(expected))
-            {
+            if ("visible".equals(expected)) {
                 element.shouldBe(Condition.visible);
-            }
-            else
-            {
-            // Expand the "OR" condition to cover common web patterns
-            element.should(Condition.or("Assertion for " + expected,
-                                        Condition.exactText(expected),
-                                        Condition.partialText(expected),
-                                        Condition.value(expected),
-                                        new PartialTextContent(expected), // This is to
-                                                                                                         // get the text
-                                                                                                         // content for
-                                                                                                         // the page
-                                                                                                         // title, which
-                                                                                                         // is not
-                                                                                                         // listening on
-                                                                                                         // partialText
-                                        Condition.attribute("href", expected),
-                                        Condition.attribute("alt", expected),
-                                        Condition.attribute("src", expected),
-                                        Condition.attribute("title", expected),
-                                        Condition.attribute("placeholder", expected),
-                                        // This covers custom data attributes like data-id or data-test-id
-                                        new DataAttributeMatches("data-.*", ".*" + expected + ".*")));
+            } else {
+                // Expand the "OR" condition to cover common web patterns
+                element.should(Condition.or("Assertion for " + expected,
+                        Condition.exactText(expected),
+                        Condition.partialText(expected),
+                        Condition.value(expected),
+                        new PartialTextContent(expected), // This is to
+                                                          // get the text
+                                                          // content for
+                                                          // the page
+                                                          // title, which
+                                                          // is not
+                                                          // listening on
+                                                          // partialText
+                        Condition.attribute("href", expected),
+                        Condition.attribute("alt", expected),
+                        Condition.attribute("src", expected),
+                        Condition.attribute("title", expected),
+                        Condition.attribute("placeholder", expected),
+                        // This covers custom data attributes like data-id or data-test-id
+                        new DataAttributeMatches("data-.*", ".*" + Pattern.quote(expected) + ".*")));
 
-        }
+            }
             LOG.debug("✓ Assertion passed for: '{}'", expected);
         } catch (Throwable e) {
             // Log the actual attributes to help debug why the AI failed
             String actualDetails = String.format("Text: '%s', Value: '%s', Alt: '%s'",
-                                                 element.getText(), element.getValue(), element.getAttribute("alt"));
+                    element.getText(), element.getValue(), element.getAttribute("alt"));
 
             throw new ActionExecutionException(
-                                               String.format("Assertion failed: '%s' not found in common attributes. Found: [%s]",
-                                                             expected, actualDetails), e);
+                    String.format("Assertion failed: '%s' not found in common attributes. Found: [%s]",
+                            expected, actualDetails),
+                    e);
         }
     }
 
@@ -303,6 +307,7 @@ public class ActionExecutor {
 
     private void executeHover(final Action action) {
         final SelenideElement element = findElement(action);
+        action.setElementContext(extractElementContext(element));
         scrollIntoView(element);
         try {
             element.hover();
@@ -374,7 +379,8 @@ public class ActionExecutor {
     private void executeClearCookies(final Action action) {
         LOG.debug("Clearing cookies");
         Selenide.clearBrowserCookies();
-        // Also clearing local storage as it is often expected when "clearing cookies" in modern web
+        // Also clearing local storage as it is often expected when "clearing cookies"
+        // in modern web
         Selenide.clearBrowserLocalStorage();
     }
 
@@ -483,7 +489,7 @@ public class ActionExecutor {
         // Strategy 0: Direct Match for Neodymium Automation ID
         if (target.matches("^xc_.*")) {
             try {
-                SelenideElement element = $(By.cssSelector("[data-neodymium-automation-id='" + target + "']"));
+                SelenideElement element = $(By.cssSelector(String.format("[data-neodymium-automation-id=\"%s\"]", target.replace("\"", "\\\""))));
                 if (element.exists()) {
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 } else {
@@ -495,13 +501,11 @@ public class ActionExecutor {
                         action.getElementDetails(), e.getMessage());
             }
         }
-        
+
         // In some cases the ai tries this, so just give it what it wants
-        if (action.getTarget().equals("document.title") || action.getTarget().equals("pageTitle"))
-        {
+        if (action.getTarget().equals("document.title") || action.getTarget().equals("pageTitle")) {
             return $("head > title");
         }
-
 
         // Strategy 1: Try as CSS selector
         try {
@@ -555,9 +559,10 @@ public class ActionExecutor {
         // text)
         try {
             // First try with target
+            String targetXpath = escapeXpath(target);
             String xpath = String.format(
-                    "//*[contains(normalize-space(text()), '%s') or contains(@value, '%s') or contains(@aria-label, '%s')]",
-                    target, target, target);
+                    "//*[contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s)]",
+                    targetXpath, targetXpath, targetXpath);
             SelenideElement element = $x(xpath);
             if (element.exists()) {
                 return element.should(Condition.exist, ELEMENT_TIMEOUT);
@@ -567,9 +572,10 @@ public class ActionExecutor {
             // Then try with element text if available and different
             final String elementText = action.getElementDetails();
             if (elementText != null && !elementText.isBlank() && !elementText.equals(target)) {
+                String elementTextXpath = escapeXpath(elementText);
                 xpath = String.format(
-                        "//*[contains(normalize-space(text()), '%s') or contains(@value, '%s') or contains(@aria-label, '%s')]",
-                        elementText, elementText, elementText);
+                        "//*[contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s)]",
+                        elementTextXpath, elementTextXpath, elementTextXpath);
                 element = $x(xpath);
                 if (element.exists()) {
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
@@ -590,6 +596,16 @@ public class ActionExecutor {
             return By.xpath(target);
         }
         return By.cssSelector(target);
+    }
+
+    private String escapeXpath(String value) {
+        if (!value.contains("'")) {
+            return "'" + value + "'";
+        } else if (!value.contains("\"")) {
+            return "\"" + value + "\"";
+        } else {
+            return "concat('" + value.replace("'", "', \"'\", '") + "')";
+        }
     }
 
     private void scrollIntoView(final SelenideElement element) {
@@ -615,6 +631,58 @@ public class ActionExecutor {
     }
 
     /**
+     * Pre-checks if the action target exists and is visible before any interaction
+     * is attempted. Use this for safely
+     * replaying instructions from a Playbook.
+     */
+    @Step("Pre-checking action: {action.type}")
+    public void preCheckAction(Action action) {
+        switch (action.getType()) {
+            case CLICK:
+            case TYPE:
+            case CLEAR:
+            case SELECT:
+            case HOVER:
+                SelenideElement element = findElement(action);
+                if (!element.exists() || !element.isDisplayed()) {
+                    throw new ActionExecutionException(String.format(
+                            "Pre-check failed: Target '%s' is not visible or doesn't exist.", action.getTarget()));
+                }
+                break;
+            default:
+                // No precheck for NAVIGATE, BACK, FORWARD, WAIT, ASSERT, JAVA_METHOD etc.
+                break;
+        }
+    }
+
+    /**
+     * Extracts useful DOM attributes from a SelenideElement to be used as context.
+     * This helps the LLM self-heal
+     * Playbooks by knowing what the element used to look like.
+     */
+    public Map<String, String> extractElementContext(SelenideElement element) {
+        try {
+            Map<String, String> context = new HashMap<>();
+            context.put("tagName", element.getTagName());
+            context.put("text", element.getText());
+            context.put("id", element.getAttribute("id"));
+            context.put("classes", element.getAttribute("class"));
+            context.put("href", element.getAttribute("href"));
+            context.put("name", element.getAttribute("name"));
+            context.put("type", element.getAttribute("type"));
+            context.put("placeholder", element.getAttribute("placeholder"));
+
+            // Filter out nulls
+            context.entrySet().removeIf(entry -> entry.getValue() == null || entry.getValue().isBlank());
+
+            return context;
+        } catch (Exception e) {
+            LOG.warn("Failed to extract element context: {}", e.getMessage());
+            return new HashMap<>();
+        }
+    }
+
+    /**
      * Exception thrown when an action execution fails.
      */
     public static class ActionExecutionException extends RuntimeException {
@@ -627,34 +695,30 @@ public class ActionExecutor {
         }
     }
 
-
-    public static class DataAttributeMatches extends WebElementCondition
-    {
+    public static class DataAttributeMatches extends WebElementCondition {
 
         private final Pattern namePattern;
 
         private final Pattern valuePattern;
 
-        public DataAttributeMatches(String nameRegex, String valueRegex)
-        {
+        public DataAttributeMatches(String nameRegex, String valueRegex) {
             super("dataAttributeMatches");
             this.namePattern = Pattern.compile(nameRegex);
             this.valuePattern = Pattern.compile(valueRegex);
         }
 
         @Override
-        public CheckResult check(Driver driver, WebElement element)
-        {
+        public CheckResult check(Driver driver, WebElement element) {
             Map<String, String> attributes = driver.executeJavaScript(
-                                                                      "var items = {}; " +
-                                                                      "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
-                                                                      "  items[attrs[i].name] = attrs[i].value; " +
-                                                                      "} "
-                                                                      + "return items;", element);
+                    "var items = {}; " +
+                            "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
+                            "  items[attrs[i].name] = attrs[i].value; " +
+                            "} "
+                            + "return items;",
+                    element);
             boolean found = false;
 
-            for (var entry : attributes.entrySet())
-            {
+            for (var entry : attributes.entrySet()) {
                 String name = entry.getKey();
 
                 if (!namePattern.matcher(name).matches())
@@ -662,8 +726,7 @@ public class ActionExecutor {
 
                 String value = entry.getValue();
 
-                if (value != null && valuePattern.matcher(value).matches())
-                {
+                if (value != null && valuePattern.matcher(value).matches()) {
                     found = true;
                 }
             }
@@ -672,21 +735,17 @@ public class ActionExecutor {
         }
     }
 
-    public static class PartialTextContent extends WebElementCondition
-    {
-
+    public static class PartialTextContent extends WebElementCondition {
 
         private final String value;
 
-        public PartialTextContent(String value)
-        {
+        public PartialTextContent(String value) {
             super("PartialTextContent");
             this.value = value;
         }
 
         @Override
-        public CheckResult check(Driver driver, WebElement element)
-        {
+        public CheckResult check(Driver driver, WebElement element) {
             @Nullable
             String attribute = element.getAttribute("textContent");
             boolean found = attribute.contains(value);

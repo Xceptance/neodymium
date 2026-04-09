@@ -177,11 +177,20 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
             @Override
             public void evaluate() throws Throwable
             {
+                // Set the exact unified test name before any setup
+                Neodymium.setTestName(getTestClass().getJavaClass().getCanonicalName() + " :: " + method.getName());
+
                 // Initialize AiBrowser
                 Neodymium.setAiBrowser(new AiBrowser(finalTestClassInstance));
+                boolean success = true;
                 try
                 {
                     finalMethodStatement.evaluate();
+                }
+                catch (Throwable t)
+                {
+                    success = false;
+                    throw t;
                 }
                 finally
                 {
@@ -189,6 +198,12 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
                     if (aiBrowser != null)
                     {
                         aiBrowser.close();
+                    }
+                    
+                    // Save Playbook on success
+                    com.xceptance.neodymium.ai.playbook.Playbook playbook = Neodymium.getAiPlaybook();
+                    if (playbook != null && playbook.isChanged() && success) {
+                        com.xceptance.neodymium.ai.playbook.PlaybookManager.savePlaybook(playbook);
                     }
                 }
             }

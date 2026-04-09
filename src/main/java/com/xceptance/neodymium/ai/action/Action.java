@@ -12,14 +12,25 @@ public class Action {
 
     private String elementDetails;
 
+    private String reasoning;
+    private java.util.Map<String, String> elementContext;
+
+    private String replay = "";
+
     public Action() {
     }
 
-    public Action(final ActionType type, final String target, final String value, final String description) {
+    public Action(final ActionType type, final String target, final String value, final String description)
+    {
         this.type = type;
         this.target = target;
         this.value = value;
         this.description = description;
+    }
+
+    public void markReplay()
+    {
+        this.replay = "(Replay)";
     }
 
     public ActionType getType() {
@@ -76,9 +87,30 @@ public class Action {
     }
 
 
+    public String getReasoning() {
+        return reasoning;
+    }
+
+    public void setReasoning(final String reasoning) {
+        this.reasoning = reasoning;
+    }
+
+    public java.util.Map<String, String> getElementContext() {
+        return elementContext;
+    }
+
+    public void setElementContext(final java.util.Map<String, String> elementContext) {
+        this.elementContext = elementContext;
+    }
+
     @Override
     public String toString() {
-        return String.format("Action{type=%s, target='%s', value='%s', desc='%s', elementDetails='%s'}",
-                             type, target, value, description, elementDetails);
+        return String.format("Action{type=%s, target='%s', value='%s', desc='%s', elementDetails='%s', reasoning='%s', context=%s}",
+                             type, target, value, description, elementDetails, reasoning, elementContext != null ? "yes" : "no");
+    }
+
+    public String getReplay()
+    {
+        return replay;
     }
 }

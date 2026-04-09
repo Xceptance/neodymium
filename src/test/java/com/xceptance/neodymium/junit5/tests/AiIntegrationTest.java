@@ -63,4 +63,17 @@ public class AiIntegrationTest extends AbstractNeodymiumTest
         NeodymiumTestExecutionSummary result = run(com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserDataResolutionTest.class);
         checkPass(result, 4, 0);
     }
+    
+    @Test
+    public void testPlaybookReplaySkipsLLM()
+    {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("neodymium.ai.apiKey", "invalid_mock_key_123");
+        addPropertiesForTest("testPlaybookReplaySkipsLLM.properties", properties);
+
+        // This test simulates execution where a playbook already exists.
+        // If the playback works, it succeeds natively without hitting the LLM
+        NeodymiumTestExecutionSummary result = run(com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserPlaybookTest.class);
+        checkPass(result, 1, 0);
+    }
 }

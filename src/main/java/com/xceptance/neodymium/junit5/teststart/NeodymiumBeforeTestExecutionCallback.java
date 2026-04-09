@@ -16,6 +16,9 @@ public class NeodymiumBeforeTestExecutionCallback implements BeforeTestExecution
         // reset the random seed so every test starts with the same values for better reproducibility
         reinitializeRandomSeed(NeodymiumRandom.SeedState.INITIALIZED);
         
+        // exact unified test name calculation
+        Neodymium.setTestName(context.getRequiredTestClass().getCanonicalName() + " :: " + context.getDisplayName());
+
         // Initialize AiBrowser
         Neodymium.setAiBrowser(new AiBrowser(context.getRequiredTestInstance()));
     }

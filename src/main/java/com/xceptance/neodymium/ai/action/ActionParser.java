@@ -164,6 +164,23 @@ public class ActionParser {
     }
 
     /**
+     * Extracts the status field from the LLM response, used for self-healing (BUG or FIX).
+     */
+    public String getHealingStatus(final String llmResponse)
+    {
+        try
+        {
+            final String json = extractJson(llmResponse);
+            final JsonObject root = GSON.fromJson(json, JsonObject.class);
+            return root.has("status") ? root.get("status").getAsString() : "";
+        }
+        catch (final Exception e)
+        {
+            return "";
+        }
+    }
+
+    /**
      * Extracts JSON from a response that might be wrapped in
      * markdown code fences (```json...```).
      */
@@ -248,6 +265,22 @@ public class ActionParser {
 
             final Action action = new Action(type, target, value, description);
             action.setElementDetails(elementDetails);
+            
+            if (obj.has("reasoning") && !obj.get("reasoning").isJsonNull()) {
+                action.setReasoning(obj.get("reasoning").getAsString());
+            }
+
+            if (obj.has("elementContext") && obj.get("elementContext").isJsonObject()) {
+                JsonObject ctxObj = obj.getAsJsonObject("elementContext");
+                java.util.Map<String, String> ctxMap = new java.util.HashMap<>();
+                for (java.util.Map.Entry<String, JsonElement> entry : ctxObj.entrySet()) {
+                    if (!entry.getValue().isJsonNull()) {
+                        ctxMap.put(entry.getKey(), entry.getValue().getAsString());
+                    }
+                }
+                action.setElementContext(ctxMap);
+            }
+
             return action;
         }
         catch (final Exception e)

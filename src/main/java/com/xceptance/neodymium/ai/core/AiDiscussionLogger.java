@@ -32,6 +32,7 @@ public class AiDiscussionLogger
         html.append(".error { color: #dc3545; font-weight: bold; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; margin-bottom: 10px; }\n");
         html.append(".warning { color: #856404; background: #fff3cd; padding: 10px; border: 1px solid #ffeeba; border-radius: 4px; margin-bottom: 10px; }\n");
         html.append(".success { color: #155724; background: #d4edda; padding: 10px; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 10px; }\n");
+        html.append(".info { color: #0e566c; background: #d1ecf1; padding: 10px; border: 1px solid #bee5eb; border-radius: 4px; margin-bottom: 10px; }\n");
         html.append("</style>\n</head>\n<body>\n");
         html.append("<h2>AI Agent Execution Log</h2>\n");
         html.append("<div class=\"instruction\"><strong>Instructions:</strong><br/>").append(escape(instructions).replace("\n", "<br/>")).append("</div>\n");
@@ -91,6 +92,11 @@ public class AiDiscussionLogger
     public void logSuccess(String message)
     {
         html.append("<div class=\"success\">").append(escape(message)).append("</div>\n");
+    }
+
+    public void logInfo(String message)
+    {
+        html.append("<div class=\"info\">").append(escape(message)).append("</div>\n");
     }
 
     public void logActions(List<Action> actions)

@@ -44,4 +44,8 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.report.attachFullDiscussion")
     @DefaultValue("true")
     public boolean attachFullDiscussionToReport();
+
+    @Key("neodymium.ai.playbook.healing.enabled")
+    @DefaultValue("true")
+    public boolean playbookHealingEnabled();
 }

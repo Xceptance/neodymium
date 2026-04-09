@@ -59,4 +59,14 @@ public class AiIntegrationTest extends NeodymiumTest {
                 Result result = run(com.xceptance.neodymium.junit4.testclasses.ai.AiBrowserDataResolutionTest.class);
                 checkPass(result, 4, 0);
         }
+
+        @Test
+        public void testPlaybookReplaySkipsLLM() {
+                Map<String, String> properties = new HashMap<>();
+                properties.put("neodymium.ai.apiKey", "invalid_mock_key_123");
+                addPropertiesForTest("testPlaybookReplaySkipsLLM.properties", properties);
+
+                Result result = run(com.xceptance.neodymium.junit4.testclasses.ai.AiBrowserPlaybookTest.class);
+                checkPass(result, 1, 0);
+        }
 }
