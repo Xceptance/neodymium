@@ -39,3 +39,5 @@ embeddedLocalProxySelfSignedRootCertificate.p12
 /.specify/
 /.vscode/
 /specs/
+
+newTickets.txt
