@@ -39,34 +39,19 @@ import io.qameta.allure.Allure;
 public class AiAgent {
     private static final Logger LOG = LoggerFactory.getLogger(AiAgent.class);
 
-    /**
-     * Pattern to detect instructions that are simply "open/go to/navigate to URL".
-     * Extracts the URL from the
-     * instruction.
-     */
-    private static final Pattern URL_PATTERN = Pattern.compile(
-            "(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?://\\S+)\\s*$");
+    private final Pattern urlPattern;
 
-    /**
-     * Pattern to detect java method calls
-     */
-    private static final Pattern JAVA_METHOD_PATTERN = Pattern.compile(
-            "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(([^)]*)\\)");
+    private final Pattern javaMethodPattern;
 
-    /**
-     * Pattern to detect validation instructions (English and German).
-     */
-    private static final Pattern VALIDATION_PATTERN = Pattern.compile(
-            "(?i)^(?:verify|check|validate|ensure|assert|prüfe|verifiziere|überprüfe|bestätige|checke)\\b.*");
+    private final Pattern validationPattern;
 
-    private static final Pattern BACK_PATTERN = Pattern.compile("(?i)^(?:go\\s+)?back$|^navigate\\s+back$");
+    private final Pattern backPattern;
 
-    private static final Pattern FORWARD_PATTERN = Pattern.compile("(?i)^(?:go\\s+)?forward$|^navigate\\s+forward$");
+    private final Pattern forwardPattern;
 
-    private static final Pattern REFRESH_PATTERN = Pattern.compile("(?i)^(?:refresh|reload)(?:\\s+page)?$");
+    private final Pattern refreshPattern;
 
-    private static final Pattern CLEAR_COOKIES_PATTERN = Pattern
-            .compile("(?i)^(?:clear\\s+cookies|reset\\s+session|clear\\s+all\\s+cookies)$");
+    private final Pattern clearCookiesPattern;
 
     private final LlmClient llmClient;
 
@@ -95,6 +80,14 @@ public class AiAgent {
         this.maxRetries = config.agentMaxRetries();
         this.screenshotBeforeAction = config.agentScreenshotBeforeAction();
         this.config = config;
+
+        this.urlPattern = Pattern.compile(config.agentPatternUrl());
+        this.javaMethodPattern = Pattern.compile(config.agentPatternJavaMethod());
+        this.validationPattern = Pattern.compile(config.agentPatternValidation());
+        this.backPattern = Pattern.compile(config.agentPatternBack());
+        this.forwardPattern = Pattern.compile(config.agentPatternForward());
+        this.refreshPattern = Pattern.compile(config.agentPatternRefresh());
+        this.clearCookiesPattern = Pattern.compile(config.agentPatternClearCookies());
     }
 
     /**
@@ -217,15 +210,16 @@ public class AiAgent {
         if (playbook.isRecording() == false) {
             // Only if we are not trying to heal a step
             if (step.failed() == false) {
-                // Check if the prompt is still the same
-                if (step.getPromptLine().equals(instruction) == false) {
-                    // prompt change found!
-                    String msg = "Prompt differs from recording. Old: '" + step.getPromptLine() + "', New: '"
+                // Check if the prompt is still the same, or if we are at the end of the playbook (promptLine is null)
+                if (step.getPromptLine() == null || step.getPromptLine().equals(instruction) == false) {
+                    // prompt change found, or new step at the end of playbook!
+                    String msg = "Prompt differs from recording or new instruction. Old: '" + step.getPromptLine() + "', New: '"
                             + instruction + "'. Starting new recording.";
                     AllureAddons.addInfoBeforeStep("Playbook Change: " + msg);
                     executionLog.logWarning(msg);
                     playbook.setRecording(true);
                     playbook.removeFutureSteps();
+                    step = playbook.getCurrentStep();
                 } else {
                     // TODO: better place?
                     final boolean isValidation = isValidationInstruction(instruction);
@@ -237,11 +231,14 @@ public class AiAgent {
             }
         }
 
-        // 2. If there is no playbook to replay, try parsing and handle obvious commands
-        // directly without calling the
-        // LLM
+        // 2. If there is no playbook to replay, try parsing and handle obvious commands directly
         if (actions.isEmpty()) {
             actions = getActionsDirectly(instruction, step);
+            if (!actions.isEmpty()) {
+                step.setPromptLine(instruction);
+                step.setReasoning("directly parsed");
+                step.setActions(actions);
+            }
         }
 
         // 3. Still no luck? Let's give it to the AI
@@ -411,7 +408,7 @@ public class AiAgent {
         ArrayList<Action> list = new ArrayList<Action>();
 
         // Check for URL navigation pattern
-        final Matcher urlMatcher = URL_PATTERN.matcher(instruction.strip());
+        final Matcher urlMatcher = urlPattern.matcher(instruction.strip());
         if (urlMatcher.find()) {
             final String url = urlMatcher.group(1);
             LOG.debug("Direct navigation to: {}", url);
@@ -419,7 +416,7 @@ public class AiAgent {
             list.add(navigateAction);
         }
         if (instruction.toLowerCase().contains("java")) {
-            final Matcher javaMatcher = JAVA_METHOD_PATTERN.matcher(instruction.strip());
+            final Matcher javaMatcher = javaMethodPattern.matcher(instruction.strip());
             if (javaMatcher.find()) {
                 final String method = javaMatcher.group(1);
                 final String param = javaMatcher.group(2);
@@ -431,19 +428,19 @@ public class AiAgent {
         }
 
         final String trimmed = instruction.strip();
-        if (BACK_PATTERN.matcher(trimmed).find()) {
+        if (backPattern.matcher(trimmed).find()) {
             LOG.debug("Direct execution: BACK");
             list.add(new Action(ActionType.BACK, null, null, "Go back"));
         }
-        if (FORWARD_PATTERN.matcher(trimmed).find()) {
+        if (forwardPattern.matcher(trimmed).find()) {
             LOG.debug("Direct execution: FORWARD");
             list.add(new Action(ActionType.FORWARD, null, null, "Go forward"));
         }
-        if (REFRESH_PATTERN.matcher(trimmed).find()) {
+        if (refreshPattern.matcher(trimmed).find()) {
             LOG.debug("Direct execution: REFRESH");
             list.add(new Action(ActionType.REFRESH, null, null, "Refresh page"));
         }
-        if (CLEAR_COOKIES_PATTERN.matcher(trimmed).find()) {
+        if (clearCookiesPattern.matcher(trimmed).find()) {
             LOG.debug("Direct execution: CLEAR_COOKIES");
             list.add(new Action(ActionType.CLEAR_COOKIES, null, null, "Clear cookies"));
         }
@@ -476,7 +473,7 @@ public class AiAgent {
     }
 
     private boolean isValidationInstruction(final String instruction) {
-        return VALIDATION_PATTERN.matcher(instruction.strip()).find();
+        return validationPattern.matcher(instruction.strip()).find();
     }
 
     /**

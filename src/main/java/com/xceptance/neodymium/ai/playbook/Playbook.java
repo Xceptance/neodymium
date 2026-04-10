@@ -6,7 +6,7 @@ import java.util.List;
 import com.xceptance.neodymium.ai.action.Action;
 
 public class Playbook {
-
+    
     private String id;
 
     private List<PlaybookStep> steps;
@@ -16,7 +16,8 @@ public class Playbook {
 
     private transient boolean recording = true;
 
-    public Playbook(String id) {
+    public Playbook(String id)
+    {
         this.id = id;
         this.steps = new ArrayList<>();
     }
@@ -42,47 +43,61 @@ public class Playbook {
         this.changed = changed;
     }
 
-    public void markActionsReplay() {
-        for (PlaybookStep step : this.steps) {
-            for (Action action : step.getActions()) {
+    public void markActionsReplay()
+    {
+        for (PlaybookStep step : this.steps)
+        {
+            for (Action action : step.getActions())
+            {
                 action.markReplay();
             }
         }
     }
 
-    public String getId() {
+    public String getId()
+    {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(String id)
+    {
         this.id = id;
     }
 
-    public boolean isRecording() {
+    public boolean isRecording()
+    {
         return this.recording;
     }
 
-    public void setRecording(boolean recording) {
+    public void setRecording(boolean recording)
+    {
         this.recording = recording;
     }
 
-    public void removeFutureSteps() {
-        if (steps.size() > cursor) {
+    public void removeFutureSteps()
+    {
+        if (steps.size() > cursor)
+        {
             steps.subList(cursor, steps.size()).clear();
         }
         this.changed = true;
     }
 
-    public void nextStep() {
+    public void nextStep()
+    {
         cursor++;
     }
 
-    public PlaybookStep getCurrentStep() {
+    public PlaybookStep getCurrentStep()
+    {
         PlaybookStep step;
 
-        if (steps.size() > cursor) {
+        if (steps.size() > cursor)
+        {
             step = steps.get(cursor);
-        } else {
+        }
+        else
+        {
             step = new PlaybookStep();
             steps.add(step);
             changed = true;

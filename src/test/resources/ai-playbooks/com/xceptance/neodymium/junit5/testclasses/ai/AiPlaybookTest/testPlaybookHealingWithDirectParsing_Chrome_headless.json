@@ -1,0 +1,22 @@
+{
+  "context": {
+    "playbookId": "com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserPlaybookTest :: testPlaybookHealingWithDirectParsing :: Browser Chrome_headless"
+  },
+  "steps": [
+    {
+      "promptLine": "java executeDummy1()",
+      "reasoning": "Healing target",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#does-not-exist-for-healing",
+          "value": null,
+          "description": "Fail to trigger healing",
+          "elementDetails": "",
+          "elementContext": {}
+        }
+      ]
+    }
+  ],
+  "changed": false
+}

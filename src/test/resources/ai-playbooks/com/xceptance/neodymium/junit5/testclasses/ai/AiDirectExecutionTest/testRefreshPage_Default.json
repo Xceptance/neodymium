@@ -1,0 +1,28 @@
+{
+  "id": "com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserDirectExecutionTest :: testRefreshPage :: Browser Default",
+  "steps": [
+    {
+      "promptLine": "open https://xceptance.com",
+      "reasoning": "directly parsed",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": "https://xceptance.com",
+          "description": "Navigate to https://xceptance.com",
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "refresh page",
+      "reasoning": "directly parsed",
+      "actions": [
+        {
+          "type": "REFRESH",
+          "description": "Refresh page",
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

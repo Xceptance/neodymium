@@ -1,0 +1,22 @@
+{
+  "context": {
+    "playbookId": "com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserPlaybookTest :: testPlaybookHealing :: Browser Chrome_headless"
+  },
+  "steps": [
+    {
+      "promptLine": "Click on the dummy button",
+      "reasoning": "Standard playback",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#does-not-exist",
+          "value": null,
+          "description": "Click the non-existent button",
+          "elementDetails": "",
+          "elementContext": {}
+        }
+      ]
+    }
+  ],
+  "changed": false
+}

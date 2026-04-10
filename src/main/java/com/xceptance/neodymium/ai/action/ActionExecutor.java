@@ -489,7 +489,7 @@ public class ActionExecutor {
         // Strategy 0: Direct Match for Neodymium Automation ID
         if (target.matches("^xc_.*")) {
             try {
-                SelenideElement element = $(By.cssSelector(String.format("[data-neodymium-automation-id=\"%s\"]", target.replace("\"", "\\\""))));
+                SelenideElement element = $(By.cssSelector("[data-neodymium-automation-id='" + target + "']"));
                 if (element.exists()) {
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 } else {

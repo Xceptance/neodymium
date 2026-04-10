@@ -73,7 +73,8 @@ public class AiIntegrationTest extends AbstractNeodymiumTest
 
         // This test simulates execution where a playbook already exists.
         // If the playback works, it succeeds natively without hitting the LLM
+        // Healing and prompt changes will hit the LLM and fail properly
         NeodymiumTestExecutionSummary result = run(com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserPlaybookTest.class);
-        checkPass(result, 1, 0);
+        checkPass(result, 7, 0);
     }
 }

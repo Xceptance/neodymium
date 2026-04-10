@@ -145,7 +145,6 @@ public class VideoWriter implements Writer
                 LOGGER.error("something went wrong with video processing");
                 break;
             }
-            LOGGER.info("process video is processing");
             Selenide.sleep(200);
         }
         File tempFile = new File(recordingConfigurations.tempFolderToStoreRecording() + "/" + "temp" + UUID.randomUUID() + ".mp4");
@@ -170,7 +169,6 @@ public class VideoWriter implements Writer
                 LOGGER.error("something went wrong with adjusting frame rate");
                 break;
             }
-            LOGGER.info("video frame rate adjustment is processing");
             Selenide.sleep(200);
         }
         tempFile.delete();
