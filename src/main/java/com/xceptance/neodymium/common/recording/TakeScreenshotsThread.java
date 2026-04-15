@@ -3,11 +3,13 @@ package com.xceptance.neodymium.common.recording;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
-import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
-import com.xceptance.neodymium.common.recording.writers.Writer;
-import com.xceptance.neodymium.util.AllureAddons;
-import io.qameta.allure.Allure;
 import javax.imageio.ImageIO;
 
 import org.openqa.selenium.OutputType;
@@ -16,12 +18,10 @@ import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
+import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
+import com.xceptance.neodymium.common.recording.writers.Writer;
+import com.xceptance.neodymium.util.AllureAddons;
+import io.qameta.allure.Allure;
 
 import static org.openqa.selenium.support.ui.ExpectedConditions.alertIsPresent;
 
