@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.common.recording;
 
 import java.awt.Graphics2D;
-import java.awt.Image;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
@@ -233,11 +233,11 @@ public class TakeScreenshotsThread extends Thread
             int normalizedHeight = (targetWidth * currentH) / currentW;
 
             // Resize image to match the target width
-            Image scaledImage = screenshot.getScaledInstance(targetWidth, normalizedHeight, Image.SCALE_SMOOTH);
             processedImage = new BufferedImage(targetWidth, normalizedHeight, BufferedImage.TYPE_INT_RGB);
 
             Graphics2D g2d = processedImage.createGraphics();
-            g2d.drawImage(scaledImage, 0, 0, null);
+            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g2d.drawImage(screenshot, 0, 0, targetWidth, normalizedHeight, null);
             g2d.dispose();
         }
         else
