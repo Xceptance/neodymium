@@ -215,8 +215,12 @@ public class TakeScreenshotsThread extends Thread
         }
     }
 
-    private static BufferedImage processFrame(BufferedImage screenshot, int targetWidth, int targetHeight) throws IOException
+    private static BufferedImage processFrame(BufferedImage screenshot, int targetWidth, int targetHeight)
     {
+        if(targetWidth <= 0 || targetHeight <= 0)
+        {
+            return screenshot; // If target dimensions are invalid, return the original screenshot
+        }
         int currentW = screenshot.getWidth();
         int currentH = screenshot.getHeight();
         BufferedImage processedImage;
