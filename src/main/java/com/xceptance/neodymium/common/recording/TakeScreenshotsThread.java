@@ -1,13 +1,15 @@
 package com.xceptance.neodymium.common.recording;
 
+import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.image.BufferedImage;
+
 import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
 import com.xceptance.neodymium.common.recording.writers.Writer;
 import com.xceptance.neodymium.util.AllureAddons;
 import io.qameta.allure.Allure;
 import javax.imageio.ImageIO;
 
-import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
@@ -129,14 +131,11 @@ public class TakeScreenshotsThread extends Thread
                         else
                         {
                             File file = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-                            int cropWidth = ((Long) ((JavascriptExecutor) driver).executeScript("return window.innerWidth;")).intValue();
-                            int cropHeight = ((Long) ((JavascriptExecutor) driver).executeScript("return window.innerHeight;")).intValue();
-                            BufferedImage fullImage = ImageIO.read(file);
-                            if (cropWidth > 0 && cropHeight > 0)
-                            {
-                                BufferedImage croppedImage = fullImage.getSubimage(0, 0, cropWidth, cropHeight);
-                                ImageIO.write(croppedImage, "png", file);
-                            }
+                            int cropWidth = driver.manage().window().getSize().width;
+                            int cropHeight = driver.manage().window().getSize().height;
+                            BufferedImage normalizedScreenshot = processFrame(ImageIO.read(file), cropWidth, cropHeight);
+                            ImageIO.write(normalizedScreenshot, "png", file);
+
                             writer.compressImageIfNeeded(file, recordingConfigurations.imageScaleFactor(), recordingConfigurations.imageQuality());
                             writer.write(file, delay);
 
@@ -214,6 +213,42 @@ public class TakeScreenshotsThread extends Thread
                 }
             }
         }
+    }
+
+    public static BufferedImage processFrame(BufferedImage screenshot, int targetWidth, int targetHeight) throws IOException
+    {
+        int currentW = screenshot.getWidth();
+        int currentH = screenshot.getHeight();
+        BufferedImage processedImage;
+
+        // 1. Check if the image is "Zoomed" or "Full-page"
+        // Logic: If width doesn't match target, it's zoomed (DPR shift).
+        if (currentW != targetWidth)
+        {
+            // Calculate new height to maintain aspect ratio during normalization
+            int normalizedHeight = (targetWidth * currentH) / currentW;
+
+            // Resize image to match the target width
+            Image scaledImage = screenshot.getScaledInstance(targetWidth, normalizedHeight, Image.SCALE_SMOOTH);
+            processedImage = new BufferedImage(targetWidth, normalizedHeight, BufferedImage.TYPE_INT_RGB);
+
+            Graphics2D g2d = processedImage.createGraphics();
+            g2d.drawImage(scaledImage, 0, 0, null);
+            g2d.dispose();
+        }
+        else
+        {
+            processedImage = screenshot;
+        }
+
+        // 2. Handle the height (The Crop)
+        // If it's a full-page screenshot, it's now TARGET_WIDTH wide but very tall.
+        if (processedImage.getHeight() > targetHeight)
+        {
+            processedImage = processedImage.getSubimage(0, 0, targetWidth, targetHeight);
+        }
+
+        return processedImage;
     }
 
     /**
