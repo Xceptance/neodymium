@@ -120,20 +120,22 @@ public class AiBrowser implements AutoCloseable {
     }
 
     private void executeList(String jsonOrString) {
+        java.util.List<String> list = null;
         try {
-            java.util.List<String> list = new com.google.gson.Gson().fromJson(jsonOrString,
+            list = new com.google.gson.Gson().fromJson(jsonOrString,
                     new com.google.gson.reflect.TypeToken<java.util.List<String>>() {
                     }.getType());
-            if (list != null) {
-                for (String item : list) {
-                    execute(item);
-                }
-                return;
-            }
-        } catch (Throwable e) {
+        } catch (com.google.gson.JsonSyntaxException e) {
             // ignore, treat as a single string
         }
-        execute(jsonOrString);
+
+        if (list != null) {
+            for (String item : list) {
+                execute(item);
+            }
+        } else {
+            execute(jsonOrString);
+        }
     }
 
     private void executeListAfterMode(String jsonOrString) throws Throwable {
@@ -142,7 +144,7 @@ public class AiBrowser implements AutoCloseable {
             list = new com.google.gson.Gson().fromJson(jsonOrString,
                     new com.google.gson.reflect.TypeToken<java.util.List<String>>() {
                     }.getType());
-        } catch (Exception e) {
+        } catch (com.google.gson.JsonSyntaxException e) {
             // ignore
         }
 
