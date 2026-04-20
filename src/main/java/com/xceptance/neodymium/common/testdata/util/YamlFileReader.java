@@ -34,6 +34,8 @@ public class YamlFileReader
 
             List<?> iterationList = null;
             String prompt = null;
+            Object before = null;
+            Object after = null;
 
             // Scenario 1: The root is a map (complex structure, e.g., AI integration with 'prompt' and 'data')
             if (data instanceof Map)
@@ -42,6 +44,12 @@ public class YamlFileReader
                 if (rootMap.containsKey("prompt"))
                 {
                     prompt = String.valueOf(rootMap.get("prompt"));
+                }
+                if (rootMap.containsKey("before")) {
+                    before = rootMap.get("before");
+                }
+                if (rootMap.containsKey("after")) {
+                    after = rootMap.get("after");
                 }
                 
                 if (rootMap.containsKey("data") && rootMap.get("data") instanceof List)
@@ -96,6 +104,24 @@ public class YamlFileReader
                         if (prompt != null && !newDataSet.containsKey("prompt"))
                         {
                             newDataSet.put("prompt", prompt);
+                        }
+                        
+                        if (before != null && !newDataSet.containsKey("before"))
+                        {
+                            if (before instanceof List) {
+                                newDataSet.put("before", GSON.toJson(before));
+                            } else {
+                                newDataSet.put("before", String.valueOf(before));
+                            }
+                        }
+                        
+                        if (after != null && !newDataSet.containsKey("after"))
+                        {
+                            if (after instanceof List) {
+                                newDataSet.put("after", GSON.toJson(after));
+                            } else {
+                                newDataSet.put("after", String.valueOf(after));
+                            }
                         }
                         
                         resultData.add(newDataSet);

@@ -304,15 +304,29 @@ public class ActionExecutor {
     }
 
     private void executeWait(final Action action) {
-        try {
-            final int ms = action.getValue() != null ? Integer.parseInt(action.getValue()) : 1000;
-            LOG.debug("Waiting {} ms", ms);
-            Selenide.sleep(ms);
-        } catch (final NumberFormatException e) {
-            // If value isn't a number, treat it as waiting for an element
-            if (action != null) {
-                findElement(action).shouldBe(Condition.visible, ELEMENT_TIMEOUT);
+        String target = action.getTarget();
+        if (target != null && !target.isBlank()) {
+            long timeoutMs = ELEMENT_TIMEOUT.toMillis();
+            if (action.getValue() != null && !action.getValue().isBlank()) {
+                try {
+                    timeoutMs = Long.parseLong(action.getValue());
+                } catch (NumberFormatException e) {
+                    LOG.warn("Invalid timeout value for WAIT action: {}", action.getValue());
+                }
             }
+            LOG.debug("Waiting up to {} ms for element: {}", timeoutMs, target);
+            findElement(action).shouldBe(Condition.visible, Duration.ofMillis(timeoutMs));
+        } else {
+            int ms = 1000;
+            if (action.getValue() != null && !action.getValue().isBlank()) {
+                try {
+                    ms = Integer.parseInt(action.getValue());
+                } catch (NumberFormatException e) {
+                    LOG.warn("Invalid sleep value for WAIT action: {}", action.getValue());
+                }
+            }
+            LOG.debug("Sleeping for {} ms", ms);
+            Selenide.sleep(ms);
         }
     }
 

@@ -73,12 +73,13 @@ public class AiBrowser implements AutoCloseable {
     }
 
     /**
-     * Executes natural language test instructions derived implicitly from the
-     * active test dataset.
-     * Expects a `prompt` variable to be defined within the currently injected
-     * dataset (e.g. via YAML).
+     * Executes natural language test instructions derived implicitly from the active test dataset. Expects a `prompt`
+     * variable to be defined within the currently injected dataset (e.g. via YAML).
+     * 
+     * @throws Throwable
      */
-    public void execute() {
+    public void execute() throws Throwable
+    {
         if (!Neodymium.getData().exists("prompt")) {
             throw new IllegalArgumentException(
                     "Cannot execute AI instruction implicitly: 'prompt' property is missing from the test dataset.");
@@ -86,12 +87,91 @@ public class AiBrowser implements AutoCloseable {
         // retrieve all data once, to only have ONE test data attachment
         Neodymium.getDataAndAddToReport();
 
-        execute(Neodymium.getData().asString("prompt"));
+        Throwable testError = null;
+
+        try {
+            if (Neodymium.getData().exists("before")) {
+                executeList(Neodymium.getData().asString("before"));
+            }
+
+            execute(Neodymium.getData().asString("prompt"));
+
+        } catch (Throwable t) {
+            testError = t;
+            throw t;
+        } finally {
+            if (Neodymium.getData().exists("after")) {
+                Throwable lastAfterError = null;
+                // If it is a list, executeList will handle the individual elements
+                // Wait, if an element fails in after, we want the OTHER after elements to still
+                // run.
+                // So executeList must catch and accumulate errors for 'after'.
+                try {
+                    executeListAfterMode(Neodymium.getData().asString("after"));
+                } catch (Throwable afterError) {
+                    if (testError != null) {
+                        testError.addSuppressed(afterError);
+                    } else {
+                        throw afterError;
+                    }
+                }
+            }
+        }
+    }
+
+    private void executeList(String jsonOrString) {
+        try {
+            java.util.List<String> list = new com.google.gson.Gson().fromJson(jsonOrString,
+                    new com.google.gson.reflect.TypeToken<java.util.List<String>>() {
+                    }.getType());
+            if (list != null) {
+                for (String item : list) {
+                    execute(item);
+                }
+                return;
+            }
+        } catch (Throwable e) {
+            // ignore, treat as a single string
+        }
+        execute(jsonOrString);
+    }
+
+    private void executeListAfterMode(String jsonOrString) throws Throwable {
+        java.util.List<String> list = null;
+        try {
+            list = new com.google.gson.Gson().fromJson(jsonOrString,
+                    new com.google.gson.reflect.TypeToken<java.util.List<String>>() {
+                    }.getType());
+        } catch (Exception e) {
+            // ignore
+        }
+
+        if (list != null) {
+            Throwable accumulatedError = null;
+            for (String item : list) {
+                try {
+                    execute(item);
+                } catch (Throwable t) {
+                    if (accumulatedError == null) {
+                        accumulatedError = t;
+                    } else {
+                        accumulatedError.addSuppressed(t);
+                    }
+                }
+            }
+            if (accumulatedError != null) {
+                throw accumulatedError;
+            }
+        } else {
+            // treat as a single string
+            execute(jsonOrString);
+        }
     }
 
     /**
      * Closes the browser and releases resources.
      */
+    @Override
     public void close() {
         // Log cumulative token usage before shutdown
         if (tokenStats.getCallCount() > 0) {
@@ -277,7 +357,7 @@ public class AiBrowser implements AutoCloseable {
         }
 
         // 4. Trigger logic utilizing a generator-mode LLM Client
-        //    (uses neodymium.ai.generate.temperature, not the agent temperature)
+        // (uses neodymium.ai.generate.temperature, not the agent temperature)
         final LlmClient generatorClient = new LlmClient(config, tokenStats, LlmMode.GENERATOR);
         com.xceptance.neodymium.ai.generator.AiPromptGenerator generator = new com.xceptance.neodymium.ai.generator.AiPromptGenerator();
         generator.generate(generatorClient, url, intent, outputPath);

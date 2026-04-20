@@ -73,8 +73,8 @@ public final class AiAgentPrompts {
         "actions": [
             {
                  "type": "NAVIGATE | CLICK | TYPE | CLEAR | SELECT | KEY_PRESS | ASSERT | WAIT | SCROLL | HOVER | CLEAR_COOKIES",
-                 "target": "css locator",
-                 "value": "concrete text to inject",
+                 "target": "css locator (for WAIT: the element to wait for)",
+                 "value": "concrete text to inject (for WAIT: max timeout in ms)",
                  "dataBindings": { },
                  "description": "Enter '${firstName}'...",
                  "elementDetails": "description of target"
@@ -166,7 +166,7 @@ public final class AiAgentPrompts {
         If trying to check if an element is visible use "visible" as value.
         If asked to verify a text, choose an element, that contains this text.
         If "value" is null, assert that the element exists and is visible.
-      - WAIT: Wait for a duration or element. "value" in milliseconds, or "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). for element.
+      - WAIT: Wait for an element to appear or wait for a specific duration. You MUST provide "target" (locator string) to wait for an element. If "target" is provided, you MAY optionally provide "value" (in milliseconds) as the maximum timeout. If you just want to sleep indiscriminately without waiting for an element, provide ONLY "value" in milliseconds and do not provide a "target".
       - SCROLL: Scroll to element. "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). is the element to scroll to.
       - HOVER: Hover over an element. Requires "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label).
       - BACK: Navigate back in browser history. No arguments.
