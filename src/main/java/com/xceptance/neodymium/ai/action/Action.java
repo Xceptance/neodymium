@@ -1,5 +1,7 @@
 package com.xceptance.neodymium.ai.action;
 
+import java.util.HashMap;
+
 /**
  * Represents a single browser action parsed from the LLM's response.
  * Each action maps to a concrete Selenium interaction.
@@ -9,6 +11,8 @@ public class Action {
     private String target;
     private String value;
     private String description;
+
+    private java.util.Map<String, String> dataBindings;
 
     private String elementDetails;
 
@@ -20,16 +24,15 @@ public class Action {
     public Action() {
     }
 
-    public Action(final ActionType type, final String target, final String value, final String description)
-    {
+    public Action(final ActionType type, final String target, final String value, final String description) {
         this.type = type;
         this.target = target;
         this.value = value;
         this.description = description;
+        this.elementContext = new HashMap<String, String>();
     }
 
-    public void markReplay()
-    {
+    public void markReplay() {
         this.replay = "(Replay)";
     }
 
@@ -76,16 +79,21 @@ public class Action {
         this.description = description;
     }
 
-    public String getElementDetails()
-    {
+    public java.util.Map<String, String> getDataBindings() {
+        return dataBindings;
+    }
+
+    public void setDataBindings(final java.util.Map<String, String> dataBindings) {
+        this.dataBindings = dataBindings;
+    }
+
+    public String getElementDetails() {
         return elementDetails;
     }
 
-    public void setElementDetails(final String elementDetails)
-    {
+    public void setElementDetails(final String elementDetails) {
         this.elementDetails = elementDetails;
     }
-
 
     public String getReasoning() {
         return reasoning;
@@ -105,12 +113,12 @@ public class Action {
 
     @Override
     public String toString() {
-        return String.format("Action{type=%s, target='%s', value='%s', desc='%s', elementDetails='%s', reasoning='%s', context=%s}",
-                             type, target, value, description, elementDetails, reasoning, elementContext != null ? "yes" : "no");
+        return String.format(
+                "Action{type=%s, target='%s', value='%s', desc='%s', elementDetails='%s', reasoning='%s', context=%s}",
+                type, target, value, description, elementDetails, reasoning, elementContext != null ? "yes" : "no");
     }
 
-    public String getReplay()
-    {
+    public String getReplay() {
         return replay;
     }
 }

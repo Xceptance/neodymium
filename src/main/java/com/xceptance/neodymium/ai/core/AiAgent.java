@@ -486,4 +486,8 @@ public class AiAgent {
             super(message, cause);
         }
     }
+
+    public LlmClient getLlmClient() {
+        return llmClient;
+    }
 }

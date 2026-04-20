@@ -19,7 +19,7 @@ public class WipTestMethodCallback implements ExecutionCondition
     {
         boolean workInProgress = Neodymium.configuration().workInProgress();
         boolean wipMethod = Stream.of(context.getRequiredTestClass().getMethods())
-                                  .filter(method -> method.getAnnotation(NeodymiumTest.class) != null)
+                                  .filter(method -> method.getAnnotation(NeodymiumTest.class) != null || method.getAnnotation(com.xceptance.neodymium.junit5.NeodymiumTestGenerator.class) != null)
                                   .anyMatch(method -> method.getAnnotation(WorkInProgress.class) != null);
 
         String testNameFilterMessage = testExecutionRegex != null ? "method or test matching filter: '" + testExecutionRegex + "' " : "";

@@ -11,61 +11,54 @@ import org.slf4j.LoggerFactory;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.xceptance.neodymium.util.Neodymium;
 
-public class PlaybookManager
-{
+public class PlaybookManager {
     private static final Logger LOG = LoggerFactory.getLogger(PlaybookManager.class);
 
     private static final String PLAYBOOK_DIR = "src/test/resources/ai-playbooks/";
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    public static Playbook loadPlaybook(String id)
-    {
+    public static Playbook loadPlaybook(String id) {
         File file = getPlaybookFile(id);
-        if (file.exists())
-        {
-            try (FileReader reader = new FileReader(file))
-            {
+        if (file.exists()) {
+            try (FileReader reader = new FileReader(file)) {
                 Playbook playbook = GSON.fromJson(reader, Playbook.class);
                 playbook.markActionsReplay();
                 playbook.setId(id);
                 return playbook;
-            }
-            catch (Exception e)
-            {
+            } catch (Exception e) {
                 LOG.error("Failed to load playbook: {}", file.getAbsolutePath(), e);
             }
         }
         return null;
     }
 
-    public static void savePlaybook(Playbook playbook)
-    {
-        if (playbook == null || playbook.getId() == null)
-        {
+    public static void savePlaybook(Playbook playbook) {
+        if (playbook == null || playbook.getId() == null) {
             return;
         }
+
+        if (!Neodymium.aiConfiguration().playbookRecordEnabled()) {
+            LOG.info("Playbook recording is disabled. Skipping save for {}", playbook.getId());
+            return;
+        }
+
         File file = getPlaybookFile(playbook.getId());
-        try
-        {
+        try {
             Files.createDirectories(file.getParentFile().toPath());
-            try (FileWriter writer = new FileWriter(file))
-            {
+            try (FileWriter writer = new FileWriter(file)) {
                 GSON.toJson(playbook, writer);
                 LOG.info("Playbook saved to {}", file.getAbsolutePath());
             }
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             LOG.error("Failed to save playbook: {}", file.getAbsolutePath(), e);
         }
     }
 
-    private static File getPlaybookFile(String playbookId)
-    {
-        if (playbookId == null)
-        {
+    private static File getPlaybookFile(String playbookId) {
+        if (playbookId == null) {
             playbookId = "unknown";
         }
 
@@ -86,13 +79,10 @@ public class PlaybookManager
 
         // Build filename
         String fileName = filePart + ".json";
-        if (!path.isEmpty())
-        {
+        if (!path.isEmpty()) {
             LOG.info("Playbook file path calculated as: {}", path + "/" + fileName);
             return new File(new File(PLAYBOOK_DIR, path), fileName);
-        }
-        else
-        {
+        } else {
             LOG.info("Playbook file path calculated as: {}", fileName);
             return new File(PLAYBOOK_DIR, fileName);
         }

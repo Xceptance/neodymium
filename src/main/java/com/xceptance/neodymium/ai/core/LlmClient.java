@@ -33,16 +33,35 @@ public class LlmClient {
     private ChatLanguageModel model;
     private final AiConfiguration config;
     private final TokenStats tokenStats;
+    private final LlmMode mode;
 
     /**
-     * Creates a new LLM client using the provided configuration.
+     * Creates a new LLM client in {@link LlmMode#AGENT} mode.
+     * Uses {@code neodymium.ai.temperature} (deterministic, for {@code @NeodymiumTest}).
      *
      * @param config     application configuration
      * @param tokenStats token usage tracker
      */
     public LlmClient(final AiConfiguration config, final TokenStats tokenStats) {
+        this(config, tokenStats, LlmMode.AGENT);
+    }
+
+    /**
+     * Creates a new LLM client with an explicit {@link LlmMode}.
+     *
+     * <ul>
+     *   <li>{@link LlmMode#AGENT} — reads {@code neodymium.ai.temperature}</li>
+     *   <li>{@link LlmMode#GENERATOR} — reads {@code neodymium.ai.generate.temperature}</li>
+     * </ul>
+     *
+     * @param config     application configuration
+     * @param tokenStats token usage tracker
+     * @param mode       the operational mode controlling temperature selection
+     */
+    public LlmClient(final AiConfiguration config, final TokenStats tokenStats, final LlmMode mode) {
         this.config = config;
         this.tokenStats = tokenStats;
+        this.mode = mode;
     }
 
     public TokenStats getTokenStats() {
@@ -57,17 +76,20 @@ public class LlmClient {
         final String apiKey = config.aiApiKey();
         final String modelName = config.aiModel();
 
-        if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey()))
-        {
-            Assertions.fail("AI API key not configured. Set in your ai.properties, neodymium.properties or as an evironment variable.");
+        if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey())) {
+            Assertions.fail(
+                    "AI API key not configured. Set in your ai.properties, neodymium.properties or as an evironment variable.");
         }
 
         LOG.debug("Initializing Gemini model: {}", modelName);
 
+        final double temperature = mode == LlmMode.GENERATOR ? config.aiGenerateTemperature() : config.aiTemperature();
+        LOG.debug("Using temperature: {} (mode={})", temperature, mode);
+
         model = GoogleAiGeminiChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(modelName)
-                .temperature(0.1) // Low temperature for deterministic actions
+                .temperature(temperature)
                 .maxOutputTokens(4096)
                 .timeout(Duration.ofSeconds(config.geminiTimeoutSeconds()))
                 .build();
@@ -87,7 +109,6 @@ public class LlmClient {
 
         return chat(systemPrompt, userMessage);
     }
-
 
     /**
      * Sends a multimodal chat message with a screenshot.
@@ -112,13 +133,12 @@ public class LlmClient {
      * Sends a chat message to the LLM.
      *
      * @param systemPrompt
-     *            instructions for the LLM
+     *                     instructions for the LLM
      * @param userMessage
-     *            the user's message
+     *                     the user's message
      * @return the LLM's text response
      */
-    private String chat(final String systemPrompt, UserMessage userMessage)
-    {
+    private String chat(final String systemPrompt, UserMessage userMessage) {
         final List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.from(systemPrompt));
         messages.add(userMessage);

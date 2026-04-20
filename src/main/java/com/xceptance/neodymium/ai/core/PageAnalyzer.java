@@ -124,6 +124,18 @@ public class PageAnalyzer
                             type: el.getAttribute('type'),
                             placeholder: el.getAttribute('placeholder'),
                             ariaLabel: el.getAttribute('aria-label'),
+                            pattern: el.getAttribute('pattern'),
+                            title: el.getAttribute('title'),
+                            min: el.getAttribute('min'),
+                            max: el.getAttribute('max'),
+                            minlength: el.getAttribute('minlength'),
+                            maxlength: el.getAttribute('maxlength'),
+                            step: el.getAttribute('step'),
+                            autocomplete: el.getAttribute('autocomplete'),
+                            required: el.hasAttribute('required') ? 'true' : null,
+                            readonly: el.hasAttribute('readonly') ? 'true' : null,
+                            disabled: el.hasAttribute('disabled') ? 'true' : null,
+                            multiple: el.hasAttribute('multiple') ? 'true' : null,
                             value: label !== 'input' ? truncate(el.getAttribute('value'), MAX_VALUE) : null,
                             selector: generateSelector(el),
                             automationId: autoId
@@ -159,6 +171,18 @@ public class PageAnalyzer
                             type: el.getAttribute('type'),
                             placeholder: el.getAttribute('placeholder'),
                             ariaLabel: el.getAttribute('aria-label'),
+                            pattern: el.getAttribute('pattern'),
+                            title: el.getAttribute('title'),
+                            min: el.getAttribute('min'),
+                            max: el.getAttribute('max'),
+                            minlength: el.getAttribute('minlength'),
+                            maxlength: el.getAttribute('maxlength'),
+                            step: el.getAttribute('step'),
+                            autocomplete: el.getAttribute('autocomplete'),
+                            required: el.hasAttribute('required') ? 'true' : null,
+                            readonly: el.hasAttribute('readonly') ? 'true' : null,
+                            disabled: el.hasAttribute('disabled') ? 'true' : null,
+                            multiple: el.hasAttribute('multiple') ? 'true' : null,
                             value: label !== 'input' ? truncate(el.getAttribute('value'), MAX_VALUE) : null,
                             selector: generateSelector(el),
                             automationId: autoId
@@ -292,32 +316,42 @@ public class PageAnalyzer
 
             for (final Map<String, Object> section : sections)
             {
-                dom.append(section.get("heading")).append("\n");
-
                 final List<Map<String, Object>> elements = (List<Map<String, Object>>) section.get("elements");
 
-                for (final Map<String, Object> el : elements)
+                if (elements != null && !elements.isEmpty())
                 {
-                    formatElement(dom, el);
+                    dom.append(section.get("heading")).append("\n");
+
+                    for (final Map<String, Object> el : elements)
+                    {
+                        formatElement(dom, el);
+                    }
                 }
             }
 
             // Render forms
-            dom.append("\n=== Forms ===\n");
             final List<Map<String, Object>> forms = (List<Map<String, Object>>) data.get("forms");
 
-            for (final Map<String, Object> form : forms)
+            if (forms != null && !forms.isEmpty())
             {
-                dom.append(String.format("[form] id='%s' action='%s' data-neodymium-automation-id='%s'\n",
-                                         form.get("id"), form.get("action"), form.get("automationId")));
+                dom.append("\n=== Forms ===\n");
 
-                final List<Map<String, Object>> fields = (List<Map<String, Object>>) form.get("fields");
-
-                for (final Map<String, Object> field : fields)
+                for (final Map<String, Object> form : forms)
                 {
-                    dom.append(String.format(
-                                             "  [form-field] type='%s' name='%s' id='%s' data-neodymium-automation-id='%s' \n",
-                                             field.get("type"), field.get("name"), field.get("id"), field.get("automationId")));
+                    dom.append(String.format("[form] id='%s' action='%s' data-neodymium-automation-id='%s'\n",
+                                             form.get("id"), form.get("action"), form.get("automationId")));
+
+                    final List<Map<String, Object>> fields = (List<Map<String, Object>>) form.get("fields");
+
+                    if (fields != null)
+                    {
+                        for (final Map<String, Object> field : fields)
+                        {
+                            dom.append(String.format(
+                                                     "  [form-field] type='%s' name='%s' id='%s' data-neodymium-automation-id='%s' \n",
+                                                     field.get("type"), field.get("name"), field.get("id"), field.get("automationId")));
+                        }
+                    }
                 }
             }
         }
@@ -372,6 +406,18 @@ public class PageAnalyzer
         appendIfPresent(dom, "href", el.get("href"));
         appendIfPresent(dom, "placeholder", el.get("placeholder"));
         appendIfPresent(dom, "aria-label", el.get("ariaLabel"));
+        appendIfPresent(dom, "pattern", el.get("pattern"));
+        appendIfPresent(dom, "title", el.get("title"));
+        appendIfPresent(dom, "min", el.get("min"));
+        appendIfPresent(dom, "max", el.get("max"));
+        appendIfPresent(dom, "minlength", el.get("minlength"));
+        appendIfPresent(dom, "maxlength", el.get("maxlength"));
+        appendIfPresent(dom, "step", el.get("step"));
+        appendIfPresent(dom, "autocomplete", el.get("autocomplete"));
+        appendIfPresent(dom, "required", el.get("required"));
+        appendIfPresent(dom, "readonly", el.get("readonly"));
+        appendIfPresent(dom, "disabled", el.get("disabled"));
+        appendIfPresent(dom, "multiple", el.get("multiple"));
         appendIfPresent(dom, "value", el.get("value"));
 
         appendIfPresent(dom, "data-neodymium-automation-id", el.get("automationId"));

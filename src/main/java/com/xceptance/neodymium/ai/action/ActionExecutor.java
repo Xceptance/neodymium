@@ -26,6 +26,7 @@ import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebElementCondition;
+import com.codeborne.selenide.ex.ElementNotFound;
 import com.codeborne.selenide.ex.ElementShould;
 
 import io.qameta.allure.Step;
@@ -224,16 +225,26 @@ public class ActionExecutor {
     }
 
     private void executeSelect(final Action action) {
-        final SelenideElement element = findElement(action);
-        action.setElementContext(extractElementContext(element));
-        scrollIntoView(element);
-        try {
+        try
+        {
+            final SelenideElement element = findElement(action);
+            action.setElementContext(extractElementContext(element));
+            scrollIntoView(element);
             element.selectOption(action.getValue());
-        } catch (final ElementNotInteractableException e) {
+        }
+        catch (final ElementNotInteractableException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element not interactable or not enabled for target '%s' (element: '%s'). "
+                                                             "Element not interactable or not enabled for target '%s' (element: '%s'). "
                             + "The chosen element cannot be selected in its current state.",
                     action.getTarget(), action.getElementDetails()), e);
+        }
+        catch (final ElementNotFound e)
+        {
+            throw new ActionExecutionException(String.format(
+                                                             "Element not found for target '%s' (element: '%s'). "
+                                                             + "The chosen element cannot be selected in its current state.",
+                                                             action.getTarget(), action.getElementDetails()), e);
         } catch (final StaleElementReferenceException e) {
             throw new ActionExecutionException(String.format(
                     "Element target '%s' (element: '%s') became stale. "
@@ -300,7 +311,7 @@ public class ActionExecutor {
         } catch (final NumberFormatException e) {
             // If value isn't a number, treat it as waiting for an element
             if (action != null) {
-                $(resolveLocator(action.getTarget())).shouldBe(Condition.visible, ELEMENT_TIMEOUT);
+                findElement(action).shouldBe(Condition.visible, ELEMENT_TIMEOUT);
             }
         }
     }
@@ -508,30 +519,38 @@ public class ActionExecutor {
         }
 
         // Strategy 1: Try as CSS selector
-        try {
-            SelenideElement element = $(By.cssSelector(target));
-            if (element.exists()) {
-                return element.should(Condition.exist, ELEMENT_TIMEOUT);
-            } else {
-                LOG.debug("CSS selector failed for target '{}' and text '{}'", target, action.getElementDetails());
+        if (isValidCssSelector(target)) {
+            try {
+                SelenideElement element = $(By.cssSelector(target));
+                if (element.exists()) {
+                    return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                } else {
+                    LOG.debug("CSS selector failed for target '{}' and text '{}'", target, action.getElementDetails());
+                }
+            } catch (final Exception e) {
+                LOG.debug("CSS selector failed for target '{}' and text '{}' with message: {}", target,
+                        action.getElementDetails(), e.getMessage());
             }
-        } catch (final Exception e) {
-            LOG.debug("CSS selector failed for target '{}' and text '{}' with message: {}", target,
-                    action.getElementDetails(), e.getMessage());
+        } else {
+            LOG.debug("Target '{}' is not a valid CSS selector. Skipping CSS strategy.", target);
         }
 
         // Strategy 2: Try as XPath
         if (target.startsWith("/") || target.startsWith("(")) {
-            try {
-                SelenideElement element = $x(target);
-                if (element.exists()) {
-                    return element.should(Condition.exist, ELEMENT_TIMEOUT);
-                } else {
-                    LOG.debug("XPath failed for target '{}' and text '{}'", target, action.getElementDetails());
+            if (isValidXPath(target)) {
+                try {
+                    SelenideElement element = $x(target);
+                    if (element.exists()) {
+                        return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                    } else {
+                        LOG.debug("XPath failed for target '{}' and text '{}'", target, action.getElementDetails());
+                    }
+                } catch (final Exception e) {
+                    LOG.debug("XPath failed for target '{}' and text '{}' with message: {}", target,
+                            action.getElementDetails(), e.getMessage());
                 }
-            } catch (final Exception e) {
-                LOG.debug("XPath failed for target '{}' and text '{}' with message: {}", target,
-                        action.getElementDetails(), e.getMessage());
+            } else {
+                LOG.debug("Target '{}' is not a valid XPath. Skipping XPath strategy.", target);
             }
         }
 
@@ -596,6 +615,28 @@ public class ActionExecutor {
             return By.xpath(target);
         }
         return By.cssSelector(target);
+    }
+
+    private boolean isValidCssSelector(String target) {
+        if (target == null || target.isBlank()) return false;
+        try {
+            return Selenide.executeJavaScript(
+                "try { document.querySelector(arguments[0]); return true; } catch(e) { return false; }", 
+                target);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean isValidXPath(String target) {
+        if (target == null || target.isBlank()) return false;
+        try {
+            return Selenide.executeJavaScript(
+                "try { document.createExpression(arguments[0], null); return true; } catch(e) { return false; }", 
+                target);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private String escapeXpath(String value) {

@@ -42,8 +42,7 @@ public class AiBrowser implements AutoCloseable {
     /**
      * Creates a new AiBrowser with default configuration.
      */
-    public AiBrowser(Object test)
-    {
+    public AiBrowser(Object test) {
         this(Neodymium.aiConfiguration(), test);
     }
 
@@ -51,10 +50,9 @@ public class AiBrowser implements AutoCloseable {
      * Creates a new AiBrowser with custom configuration.
      *
      * @param config
-     *            the configuration to use
+     *               the configuration to use
      */
-    public AiBrowser(final AiConfiguration config, Object test)
-    {
+    public AiBrowser(final AiConfiguration config, Object test) {
         this.test = test;
         this.config = config;
         this.tokenStats = new TokenStats();
@@ -75,12 +73,15 @@ public class AiBrowser implements AutoCloseable {
     }
 
     /**
-     * Executes natural language test instructions derived implicitly from the active test dataset.
-     * Expects a `prompt` variable to be defined within the currently injected dataset (e.g. via YAML).
+     * Executes natural language test instructions derived implicitly from the
+     * active test dataset.
+     * Expects a `prompt` variable to be defined within the currently injected
+     * dataset (e.g. via YAML).
      */
     public void execute() {
         if (!Neodymium.getData().exists("prompt")) {
-            throw new IllegalArgumentException("Cannot execute AI instruction implicitly: 'prompt' property is missing from the test dataset.");
+            throw new IllegalArgumentException(
+                    "Cannot execute AI instruction implicitly: 'prompt' property is missing from the test dataset.");
         }
         // retrieve all data once, to only have ONE test data attachment
         Neodymium.getDataAndAddToReport();
@@ -91,10 +92,11 @@ public class AiBrowser implements AutoCloseable {
     /**
      * Closes the browser and releases resources.
      */
-    @Override
     public void close() {
         // Log cumulative token usage before shutdown
-        tokenStats.logSummary();
+        if (tokenStats.getCallCount() > 0) {
+            tokenStats.logSummary();
+        }
     }
 
     private AiAgent createAgent(final AiConfiguration config) {
@@ -104,13 +106,10 @@ public class AiBrowser implements AutoCloseable {
         return new AiAgent(llmClient, pageAnalyzer, actionExecutor, config);
     }
 
-
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\$\\{([^}]+)\\}", Pattern.CASE_INSENSITIVE);
 
-    public static String resolveTestDataToPrompt(String promptTemplate)
-    {
-        if (promptTemplate == null || promptTemplate.isEmpty())
-        {
+    public static String resolveTestDataToPrompt(String promptTemplate) {
+        if (promptTemplate == null || promptTemplate.isEmpty()) {
             return promptTemplate;
         }
 
@@ -118,14 +117,12 @@ public class AiBrowser implements AutoCloseable {
         StringBuilder sb = new StringBuilder();
         int lastEnd = 0;
 
-        while (matcher.find())
-        {
+        while (matcher.find()) {
             sb.append(promptTemplate, lastEnd, matcher.start());
             String placeholderKey = matcher.group(1);
-            
+
             String value = extractValue(placeholderKey, 0);
-            if (value == null)
-            {
+            if (value == null) {
                 value = matcher.group(0);
             }
 
@@ -137,11 +134,9 @@ public class AiBrowser implements AutoCloseable {
         return sb.toString();
     }
 
-    private static String extractValue(String placeholderKey, int depth)
-    {
+    private static String extractValue(String placeholderKey, int depth) {
         // emergency stop
-        if (depth > 10)
-        {
+        if (depth > 10) {
             return null;
         }
 
@@ -150,67 +145,57 @@ public class AiBrowser implements AutoCloseable {
 
         // 1. Try to find the exact value (ignoring case)
         value = testData.entrySet().stream()
-                        .filter(entry -> entry.getKey().equalsIgnoreCase(placeholderKey))
-                        .map(Map.Entry::getValue)
-                        .findFirst()
-                        .orElse(null);
+                .filter(entry -> entry.getKey().equalsIgnoreCase(placeholderKey))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
 
         // 2. Try nested resolution via JSONPath if applicable
-        if (value == null && (placeholderKey.contains(".") || placeholderKey.contains("[")))
-        {
-            try
-            {
-                // Convert custom bracket notation like product[name] to jsonPath standard product['name']
+        if (value == null && (placeholderKey.contains(".") || placeholderKey.contains("["))) {
+            try {
+                // Convert custom bracket notation like product[name] to jsonPath standard
+                // product['name']
                 String jsonPathQuery = placeholderKey.replaceAll("\\[([a-zA-Z0-9_\\-]+)\\]", "['$1']");
-                
+
                 // Add strict jsonPath prefix if needed
-                if (!jsonPathQuery.startsWith("$"))
-                {
+                if (!jsonPathQuery.startsWith("$")) {
                     jsonPathQuery = "$." + jsonPathQuery;
                 }
 
                 Object resolvedValue = testData.get(jsonPathQuery, Object.class);
-                if (resolvedValue != null)
-                {
+                if (resolvedValue != null) {
                     value = resolvedValue.toString();
                 }
-            }
-            catch (Exception e)
-            {
+            } catch (Exception e) {
                 // Ignore and fall back to next resolution step
             }
         }
 
         // 3. Try to get from neodymium configuration
-        if (value == null && placeholderKey.toLowerCase().startsWith("neodymium."))
-        {
-            if (Neodymium.configuration() instanceof org.aeonbits.owner.Accessible)
-            {
-                String configValue = ((org.aeonbits.owner.Accessible) Neodymium.configuration()).getProperty(placeholderKey);
-                if (configValue != null)
-                {
+        if (value == null && placeholderKey.toLowerCase().startsWith("neodymium.")) {
+            if (Neodymium.configuration() instanceof org.aeonbits.owner.Accessible) {
+                String configValue = ((org.aeonbits.owner.Accessible) Neodymium.configuration())
+                        .getProperty(placeholderKey);
+                if (configValue != null) {
                     value = configValue;
                 }
             }
         }
 
         // Recursively resolve nested placeholders within the found value
-        if (value != null && value.contains("${"))
-        {
+        if (value != null && value.contains("${")) {
             Matcher nestedMatcher = VARIABLE_PATTERN.matcher(value);
             StringBuilder sb = new StringBuilder();
             int lastEnd = 0;
-            while (nestedMatcher.find())
-            {
+            while (nestedMatcher.find()) {
                 sb.append(value, lastEnd, nestedMatcher.start());
                 String nestedKey = nestedMatcher.group(1);
                 String nestedValue = extractValue(nestedKey, depth + 1);
-                
-                if (nestedValue == null)
-                {
+
+                if (nestedValue == null) {
                     nestedValue = nestedMatcher.group(0);
                 }
-                
+
                 sb.append(nestedValue);
                 lastEnd = nestedMatcher.end();
             }
@@ -222,12 +207,88 @@ public class AiBrowser implements AutoCloseable {
     }
 
     /**
+     * Executes the generative AI agent to create a natural language playbook.
+     * 
+     * @param intent The high-level intent or goal for the AI to achieve.
+     */
+    public void generatePrompt(final String intent) {
+        // 1. Enforce @NeodymiumTestGenerator
+        boolean isGenerator = false;
+        try {
+            if (test != null) {
+                Class<?> testClass = test.getClass();
+                if (testClass.isAnnotationPresent(com.xceptance.neodymium.junit5.NeodymiumTestGenerator.class)) {
+                    isGenerator = true;
+                } else {
+                    String testName = Neodymium.getTestName();
+                    if (testName != null && testName.contains(" :: ")) {
+                        String methodName = testName.split(" :: ")[1];
+                        try {
+                            java.lang.reflect.Method method = testClass.getMethod(methodName);
+                            if (method
+                                    .isAnnotationPresent(com.xceptance.neodymium.junit5.NeodymiumTestGenerator.class)) {
+                                isGenerator = true;
+                            }
+                        } catch (NoSuchMethodException e) {
+                            // ignore
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+        }
+
+        org.junit.jupiter.api.Assertions.assertTrue(isGenerator,
+                "Method must be annotated with @NeodymiumTestGenerator to use AiBrowser.generatePrompt()");
+
+        // 2. Build URL
+        String url = Neodymium.configuration().url();
+        if (url == null || url.trim().isEmpty()) {
+            try {
+                url = com.codeborne.selenide.WebDriverRunner.url();
+            } catch (Exception e) {
+            }
+        }
+        if (url == null || url.trim().isEmpty() || url.equals("about:blank")) {
+            throw new IllegalArgumentException("No URL provided in configuration. Please provide a neodymium.url");
+        }
+
+        // 3. Build Output Path
+        String outputPath = "src/test/resources/ai-playbooks/generated.yml";
+        String testName = Neodymium.getTestName();
+        if (testName != null && testName.contains(" :: ")) {
+            String[] parts = testName.split(" :: ");
+            String className = parts[0];
+            String methodName = parts[1];
+            outputPath = "src/test/resources/" + className.replace('.', '/') + "/" + methodName + ".yml";
+
+            // Support @DataFolder overrides
+            try {
+                if (test != null) {
+                    Class<?> testClass = test.getClass();
+                    com.xceptance.neodymium.common.testdata.DataFolder[] folders = testClass
+                            .getAnnotationsByType(com.xceptance.neodymium.common.testdata.DataFolder.class);
+                    if (folders != null && folders.length > 0) {
+                        outputPath = "src/test/resources/" + folders[0].value() + "/" + methodName + ".yml";
+                    }
+                }
+            } catch (Exception e) {
+            }
+        }
+
+        // 4. Trigger logic utilizing a generator-mode LLM Client
+        //    (uses neodymium.ai.generate.temperature, not the agent temperature)
+        final LlmClient generatorClient = new LlmClient(config, tokenStats, LlmMode.GENERATOR);
+        com.xceptance.neodymium.ai.generator.AiPromptGenerator generator = new com.xceptance.neodymium.ai.generator.AiPromptGenerator();
+        generator.generate(generatorClient, url, intent, outputPath);
+    }
+
+    /**
      * Returns the current test case instance
      * 
      * @return
      */
-    public Object getTest()
-    {
+    public Object getTest() {
         return test;
     }
 }
