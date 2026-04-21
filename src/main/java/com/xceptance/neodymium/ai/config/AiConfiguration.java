@@ -107,4 +107,12 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.generate.validations")
     @DefaultValue("false")
     public boolean aiGenerateValidations();
+
+    @Key("neodymium.ai.generate.v2")
+    @DefaultValue("false")
+    public boolean aiGenerateV2();
+
+    @Key("neodymium.ai.generate.v2.diagnosticLogs")
+    @DefaultValue("false")
+    public boolean aiGenerateV2DiagnosticLogs();
 }
