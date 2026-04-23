@@ -2,6 +2,7 @@ package com.xceptance.neodymium.ai.action;
 
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$x;
+import static com.codeborne.selenide.Selenide.open;
 
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang3.StringUtils;
 import org.jspecify.annotations.Nullable;
 import org.openqa.selenium.By;
 import org.openqa.selenium.ElementClickInterceptedException;
@@ -20,6 +22,8 @@ import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codeborne.selenide.AuthenticationType;
+import com.codeborne.selenide.BasicAuthCredentials;
 import com.codeborne.selenide.CheckResult;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Driver;
@@ -27,15 +31,17 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebElementCondition;
 import com.codeborne.selenide.ex.ElementShould;
+import com.xceptance.neodymium.util.Neodymium;
+import com.codeborne.selenide.Selectors;
 
 import io.qameta.allure.Step;
 
 /**
- * Translates {@link Action} objects into Selenium WebDriver calls. Uses smart
- * element resolution that tries multiple
+ * Translates {@link Action} objects into Selenium WebDriver calls. Uses smart element resolution that tries multiple
  * strategies.
  */
-public class ActionExecutor {
+public class ActionExecutor
+{
     private static final Logger LOG = LoggerFactory.getLogger(ActionExecutor.class);
 
     private static final Duration ELEMENT_TIMEOUT = Duration.ofSeconds(10);
@@ -45,7 +51,8 @@ public class ActionExecutor {
      */
     private Object test;
 
-    public ActionExecutor(Object test) {
+    public ActionExecutor(Object test)
+    {
         this.test = test;
     }
 
@@ -53,17 +60,19 @@ public class ActionExecutor {
      * Executes a single action.
      *
      * @param action
-     *               the action to execute
+     *            the action to execute
      * @throws ActionExecutionException
-     *                                  if the action fails
+     *             if the action fails
      */
     @Step("{action.description}  - {action.type} {action.replay} ")
-    public void execute(final Action action) {
+    public void execute(final Action action)
+    {
         LOG.debug("▶ {} — {}", action.getType(), action.getDescription());
 
         preCheckAction(action);
 
-        switch (action.getType()) {
+        switch (action.getType())
+        {
             case NAVIGATE:
                 executeNavigate(action);
                 break;
@@ -81,6 +90,9 @@ public class ActionExecutor {
                 break;
             case ASSERT:
                 executeAssert(action);
+                break;
+            case IF_CONDITION:
+                //executeConditionalAction(action);
                 break;
             case WAIT:
                 executeWait(action);
@@ -118,12 +130,14 @@ public class ActionExecutor {
      * Executes a list of actions in sequence.
      *
      * @param actions
-     *                actions to execute
+     *            actions to execute
      * @throws ActionExecutionException
-     *                                  if any action fails
+     *             if any action fails
      */
-    public void executeAll(final List<Action> actions) {
-        for (int i = 0; i < actions.size(); i++) {
+    public void executeAll(final List<Action> actions)
+    {
+        for (int i = 0; i < actions.size(); i++)
+        {
             final Action action = actions.get(i);
             LOG.debug("Action [{}/{}]", i + 1, actions.size());
 
@@ -136,247 +150,331 @@ public class ActionExecutor {
 
     // --- Action implementations ---
 
-    private void executeNavigate(final Action action) {
-        final String url = action.getValue();
-        if (url == null || url.isBlank()) {
+    private void executeNavigate(final Action action)
+    {
+        String url = action.getValue();
+        if (url == null || url.isBlank())
+        {
             throw new ActionExecutionException("NAVIGATE action requires a 'value' (URL)");
         }
-        LOG.debug("Navigating to: {}", url);
-        Selenide.open(url);
+
+        if (StringUtils.isNotBlank(action.getTarget()) && action.getValues().size() > 1)
+        {
+            url = action.getTarget();
+            String username = action.getValues().get(0);
+            String password = action.getValues().get(1);
+            LOG.debug("Navigating to: {} with basic auth {}/{}", url, username, password);
+            Selenide.open(url, AuthenticationType.BASIC, new BasicAuthCredentials(username, password));
+        }
+        else
+        {
+            LOG.debug("Navigating to: {}", url);
+            Selenide.open(url);
+        }
 
         // Wait for page load
         Selenide.Wait().until(
-                d -> Selenide.executeJavaScript("return document.readyState").equals("complete"));
+                              d -> Selenide.executeJavaScript("return document.readyState").equals("complete"));
     }
 
-    private void executeClick(final Action action) {
+    private void executeClick(final Action action)
+    {
         final SelenideElement element = findElement(action);
         action.setElementContext(extractElementContext(element));
         scrollIntoView(element);
-        try {
+        try
+        {
             element.click();
-        } catch (final ElementClickInterceptedException e) {
+        }
+        catch (final ElementClickInterceptedException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Click intercepted on target '%s' (element: '%s'): another element is covering it. "
-                            + "Please choose a different, more specific target — ideally the innermost visible "
-                            + "child element or a sibling that is not obscured.",
-                    action.getTarget(), action.getElementDetails()), e);
-        } catch (final ElementNotInteractableException e) {
+                                                             "Click intercepted on target '%s' (element: '%s'): another element is covering it. "
+                                                             + "Please choose a different, more specific target — ideally the innermost visible "
+                                                             + "child element or a sibling that is not obscured.",
+                                                             action.getTarget(), action.getElementDetails()), e);
+        }
+        catch (final ElementNotInteractableException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element not interactable or not enabled for target '%s' (element: '%s'). "
-                            + "The chosen element cannot be clicked in its current state. "
-                            + "Please select a different, directly clickable element.",
-                    action.getTarget(), action.getElementDetails()), e);
-        } catch (final StaleElementReferenceException e) {
+                                                             "Element not interactable or not enabled for target '%s' (element: '%s'). "
+                                                             + "The chosen element cannot be clicked in its current state. "
+                                                             + "Please select a different, directly clickable element.",
+                                                             action.getTarget(), action.getElementDetails()), e);
+        }
+        catch (final StaleElementReferenceException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element target '%s' (element: '%s') became stale. "
-                            + "The page may have updated. Re-analyzing and retrying...",
-                    action.getTarget(), action.getElementDetails()), e);
-        } catch (ElementShould t) {
-            if (t.getMessage().contains("Element should be clickable: interactable and enabled")) {
+                                                             "Element target '%s' (element: '%s') became stale. "
+                                                             + "The page may have updated. Re-analyzing and retrying...",
+                                                             action.getTarget(), action.getElementDetails()), e);
+        }
+        catch (ElementShould t)
+        {
+            if (t.getMessage().contains("Element should be clickable: interactable and enabled"))
+            {
                 throw new ActionExecutionException(String.format(
-                        "Element not interactable or not enabled for target '%s' (element: '%s'). "
-                                + "The chosen element cannot be clicked in its current state. "
-                                + "Please select a different, directly clickable element.",
-                        action.getTarget(), action.getElementDetails()), t);
+                                                                 "Element not interactable or not enabled for target '%s' (element: '%s'). "
+                                                                 + "The chosen element cannot be clicked in its current state. "
+                                                                 + "Please select a different, directly clickable element.",
+                                                                 action.getTarget(), action.getElementDetails()), t);
 
             }
         }
+        catch (Throwable t)
+        {
+            throw new ActionExecutionException(String.format(
+                                                             "Failed to exectute action '%s'",
+                                                             action.getTarget(), action.getElementDetails()), t);
+        }
     }
 
-    private void executeType(final Action action) {
+    private void executeType(final Action action)
+    {
         final SelenideElement element = findElement(action);
         action.setElementContext(extractElementContext(element));
         scrollIntoView(element);
-        try {
+        try
+        {
             element.clear();
             element.sendKeys(action.getValue());
-        } catch (final ElementNotInteractableException e) {
+        }
+        catch (final ElementNotInteractableException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element not interactable or not enabled for target '%s' (element: '%s'). "
-                            + "The chosen element cannot accept text in its current state. "
-                            + "Please select a different, input-ready element.",
-                    action.getTarget(), action.getElementDetails()), e);
-        } catch (final StaleElementReferenceException e) {
+                                                             "Element not interactable or not enabled for target '%s' (element: '%s'). "
+                                                             + "The chosen element cannot accept text in its current state. "
+                                                             + "Please select a different, input-ready element.",
+                                                             action.getTarget(), action.getElementDetails()), e);
+        }
+        catch (final StaleElementReferenceException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element target '%s' (element: '%s') became stale. "
-                            + "The page may have updated. Re-analyzing and retrying...",
-                    action.getTarget(), action.getElementDetails()), e);
+                                                             "Element target '%s' (element: '%s') became stale. "
+                                                             + "The page may have updated. Re-analyzing and retrying...",
+                                                             action.getTarget(), action.getElementDetails()), e);
         }
     }
 
-    private void executeClear(final Action action) {
+    private void executeClear(final Action action)
+    {
         final SelenideElement element = findElement(action);
         action.setElementContext(extractElementContext(element));
-        try {
+        try
+        {
             element.clear();
-        } catch (final ElementNotInteractableException e) {
+        }
+        catch (final ElementNotInteractableException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element not interactable or not enabled for target '%s' (element: '%s'). "
-                            + "The chosen element cannot be cleared in its current state.",
-                    action.getTarget(), action.getElementDetails()), e);
-        } catch (final StaleElementReferenceException e) {
+                                                             "Element not interactable or not enabled for target '%s' (element: '%s'). "
+                                                             + "The chosen element cannot be cleared in its current state.",
+                                                             action.getTarget(), action.getElementDetails()), e);
+        }
+        catch (final StaleElementReferenceException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element target '%s' (element: '%s') became stale. "
-                            + "The page may have updated. Re-analyzing and retrying...",
-                    action.getTarget(), action.getElementDetails()), e);
+                                                             "Element target '%s' (element: '%s') became stale. "
+                                                             + "The page may have updated. Re-analyzing and retrying...",
+                                                             action.getTarget(), action.getElementDetails()), e);
         }
     }
 
-    private void executeSelect(final Action action) {
+    private void executeSelect(final Action action)
+    {
         final SelenideElement element = findElement(action);
         action.setElementContext(extractElementContext(element));
         scrollIntoView(element);
-        try {
+        try
+        {
             element.selectOption(action.getValue());
-        } catch (final ElementNotInteractableException e) {
+        }
+        catch (final ElementNotInteractableException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element not interactable or not enabled for target '%s' (element: '%s'). "
-                            + "The chosen element cannot be selected in its current state.",
-                    action.getTarget(), action.getElementDetails()), e);
-        } catch (final StaleElementReferenceException e) {
+                                                             "Element not interactable or not enabled for target '%s' (element: '%s'). "
+                                                             + "The chosen element cannot be selected in its current state.",
+                                                             action.getTarget(), action.getElementDetails()), e);
+        }
+        catch (final StaleElementReferenceException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element target '%s' (element: '%s') became stale. "
-                            + "The page may have updated. Re-analyzing and retrying...",
-                    action.getTarget(), action.getElementDetails()), e);
+                                                             "Element target '%s' (element: '%s') became stale. "
+                                                             + "The page may have updated. Re-analyzing and retrying...",
+                                                             action.getTarget(), action.getElementDetails()), e);
         }
     }
 
-    private void executeAssert(final Action action) {
+    private void executeAssert(final Action action)
+    {
         final String expected = action.getValue();
 
         final SelenideElement element = findElement(action);
 
-        if (expected == null) {
+        if (expected == null)
+        {
             element.should(Condition.exist);
             LOG.debug("✓ Element exists: {}", action);
             return;
         }
 
-        try {
-            if ("visible".equals(expected)) {
+        try
+        {
+            if ("visible".equals(expected))
+            {
                 element.shouldBe(Condition.visible);
-            } else {
+            }
+            else
+            {
                 // Expand the "OR" condition to cover common web patterns
                 element.should(Condition.or("Assertion for " + expected,
-                        Condition.exactText(expected),
-                        Condition.partialText(expected),
-                        Condition.value(expected),
-                        new PartialTextContent(expected), // This is to
-                                                          // get the text
-                                                          // content for
-                                                          // the page
-                                                          // title, which
-                                                          // is not
-                                                          // listening on
-                                                          // partialText
-                        Condition.attribute("href", expected),
-                        Condition.attribute("alt", expected),
-                        Condition.attribute("src", expected),
-                        Condition.attribute("title", expected),
-                        Condition.attribute("placeholder", expected),
-                        // This covers custom data attributes like data-id or data-test-id
-                        new DataAttributeMatches("data-.*", ".*" + Pattern.quote(expected) + ".*")));
+                                            Condition.exactText(expected),
+                                            Condition.partialText(expected),
+                                            Condition.value(expected),
+                                            new PartialTextContent(expected), // This is to
+                                                                              // get the text
+                                                                              // content for
+                                                                              // the page
+                                                                              // title, which
+                                                                              // is not
+                                                                              // listening on
+                                                                              // partialText
+                                            Condition.attribute("href", expected),
+                                            Condition.attribute("alt", expected),
+                                            Condition.attribute("src", expected),
+                                            Condition.attribute("title", expected),
+                                            Condition.attribute("placeholder", expected),
+                                            // This covers custom data attributes like data-id or data-test-id
+                                            new DataAttributeMatches("data-.*", ".*" + Pattern.quote(expected) + ".*")));
 
             }
             LOG.debug("✓ Assertion passed for: '{}'", expected);
-        } catch (Throwable e) {
+        }
+        catch (Throwable e)
+        {
             // Log the actual attributes to help debug why the AI failed
             String actualDetails = String.format("Text: '%s', Value: '%s', Alt: '%s'",
-                    element.getText(), element.getValue(), element.getAttribute("alt"));
+                                                 element.getText(), element.getValue(), element.getAttribute("alt"));
 
-            throw new ActionExecutionException(
-                    String.format("Assertion failed: '%s' not found in common attributes. Found: [%s]",
-                            expected, actualDetails),
-                    e);
+            throw new ActionExecutionException(String.format("Assertion failed: '%s' not found in common attributes. Found: [%s]",
+                                                             expected, actualDetails), e);
         }
     }
 
-    private void executeWait(final Action action) {
-        try {
+    private void executeWait(final Action action)
+    {
+        try
+        {
             final int ms = action.getValue() != null ? Integer.parseInt(action.getValue()) : 1000;
             LOG.debug("Waiting {} ms", ms);
             Selenide.sleep(ms);
-        } catch (final NumberFormatException e) {
+        }
+        catch (final NumberFormatException e)
+        {
             // If value isn't a number, treat it as waiting for an element
-            if (action != null) {
+            if (action != null)
+            {
                 $(resolveLocator(action.getTarget())).shouldBe(Condition.visible, ELEMENT_TIMEOUT);
             }
         }
     }
 
-    private void executeHover(final Action action) {
+    private void executeHover(final Action action)
+    {
         final SelenideElement element = findElement(action);
         action.setElementContext(extractElementContext(element));
         scrollIntoView(element);
-        try {
+        try
+        {
             element.hover();
-        } catch (final ElementNotInteractableException e) {
+        }
+        catch (final ElementNotInteractableException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element not interactable or not enabled for target '%s' (element: '%s'). "
-                            + "The chosen element cannot be hovered in its current state.",
-                    action.getTarget(), action.getElementDetails()), e);
-        } catch (final StaleElementReferenceException e) {
+                                                             "Element not interactable or not enabled for target '%s' (element: '%s'). "
+                                                             + "The chosen element cannot be hovered in its current state.",
+                                                             action.getTarget(), action.getElementDetails()), e);
+        }
+        catch (final StaleElementReferenceException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element target '%s' (element: '%s') became stale. "
-                            + "The page may have updated. Re-analyzing and retrying...",
-                    action.getTarget(), action.getElementDetails()), e);
+                                                             "Element target '%s' (element: '%s') became stale. "
+                                                             + "The page may have updated. Re-analyzing and retrying...",
+                                                             action.getTarget(), action.getElementDetails()), e);
         }
     }
 
-    private void executeScroll(final Action action) {
-        if (action != null) {
+    private void executeScroll(final Action action)
+    {
+        if (action != null)
+        {
             final SelenideElement element = findElement(action);
             scrollIntoView(element);
-        } else {
+        }
+        else
+        {
             // Scroll down by viewport height
             Selenide.executeJavaScript("window.scrollBy(0, window.innerHeight)");
         }
     }
 
-    private void executeKeyPress(final Action action) {
+    private void executeKeyPress(final Action action)
+    {
         final String key = action.getValue();
-        if (key == null) {
+        if (key == null)
+        {
             throw new ActionExecutionException("KEY_PRESS action requires a 'value' (key name)");
         }
 
         final Keys seleniumKey = mapKey(key);
-        try {
-            if (action.getTarget() != null) {
+        try
+        {
+            if (action.getTarget() != null)
+            {
                 findElement(action).sendKeys(seleniumKey);
-            } else {
+            }
+            else
+            {
                 // Send to the active element
                 Selenide.actions().sendKeys(seleniumKey).perform();
             }
-        } catch (final ElementNotInteractableException e) {
+        }
+        catch (final ElementNotInteractableException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Target element not interactable or not enabled for target '%s' (element: '%s'). "
-                            + "The chosen element cannot receive key presses.",
-                    action.getTarget(), action.getElementDetails()), e);
-        } catch (final StaleElementReferenceException e) {
+                                                             "Target element not interactable or not enabled for target '%s' (element: '%s'). "
+                                                             + "The chosen element cannot receive key presses.",
+                                                             action.getTarget(), action.getElementDetails()), e);
+        }
+        catch (final StaleElementReferenceException e)
+        {
             throw new ActionExecutionException(String.format(
-                    "Element target '%s' (element: '%s') became stale. "
-                            + "The page may have updated. Re-analyzing and retrying...",
-                    action.getTarget(), action.getElementDetails()), e);
+                                                             "Element target '%s' (element: '%s') became stale. "
+                                                             + "The page may have updated. Re-analyzing and retrying...",
+                                                             action.getTarget(), action.getElementDetails()), e);
         }
     }
 
-    private void executeBack(final Action action) {
+    private void executeBack(final Action action)
+    {
         LOG.debug("Navigating back");
         Selenide.back();
     }
 
-    private void executeForward(final Action action) {
+    private void executeForward(final Action action)
+    {
         LOG.debug("Navigating forward");
         Selenide.forward();
     }
 
-    private void executeRefresh(final Action action) {
+    private void executeRefresh(final Action action)
+    {
         LOG.debug("Refreshing page");
         Selenide.refresh();
     }
 
-    private void executeClearCookies(final Action action) {
+    private void executeClearCookies(final Action action)
+    {
         LOG.debug("Clearing cookies");
         Selenide.clearBrowserCookies();
         // Also clearing local storage as it is often expected when "clearing cookies"
@@ -390,8 +488,7 @@ public class ActionExecutor {
      * Expected action fields:
      * <ul>
      * <li>{@code target} – simple method name in from the current test class.</li>
-     * <li>{@code value} – the single {@link String} argument passed to the method
-     * (may be {@code null} if the method
+     * <li>{@code value} – the single {@link String} argument passed to the method (may be {@code null} if the method
      * accepts no arguments or accepts a nullable parameter).</li>
      * </ul>
      * <p>
@@ -402,220 +499,346 @@ public class ActionExecutor {
      * <li>If no static method is found, call the method as an instance method.</li>
      * </ol>
      */
-    private void executeJavaMethod(final Action action) {
+    private void executeJavaMethod(final Action action)
+    {
         final String target = action.getTarget();
-        if (target == null || target.isBlank()) {
+        if (target == null || target.isBlank())
+        {
             throw new ActionExecutionException("JAVA_METHOD action requires a 'target' containing only the class name");
         }
 
         final int lastDot = target.lastIndexOf('.');
-        if (lastDot >= 0) {
-            throw new ActionExecutionException(
-                    "JAVA_METHOD target can not be fully qualified. Only use simple method name, got: " + target);
+        if (lastDot >= 0)
+        {
+            throw new ActionExecutionException("JAVA_METHOD target can not be fully qualified. Only use simple method name, got: " + target);
         }
 
         final String methodName = target;
-        final String param = action.getValue(); // may be null
+        final Object[] param = action.getValues().toArray(); // may be null
 
         LOG.debug("JAVA_METHOD: method='{}', param='{}'", methodName, param);
 
-        try {
+        try
+        {
             Method method = null;
             boolean isStatic = false;
             boolean hasParam = false;
             Class<? extends Object> clazz = test.getClass();
-            try {
+            try
+            {
                 method = clazz.getMethod(methodName, String.class);
                 isStatic = java.lang.reflect.Modifier.isStatic(method.getModifiers());
                 hasParam = true;
-            } catch (final NoSuchMethodException e) {
-                try {
+            }
+            catch (final NoSuchMethodException e)
+            {
+                try
+                {
                     method = clazz.getMethod(methodName);
                     isStatic = java.lang.reflect.Modifier.isStatic(method.getModifiers());
                     hasParam = false;
-                } catch (final NoSuchMethodException e1) {
-                    throw new ActionExecutionException(
-                            String.format("JAVA_METHOD: no public method '%s(String)' on class '%s'", methodName,
-                                    test.getClass().getSimpleName()),
-                            e);
+                }
+                catch (final NoSuchMethodException e1)
+                {
+                    throw new ActionExecutionException(String.format("JAVA_METHOD: no public method '%s(String)' on class '%s'", methodName,
+                                                                     test.getClass().getSimpleName()), e);
                 }
             }
 
             // run static
-            if (isStatic) {
-                if (hasParam) {
+            if (isStatic)
+            {
+                if (hasParam)
+                {
                     LOG.debug("Invoking static method {}(\"{}\")", methodName, param);
                     method.invoke(null, param);
-                } else {
+                }
+                else
+                {
                     LOG.debug("Invoking static method {}()", methodName);
                     method.invoke(null);
                 }
                 return;
             }
 
-            if (hasParam) {
+            if (hasParam)
+            {
                 LOG.debug("Invoking method {}(\"{}\")", methodName, param);
                 method.invoke(test, param);
-            } else {
+            }
+            else
+            {
                 LOG.debug("Invoking method {}()", methodName);
                 method.invoke(test);
             }
 
-        } catch (final java.lang.reflect.InvocationTargetException e) {
+        }
+        catch (final java.lang.reflect.InvocationTargetException e)
+        {
             final Throwable cause = e.getCause() != null ? e.getCause() : e;
             throw new ActionExecutionException(String.format("JAVA_METHOD: '%s.%s' threw an exception: %s",
-                    test.getClass().getSimpleName(), methodName,
-                    cause.getMessage()), cause);
-        } catch (final Exception e) {
+                                                             test.getClass().getSimpleName(), methodName,
+                                                             cause.getMessage()), cause);
+        }
+        catch (final Exception e)
+        {
             throw new ActionExecutionException(String.format("JAVA_METHOD: failed to invoke '%s.%s': %s",
-                    test.getClass().getSimpleName(), methodName,
-                    e.getMessage()), e);
+                                                             test.getClass().getSimpleName(), methodName,
+                                                             e.getMessage()), e);
         }
     }
 
     // --- Element resolution ---
 
     /**
-     * Finds an element using multiple strategies in order of preference: 0.
-     * data-neodymium-automation-id 1. CSS
+     * Finds an element using multiple strategies in order of preference: 0. data-neodymium-automation-id 1. CSS
      * selector 2. XPath 3. Link text / partial link text 4. Text content via XPath
      */
-    SelenideElement findElement(final Action action) {
+    SelenideElement findElement(final Action action)
+    {
         String target = action.getTarget();
-        if (target == null || target.isBlank()) {
+        if (target == null || target.isBlank())
+        {
             throw new ActionExecutionException("Action target is null or empty");
         }
 
         // Strategy 0: Direct Match for Neodymium Automation ID
-        if (target.matches("^xc_.*")) {
-            try {
+        if (target.matches("^xc_.*"))
+        {
+            try
+            {
                 SelenideElement element = $(By.cssSelector("[data-neodymium-automation-id='" + target + "']"));
-                if (element.exists()) {
+                if (element.exists())
+                {
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
-                } else {
-                    LOG.debug("Automation ID match failed for target '{}' and text '{}'", target,
-                            action.getElementDetails());
                 }
-            } catch (final Exception e) {
+                else
+                {
+                    LOG.debug("Automation ID match failed for target '{}' and text '{}'", target,
+                              action.getElementDetails());
+                }
+            }
+            catch (final Exception e)
+            {
                 LOG.debug("Automation ID match failed for target '{}' and text '{}' with message: {}", target,
-                        action.getElementDetails(), e.getMessage());
+                          action.getElementDetails(), e.getMessage());
+            }
+        }
+
+        // Strategy 0.5: Try explicit Shadow DOM selector
+        if (target.contains("::shadow"))
+        {
+            String[] parts = target.split("::shadow");
+            String shadowTarget = parts[parts.length - 1].trim();
+            String[] shadowHosts = new String[parts.length - 1];
+            for (int i = 0; i < parts.length - 1; i++)
+            {
+                shadowHosts[i] = parts[i].trim();
+            }
+            try
+            {
+                SelenideElement element = $(Selectors.shadowCss(shadowTarget, shadowHosts));
+                if (element.exists())
+                {
+                    return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                }
+                else
+                {
+                    LOG.debug("Explicit Shadow DOM selector failed for target '{}' and text '{}'", target,
+                              action.getElementDetails());
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.debug("Explicit Shadow DOM selector failed for target '{}' and text '{}' with message: {}", target,
+                          action.getElementDetails(), e.getMessage());
             }
         }
 
         // In some cases the ai tries this, so just give it what it wants
-        if (action.getTarget().equals("document.title") || action.getTarget().equals("pageTitle")) {
+        if (action.getTarget().equals("document.title") || action.getTarget().equals("pageTitle"))
+        {
             return $("head > title");
         }
 
         // Strategy 1: Try as CSS selector
-        try {
+        try
+        {
             SelenideElement element = $(By.cssSelector(target));
-            if (element.exists()) {
+            if (element.exists())
+            {
                 return element.should(Condition.exist, ELEMENT_TIMEOUT);
-            } else {
+            }
+            else
+            {
                 LOG.debug("CSS selector failed for target '{}' and text '{}'", target, action.getElementDetails());
             }
-        } catch (final Exception e) {
+        }
+        catch (final Exception e)
+        {
             LOG.debug("CSS selector failed for target '{}' and text '{}' with message: {}", target,
-                    action.getElementDetails(), e.getMessage());
+                      action.getElementDetails(), e.getMessage());
+        }
+
+        // Strategy 1.5: Try deep Shadow DOM CSS selector
+        if (!target.startsWith("/") && !target.startsWith("("))
+        {
+            try
+            {
+                SelenideElement element = $(Selectors.shadowDeepCss(target));
+                if (element.exists())
+                {
+                    return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                }
+                else
+                {
+                    LOG.debug("Deep Shadow DOM selector failed for target '{}' and text '{}'", target, action.getElementDetails());
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.debug("Deep Shadow DOM selector failed for target '{}' and text '{}' with message: {}", target,
+                          action.getElementDetails(), e.getMessage());
+            }
         }
 
         // Strategy 2: Try as XPath
-        if (target.startsWith("/") || target.startsWith("(")) {
-            try {
+        if (target.startsWith("/") || target.startsWith("("))
+        {
+            try
+            {
                 SelenideElement element = $x(target);
-                if (element.exists()) {
+                if (element.exists())
+                {
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
-                } else {
+                }
+                else
+                {
                     LOG.debug("XPath failed for target '{}' and text '{}'", target, action.getElementDetails());
                 }
-            } catch (final Exception e) {
+            }
+            catch (final Exception e)
+            {
                 LOG.debug("XPath failed for target '{}' and text '{}' with message: {}", target,
-                        action.getElementDetails(), e.getMessage());
+                          action.getElementDetails(), e.getMessage());
             }
         }
 
         // Strategy 3: Try as link text (first target, then element text)
-        try {
+        try
+        {
             SelenideElement element = $(By.linkText(target));
-            if (element.exists()) {
+            if (element.exists())
+            {
                 return element.should(Condition.exist, ELEMENT_TIMEOUT);
             }
             LOG.debug("Link text failed for target '{}'", target);
 
             final String elementText = action.getElementDetails();
-            if (elementText != null && !elementText.isBlank() && !elementText.equals(target)) {
+            if (elementText != null && !elementText.isBlank() && !elementText.equals(target))
+            {
                 element = $(By.linkText(elementText));
-                if (element.exists()) {
+                if (element.exists())
+                {
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 }
                 LOG.debug("Link text failed for text '{}'", elementText);
             }
-        } catch (final Exception e) {
+        }
+        catch (final Exception e)
+        {
             LOG.debug("Link text resolution failed with message: {}", e.getMessage());
         }
 
         // Strategy 4: Try finding by text content via XPath (first target, then element
         // text)
-        try {
+        try
+        {
             // First try with target
             String targetXpath = escapeXpath(target);
             String xpath = String.format(
-                    "//*[contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s)]",
-                    targetXpath, targetXpath, targetXpath);
+                                         "//*[contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s)]",
+                                         targetXpath, targetXpath, targetXpath);
             SelenideElement element = $x(xpath);
-            if (element.exists()) {
+            if (element.exists())
+            {
                 return element.should(Condition.exist, ELEMENT_TIMEOUT);
             }
             LOG.debug("Text content search failed for target '{}'", target);
 
             // Then try with element text if available and different
             final String elementText = action.getElementDetails();
-            if (elementText != null && !elementText.isBlank() && !elementText.equals(target)) {
+            if (elementText != null && !elementText.isBlank() && !elementText.equals(target))
+            {
                 String elementTextXpath = escapeXpath(elementText);
                 xpath = String.format(
-                        "//*[contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s)]",
-                        elementTextXpath, elementTextXpath, elementTextXpath);
+                                      "//*[contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s)]",
+                                      elementTextXpath, elementTextXpath, elementTextXpath);
                 element = $x(xpath);
-                if (element.exists()) {
+                if (element.exists())
+                {
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 }
                 LOG.debug("Text content search failed for text '{}'", elementText);
             }
 
-        } catch (final Exception e) {
+        }
+        catch (final Exception e)
+        {
             LOG.debug("Text content search failed with message: {}", e.getMessage());
         }
 
         throw new ActionExecutionException(String.format("Could not find element for target '%s' or text '%s'", target,
-                action.getElementDetails()));
+                                                         action.getElementDetails()));
     }
 
-    private By resolveLocator(final String target) {
-        if (target.startsWith("/") || target.startsWith("(")) {
+    private By resolveLocator(final String target)
+    {
+        if (target.startsWith("/") || target.startsWith("("))
+        {
             return By.xpath(target);
+        }
+        if (target.contains("::shadow"))
+        {
+            String[] parts = target.split("::shadow");
+            String shadowTarget = parts[parts.length - 1].trim();
+            String[] shadowHosts = new String[parts.length - 1];
+            for (int i = 0; i < parts.length - 1; i++)
+            {
+                shadowHosts[i] = parts[i].trim();
+            }
+            return Selectors.shadowCss(shadowTarget, shadowHosts);
         }
         return By.cssSelector(target);
     }
 
-    private String escapeXpath(String value) {
-        if (!value.contains("'")) {
+    private String escapeXpath(String value)
+    {
+        if (!value.contains("'"))
+        {
             return "'" + value + "'";
-        } else if (!value.contains("\"")) {
+        }
+        else if (!value.contains("\""))
+        {
             return "\"" + value + "\"";
-        } else {
+        }
+        else
+        {
             return "concat('" + value.replace("'", "', \"'\", '") + "')";
         }
     }
 
-    private void scrollIntoView(final SelenideElement element) {
+    private void scrollIntoView(final SelenideElement element)
+    {
         Selenide.executeJavaScript(
-                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element);
+                                   "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element);
         Selenide.sleep(200);
     }
 
-    private Keys mapKey(final String keyName) {
-        return switch (keyName.toUpperCase()) {
+    private Keys mapKey(final String keyName)
+    {
+        return switch (keyName.toUpperCase())
+        {
             case "ENTER", "RETURN" -> Keys.ENTER;
             case "TAB" -> Keys.TAB;
             case "ESCAPE", "ESC" -> Keys.ESCAPE;
@@ -631,22 +854,24 @@ public class ActionExecutor {
     }
 
     /**
-     * Pre-checks if the action target exists and is visible before any interaction
-     * is attempted. Use this for safely
+     * Pre-checks if the action target exists and is visible before any interaction is attempted. Use this for safely
      * replaying instructions from a Playbook.
      */
     @Step("Pre-checking action: {action.type}")
-    public void preCheckAction(Action action) {
-        switch (action.getType()) {
+    public void preCheckAction(Action action)
+    {
+        switch (action.getType())
+        {
             case CLICK:
             case TYPE:
             case CLEAR:
             case SELECT:
             case HOVER:
                 SelenideElement element = findElement(action);
-                if (!element.exists() || !element.isDisplayed()) {
+                if (!element.exists() || !element.isDisplayed())
+                {
                     throw new ActionExecutionException(String.format(
-                            "Pre-check failed: Target '%s' is not visible or doesn't exist.", action.getTarget()));
+                                                                     "Pre-check failed: Target '%s' is not visible or doesn't exist.", action.getTarget()));
                 }
                 break;
             default:
@@ -656,12 +881,13 @@ public class ActionExecutor {
     }
 
     /**
-     * Extracts useful DOM attributes from a SelenideElement to be used as context.
-     * This helps the LLM self-heal
+     * Extracts useful DOM attributes from a SelenideElement to be used as context. This helps the LLM self-heal
      * Playbooks by knowing what the element used to look like.
      */
-    public Map<String, String> extractElementContext(SelenideElement element) {
-        try {
+    public Map<String, String> extractElementContext(SelenideElement element)
+    {
+        try
+        {
             Map<String, String> context = new HashMap<>();
             context.put("tagName", element.getTagName());
             context.put("text", element.getText());
@@ -676,7 +902,9 @@ public class ActionExecutor {
             context.entrySet().removeIf(entry -> entry.getValue() == null || entry.getValue().isBlank());
 
             return context;
-        } catch (Exception e) {
+        }
+        catch (Exception e)
+        {
             LOG.warn("Failed to extract element context: {}", e.getMessage());
             return new HashMap<>();
         }
@@ -685,40 +913,47 @@ public class ActionExecutor {
     /**
      * Exception thrown when an action execution fails.
      */
-    public static class ActionExecutionException extends RuntimeException {
-        public ActionExecutionException(final String message) {
+    public static class ActionExecutionException extends RuntimeException
+    {
+        public ActionExecutionException(final String message)
+        {
             super(message);
         }
 
-        public ActionExecutionException(final String message, final Throwable cause) {
+        public ActionExecutionException(final String message, final Throwable cause)
+        {
             super(message, cause);
         }
     }
 
-    public static class DataAttributeMatches extends WebElementCondition {
+    public static class DataAttributeMatches extends WebElementCondition
+    {
 
         private final Pattern namePattern;
 
         private final Pattern valuePattern;
 
-        public DataAttributeMatches(String nameRegex, String valueRegex) {
+        public DataAttributeMatches(String nameRegex, String valueRegex)
+        {
             super("dataAttributeMatches");
             this.namePattern = Pattern.compile(nameRegex);
             this.valuePattern = Pattern.compile(valueRegex);
         }
 
         @Override
-        public CheckResult check(Driver driver, WebElement element) {
+        public CheckResult check(Driver driver, WebElement element)
+        {
             Map<String, String> attributes = driver.executeJavaScript(
-                    "var items = {}; " +
-                            "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
-                            "  items[attrs[i].name] = attrs[i].value; " +
-                            "} "
-                            + "return items;",
-                    element);
+                                                                      "var items = {}; " +
+                                                                      "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
+                                                                      "  items[attrs[i].name] = attrs[i].value; " +
+                                                                      "} "
+                                                                      + "return items;",
+                                                                      element);
             boolean found = false;
 
-            for (var entry : attributes.entrySet()) {
+            for (var entry : attributes.entrySet())
+            {
                 String name = entry.getKey();
 
                 if (!namePattern.matcher(name).matches())
@@ -726,7 +961,8 @@ public class ActionExecutor {
 
                 String value = entry.getValue();
 
-                if (value != null && valuePattern.matcher(value).matches()) {
+                if (value != null && valuePattern.matcher(value).matches())
+                {
                     found = true;
                 }
             }
@@ -735,17 +971,20 @@ public class ActionExecutor {
         }
     }
 
-    public static class PartialTextContent extends WebElementCondition {
+    public static class PartialTextContent extends WebElementCondition
+    {
 
         private final String value;
 
-        public PartialTextContent(String value) {
+        public PartialTextContent(String value)
+        {
             super("PartialTextContent");
             this.value = value;
         }
 
         @Override
-        public CheckResult check(Driver driver, WebElement element) {
+        public CheckResult check(Driver driver, WebElement element)
+        {
             @Nullable
             String attribute = element.getAttribute("textContent");
             boolean found = attribute.contains(value);

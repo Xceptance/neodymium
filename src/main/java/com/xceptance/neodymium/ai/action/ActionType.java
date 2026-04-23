@@ -22,6 +22,15 @@ public enum ActionType
 
     /** Assert that an element contains expected text or is in an expected state */
     ASSERT,
+    
+    /** Condition that needs to be true to execute the next IF_ACTION */
+    IF_CONDITION,
+    
+    /** Action to execute if the IF_CONDITION is true */
+    IF_ACTION,
+    
+    /** Check if an element contains expected text or is in an expected state */
+    CHECK,
 
     /** Scroll to an element or position */
     SCROLL,

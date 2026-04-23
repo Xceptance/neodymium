@@ -89,6 +89,18 @@ public class PageAnalyzer
                 return s.length <= max ? s : s.substring(0, max) + '…';
             }
 
+            function queryAllDeep(selector, root) {
+                root = root || document;
+                var results = Array.from(root.querySelectorAll(selector));
+                var allEls = root.querySelectorAll('*');
+                for (var i = 0; i < allEls.length; i++) {
+                    if (allEls[i].shadowRoot) {
+                        results = results.concat(queryAllDeep(selector, allEls[i].shadowRoot));
+                    }
+                }
+                return results;
+            }
+
             function generateSelector(el) {
                 var id = el.id;
                 if (id) return '#' + id;
@@ -106,7 +118,7 @@ public class PageAnalyzer
             function captureElements(cssSelector, label) {
                 var results = [];
                 try {
-                    var els = document.querySelectorAll(cssSelector);
+                    var els = queryAllDeep(cssSelector);
                     var count = 0;
                     for (var i = 0; i < els.length && count < MAX_PER_SELECTOR; i++) {
                         var el = els[i];
@@ -136,7 +148,7 @@ public class PageAnalyzer
             function captureClickableElements(cssSelector, label) {
                 var results = [];
                 try {
-                    var els = document.querySelectorAll(cssSelector);
+                    var els = queryAllDeep(cssSelector);
                     var count = 0;
                     for (var i = 0; i < els.length && count < MAX_PER_SELECTOR; i++) {
                         var el = els[i];
@@ -171,13 +183,13 @@ public class PageAnalyzer
             function captureForms() {
                 var results = [];
                 try {
-                    var forms = document.querySelectorAll('form');
+                    var forms = queryAllDeep('form');
                     for (var f = 0; f < forms.length; f++) {
                         var form = forms[f];
                         var formId = assignId(form);
 
                         var fields = [];
-                        var inputs = form.querySelectorAll('input, select, textarea');
+                        var inputs = queryAllDeep('input, select, textarea', form);
                         for (var j = 0; j < inputs.length; j++) {
                             var inp = inputs[j];
                             if (!isVisible(inp)) continue;
