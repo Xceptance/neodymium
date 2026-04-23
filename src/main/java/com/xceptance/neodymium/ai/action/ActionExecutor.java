@@ -30,6 +30,7 @@ import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebElementCondition;
+import com.codeborne.selenide.ex.ElementNotFound;
 import com.codeborne.selenide.ex.ElementShould;
 import com.xceptance.neodymium.util.Neodymium;
 import com.codeborne.selenide.Selectors;
@@ -280,28 +281,33 @@ public class ActionExecutor
         }
     }
 
-    private void executeSelect(final Action action)
-    {
-        final SelenideElement element = findElement(action);
-        action.setElementContext(extractElementContext(element));
-        scrollIntoView(element);
+
+    private void executeSelect(final Action action) {
         try
         {
+            final SelenideElement element = findElement(action);
+            action.setElementContext(extractElementContext(element));
+            scrollIntoView(element);
             element.selectOption(action.getValue());
         }
         catch (final ElementNotInteractableException e)
         {
             throw new ActionExecutionException(String.format(
                                                              "Element not interactable or not enabled for target '%s' (element: '%s'). "
-                                                             + "The chosen element cannot be selected in its current state.",
-                                                             action.getTarget(), action.getElementDetails()), e);
+                            + "The chosen element cannot be selected in its current state.",
+                    action.getTarget(), action.getElementDetails()), e);
         }
-        catch (final StaleElementReferenceException e)
+        catch (final ElementNotFound e)
         {
             throw new ActionExecutionException(String.format(
-                                                             "Element target '%s' (element: '%s') became stale. "
-                                                             + "The page may have updated. Re-analyzing and retrying...",
+                                                             "Element not found for target '%s' (element: '%s'). "
+                                                             + "The chosen element cannot be selected in its current state.",
                                                              action.getTarget(), action.getElementDetails()), e);
+        } catch (final StaleElementReferenceException e) {
+            throw new ActionExecutionException(String.format(
+                    "Element target '%s' (element: '%s') became stale. "
+                            + "The page may have updated. Re-analyzing and retrying...",
+                    action.getTarget(), action.getElementDetails()), e);
         }
     }
 
@@ -361,21 +367,30 @@ public class ActionExecutor
         }
     }
 
-    private void executeWait(final Action action)
-    {
-        try
-        {
-            final int ms = action.getValue() != null ? Integer.parseInt(action.getValue()) : 1000;
-            LOG.debug("Waiting {} ms", ms);
-            Selenide.sleep(ms);
-        }
-        catch (final NumberFormatException e)
-        {
-            // If value isn't a number, treat it as waiting for an element
-            if (action != null)
-            {
-                $(resolveLocator(action.getTarget())).shouldBe(Condition.visible, ELEMENT_TIMEOUT);
+    private void executeWait(final Action action) {
+        String target = action.getTarget();
+        if (target != null && !target.isBlank()) {
+            long timeoutMs = ELEMENT_TIMEOUT.toMillis();
+            if (action.getValue() != null && !action.getValue().isBlank()) {
+                try {
+                    timeoutMs = Long.parseLong(action.getValue());
+                } catch (NumberFormatException e) {
+                    LOG.warn("Invalid timeout value for WAIT action: {}", action.getValue());
+                }
             }
+            LOG.debug("Waiting up to {} ms for element: {}", timeoutMs, target);
+            findElement(action).shouldBe(Condition.visible, Duration.ofMillis(timeoutMs));
+        } else {
+            int ms = 1000;
+            if (action.getValue() != null && !action.getValue().isBlank()) {
+                try {
+                    ms = Integer.parseInt(action.getValue());
+                } catch (NumberFormatException e) {
+                    LOG.warn("Invalid sleep value for WAIT action: {}", action.getValue());
+                }
+            }
+            LOG.debug("Sleeping for {} ms", ms);
+            Selenide.sleep(ms);
         }
     }
 
@@ -707,20 +722,41 @@ public class ActionExecutor
         {
             try
             {
-                SelenideElement element = $x(target);
+                SelenideElement element = $(By.cssSelector(target));
                 if (element.exists())
                 {
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 }
                 else
                 {
-                    LOG.debug("XPath failed for target '{}' and text '{}'", target, action.getElementDetails());
+                    LOG.debug("CSS selector failed for target '{}' and text '{}'", target, action.getElementDetails());
                 }
             }
             catch (final Exception e)
             {
-                LOG.debug("XPath failed for target '{}' and text '{}' with message: {}", target,
+                LOG.debug("CSS selector failed for target '{}' and text '{}' with message: {}", target,
                           action.getElementDetails(), e.getMessage());
+            }
+        } else {
+            LOG.debug("Target '{}' is not a valid CSS selector. Skipping CSS strategy.", target);
+        }
+
+        // Strategy 2: Try as XPath
+        if (target.startsWith("/") || target.startsWith("(")) {
+            if (isValidXPath(target)) {
+                try {
+                    SelenideElement element = $x(target);
+                    if (element.exists()) {
+                        return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                    } else {
+                        LOG.debug("XPath failed for target '{}' and text '{}'", target, action.getElementDetails());
+                    }
+                } catch (final Exception e) {
+                    LOG.debug("XPath failed for target '{}' and text '{}' with message: {}", target,
+                            action.getElementDetails(), e.getMessage());
+                }
+            } else {
+                LOG.debug("Target '{}' is not a valid XPath. Skipping XPath strategy.", target);
             }
         }
 
@@ -810,6 +846,28 @@ public class ActionExecutor
             return Selectors.shadowCss(shadowTarget, shadowHosts);
         }
         return By.cssSelector(target);
+    }
+
+    private boolean isValidCssSelector(String target) {
+        if (target == null || target.isBlank()) return false;
+        try {
+            return Selenide.executeJavaScript(
+                "try { document.querySelector(arguments[0]); return true; } catch(e) { return false; }", 
+                target);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean isValidXPath(String target) {
+        if (target == null || target.isBlank()) return false;
+        try {
+            return Selenide.executeJavaScript(
+                "try { document.createExpression(arguments[0], null); return true; } catch(e) { return false; }", 
+                target);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private String escapeXpath(String value)

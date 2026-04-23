@@ -54,6 +54,35 @@ public final class TestDataUtils
         DataFile[] dataFiles = testClass.getAnnotationsByType(DataFile.class);
         DataFolder[] dataFolders = testClass.getAnnotationsByType(DataFolder.class);
 
+        // If this is an AI Test Generator, do not read data sets but automatically create data folders if requested
+        boolean isGenerator = false;
+        for (java.lang.annotation.Annotation a : testClass.getAnnotations()) {
+            if (a.annotationType().getSimpleName().equals("NeodymiumTestGenerator")) {
+                isGenerator = true;
+                break;
+            }
+        }
+        if (!isGenerator) {
+            for (java.lang.reflect.Method m : testClass.getMethods()) {
+                for (java.lang.annotation.Annotation a : m.getAnnotations()) {
+                    if (a.annotationType().getSimpleName().equals("NeodymiumTestGenerator")) {
+                        isGenerator = true;
+                        break;
+                    }
+                }
+                if (isGenerator) break;
+            }
+        }
+        if (isGenerator) {
+            for (DataFolder dataFolder : dataFolders) {
+                String folderPath = dataFolder.value();
+                if (StringUtils.isNotBlank(folderPath)) {
+                    new File("src/test/resources/" + folderPath).mkdirs();
+                }
+            }
+            return new LinkedList<>();
+        }
+
         List<Map<String, String>> resultDataSets = new LinkedList<>();
         Map<String, String> testIdToFileName = new HashMap<>();
 

@@ -202,7 +202,7 @@ public class AiAgent
                 LOG.warn("Actions failed: {} (Attempt {}/{})", e.getMessage(), errorCount, maxRetries);
                 executionLog.logWarning("Action failed: " + e + ". Retrying...");
 
-                if (errorCount > maxRetries)
+                if (errorCount >= maxRetries)
                 {
                     final Throwable finalThrowable = e.getCause() != null ? e.getCause() : e;
                     executionLog.logError("Max retries for errors reached.");
@@ -442,7 +442,7 @@ public class AiAgent
                 LOG.warn("Action failed: {} (Attempt {}/{})", lastError, errorCount, maxRetries);
                 executionLog.logWarning("Action failed: " + lastError + ". Retrying...");
 
-                if (errorCount > maxRetries)
+                if (errorCount >= maxRetries)
                 {
                     final Throwable finalThrowable = lastThrowable;
                     executionLog.logError("Max retries for errors reached.");
@@ -586,5 +586,9 @@ public class AiAgent
         {
             super(message, cause);
         }
+    }
+
+    public LlmClient getLlmClient() {
+        return llmClient;
     }
 }

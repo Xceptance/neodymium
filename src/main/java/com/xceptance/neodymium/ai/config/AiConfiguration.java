@@ -49,6 +49,10 @@ public interface AiConfiguration extends Mutable
     @DefaultValue("true")
     public boolean playbookHealingEnabled();
 
+    @Key("neodymium.ai.playbook.record")
+    @DefaultValue("true")
+    public boolean playbookRecordEnabled();
+
     @Key("neodymium.ai.agent.pattern.url")
     @DefaultValue("(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(\\.)*$")
     public String agentPatternUrl();
@@ -84,4 +88,39 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.agent.pattern.ifStatmentPattern")
     @DefaultValue("(?i)if\\s+(.*?)(?:,\\s+then\\s+|\\s+then\\s+|,\\s+)(.*)$")
     public String agentPatternIfStatement();
+
+    @Key("neodymium.ai.temperature")
+    @DefaultValue("0.1")
+    public double aiTemperature();
+
+    @Key("neodymium.ai.generate")
+    @DefaultValue("false")
+    public boolean aiGenerateEnabled();
+
+    @Key("neodymium.ai.generate.temperature")
+    @DefaultValue("1.0")
+    public double aiGenerateTemperature();
+
+    @Key("neodymium.ai.generate.maxSteps")
+    @DefaultValue("100")
+    public int aiGenerateMaxSteps();
+
+    @Key("neodymium.ai.generate.maxFailures")
+    @DefaultValue("5")
+    public int aiGenerateMaxFailures();
+
+    /**
+     * This is work in progress, the generated assertions are not stable right now.
+     */
+    @Key("neodymium.ai.generate.validations")
+    @DefaultValue("false")
+    public boolean aiGenerateValidations();
+
+    @Key("neodymium.ai.generate.v2")
+    @DefaultValue("false")
+    public boolean aiGenerateV2();
+
+    @Key("neodymium.ai.generate.v2.diagnosticLogs")
+    @DefaultValue("false")
+    public boolean aiGenerateV2DiagnosticLogs();
 }

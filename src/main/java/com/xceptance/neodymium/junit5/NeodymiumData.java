@@ -35,7 +35,9 @@ public class NeodymiumData
     {
         boolean workInProgress = Neodymium.configuration().workInProgress();
         boolean wipMethod = List.of(templateMethod.getDeclaringClass().getMethods()).stream()
-                                .filter(method -> method.getAnnotation(NeodymiumTest.class) != null)
+                                .filter(method -> {
+                                    return (method.getAnnotation(NeodymiumTest.class) != null || method.getAnnotation(NeodymiumTestGenerator.class) != null);
+                                })
                                 .anyMatch(method -> method.getAnnotation(WorkInProgress.class) != null);
 
         List<TestTemplateInvocationContext> multiplicationResult = new ArrayList<>();

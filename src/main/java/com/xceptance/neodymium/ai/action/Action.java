@@ -1,6 +1,7 @@
 package com.xceptance.neodymium.ai.action;
 
 import java.util.List;
+import java.util.HashMap;
 
 /**
  * Represents a single browser action parsed from the LLM's response. Each action maps to a concrete Selenium
@@ -15,6 +16,8 @@ public class Action
     private List<String> value;
 
     private String description;
+
+    private java.util.Map<String, String> dataBindings;
 
     private String elementDetails;
 
@@ -41,16 +44,15 @@ public class Action
         this(type, target, value != null ? List.of(value) : null, description);
     }
 
-    public Action(final ActionType type, final String target, final List<String> value, final String description)
-    {
+    public Action(final ActionType type, final String target, final List<String> value, final String description) {
         this.type = type;
         this.target = target;
         this.value = value;
         this.description = description;
+        this.elementContext = new HashMap<String, String>();
     }
 
-    public void markReplay()
-    {
+    public void markReplay() {
         this.replay = "(Replay)";
     }
 
@@ -108,13 +110,19 @@ public class Action
         this.description = description;
     }
 
-    public String getElementDetails()
-    {
+    public java.util.Map<String, String> getDataBindings() {
+        return dataBindings;
+    }
+
+    public void setDataBindings(final java.util.Map<String, String> dataBindings) {
+        this.dataBindings = dataBindings;
+    }
+
+    public String getElementDetails() {
         return elementDetails;
     }
 
-    public void setElementDetails(final String elementDetails)
-    {
+    public void setElementDetails(final String elementDetails) {
         this.elementDetails = elementDetails;
     }
 
@@ -145,8 +153,7 @@ public class Action
                              type, target, value, description, elementDetails, reasoning, elementContext != null ? "yes" : "no");
     }
 
-    public String getReplay()
-    {
+    public String getReplay() {
         return replay;
     }
 }
