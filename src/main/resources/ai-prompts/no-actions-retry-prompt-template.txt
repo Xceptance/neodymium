@@ -1,0 +1,17 @@
+      ## Current Instruction (RETRY - NO ACTIONS RETURNED)
+      {instruction}
+{sutContextBlock}
+      ## YOUR PREVIOUS RESPONSE WAS EMPTY!
+      You did NOT return any actions in your previous response. This is unacceptable.
+      You MUST take action to fulfill the instruction.
+
+      ## How to proceed
+      1. Analyze the page and the DOM carefully.
+      2. Identify the elements you need to interact with.
+      3. If you are stuck, try a broader search or a different strategy (e.g., scrolling, waiting, or clicking a related element).
+      4. DO NOT return an empty actions list again. YOU MUST DO SOMETHING!
+
+      ## Current Page State (DOM)
+      {domContext}
+
+      Return JSON actions with at least one concrete steps to move forward.

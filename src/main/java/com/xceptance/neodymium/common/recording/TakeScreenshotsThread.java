@@ -149,6 +149,14 @@ public class TakeScreenshotsThread extends Thread
                     }
                     catch (Throwable e)
                     {
+                        if (e instanceof org.openqa.selenium.NoSuchSessionException || 
+                           (e.getMessage() != null && (e.getMessage().contains("invalid session id") || e.getMessage().contains("Session not found") || e.getMessage().contains("unreachable")))) 
+                        {
+                            LOGGER.debug("Target browser closed manually or session expired. Screenshot loop gracefully stopping.");
+                            run = false;
+                            break;
+                        }
+
                         // catching the exception prevents the video from failing
                         LOGGER.error("Screenshot could not be taken", e);
                     }

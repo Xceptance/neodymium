@@ -38,13 +38,13 @@ public class AiPromptGenerator {
      * @param intent     The high-level instructional goal.
      * @param outputPath The path to output the generated YAML file.
      */
-    public void generate(String url, String intent, String outputPath) {
+    public void generate(String url, String intent, String sutContext, String outputPath) {
         TokenStats tokenStats = new TokenStats();
         LlmClient llmClient = new LlmClient(Neodymium.aiConfiguration(), tokenStats);
-        generate(llmClient, url, intent, outputPath);
+        generate(llmClient, url, intent, sutContext, outputPath);
     }
 
-    public void generate(LlmClient llmClient, String url, String intent, String outputPath) {
+    public void generate(LlmClient llmClient, String url, String intent, String sutContext, String outputPath) {
         // 1. Verify property constraints using the standard Neodymium configuration
         // system.
         if (!Neodymium.aiConfiguration().aiGenerateEnabled()) {
@@ -60,7 +60,7 @@ public class AiPromptGenerator {
         // Since owner Config is mutable in Neodymium (AiConfiguration extends Mutable),
         // we can set it.
         if (Neodymium.aiConfiguration().aiGenerateV2()) {
-            generateV2(llmClient, url, intent, outputPath);
+            generateV2(llmClient, url, intent, sutContext, outputPath);
             return;
         }
 
@@ -77,7 +77,7 @@ public class AiPromptGenerator {
         LOG.warn("************************************************************************");
 
         // 4. Explore step-by-step
-        explore(llmClient, url, intent, outputPath);
+        explore(llmClient, url, intent, sutContext, outputPath);
     }
 
     protected void openBrowser(String url) {
@@ -94,7 +94,9 @@ public class AiPromptGenerator {
         actionExecutor.executeAll(toExecute);
     }
 
-    public List<Action> explore(LlmClient llmClient, String url, String intent, String outputPath) {
+    public List<Action> explore(LlmClient llmClient, String url, String intent, String sutContext, String outputPath) {
+        com.xceptance.neodymium.ai.core.AiDiscussionLogger executionLog = new com.xceptance.neodymium.ai.core.AiDiscussionLogger(
+                intent);
         LOG.info("Starting step-by-step exploratory run on '{}' for intent: '{}'", url, intent);
 
         openBrowser(url);
@@ -123,6 +125,8 @@ public class AiPromptGenerator {
         int failedAttempts = 0;
 
         for (int i = 0; i < maxSteps && !entireGoalAchieved; i++) {
+            executionLog.startStep(i + 1, maxSteps, "Exploration Step");
+            executionLog.startAttempt("Attempt");
             StringBuilder historyBuilder = new StringBuilder();
             if (successfulPath.isEmpty() && pendingActions.isEmpty()) {
                 historyBuilder.append("None (Initial Step)");
@@ -138,10 +142,12 @@ public class AiPromptGenerator {
             }
 
             String dom = captureDom(pageAnalyzer);
-            String prompt = AiAgentPrompts.buildExplorationPrompt(intent, currentSubgoal, historyBuilder.toString(),
+            String prompt = AiAgentPrompts.buildExplorationPrompt(intent, sutContext, currentSubgoal, historyBuilder.toString(),
                     dom,
                     statusMessage, knownBindings);
+            executionLog.logPrompt(prompt);
             String responseStr = executeExplorationLlmCall(llmClient, prompt);
+            executionLog.logResponse(responseStr);
 
             String currentIterationLog = "Iteration " + (i + 1) + "\n\n--- AI Prompt ---\n" + prompt
                     + "\n\n--- AI Response ---\n" + responseStr
@@ -207,12 +213,14 @@ public class AiPromptGenerator {
                     LOG.warn(
                             "Failed to format or return valid JSON after {} attempts. Instructing AI to retry next turn.",
                             maxJsonRetries);
+                    executionLog.logError("Failed JSON parsing");
                     statusMessage = "FAILED: Could not parse your response as valid JSON after multiple attempts. You must return a strict JSON object.";
                     failedAttempts++;
                     continue;
                 }
 
                 if (json.has("reasoning") && !json.get("reasoning").isJsonNull()) {
+                    executionLog.logReasoning(json.get("reasoning").getAsString());
                     LOG.info("AI Reasoning: {}", json.get("reasoning").getAsString());
                 }
 
@@ -255,6 +263,7 @@ public class AiPromptGenerator {
                 }
 
                 if (!pendingActions.isEmpty()) {
+                    executionLog.logActions(pendingActions);
                     LOG.info("Pending actions executed smoothly. Saving to local branch.");
                     for (Action pending : pendingActions) {
                         successfulPath.add(pending);
@@ -392,6 +401,8 @@ public class AiPromptGenerator {
                 failedAttempts++;
             }
 
+            executionLog.endAttempt();
+            executionLog.endStep();
             if (failedAttempts >= maxFailures) {
                 LOG.warn("AI exceeded maximum consecutively failed attempts or errors ({}). Aborting exploration.",
                         failedAttempts);
@@ -417,10 +428,17 @@ public class AiPromptGenerator {
             extractAndWriteYaml(successfulPath, outputPath);
         }
 
+        if (com.xceptance.neodymium.util.Neodymium.aiConfiguration().attachFullDiscussionToReport()) {
+            io.qameta.allure.Allure.addAttachment("AI Discussion", "text/html", executionLog.generateHtml(), ".html");
+        }
+
         return successfulPath;
     }
 
-    protected void generateV2(LlmClient llmClient, String url, String intent, String outputPath) {
+    @io.qameta.allure.Step("AI Prompt Generation")
+    protected void generateV2(LlmClient llmClient, String url, String intent, String sutContext, String outputPath) {
+        com.xceptance.neodymium.ai.core.AiDiscussionLogger executionLog = new com.xceptance.neodymium.ai.core.AiDiscussionLogger(
+                intent);
         LOG.warn("************************************************************************");
         LOG.warn("WARNING: NEODYMIUM AI EXPLORATORY GENERATOR STARTED");
         LOG.warn("This bot will dynamically navigate and attempt to fulfill your prompt.");
@@ -431,20 +449,26 @@ public class AiPromptGenerator {
         LOG.warn("************************************************************************");
 
         // 1. Explore step-by-step
-        com.xceptance.neodymium.ai.playbook.Playbook playbook = exploreV2(llmClient, url, intent, outputPath);
+        com.xceptance.neodymium.ai.playbook.Playbook playbook = exploreV2(llmClient, url, intent, sutContext, outputPath,
+                executionLog);
 
         // 2. Extract
-        List<Action> cleanPath = extractV2(llmClient, playbook, intent, outputPath);
+        List<Action> cleanPath = extractV2(llmClient, playbook, intent, outputPath, executionLog);
 
         // 3. Verify
         verifyV2(cleanPath, outputPath, url);
 
         // 4. Dump to yaml
         extractAndWriteYaml(cleanPath, outputPath);
+        if (com.xceptance.neodymium.util.Neodymium.aiConfiguration().attachFullDiscussionToReport()) {
+            io.qameta.allure.Allure.addAttachment("AI Discussion V2", "text/html", executionLog.generateHtml(),
+                    ".html");
+        }
     }
 
+    @io.qameta.allure.Step("Phase 1: Exploration")
     protected com.xceptance.neodymium.ai.playbook.Playbook exploreV2(LlmClient llmClient, String url, String intent,
-            String outputPath) {
+            String sutContext, String outputPath, com.xceptance.neodymium.ai.core.AiDiscussionLogger executionLog) {
         LOG.info("\n========================================================================");
         LOG.info("\uD83E\uDDED PHASE 1: EXPLORATION (V2)");
         LOG.info("Starting step-by-step exploratory run on '{}' for intent: '{}'", url, intent);
@@ -453,9 +477,9 @@ public class AiPromptGenerator {
 
         PageAnalyzer pageAnalyzer = new PageAnalyzer();
         ActionExecutor actionExecutor = new ActionExecutor(this);
-        
+
         Neodymium.initializePlaybook();
-        
+
         java.util.Map<String, String> knownBindings = new java.util.LinkedHashMap<>();
         String fileName = Paths.get(outputPath).getFileName().toString();
         String testId = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
@@ -473,6 +497,8 @@ public class AiPromptGenerator {
 
         Playbook playbook = Neodymium.getAiPlaybook();
         for (int i = 0; i < maxSteps && !entireGoalAchieved; i++) {
+            executionLog.startStep(i + 1, maxSteps, "Exploration Step");
+            executionLog.startAttempt("Exploration Attempt");
             LOG.info("\n\uD83D\uDC63 --- EXPLORATION STEP {} \u2192 Analyzing DOM and asking AI... ---", i + 1);
             StringBuilder historyBuilder = new StringBuilder();
             if (playbook.getSteps().isEmpty()) {
@@ -485,10 +511,12 @@ public class AiPromptGenerator {
             }
 
             String dom = captureDom(pageAnalyzer);
-            String prompt = AiAgentPrompts.buildExplorationPrompt(intent, currentSubgoal, historyBuilder.toString(),
+            String prompt = AiAgentPrompts.buildExplorationPrompt(intent, sutContext, currentSubgoal, historyBuilder.toString(),
                     dom, statusMessage, knownBindings);
+            executionLog.logPrompt(prompt);
             String responseStr = executeV2ExplorationLlmCall(llmClient, prompt);
-            
+            executionLog.logResponse(responseStr);
+
             String currentIterationLog = "Iteration " + (i + 1) + "\n\n--- AI Prompt ---\n" + prompt
                     + "\n\n--- AI Response ---\n" + responseStr
                     + "\n--------------------------------------------------";
@@ -555,6 +583,7 @@ public class AiPromptGenerator {
                         pbStep.setActions(java.util.Collections.singletonList(nextAction));
                         playbook.addStep(pbStep);
                         actionsForLogging.add(nextAction);
+                        executionLog.logActions(java.util.Collections.singletonList(nextAction));
 
                         if (nextAction.getDataBindings() != null)
                             knownBindings.putAll(nextAction.getDataBindings());
@@ -571,9 +600,12 @@ public class AiPromptGenerator {
             } else {
                 LOG.warn("No actions provided.");
                 statusMessage = "FAILED: You provided no actions.";
+                executionLog.logError(statusMessage);
                 failedAttempts++;
             }
 
+            executionLog.endAttempt();
+            executionLog.endStep();
             if (failedAttempts >= maxFailures) {
                 LOG.warn("Exceeded max failures.");
                 break;
@@ -581,20 +613,23 @@ public class AiPromptGenerator {
         }
 
         if (!entireGoalAchieved || playbook.getSteps().isEmpty()) {
-            String reason = !entireGoalAchieved ? "Goal was not achieved after " + iterationLogs.size() + " iterations." : "Playbook successfully generated but produced an empty list of steps.";
+            String reason = !entireGoalAchieved ? "Goal was not achieved after " + iterationLogs.size() + " iterations."
+                    : "Playbook successfully generated but produced an empty list of steps.";
             Path logPath = dumpDiagnosticLog(actionsForLogging, iterationLogs, outputPath, "V2 Failed: " + reason);
             String location = logPath != null ? logPath.toAbsolutePath().toString() : "failed to save";
             Assertions.fail("Exploration V2 failed. Reason: " + reason + " Diagnostic log: " + location);
         }
 
         if (Neodymium.aiConfiguration().aiGenerateV2DiagnosticLogs()) {
-            dumpDiagnosticLog(actionsForLogging, iterationLogs, outputPath, "V2 Playbook RAW (Diagnostic)", "_phase1_diagnostic");
+            dumpDiagnosticLog(actionsForLogging, iterationLogs, outputPath, "V2 Playbook RAW (Diagnostic)",
+                    "_phase1_diagnostic");
         }
         return playbook;
     }
 
+    @io.qameta.allure.Step("Phase 2: Extraction")
     protected List<Action> extractV2(LlmClient llmClient, com.xceptance.neodymium.ai.playbook.Playbook playbook,
-            String intent, String outputPath) {
+            String intent, String outputPath, com.xceptance.neodymium.ai.core.AiDiscussionLogger executionLog) {
         LOG.info("\n========================================================================");
         LOG.info("\uD83E\uDDE0 PHASE 2: EXTRACTION (V2)");
         LOG.info("\u2702\uFE0F Sending recorded Playbook to AI to extract successful minimal path...");
@@ -604,6 +639,8 @@ public class AiPromptGenerator {
         List<String> iterationLogs = new ArrayList<>();
 
         for (int i = 0; i < maxRetries; i++) {
+            executionLog.startStep(maxRetries, maxRetries, "Extraction Phase");
+            executionLog.startAttempt("Extraction Try " + (i + 1));
             StringBuilder sb = new StringBuilder();
             sb.append("Overall Goal: ").append(intent).append("\n\nPlaybook:\n");
             for (int stepIdx = 0; stepIdx < playbook.getSteps().size(); stepIdx++) {
@@ -618,8 +655,11 @@ public class AiPromptGenerator {
                 sysPrompt += "\n\n" + AiAgentPrompts.V2_EXTRACTION_RETRY_PROMPT.replace("{error}", errorMessage);
             }
 
+            executionLog.logPrompt(sysPrompt + "\\n\\n" + sb.toString());
             String responseStr = llmClient.chat(sysPrompt, sb.toString());
-            String currentIterationLog = "Extraction Attempt " + (i + 1) + "\n\n--- AI Prompt ---\n" + sysPrompt + "\n\n" + sb.toString()
+            executionLog.logResponse(responseStr);
+            String currentIterationLog = "Extraction Attempt " + (i + 1) + "\n\n--- AI Prompt ---\n" + sysPrompt
+                    + "\n\n" + sb.toString()
                     + "\n\n--- AI Response ---\n" + responseStr
                     + "\n--------------------------------------------------";
             iterationLogs.add(currentIterationLog);
@@ -665,19 +705,26 @@ public class AiPromptGenerator {
                 LOG.info("\uD83D\uDE80 Extraction successful! Picked {} out of {} steps.", extractedIndices.size(),
                         playbook.getSteps().size());
                 if (Neodymium.aiConfiguration().aiGenerateV2DiagnosticLogs()) {
-                    dumpDiagnosticLog(cleanActions, iterationLogs, outputPath, "V2 Extraction Finished", "_phase2_diagnostic");
+                    dumpDiagnosticLog(cleanActions, iterationLogs, outputPath, "V2 Extraction Finished",
+                            "_phase2_diagnostic");
                 }
+                executionLog.endAttempt();
+                executionLog.endStep();
                 return cleanActions;
             } catch (Exception e) {
                 errorMessage = e.getMessage();
                 LOG.warn("Extraction failed validation: {}. Retrying...", errorMessage);
+                executionLog.logError(errorMessage);
             }
+            executionLog.endAttempt();
+            executionLog.endStep();
         }
 
         Assertions.fail("Extraction phase failed after " + maxRetries + " retries.");
         return new ArrayList<>();
     }
 
+    @io.qameta.allure.Step("Phase 3: Verification")
     protected void verifyV2(List<Action> cleanPath, String outputPath, String url) {
         LOG.info("\n========================================================================");
         LOG.info("\u2705 PHASE 3: VERIFICATION (V2)");
@@ -717,7 +764,8 @@ public class AiPromptGenerator {
 
         LOG.info("\uD83C\uDF89 Verification Complete! Clean path is robust.");
         if (Neodymium.aiConfiguration().aiGenerateV2DiagnosticLogs()) {
-            dumpDiagnosticLog(cleanPath, new ArrayList<>(), outputPath, "V2 Verification Finished", "_phase3_diagnostic");
+            dumpDiagnosticLog(cleanPath, new ArrayList<>(), outputPath, "V2 Verification Finished",
+                    "_phase3_diagnostic");
         }
     }
 
@@ -820,7 +868,8 @@ public class AiPromptGenerator {
                 if (knownBindings.containsKey(paramName)) {
                     if (!knownBindings.get(paramName).equals(paramValue)) {
                         if (Neodymium.aiConfiguration().aiGenerateV2()) {
-                            LOG.info("V2 Mode: Allowing re-assignment of data binding '{}' from '{}' to '{}'.", paramName, knownBindings.get(paramName), paramValue);
+                            LOG.info("V2 Mode: Allowing re-assignment of data binding '{}' from '{}' to '{}'.",
+                                    paramName, knownBindings.get(paramName), paramValue);
                         } else {
                             throw new IllegalArgumentException("Data Binding error: Parameter " + paramName
                                     + " was already used with value '" + knownBindings.get(paramName)
@@ -906,6 +955,7 @@ public class AiPromptGenerator {
         LOG.info("Executing proposed action: {}", logMessage);
     }
 
+    @io.qameta.allure.Step("Phase 4: Output Generation (YAML)")
     protected void extractAndWriteYaml(List<Action> successfulPath, String outputPath) {
         try {
             Path path = Paths.get(outputPath);

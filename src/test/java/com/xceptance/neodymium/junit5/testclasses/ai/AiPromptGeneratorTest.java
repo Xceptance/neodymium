@@ -20,7 +20,7 @@ public class AiPromptGeneratorTest
         AiPromptGenerator generator = new AiPromptGenerator();
         
         AssertionFailedError error = Assertions.assertThrows(AssertionFailedError.class, () -> {
-            generator.generate("https://example.com", "intent", "output.yml");
+            generator.generate("https://example.com", "intent", null, "output.yml");
         });
         
         Assertions.assertTrue(error.getMessage().contains("neodymium.ai.generate=true"));
@@ -40,12 +40,12 @@ public class AiPromptGeneratorTest
             class TestableGenerator extends AiPromptGenerator {
 
                 @Override
-                public List<Action> explore(com.xceptance.neodymium.ai.core.LlmClient llmClient, String url, String intent, String outputPath) { return new java.util.ArrayList<>(); }
+                public List<Action> explore(com.xceptance.neodymium.ai.core.LlmClient llmClient, String url, String intent, String sutContext, String outputPath) { return new java.util.ArrayList<>(); }
             }
 
             TestableGenerator generator = new TestableGenerator();
             // Should not throw any assertion
-            generator.generate("https://example.com", "intent", "output.yml");
+            generator.generate("https://example.com", "intent", null, "output.yml");
 
             // Verify Playbook JSON recording was disabled by the generator
             Assertions.assertFalse(Neodymium.aiConfiguration().playbookRecordEnabled());
@@ -83,23 +83,23 @@ public class AiPromptGeneratorTest
                 protected String executeExplorationLlmCall(com.xceptance.neodymium.ai.core.LlmClient llmClient, String prompt) {
                     callCount++;
                     if (callCount == 1) {
-                        return "{\"action\": {\"type\": \"CLICK\", \"target\": \"#btn\", \"description\": \"Click button\"}}";
+                        return "{\"actions\": [{\"type\": \"CLICK\", \"target\": \"#btn\", \"description\": \"Click button\"}]}";
                     } else if (callCount == 2) {
                         // AI reports failure of previous action
-                        return "{\"previousActionSuccess\": false, \"action\": {\"type\": \"NAVIGATE\", \"value\": \"http://example.com\", \"description\": \"try again\"}}";
+                        return "{\"dropLastNActions\": 1, \"actions\": [{\"type\": \"NAVIGATE\", \"value\": \"http://example.com\", \"description\": \"try again\"}]}";
                     } else {
-                        return "{\"previousActionSuccess\": true, \"goalAchieved\": true}";
+                        return "{\"previousActionSuccess\": true, \"overallIntentAchieved\": true}";
                     }
                 }
                 
                 @Override
-                public List<Action> explore(com.xceptance.neodymium.ai.core.LlmClient llmClient, String url, String intent, String outputPath) {
-                    return super.explore(llmClient, url, intent, outputPath);
+                public List<Action> explore(com.xceptance.neodymium.ai.core.LlmClient llmClient, String url, String intent, String sutContext, String outputPath) {
+                    return super.explore(llmClient, url, intent, sutContext, outputPath);
                 }
             }
 
             TestableGenerator generator = new TestableGenerator();
-            List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.TokenStats()), "https://example.com", "intent", "output.yml");
+            List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.TokenStats()), "https://example.com", "intent", null, "output.yml");
 
             // We expect the path to contain ONLY the NAVIGATE action because the CLICK action was marked as failed
             Assertions.assertEquals(1, path.size());
@@ -135,24 +135,24 @@ public class AiPromptGeneratorTest
                 protected String executeExplorationLlmCall(com.xceptance.neodymium.ai.core.LlmClient llmClient, String prompt) {
                     callCount++;
                     if (callCount == 1) {
-                        return "{\"action\": {\"type\": \"ASSERT\", \"target\": \"#email\", \"description\": \"Validate there is an input field for the email address\"}}";
+                        return "{\"actions\": [{\"type\": \"ASSERT\", \"target\": \"#email\", \"description\": \"Validate there is an input field for the email address\"}]}";
                     } else if (callCount == 2) {
-                        return "{\"previousActionSuccess\": true, \"action\": {\"type\": \"TYPE\", \"target\": \"#email\", \"value\": \"John Doe\", \"dataBindings\": {\"firstName\": \"John\", \"lastName\": \"Doe\"}, \"description\": \"Enter '${firstName} ${lastName}' into the user field\"}}";
+                        return "{\"actions\": [{\"type\": \"TYPE\", \"target\": \"#email\", \"value\": \"John Doe\", \"dataBindings\": {\"firstName\": \"John\", \"lastName\": \"Doe\"}, \"description\": \"Enter '${firstName} ${lastName}' into the user field\"}]}";
                     } else if (callCount == 3) {
-                        return "{\"previousActionSuccess\": true, \"action\": {\"type\": \"CLICK\", \"target\": \"#login\", \"description\": \"Click the login button\"}}";
+                        return "{\"actions\": [{\"type\": \"CLICK\", \"target\": \"#login\", \"description\": \"Click the login button\"}]}";
                     } else {
-                        return "{\"previousActionSuccess\": true, \"goalAchieved\": true}";
+                        return "{\"previousActionSuccess\": true, \"overallIntentAchieved\": true}";
                     }
                 }
                 
                 @Override
-                public List<Action> explore(com.xceptance.neodymium.ai.core.LlmClient llmClient, String url, String intent, String outputPath) {
-                    return super.explore(llmClient, url, intent, outputPath);
+                public List<Action> explore(com.xceptance.neodymium.ai.core.LlmClient llmClient, String url, String intent, String sutContext, String outputPath) {
+                    return super.explore(llmClient, url, intent, sutContext, outputPath);
                 }
             }
 
             TestableGenerator generator = new TestableGenerator();
-            List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.TokenStats()), "https://example.com", "intent", "output.yml");
+            List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.TokenStats()), "https://example.com", "intent", null, "output.yml");
 
             Assertions.assertEquals(3, path.size());
             Assertions.assertEquals("ASSERT", path.get(0).getType().name());

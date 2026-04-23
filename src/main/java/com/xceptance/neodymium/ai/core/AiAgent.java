@@ -69,6 +69,8 @@ public class AiAgent {
 
     private AiDiscussionLogger executionLog;
 
+    private String sutContext;
+
     private static final int NO_ACTIONS_MAX_RETRIES = 15;
 
     public AiAgent(final LlmClient llmClient, final PageAnalyzer pageAnalyzer,
@@ -88,6 +90,10 @@ public class AiAgent {
         this.forwardPattern = Pattern.compile(config.agentPatternForward());
         this.refreshPattern = Pattern.compile(config.agentPatternRefresh());
         this.clearCookiesPattern = Pattern.compile(config.agentPatternClearCookies());
+    }
+
+    public void setSutContext(String sutContext) {
+        this.sutContext = sutContext;
     }
 
     /**
@@ -284,12 +290,12 @@ public class AiAgent {
                 if (lastWasNoActions) {
                     LOG.debug("Retry attempt (no actions returned) {}/{} for instruction: {}", noActionsCount,
                             NO_ACTIONS_MAX_RETRIES, instruction);
-                    userPrompt = AiAgentPrompts.buildNoActionsRetryPrompt(instruction, domContext);
+                    userPrompt = AiAgentPrompts.buildNoActionsRetryPrompt(instruction, sutContext, domContext);
                 } else if (lastError != null) {
                     LOG.debug("Retry attempt (error) {}/{} — previous error: {}", errorCount, maxRetries, lastError);
-                    userPrompt = AiAgentPrompts.buildRetryPrompt(instruction, domContext, lastError);
+                    userPrompt = AiAgentPrompts.buildRetryPrompt(instruction, sutContext, domContext, lastError);
                 } else {
-                    userPrompt = AiAgentPrompts.buildUserPrompt(instruction, domContext);
+                    userPrompt = AiAgentPrompts.buildUserPrompt(instruction, sutContext, domContext);
                 }
 
                 // 3. Send to LLM

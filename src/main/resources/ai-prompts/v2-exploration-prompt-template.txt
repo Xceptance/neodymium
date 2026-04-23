@@ -1,0 +1,17 @@
+      ## HIGH-LEVEL INTENT (The overall goal to achieve)
+      {intent}
+{sutContextBlock}
+      ## Previously Active Sub-goal
+      {subgoal}
+{knownBindingsBlock}
+      ## What we've recorded so far (These are the active steps in the script)
+      {history}
+
+      ## Last Action Attempted (For Verification)
+      {previousAction}
+
+      ## Current Page State (DOM)
+      {domContext}
+
+      Carefully review "What we've recorded so far". Analyze the DOM to determine if the "Last Action Attempted" succeeded visually.
+      Determine your `currentSubgoal` (you may continue the previous one or define a new one if it was ACHIEVED).

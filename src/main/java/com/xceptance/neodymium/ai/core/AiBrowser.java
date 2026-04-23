@@ -87,6 +87,10 @@ public class AiBrowser implements AutoCloseable {
         // retrieve all data once, to only have ONE test data attachment
         Neodymium.getDataAndAddToReport();
 
+        if (Neodymium.getData().exists("context")) {
+            agent.setSutContext(resolveTestDataToPrompt(Neodymium.getData().asString("context")));
+        }
+
         Throwable testError = null;
 
         try {
@@ -358,11 +362,20 @@ public class AiBrowser implements AutoCloseable {
             }
         }
 
+        String sutContext = null;
+        try {
+            if (Neodymium.getData() != null && Neodymium.getData().exists("context")) {
+                sutContext = resolveTestDataToPrompt(Neodymium.getData().asString("context"));
+            }
+        } catch (Exception e) {
+            // ignore if no data is available
+        }
+
         // 4. Trigger logic utilizing a generator-mode LLM Client
         // (uses neodymium.ai.generate.temperature, not the agent temperature)
         final LlmClient generatorClient = new LlmClient(config, tokenStats, LlmMode.GENERATOR);
         com.xceptance.neodymium.ai.generator.AiPromptGenerator generator = new com.xceptance.neodymium.ai.generator.AiPromptGenerator();
-        generator.generate(generatorClient, url, intent, outputPath);
+        generator.generate(generatorClient, url, intent, sutContext, outputPath);
     }
 
     /**
