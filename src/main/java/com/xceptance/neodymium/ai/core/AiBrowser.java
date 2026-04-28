@@ -87,6 +87,14 @@ public class AiBrowser implements AutoCloseable {
         // retrieve all data once, to only have ONE test data attachment
         Neodymium.getDataAndAddToReport();
 
+        try {
+            if (!Neodymium.getData().containsKey("random")) {
+                Neodymium.getData().put("random", java.util.UUID.randomUUID().toString().substring(0, 8));
+            }
+        } catch (Exception e) {
+            // safely ignore if data is missing
+        }
+
         if (Neodymium.getData().exists("context")) {
             agent.setSutContext(resolveTestDataToPrompt(Neodymium.getData().asString("context")));
         }
@@ -298,6 +306,16 @@ public class AiBrowser implements AutoCloseable {
      * @param intent The high-level intent or goal for the AI to achieve.
      */
     public void generatePrompt(final String intent) {
+        generatePrompt(intent, null);
+    }
+
+    /**
+     * Executes the generative AI agent to create a natural language playbook.
+     * 
+     * @param intent The high-level intent or goal for the AI to achieve.
+     * @param systemContext System-specific context to guide the AI's behavior.
+     */
+    public void generatePrompt(final String intent, final String systemContext) {
         // 1. Enforce @NeodymiumTestGenerator
         boolean isGenerator = false;
         try {
@@ -362,10 +380,10 @@ public class AiBrowser implements AutoCloseable {
             }
         }
 
-        String sutContext = null;
+        String resolvedSutContext = systemContext;
         try {
-            if (Neodymium.getData() != null && Neodymium.getData().exists("context")) {
-                sutContext = resolveTestDataToPrompt(Neodymium.getData().asString("context"));
+            if (resolvedSutContext == null && Neodymium.getData() != null && Neodymium.getData().exists("context")) {
+                resolvedSutContext = resolveTestDataToPrompt(Neodymium.getData().asString("context"));
             }
         } catch (Exception e) {
             // ignore if no data is available
@@ -375,7 +393,7 @@ public class AiBrowser implements AutoCloseable {
         // (uses neodymium.ai.generate.temperature, not the agent temperature)
         final LlmClient generatorClient = new LlmClient(config, tokenStats, LlmMode.GENERATOR);
         com.xceptance.neodymium.ai.generator.AiPromptGenerator generator = new com.xceptance.neodymium.ai.generator.AiPromptGenerator();
-        generator.generate(generatorClient, url, intent, sutContext, outputPath);
+        generator.generate(generatorClient, url, intent, resolvedSutContext, outputPath);
     }
 
     /**

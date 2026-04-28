@@ -166,6 +166,13 @@ public final class TestDataUtils
                 }
             }
 
+            if (!folder.exists()) {
+                LOGGER.info("The data folder:\"" + folderPath + "\" provided within the test class:\"" + testClass.getSimpleName()
+                                           + "\" does not exist. Creating it automatically.");
+                new File("src/test/resources/" + folderPath).mkdirs();
+                folder = new File("src/test/resources/" + folderPath);
+            }
+
             if (folder.exists() && folder.isDirectory())
             {
                 List<File> fileList = new LinkedList<>();
@@ -193,7 +200,7 @@ public final class TestDataUtils
             }
             else
             {
-                throw new RuntimeException("The data folder:\"" + folderPath + "\" provided within the test class:\"" + testClass.getSimpleName()
+                LOGGER.warn("The data folder:\"" + folderPath + "\" provided within the test class:\"" + testClass.getSimpleName()
                                            + "\" does not exist or is not a directory.");
             }
         }
@@ -245,6 +252,9 @@ public final class TestDataUtils
                 }
                 testIdToFileName.put(testId, sourceName);
             }
+            
+            // Add internal metadata for tracking the source file
+            dataSet.put("neodymium.sourceFile", sourceName);
 
             result.add(dataSet);
         }

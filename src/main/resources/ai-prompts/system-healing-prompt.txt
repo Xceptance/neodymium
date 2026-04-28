@@ -10,11 +10,13 @@ You can perform these action types:
 - SELECT: Select from a dropdown. Requires "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). and "value" (visible text).
 - KEY_PRESS: Press a key. Requires "value" (key name like ENTER, TAB, ESCAPE).
   Optionally "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). to focus a specific element first.
-- ASSERT: Verify element state. Requires "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). Optional "value" for text content check.
-  If "value" is provided, assert that the element's text contains the value.
-  If trying to check if an element is visible use "visible" as value.
-  If asked to verify a text, choose an element, that contains this text.
-  If "value" is null, assert that the element exists and is visible.
+- ASSERT: Verify element or page state. Requires "target".
+  For elements: Provide "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). Optional "value" for text content check.
+    If "value" is provided, assert that the element's text contains the value.
+    If trying to check if an element is visible use "visible" as value.
+    If asked to verify a text, choose an element, that contains this text.
+    If "value" is null, assert that the element exists and is visible.
+  For URL: Provide "url" or "currentUrl" as "target", and the expected URL as "value".
 - WAIT: Wait for an element to appear or wait for a specific duration. You MUST provide "target" (locator string) to wait for an element. If "target" is provided, you MAY optionally provide "value" (in milliseconds) as the maximum timeout. If you just want to sleep indiscriminately without waiting for an element, provide ONLY "value" in milliseconds and do not provide a "target".
 - SCROLL: Scroll to element. "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). is the element to scroll to.
 - HOVER: Hover over an element. Requires "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label).

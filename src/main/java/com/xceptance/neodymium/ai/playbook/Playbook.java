@@ -88,6 +88,11 @@ public class Playbook {
         cursor++;
     }
 
+    public void setCursor(int cursor)
+    {
+        this.cursor = cursor;
+    }
+
     public PlaybookStep getCurrentStep()
     {
         PlaybookStep step;

@@ -256,6 +256,20 @@ public class ActionExecutor {
     private void executeAssert(final Action action) {
         final String expected = action.getValue();
 
+        if ("url".equalsIgnoreCase(action.getTarget()) || "currentUrl".equalsIgnoreCase(action.getTarget()) || "pageUrl".equalsIgnoreCase(action.getTarget())) {
+            if (expected == null) {
+                throw new ActionExecutionException("URL assertion requires a 'value' (the expected URL)");
+            }
+            try {
+                Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected));
+                LOG.debug("✓ URL Assertion passed for: '{}'", expected);
+            } catch (org.openqa.selenium.TimeoutException e) {
+                String actualUrl = com.codeborne.selenide.WebDriverRunner.url();
+                throw new ActionExecutionException(String.format("Assertion failed: Expected URL to contain '%s' but was '%s'", expected, actualUrl), e);
+            }
+            return;
+        }
+
         final SelenideElement element = findElement(action);
 
         if (expected == null) {

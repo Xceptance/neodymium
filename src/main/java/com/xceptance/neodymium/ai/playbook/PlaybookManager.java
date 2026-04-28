@@ -71,8 +71,20 @@ public class PlaybookManager {
         int underscoreIndex = playbookId.indexOf('_', lastDotIndex);
 
         // Split into path part and filename part
-        String pathPart = playbookId.substring(0, underscoreIndex);
-        String filePart = playbookId.substring(underscoreIndex + 1);
+        String pathPart;
+        String filePart;
+        if (underscoreIndex == -1) {
+            if (lastDotIndex != -1) {
+                pathPart = playbookId.substring(0, lastDotIndex);
+                filePart = playbookId.substring(lastDotIndex + 1);
+            } else {
+                pathPart = "";
+                filePart = playbookId;
+            }
+        } else {
+            pathPart = playbookId.substring(0, underscoreIndex);
+            filePart = playbookId.substring(underscoreIndex + 1);
+        }
 
         // Convert path: replace dots with slashes
         String path = pathPart.replace('.', '/');

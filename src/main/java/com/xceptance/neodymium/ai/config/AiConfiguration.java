@@ -115,4 +115,8 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.generate.v2.diagnosticLogs")
     @DefaultValue("false")
     public boolean aiGenerateV2DiagnosticLogs();
+
+    @Key("neodymium.ai.interactive")
+    @DefaultValue("false")
+    public boolean aiInteractive();
 }

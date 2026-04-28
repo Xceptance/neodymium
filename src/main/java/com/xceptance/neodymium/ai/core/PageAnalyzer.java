@@ -138,7 +138,8 @@ public class PageAnalyzer
                             multiple: el.hasAttribute('multiple') ? 'true' : null,
                             value: label !== 'input' ? truncate(el.getAttribute('value'), MAX_VALUE) : null,
                             selector: generateSelector(el),
-                            automationId: autoId
+                            automationId: autoId,
+                            domElement: el
                         });
                     }
                 } catch(e) { /* skip selector errors */ }
@@ -185,7 +186,8 @@ public class PageAnalyzer
                             multiple: el.hasAttribute('multiple') ? 'true' : null,
                             value: label !== 'input' ? truncate(el.getAttribute('value'), MAX_VALUE) : null,
                             selector: generateSelector(el),
-                            automationId: autoId
+                            automationId: autoId,
+                            domElement: el
                         });
                     }
                 } catch(e) { /* skip selector errors */ }
@@ -229,15 +231,50 @@ public class PageAnalyzer
             var sections = [];
 
             // Interactive elements
-            sections.push({heading: '=== Interactive Elements ===', elements:
-                captureElements('a', 'link')
+            var interactiveElements = captureElements('a', 'link')
                 .concat(captureElements('button', 'button'))
                 .concat(captureElements('input', 'input'))
                 .concat(captureElements('select', 'select'))
                 .concat(captureElements('option', 'option'))
                 .concat(captureElements('textarea', 'textarea'))
-                .concat(captureClickableElements('div, span, tr, td, th', 'clickable'))
-            });
+                .concat(captureClickableElements('div, span, tr, td, th', 'clickable'));
+
+            var getDisplayLabel = function(elObj) {
+                return elObj.text || elObj.placeholder || elObj.value || elObj.ariaLabel || elObj.title || elObj.name || '';
+            };
+
+            var textCounts = {};
+            for (var i = 0; i < interactiveElements.length; i++) {
+                var lbl = getDisplayLabel(interactiveElements[i]);
+                if (lbl) {
+                    textCounts[lbl] = (textCounts[lbl] || 0) + 1;
+                }
+            }
+
+            for (var i = 0; i < interactiveElements.length; i++) {
+                var elObj = interactiveElements[i];
+                var lbl = getDisplayLabel(elObj);
+                if (lbl && textCounts[lbl] > 1 && elObj.domElement) {
+                    var parentText = '';
+                    var p = elObj.domElement.parentElement;
+                    while (p && p !== document.body) {
+                        var pText = (p.innerText || '').trim();
+                        if (pText.length > lbl.length && pText.length < 300) {
+                            parentText = pText;
+                        }
+                        if (pText.length >= 300) {
+                            break;
+                        }
+                        p = p.parentElement;
+                    }
+                    if (parentText) {
+                        elObj.parentText = truncate(parentText.replace(/\\s*\\n\\s*/g, ' | '), MAX_TEXT);
+                    }
+                }
+                delete elObj.domElement;
+            }
+
+            sections.push({heading: '=== Interactive Elements ===', elements: interactiveElements});
 
             // Page structure
             sections.push({heading: '\\n=== Page Structure ===', elements:
@@ -403,6 +440,7 @@ public class PageAnalyzer
             dom.append(String.format("text='%s' ", text));
         }
 
+        appendIfPresent(dom, "parentText", el.get("parentText"));
         appendIfPresent(dom, "href", el.get("href"));
         appendIfPresent(dom, "placeholder", el.get("placeholder"));
         appendIfPresent(dom, "aria-label", el.get("ariaLabel"));

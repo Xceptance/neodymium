@@ -112,6 +112,7 @@ public class AiPromptGenerator {
         String fileName = Paths.get(outputPath).getFileName().toString();
         String testId = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
         knownBindings.put("testId", testId);
+        knownBindings.put("random", java.util.UUID.randomUUID().toString().substring(0, 8));
 
         List<String> iterationLogs = new ArrayList<>();
 
@@ -142,7 +143,8 @@ public class AiPromptGenerator {
             }
 
             String dom = captureDom(pageAnalyzer);
-            String prompt = AiAgentPrompts.buildExplorationPrompt(intent, sutContext, currentSubgoal, historyBuilder.toString(),
+            String prompt = AiAgentPrompts.buildExplorationPrompt(intent, sutContext, currentSubgoal,
+                    historyBuilder.toString(),
                     dom,
                     statusMessage, knownBindings);
             executionLog.logPrompt(prompt);
@@ -307,6 +309,7 @@ public class AiPromptGenerator {
                                 LOG.info("Skipping duplicate ASSERT action: {}", nextAction.getDescription());
                                 statusMessage = "Skipped duplicate validation: " + nextAction.getDescription()
                                         + ". Please perform a different action.";
+                                failedAttempts++;
                                 continue;
                             }
                         }
@@ -395,7 +398,7 @@ public class AiPromptGenerator {
 
             } catch (Exception e) {
                 LOG.warn("Failed to parse exploration response or execute action: {}. AI will evaluate next turn.",
-                        e.getMessage());
+                        e.getMessage(), e);
                 statusMessage = "Processing your previous response failed with error: " + e.getMessage()
                         + ". Please fix your JSON structure or action.";
                 failedAttempts++;
@@ -437,6 +440,22 @@ public class AiPromptGenerator {
 
     @io.qameta.allure.Step("AI Prompt Generation")
     protected void generateV2(LlmClient llmClient, String url, String intent, String sutContext, String outputPath) {
+        // Force fresh generation: ignore and delete previous attempts
+        try {
+            Files.deleteIfExists(Paths.get(outputPath));
+        } catch (IOException e) {
+            LOG.warn("Failed to delete existing YAML file at {}: {}", outputPath, e.getMessage());
+        }
+
+        // Prevent Neodymium from loading outdated playbook JSONs from disk during
+        // generation
+        String testId = com.xceptance.neodymium.util.Neodymium.getTestName();
+        if (testId == null || testId.isEmpty()) {
+            String fileName = Paths.get(outputPath).getFileName().toString();
+            testId = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
+        }
+        com.xceptance.neodymium.util.Neodymium.setAiPlaybook(new com.xceptance.neodymium.ai.playbook.Playbook(testId));
+
         com.xceptance.neodymium.ai.core.AiDiscussionLogger executionLog = new com.xceptance.neodymium.ai.core.AiDiscussionLogger(
                 intent);
         LOG.warn("************************************************************************");
@@ -449,7 +468,8 @@ public class AiPromptGenerator {
         LOG.warn("************************************************************************");
 
         // 1. Explore step-by-step
-        com.xceptance.neodymium.ai.playbook.Playbook playbook = exploreV2(llmClient, url, intent, sutContext, outputPath,
+        com.xceptance.neodymium.ai.playbook.Playbook playbook = exploreV2(llmClient, url, intent, sutContext,
+                outputPath,
                 executionLog);
 
         // 2. Extract
@@ -484,10 +504,12 @@ public class AiPromptGenerator {
         String fileName = Paths.get(outputPath).getFileName().toString();
         String testId = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
         knownBindings.put("testId", testId);
+        knownBindings.put("random", java.util.UUID.randomUUID().toString().substring(0, 8));
 
         int maxSteps = Neodymium.aiConfiguration().aiGenerateMaxSteps();
         int maxFailures = Neodymium.aiConfiguration().aiGenerateMaxFailures();
         boolean entireGoalAchieved = false;
+        boolean infiniteLoopDetected = false;
         String currentSubgoal = null;
         String statusMessage = null;
         int failedAttempts = 0;
@@ -496,7 +518,19 @@ public class AiPromptGenerator {
         List<String> iterationLogs = new ArrayList<>();
 
         Playbook playbook = Neodymium.getAiPlaybook();
+        boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
+        boolean autoSkip = false;
         for (int i = 0; i < maxSteps && !entireGoalAchieved; i++) {
+            if (isInteractive) {
+                Boolean currentAutoSkipStatus = PromptGenerationHudHelper.checkAutoSkipStatus();
+                if (currentAutoSkipStatus != null) {
+                    autoSkip = currentAutoSkipStatus;
+                }
+                List<String> performedStrs = new java.util.ArrayList<>();
+                for (Action a : actionsForLogging)
+                    performedStrs.add(a.getDescription());
+                PromptGenerationHudHelper.injectOrUpdateHud(null, performedStrs, autoSkip, false, false);
+            }
             executionLog.startStep(i + 1, maxSteps, "Exploration Step");
             executionLog.startAttempt("Exploration Attempt");
             LOG.info("\n\uD83D\uDC63 --- EXPLORATION STEP {} \u2192 Analyzing DOM and asking AI... ---", i + 1);
@@ -511,7 +545,8 @@ public class AiPromptGenerator {
             }
 
             String dom = captureDom(pageAnalyzer);
-            String prompt = AiAgentPrompts.buildExplorationPrompt(intent, sutContext, currentSubgoal, historyBuilder.toString(),
+            String prompt = AiAgentPrompts.buildExplorationPrompt(intent, sutContext, currentSubgoal,
+                    historyBuilder.toString(),
                     dom, statusMessage, knownBindings);
             executionLog.logPrompt(prompt);
             String responseStr = executeV2ExplorationLlmCall(llmClient, prompt);
@@ -570,31 +605,200 @@ public class AiPromptGenerator {
             }
 
             if (actionsArray != null && actionsArray.size() > 0) {
+                List<Action> proposedActions = new ArrayList<>();
+                java.util.Map<String, String> tempBindings = new java.util.HashMap<>(knownBindings);
                 for (com.google.gson.JsonElement actionElement : actionsArray) {
-                    Action nextAction = null;
                     try {
-                        nextAction = parseAndValidateAction(actionElement.getAsJsonObject(), knownBindings);
-                        logProposedAction(nextAction, knownBindings);
-                        executeAction(actionExecutor, nextAction);
-
-                        com.xceptance.neodymium.ai.playbook.PlaybookStep pbStep = new com.xceptance.neodymium.ai.playbook.PlaybookStep();
-                        pbStep.setPromptLine(nextAction.getDescription());
-                        pbStep.setReasoning(reasoning);
-                        pbStep.setActions(java.util.Collections.singletonList(nextAction));
-                        playbook.addStep(pbStep);
-                        actionsForLogging.add(nextAction);
-                        executionLog.logActions(java.util.Collections.singletonList(nextAction));
-
-                        if (nextAction.getDataBindings() != null)
-                            knownBindings.putAll(nextAction.getDataBindings());
-                        statusMessage = nextAction.getDescription() + " (Target: " + nextAction.getTarget() + ")";
-                        failedAttempts = 0;
-                    } catch (Exception e) {
-                        LOG.warn("Action failed: {}", e.getMessage());
-                        statusMessage = (nextAction != null ? nextAction.getDescription() : "Action") + " -> FAILED: "
-                                + e.getMessage();
+                        Action act = parseAndValidateAction(actionElement.getAsJsonObject(), tempBindings);
+                        if (act.getType() == ActionType.ASSERT) {
+                            boolean isDuplicate = false;
+                            for (int aIdx = actionsForLogging.size() - 1; aIdx >= 0; aIdx--) {
+                                Action recent = actionsForLogging.get(aIdx);
+                                if (recent.getType() != ActionType.ASSERT)
+                                    break;
+                                if (java.util.Objects.equals(recent.getDescription(), act.getDescription()) &&
+                                        java.util.Objects.equals(recent.getTarget(), act.getTarget())) {
+                                    isDuplicate = true;
+                                    break;
+                                }
+                            }
+                            if (isDuplicate) {
+                                LOG.info("Skipping duplicate ASSERT action: {}", act.getDescription());
+                                statusMessage = "Skipped duplicate validation: " + act.getDescription()
+                                        + ". Please perform a different action.";
+                                failedAttempts++;
+                                continue;
+                            }
+                        }
+                        proposedActions.add(act);
+                        if (act.getDataBindings() != null)
+                            tempBindings.putAll(act.getDataBindings());
+                    } catch (Throwable e) {
+                        LOG.warn("Parsing proposed action failed: {}", e.getMessage(), e);
+                        statusMessage = "Action -> FAILED: " + e.getMessage();
                         failedAttempts++;
                         break;
+                    }
+                }
+
+                if (!proposedActions.isEmpty()) {
+                    for (int pIdx = 0; pIdx < proposedActions.size(); pIdx++) {
+                        Action nextAction = proposedActions.get(pIdx);
+
+                        boolean shouldExecute = true;
+                        boolean hudRewind = false;
+                        String hudAddInstruction = null;
+                        String hudEditInstruction = null;
+                        boolean hudSaveExit = false;
+
+                        if (isInteractive) {
+                            java.util.Map<String, String> hudBindings = new java.util.HashMap<>(knownBindings);
+                            List<String> plannedStrs = new ArrayList<>();
+                            for (int aIdx = pIdx; aIdx < proposedActions.size(); aIdx++) {
+                                Action act = proposedActions.get(aIdx);
+                                if (act.getDataBindings() != null)
+                                    hudBindings.putAll(act.getDataBindings());
+                                String resolvedStr = interpolateBindings(act.getDescription(), act.getDataBindings(),
+                                        hudBindings);
+                                plannedStrs.add(resolvedStr != null ? resolvedStr : act.getDescription());
+                            }
+                            List<String> performedStrs = new ArrayList<>();
+                            for (Action a : actionsForLogging) {
+                                String resolvedStr = interpolateBindings(a.getDescription(), a.getDataBindings(),
+                                        knownBindings);
+                                performedStrs.add(resolvedStr != null ? resolvedStr : a.getDescription());
+                            }
+                            PromptGenerationHudHelper.injectOrUpdateHud(plannedStrs, performedStrs, autoSkip, false, false);
+
+                            if (!autoSkip) {
+                                LOG.info("Waiting for user action in HUD...");
+                                boolean handled = false;
+                                for (int wait = 0; wait < 3600; wait++) {
+                                    String hudActionStr = PromptGenerationHudHelper.checkHudAction();
+                                    if (hudActionStr != null) {
+                                        Boolean s = PromptGenerationHudHelper.checkAutoSkipStatus();
+                                        if (s != null) {
+                                            autoSkip = s;
+                                        }
+                                        com.google.gson.JsonObject actionObj = com.google.gson.JsonParser.parseString(hudActionStr).getAsJsonObject();
+                                        String actionType = actionObj.has("action") ? actionObj.get("action").getAsString() : "";
+
+                                        if ("APPROVE".equals(actionType)) {
+                                            handled = true;
+                                            break;
+                                        } else if ("SKIP".equals(actionType)) {
+                                            shouldExecute = false;
+                                            handled = true;
+                                            break;
+                                        } else if ("REWIND".equals(actionType)) {
+                                            int rIdx = actionObj.get("index").getAsInt();
+                                            playbook.getSteps().subList(rIdx, playbook.getSteps().size()).clear();
+                                            playbook.setCursor(rIdx);
+                                            actionsForLogging.subList(rIdx, actionsForLogging.size()).clear();
+                                            PromptGenerationHudHelper.resetHudAction();
+                                            hudRewind = true;
+                                            handled = true;
+                                            break;
+                                        } else if ("ADD".equals(actionType)) {
+                                            hudAddInstruction = actionObj.get("instruction").getAsString();
+                                            PromptGenerationHudHelper.resetHudAction();
+                                            handled = true;
+                                            break;
+                                        } else if ("EDIT".equals(actionType)) {
+                                            hudEditInstruction = actionObj.get("instruction").getAsString();
+                                            PromptGenerationHudHelper.resetHudAction();
+                                            shouldExecute = false; // Don't execute the old action
+                                            handled = true;
+                                            break;
+                                        } else if ("SAVE_EXIT".equals(actionType)) {
+                                            PromptGenerationHudHelper.resetHudAction();
+                                            hudSaveExit = true;
+                                            handled = true;
+                                            break;
+                                        }
+                                    }
+                                    try {
+                                        Thread.sleep(1000);
+                                    } catch (InterruptedException ignored) {
+                                    }
+                                }
+                                if (!handled)
+                                    throw new RuntimeException(
+                                            "User did not approve the actions within 1 hour. Halting exploration.");
+                            }
+                            PromptGenerationHudHelper.resetHudAction();
+                        }
+
+                        if (hudRewind) {
+                            statusMessage = "Rewound execution to a previous step.";
+                            failedAttempts = 0;
+                            break;
+                        }
+                        if (hudSaveExit) {
+                            entireGoalAchieved = true;
+                            break;
+                        }
+                        if (hudAddInstruction != null || hudEditInstruction != null) {
+                            String manualInstr = hudAddInstruction != null ? hudAddInstruction : hudEditInstruction;
+                            LOG.info("User requested manual instruction: {}", manualInstr);
+                            String fallbackPrompt = "The user manually requested this action: '" + manualInstr + "'. " +
+                                "Return exactly ONE action JSON object matching this instruction, adhering to your system ActionType rules. " +
+                                "No markdown, just raw JSON.";
+                            
+                            try {
+                                String fallbackResponse = llmClient.chat(AiAgentPrompts.SYSTEM_PROMPT, fallbackPrompt);
+                                String cleanJson = fallbackResponse.trim();
+                                if (cleanJson.startsWith("```json")) cleanJson = cleanJson.substring(7);
+                                else if (cleanJson.startsWith("```")) cleanJson = cleanJson.substring(3);
+                                if (cleanJson.endsWith("```")) cleanJson = cleanJson.substring(0, cleanJson.length() - 3);
+                                com.google.gson.JsonObject fallbackObj = com.google.gson.JsonParser.parseString(cleanJson).getAsJsonObject();
+                                Action fallbackAction = parseAndValidateAction(fallbackObj, knownBindings);
+                                
+                                executeAction(actionExecutor, fallbackAction);
+                                com.xceptance.neodymium.ai.playbook.PlaybookStep pbStep = new com.xceptance.neodymium.ai.playbook.PlaybookStep();
+                                pbStep.setPromptLine(fallbackAction.getDescription());
+                                pbStep.setReasoning(hudAddInstruction != null ? "Manually added by user: " + manualInstr : "Manually edited by user: " + manualInstr);
+                                pbStep.setActions(java.util.Collections.singletonList(fallbackAction));
+                                playbook.addStep(pbStep);
+                                actionsForLogging.add(fallbackAction);
+                                executionLog.logActions(java.util.Collections.singletonList(fallbackAction));
+                                statusMessage = "Manually executed: " + fallbackAction.getDescription();
+                                failedAttempts = 0;
+                            } catch (Throwable t) {
+                                LOG.warn("Failed to add/edit manual action", t);
+                                statusMessage = "Failed to add/edit manual action: " + t.getMessage();
+                                failedAttempts++;
+                            }
+                            break;
+                        }
+
+                        logProposedAction(nextAction, knownBindings);
+                        if (shouldExecute && nextAction.getDataBindings() != null)
+                            knownBindings.putAll(nextAction.getDataBindings());
+
+                        try {
+                            if (shouldExecute) {
+                                executeAction(actionExecutor, nextAction);
+                                com.xceptance.neodymium.ai.playbook.PlaybookStep pbStep = new com.xceptance.neodymium.ai.playbook.PlaybookStep();
+                                pbStep.setPromptLine(nextAction.getDescription());
+                                pbStep.setReasoning(reasoning);
+                                pbStep.setActions(java.util.Collections.singletonList(nextAction));
+                                playbook.addStep(pbStep);
+                                actionsForLogging.add(nextAction);
+                                executionLog.logActions(java.util.Collections.singletonList(nextAction));
+
+                                statusMessage = nextAction.getDescription() + " (Target: " + nextAction.getTarget() + ")";
+                                failedAttempts = 0;
+                            } else {
+                                statusMessage = "Skipped by user: " + nextAction.getDescription();
+                                failedAttempts = 0;
+                            }
+                        } catch (Throwable e) {
+                            LOG.warn("Action failed: {}", e.getMessage(), e);
+                            statusMessage = nextAction.getDescription() + " -> FAILED: " + e.getMessage();
+                            failedAttempts++;
+                            break;
+                        }
                     }
                 }
             } else {
@@ -610,11 +814,50 @@ public class AiPromptGenerator {
                 LOG.warn("Exceeded max failures.");
                 break;
             }
+
+            int numActions = actionsForLogging.size();
+            // Check for sequences of ANY length (l) that repeat multiple times in a row at
+            // the end of the playbook.
+            // For example, if l=3, it checks if the last 9 actions are A,B,C, A,B,C, A,B,C
+            // (3 repetitions).
+            // If l=1, we require 5 repetitions (A, A, A, A, A) to avoid false positives on
+            // valid sequences like pagination.
+            for (int l = 1; l <= numActions / 4; l++) {
+                int requiredRepetitions = (l == 1) ? 6 : 4;
+                if (numActions < requiredRepetitions * l)
+                    continue;
+
+                boolean match = true;
+                for (int rep = 1; rep < requiredRepetitions; rep++) {
+                    for (int offset = 0; offset < l; offset++) {
+                        String a1 = actionsForLogging.get(numActions - requiredRepetitions * l + offset)
+                                .getDescription();
+                        String aNext = actionsForLogging.get(numActions - (requiredRepetitions - rep) * l + offset)
+                                .getDescription();
+                        if (!a1.equals(aNext)) {
+                            match = false;
+                            break;
+                        }
+                    }
+                    if (!match)
+                        break;
+                }
+                if (match) {
+                    LOG.error("Infinite loop detected! The AI repeated a sequence of length {} {} times in a row.", l,
+                            requiredRepetitions);
+                    infiniteLoopDetected = true;
+                    break;
+                }
+            }
+            if (infiniteLoopDetected) {
+                break;
+            }
         }
 
-        if (!entireGoalAchieved || playbook.getSteps().isEmpty()) {
-            String reason = !entireGoalAchieved ? "Goal was not achieved after " + iterationLogs.size() + " iterations."
-                    : "Playbook successfully generated but produced an empty list of steps.";
+        if (!entireGoalAchieved || playbook.getSteps().isEmpty() || infiniteLoopDetected) {
+            String reason = infiniteLoopDetected ? "Infinite loop detected (AI repeated a sequence multiple times)."
+                    : (!entireGoalAchieved ? "Goal was not achieved after " + iterationLogs.size() + " iterations."
+                            : "Playbook successfully generated but produced an empty list of steps.");
             Path logPath = dumpDiagnosticLog(actionsForLogging, iterationLogs, outputPath, "V2 Failed: " + reason);
             String location = logPath != null ? logPath.toAbsolutePath().toString() : "failed to save";
             Assertions.fail("Exploration V2 failed. Reason: " + reason + " Diagnostic log: " + location);
@@ -711,9 +954,9 @@ public class AiPromptGenerator {
                 executionLog.endAttempt();
                 executionLog.endStep();
                 return cleanActions;
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 errorMessage = e.getMessage();
-                LOG.warn("Extraction failed validation: {}. Retrying...", errorMessage);
+                LOG.warn("Extraction failed validation: {}. Retrying...", errorMessage, e);
                 executionLog.logError(errorMessage);
             }
             executionLog.endAttempt();
@@ -731,8 +974,8 @@ public class AiPromptGenerator {
         LOG.info("\uD83D\uDD04 Restarting browser natively and verifying extracted path...");
         LOG.info("========================================================================");
 
-        com.xceptance.neodymium.util.WebDriverUtils.preventReuseAndTearDown();
         String currentProfile = Neodymium.getBrowserProfileName();
+        com.xceptance.neodymium.util.WebDriverUtils.preventReuseAndTearDown();
         if (currentProfile != null) {
             com.xceptance.neodymium.common.browser.BrowserMethodData browserData = new com.xceptance.neodymium.common.browser.BrowserMethodData(
                     currentProfile, false, false, false, false, new ArrayList<>());
@@ -755,8 +998,14 @@ public class AiPromptGenerator {
             try {
                 actionExecutor.preCheckAction(nextAction);
                 executeAction(actionExecutor, nextAction);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 LOG.error("Verification failed at step {}: {}", i, nextAction.getDescription(), e);
+                if (Neodymium.aiConfiguration().aiGenerateV2DiagnosticLogs()) {
+                    dumpDiagnosticLog(cleanPath.subList(0, i + 1), new ArrayList<>(), outputPath,
+                            "V2 Verification Failed at step " + (i + 1) + " -> " + nextAction.getDescription()
+                                    + ". Error: " + e.getMessage(),
+                            "_phase3_diagnostic");
+                }
                 Assertions.fail("Verification of extracted path failed at step " + i + " -> "
                         + nextAction.getDescription() + ". Error: " + e.getMessage());
             }
@@ -841,17 +1090,27 @@ public class AiPromptGenerator {
             com.google.gson.JsonObject bindingsObj = actionJson.getAsJsonObject("dataBindings");
             for (java.util.Map.Entry<String, com.google.gson.JsonElement> entry : bindingsObj.entrySet()) {
                 if (!entry.getValue().isJsonNull()) {
-                    dataBindings.put(entry.getKey(), entry.getValue().getAsString());
+                    String val = entry.getValue().getAsString();
+                    if (val != null && val.contains("${random(")) {
+                        val = resolveDynamicRandoms(val);
+                    }
+                    dataBindings.put(entry.getKey(), val);
                 }
             }
         }
         String description = actionJson.has("description") && !actionJson.get("description").isJsonNull()
                 ? actionJson.get("description").getAsString()
                 : "Generated action";
+        if (description != null && description.contains("${random(")) {
+            description = resolveDynamicRandoms(description);
+        }
         String elementDetails = actionJson.has("elementDetails")
                 && !actionJson.get("elementDetails").isJsonNull()
                         ? actionJson.get("elementDetails").getAsString()
                         : "";
+
+        if (target != null && target.contains("${random(")) target = resolveDynamicRandoms(target);
+        if (value != null && value.contains("${random(")) value = resolveDynamicRandoms(value);
 
         if (!dataBindings.isEmpty()) {
             for (java.util.Map.Entry<String, String> entry : dataBindings.entrySet()) {
@@ -1036,5 +1295,34 @@ public class AiPromptGenerator {
             current = sb.toString();
         }
         return current;
+    }
+
+    private String resolveDynamicRandoms(String text) {
+        if (text == null || !text.contains("${random(")) return text;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\$\\{random\\(([^)]+)\\)\\}").matcher(text);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            String[] parts = m.group(1).split(",");
+            String type = parts[0].trim().toLowerCase();
+            int length = 8;
+            if (parts.length > 1) {
+                try { length = Integer.parseInt(parts[1].trim()); } catch (Exception e) {}
+            }
+            String generated = "";
+            java.util.Random rnd = new java.util.Random();
+            if (type.equals("alpha")) {
+                generated = rnd.ints(97, 123).limit(length).collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString();
+            } else if (type.equals("numeric")) {
+                generated = rnd.ints(48, 58).limit(length).collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString();
+            } else {
+                String chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                StringBuilder tmp = new StringBuilder(length);
+                for (int i=0; i<length; i++) tmp.append(chars.charAt(rnd.nextInt(chars.length())));
+                generated = tmp.toString();
+            }
+            m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(generated));
+        }
+        m.appendTail(sb);
+        return sb.toString();
     }
 }

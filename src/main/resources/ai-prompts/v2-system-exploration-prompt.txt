@@ -10,7 +10,8 @@
       CRITICAL BROWSER STATE WARNING:
       - You must constantly move forward. If you make a mistake (e.g., clicking the wrong link), YOUR NEXT ACTIONS MUST RECOVER from that mistake (e.g., navigate back, try another link).
       - Do NOT attempt to conceptually 'undo' past actions in your response. Just provide the recovery actions.
-      - FORM RECOVERY RULE: If you submit a multi-field form and encounter a validation error (e.g., 'Email already used'), DO NOT just fix the single broken field. You MUST re-fill the entire form from scratch with corrected data to maintain a clean chronological test script flow!
+      - ANTI-LOOPING RULE: If your last action resulted in an error message or failed to change the DOM state, NEVER repeat the exact same sequence of actions. You MUST change your approach, click a different element, or invent entirely new data. Repeating the same failed action is strictly forbidden.
+      - FORM RECOVERY RULE: If you submit a multi-field form and encounter a validation error (e.g., 'Email already used'), DO NOT just fix the single broken field. You MUST re-fill the entire form from scratch with corrected data to maintain a clean chronological test script flow! If a login or form submission fails, do not just re-submit the same credentials. The system will reject it again. IMPORTANT: The 'TYPE' action automatically clears the field before typing. NEVER emit an explicit 'CLEAR' action immediately before a 'TYPE' action.
       - To avoid repeating mistakes, review your "Playbook History" to see what values failed before, and invent completely fresh data!
 
       CRITICAL INSTRUCTION FOR DESCRIPTIONS AND VALUES:
@@ -32,7 +33,9 @@
       2. If introducing NEW data, define semantic camelCase variable names and values natively in "dataBindings" JSON object.
       3. Use the formatting `${variable}` inside your "description", AND wrap it in single quotes (e.g., "Type '${email}' into the field").
       4. IF you want to re-use data you already entered previously, look at the "Known Data Bindings" in your prompt context. Use the exact same `'${variable}'` format in your description.
-      5. VERBOSE DATA RECOVERY OVERRIDE: If you are recovering from a failed form submission and need to invent NEW data, you ARE encouraged to OVERWRITE the existing data binding keys! Supply the previously used key (e.g., "email") in your "dataBindings" object with the fresh validation-passing value. Do NOT invent 'email2' or 'email3'. Keep the variable names pristine!
+      5. UNIQUE DATA GENERATION: To guarantee unique constraints, you can use the dynamic placeholder `${random(type, length)}`. Supported types: 'alpha' (letters only), 'numeric' (numbers only), 'alphanumeric' (both). Example: `"email": "john.doe.${random(alphanumeric, 6)}@example.com"`.
+      6. VERBOSE DATA RECOVERY OVERRIDE: If you encounter an 'Email already used' or 'Account already exists' error despite using `${random}`, it means a previous step partially succeeded! You MUST invent NEW data by appending a suffix. Supply the previously used key (e.g., "email") in your "dataBindings" object with the fresh validation-passing value (e.g., `"email": "john.doe.${random(alphanumeric, 6)}_retry1@example.com"`). Do NOT invent 'email2' or 'email3'. Keep the variable names pristine!
+      7. PATTERN & HTML5 CONSTRAINTS: If the target element specifies a 'pattern', 'minlength', 'maxlength', 'min', or 'max' attribute in the simplified DOM, your generated data MUST strictly conform to those constraints! For example, if a name field has pattern="[A-Za-z ]+" and maxlength="10", you MUST use `${random(alpha, 8)}` to ensure you don't violate the constraint by inserting numbers or exceeding the length limit.
 
 {assertionsInstruction}
       CRITICAL INSTRUCTION FOR LOCATORS & RETRIES:
