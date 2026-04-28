@@ -19,6 +19,7 @@ package org.openqa.selenium.remote.http.jdk;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.net.Authenticator;
 import java.net.PasswordAuthentication;
@@ -421,6 +422,19 @@ public class JdkHttpClient implements HttpClient
         return handler.execute(req);
     }
 
+    @Override
+    public <T> java.net.http.HttpResponse<T> sendNative(
+            java.net.http.HttpRequest request, java.net.http.HttpResponse.BodyHandler<T> responseHandler)
+            throws IOException, InterruptedException {
+        return client.send(request, responseHandler);
+    }
+
+    @Override
+    public <T> CompletableFuture<java.net.http.HttpResponse<T>> sendAsyncNative(
+            java.net.http.HttpRequest request, java.net.http.HttpResponse.BodyHandler<T> responseHandler) {
+        return client.sendAsync(request, responseHandler);
+    }
+
     private HttpResponse execute0(HttpRequest req) throws UncheckedIOException
     {
         Objects.requireNonNull(req, "Request");
@@ -428,7 +442,7 @@ public class JdkHttpClient implements HttpClient
         LOG.fine("Executing request: " + req);
         long start = System.currentTimeMillis();
 
-        BodyHandler<byte[]> byteHandler = BodyHandlers.ofByteArray();
+        BodyHandler<InputStream> streamHandler = BodyHandlers.ofInputStream();
         try
         {
             HttpMethod method = req.getMethod();
@@ -441,10 +455,10 @@ public class JdkHttpClient implements HttpClient
             for (int i = 0; i < 100; i++)
             {
                 java.net.http.HttpRequest request = messages.createRequest(req, method, rawUri);
-                java.net.http.HttpResponse<byte[]> response;
+                java.net.http.HttpResponse<InputStream> response;
 
                 // use sendAsync to not run into https://bugs.openjdk.org/browse/JDK-8258397
-                CompletableFuture<java.net.http.HttpResponse<byte[]>> future = client.sendAsync(request, byteHandler);
+                CompletableFuture<java.net.http.HttpResponse<InputStream>> future = client.sendAsync(request, streamHandler);
 
                 try
                 {
