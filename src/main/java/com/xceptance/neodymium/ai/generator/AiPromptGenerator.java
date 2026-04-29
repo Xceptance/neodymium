@@ -681,16 +681,22 @@ public class AiPromptGenerator {
                                             autoSkip = s;
                                         }
                                         com.google.gson.JsonObject actionObj = com.google.gson.JsonParser.parseString(hudActionStr).getAsJsonObject();
-                                        String actionType = actionObj.has("action") ? actionObj.get("action").getAsString() : "";
+                                        String actionTypeStr = actionObj.has("action") ? actionObj.get("action").getAsString() : "";
+                                        com.xceptance.neodymium.ai.core.HudActionType actionType = null;
+                                        try {
+                                            actionType = com.xceptance.neodymium.ai.core.HudActionType.valueOf(actionTypeStr);
+                                        } catch (IllegalArgumentException e) {
+                                            // Ignore unknown actions
+                                        }
 
-                                        if ("APPROVE".equals(actionType)) {
+                                        if (com.xceptance.neodymium.ai.core.HudActionType.APPROVE == actionType) {
                                             handled = true;
                                             break;
-                                        } else if ("SKIP".equals(actionType)) {
+                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.SKIP == actionType) {
                                             shouldExecute = false;
                                             handled = true;
                                             break;
-                                        } else if ("REWIND".equals(actionType)) {
+                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.REWIND == actionType) {
                                             int rIdx = actionObj.get("index").getAsInt();
                                             playbook.getSteps().subList(rIdx, playbook.getSteps().size()).clear();
                                             playbook.setCursor(rIdx);
@@ -699,18 +705,18 @@ public class AiPromptGenerator {
                                             hudRewind = true;
                                             handled = true;
                                             break;
-                                        } else if ("ADD".equals(actionType)) {
+                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.ADD == actionType) {
                                             hudAddInstruction = actionObj.get("instruction").getAsString();
                                             PromptGenerationHudHelper.resetHudAction();
                                             handled = true;
                                             break;
-                                        } else if ("EDIT".equals(actionType)) {
+                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.EDIT == actionType) {
                                             hudEditInstruction = actionObj.get("instruction").getAsString();
                                             PromptGenerationHudHelper.resetHudAction();
                                             shouldExecute = false; // Don't execute the old action
                                             handled = true;
                                             break;
-                                        } else if ("SAVE_EXIT".equals(actionType)) {
+                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.SAVE_EXIT == actionType) {
                                             PromptGenerationHudHelper.resetHudAction();
                                             hudSaveExit = true;
                                             handled = true;

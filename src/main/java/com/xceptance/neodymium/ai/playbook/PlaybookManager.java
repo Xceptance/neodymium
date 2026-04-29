@@ -27,6 +27,7 @@ public class PlaybookManager {
                 Playbook playbook = GSON.fromJson(reader, Playbook.class);
                 playbook.markActionsReplay();
                 playbook.setId(id);
+                LOG.info("======== 📖 Playbook Loaded: {} ========", file.getPath());
                 return playbook;
             } catch (Exception e) {
                 LOG.error("Failed to load playbook: {}", file.getAbsolutePath(), e);
@@ -50,7 +51,7 @@ public class PlaybookManager {
             Files.createDirectories(file.getParentFile().toPath());
             try (FileWriter writer = new FileWriter(file)) {
                 GSON.toJson(playbook, writer);
-                LOG.info("Playbook saved to {}", file.getAbsolutePath());
+                LOG.info("======== 💾 Playbook Saved: {} ========", file.getPath());
             }
         } catch (IOException e) {
             LOG.error("Failed to save playbook: {}", file.getAbsolutePath(), e);
@@ -92,10 +93,10 @@ public class PlaybookManager {
         // Build filename
         String fileName = filePart + ".json";
         if (!path.isEmpty()) {
-            LOG.info("Playbook file path calculated as: {}", path + "/" + fileName);
+            LOG.debug("Playbook target path: {}", path + "/" + fileName);
             return new File(new File(PLAYBOOK_DIR, path), fileName);
         } else {
-            LOG.info("Playbook file path calculated as: {}", fileName);
+            LOG.debug("Playbook target path: {}", fileName);
             return new File(PLAYBOOK_DIR, fileName);
         }
     }

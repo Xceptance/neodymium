@@ -58,7 +58,7 @@ public interface AiConfiguration extends Mutable
     public String agentPatternUrl();
 
     @Key("neodymium.ai.agent.pattern.urlWithBasicAuth")
-    @DefaultValue("(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(?:\\s+.*?\\b(?:with|using)?\\s*basic\\s+auth\\s+(?:username|user)\\s+['\"](?<username>.*?)['\"]\\s+(?:and\\s+)?(?:password|pass)\\s+['\"](?<password>.*?)['\"])?.*$")
+    @DefaultValue("(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(?:\\s+.*?\\b(?:with|using)?\\s*basic\\s+auth\\s+(?:username|user)\\s+['\"](?<username>.*?)['\"]\\s+(?:and\\s+)?(?:password|pass)\\s+['\"](?<password>.*?)['\"]).*$")
     public String agentPatternUrlWithBasicAuth();
     
     @Key("neodymium.ai.agent.pattern.javaMethod")

@@ -10,8 +10,7 @@ import org.slf4j.LoggerFactory;
  * Tracks cumulative token usage statistics across all LLM calls.
  * Thread-safe via atomic counters.
  */
-public class TokenStats
-{
+public class TokenStats {
     private static final Logger LOG = LoggerFactory.getLogger(TokenStats.class);
 
     private final AtomicLong inputTokens = new AtomicLong();
@@ -24,60 +23,51 @@ public class TokenStats
      * @param input  number of input (prompt) tokens
      * @param output number of output (completion) tokens
      */
-    public void record(final long input, final long output)
-    {
+    public void record(final long input, final long output) {
         inputTokens.addAndGet(input);
         outputTokens.addAndGet(output);
         callCount.incrementAndGet();
 
-        LOG.debug("  ┌─ Tokens: {} in → {} out  (call #{})",
+        LOG.debug("   📊 Tokens: {} in → {} out  (call #{})",
                 input, output, callCount.get());
     }
 
     /**
      * Logs a summary of all cumulative token usage.
      */
-    public void logSummary()
-    {
+    public void logSummary() {
         final long totalIn = inputTokens.get();
         final long totalOut = outputTokens.get();
         final long total = totalIn + totalOut;
 
-        LOG.debug("═══════════════════════════════════════════════════════════");
-        LOG.debug("  Token Usage Summary");
-        LOG.debug("───────────────────────────────────────────────────────────");
-        LOG.debug("  LLM calls:      {}", callCount.get());
-        LOG.debug("  Input tokens:    {}", totalIn);
-        LOG.debug("  Output tokens:   {}", totalOut);
-        LOG.debug("  Total tokens:    {}", total);
-        LOG.debug("═══════════════════════════════════════════════════════════");
+        LOG.debug("======== 📊 Token Usage Summary ========");
+        LOG.debug("   LLM calls:      {}", callCount.get());
+        LOG.debug("   Input tokens:   {}", totalIn);
+        LOG.debug("   Output tokens:  {}", totalOut);
+        LOG.debug("   Total tokens:   {}", total);
+        LOG.debug("========================================");
     }
 
-    public long getInputTokens()
-    {
+    public long getInputTokens() {
         return inputTokens.get();
     }
 
-    public long getOutputTokens()
-    {
+    public long getOutputTokens() {
         return outputTokens.get();
     }
 
-    public long getTotalTokens()
-    {
+    public long getTotalTokens() {
         return inputTokens.get() + outputTokens.get();
     }
 
-    public int getCallCount()
-    {
+    public int getCallCount() {
         return callCount.get();
     }
 
     /**
      * Resets all counters.
      */
-    public void reset()
-    {
+    public void reset() {
         inputTokens.set(0);
         outputTokens.set(0);
         callCount.set(0);

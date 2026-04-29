@@ -81,10 +81,10 @@ public class LlmClient {
                     "AI API key not configured. Set in your ai.properties, neodymium.properties or as an evironment variable.");
         }
 
-        LOG.debug("Initializing Gemini model: {}", modelName);
+        LOG.debug("   🤖 Initializing Gemini model: {}", modelName);
 
         final double temperature = mode == LlmMode.GENERATOR ? config.aiGenerateTemperature() : config.aiTemperature();
-        LOG.debug("Using temperature: {} (mode={})", temperature, mode);
+        LOG.debug("   🌡️ Using temperature: {} (mode={})", temperature, mode);
 
         model = GoogleAiGeminiChatModel.builder()
                 .apiKey(apiKey)
@@ -104,7 +104,7 @@ public class LlmClient {
      * @return the LLM's text response
      */
     public String chat(final String systemPrompt, final String userPrompt) {
-        LOG.debug("Sending text-only prompt ({} chars)", userPrompt.length());
+        LOG.debug("   💬 Sending text-only prompt ({} chars)", userPrompt.length());
         UserMessage userMessage = UserMessage.from(userPrompt);
 
         return chat(systemPrompt, userMessage);
@@ -120,7 +120,7 @@ public class LlmClient {
      */
     public String chatWithScreenshot(final String systemPrompt, final String userPrompt,
             final String base64Screenshot) {
-        LOG.debug("Sending multimodal prompt ({} chars + screenshot)", userPrompt.length());
+        LOG.debug("   💬 Sending multimodal prompt ({} chars + screenshot)", userPrompt.length());
         // Build a multimodal user message with text + image
         final UserMessage userMessage = UserMessage.from(
                 TextContent.from(userPrompt),
@@ -147,7 +147,7 @@ public class LlmClient {
         recordTokenUsage(response);
 
         final String text = response.aiMessage().text();
-        LOG.debug("LLM response ({} chars)", text.length());
+        LOG.debug("   💬 LLM response ({} chars)", text.length());
         return text;
     }
 

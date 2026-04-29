@@ -68,7 +68,7 @@ public class ActionExecutor
     @Step("{action.description}  - {action.type} {action.replay} ")
     public void execute(final Action action)
     {
-        LOG.debug("▶ {} — {}", action.getType(), action.getDescription());
+        LOG.debug("   🤖 {}", action.getDescription());
 
         preCheckAction(action);
 
@@ -140,7 +140,8 @@ public class ActionExecutor
         for (int i = 0; i < actions.size(); i++)
         {
             final Action action = actions.get(i);
-            LOG.debug("Action [{}/{}]", i + 1, actions.size());
+            LOG.debug("   --------------------------------------------------------");
+            LOG.debug("▶️ [EXEC] Executing Action [{}/{}]: {}", i + 1, actions.size(), action.getType());
 
             execute(action);
 
@@ -321,7 +322,7 @@ public class ActionExecutor
             }
             try {
                 Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected));
-                LOG.debug("✓ URL Assertion passed for: '{}'", expected);
+                LOG.debug("   ✅ URL Assertion passed for: '{}'", expected);
             } catch (org.openqa.selenium.TimeoutException e) {
                 String actualUrl = com.codeborne.selenide.WebDriverRunner.url();
                 throw new ActionExecutionException(String.format("Assertion failed: Expected URL to contain '%s' but was '%s'", expected, actualUrl), e);
@@ -334,7 +335,7 @@ public class ActionExecutor
         if (expected == null)
         {
             element.should(Condition.exist);
-            LOG.debug("✓ Element exists: {}", action);
+            LOG.debug("   ✅ Element exists: {}", action);
             return;
         }
 
@@ -368,7 +369,7 @@ public class ActionExecutor
                                             new DataAttributeMatches("data-.*", ".*" + Pattern.quote(expected) + ".*")));
 
             }
-            LOG.debug("✓ Assertion passed for: '{}'", expected);
+            LOG.debug("   ✅ Assertion passed for: '{}'", expected);
         }
         catch (Throwable e)
         {

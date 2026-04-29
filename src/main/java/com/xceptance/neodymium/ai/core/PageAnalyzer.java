@@ -321,7 +321,7 @@ public class PageAnalyzer
 
     public String captureScreenshot(String title) throws IOException
     {
-        LOG.debug("Capturing screenshot for: {}", title);
+        LOG.debug("   📸 Capturing screenshot for: {}", title);
         return ScreenshotWriter.doScreenshot(title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)),
                                              ScreenshotWriter.getFormatedReportsPath(), false, false);
     }
@@ -348,7 +348,7 @@ public class PageAnalyzer
     @SuppressWarnings("unchecked")
     public String captureSimplifiedDom(boolean forValidation)
     {
-        LOG.debug("Capturing simplified DOM for: {} (validation: {})", com.codeborne.selenide.WebDriverRunner.url(),
+        LOG.debug("   📄 Capturing simplified DOM for: {} (validation: {})", com.codeborne.selenide.WebDriverRunner.url(),
                   forValidation);
 
         final StringBuilder dom = new StringBuilder();
@@ -373,6 +373,7 @@ public class PageAnalyzer
 
                     for (final Map<String, Object> el : elements)
                     {
+                        dom.append("\t");
                         formatElement(dom, el);
                     }
                 }
@@ -387,7 +388,7 @@ public class PageAnalyzer
 
                 for (final Map<String, Object> form : forms)
                 {
-                    dom.append(String.format("[form] id='%s' action='%s' data-neodymium-automation-id='%s'\n",
+                    dom.append(String.format("\t[form] id='%s' action='%s' data-neodymium-automation-id='%s'\n",
                                              form.get("id"), form.get("action"), form.get("automationId")));
 
                     final List<Map<String, Object>> fields = (List<Map<String, Object>>) form.get("fields");
@@ -397,7 +398,7 @@ public class PageAnalyzer
                         for (final Map<String, Object> field : fields)
                         {
                             dom.append(String.format(
-                                                     "  [form-field] type='%s' name='%s' id='%s' data-neodymium-automation-id='%s' \n",
+                                                     "\t\t[form-field] type='%s' name='%s' id='%s' data-neodymium-automation-id='%s' \n",
                                                      field.get("type"), field.get("name"), field.get("id"), field.get("automationId")));
                         }
                     }
@@ -411,7 +412,7 @@ public class PageAnalyzer
         }
 
         final String result = dom.toString();
-        LOG.debug("Simplified DOM size: {} chars", result.length());
+        LOG.debug("   📄 Simplified DOM size: {} chars", result.length());
         return result;
     }
 

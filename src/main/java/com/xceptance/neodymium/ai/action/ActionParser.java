@@ -83,7 +83,7 @@ public class ActionParser {
             }
         }
 
-        LOG.debug("Parsed {} action(s) from LLM response", actions.size());
+        LOG.debug("   ⚙️ Parsed {} action(s) from LLM response", actions.size());
         return actions;
     }
 

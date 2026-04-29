@@ -203,7 +203,7 @@ public class ScreenshotWriter
                     }
                 }
             }
-            log.info("captured Screenshot to: " + imagePath);
+            log.debug("captured Screenshot to: " + imagePath);
 
             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
             boolean result = ImageIO.write(image, "png", baos);
