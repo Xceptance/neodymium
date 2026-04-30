@@ -81,7 +81,7 @@ public class InteractiveHud {
     }
 
     public void injectOrUpdateHud(List<String> planned, List<String> performed, boolean autoSkip,
-            boolean hudPromptChanged, boolean isFinished, String currentUnresolvedStep) {
+            boolean hudPromptChanged, boolean isFinished, String currentUnresolvedStep, String reasoning, boolean isReplay) {
         evaluateCanEdit();
         Map<String, String> configMap = new java.util.HashMap<>();
         if (com.xceptance.neodymium.util.Neodymium.configuration() instanceof org.aeonbits.owner.Accessible) {
@@ -95,10 +95,15 @@ public class InteractiveHud {
         }
         try {
             com.codeborne.selenide.Selenide.executeJavaScript(HUD_JS, HUD_HTML, planned, performed, autoSkip,
-                    hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap);
+                    hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay);
         } catch (Exception e) {
             LOG.warn("Failed to inject AI Generation HUD: {}", e.getMessage());
         }
+    }
+
+    public void injectOrUpdateHud(List<String> planned, List<String> performed, boolean autoSkip,
+            boolean hudPromptChanged, boolean isFinished, String currentUnresolvedStep) {
+        injectOrUpdateHud(planned, performed, autoSkip, hudPromptChanged, isFinished, currentUnresolvedStep, null, false);
     }
 
     public String checkHudAction() {

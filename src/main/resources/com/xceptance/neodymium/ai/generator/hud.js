@@ -1,4 +1,4 @@
-(function(hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap) {
+(function(hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay) {
     window.neoCurrentUnresolvedStep = currentUnresolvedStep;
     window.neoDataBindings = dataBindings;
     window.neoConfigMap = configMap;
@@ -306,6 +306,34 @@
         }
         plannedContainer.style.display = 'block';
 
+        var rContainer = document.getElementById('neo-reasoning-container');
+        var pContainer = document.getElementById('neo-playbook-container');
+        var rText = document.getElementById('neo-reasoning-text');
+        var pReasoning = document.getElementById('neo-playbook-reasoning');
+
+        if (rContainer) rContainer.style.display = 'none';
+        if (pContainer) pContainer.style.display = 'none';
+
+        if (isReplay) {
+            if (pContainer) {
+                pContainer.style.display = 'block';
+                if (reasoning) {
+                    pReasoning.innerText = "Original reasoning: " + reasoning;
+                } else {
+                    pReasoning.innerText = "";
+                }
+            }
+        } else if (reasoning && reasoning !== "No reasoning") {
+            if (rContainer) {
+                rContainer.style.display = 'block';
+                if (reasoning === "Loading reasoning...") {
+                    rText.innerHTML = '<span style="color:#aaa; font-style:italic;">⏳ Loading reasoning from AI...</span>';
+                } else {
+                    rText.innerText = reasoning;
+                }
+            }
+        }
+
         if (isFinished) {
             approveBtn.innerHTML = '💾';
             approveBtn.title = 'Save & Exit';
@@ -352,6 +380,11 @@
         statusDiv.innerText = 'Waiting...';
         statusDiv.style.color = '#2196F3';
         plannedContainer.style.display = 'none';
+        var rContainer = document.getElementById('neo-reasoning-container');
+        var pContainer = document.getElementById('neo-playbook-container');
+        if (rContainer) rContainer.style.display = 'none';
+        if (pContainer) pContainer.style.display = 'none';
+
         approveBtn.disabled = true;
         approveBtn.style.opacity = '0.5';
         skipBtn.disabled = true;
@@ -373,4 +406,4 @@
         }
     }
 
-})(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9]);
+})(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11]);

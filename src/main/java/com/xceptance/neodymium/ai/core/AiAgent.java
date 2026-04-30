@@ -345,13 +345,34 @@ public class AiAgent {
                 if (isInteractive) {
                     List<String> plannedStrs = new ArrayList<>();
                     plannedStrs.add(instruction);
+                    
+                    // Show HUD immediately so the user doesn't wait forever, indicating reasoning is loading
                     com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
-                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction);
-
-                    waitForHudAction(true);
+                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Loading reasoning...", false);
                 }
 
                 List<Action> actions = getStepActions(instruction, playbook);
+                
+                if (isInteractive) {
+                    List<String> plannedStrs = new ArrayList<>();
+                    plannedStrs.add(instruction);
+                    
+                    String reasoning = null;
+                    boolean isReplay = false;
+                    PlaybookStep stepObj = playbook.getCurrentStep();
+                    if (stepObj != null) {
+                        reasoning = stepObj.getReasoning();
+                        // If playbook is not recording, it's a replay of an existing step
+                        if (!playbook.isRecording() && stepObj.getPromptLine() != null && stepObj.getPromptLine().equals(instruction)) {
+                            isReplay = true;
+                        }
+                    }
+
+                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction, reasoning, isReplay);
+
+                    waitForHudAction(true);
+                }
 
                 actionExecutor.executeAll(actions);
 

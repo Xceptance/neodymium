@@ -62,6 +62,50 @@ public class AiBrowser implements AutoCloseable {
     }
 
     /**
+     * Set the main prompt to be executed.
+     * 
+     * @param instructions the main prompt instructions
+     * @return the current AiBrowser instance
+     */
+    public AiBrowser prompt(String instructions) {
+        Neodymium.getData().put("prompt", instructions);
+        return this;
+    }
+
+    /**
+     * Set instructions to be executed before the main prompt.
+     * 
+     * @param instructions the before instructions
+     * @return the current AiBrowser instance
+     */
+    public AiBrowser before(String instructions) {
+        Neodymium.getData().put("before", instructions);
+        return this;
+    }
+
+    /**
+     * Set instructions to be executed after the main prompt.
+     * 
+     * @param instructions the after instructions
+     * @return the current AiBrowser instance
+     */
+    public AiBrowser after(String instructions) {
+        Neodymium.getData().put("after", instructions);
+        return this;
+    }
+
+    /**
+     * Set the system context for the LLM.
+     * 
+     * @param context the system context instructions
+     * @return the current AiBrowser instance
+     */
+    public AiBrowser systemContext(String context) {
+        Neodymium.getData().put("context", context);
+        return this;
+    }
+
+    /**
      * Executes natural language test instructions.
      * This is the core AI method — it sends your instructions to the LLM,
      * which analyzes the page and performs the corresponding browser actions.
