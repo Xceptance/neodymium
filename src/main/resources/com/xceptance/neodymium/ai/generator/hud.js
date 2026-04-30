@@ -3,7 +3,14 @@
     window.neoDataBindings = dataBindings;
     window.neoConfigMap = configMap;
 
-    if (!window.neodymiumPromptGenerationHudInjected || !document.getElementById('neo-ai-hud')) {
+    var existingHud = document.getElementById('neo-ai-hud');
+    if (existingHud && existingHud.getAttribute('data-hud-version') !== '3') {
+        existingHud.remove();
+        window.neodymiumPromptGenerationHudInjected = false;
+        existingHud = null;
+    }
+
+    if (!window.neodymiumPromptGenerationHudInjected || !existingHud) {
         var hud = document.createElement('div');
         hud.innerHTML = hudHtml;
         document.body.appendChild(hud.firstChild);
@@ -155,10 +162,7 @@
                 
                 // Allow table to grow up to a large height and expand HUD top dynamically
                 document.getElementById('neo-ai-hud').style.width = '600px';
-                document.getElementById('neo-ai-hud').style.top = '20px';
-                document.getElementById('neo-ai-hud').style.bottom = '20px';
                 document.getElementById('neo-bindings-container').style.maxHeight = 'none';
-                document.getElementById('neo-ai-hud').style.maxHeight = 'none';
                 document.getElementById('neo-hud-content').style.maxHeight = 'none';
                 
                 editOverlay.style.display = 'flex';
@@ -168,8 +172,6 @@
 
         document.getElementById('neo-edit-cancel-btn').addEventListener('click', function() {
             document.getElementById('neo-ai-hud').style.width = '350px';
-            document.getElementById('neo-ai-hud').style.top = 'auto';
-            document.getElementById('neo-ai-hud').style.bottom = '20px';
             document.getElementById('neo-bindings-container').style.maxHeight = '100px';
             document.getElementById('neo-hud-content').style.maxHeight = '400px';
             editOverlay.style.display = 'none';
@@ -188,15 +190,11 @@
                 window.neoHudAction = JSON.stringify({ action: "EDIT", instruction: newInstr.trim(), index: pIdx, bindings: updatedBindings });
                 
                 document.getElementById('neo-ai-hud').style.width = '350px';
-                document.getElementById('neo-ai-hud').style.top = 'auto';
-                document.getElementById('neo-ai-hud').style.bottom = '20px';
                 document.getElementById('neo-bindings-container').style.maxHeight = '100px';
                 document.getElementById('neo-hud-content').style.maxHeight = '400px';
                 editOverlay.style.display = 'none';
             } else {
                 document.getElementById('neo-ai-hud').style.width = '350px';
-                document.getElementById('neo-ai-hud').style.top = 'auto';
-                document.getElementById('neo-ai-hud').style.bottom = '20px';
                 document.getElementById('neo-bindings-container').style.maxHeight = '100px';
                 document.getElementById('neo-hud-content').style.maxHeight = '400px';
                 editOverlay.style.display = 'none';
@@ -279,6 +277,60 @@
                 if (toggleBtn) toggleBtn.click();
             }
         });
+
+        function renderFullPrompt() {
+            var overlay = document.getElementById('neo-full-prompt-overlay');
+            var btn = document.getElementById('neo-full-prompt-btn');
+            
+            if (window.neoFullPromptOpen) {
+                overlay.style.display = 'none';
+                btn.innerHTML = '▲ Show Full Prompt ▲';
+                window.neoFullPromptOpen = false;
+                return;
+            }
+            
+            var html = '';
+            var pList = window.neoPerformedList || [];
+            var aList = window.neoPlannedList || [];
+
+            if (pList && pList.length > 0) {
+                pList.forEach(function(step, i) {
+                    html += '<div style="padding:4px; margin-bottom:2px; color:#888; border-left:2px solid #555;">' + 
+                            '<span style="font-size:10px; margin-right:5px;">[' + (i + 1) + ']</span> ✓ ' + step + 
+                            '</div>';
+                });
+            }
+            
+            if (aList && aList.length > 0) {
+                html += '<div style="padding:6px; margin-bottom:2px; background:#333; color:#fff; border-left:3px solid #2196F3; font-weight:bold;">' + 
+                        '<span style="font-size:10px; margin-right:5px; color:#2196F3;">[' + ((pList ? pList.length : 0) + 1) + ']</span> ➔ ' + aList[0] + 
+                        '</div>';
+                        
+                if (aList.length > 1) {
+                    aList.slice(1).forEach(function(step, i) {
+                        var idx = (pList ? pList.length : 0) + 2 + i;
+                        html += '<div style="padding:4px; margin-bottom:2px; color:#ccc; border-left:2px solid #444;">' + 
+                                '<span style="font-size:10px; margin-right:5px;">[' + idx + ']</span> &nbsp; ' + step + 
+                                '</div>';
+                    });
+                }
+            }
+            
+            overlay.innerHTML = html;
+            
+            overlay.style.display = 'flex';
+            btn.innerHTML = '▼ Hide Full Prompt ▼';
+            window.neoFullPromptOpen = true;
+        }
+
+        document.getElementById('neo-full-prompt-btn').addEventListener('click', renderFullPrompt);
+    }
+
+    window.neoPerformedList = performed;
+    window.neoPlannedList = planned;
+
+    if (window.neoFullPromptOpen) {
+        document.getElementById('neo-full-prompt-btn').click();
     }
 
     // Sync auto skip state
@@ -288,7 +340,6 @@
     var statusDiv = document.getElementById('neo-status-indicator');
     var plannedContainer = document.getElementById('neo-planned-actions');
     var nextActionDiv = document.getElementById('neo-next-action');
-    var allPlannedDiv = document.getElementById('neo-all-planned');
     var approveBtn = document.getElementById('neo-approve-btn');
     var skipBtn = document.getElementById('neo-skip-btn');
     var editBtn = document.getElementById('neo-edit-btn');
@@ -299,11 +350,6 @@
         statusDiv.innerText = 'Pending';
         statusDiv.style.color = '#FF9800';
         nextActionDiv.innerText = planned[0];
-        if (planned.length > 1) {
-            allPlannedDiv.innerHTML = '<strong>Subsequent Actions:</strong><ol style="margin:5px 0 0 0; padding-left:20px; font-size:11px; color:#ccc;">' + planned.slice(1).map(function(a) { return '<li>' + a + '</li>'; }).join('') + '</ol>';
-        } else {
-            allPlannedDiv.innerHTML = '';
-        }
         plannedContainer.style.display = 'block';
 
         var rContainer = document.getElementById('neo-reasoning-container');

@@ -224,7 +224,11 @@ public class AiAgent {
 
                 try {
                     executionLog.startStep(i + 1, stepsList.size(), step);
-                    executeStep(step, performedInstructions, stepUnresolved);
+                    List<String> futureInstructions = new ArrayList<>();
+                    for (int j = i + 1; j < stepsList.size(); j++) {
+                        futureInstructions.add(stepsList.get(j));
+                    }
+                    executeStep(step, performedInstructions, stepUnresolved, futureInstructions);
                     performedInstructions.add(stepUnresolved);
                 } catch (HudActionException e) {
                     if (HudActionType.REWIND == e.actionType) {
@@ -335,7 +339,7 @@ public class AiAgent {
      * navigation), then falls back to the
      * playbook replay or LLM with retry logic.
      */
-    private void executeStep(final String instruction, List<String> performedInstructions, String unresolvedInstruction) throws HudActionException {
+    private void executeStep(final String instruction, List<String> performedInstructions, String unresolvedInstruction, List<String> futureInstructions) throws HudActionException {
         int errorCount = 0;
         Playbook playbook = Neodymium.getAiPlaybook();
         boolean isInteractive = config.aiInteractive();
@@ -345,6 +349,9 @@ public class AiAgent {
                 if (isInteractive) {
                     List<String> plannedStrs = new ArrayList<>();
                     plannedStrs.add(instruction);
+                    if (futureInstructions != null) {
+                        plannedStrs.addAll(futureInstructions);
+                    }
                     
                     // Show HUD immediately so the user doesn't wait forever, indicating reasoning is loading
                     com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
@@ -356,6 +363,9 @@ public class AiAgent {
                 if (isInteractive) {
                     List<String> plannedStrs = new ArrayList<>();
                     plannedStrs.add(instruction);
+                    if (futureInstructions != null) {
+                        plannedStrs.addAll(futureInstructions);
+                    }
                     
                     String reasoning = null;
                     boolean isReplay = false;

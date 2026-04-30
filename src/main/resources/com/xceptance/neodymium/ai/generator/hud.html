@@ -1,4 +1,4 @@
-<div id="neo-ai-hud" style="position:fixed; bottom:20px; right:20px; width:350px; background:rgba(30,30,30,0.95); border:1px solid #555; border-radius:8px; z-index:999999; font-family:sans-serif; color:white; box-shadow:0 4px 15px rgba(0,0,0,0.5); overflow:hidden; display:flex; flex-direction:column; transition:opacity 0.3s; opacity:0;">
+<div id="neo-ai-hud" data-hud-version="3" style="position:fixed; bottom:20px; right:20px; width:350px; background:rgba(30,30,30,0.95); border:1px solid #555; border-radius:8px; z-index:999999; font-family:sans-serif; color:white; box-shadow:0 4px 15px rgba(0,0,0,0.5); overflow:hidden; display:flex; flex-direction:column; transition:opacity 0.3s; opacity:0;">
 
     <div id="neo-add-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(30,30,30,0.98); z-index:10000; flex-direction:column; padding:15px; box-sizing:border-box; justify-content:center;">
         <div style="color:#2196F3; font-weight:bold; margin-bottom:10px; font-size:14px;">➕ Insert Action Before Current</div>
@@ -38,6 +38,12 @@
     </div>
 
     <div id="neo-hud-content" style="padding:12px; flex-grow:1; display:flex; flex-direction:column; gap:10px; max-height:400px; overflow-y:auto;">
+        
+        <div id="neo-full-prompt-overlay" style="display:none; flex-direction:column; flex-shrink:1; max-height:250px; overflow-y:auto; background:#222; border:1px solid #444; border-radius:4px; padding:5px; font-size:12px;">
+            <!-- filled by js -->
+        </div>
+
+        <button id="neo-full-prompt-btn" style="width:100%; background:#333; color:#aaa; border:1px solid #444; border-radius:4px; padding:4px; cursor:pointer; font-size:10px; text-align:center; transition:background 0.2s; margin-bottom:-5px;" title="Show Full Menu">▲ Show Full Prompt ▲</button>
         <div id="neo-planned-actions" style="display:none; background:#222; border:1px solid #444; padding:10px; border-radius:4px;">
             <div style="font-size:11px; color:#888; text-transform:uppercase; margin-bottom:5px;">Next Action</div>
             <div style="display:flex; align-items:flex-start; margin-bottom:5px;">
@@ -54,7 +60,6 @@
                 <button id="neo-rewind-btn" disabled title="Rewind to previous step" style="flex:1; padding:6px; background:#444; border:1px dashed #666; color:#bbb; border-radius:4px; cursor:pointer; font-size:11px; opacity:0.5; text-align:center;">⏪ Back</button>
                 <button id="neo-add-overlay-btn" disabled style="flex:1; padding:6px; background:#444; border:1px dashed #666; color:#bbb; border-radius:4px; cursor:pointer; font-size:11px; opacity:0.5; text-align:center;">Insert new step</button>
             </div>
-            <div id="neo-all-planned"></div>
         </div>
 
         <div id="neo-reasoning-container" style="display:none; margin-top:5px; padding:8px; background:#1e1e1e; border-left:3px solid #9C27B0; font-size:12px; color:#ddd; border-radius:3px;">
