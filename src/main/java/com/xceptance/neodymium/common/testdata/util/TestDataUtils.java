@@ -106,6 +106,7 @@ public final class TestDataUtils
 
             List<File> dataSetFileDirs = new LinkedList<>();
             dataSetFileDirs.add(new File("."));
+            dataSetFileDirs.add(new File("src/test/resources"));
 
             List<Map<String, String>> fileDataSets = getDataSets(dataSetFileDirs, fileNames, testClass);
             
@@ -124,7 +125,8 @@ public final class TestDataUtils
             }
 
             InputStream inputStream = testClass.getResourceAsStream("/" + filePath);
-            if (inputStream == null)
+            File localFile = new File("src/test/resources/" + filePath);
+            if (inputStream == null && !localFile.exists())
             {
                 throw new RuntimeException("The data file:\"" + filePath + "\" provided within the test class:\"" + testClass.getSimpleName()
                                            + "\" can't be read.");
@@ -135,6 +137,7 @@ public final class TestDataUtils
 
             List<File> dataSetFileDirs = new LinkedList<>();
             dataSetFileDirs.add(new File("."));
+            dataSetFileDirs.add(new File("src/test/resources"));
 
             List<Map<String, String>> fileDataSets = getDataSets(dataSetFileDirs, fileNames, testClass);
 
