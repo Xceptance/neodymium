@@ -7,10 +7,17 @@ public class HudActionException extends Exception {
     public final String instruction;
     public final int index;
 
-    public HudActionException(HudActionType actionType, String instruction, int index) {
+    public final java.util.Map<String, String> bindings;
+
+    public HudActionException(HudActionType actionType, String instruction, int index, java.util.Map<String, String> bindings) {
         super("HUD_" + actionType.name());
         this.actionType = actionType;
         this.instruction = instruction;
         this.index = index;
+        this.bindings = bindings;
+    }
+    
+    public HudActionException(HudActionType actionType, String instruction, int index) {
+        this(actionType, instruction, index, null);
     }
 }

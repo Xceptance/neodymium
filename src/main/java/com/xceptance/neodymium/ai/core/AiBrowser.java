@@ -69,7 +69,15 @@ public class AiBrowser implements AutoCloseable {
      * @param naturalLanguageInstructions test steps written in plain English
      */
     public void execute(final String naturalLanguageInstructions) {
-        agent.execute(resolveTestDataToPrompt(naturalLanguageInstructions));
+        if (config.aiInteractive()) {
+            try {
+                com.xceptance.neodymium.ai.generator.InteractiveHud hud = Neodymium.getOrCreateInteractiveHud();
+                if (Neodymium.getData() != null) {
+                    hud.setDataBindings(new java.util.HashMap<>(Neodymium.getData()));
+                }
+            } catch (Exception e) {}
+        }
+        agent.execute(naturalLanguageInstructions);
     }
 
     /**
@@ -266,7 +274,7 @@ public class AiBrowser implements AutoCloseable {
         }
 
         // 3. Try to get from neodymium configuration
-        if (value == null && placeholderKey.toLowerCase().startsWith("neodymium.")) {
+        if (value == null) {
             if (Neodymium.configuration() instanceof org.aeonbits.owner.Accessible) {
                 String configValue = ((org.aeonbits.owner.Accessible) Neodymium.configuration())
                         .getProperty(placeholderKey);

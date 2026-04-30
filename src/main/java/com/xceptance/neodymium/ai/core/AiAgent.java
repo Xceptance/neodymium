@@ -139,7 +139,7 @@ public class AiAgent {
 
             for (int i = 0; i <= stepsList.size(); i++) {
                 if (isInteractive) {
-                    Boolean currentAutoSkipStatus = com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper
+                    Boolean currentAutoSkipStatus = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
                             .checkAutoSkipStatus();
                     if (currentAutoSkipStatus != null) {
                         this.autoSkip = currentAutoSkipStatus;
@@ -157,8 +157,8 @@ public class AiAgent {
                         try {
                             List<String> finishedStrs = new ArrayList<>();
                             finishedStrs.add("🎉 Execution Complete! Click Save & Exit to store changes.");
-                            com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper
-                                    .injectOrUpdateHud(finishedStrs, performedInstructions, this.autoSkip, true, true);
+                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                    .injectOrUpdateHud(finishedStrs, performedInstructions, this.autoSkip, true, true, "");
                             waitForHudAction(false);
                         } catch (HudActionException e) {
                             if (HudActionType.REWIND == e.actionType) {
@@ -202,12 +202,14 @@ public class AiAgent {
                     break;
                 }
 
-                final String step = stepsList.get(i);
+                final String stepUnresolved = stepsList.get(i);
+                final String step = com.xceptance.neodymium.ai.core.AiBrowser.resolveTestDataToPrompt(stepUnresolved);
+                
                 boolean isReplay = false;
                 Playbook playbookForCheck = Neodymium.getAiPlaybook();
                 if (playbookForCheck != null && !playbookForCheck.isRecording() && playbookForCheck.getCurrentStep() != null) {
                     PlaybookStep stepObj = playbookForCheck.getCurrentStep();
-                    if (!stepObj.failed() && stepObj.getPromptLine() != null && stepObj.getPromptLine().equals(step)) {
+                    if (!stepObj.failed() && stepObj.getPromptLine() != null && stepObj.getPromptLine().equals(stepUnresolved)) {
                         isReplay = true;
                     }
                 }
@@ -222,8 +224,8 @@ public class AiAgent {
 
                 try {
                     executionLog.startStep(i + 1, stepsList.size(), step);
-                    executeStep(step, performedInstructions);
-                    performedInstructions.add(step);
+                    executeStep(step, performedInstructions, stepUnresolved);
+                    performedInstructions.add(stepUnresolved);
                 } catch (HudActionException e) {
                     if (HudActionType.REWIND == e.actionType) {
                         int rIdx = e.index;
@@ -257,6 +259,12 @@ public class AiAgent {
                         continue;
                     } else if (HudActionType.EDIT == e.actionType) {
                         String editInstr = e.instruction;
+                        java.util.Map<String, String> updatedBindings = e.bindings;
+                        if (updatedBindings != null && !updatedBindings.isEmpty()) {
+                            com.xceptance.neodymium.util.Neodymium.getData().putAll(updatedBindings);
+                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().setDataBindings(new java.util.HashMap<>(com.xceptance.neodymium.util.Neodymium.getData()));
+                        }
+                        
                         stepsList.set(i, editInstr);
 
                         Playbook playbook = Neodymium.getAiPlaybook();
@@ -327,7 +335,7 @@ public class AiAgent {
      * navigation), then falls back to the
      * playbook replay or LLM with retry logic.
      */
-    private void executeStep(final String instruction, List<String> performedInstructions) throws HudActionException {
+    private void executeStep(final String instruction, List<String> performedInstructions, String unresolvedInstruction) throws HudActionException {
         int errorCount = 0;
         Playbook playbook = Neodymium.getAiPlaybook();
         boolean isInteractive = config.aiInteractive();
@@ -337,8 +345,8 @@ public class AiAgent {
                 if (isInteractive) {
                     List<String> plannedStrs = new ArrayList<>();
                     plannedStrs.add(instruction);
-                    com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper.injectOrUpdateHud(plannedStrs,
-                            performedInstructions, this.autoSkip, false, false);
+                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction);
 
                     waitForHudAction(true);
                 }
@@ -371,8 +379,8 @@ public class AiAgent {
                 if (isInteractive) {
                     List<String> errorStrs = new ArrayList<>();
                     errorStrs.add("⚠️ ERROR: " + e.getMessage());
-                    com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper.injectOrUpdateHud(errorStrs,
-                            performedInstructions, this.autoSkip, false, false);
+                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(errorStrs,
+                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction);
                     waitForHudAction(false); // Never auto-skip errors
                 } else {
                     sleep(1000);
@@ -397,9 +405,9 @@ public class AiAgent {
         LOG.info("Waiting for user action in HUD...");
         boolean handled = false;
         for (int wait = 0; wait < 3600; wait++) {
-            String hudActionStr = com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper.checkHudAction();
+            String hudActionStr = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkHudAction();
             if (hudActionStr != null) {
-                Boolean s = com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper.checkAutoSkipStatus();
+                Boolean s = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
                 if (s != null)
                     this.autoSkip = s;
 
@@ -418,22 +426,30 @@ public class AiAgent {
                     handled = true;
                     break;
                 } else if (typeEnum == HudActionType.SKIP) {
-                    com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper.resetHudAction();
+                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.SKIP, null, 0);
                 } else if (typeEnum == HudActionType.REWIND) {
                     int rIdx = actionObj.get("index").getAsInt();
-                    com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper.resetHudAction();
+                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.REWIND, null, rIdx);
                 } else if (typeEnum == HudActionType.ADD) {
                     String instructionAdd = actionObj.get("instruction").getAsString();
-                    com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper.resetHudAction();
+                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.ADD, instructionAdd, 0);
                 } else if (typeEnum == HudActionType.EDIT) {
                     String instructionEdit = actionObj.get("instruction").getAsString();
-                    com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper.resetHudAction();
-                    throw new HudActionException(HudActionType.EDIT, instructionEdit, 0);
+                    int eIdx = actionObj.has("index") ? actionObj.get("index").getAsInt() : 0;
+                    java.util.Map<String, String> bindingsMap = new java.util.HashMap<>();
+                    if (actionObj.has("bindings")) {
+                        com.google.gson.JsonObject bObj = actionObj.getAsJsonObject("bindings");
+                        for (String key : bObj.keySet()) {
+                            bindingsMap.put(key, bObj.get(key).getAsString());
+                        }
+                    }
+                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    throw new HudActionException(HudActionType.EDIT, instructionEdit, eIdx, bindingsMap);
                 } else if (typeEnum == HudActionType.SAVE_EXIT) {
-                    com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper.resetHudAction();
+                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.SAVE_EXIT, null, 0);
                 }
             }
@@ -442,7 +458,7 @@ public class AiAgent {
         if (!handled) {
             throw new RuntimeException("User did not approve the actions within 1 hour. Halting execution.");
         }
-        com.xceptance.neodymium.ai.generator.PromptGenerationHudHelper.resetHudAction();
+        com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
     }
 
     private List<Action> getStepActions(final String instruction, Playbook playbook) {
@@ -777,34 +793,9 @@ public class AiAgent {
             playbook.getSteps().subList(currentIndex, playbook.getSteps().size()).clear();
             playbook.setChanged(true);
         }
-        StringBuilder yamlBuilder = new StringBuilder();
-        yamlBuilder.append("prompt: |\n");
-        for (String instr : performedInstructions) {
-            yamlBuilder.append("  ").append(instr).append("\n");
-        }
-        try {
-            String outputPath = "src/test/resources/saved_debug.yml";
-
-            try {
-                if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.sourceFile")) {
-                    outputPath = Neodymium.getData().asString("neodymium.sourceFile");
-                } else {
-                    String testName = Neodymium.getTestName();
-                    if (testName != null && testName.contains(" :: ")) {
-                        String[] parts = testName.split(" :: ");
-                        outputPath = "src/test/resources/" + parts[0].replace('.', '/') + "/" + parts[1] + ".yml";
-                    }
-                }
-            } catch (Exception e) {
-                // Ignore fallback errors
-            }
-
-            java.nio.file.Files.write(java.nio.file.Paths.get(outputPath),
-                    yamlBuilder.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            LOG.info("Successfully saved overwritten YAML test to: {}", outputPath);
-        } catch (Exception ex) {
-            LOG.error("Failed to write output YAML file", ex);
-        }
+        
+        com.xceptance.neodymium.ai.generator.InteractiveHud hud = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud();
+        hud.saveYamlDataFileIfModified(performedInstructions);
         return true;
     }
 }

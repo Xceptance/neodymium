@@ -22,6 +22,7 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.ai.core.AiBrowser;
+import com.xceptance.neodymium.ai.generator.InteractiveHud;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookManager;
 import com.xceptance.neodymium.common.TestStepListener;
@@ -46,6 +47,9 @@ public class Neodymium
 
     // keep our active AI Playbook instance
     private Playbook activeAiPlaybook;
+
+    // keep our interactive HUD instance
+    private InteractiveHud interactiveHud;
 
     // keep our current browser profile name
     private String browserProfileName;
@@ -393,6 +397,40 @@ public class Neodymium
     public static void setAiPlaybook(Playbook playbook)
     {
         getContext().activeAiPlaybook = playbook;
+    }
+
+    /**
+     * Get the current InteractiveHud instance
+     * 
+     * @return interactiveHud
+     */
+    public static InteractiveHud getInteractiveHud()
+    {
+        return getContext().interactiveHud;
+    }
+
+    /**
+     * Get or create the InteractiveHud instance
+     * 
+     * @return interactiveHud
+     */
+    public static InteractiveHud getOrCreateInteractiveHud()
+    {
+        if (getContext().interactiveHud == null) {
+            getContext().interactiveHud = new InteractiveHud();
+        }
+        return getContext().interactiveHud;
+    }
+
+    /**
+     * Set the current InteractiveHud instance
+     * 
+     * @param interactiveHud
+     *            the InteractiveHud to set
+     */
+    public static void setInteractiveHud(InteractiveHud interactiveHud)
+    {
+        getContext().interactiveHud = interactiveHud;
     }
 
     /**

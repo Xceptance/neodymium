@@ -522,14 +522,14 @@ public class AiPromptGenerator {
         boolean autoSkip = false;
         for (int i = 0; i < maxSteps && !entireGoalAchieved; i++) {
             if (isInteractive) {
-                Boolean currentAutoSkipStatus = PromptGenerationHudHelper.checkAutoSkipStatus();
+                Boolean currentAutoSkipStatus = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
                 if (currentAutoSkipStatus != null) {
                     autoSkip = currentAutoSkipStatus;
                 }
                 List<String> performedStrs = new java.util.ArrayList<>();
                 for (Action a : actionsForLogging)
                     performedStrs.add(a.getDescription());
-                PromptGenerationHudHelper.injectOrUpdateHud(null, performedStrs, autoSkip, false, false);
+                Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(null, performedStrs, autoSkip, false, false, "");
             }
             executionLog.startStep(i + 1, maxSteps, "Exploration Step");
             executionLog.startAttempt("Exploration Attempt");
@@ -668,15 +668,15 @@ public class AiPromptGenerator {
                                         knownBindings);
                                 performedStrs.add(resolvedStr != null ? resolvedStr : a.getDescription());
                             }
-                            PromptGenerationHudHelper.injectOrUpdateHud(plannedStrs, performedStrs, autoSkip, false, false);
+                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs, performedStrs, autoSkip, false, false, plannedStrs != null && !plannedStrs.isEmpty() ? plannedStrs.get(0) : "");
 
                             if (!autoSkip) {
                                 LOG.info("Waiting for user action in HUD...");
                                 boolean handled = false;
                                 for (int wait = 0; wait < 3600; wait++) {
-                                    String hudActionStr = PromptGenerationHudHelper.checkHudAction();
+                                    String hudActionStr = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkHudAction();
                                     if (hudActionStr != null) {
-                                        Boolean s = PromptGenerationHudHelper.checkAutoSkipStatus();
+                                        Boolean s = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
                                         if (s != null) {
                                             autoSkip = s;
                                         }
@@ -701,23 +701,23 @@ public class AiPromptGenerator {
                                             playbook.getSteps().subList(rIdx, playbook.getSteps().size()).clear();
                                             playbook.setCursor(rIdx);
                                             actionsForLogging.subList(rIdx, actionsForLogging.size()).clear();
-                                            PromptGenerationHudHelper.resetHudAction();
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
                                             hudRewind = true;
                                             handled = true;
                                             break;
                                         } else if (com.xceptance.neodymium.ai.core.HudActionType.ADD == actionType) {
                                             hudAddInstruction = actionObj.get("instruction").getAsString();
-                                            PromptGenerationHudHelper.resetHudAction();
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
                                             handled = true;
                                             break;
                                         } else if (com.xceptance.neodymium.ai.core.HudActionType.EDIT == actionType) {
                                             hudEditInstruction = actionObj.get("instruction").getAsString();
-                                            PromptGenerationHudHelper.resetHudAction();
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
                                             shouldExecute = false; // Don't execute the old action
                                             handled = true;
                                             break;
                                         } else if (com.xceptance.neodymium.ai.core.HudActionType.SAVE_EXIT == actionType) {
-                                            PromptGenerationHudHelper.resetHudAction();
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
                                             hudSaveExit = true;
                                             handled = true;
                                             break;
@@ -732,7 +732,7 @@ public class AiPromptGenerator {
                                     throw new RuntimeException(
                                             "User did not approve the actions within 1 hour. Halting exploration.");
                             }
-                            PromptGenerationHudHelper.resetHudAction();
+                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
                         }
 
                         if (hudRewind) {
