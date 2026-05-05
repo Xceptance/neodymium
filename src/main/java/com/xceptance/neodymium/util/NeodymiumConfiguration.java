@@ -339,6 +339,12 @@ public interface NeodymiumConfiguration extends Mutable, Accessible
     @Key("neodymium.testNameFilter")
     public String getTestNameFilter();
 
+    @Key("neodymium.testIdFilter")
+    public String getTestIdFilter();
+
+    @Key("neodymium.testFileFilter")
+    public String getTestFileFilter();
+
     @Key("neodymium.workInProgress")
     @DefaultValue("false")
     public boolean workInProgress();

@@ -238,21 +238,20 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
             // required to clear context for the thread containing class with no tests (usually done in runChild but as
             // runChild is not triggered for any method in the class in this case, we need to trigger it here)
             Neodymium.clearThreadContext();
+            boolean noFiltersActive = StringUtils.isEmpty(testExecutionRegex) 
+                    && StringUtils.isBlank(Neodymium.configuration().getTestFileFilter()) 
+                    && StringUtils.isBlank(Neodymium.configuration().getTestIdFilter());
+
             // only throw exception if test class has no execution methods accidentally
-            if (StringUtils.isNotEmpty(testExecutionRegex))
+            if (noFiltersActive)
             {
                 errors.add(new Exception("No runnable methods"));
             }
-            // in case the neodymium.testNameFilter is set, it's assumes, that the test methods are ignored on
-            // purpose
+            // in case any filter is set, it's assumed that the test methods are ignored on purpose
             else
             {
-                // for the case, when the property was set accidentally, inform the user about such behavior reason via
-                // warning in logs
-                LOGGER.warn("The test class " + getName() + " will not be executed as none of its methods match regex '"
-                                + testExecutionRegex + "'. In case this is not the behaviour you expected,"
-                                + " please check your neodymium.properties for neodymium.testNameFilter configuration"
-                                + " and your maven surefire settings for the corresponding system property");
+                // for the case, when the property was set accidentally, inform the user about such behavior reason via warning in logs
+                LOGGER.warn("The test class " + getName() + " will not be executed as none of its methods match the active filters.");
             }
         }
     }
@@ -326,6 +325,16 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
                     // we save both, the builder instance as well as the "data" to run with
                     builderList.add(builder);
                     builderDataList.add(iterationData);
+                }
+                else if (builder instanceof com.xceptance.neodymium.junit4.statement.testdata.TestdataStatement)
+                {
+                    if (org.apache.commons.lang3.StringUtils.isNotBlank(Neodymium.configuration().getTestFileFilter()) || org.apache.commons.lang3.StringUtils.isNotBlank(Neodymium.configuration().getTestIdFilter()))
+                    {
+                        // If test data filter is active, and test data is empty, this test should be skipped entirely
+                        builderList.add(builder);
+                        builderDataList.add(new LinkedList<>());
+                        break;
+                    }
                 }
             }
 

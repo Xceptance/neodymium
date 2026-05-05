@@ -26,6 +26,10 @@ import org.slf4j.LoggerFactory;
 
 import com.xceptance.neodymium.common.testdata.DataFile;
 import com.xceptance.neodymium.common.testdata.DataFolder;
+import com.xceptance.neodymium.util.Neodymium;
+import java.util.stream.Collectors;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 /**
  * Utility class for test data handling.
  * 
@@ -51,6 +55,12 @@ public final class TestDataUtils
      */
     public static List<Map<String, String>> getDataSets(final Class<?> testClass) throws FileNotFoundException, IOException
     {
+        Pattern fileFilterPattern = null;
+        if (StringUtils.isNotBlank(Neodymium.configuration().getTestFileFilter())) {
+            // Compile the filter regex once to optimize repeated matching during file discovery
+            fileFilterPattern = Pattern.compile(Neodymium.configuration().getTestFileFilter());
+        }
+
         DataFile[] dataFiles = testClass.getAnnotationsByType(DataFile.class);
         DataFolder[] dataFolders = testClass.getAnnotationsByType(DataFolder.class);
 
@@ -104,6 +114,12 @@ public final class TestDataUtils
                 fileNames.add(dottedName + fileExtension);
             }
 
+            if (fileFilterPattern != null) {
+                final Pattern finalFilter = fileFilterPattern;
+                // Pre-filter implicit files before triggering disk I/O
+                fileNames.removeIf(name -> !finalFilter.matcher(name.replace('\\', '/')).find());
+            }
+
             List<File> dataSetFileDirs = new LinkedList<>();
             dataSetFileDirs.add(new File("."));
             dataSetFileDirs.add(new File("src/test/resources"));
@@ -111,9 +127,9 @@ public final class TestDataUtils
             List<Map<String, String>> fileDataSets = getDataSets(dataSetFileDirs, fileNames, testClass);
             
             appendDataSetsAndCheckIDs(resultDataSets, fileDataSets, dataSetFileDirs.get(0).getName(), testIdToFileName);
-            
-            return resultDataSets;
         }
+        else
+        {
 
 
         for (DataFile dataFile : dataFiles)
@@ -121,6 +137,11 @@ public final class TestDataUtils
             String filePath = dataFile.value();
             if (StringUtils.isBlank(filePath))
             {
+                continue;
+            }
+
+            if (fileFilterPattern != null && !fileFilterPattern.matcher(filePath.replace('\\', '/')).find()) {
+                // Skip reading this explicit @DataFile if it does not match the requested filter
                 continue;
             }
 
@@ -190,6 +211,11 @@ public final class TestDataUtils
                         continue;
                     }
 
+                    if (fileFilterPattern != null && !fileFilterPattern.matcher(file.getAbsolutePath().replace('\\', '/')).find()) {
+                        // Skip parsing this discovered file entirely to save time during large test runs
+                        continue;
+                    }
+
                     if (!isSupportedExtension(file.getName()))
                     {
                         LOGGER.warn("Unsupported or ignored test data file: " + file.getAbsolutePath());
@@ -206,6 +232,30 @@ public final class TestDataUtils
                 LOGGER.warn("The data folder:\"" + folderPath + "\" provided within the test class:\"" + testClass.getSimpleName()
                                            + "\" does not exist or is not a directory.");
             }
+        }
+
+        }
+
+        String targetTestId = Neodymium.configuration().getTestIdFilter();
+
+        if (StringUtils.isNotBlank(targetTestId))
+        {
+            Pattern idFilter = Pattern.compile(targetTestId);
+
+            // Filter parsed datasets. We must do this after file parsing because test IDs are defined inside the files.
+            resultDataSets = resultDataSets.stream().filter(dataSet -> {
+                String currentTestId = dataSet.get("testId");
+                if (StringUtils.isBlank(currentTestId))
+                {
+                    currentTestId = dataSet.get("TEST_ID");
+                }
+
+                if (currentTestId == null) {
+                    return false;
+                }
+                
+                return idFilter.matcher(currentTestId).find();
+            }).collect(Collectors.toList());
         }
 
         return resultDataSets;

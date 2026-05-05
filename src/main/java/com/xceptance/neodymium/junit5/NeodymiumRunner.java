@@ -66,6 +66,12 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
     }
 
     @Override
+    public boolean mayReturnZeroTestTemplateInvocationContexts(ExtensionContext context)
+    {
+        return true;
+    }
+
+    @Override
     public Stream<TestTemplateInvocationContext> provideTestTemplateInvocationContexts(ExtensionContext context)
     {
         // clear the context before next child run
