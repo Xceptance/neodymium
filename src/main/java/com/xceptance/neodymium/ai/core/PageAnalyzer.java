@@ -76,6 +76,7 @@ public class PageAnalyzer
 
             function isVisible(el) {
                 if (!el.isConnected) return false;
+                if (el.closest && el.closest('.neodymium-ai-hud')) return false;
 
                 const style = window.getComputedStyle(el);
                 if (style.display === 'none' || style.visibility === 'hidden') return false;
@@ -212,6 +213,7 @@ public class PageAnalyzer
                     var forms = queryAllDeep('form');
                     for (var f = 0; f < forms.length; f++) {
                         var form = forms[f];
+                        if (form.closest && form.closest('.neodymium-ai-hud')) continue;
                         var formId = assignId(form);
 
                         var fields = [];
