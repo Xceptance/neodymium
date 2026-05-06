@@ -14,21 +14,17 @@ import org.yaml.snakeyaml.Yaml;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-public class YamlFileReader
-{
+public class YamlFileReader {
     private final static Gson GSON = new GsonBuilder().serializeNulls().create();
 
-    public static List<Map<String, String>> readFile(InputStream inputStream)
-    {
+    public static List<Map<String, String>> readFile(InputStream inputStream) {
         List<Map<String, String>> resultData = new LinkedList<>();
         Yaml yaml = new Yaml();
-        
-        try
-        {
+
+        try {
             Object data = yaml.load(inputStream);
-            
-            if (data == null)
-            {
+
+            if (data == null) {
                 return resultData;
             }
 
@@ -36,115 +32,114 @@ public class YamlFileReader
             String prompt = null;
             Object before = null;
             Object after = null;
+            Object context = null;
 
-            // Scenario 1: The root is a map (complex structure, e.g., AI integration with 'prompt' and 'data')
-            if (data instanceof Map)
-            {
+            // Scenario 1: The root is a map (complex structure, e.g., AI integration with
+            // 'prompt' and 'data')
+            if (data instanceof Map) {
                 Map<?, ?> rootMap = (Map<?, ?>) data;
-                if (rootMap.containsKey("prompt"))
-                {
+                if (rootMap.containsKey("prompt")) {
                     prompt = String.valueOf(rootMap.get("prompt"));
                 }
+                if (rootMap.containsKey("context")) {
+                    context = rootMap.get("context");
+                }
+                if (rootMap.containsKey("systemContext")) {
+                    context = rootMap.get("systemContext");
+                }
+
                 if (rootMap.containsKey("before")) {
                     before = rootMap.get("before");
                 }
                 if (rootMap.containsKey("after")) {
                     after = rootMap.get("after");
                 }
-                
-                if (rootMap.containsKey("data") && rootMap.get("data") instanceof List)
-                {
+
+                if (rootMap.containsKey("data") && rootMap.get("data") instanceof List) {
                     iterationList = (List<?>) rootMap.get("data");
-                }
-                else
-                {
-                    // Treat the map itself as a single iteration if it does not match the 'data' array format
+                } else {
+                    // Treat the map itself as a single iteration if it does not match the 'data'
+                    // array format
                     iterationList = List.of(rootMap);
                 }
             }
             // Scenario 2: The root is a list directly
-            else if (data instanceof List)
-            {
+            else if (data instanceof List) {
                 iterationList = (List<?>) data;
-            }
-            else
-            {
+            } else {
                 throw new RuntimeException("YAML root must be a List or a Map containing a 'data' List.");
             }
 
-            // Map each element into Map<String, String> preserving JSON-style serialization for nesting
-            if (iterationList != null)
-            {
-                for (Object item : iterationList)
-                {
-                    if (item instanceof Map)
-                    {
+            // Map each element into Map<String, String> preserving JSON-style serialization
+            // for nesting
+            if (iterationList != null) {
+                for (Object item : iterationList) {
+                    if (item instanceof Map) {
                         Map<?, ?> dataset = (Map<?, ?>) item;
                         Map<String, String> newDataSet = new HashMap<>();
-                        
-                        for (Map.Entry<?, ?> entry : dataset.entrySet())
-                        {
+
+                        for (Map.Entry<?, ?> entry : dataset.entrySet()) {
+                            String key = entry.getKey().toString();
+                            if ("systemContext".equals(key)) {
+                                key = "context";
+                            }
+                            
                             Object value = entry.getValue();
-                            if (value == null)
-                            {
-                                newDataSet.put(entry.getKey().toString(), null);
-                            }
-                            else if (value instanceof Map || value instanceof List)
-                            {
+                            if (value == null) {
+                                newDataSet.put(key, null);
+                            } else if (value instanceof Map || value instanceof List) {
                                 // Serialize nested objects back to JSON string for consistent @DataItem parsing
-                                newDataSet.put(entry.getKey().toString(), GSON.toJson(value));
-                            }
-                            else
-                            {
-                                newDataSet.put(entry.getKey().toString(), String.valueOf(value));
+                                newDataSet.put(key, GSON.toJson(value));
+                            } else {
+                                newDataSet.put(key, String.valueOf(value));
                             }
                         }
-                        
-                        // Inject the AI global prompt into every iteration context transparently if not locally overridden
-                        if (prompt != null && !newDataSet.containsKey("prompt"))
-                        {
+
+                        // Inject the AI global prompt into every iteration context transparently if not
+                        // locally overridden
+                        if (prompt != null && !newDataSet.containsKey("prompt")) {
                             newDataSet.put("prompt", prompt);
                         }
-                        
-                        if (before != null && !newDataSet.containsKey("before"))
-                        {
+
+                        if (before != null && !newDataSet.containsKey("before")) {
                             if (before instanceof List) {
                                 newDataSet.put("before", GSON.toJson(before));
                             } else {
                                 newDataSet.put("before", String.valueOf(before));
                             }
                         }
-                        
-                        if (after != null && !newDataSet.containsKey("after"))
-                        {
+
+                        if (after != null && !newDataSet.containsKey("after")) {
                             if (after instanceof List) {
                                 newDataSet.put("after", GSON.toJson(after));
                             } else {
                                 newDataSet.put("after", String.valueOf(after));
                             }
                         }
-                        
+
+                        if (context != null && !newDataSet.containsKey("context")) {
+                            if (context instanceof List) {
+                                newDataSet.put("context", GSON.toJson(context));
+                            } else {
+                                newDataSet.put("context", String.valueOf(context));
+                            }
+                        }
+
                         resultData.add(newDataSet);
                     }
                 }
             }
-        }
-        catch (Exception e)
-        {
+        } catch (Exception e) {
             throw new RuntimeException("Error parsing YAML file", e);
         }
-        
+
         return resultData;
     }
 
-    public static List<Map<String, String>> readFile(File file)
-    {
-        try
-        {
+    public static List<Map<String, String>> readFile(File file) {
+        try {
             return readFile(new FileInputStream(file));
-        }
-        catch (FileNotFoundException e)
-        {
+        } catch (FileNotFoundException e) {
             throw new RuntimeException("File not found: " + file.getAbsolutePath(), e);
         }
     }
