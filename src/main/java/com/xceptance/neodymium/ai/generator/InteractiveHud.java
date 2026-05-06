@@ -36,6 +36,15 @@ public class InteractiveHud {
     private String sourceFile;
     private Map<String, String> dataBindings;
     private boolean canEdit;
+    
+    private List<String> lastPlanned;
+    private List<String> lastPerformed;
+    private boolean lastAutoSkip;
+    private boolean lastHudPromptChanged;
+    private boolean lastIsFinished;
+    private String lastCurrentUnresolvedStep;
+    private String lastReasoning;
+    private boolean lastIsReplay;
 
     public InteractiveHud() {
         evaluateCanEdit();
@@ -82,6 +91,15 @@ public class InteractiveHud {
 
     public void injectOrUpdateHud(List<String> planned, List<String> performed, boolean autoSkip,
             boolean hudPromptChanged, boolean isFinished, String currentUnresolvedStep, String reasoning, boolean isReplay) {
+        this.lastPlanned = planned;
+        this.lastPerformed = performed;
+        this.lastAutoSkip = autoSkip;
+        this.lastHudPromptChanged = hudPromptChanged;
+        this.lastIsFinished = isFinished;
+        this.lastCurrentUnresolvedStep = currentUnresolvedStep;
+        this.lastReasoning = reasoning;
+        this.lastIsReplay = isReplay;
+
         evaluateCanEdit();
         Map<String, String> configMap = new java.util.HashMap<>();
         if (com.xceptance.neodymium.util.Neodymium.configuration() instanceof org.aeonbits.owner.Accessible) {
@@ -108,6 +126,18 @@ public class InteractiveHud {
 
     public String checkHudAction() {
         try {
+            Boolean hudExists = com.codeborne.selenide.Selenide.executeJavaScript("return document.getElementById('neo-ai-hud') !== null;");
+            if (Boolean.FALSE.equals(hudExists) && lastPlanned != null) {
+                // The HUD was removed (e.g. page navigation), reinject it silently.
+                injectOrUpdateHud(lastPlanned, lastPerformed, lastAutoSkip, lastHudPromptChanged, lastIsFinished, lastCurrentUnresolvedStep, lastReasoning, lastIsReplay);
+            } else if (Boolean.TRUE.equals(hudExists)) {
+                // If it exists, sync autoSkip state in case user changed it before navigating
+                Object skipStatus = com.codeborne.selenide.Selenide.executeJavaScript("return window.neoHudAutoSkip;");
+                if (skipStatus != null) {
+                    this.lastAutoSkip = (Boolean) skipStatus;
+                }
+            }
+
             Object status = com.codeborne.selenide.Selenide.executeJavaScript("return window.neoHudAction;");
             if (status != null) {
                 return String.valueOf(status);

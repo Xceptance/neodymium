@@ -23,6 +23,11 @@
         var hudElement = document.getElementById('neo-ai-hud');
         hudElement.style.opacity = '1';
 
+        // Prevent mouse interactions inside the HUD from bubbling up and closing page overlays
+        hudElement.addEventListener('click', function(e) { e.stopPropagation(); });
+        hudElement.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+        hudElement.addEventListener('mouseup', function(e) { e.stopPropagation(); });
+
         document.getElementById('neo-approve-btn').addEventListener('click', function() {
             if (!this.disabled) {
                 if (this.dataset.isFinished === 'true') {
@@ -262,21 +267,51 @@
                 return;
             }
 
-            if (e.altKey && e.key.toLowerCase() === 'a') {
+            var key = e.key ? e.key.toLowerCase() : '';
+            var isAltA = e.altKey && key === 'a';
+            var isCtrlEnter = e.ctrlKey && e.code === 'Enter';
+            
+            if (isAltA || isCtrlEnter || (e.altKey && (key === 's' || key === 'h'))) {
                 e.preventDefault();
-                var btn = document.getElementById('neo-approve-btn');
-                if (!btn.disabled) btn.click();
-            } else if (e.altKey && e.key.toLowerCase() === 's') {
-                e.preventDefault();
-                var cb = document.getElementById('neo-autoskip-cb');
-                cb.checked = !cb.checked;
-                cb.dispatchEvent(new Event('change'));
-            } else if (e.altKey && e.key.toLowerCase() === 'h') {
-                e.preventDefault();
-                var toggleBtn = document.getElementById('neo-toggle-history');
-                if (toggleBtn) toggleBtn.click();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                if (isAltA || isCtrlEnter) {
+                    var btn = document.getElementById('neo-approve-btn');
+                    if (!btn.disabled) {
+                        if (btn.dataset.isFinished === 'true') {
+                            window.neoHudAction = JSON.stringify({ action: "SAVE_EXIT" });
+                        } else {
+                            window.neoHudAction = JSON.stringify({ action: "APPROVE" });
+                        }
+                        btn.disabled = true;
+                        btn.style.opacity = '0.5';
+                    }
+                } else if (key === 's') {
+                    var cb = document.getElementById('neo-autoskip-cb');
+                    cb.checked = !cb.checked;
+                    window.neoHudAutoSkip = cb.checked;
+                    if (cb.checked && !document.getElementById('neo-approve-btn').disabled && document.getElementById('neo-planned-actions').style.display !== 'none') {
+                        window.neoHudAction = JSON.stringify({ action: "APPROVE" });
+                    }
+                } else if (key === 'h') {
+                    var toggleBtn = document.getElementById('neo-toggle-history');
+                    if (toggleBtn) toggleBtn.click();
+                }
             }
-        });
+        }, true);
+
+        // Also intercept keyup to prevent the application from reacting to the release of the shortcut keys
+        document.addEventListener('keyup', function(e) {
+            if (e.altKey && e.key) {
+                var key = e.key.toLowerCase();
+                if (key === 'a' || key === 's' || key === 'h') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                }
+            }
+        }, true);
 
         function renderFullPrompt() {
             var overlay = document.getElementById('neo-full-prompt-overlay');
@@ -387,7 +422,7 @@
             approveBtn.dataset.isFinished = 'true';
         } else {
             approveBtn.innerHTML = '✓';
-            approveBtn.title = 'Approve [Alt+A]';
+            approveBtn.title = 'Approve [Ctrl+Enter or Alt+A]';
             approveBtn.style.background = '#4CAF50';
             approveBtn.dataset.isFinished = 'false';
         }
