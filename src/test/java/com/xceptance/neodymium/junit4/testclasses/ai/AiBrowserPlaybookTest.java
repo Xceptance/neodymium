@@ -10,7 +10,6 @@ import java.util.Arrays;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.ai.action.Action;
-import com.xceptance.neodymium.ai.action.ActionType;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.Neodymium;
@@ -134,7 +133,7 @@ public class AiBrowserPlaybookTest {
     }
 
     private PlaybookStep createStep(String promptLine, String method) {
-        Action a = new Action(ActionType.JAVA_METHOD, method, "", "Mock action");
+        Action a = new Action("JAVA_METHOD", method, "", "Mock action");
         return new PlaybookStep(promptLine, "mock reasoning", Arrays.asList(a));
     }
 }

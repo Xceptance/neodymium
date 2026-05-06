@@ -53,41 +53,7 @@ public interface AiConfiguration extends Mutable
     @DefaultValue("true")
     public boolean playbookRecordEnabled();
 
-    @Key("neodymium.ai.agent.pattern.url")
-    @DefaultValue("(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(\\.)*$")
-    public String agentPatternUrl();
 
-    @Key("neodymium.ai.agent.pattern.urlWithBasicAuth")
-    @DefaultValue("(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(?:\\s+.*?\\b(?:with|using)?\\s*basic\\s+auth\\s+(?:username|user)\\s+['\"](?<username>.*?)['\"]\\s+(?:and\\s+)?(?:password|pass)\\s+['\"](?<password>.*?)['\"]).*$")
-    public String agentPatternUrlWithBasicAuth();
-    
-    @Key("neodymium.ai.agent.pattern.javaMethod")
-    @DefaultValue("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(([^)]*)\\)")
-    public String agentPatternJavaMethod();
-
-    @Key("neodymium.ai.agent.pattern.validation")
-    @DefaultValue("(?i)^(?:verify|check|validate|ensure|assert|prüfe|verifiziere|überprüfe|bestätige|checke)\\b.*")
-    public String agentPatternValidation();
-
-    @Key("neodymium.ai.agent.pattern.back")
-    @DefaultValue("(?i)^(?:go\\s+)?back$|^navigate\\s+back$")
-    public String agentPatternBack();
-
-    @Key("neodymium.ai.agent.pattern.forward")
-    @DefaultValue("(?i)^(?:go\\s+)?forward$|^navigate\\s+forward$")
-    public String agentPatternForward();
-
-    @Key("neodymium.ai.agent.pattern.refresh")
-    @DefaultValue("(?i)^(?:refresh|reload)(?:\\s+page)?$")
-    public String agentPatternRefresh();
-
-    @Key("neodymium.ai.agent.pattern.clearCookies")
-    @DefaultValue("(?i)^(?:clear\\s+cookies|reset\\s+session|clear\\s+all\\s+cookies)$")
-    public String agentPatternClearCookies();
-    
-    @Key("neodymium.ai.agent.pattern.ifStatmentPattern")
-    @DefaultValue("(?i)if\\s+(.*?)(?:,\\s+then\\s+|\\s+then\\s+|,\\s+)(.*)$")
-    public String agentPatternIfStatement();
 
     @Key("neodymium.ai.temperature")
     @DefaultValue("0.1")
@@ -127,4 +93,8 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.interactive")
     @DefaultValue("false")
     public boolean aiInteractive();
+
+    @Key("neodymium.ai.plugins")
+    @DefaultValue("")
+    public java.util.List<String> aiPlugins();
 }

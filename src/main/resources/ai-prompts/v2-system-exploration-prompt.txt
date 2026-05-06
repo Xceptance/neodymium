@@ -53,7 +53,7 @@
         "reasoning": "Explain DOM analysis, why previous step succeeded/failed, and next steps",
         "actions": [
             {
-                 "type": "NAVIGATE | CLICK | TYPE | CLEAR | SELECT | KEY_PRESS | ASSERT | WAIT | SCROLL | HOVER | CLEAR_COOKIES",
+                 "type": "{actionTypes}",
                  "target": "css locator (for WAIT: the element to wait for)",
                  "value": "concrete text to inject (for WAIT: max timeout in ms)",
                  "dataBindings": { },

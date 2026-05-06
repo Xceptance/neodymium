@@ -9,7 +9,7 @@ import java.util.HashMap;
  */
 public class Action
 {
-    private ActionType type;
+    private String type;
 
     private String target;
 
@@ -31,7 +31,7 @@ public class Action
     {
     }
 
-    public Action(final ActionType type, final String target, final String description)
+    public Action(final String type, final String target, final String description)
     {
         this.type = type;
         this.target = target;
@@ -39,12 +39,12 @@ public class Action
         this.description = description;
     }
 
-    public Action(final ActionType type, final String target, final String value, final String description)
+    public Action(final String type, final String target, final String value, final String description)
     {
         this(type, target, value != null ? List.of(value) : null, description);
     }
 
-    public Action(final ActionType type, final String target, final List<String> value, final String description) {
+    public Action(final String type, final String target, final List<String> value, final String description) {
         this.type = type;
         this.target = target;
         this.value = value;
@@ -56,14 +56,21 @@ public class Action
         this.replay = "(Replay)";
     }
 
-    public ActionType getType()
+    public String getType()
     {
         return type;
     }
 
-    public void setType(final ActionType type)
+    public void setType(final String type)
     {
         this.type = type;
+    }
+
+    /**
+     * Gets the plugin responsible for executing this action, based on the action type.
+     */
+    public AiActionPlugin getPlugin() {
+        return ActionRegistry.getPlugin(type);
     }
 
     /**

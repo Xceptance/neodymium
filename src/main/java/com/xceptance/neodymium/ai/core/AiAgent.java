@@ -3,7 +3,6 @@ package com.xceptance.neodymium.ai.core;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
@@ -15,7 +14,8 @@ import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
 import com.xceptance.neodymium.ai.action.ActionParser;
-import com.xceptance.neodymium.ai.action.ActionType;
+import com.xceptance.neodymium.ai.action.ActionRegistry;
+import com.xceptance.neodymium.ai.action.AiActionPlugin;
 import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
@@ -41,23 +41,7 @@ public class AiAgent {
 
     private static final Logger LOG = LoggerFactory.getLogger(AiAgent.class);
 
-    private final Pattern urlPattern;
 
-    private final Pattern urlBasicAuthPattern;
-
-    private final Pattern javaMethodPattern;
-
-    private final Pattern validationPattern;
-
-    private final Pattern backPattern;
-
-    private final Pattern forwardPattern;
-
-    private final Pattern refreshPattern;
-
-    private final Pattern clearCookiesPattern;
-
-    private final Pattern ifStatementPattern;
 
     private final LlmClient llmClient;
 
@@ -90,16 +74,6 @@ public class AiAgent {
         this.maxRetries = config.agentMaxRetries();
         this.screenshotBeforeAction = config.agentScreenshotBeforeAction();
         this.config = config;
-
-        this.urlPattern = Pattern.compile(config.agentPatternUrl());
-        this.urlBasicAuthPattern = Pattern.compile(config.agentPatternUrlWithBasicAuth());
-        this.javaMethodPattern = Pattern.compile(config.agentPatternJavaMethod());
-        this.validationPattern = Pattern.compile(config.agentPatternValidation());
-        this.backPattern = Pattern.compile(config.agentPatternBack());
-        this.forwardPattern = Pattern.compile(config.agentPatternForward());
-        this.refreshPattern = Pattern.compile(config.agentPatternRefresh());
-        this.clearCookiesPattern = Pattern.compile(config.agentPatternClearCookies());
-        this.ifStatementPattern = Pattern.compile(config.agentPatternIfStatement());
     }
 
     public void setSutContext(String sutContext) {
@@ -523,26 +497,47 @@ public class AiAgent {
             }
         }
 
-        // 2. If there is no playbook to replay, try parsing and handle obvious commands
-        // directly
+        // 2. Try to identify the action intent upfront. If it can be executed directly, do so.
+        // If it requires the LLM to resolve parameters or perform visual validation, pass it to the LLM.
         if (actions.isEmpty()) {
-            actions = getActionsDirectly(instruction, step);
+            actions = identifyActions(instruction, step);
             if (!actions.isEmpty()) {
-                step.setPromptLine(instruction);
-                step.setReasoning("directly parsed");
-                step.setActions(actions);
+                boolean requiresLlm = false;
+                boolean requiresScreenshot = screenshotBeforeAction;
+                
+                for (Action a : actions) {
+                    AiActionPlugin plugin = a.getPlugin();
+                    if (plugin != null) {
+                        if (plugin.requiresLlm(a)) {
+                            requiresLlm = true;
+                        }
+                        if (plugin.requiresScreenshot(a)) {
+                            requiresScreenshot = true;
+                        }
+                    }
+                }
+                
+                if (requiresLlm) {
+                    // Intent extracted, but it requires the LLM to process it fully (e.g. visual validation)
+                    actions = getActionsFromLLM(instruction, step, playbook, requiresScreenshot);
+                } else {
+                    // Simple action that can be executed directly
+                    step.setPromptLine(instruction);
+                    step.setReasoning("directly parsed");
+                    step.setActions(actions);
+                }
             }
         }
 
         // 3. Still no luck? Let's give it to the AI
         if (actions.isEmpty()) {
-            actions = getActionsFromLLM(instruction, step, playbook);
+            actions = getActionsFromLLM(instruction, step, playbook, screenshotBeforeAction);
         }
 
         return actions;
     }
 
-    private List<Action> getActionsFromLLM(String instruction, PlaybookStep playbookStep, Playbook playbook) {
+    private List<Action> getActionsFromLLM(String instruction, PlaybookStep playbookStep, Playbook playbook, boolean requiresScreenshot) {
         // If we are inside a playbook replay and failed, we have an initial error
         // already.
         String lastError;
@@ -568,7 +563,7 @@ public class AiAgent {
                 // 1. Capture page state
                 final boolean isValidation = isValidationInstruction(instruction);
                 final String domContext = pageAnalyzer.getPageContext(isValidation);
-                final String screenshot = screenshotBeforeAction
+                final String screenshot = requiresScreenshot
                         ? pageAnalyzer.captureScreenshot("Step: " + instruction)
                         : null;
 
@@ -704,79 +699,30 @@ public class AiAgent {
         }
     }
 
-    private List<Action> getActionsDirectly(String instruction, PlaybookStep playbookStep) {
-        ArrayList<Action> list = new ArrayList<Action>();
-
-        // Check for URL navigation pattern
-        final Matcher urlMatcher = urlPattern.matcher(instruction.strip());
-        if (urlMatcher.find()) {
-            final String url = urlMatcher.group(1);
-            LOG.debug("▶️ [EXEC] Direct navigation to: {}", url);
-            final Action navigateAction = new Action(ActionType.NAVIGATE, null, url, "Navigate to " + url);
-            list.add(navigateAction);
-        }
-
-        final Matcher urlBasicAuthMatcher = urlBasicAuthPattern.matcher(instruction.strip());
-        if (urlBasicAuthMatcher.find()) {
-            final String url = urlBasicAuthMatcher.group(1);
-            final String username = urlBasicAuthMatcher.group("username");
-            final String password = urlBasicAuthMatcher.group("password");
-            if (username != null && password != null) {
-                LOG.debug("▶️ [EXEC] Direct navigation to: {}", url);
-                final Action navigateAction = new Action(ActionType.NAVIGATE, url, List.of(username, password),
-                        "Navigate to " + url + " with basic auth (user: "
-                                + username + ", pass: " + password + ")");
-                list.add(navigateAction);
+    private List<Action> identifyActions(String instruction, PlaybookStep playbookStep) {
+        for (AiActionPlugin plugin : ActionRegistry.getAllPlugins())
+        {
+            List<Action> actions = plugin.parseDirectInstruction(instruction);
+            if (actions != null && !actions.isEmpty()) {
+                if ("IF_CONDITION".equals(actions.get(0).getType())) {
+                    String condition = actions.get(0).getTarget();
+                    String command = actions.get(0).getValue();
+                    LOG.debug("🧠 [THOUGHT] Execution: If statement with condition '{}' and command '{}'", condition, command);
+                    List<Action> ifActions = getStepActions(condition, new Playbook(UUID.randomUUID().toString()));
+                    playbookStep.setActions(ifActions);
+                    playbookStep.setPromptLine(instruction);
+                    playbookStep.setReasoning("directly parsed (if-condition)");
+                    playbookStep.setFailure(null);
+                    return ifActions;
+                }
+                playbookStep.setActions(actions);
+                playbookStep.setPromptLine(instruction);
+                playbookStep.setReasoning("directly parsed");
+                playbookStep.setFailure(null);
+                return actions;
             }
         }
-
-        if (instruction.toLowerCase().contains("java")) {
-            final Matcher javaMatcher = javaMethodPattern.matcher(instruction.strip());
-            if (javaMatcher.find()) {
-                final String method = javaMatcher.group(1);
-                final String param = javaMatcher.group(2);
-                LOG.debug("▶️ [EXEC] Direct call Java Method {} with param {}", method, param);
-                final Action javaAction = new Action(ActionType.JAVA_METHOD, method, List.of(param),
-                        "Call " + method + " with param " + param);
-                list.add(javaAction);
-            }
-        }
-
-        final String trimmed = instruction.strip();
-        if (backPattern.matcher(trimmed).find()) {
-            LOG.debug("▶️ [EXEC] Direct execution: BACK");
-            list.add(new Action(ActionType.BACK, null, "Go back"));
-        }
-        if (forwardPattern.matcher(trimmed).find()) {
-            LOG.debug("▶️ [EXEC] Direct execution: FORWARD");
-            list.add(new Action(ActionType.FORWARD, null, "Go forward"));
-        }
-        if (refreshPattern.matcher(trimmed).find()) {
-            LOG.debug("▶️ [EXEC] Direct execution: REFRESH");
-            list.add(new Action(ActionType.REFRESH, null, "Refresh page"));
-        }
-        if (clearCookiesPattern.matcher(trimmed).find()) {
-            LOG.debug("▶️ [EXEC] Direct execution: CLEAR_COOKIES");
-            list.add(new Action(ActionType.CLEAR_COOKIES, null, "Clear cookies"));
-        }
-
-        final Matcher ifStatementMatcher = ifStatementPattern.matcher(instruction.strip());
-        if (ifStatementMatcher.find()) {
-            final String condition = ifStatementMatcher.group(1);
-            final String command = ifStatementMatcher.group(2);
-            LOG.debug("🧠 [THOUGHT] Execution: If statement with condition '{}' and command '{}'", condition, command);
-            list.addAll(getStepActions(condition, new Playbook(UUID.randomUUID().toString()))); // we can use a
-                                                                                                // temporary playbook
-                                                                                                // since we just want to
-                                                                                                // parse the condition
-        }
-
-        playbookStep.setActions(list);
-        playbookStep.setPromptLine(instruction);
-        playbookStep.setReasoning("directly parsed");
-        playbookStep.setFailure(null);
-
-        return list;
+        return new ArrayList<>();
     }
 
     /**
@@ -799,7 +745,8 @@ public class AiAgent {
     }
 
     private boolean isValidationInstruction(final String instruction) {
-        return validationPattern.matcher(instruction.strip()).find();
+        String pattern = com.xceptance.neodymium.util.Neodymium.configuration().getProperty("neodymium.ai.agent.pattern.validation", "(?i)^(?:verify|check|validate|ensure|assert|prüfe|verifiziere|überprüfe|bestätige|checke)\\b.*");
+        return Pattern.compile(pattern).matcher(instruction.strip()).find();
     }
 
     /**

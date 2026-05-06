@@ -119,19 +119,25 @@ public class AiBrowser implements AutoCloseable {
                 if (Neodymium.getData() != null) {
                     hud.setDataBindings(new java.util.HashMap<>(Neodymium.getData()));
                 }
-            } catch (Exception e) {}
+            } catch (Exception e) {
+            }
         }
+
+        if (Neodymium.getData() != null && Neodymium.getData().exists("context")) {
+            agent.setSutContext(resolveTestDataToPrompt(Neodymium.getData().asString("context")));
+        }
+
         agent.execute(naturalLanguageInstructions);
     }
 
     /**
-     * Executes natural language test instructions derived implicitly from the active test dataset. Expects a `prompt`
+     * Executes natural language test instructions derived implicitly from the
+     * active test dataset. Expects a `prompt`
      * variable to be defined within the currently injected dataset (e.g. via YAML).
      * 
      * @throws Throwable
      */
-    public void execute() throws Throwable
-    {
+    public void execute() throws Throwable {
         if (!Neodymium.getData().exists("prompt")) {
             throw new IllegalArgumentException(
                     "Cannot execute AI instruction implicitly: 'prompt' property is missing from the test dataset.");
@@ -364,7 +370,7 @@ public class AiBrowser implements AutoCloseable {
     /**
      * Executes the generative AI agent to create a natural language playbook.
      * 
-     * @param intent The high-level intent or goal for the AI to achieve.
+     * @param intent        The high-level intent or goal for the AI to achieve.
      * @param systemContext System-specific context to guide the AI's behavior.
      */
     public void generatePrompt(final String intent, final String systemContext) {

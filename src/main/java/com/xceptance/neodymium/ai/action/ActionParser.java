@@ -239,13 +239,10 @@ public class ActionParser {
                 return null;
             }
 
-            final ActionType type;
-            try
-            {
-                type = ActionType.valueOf(typeStr.toUpperCase());
-            }
-            catch (final IllegalArgumentException e)
-            {
+            final String type;
+            if (ActionRegistry.getPlugin(typeStr) != null) {
+                type = typeStr.toUpperCase();
+            } else {
                 LOG.warn("Unknown action type '{}', skipping", typeStr);
                 return null;
             }

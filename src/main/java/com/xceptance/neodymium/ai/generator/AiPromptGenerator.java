@@ -15,7 +15,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.Strictness;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
-import com.xceptance.neodymium.ai.action.ActionType;
+import com.xceptance.neodymium.ai.action.ActionParser;
+import com.xceptance.neodymium.ai.action.plugins.AssertAction;
 import com.xceptance.neodymium.ai.core.AiAgentPrompts;
 import com.xceptance.neodymium.ai.core.LlmClient;
 import com.xceptance.neodymium.ai.core.LlmMode;
@@ -290,13 +291,14 @@ public class AiPromptGenerator {
                         JsonObject actionJson = actionElement.getAsJsonObject();
                         Action nextAction = parseAndValidateAction(actionJson, currentKnownBindings);
 
-                        if (nextAction.getType() == ActionType.ASSERT) {
+                        if (AssertAction.ACTION_NAME.equals(nextAction.getType())) {
                             boolean isDuplicate = false;
                             java.util.List<Action> recentActions = new java.util.ArrayList<>(successfulPath);
                             recentActions.addAll(pendingActions);
                             for (int aIdx = recentActions.size() - 1; aIdx >= 0; aIdx--) {
                                 Action recent = recentActions.get(aIdx);
-                                if (recent.getType() != ActionType.ASSERT) {
+                                if (!com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME
+                                        .equals(recent.getType())) {
                                     break;
                                 }
                                 if (java.util.Objects.equals(recent.getDescription(), nextAction.getDescription()) &&
@@ -321,7 +323,8 @@ public class AiPromptGenerator {
                             pendingActions.add(nextAction);
                             statusMessage = nextAction.getDescription() + " (Target: " + nextAction.getTarget() + ")";
                         } catch (Exception e) {
-                            if (nextAction.getType() == ActionType.ASSERT
+                            if (com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME
+                                    .equals(nextAction.getType())
                                     && Neodymium.aiConfiguration().aiGenerateValidations()) {
                                 LOG.warn(
                                         "Validation failed. Attempting reactive healing with deterministic Validator Agent...");
@@ -363,7 +366,7 @@ public class AiPromptGenerator {
                         pendingActions.add(nextAction);
                         statusMessage = nextAction.getDescription() + " (Target: " + nextAction.getTarget() + ")";
                     } catch (Exception e) {
-                        if (nextAction.getType() == ActionType.ASSERT
+                        if ("ASSERT".equals(nextAction.getType())
                                 && Neodymium.aiConfiguration().aiGenerateValidations()) {
                             LOG.warn(
                                     "Validation failed. Attempting reactive healing with deterministic Validator Agent...");
@@ -428,7 +431,7 @@ public class AiPromptGenerator {
             Assertions.fail(
                     "Exploration finished but no steps were successful. Diagnostic log: " + locationHtml);
         } else {
-            extractAndWriteYaml(successfulPath, outputPath);
+            extractAndWriteYaml(successfulPath, outputPath, sutContext);
         }
 
         if (com.xceptance.neodymium.util.Neodymium.aiConfiguration().attachFullDiscussionToReport()) {
@@ -479,7 +482,7 @@ public class AiPromptGenerator {
         verifyV2(cleanPath, outputPath, url);
 
         // 4. Dump to yaml
-        extractAndWriteYaml(cleanPath, outputPath);
+        extractAndWriteYaml(cleanPath, outputPath, sutContext);
         if (com.xceptance.neodymium.util.Neodymium.aiConfiguration().attachFullDiscussionToReport()) {
             io.qameta.allure.Allure.addAttachment("AI Discussion V2", "text/html", executionLog.generateHtml(),
                     ".html");
@@ -522,14 +525,16 @@ public class AiPromptGenerator {
         boolean autoSkip = false;
         for (int i = 0; i < maxSteps && !entireGoalAchieved; i++) {
             if (isInteractive) {
-                Boolean currentAutoSkipStatus = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
+                Boolean currentAutoSkipStatus = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                        .checkAutoSkipStatus();
                 if (currentAutoSkipStatus != null) {
                     autoSkip = currentAutoSkipStatus;
                 }
                 List<String> performedStrs = new java.util.ArrayList<>();
                 for (Action a : actionsForLogging)
                     performedStrs.add(a.getDescription());
-                Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(null, performedStrs, autoSkip, false, false, "");
+                Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(null, performedStrs, autoSkip, false, false,
+                        "");
             }
             executionLog.startStep(i + 1, maxSteps, "Exploration Step");
             executionLog.startAttempt("Exploration Attempt");
@@ -610,11 +615,11 @@ public class AiPromptGenerator {
                 for (com.google.gson.JsonElement actionElement : actionsArray) {
                     try {
                         Action act = parseAndValidateAction(actionElement.getAsJsonObject(), tempBindings);
-                        if (act.getType() == ActionType.ASSERT) {
+                        if ("ASSERT".equals(act.getType())) {
                             boolean isDuplicate = false;
                             for (int aIdx = actionsForLogging.size() - 1; aIdx >= 0; aIdx--) {
                                 Action recent = actionsForLogging.get(aIdx);
-                                if (recent.getType() != ActionType.ASSERT)
+                                if (!"ASSERT".equals(recent.getType()))
                                     break;
                                 if (java.util.Objects.equals(recent.getDescription(), act.getDescription()) &&
                                         java.util.Objects.equals(recent.getTarget(), act.getTarget())) {
@@ -653,6 +658,8 @@ public class AiPromptGenerator {
 
                         if (isInteractive) {
                             java.util.Map<String, String> hudBindings = new java.util.HashMap<>(knownBindings);
+                            String systemPromptBase = AiAgentPrompts.SYSTEM_HEALING_PROMPT;
+                            systemPromptBase = injectPluginMetadata(systemPromptBase);
                             List<String> plannedStrs = new ArrayList<>();
                             for (int aIdx = pIdx; aIdx < proposedActions.size(); aIdx++) {
                                 Action act = proposedActions.get(aIdx);
@@ -668,23 +675,31 @@ public class AiPromptGenerator {
                                         knownBindings);
                                 performedStrs.add(resolvedStr != null ? resolvedStr : a.getDescription());
                             }
-                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs, performedStrs, autoSkip, false, false, plannedStrs != null && !plannedStrs.isEmpty() ? plannedStrs.get(0) : "");
+                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(
+                                    plannedStrs, performedStrs, autoSkip, false, false,
+                                    plannedStrs != null && !plannedStrs.isEmpty() ? plannedStrs.get(0) : "");
 
                             if (!autoSkip) {
                                 LOG.info("Waiting for user action in HUD...");
                                 boolean handled = false;
                                 for (int wait = 0; wait < 3600; wait++) {
-                                    String hudActionStr = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkHudAction();
+                                    String hudActionStr = com.xceptance.neodymium.util.Neodymium
+                                            .getOrCreateInteractiveHud().checkHudAction();
                                     if (hudActionStr != null) {
-                                        Boolean s = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
+                                        Boolean s = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                .checkAutoSkipStatus();
                                         if (s != null) {
                                             autoSkip = s;
                                         }
-                                        com.google.gson.JsonObject actionObj = com.google.gson.JsonParser.parseString(hudActionStr).getAsJsonObject();
-                                        String actionTypeStr = actionObj.has("action") ? actionObj.get("action").getAsString() : "";
+                                        com.google.gson.JsonObject actionObj = com.google.gson.JsonParser
+                                                .parseString(hudActionStr).getAsJsonObject();
+                                        String actionTypeStr = actionObj.has("action")
+                                                ? actionObj.get("action").getAsString()
+                                                : "";
                                         com.xceptance.neodymium.ai.core.HudActionType actionType = null;
                                         try {
-                                            actionType = com.xceptance.neodymium.ai.core.HudActionType.valueOf(actionTypeStr);
+                                            actionType = com.xceptance.neodymium.ai.core.HudActionType
+                                                    .valueOf(actionTypeStr);
                                         } catch (IllegalArgumentException e) {
                                             // Ignore unknown actions
                                         }
@@ -701,23 +716,27 @@ public class AiPromptGenerator {
                                             playbook.getSteps().subList(rIdx, playbook.getSteps().size()).clear();
                                             playbook.setCursor(rIdx);
                                             actionsForLogging.subList(rIdx, actionsForLogging.size()).clear();
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                    .resetHudAction();
                                             hudRewind = true;
                                             handled = true;
                                             break;
                                         } else if (com.xceptance.neodymium.ai.core.HudActionType.ADD == actionType) {
                                             hudAddInstruction = actionObj.get("instruction").getAsString();
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                    .resetHudAction();
                                             handled = true;
                                             break;
                                         } else if (com.xceptance.neodymium.ai.core.HudActionType.EDIT == actionType) {
                                             hudEditInstruction = actionObj.get("instruction").getAsString();
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                    .resetHudAction();
                                             shouldExecute = false; // Don't execute the old action
                                             handled = true;
                                             break;
                                         } else if (com.xceptance.neodymium.ai.core.HudActionType.SAVE_EXIT == actionType) {
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                    .resetHudAction();
                                             hudSaveExit = true;
                                             handled = true;
                                             break;
@@ -748,22 +767,30 @@ public class AiPromptGenerator {
                             String manualInstr = hudAddInstruction != null ? hudAddInstruction : hudEditInstruction;
                             LOG.info("User requested manual instruction: {}", manualInstr);
                             String fallbackPrompt = "The user manually requested this action: '" + manualInstr + "'. " +
-                                "Return exactly ONE action JSON object matching this instruction, adhering to your system ActionType rules. " +
-                                "No markdown, just raw JSON.";
-                            
+                                    "Return exactly ONE action JSON object matching this instruction, adhering to your system ActionType rules. "
+                                    +
+                                    "No markdown, just raw JSON.";
+
                             try {
-                                String fallbackResponse = llmClient.chat(AiAgentPrompts.SYSTEM_PROMPT, fallbackPrompt);
+                                String systemPromptBase = AiAgentPrompts.SYSTEM_PROMPT;
+                                systemPromptBase = injectPluginMetadata(systemPromptBase);
+                                String fallbackResponse = llmClient.chat(systemPromptBase, fallbackPrompt);
                                 String cleanJson = fallbackResponse.trim();
-                                if (cleanJson.startsWith("```json")) cleanJson = cleanJson.substring(7);
-                                else if (cleanJson.startsWith("```")) cleanJson = cleanJson.substring(3);
-                                if (cleanJson.endsWith("```")) cleanJson = cleanJson.substring(0, cleanJson.length() - 3);
-                                com.google.gson.JsonObject fallbackObj = com.google.gson.JsonParser.parseString(cleanJson).getAsJsonObject();
+                                if (cleanJson.startsWith("```json"))
+                                    cleanJson = cleanJson.substring(7);
+                                else if (cleanJson.startsWith("```"))
+                                    cleanJson = cleanJson.substring(3);
+                                if (cleanJson.endsWith("```"))
+                                    cleanJson = cleanJson.substring(0, cleanJson.length() - 3);
+                                com.google.gson.JsonObject fallbackObj = com.google.gson.JsonParser
+                                        .parseString(cleanJson).getAsJsonObject();
                                 Action fallbackAction = parseAndValidateAction(fallbackObj, knownBindings);
-                                
+
                                 executeAction(actionExecutor, fallbackAction);
                                 com.xceptance.neodymium.ai.playbook.PlaybookStep pbStep = new com.xceptance.neodymium.ai.playbook.PlaybookStep();
                                 pbStep.setPromptLine(fallbackAction.getDescription());
-                                pbStep.setReasoning(hudAddInstruction != null ? "Manually added by user: " + manualInstr : "Manually edited by user: " + manualInstr);
+                                pbStep.setReasoning(hudAddInstruction != null ? "Manually added by user: " + manualInstr
+                                        : "Manually edited by user: " + manualInstr);
                                 pbStep.setActions(java.util.Collections.singletonList(fallbackAction));
                                 playbook.addStep(pbStep);
                                 actionsForLogging.add(fallbackAction);
@@ -793,7 +820,8 @@ public class AiPromptGenerator {
                                 actionsForLogging.add(nextAction);
                                 executionLog.logActions(java.util.Collections.singletonList(nextAction));
 
-                                statusMessage = nextAction.getDescription() + " (Target: " + nextAction.getTarget() + ")";
+                                statusMessage = nextAction.getDescription() + " (Target: " + nextAction.getTarget()
+                                        + ")";
                                 failedAttempts = 0;
                             } else {
                                 statusMessage = "Skipped by user: " + nextAction.getDescription();
@@ -1025,9 +1053,10 @@ public class AiPromptGenerator {
     }
 
     protected String executeV2ExplorationLlmCall(LlmClient llmClient, String prompt) {
-        return llmClient.chat(
-                AiAgentPrompts.getV2SystemExplorationPrompt(Neodymium.aiConfiguration().aiGenerateValidations()),
-                prompt);
+        String systemPromptBase = AiAgentPrompts
+                .getV2SystemExplorationPrompt(Neodymium.aiConfiguration().aiGenerateValidations());
+        systemPromptBase = injectPluginMetadata(systemPromptBase);
+        return llmClient.chat(systemPromptBase, prompt);
     }
 
     protected Path dumpDiagnosticLog(List<Action> successfulPath, List<String> iterationLogs, String outputPath,
@@ -1084,7 +1113,7 @@ public class AiPromptGenerator {
     }
 
     private Action parseAndValidateAction(JsonObject actionJson, java.util.Map<String, String> knownBindings) {
-        ActionType type = ActionType.valueOf(actionJson.get("type").getAsString());
+        String type = actionJson.get("type").getAsString();
         String target = actionJson.has("target") && !actionJson.get("target").isJsonNull()
                 ? actionJson.get("target").getAsString()
                 : null;
@@ -1115,8 +1144,10 @@ public class AiPromptGenerator {
                         ? actionJson.get("elementDetails").getAsString()
                         : "";
 
-        if (target != null && target.contains("${random(")) target = resolveDynamicRandoms(target);
-        if (value != null && value.contains("${random(")) value = resolveDynamicRandoms(value);
+        if (target != null && target.contains("${random("))
+            target = resolveDynamicRandoms(target);
+        if (value != null && value.contains("${random("))
+            value = resolveDynamicRandoms(value);
 
         if (!dataBindings.isEmpty()) {
             for (java.util.Map.Entry<String, String> entry : dataBindings.entrySet()) {
@@ -1221,7 +1252,7 @@ public class AiPromptGenerator {
     }
 
     @io.qameta.allure.Step("Phase 4: Output Generation (YAML)")
-    protected void extractAndWriteYaml(List<Action> successfulPath, String outputPath) {
+    protected void extractAndWriteYaml(List<Action> successfulPath, String outputPath, String sutContext) {
         try {
             Path path = Paths.get(outputPath);
             if (path.getParent() != null) {
@@ -1229,6 +1260,11 @@ public class AiPromptGenerator {
             }
 
             StringBuilder yamlBuilder = new StringBuilder();
+            if (sutContext != null && !sutContext.trim().isEmpty()) {
+                yamlBuilder.append("context: \"").append(sutContext.replace("\"", "\\\"").replace("\n", "\\n"))
+                        .append("\"\n");
+            }
+
             yamlBuilder.append("prompt: |\n");
             yamlBuilder.append("  Open ${neodymium.url}\n");
 
@@ -1238,6 +1274,9 @@ public class AiPromptGenerator {
             String fileName = path.getFileName().toString();
             String testId = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
             dataMap.put("testId", testId);
+            if (sutContext != null && !sutContext.trim().isEmpty()) {
+                dataMap.put("context", sutContext);
+            }
 
             for (Action action : successfulPath) {
                 // Ensure properly indented lines for YAML multiline string
@@ -1270,8 +1309,10 @@ public class AiPromptGenerator {
 
     // Extracted for test mocking
     protected String executeExplorationLlmCall(LlmClient llmClient, String prompt) {
-        return llmClient.chat(
-                AiAgentPrompts.getSystemExplorationPrompt(Neodymium.aiConfiguration().aiGenerateValidations()), prompt);
+        String systemPromptBase = AiAgentPrompts
+                .getSystemExplorationPrompt(Neodymium.aiConfiguration().aiGenerateValidations());
+        systemPromptBase = injectPluginMetadata(systemPromptBase);
+        return llmClient.chat(systemPromptBase, prompt);
     }
 
     private String interpolateBindings(String text, java.util.Map<String, String> dataBindings,
@@ -1304,7 +1345,8 @@ public class AiPromptGenerator {
     }
 
     private String resolveDynamicRandoms(String text) {
-        if (text == null || !text.contains("${random(")) return text;
+        if (text == null || !text.contains("${random("))
+            return text;
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\$\\{random\\(([^)]+)\\)\\}").matcher(text);
         StringBuffer sb = new StringBuffer();
         while (m.find()) {
@@ -1312,23 +1354,54 @@ public class AiPromptGenerator {
             String type = parts[0].trim().toLowerCase();
             int length = 8;
             if (parts.length > 1) {
-                try { length = Integer.parseInt(parts[1].trim()); } catch (Exception e) {}
+                try {
+                    length = Integer.parseInt(parts[1].trim());
+                } catch (Exception e) {
+                }
             }
             String generated = "";
             java.util.Random rnd = new java.util.Random();
             if (type.equals("alpha")) {
-                generated = rnd.ints(97, 123).limit(length).collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString();
+                generated = rnd.ints(97, 123).limit(length)
+                        .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString();
             } else if (type.equals("numeric")) {
-                generated = rnd.ints(48, 58).limit(length).collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString();
+                generated = rnd.ints(48, 58).limit(length)
+                        .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString();
             } else {
                 String chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
                 StringBuilder tmp = new StringBuilder(length);
-                for (int i=0; i<length; i++) tmp.append(chars.charAt(rnd.nextInt(chars.length())));
+                for (int i = 0; i < length; i++)
+                    tmp.append(chars.charAt(rnd.nextInt(chars.length())));
                 generated = tmp.toString();
             }
             m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(generated));
         }
         m.appendTail(sb);
         return sb.toString();
+    }
+
+    private String injectPluginMetadata(String promptTemplate) {
+        if (promptTemplate == null) {
+            return null;
+        }
+
+        java.util.Collection<com.xceptance.neodymium.ai.action.AiActionPlugin> plugins = com.xceptance.neodymium.ai.action.ActionRegistry
+                .getAllPlugins();
+
+        java.util.List<String> typeNames = new java.util.ArrayList<>();
+        StringBuilder descriptions = new StringBuilder();
+
+        for (com.xceptance.neodymium.ai.action.AiActionPlugin plugin : plugins) {
+            typeNames.add(plugin.getActionName());
+            String desc = plugin.getPromptInstructions();
+            if (desc != null && !desc.isBlank()) {
+                descriptions.append("- ").append(desc).append("\n");
+            }
+        }
+
+        String typesStr = String.join(" | ", typeNames);
+
+        return promptTemplate.replace("{actionTypes}", typesStr)
+                .replace("{actionDescriptions}", descriptions.toString());
     }
 }

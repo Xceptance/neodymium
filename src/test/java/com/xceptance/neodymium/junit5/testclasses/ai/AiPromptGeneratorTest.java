@@ -103,7 +103,7 @@ public class AiPromptGeneratorTest
 
             // We expect the path to contain ONLY the NAVIGATE action because the CLICK action was marked as failed
             Assertions.assertEquals(1, path.size());
-            Assertions.assertEquals("NAVIGATE", path.get(0).getType().name());
+            Assertions.assertEquals("NAVIGATE", path.get(0).getType());
         }
         finally
         {
@@ -135,7 +135,7 @@ public class AiPromptGeneratorTest
                 protected String executeExplorationLlmCall(com.xceptance.neodymium.ai.core.LlmClient llmClient, String prompt) {
                     callCount++;
                     if (callCount == 1) {
-                        return "{\"actions\": [{\"type\": \"ASSERT\", \"target\": \"#email\", \"description\": \"Validate there is an input field for the email address\"}]}";
+                        return "{\"actions\": [{\"type\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"target\": \"#email\", \"description\": \"Validate there is an input field for the email address\"}]}";
                     } else if (callCount == 2) {
                         return "{\"actions\": [{\"type\": \"TYPE\", \"target\": \"#email\", \"value\": \"John Doe\", \"dataBindings\": {\"firstName\": \"John\", \"lastName\": \"Doe\"}, \"description\": \"Enter '${firstName} ${lastName}' into the user field\"}]}";
                     } else if (callCount == 3) {
@@ -155,17 +155,72 @@ public class AiPromptGeneratorTest
             List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.TokenStats()), "https://example.com", "intent", null, "output.yml");
 
             Assertions.assertEquals(3, path.size());
-            Assertions.assertEquals("ASSERT", path.get(0).getType().name());
+            Assertions.assertEquals(com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME, path.get(0).getType());
             Assertions.assertEquals("Validate there is an input field for the email address", path.get(0).getDescription());
             
-            Assertions.assertEquals("TYPE", path.get(1).getType().name());
+            Assertions.assertEquals("TYPE", path.get(1).getType());
             Assertions.assertEquals("Enter '${firstName} ${lastName}' into the user field", path.get(1).getDescription());
             Assertions.assertEquals(2, path.get(1).getDataBindings().size());
             Assertions.assertEquals("John", path.get(1).getDataBindings().get("firstName"));
             Assertions.assertEquals("Doe", path.get(1).getDataBindings().get("lastName"));
             
-            Assertions.assertEquals("CLICK", path.get(2).getType().name());
+            Assertions.assertEquals("CLICK", path.get(2).getType());
             Assertions.assertEquals("Click the login button", path.get(2).getDescription());
+        }
+        finally
+        {
+            Neodymium.aiConfiguration().setProperty("neodymium.ai.generate", String.valueOf(originalValue));
+        }
+    }
+
+    @Test
+    public void testGeneratorSkipsDuplicateAsserts()
+    {
+        boolean originalValue = Neodymium.aiConfiguration().aiGenerateEnabled();
+        try
+        {
+            Neodymium.aiConfiguration().setProperty("neodymium.ai.generate", "true");
+            
+            class TestableGenerator extends AiPromptGenerator {
+                public int callCount = 0;
+                
+                @Override
+                protected void openBrowser(String url) {}
+                
+                @Override
+                protected String captureDom(com.xceptance.neodymium.ai.core.PageAnalyzer analyzer) { return "<html><body><div id='msg'>Hello</div></body></html>"; }
+                
+                @Override
+                protected void executeAction(com.xceptance.neodymium.ai.action.ActionExecutor executor, Action action) {}
+
+                @Override
+                protected String executeExplorationLlmCall(com.xceptance.neodymium.ai.core.LlmClient llmClient, String prompt) {
+                    callCount++;
+                    if (callCount == 1) {
+                        return "{\"actions\": [{\"type\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"target\": \"#msg\", \"description\": \"Validate msg\"}]}";
+                    } else if (callCount == 2) {
+                        // AI returns the EXACT SAME assert, should be skipped
+                        return "{\"actions\": [{\"type\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"target\": \"#msg\", \"description\": \"Validate msg\"}]}";
+                    } else if (callCount == 3) {
+                        return "{\"actions\": [{\"type\": \"CLICK\", \"target\": \"#btn\", \"description\": \"Click button\"}]}";
+                    } else {
+                        return "{\"previousActionSuccess\": true, \"overallIntentAchieved\": true}";
+                    }
+                }
+                
+                @Override
+                public List<Action> explore(com.xceptance.neodymium.ai.core.LlmClient llmClient, String url, String intent, String sutContext, String outputPath) {
+                    return super.explore(llmClient, url, intent, sutContext, outputPath);
+                }
+            }
+
+            TestableGenerator generator = new TestableGenerator();
+            List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.TokenStats()), "https://example.com", "intent", null, "output.yml");
+
+            // We expect the path to contain ONLY the first ASSERT and the CLICK action because the duplicate ASSERT was skipped
+            Assertions.assertEquals(2, path.size());
+            Assertions.assertEquals(com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME, path.get(0).getType());
+            Assertions.assertEquals("CLICK", path.get(1).getType());
         }
         finally
         {

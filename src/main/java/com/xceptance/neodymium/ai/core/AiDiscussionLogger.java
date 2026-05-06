@@ -104,7 +104,7 @@ public class AiDiscussionLogger
         html.append("<div class=\"actions\"><strong>Actions Executed:</strong><ul>\n");
         for (Action a : actions)
         {
-            html.append("<li>").append(escape(a.getDescription())).append(" (<strong>").append(escape(a.getType().name())).append("</strong>)</li>\n");
+            html.append("<li>").append(escape(a.getDescription())).append(" (<strong>").append(escape(a.getType())).append("</strong>)</li>\n");
         }
         html.append("</ul></div>\n");
     }
