@@ -41,8 +41,6 @@ public class AiAgent {
 
     private static final Logger LOG = LoggerFactory.getLogger(AiAgent.class);
 
-
-
     private final LlmClient llmClient;
 
     private final PageAnalyzer pageAnalyzer;
@@ -99,6 +97,7 @@ public class AiAgent {
         executionLog = new AiDiscussionLogger(instructions);
 
         LOG.debug("======== 🚀 AI Agent: Processing instructions ========");
+        LOG.debug("SUT Context: {}", sutContext);
 
         boolean hudPromptChanged = false;
         boolean hudSaveExit = false;
@@ -132,7 +131,8 @@ public class AiAgent {
                             List<String> finishedStrs = new ArrayList<>();
                             finishedStrs.add("🎉 Execution Complete! Click Save & Exit to store changes.");
                             com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                    .injectOrUpdateHud(finishedStrs, performedInstructions, this.autoSkip, true, true, "");
+                                    .injectOrUpdateHud(finishedStrs, performedInstructions, this.autoSkip, true, true,
+                                            "");
                             waitForHudAction(false);
                         } catch (HudActionException e) {
                             if (HudActionType.REWIND == e.actionType) {
@@ -178,16 +178,18 @@ public class AiAgent {
 
                 final String stepUnresolved = stepsList.get(i);
                 final String step = com.xceptance.neodymium.ai.core.AiBrowser.resolveTestDataToPrompt(stepUnresolved);
-                
+
                 boolean isReplay = false;
                 Playbook playbookForCheck = Neodymium.getAiPlaybook();
-                if (playbookForCheck != null && !playbookForCheck.isRecording() && playbookForCheck.getCurrentStep() != null) {
+                if (playbookForCheck != null && !playbookForCheck.isRecording()
+                        && playbookForCheck.getCurrentStep() != null) {
                     PlaybookStep stepObj = playbookForCheck.getCurrentStep();
-                    if (!stepObj.failed() && stepObj.getPromptLine() != null && stepObj.getPromptLine().equals(stepUnresolved)) {
+                    if (!stepObj.failed() && stepObj.getPromptLine() != null
+                            && stepObj.getPromptLine().equals(stepUnresolved)) {
                         isReplay = true;
                     }
                 }
-                
+
                 LOG.debug("───────────────────────────────────────────────────────────");
                 if (isReplay) {
                     LOG.debug("     Step [{}/{}]: {} (REPLAY)", i + 1, stepsList.size(), step);
@@ -240,9 +242,10 @@ public class AiAgent {
                         java.util.Map<String, String> updatedBindings = e.bindings;
                         if (updatedBindings != null && !updatedBindings.isEmpty()) {
                             com.xceptance.neodymium.util.Neodymium.getData().putAll(updatedBindings);
-                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().setDataBindings(new java.util.HashMap<>(com.xceptance.neodymium.util.Neodymium.getData()));
+                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().setDataBindings(
+                                    new java.util.HashMap<>(com.xceptance.neodymium.util.Neodymium.getData()));
                         }
-                        
+
                         stepsList.set(i, editInstr);
 
                         Playbook playbook = Neodymium.getAiPlaybook();
@@ -313,7 +316,8 @@ public class AiAgent {
      * navigation), then falls back to the
      * playbook replay or LLM with retry logic.
      */
-    private void executeStep(final String instruction, List<String> performedInstructions, String unresolvedInstruction, List<String> futureInstructions) throws HudActionException {
+    private void executeStep(final String instruction, List<String> performedInstructions, String unresolvedInstruction,
+            List<String> futureInstructions) throws HudActionException {
         int errorCount = 0;
         Playbook playbook = Neodymium.getAiPlaybook();
         boolean isInteractive = config.aiInteractive();
@@ -326,34 +330,38 @@ public class AiAgent {
                     if (futureInstructions != null) {
                         plannedStrs.addAll(futureInstructions);
                     }
-                    
-                    // Show HUD immediately so the user doesn't wait forever, indicating reasoning is loading
+
+                    // Show HUD immediately so the user doesn't wait forever, indicating reasoning
+                    // is loading
                     com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
-                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Loading reasoning...", false);
+                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                            "Loading reasoning...", false);
                 }
 
                 List<Action> actions = getStepActions(instruction, playbook);
-                
+
                 if (isInteractive) {
                     List<String> plannedStrs = new ArrayList<>();
                     plannedStrs.add(instruction);
                     if (futureInstructions != null) {
                         plannedStrs.addAll(futureInstructions);
                     }
-                    
+
                     String reasoning = null;
                     boolean isReplay = false;
                     PlaybookStep stepObj = playbook.getCurrentStep();
                     if (stepObj != null) {
                         reasoning = stepObj.getReasoning();
                         // If playbook is not recording, it's a replay of an existing step
-                        if (!playbook.isRecording() && stepObj.getPromptLine() != null && stepObj.getPromptLine().equals(instruction)) {
+                        if (!playbook.isRecording() && stepObj.getPromptLine() != null
+                                && stepObj.getPromptLine().equals(instruction)) {
                             isReplay = true;
                         }
                     }
 
                     com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
-                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction, reasoning, isReplay);
+                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction, reasoning,
+                            isReplay);
 
                     waitForHudAction(true);
                 }
@@ -497,14 +505,16 @@ public class AiAgent {
             }
         }
 
-        // 2. Try to identify the action intent upfront. If it can be executed directly, do so.
-        // If it requires the LLM to resolve parameters or perform visual validation, pass it to the LLM.
+        // 2. Try to identify the action intent upfront. If it can be executed directly,
+        // do so.
+        // If it requires the LLM to resolve parameters or perform visual validation,
+        // pass it to the LLM.
         if (actions.isEmpty()) {
             actions = identifyActions(instruction, step);
             if (!actions.isEmpty()) {
                 boolean requiresLlm = false;
                 boolean requiresScreenshot = screenshotBeforeAction;
-                
+
                 for (Action a : actions) {
                     AiActionPlugin plugin = a.getPlugin();
                     if (plugin != null) {
@@ -516,9 +526,10 @@ public class AiAgent {
                         }
                     }
                 }
-                
+
                 if (requiresLlm) {
-                    // Intent extracted, but it requires the LLM to process it fully (e.g. visual validation)
+                    // Intent extracted, but it requires the LLM to process it fully (e.g. visual
+                    // validation)
                     actions = getActionsFromLLM(instruction, step, playbook, requiresScreenshot);
                 } else {
                     // Simple action that can be executed directly
@@ -537,7 +548,8 @@ public class AiAgent {
         return actions;
     }
 
-    private List<Action> getActionsFromLLM(String instruction, PlaybookStep playbookStep, Playbook playbook, boolean requiresScreenshot) {
+    private List<Action> getActionsFromLLM(String instruction, PlaybookStep playbookStep, Playbook playbook,
+            boolean requiresScreenshot) {
         // If we are inside a playbook replay and failed, we have an initial error
         // already.
         String lastError;
@@ -700,14 +712,14 @@ public class AiAgent {
     }
 
     private List<Action> identifyActions(String instruction, PlaybookStep playbookStep) {
-        for (AiActionPlugin plugin : ActionRegistry.getAllPlugins())
-        {
+        for (AiActionPlugin plugin : ActionRegistry.getAllPlugins()) {
             List<Action> actions = plugin.parseDirectInstruction(instruction);
             if (actions != null && !actions.isEmpty()) {
                 if ("IF_CONDITION".equals(actions.get(0).getType())) {
                     String condition = actions.get(0).getTarget();
                     String command = actions.get(0).getValue();
-                    LOG.debug("🧠 [THOUGHT] Execution: If statement with condition '{}' and command '{}'", condition, command);
+                    LOG.debug("🧠 [THOUGHT] Execution: If statement with condition '{}' and command '{}'", condition,
+                            command);
                     List<Action> ifActions = getStepActions(condition, new Playbook(UUID.randomUUID().toString()));
                     playbookStep.setActions(ifActions);
                     playbookStep.setPromptLine(instruction);
@@ -745,7 +757,9 @@ public class AiAgent {
     }
 
     private boolean isValidationInstruction(final String instruction) {
-        String pattern = com.xceptance.neodymium.util.Neodymium.configuration().getProperty("neodymium.ai.agent.pattern.validation", "(?i)^(?:verify|check|validate|ensure|assert|prüfe|verifiziere|überprüfe|bestätige|checke)\\b.*");
+        String pattern = com.xceptance.neodymium.util.Neodymium.configuration().getProperty(
+                "neodymium.ai.agent.pattern.validation",
+                "(?i)^(?:verify|check|validate|ensure|assert|prüfe|verifiziere|überprüfe|bestätige|checke)\\b.*");
         return Pattern.compile(pattern).matcher(instruction.strip()).find();
     }
 
@@ -771,8 +785,9 @@ public class AiAgent {
             playbook.getSteps().subList(currentIndex, playbook.getSteps().size()).clear();
             playbook.setChanged(true);
         }
-        
-        com.xceptance.neodymium.ai.generator.InteractiveHud hud = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud();
+
+        com.xceptance.neodymium.ai.generator.InteractiveHud hud = com.xceptance.neodymium.util.Neodymium
+                .getOrCreateInteractiveHud();
         hud.saveYamlDataFileIfModified(performedInstructions);
         return true;
     }

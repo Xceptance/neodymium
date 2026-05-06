@@ -99,6 +99,7 @@ public class AiPromptGenerator {
         com.xceptance.neodymium.ai.core.AiDiscussionLogger executionLog = new com.xceptance.neodymium.ai.core.AiDiscussionLogger(
                 intent);
         LOG.info("Starting step-by-step exploratory run on '{}' for intent: '{}'", url, intent);
+        LOG.debug("SUT Context: {}", sutContext);
 
         openBrowser(url);
 
@@ -495,6 +496,7 @@ public class AiPromptGenerator {
         LOG.info("\n========================================================================");
         LOG.info("\uD83E\uDDED PHASE 1: EXPLORATION (V2)");
         LOG.info("Starting step-by-step exploratory run on '{}' for intent: '{}'", url, intent);
+        LOG.debug("SUT Context: {}", sutContext);
         LOG.info("========================================================================");
         openBrowser(url);
 
