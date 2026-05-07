@@ -10,6 +10,7 @@ import com.codeborne.selenide.SelenideElement;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.util.SelenideAddons;
 
 public class AssertAction implements AiActionPlugin {
     private static final Logger LOG = LoggerFactory.getLogger(AssertAction.class);
@@ -26,7 +27,15 @@ public class AssertAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "ASSERT: assert that an element contains expected text or is in an expected state (requires target and value)."; }
+    public String getPromptInstructions() { 
+        return "ASSERT: Verify element or page state. Requires \"target\".\n" +
+               "  For elements: Provide \"target\" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). Optional \"value\" for text content check.\n" +
+               "    If \"value\" is provided, assert that the element's text contains the value.\n" +
+               "    If trying to check if an element is visible use \"visible\" as value.\n" +
+               "    If asked to verify a text, choose an element, that contains this text.\n" +
+               "    If \"value\" is null, assert that the element exists and is visible.\n" +
+               "  For URL: Provide \"url\" or \"currentUrl\" as \"target\", and the expected URL as \"value\"."; 
+    }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {
@@ -40,7 +49,9 @@ public class AssertAction implements AiActionPlugin {
                 LOG.debug("   ✅ URL Assertion passed for: '{}'", expected);
             } catch (org.openqa.selenium.TimeoutException e) {
                 String actualUrl = com.codeborne.selenide.WebDriverRunner.url();
-                throw new ActionExecutor.ActionExecutionException(String.format("Assertion failed: Expected URL to contain '%s' but was '%s'", expected, actualUrl), e);
+                SelenideAddons.wrapAssertionError(() -> {
+                    throw new AssertionError(String.format("Assertion failed: Expected URL to contain '%s' but was '%s'", expected, actualUrl), e);
+                });
             }
             return;
         }
@@ -72,7 +83,9 @@ public class AssertAction implements AiActionPlugin {
             LOG.debug("   ✅ Assertion passed for: '{}'", expected);
         } catch (Throwable e) {
             String actualDetails = String.format("Text: '%s', Value: '%s', Alt: '%s'", element.getText(), element.getValue(), element.getAttribute("alt"));
-            throw new ActionExecutor.ActionExecutionException(String.format("Assertion failed: '%s' not found in common attributes. Found: [%s]", expected, actualDetails), e);
+            SelenideAddons.wrapAssertionError(() -> {
+                throw new AssertionError(String.format("Assertion failed: '%s' not found in common attributes. Found: [%s]", expected, actualDetails), e);
+            });
         }
     }
 }
