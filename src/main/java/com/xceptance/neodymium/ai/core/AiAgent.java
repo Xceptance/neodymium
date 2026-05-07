@@ -382,30 +382,63 @@ public class AiAgent {
                 if (errorCount >= maxRetries) {
                     final Throwable finalThrowable = e.getCause() != null ? e.getCause() : e;
                     executionLog.logError("Max retries for errors reached.");
-                    SelenideAddons.wrapAssertionError(() -> {
-                        throw new AssertionError("Instruction '" + instruction + "' failed (" + maxRetries
-                                + " tries):\n\n" + finalThrowable.getMessage(), finalThrowable);
-                    });
+                    if (isInteractive) {
+                        List<String> errorStrs = new ArrayList<>();
+                        errorStrs.add("⚠️ ERROR: Max retries reached - " + e.getMessage());
+                        com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(errorStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction);
+                        waitForHudAction(false); // Never auto-skip errors
+                        errorCount = 0;
+                    } else {
+                        SelenideAddons.wrapAssertionError(() -> {
+                            throw new AssertionError("Instruction '" + instruction + "' failed (" + maxRetries
+                                    + " tries):\n\n" + finalThrowable.getMessage(), finalThrowable);
+                        });
+                    }
+                } else {
+                    // Wait before retry
+                    if (isInteractive) {
+                        List<String> errorStrs = new ArrayList<>();
+                        errorStrs.add("⚠️ ERROR: " + e.getMessage());
+                        com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(errorStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction);
+                        waitForHudAction(false); // Never auto-skip errors
+                    } else {
+                        sleep(1000);
+                    }
+                    errorCount++;
                 }
+            } catch (final HudActionException e) {
+                throw e; // Rethrow to be caught by the outer loop
+            } catch (final AssertionError e) {
+                PlaybookStep step = playbook.getCurrentStep();
+                step.setFailure(new ActionExecutionException(e.getMessage(), e));
 
-                // Wait before retry
+                LOG.warn("    ⚠️ Assertion failed: {}", e.getMessage());
+                executionLog.logError("Assertion failed: " + e.getMessage());
+
                 if (isInteractive) {
                     List<String> errorStrs = new ArrayList<>();
-                    errorStrs.add("⚠️ ERROR: " + e.getMessage());
+                    errorStrs.add("⚠️ ASSERTION ERROR: " + e.getMessage());
                     com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(errorStrs,
                             performedInstructions, this.autoSkip, false, false, unresolvedInstruction);
                     waitForHudAction(false); // Never auto-skip errors
                 } else {
-                    sleep(1000);
+                    throw e; // Bubble up immediately to fail the test without retries
                 }
-                errorCount++;
-            } catch (final HudActionException e) {
-                throw e; // Rethrow to be caught by the outer loop
             } catch (final Exception e) {
                 LOG.error("Unexpected error executing step: {}", instruction, e);
-                SelenideAddons.wrapAssertionError(() -> {
-                    throw new AiAgentException("Unexpected error executing step: " + instruction, e);
-                });
+                if (isInteractive) {
+                    List<String> errorStrs = new ArrayList<>();
+                    errorStrs.add("⚠️ UNEXPECTED ERROR: " + e.getMessage());
+                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(errorStrs,
+                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction);
+                    waitForHudAction(false); // Never auto-skip errors
+                } else {
+                    SelenideAddons.wrapAssertionError(() -> {
+                        throw new AiAgentException("Unexpected error executing step: " + instruction, e);
+                    });
+                }
             }
         }
     }
