@@ -383,10 +383,11 @@ public class AiAgent {
                     final Throwable finalThrowable = e.getCause() != null ? e.getCause() : e;
                     executionLog.logError("Max retries for errors reached.");
                     if (isInteractive) {
-                        List<String> errorStrs = new ArrayList<>();
-                        errorStrs.add("⚠️ ERROR: Max retries reached - " + e.getMessage());
-                        com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(errorStrs,
-                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction);
+                        List<String> plannedStrs = new ArrayList<>();
+                        plannedStrs.add("⚠️ " + instruction);
+                        if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
+                        com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Max retries reached: " + e.getMessage(), false);
                         waitForHudAction(false); // Never auto-skip errors
                         errorCount = 0;
                     } else {
@@ -398,10 +399,11 @@ public class AiAgent {
                 } else {
                     // Wait before retry
                     if (isInteractive) {
-                        List<String> errorStrs = new ArrayList<>();
-                        errorStrs.add("⚠️ ERROR: " + e.getMessage());
-                        com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(errorStrs,
-                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction);
+                        List<String> plannedStrs = new ArrayList<>();
+                        plannedStrs.add("⚠️ " + instruction);
+                        if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
+                        com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Action Failed: " + e.getMessage(), false);
                         waitForHudAction(false); // Never auto-skip errors
                     } else {
                         sleep(1000);
@@ -418,10 +420,11 @@ public class AiAgent {
                 executionLog.logError("Assertion failed: " + e.getMessage());
 
                 if (isInteractive) {
-                    List<String> errorStrs = new ArrayList<>();
-                    errorStrs.add("⚠️ ASSERTION ERROR: " + e.getMessage());
-                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(errorStrs,
-                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction);
+                    List<String> plannedStrs = new ArrayList<>();
+                    plannedStrs.add("⚠️ " + instruction);
+                    if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
+                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Assertion Failed: " + e.getMessage(), false);
                     waitForHudAction(false); // Never auto-skip errors
                 } else {
                     throw e; // Bubble up immediately to fail the test without retries
@@ -429,10 +432,11 @@ public class AiAgent {
             } catch (final Exception e) {
                 LOG.error("Unexpected error executing step: {}", instruction, e);
                 if (isInteractive) {
-                    List<String> errorStrs = new ArrayList<>();
-                    errorStrs.add("⚠️ UNEXPECTED ERROR: " + e.getMessage());
-                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(errorStrs,
-                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction);
+                    List<String> plannedStrs = new ArrayList<>();
+                    plannedStrs.add("⚠️ " + instruction);
+                    if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
+                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Unexpected Error: " + e.getMessage(), false);
                     waitForHudAction(false); // Never auto-skip errors
                 } else {
                     SelenideAddons.wrapAssertionError(() -> {

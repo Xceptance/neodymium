@@ -45,6 +45,7 @@ public class InteractiveHud {
     private String lastCurrentUnresolvedStep;
     private String lastReasoning;
     private boolean lastIsReplay;
+    private boolean lastFullPromptOpen = false;
 
     public InteractiveHud() {
         evaluateCanEdit();
@@ -113,7 +114,7 @@ public class InteractiveHud {
         }
         try {
             com.codeborne.selenide.Selenide.executeJavaScript(HUD_JS, HUD_HTML, planned, performed, autoSkip,
-                    hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay);
+                    hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen);
         } catch (Exception e) {
             LOG.warn("Failed to inject AI Generation HUD: {}", e.getMessage());
         }
@@ -135,6 +136,10 @@ public class InteractiveHud {
                 Object skipStatus = com.codeborne.selenide.Selenide.executeJavaScript("return window.neoHudAutoSkip;");
                 if (skipStatus != null) {
                     this.lastAutoSkip = (Boolean) skipStatus;
+                }
+                Object promptOpen = com.codeborne.selenide.Selenide.executeJavaScript("return window.neoFullPromptOpen;");
+                if (promptOpen != null) {
+                    this.lastFullPromptOpen = (Boolean) promptOpen;
                 }
             }
 

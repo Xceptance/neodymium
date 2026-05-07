@@ -31,15 +31,15 @@
     </div>
 
     <div id="neo-hud-header" style="background:#2196F3; padding:8px 12px; font-weight:bold; font-size:14px; display:flex; justify-content:space-between; align-items:center; cursor:move;">
-        <span style="display:flex; align-items:center; gap:5px;">🤖 Neodymium AI <span id="neo-status-indicator" style="font-size:10px; background:#FF9800; padding:2px 6px; border-radius:10px;">Pending</span></span>
+        <span id="neo-header-title" style="display:flex; align-items:center; gap:5px;">🤖 Neodymium AI <span id="neo-status-indicator" style="font-size:10px; background:#FF9800; padding:2px 6px; border-radius:10px; color:#000;">Pending</span></span>
         <div style="display:flex; gap:8px;">
             <button id="neo-min-btn" style="background:transparent; color:white; border:none; cursor:pointer; font-size:16px; padding:0;">−</button>
         </div>
     </div>
 
-    <div id="neo-hud-content" style="padding:12px; flex-grow:1; display:flex; flex-direction:column; gap:10px; max-height:400px; overflow-y:auto;">
+    <div id="neo-hud-content" style="padding:12px; flex-grow:1; display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 80px); overflow-y:auto;">
         
-        <div id="neo-full-prompt-overlay" style="display:none; flex-direction:column; flex-shrink:1; max-height:250px; overflow-y:auto; background:#222; border:1px solid #444; border-radius:4px; padding:5px; font-size:12px;">
+        <div id="neo-full-prompt-overlay" style="display:none; flex-direction:column; flex-shrink:1; max-height:calc(100vh - 250px); overflow-y:auto; background:#222; border:1px solid #444; border-radius:4px; padding:5px; font-size:12px;">
             <!-- filled by js -->
         </div>
 

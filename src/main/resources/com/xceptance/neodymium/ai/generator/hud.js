@@ -1,7 +1,25 @@
-(function(hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay) {
+(function(hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen) {
     window.neoCurrentUnresolvedStep = currentUnresolvedStep;
     window.neoDataBindings = dataBindings;
     window.neoConfigMap = configMap;
+
+    function getSessionStorage(key) {
+        try {
+            return sessionStorage.getItem(key);
+        } catch(e) {
+            return null;
+        }
+    }
+
+    function setSessionStorage(key, value) {
+        try {
+            sessionStorage.setItem(key, value);
+        } catch(e) {}
+    }
+
+    if (window.neoFullPromptOpen === undefined) {
+        window.neoFullPromptOpen = (lastFullPromptOpen === true) || (getSessionStorage('neoFullPromptOpen') === 'true');
+    }
 
     var existingHud = document.getElementById('neo-ai-hud');
     if (existingHud && existingHud.getAttribute('data-hud-version') !== '3') {
@@ -17,6 +35,11 @@
 
         window.neodymiumPromptGenerationHudInjected = true;
         window.neoHudAction = null;
+        window.neoSubmitAction = function(actionObj) {
+            window.neoHudAction = JSON.stringify(actionObj);
+            var h = document.getElementById('neo-ai-hud');
+            if (h) h.style.display = 'none';
+        };
         window.neoHudAutoSkip = autoSkip;
         document.getElementById('neo-autoskip-cb').checked = autoSkip;
 
@@ -28,12 +51,32 @@
         hudElement.addEventListener('mousedown', function(e) { e.stopPropagation(); });
         hudElement.addEventListener('mouseup', function(e) { e.stopPropagation(); });
 
+        document.getElementById('neo-min-btn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            var content = document.getElementById('neo-hud-content');
+            var hud = document.getElementById('neo-ai-hud');
+            var title = document.getElementById('neo-header-title');
+            if (this.innerHTML === '−') {
+                content.style.display = 'none';
+                hud.style.width = 'auto';
+                this.innerHTML = '+';
+                if (title) title.style.display = 'none';
+                setSessionStorage('neoHudMinimized', 'true');
+            } else {
+                content.style.display = 'flex';
+                hud.style.width = '350px';
+                this.innerHTML = '−';
+                if (title) title.style.display = 'flex';
+                setSessionStorage('neoHudMinimized', 'false');
+            }
+        });
+
         document.getElementById('neo-approve-btn').addEventListener('click', function() {
             if (!this.disabled) {
                 if (this.dataset.isFinished === 'true') {
-                    window.neoHudAction = JSON.stringify({ action: "SAVE_EXIT" });
+                    window.neoSubmitAction({ action: "SAVE_EXIT" });
                 } else {
-                    window.neoHudAction = JSON.stringify({ action: "APPROVE" });
+                    window.neoSubmitAction({ action: "APPROVE" });
                 }
                 this.disabled = true;
                 this.style.opacity = '0.5';
@@ -42,7 +85,7 @@
 
         document.getElementById('neo-skip-btn').addEventListener('click', function() {
             if (!this.disabled) {
-                window.neoHudAction = JSON.stringify({ action: "SKIP" });
+                window.neoSubmitAction({ action: "SKIP" });
                 this.disabled = true;
                 this.style.opacity = '0.5';
             }
@@ -192,7 +235,7 @@
                     updatedBindings[inputs[i].dataset.key] = inputs[i].value;
                 }
                 var pIdx = (performed && performed.length > 0) ? performed.length : 0;
-                window.neoHudAction = JSON.stringify({ action: "EDIT", instruction: newInstr.trim(), index: pIdx, bindings: updatedBindings });
+                window.neoSubmitAction({ action: "EDIT", instruction: newInstr.trim(), index: pIdx, bindings: updatedBindings });
                 
                 document.getElementById('neo-ai-hud').style.width = '350px';
                 document.getElementById('neo-bindings-container').style.maxHeight = '100px';
@@ -211,7 +254,7 @@
                 var histList = document.getElementById('neo-history-list');
                 var count = histList ? histList.children.length : 0;
                 if (count > 0) {
-                    window.neoHudAction = JSON.stringify({ action: "REWIND", index: count - 1 });
+                    window.neoSubmitAction({ action: "REWIND", index: count - 1 });
                 }
             }
         });
@@ -232,7 +275,7 @@
         document.getElementById('neo-add-submit-btn').addEventListener('click', function() {
             var input = document.getElementById('neo-add-input').value.trim();
             if (input !== '') {
-                window.neoHudAction = JSON.stringify({ action: "ADD", instruction: input });
+                window.neoSubmitAction({ action: "ADD", instruction: input });
                 addOverlay.style.display = 'none';
                 document.getElementById('neo-add-input').value = '';
             }
@@ -247,7 +290,7 @@
         document.getElementById('neo-autoskip-cb').addEventListener('change', function(e) {
             window.neoHudAutoSkip = e.target.checked;
             if (e.target.checked && !document.getElementById('neo-approve-btn').disabled && document.getElementById('neo-planned-actions').style.display !== 'none') {
-                window.neoHudAction = JSON.stringify({ action: "APPROVE" });
+                window.neoSubmitAction({ action: "APPROVE" });
             }
         });
 
@@ -280,9 +323,9 @@
                     var btn = document.getElementById('neo-approve-btn');
                     if (!btn.disabled) {
                         if (btn.dataset.isFinished === 'true') {
-                            window.neoHudAction = JSON.stringify({ action: "SAVE_EXIT" });
+                            window.neoSubmitAction({ action: "SAVE_EXIT" });
                         } else {
-                            window.neoHudAction = JSON.stringify({ action: "APPROVE" });
+                            window.neoSubmitAction({ action: "APPROVE" });
                         }
                         btn.disabled = true;
                         btn.style.opacity = '0.5';
@@ -292,7 +335,7 @@
                     cb.checked = !cb.checked;
                     window.neoHudAutoSkip = cb.checked;
                     if (cb.checked && !document.getElementById('neo-approve-btn').disabled && document.getElementById('neo-planned-actions').style.display !== 'none') {
-                        window.neoHudAction = JSON.stringify({ action: "APPROVE" });
+                        window.neoSubmitAction({ action: "APPROVE" });
                     }
                 } else if (key === 'h') {
                     var toggleBtn = document.getElementById('neo-toggle-history');
@@ -313,17 +356,8 @@
             }
         }, true);
 
-        function renderFullPrompt() {
+        window.neoRenderFullPrompt = function() {
             var overlay = document.getElementById('neo-full-prompt-overlay');
-            var btn = document.getElementById('neo-full-prompt-btn');
-            
-            if (window.neoFullPromptOpen) {
-                overlay.style.display = 'none';
-                btn.innerHTML = '▲ Show Full Prompt ▲';
-                window.neoFullPromptOpen = false;
-                return;
-            }
-            
             var html = '';
             var pList = window.neoPerformedList || [];
             var aList = window.neoPlannedList || [];
@@ -352,20 +386,47 @@
             }
             
             overlay.innerHTML = html;
-            
-            overlay.style.display = 'flex';
-            btn.innerHTML = '▼ Hide Full Prompt ▼';
-            window.neoFullPromptOpen = true;
-        }
+        };
 
-        document.getElementById('neo-full-prompt-btn').addEventListener('click', renderFullPrompt);
+        window.neoToggleFullPrompt = function() {
+            var overlay = document.getElementById('neo-full-prompt-overlay');
+            var btn = document.getElementById('neo-full-prompt-btn');
+            
+            if (window.neoFullPromptOpen) {
+                overlay.style.display = 'none';
+                btn.innerHTML = '▲ Show Full Prompt ▲';
+                window.neoFullPromptOpen = false;
+                setSessionStorage('neoFullPromptOpen', 'false');
+            } else {
+                window.neoRenderFullPrompt();
+                overlay.style.display = 'flex';
+                btn.innerHTML = '▼ Hide Full Prompt ▼';
+                window.neoFullPromptOpen = true;
+                setSessionStorage('neoFullPromptOpen', 'true');
+            }
+        };
+
+        document.getElementById('neo-full-prompt-btn').addEventListener('click', window.neoToggleFullPrompt);
+        
+        if (getSessionStorage('neoHudMinimized') === 'true') {
+            document.getElementById('neo-min-btn').click();
+        }
     }
 
     window.neoPerformedList = performed;
     window.neoPlannedList = planned;
 
-    if (window.neoFullPromptOpen) {
-        document.getElementById('neo-full-prompt-btn').click();
+    var currentHud = document.getElementById('neo-ai-hud');
+    if (currentHud) {
+        currentHud.style.display = 'flex';
+    }
+
+    if (window.neoFullPromptOpen && window.neoRenderFullPrompt) {
+        window.neoRenderFullPrompt();
+        var overlay = document.getElementById('neo-full-prompt-overlay');
+        var btn = document.getElementById('neo-full-prompt-btn');
+        if (overlay) overlay.style.display = 'flex';
+        if (btn) btn.innerHTML = '▼ Hide Full Prompt ▼';
     }
 
     // Sync auto skip state
@@ -382,8 +443,15 @@
     var rewindBtn = document.getElementById('neo-rewind-btn');
 
     if (planned && planned.length > 0) {
-        statusDiv.innerText = 'Pending';
-        statusDiv.style.color = '#FF9800';
+        if (planned[0] && planned[0].startsWith && planned[0].startsWith('⚠️')) {
+            statusDiv.innerText = 'Debug - Error';
+            statusDiv.style.background = '#f44336';
+            statusDiv.style.color = '#fff';
+        } else {
+            statusDiv.innerText = 'Pending';
+            statusDiv.style.background = '#FF9800';
+            statusDiv.style.color = '#000';
+        }
         nextActionDiv.innerText = planned[0];
         plannedContainer.style.display = 'block';
 
@@ -455,10 +523,11 @@
         }
 
         if (window.neoHudAutoSkip) {
-            window.neoHudAction = JSON.stringify({ action: "APPROVE" });
+            window.neoSubmitAction({ action: "APPROVE" });
         }
     } else {
         statusDiv.innerText = 'Waiting...';
+        statusDiv.style.background = 'transparent';
         statusDiv.style.color = '#2196F3';
         plannedContainer.style.display = 'none';
         var rContainer = document.getElementById('neo-reasoning-container');
@@ -482,9 +551,9 @@
         var historyList = document.getElementById('neo-history-list');
         if (historyList) {
             historyList.innerHTML = performed.map(function(a, index) {
-                return '<li style="margin-bottom:3px; padding:2px; background:#444; cursor:pointer;" onclick="if(confirm(\'Rewind execution back to this step?\')) window.neoHudAction = JSON.stringify({ action: \'REWIND\', index: ' + index + ' });" title="Click to rewind">[' + index + '] ' + a + '</li>';
+                return '<li style="margin-bottom:3px; padding:2px; background:#444; cursor:pointer;" onclick="if(confirm(\'Rewind execution back to this step?\')) window.neoSubmitAction({ action: \'REWIND\', index: ' + index + ' });" title="Click to rewind">[' + index + '] ' + a + '</li>';
             }).join('');
         }
     }
 
-})(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11]);
+})(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11], arguments[12]);
