@@ -59,11 +59,19 @@ public class ActionExecutor {
         preCheckAction(action);
 
         AiActionPlugin plugin = ActionRegistry.getPlugin(action.getType());
+
         if (plugin != null) {
-            plugin.execute(action, test, this);
+            try {
+                plugin.execute(action, test, this);
+            } finally {
+                if (plugin != null) {
+                    plugin.cleanup(action, this);
+                }
+            }
         } else {
             LOG.warn("Unsupported action type: {}", action.getType());
         }
+
     }
 
     /**
@@ -264,7 +272,88 @@ public class ActionExecutor {
                 action.getElementDetails()));
     }
 
-    private By resolveLocator(final String target) {
+    /**
+     * Finds all elements using the same strategies as findElement.
+     */
+    public com.codeborne.selenide.ElementsCollection findElements(final Action action) {
+        String target = action.getTarget();
+        if (target == null || target.isBlank()) {
+            throw new ActionExecutionException("Action target is null or empty");
+        }
+
+        // Strategy 0: Direct Match for Neodymium Automation ID
+        if (target.matches("^xc_.*")) {
+            try {
+                com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(By.cssSelector("[data-neodymium-automation-id='" + target + "']"));
+                if (!elements.isEmpty()) return elements;
+            } catch (Exception e) {}
+        }
+
+        // Strategy 0.5: Try explicit Shadow DOM selector
+        if (target.contains("::shadow")) {
+            try {
+                com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(resolveLocator(target));
+                if (!elements.isEmpty()) return elements;
+            } catch (Exception e) {}
+        }
+
+        if (target.equals("document.title") || target.equals("pageTitle")) {
+            return com.codeborne.selenide.Selenide.$$("head > title");
+        }
+
+        // Strategy 1: Try as CSS selector
+        try {
+            com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(By.cssSelector(target));
+            if (!elements.isEmpty()) return elements;
+        } catch (Exception e) {}
+
+        // Strategy 2: Try as XPath
+        if (target.startsWith("/") || target.startsWith("(")) {
+            if (isValidXPath(target)) {
+                try {
+                    com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$x(target);
+                    if (!elements.isEmpty()) return elements;
+                } catch (Exception e) {}
+            }
+        }
+
+        // Strategy 3: Try as link text
+        try {
+            com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(By.linkText(target));
+            if (!elements.isEmpty()) return elements;
+
+            final String elementText = action.getElementDetails();
+            if (elementText != null && !elementText.isBlank() && !elementText.equals(target)) {
+                elements = com.codeborne.selenide.Selenide.$$(By.linkText(elementText));
+                if (!elements.isEmpty()) return elements;
+            }
+        } catch (Exception e) {}
+
+        // Strategy 4: Try finding by text content via XPath
+        try {
+            String targetXpath = escapeXpath(target);
+            String xpath = String.format(
+                    "//*[contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s)]",
+                    targetXpath, targetXpath, targetXpath);
+            com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$x(xpath);
+            if (!elements.isEmpty()) return elements;
+
+            final String elementText = action.getElementDetails();
+            if (elementText != null && !elementText.isBlank() && !elementText.equals(target)) {
+                String elementTextXpath = escapeXpath(elementText);
+                xpath = String.format(
+                        "//*[contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s)]",
+                        elementTextXpath, elementTextXpath, elementTextXpath);
+                elements = com.codeborne.selenide.Selenide.$$x(xpath);
+                if (!elements.isEmpty()) return elements;
+            }
+        } catch (Exception e) {}
+
+        throw new ActionExecutionException(String.format("Could not find any elements for target '%s' or text '%s'", target,
+                action.getElementDetails()));
+    }
+
+    public By resolveLocator(final String target) {
         if (target.startsWith("/") || target.startsWith("(")) {
             return By.xpath(target);
         }

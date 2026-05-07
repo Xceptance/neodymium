@@ -18,7 +18,11 @@ public class SelectAction implements AiActionPlugin {
 
     @Override
     public void preCheck(Action action, ActionExecutor executor) {
-        executor.findElement(action).shouldBe(com.codeborne.selenide.Condition.visible);
+        try {
+            executor.findElement(action).shouldBe(com.codeborne.selenide.Condition.visible);
+        } catch (Throwable t) {
+            throw new ActionExecutor.ActionExecutionException(String.format("Element not found or not visible for target '%s'", action.getTarget()), t);
+        }
     }
 
     @Override
@@ -34,12 +38,14 @@ public class SelectAction implements AiActionPlugin {
             action.setElementContext(executor.extractElementContext(element));
             executor.scrollIntoView(element);
             element.selectOption(action.getValue());
-        } catch (final ElementNotInteractableException e) {
+        } catch (final org.openqa.selenium.ElementNotInteractableException e) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element not interactable for target '%s'", action.getTarget()), e);
-        } catch (final ElementNotFound e) {
+        } catch (final com.codeborne.selenide.ex.ElementNotFound e) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element not found for target '%s'", action.getTarget()), e);
-        } catch (final StaleElementReferenceException e) {
+        } catch (final org.openqa.selenium.StaleElementReferenceException e) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element became stale for target '%s'", action.getTarget()), e);
+        } catch (Throwable t) {
+            throw new ActionExecutor.ActionExecutionException(String.format("Failed to execute action '%s'", action.getTarget()), t);
         }
     }
 }

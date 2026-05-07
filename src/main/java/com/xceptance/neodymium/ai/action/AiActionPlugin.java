@@ -25,7 +25,23 @@ public interface AiActionPlugin {
      * simply replayed from a playbook/direct execution without AI processing.
      * In most cases, this is false, unless the action uses AI internally.
      */
-    boolean requiresLlm(Action action);
+    default boolean requiresLlm(Action action) {
+        return false;
+    }
+
+    /**
+     * Determine if this action requires the LLM to generate actions, with executor context.
+     * Overrides can use the executor to perform local checks.
+     */
+    default boolean requiresLlm(Action action, ActionExecutor actionExecutor) {
+        return requiresLlm(action);
+    }
+
+    /**
+     * Prepare phase for the action. Called before any screenshots are taken for the LLM.
+     * Allows the plugin to inject scripts, modify DOM, or perform local comparisons.
+     */
+    default void prepare(Action action, ActionExecutor actionExecutor) throws ActionExecutionException {}
 
     /**
      * Executes the action via Selenium/Selenide.
@@ -35,6 +51,11 @@ public interface AiActionPlugin {
      * @param actionExecutor The ActionExecutor for utilizing helper methods (like findElement)
      */
     void execute(Action action, Object testInstance, ActionExecutor actionExecutor) throws ActionExecutionException;
+
+    /**
+     * Cleanup phase for the action. Called after execution.
+     */
+    default void cleanup(Action action, ActionExecutor actionExecutor) {}
 
     /**
      * Returns the markdown instructions to append to the system prompt

@@ -39,10 +39,12 @@ public class KeyPressAction implements AiActionPlugin {
             } else {
                 Selenide.actions().sendKeys(seleniumKey).perform();
             }
-        } catch (final ElementNotInteractableException e) {
+        } catch (final org.openqa.selenium.ElementNotInteractableException e) {
             throw new ActionExecutor.ActionExecutionException(String.format("Target element not interactable for target '%s'", action.getTarget()), e);
-        } catch (final StaleElementReferenceException e) {
+        } catch (final org.openqa.selenium.StaleElementReferenceException e) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element became stale for target '%s'", action.getTarget()), e);
+        } catch (Throwable t) {
+            throw new ActionExecutor.ActionExecutionException(String.format("Failed to execute key press for target '%s'", action.getTarget()), t);
         }
     }
 

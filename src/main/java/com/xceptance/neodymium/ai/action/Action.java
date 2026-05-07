@@ -25,6 +25,8 @@ public class Action
 
     private java.util.Map<String, String> elementContext;
 
+    private String screenshotPath;
+
     private String replay = "";
 
     public Action()
@@ -158,6 +160,14 @@ public class Action
     {
         return String.format("Action{type=%s, target='%s', value='%s', desc='%s', elementDetails='%s', reasoning='%s', context=%s}",
                              type, target, value, description, elementDetails, reasoning, elementContext != null ? "yes" : "no");
+    }
+
+    public String getScreenshotPath() {
+        return screenshotPath;
+    }
+
+    public void setScreenshotPath(String screenshotPath) {
+        this.screenshotPath = screenshotPath;
     }
 
     public String getReplay() {

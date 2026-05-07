@@ -482,8 +482,7 @@ public class AiAgent {
         if (playbook.isRecording() == false) {
             // Only if we are not trying to heal a step
             if (step.failed() == false) {
-                // Check if the prompt is still the same, or if we are at the end of the
-                // playbook (promptLine is null)
+                // Check if the prompt is still the same, or if we are at the end of the playbook
                 if (step.getPromptLine() == null || step.getPromptLine().equals(instruction) == false) {
                     // prompt change found, or new step at the end of playbook!
                     String msg = "Prompt differs from recording or new instruction. Old: '" + step.getPromptLine()
@@ -495,7 +494,6 @@ public class AiAgent {
                     playbook.removeFutureSteps();
                     step = playbook.getCurrentStep();
                 } else {
-                    // TODO: better place?
                     final boolean isValidation = isValidationInstruction(instruction);
                     pageAnalyzer.getPageContext(isValidation);
 
@@ -505,44 +503,44 @@ public class AiAgent {
             }
         }
 
-        // 2. Try to identify the action intent upfront. If it can be executed directly,
-        // do so.
-        // If it requires the LLM to resolve parameters or perform visual validation,
-        // pass it to the LLM.
+        // 2. Try to identify the action intent upfront.
         if (actions.isEmpty()) {
             actions = identifyActions(instruction, step);
-            if (!actions.isEmpty()) {
-                boolean requiresLlm = false;
-                boolean requiresScreenshot = screenshotBeforeAction;
+        }
 
-                for (Action a : actions) {
-                    AiActionPlugin plugin = a.getPlugin();
-                    if (plugin != null) {
-                        if (plugin.requiresLlm(a)) {
-                            requiresLlm = true;
-                        }
-                        if (plugin.requiresScreenshot(a)) {
-                            requiresScreenshot = true;
-                        }
+        // 3. Prepare Phase and LLM Check
+        boolean requiresLlm = actions.isEmpty();
+        boolean requiresScreenshot = screenshotBeforeAction;
+
+        if (!actions.isEmpty()) {
+            for (Action a : actions) {
+                AiActionPlugin plugin = a.getPlugin();
+                if (plugin != null) {
+                    try {
+                        plugin.prepare(a, actionExecutor);
+                    } catch (ActionExecutionException e) {
+                        LOG.warn("Failed to prepare action: {}", e.getMessage(), e);
                     }
-                }
-
-                if (requiresLlm) {
-                    // Intent extracted, but it requires the LLM to process it fully (e.g. visual
-                    // validation)
-                    actions = getActionsFromLLM(instruction, step, playbook, requiresScreenshot);
-                } else {
-                    // Simple action that can be executed directly
-                    step.setPromptLine(instruction);
-                    step.setReasoning("directly parsed");
-                    step.setActions(actions);
+                    if (plugin.requiresScreenshot(a)) {
+                        requiresScreenshot = true;
+                    }
+                    if (plugin.requiresLlm(a, actionExecutor)) {
+                        requiresLlm = true;
+                    }
                 }
             }
         }
 
-        // 3. Still no luck? Let's give it to the AI
-        if (actions.isEmpty()) {
-            actions = getActionsFromLLM(instruction, step, playbook, screenshotBeforeAction);
+        if (requiresLlm) {
+            // Intent extracted, but it requires the LLM to process it fully (or actions empty)
+            actions = getActionsFromLLM(instruction, step, playbook, requiresScreenshot);
+        } else {
+            // Simple action that can be executed directly, or local replay comparison succeeded
+            if (playbook.isRecording()) {
+                step.setPromptLine(instruction);
+                step.setReasoning("directly parsed or local validation succeeded");
+                step.setActions(actions);
+            }
         }
 
         return actions;

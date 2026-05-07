@@ -21,20 +21,9 @@ public class ClickAction implements AiActionPlugin {
     public void preCheck(Action action, ActionExecutor executor) {
         try {
             executor.findElement(action).shouldBe(com.codeborne.selenide.Condition.visible);
-                 } catch (final ElementClickInterceptedException e) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Click intercepted on target '%s' (element: '%s')", action.getTarget(), action.getElementDetails()), e);
-        } catch (final ElementNotInteractableException e) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Element not interactable for target '%s'", action.getTarget()), e);
-        } catch (final StaleElementReferenceException e) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Element became stale for target '%s'", action.getTarget()), e);
-        } catch (ElementShould t) {
-            if (t.getMessage().contains("Element should be")) {
-                throw new ActionExecutor.ActionExecutionException(String.format("Element not interactable for target '%s'", action.getTarget()), t);
-            }
         } catch (Throwable t) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Failed to exectute action '%s'", action.getTarget()), t);
+            throw new ActionExecutor.ActionExecutionException(String.format("Element not found or not visible for target '%s'", action.getTarget()), t);
         }
-
     }
 
     @Override
@@ -45,23 +34,19 @@ public class ClickAction implements AiActionPlugin {
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {
-        final SelenideElement element = executor.findElement(action);
-        action.setElementContext(executor.extractElementContext(element));
-        executor.scrollIntoView(element);
         try {
+            final SelenideElement element = executor.findElement(action);
+            action.setElementContext(executor.extractElementContext(element));
+            executor.scrollIntoView(element);
             element.click();
-        } catch (final ElementClickInterceptedException e) {
+        } catch (final org.openqa.selenium.ElementClickInterceptedException e) {
             throw new ActionExecutor.ActionExecutionException(String.format("Click intercepted on target '%s' (element: '%s')", action.getTarget(), action.getElementDetails()), e);
-        } catch (final ElementNotInteractableException e) {
+        } catch (final org.openqa.selenium.ElementNotInteractableException e) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element not interactable for target '%s'", action.getTarget()), e);
-        } catch (final StaleElementReferenceException e) {
+        } catch (final org.openqa.selenium.StaleElementReferenceException e) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element became stale for target '%s'", action.getTarget()), e);
-        } catch (ElementShould t) {
-            if (t.getMessage().contains("Element should be")) {
-                throw new ActionExecutor.ActionExecutionException(String.format("Element not interactable for target '%s'", action.getTarget()), t);
-            }
         } catch (Throwable t) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Failed to exectute action '%s'", action.getTarget()), t);
+            throw new ActionExecutor.ActionExecutionException(String.format("Failed to execute action '%s'", action.getTarget()), t);
         }
     }
 }

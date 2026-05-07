@@ -58,7 +58,7 @@ public class PlaybookManager {
         }
     }
 
-    private static File getPlaybookFile(String playbookId) {
+    public static File getPlaybookFile(String playbookId) {
         if (playbookId == null) {
             playbookId = "unknown";
         }
