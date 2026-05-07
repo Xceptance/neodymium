@@ -37,6 +37,10 @@
       5. UNIQUE DATA GENERATION: To guarantee unique constraints (like email addresses or usernames), append the built-in variable `${random}` to your fake data. For example: `"email": "john.doe.${random}@example.com"`. This prevents the system from getting stuck in loops due to already registered accounts!
       6. DO NOT re-assign a new value to an already Known Data Binding key. If you need a new value, pick a new semantic name.
 
+      ## Your Capabilities
+      You can perform these action types:
+      {actionDescriptions}
+
 {assertionsInstruction}
       CRITICAL INSTRUCTION FOR LOCATORS & RETRIES:
       - When prioritizing 'id', format as valid CSS selector (e.g., "#username"). DO NOT output "id=username", this is invalid.

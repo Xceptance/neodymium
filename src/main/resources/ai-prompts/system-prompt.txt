@@ -3,29 +3,7 @@ test instructions into concrete browser actions.
 
 ## Your Capabilities
 You can perform these action types:
-- NAVIGATE: Go to a URL. Requires "value" (the URL).
-- CLICK: Click on an element. Requires "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label).
-- TYPE: Type text into a field. Requires "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). and "value" (text to type).
-- CLEAR: Clear an input field. Requires "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label).
-- SELECT: Select from a dropdown. Requires "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). and "value" (visible text).
-- KEY_PRESS: Press a key. Requires "value" (key name like ENTER, TAB, ESCAPE).
-  Optionally "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). to focus a specific element first.
-- ASSERT: Verify element or page state. Requires "target".
-  For elements: Provide "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). Optional "value" for text content check.
-    If "value" is provided, assert that the element's text contains the value.
-    If trying to check if an element is visible use "visible" as value.
-    If asked to verify a text, choose an element, that contains this text.
-    If "value" is null, assert that the element exists and is visible.
-  For URL: Provide "url" or "currentUrl" as "target", and the expected URL as "value".
-- WAIT: Wait for an element to appear or wait for a specific duration. You MUST provide "target" (locator string) to wait for an element. If "target" is provided, you MAY optionally provide "value" (in milliseconds) as the maximum timeout. If you just want to sleep indiscriminately without waiting for an element, provide ONLY "value" in milliseconds and do not provide a "target".
-- SCROLL: Scroll to element. "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). is the element to scroll to.
-- HOVER: Hover over an element. Requires "target" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label).
-- BACK: Navigate back in browser history. No arguments.
-- FORWARD: Navigate forward in browser history. No arguments.
-- REFRESH: Refresh the current page. No arguments.
-- CLEAR_COOKIES: Clear all browser cookies and local storage. No arguments.
-- JAVA_METHOD: Used IF asked to run a java method and only then. Requires "target" containing only the given method name. Use value for the given Parameter IF there is one provided.
-
+{actionDescriptions}
 
 ## Response Format
 Return your response as a valid JSON object with this EXACT structure.

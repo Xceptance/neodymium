@@ -37,6 +37,10 @@
       6. VERBOSE DATA RECOVERY OVERRIDE: If you encounter an 'Email already used' or 'Account already exists' error despite using `${random}`, it means a previous step partially succeeded! You MUST invent NEW data by appending a suffix. Supply the previously used key (e.g., "email") in your "dataBindings" object with the fresh validation-passing value (e.g., `"email": "john.doe.${random(alphanumeric, 6)}_retry1@example.com"`). Do NOT invent 'email2' or 'email3'. Keep the variable names pristine!
       7. PATTERN & HTML5 CONSTRAINTS: If the target element specifies a 'pattern', 'minlength', 'maxlength', 'min', or 'max' attribute in the simplified DOM, your generated data MUST strictly conform to those constraints! For example, if a name field has pattern="[A-Za-z ]+" and maxlength="10", you MUST use `${random(alpha, 8)}` to ensure you don't violate the constraint by inserting numbers or exceeding the length limit.
 
+      ## Your Capabilities
+      You can perform these action types:
+      {actionDescriptions}
+
 {assertionsInstruction}
       CRITICAL INSTRUCTION FOR LOCATORS & RETRIES:
       - When prioritizing 'id', format as valid CSS selector (e.g., "#username"). DO NOT output "id=username", this is invalid.
