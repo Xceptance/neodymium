@@ -109,4 +109,11 @@ public class Playbook {
         }
         return step;
     }
+
+    @Override
+    public String toString()
+    {
+        return "Playbook [id=" + id + ", steps=" + steps + ", changed=" + changed + ", cursor=" + cursor + ", recording=" + recording + "]";
+    }
+
 }

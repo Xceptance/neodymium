@@ -661,7 +661,7 @@ public class AiPromptGenerator {
                         if (isInteractive) {
                             java.util.Map<String, String> hudBindings = new java.util.HashMap<>(knownBindings);
                             String systemPromptBase = AiAgentPrompts.SYSTEM_HEALING_PROMPT;
-                            systemPromptBase = injectPluginMetadata(systemPromptBase);
+                            systemPromptBase = AiAgentPrompts.injectPluginMetadata(systemPromptBase);
                             List<String> plannedStrs = new ArrayList<>();
                             for (int aIdx = pIdx; aIdx < proposedActions.size(); aIdx++) {
                                 Action act = proposedActions.get(aIdx);
@@ -775,7 +775,7 @@ public class AiPromptGenerator {
 
                             try {
                                 String systemPromptBase = AiAgentPrompts.SYSTEM_PROMPT;
-                                systemPromptBase = injectPluginMetadata(systemPromptBase);
+                                systemPromptBase = AiAgentPrompts.injectPluginMetadata(systemPromptBase);
                                 String fallbackResponse = llmClient.chat(systemPromptBase, fallbackPrompt);
                                 String cleanJson = fallbackResponse.trim();
                                 if (cleanJson.startsWith("```json"))
@@ -1057,7 +1057,7 @@ public class AiPromptGenerator {
     protected String executeV2ExplorationLlmCall(LlmClient llmClient, String prompt) {
         String systemPromptBase = AiAgentPrompts
                 .getV2SystemExplorationPrompt(Neodymium.aiConfiguration().aiGenerateValidations());
-        systemPromptBase = injectPluginMetadata(systemPromptBase);
+        systemPromptBase = AiAgentPrompts.injectPluginMetadata(systemPromptBase);
         return llmClient.chat(systemPromptBase, prompt);
     }
 
@@ -1313,7 +1313,7 @@ public class AiPromptGenerator {
     protected String executeExplorationLlmCall(LlmClient llmClient, String prompt) {
         String systemPromptBase = AiAgentPrompts
                 .getSystemExplorationPrompt(Neodymium.aiConfiguration().aiGenerateValidations());
-        systemPromptBase = injectPluginMetadata(systemPromptBase);
+        systemPromptBase = AiAgentPrompts.injectPluginMetadata(systemPromptBase);
         return llmClient.chat(systemPromptBase, prompt);
     }
 
@@ -1382,28 +1382,5 @@ public class AiPromptGenerator {
         return sb.toString();
     }
 
-    private String injectPluginMetadata(String promptTemplate) {
-        if (promptTemplate == null) {
-            return null;
-        }
 
-        java.util.Collection<com.xceptance.neodymium.ai.action.AiActionPlugin> plugins = com.xceptance.neodymium.ai.action.ActionRegistry
-                .getAllPlugins();
-
-        java.util.List<String> typeNames = new java.util.ArrayList<>();
-        StringBuilder descriptions = new StringBuilder();
-
-        for (com.xceptance.neodymium.ai.action.AiActionPlugin plugin : plugins) {
-            typeNames.add(plugin.getActionName());
-            String desc = plugin.getPromptInstructions();
-            if (desc != null && !desc.isBlank()) {
-                descriptions.append("- ").append(desc).append("\n");
-            }
-        }
-
-        String typesStr = String.join(" | ", typeNames);
-
-        return promptTemplate.replace("{actionTypes}", typesStr)
-                .replace("{actionDescriptions}", descriptions.toString());
-    }
 }

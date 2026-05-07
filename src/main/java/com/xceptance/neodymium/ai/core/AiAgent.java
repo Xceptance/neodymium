@@ -376,7 +376,7 @@ public class AiAgent {
                 PlaybookStep step = playbook.getCurrentStep();
                 step.setFailure(e);
 
-                LOG.warn("Actions failed: {} (Attempt {}/{})", e.getMessage(), errorCount, maxRetries);
+                LOG.warn("    ⚠️ Actions failed: {} (Attempt {}/{})", e.getMessage(), errorCount + 1, maxRetries);
                 executionLog.logWarning("Action failed: " + e + ". Retrying...");
 
                 if (errorCount >= maxRetries) {
@@ -582,11 +582,11 @@ public class AiAgent {
                 // 2. Build prompt
                 final String userPrompt;
                 if (lastWasNoActions) {
-                    LOG.debug("Retry attempt (no actions returned) {}/{} for instruction: {}", noActionsCount,
+                    LOG.info("    🔄 Retry attempt (no actions returned) {}/{} for instruction: {}", noActionsCount,
                             NO_ACTIONS_MAX_RETRIES, instruction);
                     userPrompt = AiAgentPrompts.buildNoActionsRetryPrompt(instruction, sutContext, domContext);
                 } else if (lastError != null) {
-                    LOG.debug("Retry attempt (error) {}/{} — previous error: {}", errorCount, maxRetries, lastError);
+                    LOG.info("    🔄 Retry attempt (error) {}/{} — previous error: {}", errorCount, maxRetries, lastError);
                     userPrompt = AiAgentPrompts.buildRetryPrompt(instruction, sutContext, domContext, lastError);
                 } else {
                     userPrompt = AiAgentPrompts.buildUserPrompt(instruction, sutContext, domContext);
@@ -602,9 +602,9 @@ public class AiAgent {
                 try {
                     if (screenshot != null) {
                         llmResponse = llmClient.chatWithScreenshot(
-                                AiAgentPrompts.SYSTEM_PROMPT, userPrompt, screenshot);
+                                AiAgentPrompts.getSystemPrompt(), userPrompt, screenshot);
                     } else {
-                        llmResponse = llmClient.chat(AiAgentPrompts.SYSTEM_PROMPT, userPrompt);
+                        llmResponse = llmClient.chat(AiAgentPrompts.getSystemPrompt(), userPrompt);
                     }
                 } catch (Exception e) {
                     LOG.warn("LLM call failed or timed out: {}", e.getMessage());
@@ -627,7 +627,7 @@ public class AiAgent {
                     final String message = error.isEmpty()
                             ? "LLM reported failure for: " + instruction
                             : "Verification failed: " + error;
-                    LOG.error(message);
+                    LOG.error("    ❌ {}", message);
                     executionLog.logError(message);
                     throw new ActionExecutionException(message, null);
                 }
@@ -651,7 +651,7 @@ public class AiAgent {
                         });
                     }
                     LOG.warn(
-                            "LLM returned no actions for instruction: {}. Retrying with pressure prompt (attempt {}/{})",
+                            "    ⚠️ LLM returned no actions for instruction: {}. Retrying with pressure prompt (attempt {}/{})",
                             instruction, noActionsCount, NO_ACTIONS_MAX_RETRIES);
                     executionLog.logWarning("No actions returned. Retrying...");
                     lastWasNoActions = true;
@@ -686,7 +686,7 @@ public class AiAgent {
                 lastError = e.getMessage();
                 lastThrowable = e.getCause() != null ? e.getCause() : e;
                 lastWasNoActions = false;
-                LOG.warn("Action failed: {} (Attempt {}/{})", lastError, errorCount, maxRetries);
+                LOG.warn("    ⚠️ Action failed: {} (Attempt {}/{})", lastError, errorCount, maxRetries);
                 executionLog.logWarning("Action failed: " + lastError + ". Retrying...");
 
                 if (errorCount >= maxRetries) {

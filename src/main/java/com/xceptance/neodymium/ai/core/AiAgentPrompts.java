@@ -180,4 +180,33 @@ public final class AiAgentPrompts {
         .replace("{error}", error != null ? error : "Unknown error")
         .replace("{domContext}", domContext);
   }
+
+  public static String injectPluginMetadata(String promptTemplate) {
+      if (promptTemplate == null) {
+          return null;
+      }
+
+      java.util.Collection<com.xceptance.neodymium.ai.action.AiActionPlugin> plugins = com.xceptance.neodymium.ai.action.ActionRegistry
+              .getAllPlugins();
+
+      java.util.List<String> typeNames = new java.util.ArrayList<>();
+      StringBuilder descriptions = new StringBuilder();
+
+      for (com.xceptance.neodymium.ai.action.AiActionPlugin plugin : plugins) {
+          typeNames.add(plugin.getActionName());
+          String desc = plugin.getPromptInstructions();
+          if (desc != null && !desc.isBlank()) {
+              descriptions.append("- ").append(desc).append("\n");
+          }
+      }
+
+      String typesStr = String.join(" | ", typeNames);
+
+      return promptTemplate.replace("{actionTypes}", typesStr)
+              .replace("{actionDescriptions}", descriptions.toString());
+  }
+
+  public static String getSystemPrompt() {
+      return injectPluginMetadata(SYSTEM_PROMPT);
+  }
 }

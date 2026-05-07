@@ -7,6 +7,7 @@ import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
 
 public class PlaybookStep {
+
     private String promptLine;
     private String reasoning;
     private List<Action> actions;
@@ -64,5 +65,11 @@ public class PlaybookStep {
     public String getLastFailure()
     {
         return lastFailure;
+    }
+
+    @Override
+    public String toString()
+    {
+        return "PlaybookStep [promptLine=" + promptLine + ", reasoning=" + reasoning + ", actions=" + actions + "]";
     }
 }
