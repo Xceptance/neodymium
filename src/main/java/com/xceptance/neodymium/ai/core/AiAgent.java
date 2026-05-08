@@ -449,7 +449,13 @@ public class AiAgent {
 
     private void waitForHudAction(boolean allowAutoSkip) throws HudActionException {
         if (allowAutoSkip && this.autoSkip) {
-            return;
+            Boolean s = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
+            if (s != null) {
+                this.autoSkip = s;
+            }
+            if (this.autoSkip) {
+                return;
+            }
         }
 
         LOG.info("Waiting for user action in HUD...");

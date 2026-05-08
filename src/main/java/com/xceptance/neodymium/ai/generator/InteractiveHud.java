@@ -46,6 +46,8 @@ public class InteractiveHud {
     private String lastReasoning;
     private boolean lastIsReplay;
     private boolean lastFullPromptOpen = false;
+    private String lastBreakpointsStr = "[]";
+    private boolean lastHelpShown = false;
 
     public InteractiveHud() {
         evaluateCanEdit();
@@ -114,7 +116,7 @@ public class InteractiveHud {
         }
         try {
             com.codeborne.selenide.Selenide.executeJavaScript(HUD_JS, HUD_HTML, planned, performed, autoSkip,
-                    hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen);
+                    hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen, lastBreakpointsStr, lastHelpShown);
         } catch (Exception e) {
             LOG.warn("Failed to inject AI Generation HUD: {}", e.getMessage());
         }
@@ -140,6 +142,16 @@ public class InteractiveHud {
                 Object promptOpen = com.codeborne.selenide.Selenide.executeJavaScript("return window.neoFullPromptOpen;");
                 if (promptOpen != null) {
                     this.lastFullPromptOpen = (Boolean) promptOpen;
+                }
+                
+                Object bps = com.codeborne.selenide.Selenide.executeJavaScript("return window.neoBreakpoints ? JSON.stringify(window.neoBreakpoints) : null;");
+                if (bps != null) {
+                    this.lastBreakpointsStr = (String) bps;
+                }
+                
+                Object helpShown = com.codeborne.selenide.Selenide.executeJavaScript("return window.neoHelpShown;");
+                if (helpShown != null) {
+                    this.lastHelpShown = (Boolean) helpShown;
                 }
             }
 

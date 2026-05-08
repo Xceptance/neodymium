@@ -1,4 +1,5 @@
-<div id="neo-ai-hud" class="neodymium-ai-hud" data-hud-version="3" style="position:fixed; bottom:20px; right:20px; width:350px; background:rgba(30,30,30,0.95); border:1px solid #555; border-radius:8px; z-index:999999; font-family:sans-serif; color:white; box-shadow:0 4px 15px rgba(0,0,0,0.5); overflow:hidden; display:flex; flex-direction:column; transition:opacity 0.3s; opacity:0;">
+<div id="neodymium-ai-hud-container" data-hud-version="4" style="z-index:999999;">
+<div id="neo-ai-hud" class="neodymium-ai-hud" style="position:fixed; bottom:20px; right:20px; width:350px; background:rgba(30,30,30,0.95); border:1px solid #555; border-radius:8px; font-family:sans-serif; color:white; box-shadow:0 4px 15px rgba(0,0,0,0.5); display:flex; flex-direction:column; transition:opacity 0.3s; opacity:0;">
 
     <div id="neo-add-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(30,30,30,0.98); z-index:10000; flex-direction:column; padding:15px; box-sizing:border-box; justify-content:center;">
         <div style="color:#2196F3; font-weight:bold; margin-bottom:10px; font-size:14px;">➕ Insert Action Before Current</div>
@@ -30,17 +31,35 @@
         </div>
     </div>
 
-    <div id="neo-hud-header" style="background:#2196F3; padding:8px 12px; font-weight:bold; font-size:14px; display:flex; justify-content:space-between; align-items:center; cursor:move;">
+    <div id="neo-hud-header" style="background:#2196F3; padding:8px 12px; font-weight:bold; font-size:14px; display:flex; justify-content:space-between; align-items:center; cursor:move; border-top-left-radius:7px; border-top-right-radius:7px;">
         <span id="neo-header-title" style="display:flex; align-items:center; gap:5px;">🤖 Neodymium AI <span id="neo-status-indicator" style="font-size:10px; background:#FF9800; padding:2px 6px; border-radius:10px; color:#000;">Pending</span></span>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; align-items:center;">
+            <button id="neo-info-btn" style="background:transparent; color:white; border:none; cursor:pointer; font-size:16px; padding:0;" title="Help">ℹ️</button>
             <button id="neo-min-btn" style="background:transparent; color:white; border:none; cursor:pointer; font-size:16px; padding:0;">−</button>
+        </div>
+    </div>
+
+    <div id="neo-help-overlay" style="display:none; position:absolute; top:0; right:360px; width:320px; background:rgba(20,20,20,0.98); border:1px solid #555; border-radius:6px; z-index:10001; padding:15px; box-sizing:border-box; box-shadow:0 4px 15px rgba(0,0,0,0.7); color:#ddd; font-size:12px;">
+        <div style="color:#2196F3; font-weight:bold; margin-bottom:10px; font-size:14px; text-align:center;">Interactive Debug Help</div>
+        <div style="margin-bottom:10px; line-height:1.4;">
+            <strong>Shortcuts:</strong><br>
+            <span style="background:#444; padding:2px 4px; border-radius:3px; display:inline-block; margin-bottom:2px;">Alt+A</span> or <span style="background:#444; padding:2px 4px; border-radius:3px; display:inline-block; margin-bottom:2px;">Ctrl+Enter</span> : Approve current step<br>
+            <span style="background:#444; padding:2px 4px; border-radius:3px; display:inline-block; margin-bottom:2px;">Alt+S</span> : Toggle Fast-Forward<br>
+            <span style="background:#444; padding:2px 4px; border-radius:3px; display:inline-block; margin-bottom:2px;">Alt+E</span> : Edit current step<br>
+        </div>
+        <div style="line-height:1.4;">
+            <strong>Features:</strong><br>
+            - Click the <strong>first column</strong> in the Full Prompt table to set a <strong>breakpoint</strong> (🛑). Fast-Forward will pause there.<br>
+            - Steps starting with ⚠️ indicate a failed action being retried.
         </div>
     </div>
 
     <div id="neo-hud-content" style="padding:12px; flex-grow:1; display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 80px); overflow-y:auto;">
         
-        <div id="neo-full-prompt-overlay" style="display:none; flex-direction:column; flex-shrink:1; max-height:calc(100vh - 250px); overflow-y:auto; background:#222; border:1px solid #444; border-radius:4px; padding:5px; font-size:12px;">
-            <!-- filled by js -->
+        <div id="neo-full-prompt-overlay" style="display:none; flex-direction:column; flex-shrink:1; max-height:calc(100vh - 250px); overflow-y:auto; background:#222; border:1px solid #444; border-radius:4px; font-size:12px; margin-bottom:5px;">
+            <table id="neo-full-prompt-table" style="width:100%; border-collapse:collapse; color:#ddd; font-size:11px;">
+                <!-- filled by js -->
+            </table>
         </div>
 
         <button id="neo-full-prompt-btn" style="width:100%; background:#333; color:#aaa; border:1px solid #444; border-radius:4px; padding:4px; cursor:pointer; font-size:10px; text-align:center; transition:background 0.2s; margin-bottom:-5px;" title="Show Full Menu">▲ Show Full Prompt ▲</button>
@@ -70,13 +89,19 @@
             <strong style="color:#81c784;">📼 Playbook Replay:</strong> Executing recorded step.<span id="neo-playbook-reasoning" style="display:block; margin-top:4px; font-size:11px; color:#aaa; font-style:italic;"></span>
         </div>
 
-        <label style="cursor:pointer; font-size:12px; display:flex; align-items:center; user-select:none; justify-content:flex-end;">
-            <input type="checkbox" id="neo-autoskip-cb" style="margin-right:5px;"> Auto-Skip [Alt+S]
-        </label>
+        <div style="display:flex; justify-content:flex-end; margin-top:5px;">
+            <button id="neo-autoskip-btn" title="Fast-Forward [Alt+S]" style="background:#4CAF50; color:white; border:none; cursor:pointer; font-size:13px; padding:6px 12px; border-radius:4px; display:flex; align-items:center; gap:5px; font-weight:bold; transition:background 0.2s;">
+                <span id="neo-autoskip-icon">⏩</span> <span id="neo-autoskip-text">Fast-Forward</span>
+            </button>
+        </div>
 
         <div id="neo-history-container" style="display:none; margin-top:5px;">
             <div style="font-size:11px; color:#888; text-transform:uppercase; margin-bottom:5px;">History (Click to Rewind)</div>
             <ol id="neo-history-list" style="margin:0; padding-left:20px; font-size:12px; color:#aaa; max-height:100px; overflow-y:auto;"></ol>
         </div>
+    </div>
+</div>
+    <div id="neo-min-circle" style="display:none; position:fixed; bottom:20px; right:20px; width:40px; height:40px; border-radius:20px; background:rgba(30,30,30,0.95); border:1px solid #555; box-shadow:0 4px 15px rgba(0,0,0,0.5); align-items:center; justify-content:center; cursor:move; font-size:18px; color:white; transition:background 0.3s;">
+        <span id="neo-min-icon" style="pointer-events:none; font-weight:bold;">+</span>
     </div>
 </div>

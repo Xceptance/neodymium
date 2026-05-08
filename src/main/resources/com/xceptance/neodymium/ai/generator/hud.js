@@ -1,4 +1,4 @@
-(function(hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen) {
+(function(hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen, lastBreakpointsStr, lastHelpShown) {
     window.neoCurrentUnresolvedStep = currentUnresolvedStep;
     window.neoDataBindings = dataBindings;
     window.neoConfigMap = configMap;
@@ -21,8 +21,21 @@
         window.neoFullPromptOpen = (lastFullPromptOpen === true) || (getSessionStorage('neoFullPromptOpen') === 'true');
     }
 
-    var existingHud = document.getElementById('neo-ai-hud');
-    if (existingHud && existingHud.getAttribute('data-hud-version') !== '3') {
+    if (window.neoBreakpoints === undefined) {
+        if (lastBreakpointsStr) {
+            window.neoBreakpoints = JSON.parse(lastBreakpointsStr);
+        } else {
+            var bpStr = getSessionStorage('neoBreakpoints');
+            window.neoBreakpoints = bpStr ? JSON.parse(bpStr) : [];
+        }
+    }
+
+    if (window.neoHelpShown === undefined) {
+        window.neoHelpShown = (lastHelpShown === true) || (getSessionStorage('neoHelpShown') === 'true');
+    }
+
+    var existingHud = document.getElementById('neodymium-ai-hud-container');
+    if (existingHud && existingHud.getAttribute('data-hud-version') !== '4') {
         existingHud.remove();
         window.neodymiumPromptGenerationHudInjected = false;
         existingHud = null;
@@ -37,11 +50,62 @@
         window.neoHudAction = null;
         window.neoSubmitAction = function(actionObj) {
             window.neoHudAction = JSON.stringify(actionObj);
-            var h = document.getElementById('neo-ai-hud');
-            if (h) h.style.display = 'none';
+            if (window.neoMinimizeHud) window.neoMinimizeHud();
         };
         window.neoHudAutoSkip = autoSkip;
-        document.getElementById('neo-autoskip-cb').checked = autoSkip;
+        
+        var autoSkipBtn = document.getElementById('neo-autoskip-btn');
+        var autoSkipIcon = document.getElementById('neo-autoskip-icon');
+        var autoSkipText = document.getElementById('neo-autoskip-text');
+        
+        window.updateAutoSkipBtn = function() {
+            if (window.neoHudAutoSkip) {
+                if (autoSkipIcon) autoSkipIcon.innerText = '⏸️';
+                if (autoSkipText) autoSkipText.innerText = 'Pause';
+                if (autoSkipBtn) autoSkipBtn.style.background = '#FF9800';
+            } else {
+                if (autoSkipIcon) autoSkipIcon.innerText = '⏩';
+                if (autoSkipText) autoSkipText.innerText = 'Fast-Forward';
+                if (autoSkipBtn) autoSkipBtn.style.background = '#4CAF50';
+            }
+        };
+        window.updateAutoSkipBtn();
+
+        if (autoSkipBtn) {
+            autoSkipBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                window.neoHudAutoSkip = !window.neoHudAutoSkip;
+                window.updateAutoSkipBtn();
+                
+                if (window.neoHudAutoSkip) {
+                    var hitBreakpoint = false;
+                    var pList = window.neoPlannedList || [];
+                    if (pList && pList.length > 0) {
+                        var currentText = pList[0] ? pList[0].replace(/^⚠️\s*/, '') : '';
+                        if (window.neoBreakpoints && window.neoBreakpoints.indexOf(currentText) !== -1) {
+                            hitBreakpoint = true;
+                        }
+                    }
+                    if (!hitBreakpoint) {
+                        var approveBtn = document.getElementById('neo-approve-btn');
+                        var plannedContainer = document.getElementById('neo-planned-actions');
+                        if (approveBtn && !approveBtn.disabled && plannedContainer && plannedContainer.style.display !== 'none') {
+                            if (approveBtn.dataset.isFinished === 'true') {
+                                window.neoSubmitAction({ action: "SAVE_EXIT" });
+                            } else {
+                                window.neoSubmitAction({ action: "APPROVE" });
+                            }
+                            approveBtn.disabled = true;
+                            approveBtn.style.opacity = '0.5';
+                        }
+                    } else {
+                        // User tried to fast-forward on a breakpoint. We immediately pause it again.
+                        window.neoHudAutoSkip = false;
+                        window.updateAutoSkipBtn();
+                    }
+                }
+            });
+        }
 
         var hudElement = document.getElementById('neo-ai-hud');
         hudElement.style.opacity = '1';
@@ -51,25 +115,172 @@
         hudElement.addEventListener('mousedown', function(e) { e.stopPropagation(); });
         hudElement.addEventListener('mouseup', function(e) { e.stopPropagation(); });
 
-        document.getElementById('neo-min-btn').addEventListener('click', function(e) {
-            e.stopPropagation();
-            var content = document.getElementById('neo-hud-content');
-            var hud = document.getElementById('neo-ai-hud');
-            var title = document.getElementById('neo-header-title');
-            if (this.innerHTML === '−') {
-                content.style.display = 'none';
-                hud.style.width = 'auto';
-                this.innerHTML = '+';
-                if (title) title.style.display = 'none';
-                setSessionStorage('neoHudMinimized', 'true');
-            } else {
-                content.style.display = 'flex';
-                hud.style.width = '350px';
-                this.innerHTML = '−';
-                if (title) title.style.display = 'flex';
-                setSessionStorage('neoHudMinimized', 'false');
+        window.neoMinimizeHud = function() {
+            var mainHud = document.getElementById('neo-ai-hud');
+            var minCircle = document.getElementById('neo-min-circle');
+            var minIcon = document.getElementById('neo-min-icon');
+            if (mainHud) mainHud.style.display = 'none';
+            if (minCircle) {
+                minCircle.style.display = 'flex';
+                if (window.neoHudAutoSkip) {
+                    minIcon.innerText = '⏸️';
+                    minCircle.style.background = '#FF9800';
+                } else {
+                    minIcon.innerText = '+';
+                    minCircle.style.background = 'rgba(30,30,30,0.95)';
+                }
             }
-        });
+            setSessionStorage('neoHudMinimized', 'true');
+        };
+
+        window.neoMaximizeHud = function() {
+            var mainHud = document.getElementById('neo-ai-hud');
+            var minCircle = document.getElementById('neo-min-circle');
+            var minIcon = document.getElementById('neo-min-icon');
+            if (mainHud) mainHud.style.display = 'flex';
+            if (minCircle) {
+                minCircle.style.display = 'none';
+                if (minIcon && minIcon.innerText === '⏸️') {
+                    window.neoHudAutoSkip = false;
+                    if (window.updateAutoSkipBtn) window.updateAutoSkipBtn();
+                }
+            }
+            setSessionStorage('neoHudMinimized', 'false');
+            
+            setTimeout(function() {
+                if (!mainHud) return;
+                var rect = mainHud.getBoundingClientRect();
+                var currentBottom = parseFloat(mainHud.style.bottom) || 20;
+                if (currentBottom + rect.height > window.innerHeight) {
+                    var newBottom = window.innerHeight - rect.height;
+                    if (newBottom < 0) newBottom = 0;
+                    mainHud.style.bottom = newBottom + 'px';
+                    setSessionStorage('neoHudPosBottom', newBottom + 'px');
+                    if (minCircle) minCircle.style.bottom = newBottom + 'px';
+                }
+                
+                var currentRight = parseFloat(mainHud.style.right) || 20;
+                if (currentRight + rect.width > window.innerWidth) {
+                    var newRight = window.innerWidth - rect.width;
+                    if (newRight < 0) newRight = 0;
+                    mainHud.style.right = newRight + 'px';
+                    setSessionStorage('neoHudPosRight', newRight + 'px');
+                    if (minCircle) minCircle.style.right = newRight + 'px';
+                }
+            }, 10);
+        };
+
+        var minCircle = document.getElementById('neo-min-circle');
+        if (minCircle) {
+            minCircle.addEventListener('click', function(e) {
+                if (window.neoIsDraggingHud) return;
+                window.neoMaximizeHud();
+            });
+        }
+
+        var minBtn = document.getElementById('neo-min-btn');
+        if (minBtn) {
+            minBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                window.neoMinimizeHud();
+            });
+        }
+        
+        function makeDraggable(dragHandle, moveTargets) {
+            if (!dragHandle || !moveTargets || moveTargets.length === 0) return;
+            var isDown = false;
+            var startX, startY, startRight, startBottom;
+
+            dragHandle.addEventListener('mousedown', function(e) {
+                if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+                isDown = true;
+                window.neoIsDraggingHud = false;
+                startX = e.clientX;
+                startY = e.clientY;
+                
+                startRight = parseFloat(moveTargets[0].style.right) || 20;
+                startBottom = parseFloat(moveTargets[0].style.bottom) || 20;
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (!isDown) return;
+                var dx = e.clientX - startX;
+                var dy = e.clientY - startY;
+                if (Math.abs(dx) > 3 || Math.abs(dy) > 3) window.neoIsDraggingHud = true;
+
+                var newRight = startRight - dx;
+                var newBottom = startBottom - dy;
+                
+                var w = moveTargets[0].offsetWidth || 40;
+                var h = moveTargets[0].offsetHeight || 40;
+                if (newRight < 0) newRight = 0;
+                if (newBottom < 0) newBottom = 0;
+                if (newRight + w > window.innerWidth) newRight = window.innerWidth - w;
+                if (newBottom + h > window.innerHeight) newBottom = window.innerHeight - h;
+                
+                moveTargets.forEach(function(target) {
+                    target.style.right = newRight + 'px';
+                    target.style.bottom = newBottom + 'px';
+                    target.style.left = 'auto';
+                    target.style.top = 'auto';
+                });
+                
+                setSessionStorage('neoHudPosRight', newRight + 'px');
+                setSessionStorage('neoHudPosBottom', newBottom + 'px');
+            });
+
+            window.addEventListener('mouseup', function() {
+                if (isDown) {
+                    isDown = false;
+                    setTimeout(function(){ window.neoIsDraggingHud = false; }, 50);
+                }
+            }, true);
+        }
+
+        makeDraggable(document.getElementById('neo-hud-header'), [document.getElementById('neo-ai-hud'), document.getElementById('neo-min-circle')]);
+        makeDraggable(document.getElementById('neo-min-circle'), [document.getElementById('neo-ai-hud'), document.getElementById('neo-min-circle')]);
+
+        var helpBtn = document.getElementById('neo-info-btn');
+        var helpOverlay = document.getElementById('neo-help-overlay');
+
+        if (helpBtn && helpOverlay) {
+            var isHovering = false;
+            helpBtn.addEventListener('mouseenter', function() {
+                isHovering = true;
+                helpOverlay.style.display = 'block';
+            });
+            helpBtn.addEventListener('mouseleave', function() {
+                isHovering = false;
+                setTimeout(function() {
+                    if (!isHovering) {
+                        helpOverlay.style.display = 'none';
+                    }
+                }, 100);
+            });
+            helpOverlay.addEventListener('mouseenter', function() {
+                isHovering = true;
+            });
+            helpOverlay.addEventListener('mouseleave', function() {
+                isHovering = false;
+                setTimeout(function() {
+                    if (!isHovering) {
+                        helpOverlay.style.display = 'none';
+                    }
+                }, 100);
+            });
+            
+            if (!window.neoHelpShown) {
+                helpOverlay.style.display = 'block';
+                window.neoHelpShown = true;
+                setSessionStorage('neoHelpShown', 'true');
+                setTimeout(function() {
+                    if (!isHovering) {
+                        helpOverlay.style.display = 'none';
+                    }
+                }, 4000);
+            }
+        }
 
         document.getElementById('neo-approve-btn').addEventListener('click', function() {
             if (!this.disabled) {
@@ -287,12 +498,7 @@
             }
         });
 
-        document.getElementById('neo-autoskip-cb').addEventListener('change', function(e) {
-            window.neoHudAutoSkip = e.target.checked;
-            if (e.target.checked && !document.getElementById('neo-approve-btn').disabled && document.getElementById('neo-planned-actions').style.display !== 'none') {
-                window.neoSubmitAction({ action: "APPROVE" });
-            }
-        });
+
 
         // Keyboard shortcuts logic
         document.addEventListener('keydown', function(e) {
@@ -331,11 +537,9 @@
                         btn.style.opacity = '0.5';
                     }
                 } else if (key === 's') {
-                    var cb = document.getElementById('neo-autoskip-cb');
-                    cb.checked = !cb.checked;
-                    window.neoHudAutoSkip = cb.checked;
-                    if (cb.checked && !document.getElementById('neo-approve-btn').disabled && document.getElementById('neo-planned-actions').style.display !== 'none') {
-                        window.neoSubmitAction({ action: "APPROVE" });
+                    var toggleBtn = document.getElementById('neo-autoskip-btn');
+                    if (toggleBtn) {
+                        toggleBtn.click();
                     }
                 } else if (key === 'h') {
                     var toggleBtn = document.getElementById('neo-toggle-history');
@@ -357,35 +561,94 @@
         }, true);
 
         window.neoRenderFullPrompt = function() {
-            var overlay = document.getElementById('neo-full-prompt-overlay');
+            var table = document.getElementById('neo-full-prompt-table');
+            if (!table) return;
+            
+            window.neoCurrentRenderedSteps = [];
+            
+            if (!window.neoBpListenerAttached) {
+                table.addEventListener('click', function(e) {
+                    var td = e.target.closest('td.neo-bp-col');
+                    if (td) {
+                        var idxInList = parseInt(td.getAttribute('data-idx'));
+                        var rawText = window.neoCurrentRenderedSteps[idxInList];
+                        if (rawText) {
+                            if (!window.neoBreakpoints) window.neoBreakpoints = [];
+                            var bpIdx = window.neoBreakpoints.indexOf(rawText);
+                            if (bpIdx === -1) {
+                                window.neoBreakpoints.push(rawText);
+                            } else {
+                                window.neoBreakpoints.splice(bpIdx, 1);
+                            }
+                            setSessionStorage('neoBreakpoints', JSON.stringify(window.neoBreakpoints));
+                            window.neoRenderFullPrompt();
+                        }
+                    }
+                });
+                window.neoBpListenerAttached = true;
+            }
+
             var html = '';
             var pList = window.neoPerformedList || [];
             var aList = window.neoPlannedList || [];
 
+            function getStatusIcon(statusStr) {
+                if (statusStr === 'error') return '<span style="color:#f44336; font-size:14px; font-weight:bold;">✕</span>';
+                if (statusStr === 'pending') return '<span style="color:#2196F3; font-size:14px; font-weight:bold;">➔</span>';
+                if (statusStr === 'done') return '<span style="color:#4CAF50; font-size:14px; font-weight:bold;">✓</span>';
+                return '';
+            }
+
+            function escapeHtml(unsafe) {
+                return (unsafe || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+            }
+
+            function getCleanStepText(text) {
+                return text ? text.replace(/^⚠️\s*/, '') : '';
+            }
+
+            function genRow(stepText, statusStr, isCurrent) {
+                var cleanText = getCleanStepText(stepText);
+                var stepIdx = window.neoCurrentRenderedSteps.length;
+                window.neoCurrentRenderedSteps.push(cleanText);
+                
+                var isBp = window.neoBreakpoints && window.neoBreakpoints.indexOf(cleanText) !== -1;
+                var bpDisplay = isBp ? '🛑' : '<span style="opacity:0.2;">⚪</span>';
+                
+                var rowStyle = 'border-bottom:1px solid #333;';
+                if (isCurrent) {
+                    rowStyle += ' background:#333; border-left:3px solid #2196F3; font-weight:bold;';
+                } else if (statusStr === 'done') {
+                    rowStyle += ' color:#888; border-left:2px solid #555;';
+                } else {
+                    rowStyle += ' color:#aaa; border-left:2px solid #444;';
+                }
+
+                return '<tr style="' + rowStyle + '">' +
+                       '<td class="neo-bp-col" data-idx="' + stepIdx + '" style="width:25px; text-align:center; padding:6px; cursor:pointer;" title="Click to toggle breakpoint">' + bpDisplay + '</td>' +
+                       '<td style="padding:6px; word-break:break-word;">' + escapeHtml(stepText) + '</td>' +
+                       '<td style="width:25px; text-align:center; padding:6px;">' + getStatusIcon(statusStr) + '</td>' +
+                       '</tr>';
+            }
+
             if (pList && pList.length > 0) {
-                pList.forEach(function(step, i) {
-                    html += '<div style="padding:4px; margin-bottom:2px; color:#888; border-left:2px solid #555;">' + 
-                            '<span style="font-size:10px; margin-right:5px;">[' + (i + 1) + ']</span> ✓ ' + step + 
-                            '</div>';
+                pList.forEach(function(step) {
+                    html += genRow(step, 'done', false);
                 });
             }
             
             if (aList && aList.length > 0) {
-                html += '<div style="padding:6px; margin-bottom:2px; background:#333; color:#fff; border-left:3px solid #2196F3; font-weight:bold;">' + 
-                        '<span style="font-size:10px; margin-right:5px; color:#2196F3;">[' + ((pList ? pList.length : 0) + 1) + ']</span> ➔ ' + aList[0] + 
-                        '</div>';
-                        
+                var currentStep = aList[0];
+                var status = currentStep.startsWith('⚠️') ? 'error' : 'pending';
+                html += genRow(currentStep, status, true);
+                
                 if (aList.length > 1) {
-                    aList.slice(1).forEach(function(step, i) {
-                        var idx = (pList ? pList.length : 0) + 2 + i;
-                        html += '<div style="padding:4px; margin-bottom:2px; color:#ccc; border-left:2px solid #444;">' + 
-                                '<span style="font-size:10px; margin-right:5px;">[' + idx + ']</span> &nbsp; ' + step + 
-                                '</div>';
+                    aList.slice(1).forEach(function(step) {
+                        html += genRow(step, '', false);
                     });
                 }
             }
-            
-            overlay.innerHTML = html;
+            table.innerHTML = html;
         };
 
         window.neoToggleFullPrompt = function() {
@@ -404,21 +667,49 @@
                 window.neoFullPromptOpen = true;
                 setSessionStorage('neoFullPromptOpen', 'true');
             }
+            
+            setTimeout(function() {
+                var hud = document.getElementById('neo-ai-hud');
+                if (!hud) return;
+                var rect = hud.getBoundingClientRect();
+                var currentBottom = parseFloat(hud.style.bottom) || 20;
+                
+                if (currentBottom + rect.height > window.innerHeight) {
+                    var newBottom = window.innerHeight - rect.height;
+                    if (newBottom < 0) newBottom = 0;
+                    hud.style.bottom = newBottom + 'px';
+                    setSessionStorage('neoHudPosBottom', newBottom + 'px');
+                    var minCircle = document.getElementById('neo-min-circle');
+                    if (minCircle) minCircle.style.bottom = newBottom + 'px';
+                }
+            }, 10);
         };
 
         document.getElementById('neo-full-prompt-btn').addEventListener('click', window.neoToggleFullPrompt);
-        
-        if (getSessionStorage('neoHudMinimized') === 'true') {
-            document.getElementById('neo-min-btn').click();
-        }
     }
 
     window.neoPerformedList = performed;
     window.neoPlannedList = planned;
 
     var currentHud = document.getElementById('neo-ai-hud');
-    if (currentHud) {
-        currentHud.style.display = 'flex';
+    var minCircle = document.getElementById('neo-min-circle');
+    
+    if (getSessionStorage('neoHudPosRight')) {
+        var r = getSessionStorage('neoHudPosRight');
+        var b = getSessionStorage('neoHudPosBottom');
+        if (currentHud) { currentHud.style.right = r; currentHud.style.bottom = b; currentHud.style.left = 'auto'; currentHud.style.top = 'auto'; }
+        if (minCircle) { minCircle.style.right = r; minCircle.style.bottom = b; minCircle.style.left = 'auto'; minCircle.style.top = 'auto'; }
+    }
+
+    if (getSessionStorage('neoHudMinimized') === 'true') {
+        if (window.neoHudAutoSkip === false) {
+            if (window.neoMaximizeHud) window.neoMaximizeHud();
+        } else {
+            if (window.neoMinimizeHud) window.neoMinimizeHud();
+        }
+    } else {
+        if (currentHud) currentHud.style.display = 'flex';
+        if (minCircle) minCircle.style.display = 'none';
     }
 
     if (window.neoFullPromptOpen && window.neoRenderFullPrompt) {
@@ -429,8 +720,7 @@
         if (btn) btn.innerHTML = '▼ Hide Full Prompt ▼';
     }
 
-    // Sync auto skip state
-    document.getElementById('neo-autoskip-cb').checked = window.neoHudAutoSkip;
+
 
     // Update content
     var statusDiv = document.getElementById('neo-status-indicator');
@@ -523,7 +813,20 @@
         }
 
         if (window.neoHudAutoSkip) {
-            window.neoSubmitAction({ action: "APPROVE" });
+            var hitBreakpoint = false;
+            if (planned && planned.length > 0) {
+                var currentText = planned[0] ? planned[0].replace(/^⚠️\s*/, '') : '';
+                if (window.neoBreakpoints && window.neoBreakpoints.indexOf(currentText) !== -1) {
+                    hitBreakpoint = true;
+                }
+            }
+            if (hitBreakpoint) {
+                window.neoHudAutoSkip = false;
+                if (window.updateAutoSkipBtn) window.updateAutoSkipBtn();
+                if (window.neoMaximizeHud) window.neoMaximizeHud();
+            } else {
+                window.neoSubmitAction({ action: "APPROVE" });
+            }
         }
     } else {
         statusDiv.innerText = 'Waiting...';
@@ -556,4 +859,4 @@
         }
     }
 
-})(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11], arguments[12]);
+})(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11], arguments[12], arguments[13], arguments[14]);
