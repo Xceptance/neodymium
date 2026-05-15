@@ -178,10 +178,12 @@ public class AiAgent
                     }
                 }
 
+                // If we've reached the end of the predefined steps list
                 if (i == stepsList.size())
                 {
                     if (isInteractive)
                     {
+                        // Check if any steps were modified or added via the HUD
                         if (!hudPromptChanged)
                         {
                             LOG.info(
@@ -191,14 +193,18 @@ public class AiAgent
 
                         try
                         {
+                            // Show a final confirmation dialog to save the interactive session changes
                             final List<String> finishedStrs = new ArrayList<>();
                             finishedStrs.add("🎉 Execution Complete! Click Save & Exit to store changes.");
                             Neodymium.getOrCreateInteractiveHud()
                                     .injectOrUpdateHud(finishedStrs, performedInstructions, this.autoSkip, true, true,
                                             "");
+                            // Block execution until the user responds to the prompt
                             waitForHudAction(false);
                         } catch (HudActionException e)
                         {
+                            // If the user chooses to rewind, edit, or add during the final prompt,
+                            // we update the loop index 'i' and continue from the new position
                             i = processHudActionException(e, i, stepsList, performedInstructions);
                             if (i < 0) break;
                             continue;
@@ -207,15 +213,18 @@ public class AiAgent
                     break;
                 }
 
+                // Resolve placeholders or variables in the raw instruction string
                 final String stepUnresolved = stepsList.get(i);
                 final String step = AiBrowser.resolveTestDataToPrompt(stepUnresolved);
 
                 boolean isReplay = false;
                 final Playbook playbookForCheck = Neodymium.getAiPlaybook();
+                // Check if we have an active, non-recording playbook matching the current step
                 if (playbookForCheck != null && !playbookForCheck.isRecording()
                         && playbookForCheck.getCurrentStep() != null)
                         {
                     final PlaybookStep stepObj = playbookForCheck.getCurrentStep();
+                    // Mark as replay only if the previous run didn't fail and prompts match exactly
                     if (!stepObj.failed() && stepObj.getPromptLine() != null
                             && stepObj.getPromptLine().equals(stepUnresolved))
                             {
@@ -331,10 +340,12 @@ public class AiAgent
                             "Loading reasoning...", false);
                 }
 
+                // Try to resolve the required actions (from playbook cache, direct plugins, or LLM)
                 final List<Action> actions = getStepActions(instruction, playbook);
 
                 if (isInteractive)
                 {
+                    // Update the HUD with the proposed actions and reasoning before executing them
                     final List<String> plannedStrs = new ArrayList<>();
                     plannedStrs.add(instruction);
                     if (futureInstructions != null)
@@ -360,11 +371,14 @@ public class AiAgent
                             performedInstructions, this.autoSkip, false, false, unresolvedInstruction, reasoning,
                             isReplay);
 
+                    // Block and wait for the user to approve the actions
                     waitForHudAction(true);
                 }
 
+                // Execute the approved actions via Selenium/WebDriver
                 actionExecutor.executeAll(actions);
 
+                // Move the playbook cursor forward upon successful execution
                 playbook.nextStep();
 
                 return;
