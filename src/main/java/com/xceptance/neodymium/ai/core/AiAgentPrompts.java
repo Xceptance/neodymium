@@ -25,211 +25,374 @@ package com.xceptance.neodymium.ai.core;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import com.xceptance.neodymium.ai.action.ActionRegistry;
+import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 
 /**
  * Contains the system prompt templates for the AI agent.
  * Separated into its own class for easy tuning and experimentation.
  * Prompts are loaded from the classpath at 'ai-prompts/' to allow 
  * external projects to easily override them.
-  *
+ *
  * // AI-generated: Gemini 2.0 Flash
-*/
-public final class AiAgentPrompts {
-  private AiAgentPrompts() {
-    // utility class
-  }
-
-  private static String loadPrompt(String filename) {
-    String resourcePath = "ai-prompts/" + filename;
-    try (InputStream is = AiAgentPrompts.class.getClassLoader().getResourceAsStream(resourcePath)) {
-      if (is != null) {
-        return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-      } else {
-        throw new RuntimeException("Could not find prompt file on classpath: " + resourcePath);
-      }
-    } catch (Exception e) {
-      throw new RuntimeException("Failed to load prompt file: " + resourcePath, e);
-    }
-  }
-
-  public static final String SYSTEM_EXPLORATION_PROMPT = loadPrompt("system-exploration-prompt.txt");
-  public static final String EXPLORATION_PROMPT_TEMPLATE = loadPrompt("exploration-prompt-template.txt");
-  public static final String V2_EXPLORATION_PROMPT_TEMPLATE = loadPrompt("v2-exploration-prompt-template.txt");
-  public static final String V2_SYSTEM_EXPLORATION_PROMPT = loadPrompt("v2-system-exploration-prompt.txt");
-  public static final String V2_EXTRACTION_PROMPT = loadPrompt("v2-extraction-prompt.txt");
-  public static final String V2_EXTRACTION_RETRY_PROMPT = loadPrompt("v2-extraction-retry-prompt.txt");
-  public static final String SYSTEM_PROMPT = loadPrompt("system-prompt.txt");
-  public static final String USER_PROMPT_TEMPLATE = loadPrompt("user-prompt-template.txt");
-  public static final String RETRY_PROMPT_TEMPLATE = loadPrompt("retry-prompt-template.txt");
-  public static final String NO_ACTIONS_RETRY_PROMPT_TEMPLATE = loadPrompt("no-actions-retry-prompt-template.txt");
-  public static final String SYSTEM_HEALING_PROMPT = loadPrompt("system-healing-prompt.txt");
-  public static final String HEALING_PROMPT_TEMPLATE = loadPrompt("healing-prompt-template.txt");
-
-  /**
-   * Builds the exploration prompt.
-   */
-  public static String buildExplorationPrompt(final String intent, final String sutContext, final String subgoal, final String history,
-      final String domContext, final String previousActionStr, final java.util.Map<String, String> knownBindings) {
-    String sutContextBlock = "";
-    if (sutContext != null && !sutContext.trim().isEmpty()) {
-      sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
-    }
-    String knownBindingsBlock = "";
-    if (knownBindings != null && !knownBindings.isEmpty()) {
-      StringBuilder sb = new StringBuilder();
-      for (java.util.Map.Entry<String, String> entry : knownBindings.entrySet()) {
-        sb.append("  ${").append(entry.getKey()).append("} = '").append(entry.getValue()).append("'\n");
-      }
-      knownBindingsBlock = "\n## Known Data Bindings\n" + sb.toString();
-    }
-    return EXPLORATION_PROMPT_TEMPLATE
-        .replace("{intent}", intent)
-        .replace("{sutContextBlock}", sutContextBlock)
-        .replace("{subgoal}", subgoal != null && !subgoal.isEmpty() ? subgoal : "None (Starting First Phase)")
-        .replace("{knownBindingsBlock}", knownBindingsBlock)
-        .replace("{history}", history != null && !history.trim().isEmpty() ? history : "None (Initial Step)")
-        .replace("{domContext}", domContext)
-        .replace("{previousAction}", previousActionStr != null ? previousActionStr : "None (Initial Step)");
-  }
-
-  public static String buildV2ExplorationPrompt(final String intent, final String sutContext, final String subgoal, final String history,
-      final String domContext, final String previousActionStr, final java.util.Map<String, String> knownBindings) {
-    String sutContextBlock = "";
-    if (sutContext != null && !sutContext.trim().isEmpty()) {
-      sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
-    }
-    String knownBindingsBlock = "";
-    if (knownBindings != null && !knownBindings.isEmpty()) {
-      StringBuilder sb = new StringBuilder();
-      for (java.util.Map.Entry<String, String> entry : knownBindings.entrySet()) {
-        sb.append("  ${").append(entry.getKey()).append("} = '").append(entry.getValue()).append("'\n");
-      }
-      knownBindingsBlock = "\n## Known Data Bindings\n" + sb.toString();
-    }
-    return V2_EXPLORATION_PROMPT_TEMPLATE
-        .replace("{intent}", intent)
-        .replace("{sutContextBlock}", sutContextBlock)
-        .replace("{subgoal}", subgoal != null && !subgoal.isEmpty() ? subgoal : "None (Starting First Phase)")
-        .replace("{knownBindingsBlock}", knownBindingsBlock)
-        .replace("{history}", history != null && !history.trim().isEmpty() ? history : "None (Initial Step)")
-        .replace("{domContext}", domContext)
-        .replace("{previousAction}", previousActionStr != null ? previousActionStr : "None (Initial Step)");
-  }
-
-  public static String getSystemExplorationPrompt(boolean includeValidations) {
-    if (includeValidations) {
-        String assertionsBlock = """
-      CRITICAL INSTRUCTION FOR Assertions:
-      You MUST systematically inject ASSERT actions. Target elements that are functionally and visually interactable to the user (e.g., "Validate the Login button is visible") or structurally important text on the page.
-      Whenever you land on a new page or new modal, your FIRST actions in your array MUST be multiple `ASSERT` actions to validate the new state.
-      Make sure to check for IMPORTANT information that matches the page's purpose (e.g. check if the expected text matches the page context). We don't need to check that text is character-perfect, so DO NOT include a "value" field for `ASSERT` actions unless absolutely necessary. Simply providing the `target` and a `description` will check if the element is visible on the page, which is sufficient for structural validation.
-      - NEVER use structural terms like "heading" or "page headline" in your assertion descriptions. Just refer to the text itself (e.g., use "Validate the text North Boston is visible" instead of "Validate the 'North Boston' heading is visible").
-""";
-        return SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", assertionsBlock);
-    }
-    return SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", "");
-  }
-
-  public static String getV2SystemExplorationPrompt(boolean includeValidations) {
-    if (includeValidations) {
-        String assertionsBlock = """
-      CRITICAL INSTRUCTION FOR Assertions:
-      You MUST systematically inject ASSERT actions. Target elements that are functionally and visually interactable to the user (e.g., "Validate the Login button is visible") or structurally important text on the page...
-""";
-        return V2_SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", assertionsBlock);
-    }
-    return V2_SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", "");
-  }
-
-  /**
-   * Builds the user prompt with the instruction and DOM context.
-   */
-  public static String buildUserPrompt(final String instruction, final String sutContext, final String domContext) {
-    String sutContextBlock = "";
-    if (sutContext != null && !sutContext.trim().isEmpty()) {
-      sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
-    }
-    return USER_PROMPT_TEMPLATE
-        .replace("{instruction}", instruction)
-        .replace("{sutContextBlock}", sutContextBlock)
-        .replace("{domContext}", domContext);
-  }
-
-  /**
-   * Builds a retry prompt with error context.
-   */
-  public static String buildRetryPrompt(final String instruction, final String sutContext, final String domContext,
-      final String error) {
-    String sutContextBlock = "";
-    if (sutContext != null && !sutContext.trim().isEmpty()) {
-      sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
-    }
-    return RETRY_PROMPT_TEMPLATE
-        .replace("{instruction}", instruction)
-        .replace("{sutContextBlock}", sutContextBlock)
-        .replace("{domContext}", domContext)
-        .replace("{error}", error);
-  }
-
-  /**
-   * Builds a retry prompt for when no actions were returned.
-   */
-  public static String buildNoActionsRetryPrompt(final String instruction, final String sutContext, final String domContext) {
-    String sutContextBlock = "";
-    if (sutContext != null && !sutContext.trim().isEmpty()) {
-      sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
-    }
-    return NO_ACTIONS_RETRY_PROMPT_TEMPLATE
-        .replace("{instruction}", instruction)
-        .replace("{sutContextBlock}", sutContextBlock)
-        .replace("{domContext}", domContext);
-  }
-
-  public static String buildHealingPrompt(final String instruction, final String originalReasoning,
-      final String domContext, final String error, final com.xceptance.neodymium.ai.playbook.PlaybookStep step) {
-
-    String elemCtx = "None";
-    if (step != null && step.getActions() != null && !step.getActions().isEmpty()) {
-      java.util.Map<String, String> ctx = step.getActions().get(0).getElementContext();
-      if (ctx != null) {
-        elemCtx = ctx.toString();
-      }
+ */
+public final class AiAgentPrompts
+{
+    private AiAgentPrompts()
+    {
+        // utility class
     }
 
-    return HEALING_PROMPT_TEMPLATE
-        .replace("{instruction}", instruction)
-        .replace("{originalReasoning}", originalReasoning != null ? originalReasoning : "None")
-        .replace("{elementContext}", elemCtx)
-        .replace("{error}", error != null ? error : "Unknown error")
-        .replace("{domContext}", domContext);
-  }
+    private static String loadPrompt(final String filename)
+    {
+        final String resourcePath = "ai-prompts/" + filename;
+        try (final InputStream is = AiAgentPrompts.class.getClassLoader().getResourceAsStream(resourcePath))
+        {
+            if (is != null)
+            {
+                return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            else
+            {
+                throw new RuntimeException("Could not find prompt file on classpath: " + resourcePath);
+            }
+        }
+        catch (final Exception e)
+        {
+            throw new RuntimeException("Failed to load prompt file: " + resourcePath, e);
+        }
+    }
 
-  public static String injectPluginMetadata(String promptTemplate) {
-      if (promptTemplate == null) {
-          return null;
-      }
+    /**
+     * System prompt for standard exploration.
+     */
+    public static final String SYSTEM_EXPLORATION_PROMPT = loadPrompt("system-exploration-prompt.txt");
 
-      java.util.Collection<com.xceptance.neodymium.ai.action.AiActionPlugin> plugins = com.xceptance.neodymium.ai.action.ActionRegistry
-              .getAllPlugins();
+    /**
+     * Template for standard exploration steps.
+     */
+    public static final String EXPLORATION_PROMPT_TEMPLATE = loadPrompt("exploration-prompt-template.txt");
 
-      java.util.List<String> typeNames = new java.util.ArrayList<>();
-      StringBuilder descriptions = new StringBuilder();
+    /**
+     * Template for v2 exploration steps.
+     */
+    public static final String V2_EXPLORATION_PROMPT_TEMPLATE = loadPrompt("v2-exploration-prompt-template.txt");
 
-      for (com.xceptance.neodymium.ai.action.AiActionPlugin plugin : plugins) {
-          typeNames.add(plugin.getActionName());
-          String desc = plugin.getPromptInstructions();
-          if (desc != null && !desc.isBlank()) {
-              descriptions.append("- ").append(desc).append("\n");
-          }
-      }
+    /**
+     * System prompt for v2 exploration.
+     */
+    public static final String V2_SYSTEM_EXPLORATION_PROMPT = loadPrompt("v2-system-exploration-prompt.txt");
 
-      String typesStr = String.join(" | ", typeNames);
+    /**
+     * System prompt for v2 extraction.
+     */
+    public static final String V2_EXTRACTION_PROMPT = loadPrompt("v2-extraction-prompt.txt");
 
-      return promptTemplate.replace("{actionTypes}", typesStr)
-              .replace("{actionDescriptions}", descriptions.toString());
-  }
+    /**
+     * System prompt for v2 extraction retry.
+     */
+    public static final String V2_EXTRACTION_RETRY_PROMPT = loadPrompt("v2-extraction-retry-prompt.txt");
 
-  public static String getSystemPrompt() {
-      return injectPluginMetadata(SYSTEM_PROMPT);
-  }
+    /**
+     * Base system prompt.
+     */
+    public static final String SYSTEM_PROMPT = loadPrompt("system-prompt.txt");
+
+    /**
+     * Standard user prompt template.
+     */
+    public static final String USER_PROMPT_TEMPLATE = loadPrompt("user-prompt-template.txt");
+
+    /**
+     * Prompt template for when an action fails and needs a retry.
+     */
+    public static final String RETRY_PROMPT_TEMPLATE = loadPrompt("retry-prompt-template.txt");
+
+    /**
+     * Prompt template for when no actions were generated and a retry is needed.
+     */
+    public static final String NO_ACTIONS_RETRY_PROMPT_TEMPLATE = loadPrompt("no-actions-retry-prompt-template.txt");
+
+    /**
+     * System prompt for playbook healing.
+     */
+    public static final String SYSTEM_HEALING_PROMPT = loadPrompt("system-healing-prompt.txt");
+
+    /**
+     * Prompt template for playbook healing.
+     */
+    public static final String HEALING_PROMPT_TEMPLATE = loadPrompt("healing-prompt-template.txt");
+
+    /**
+     * Builds the exploration prompt.
+     *
+     * @param intent            the overarching goal
+     * @param sutContext        application specific instructions
+     * @param subgoal           current subgoal
+     * @param history           action history
+     * @param domContext        current DOM representation
+     * @param previousActionStr the previously executed action
+     * @param knownBindings     previously extracted or known variables
+     * @return the fully formatted prompt
+     */
+    public static String buildExplorationPrompt(final String intent, final String sutContext, final String subgoal, final String history,
+        final String domContext, final String previousActionStr, final Map<String, String> knownBindings)
+    {
+        String sutContextBlock = "";
+        if (sutContext != null && !sutContext.trim().isEmpty())
+        {
+            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+        }
+        
+        String knownBindingsBlock = "";
+        if (knownBindings != null && !knownBindings.isEmpty())
+        {
+            final StringBuilder sb = new StringBuilder();
+            for (final Entry<String, String> entry : knownBindings.entrySet())
+            {
+                sb.append("  ${").append(entry.getKey()).append("} = '").append(entry.getValue()).append("'\n");
+            }
+            knownBindingsBlock = "\n## Known Data Bindings\n" + sb.toString();
+        }
+        
+        return EXPLORATION_PROMPT_TEMPLATE
+            .replace("{intent}", intent)
+            .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{subgoal}", subgoal != null && !subgoal.isEmpty() ? subgoal : "None (Starting First Phase)")
+            .replace("{knownBindingsBlock}", knownBindingsBlock)
+            .replace("{history}", history != null && !history.trim().isEmpty() ? history : "None (Initial Step)")
+            .replace("{domContext}", domContext)
+            .replace("{previousAction}", previousActionStr != null ? previousActionStr : "None (Initial Step)");
+    }
+
+    /**
+     * Builds the V2 exploration prompt.
+     *
+     * @param intent            the overarching goal
+     * @param sutContext        application specific instructions
+     * @param subgoal           current subgoal
+     * @param history           action history
+     * @param domContext        current DOM representation
+     * @param previousActionStr the previously executed action
+     * @param knownBindings     previously extracted or known variables
+     * @return the fully formatted prompt
+     */
+    public static String buildV2ExplorationPrompt(final String intent, final String sutContext, final String subgoal, final String history,
+        final String domContext, final String previousActionStr, final Map<String, String> knownBindings)
+    {
+        String sutContextBlock = "";
+        if (sutContext != null && !sutContext.trim().isEmpty())
+        {
+            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+        }
+        
+        String knownBindingsBlock = "";
+        if (knownBindings != null && !knownBindings.isEmpty())
+        {
+            final StringBuilder sb = new StringBuilder();
+            for (final Entry<String, String> entry : knownBindings.entrySet())
+            {
+                sb.append("  ${").append(entry.getKey()).append("} = '").append(entry.getValue()).append("'\n");
+            }
+            knownBindingsBlock = "\n## Known Data Bindings\n" + sb.toString();
+        }
+        
+        return V2_EXPLORATION_PROMPT_TEMPLATE
+            .replace("{intent}", intent)
+            .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{subgoal}", subgoal != null && !subgoal.isEmpty() ? subgoal : "None (Starting First Phase)")
+            .replace("{knownBindingsBlock}", knownBindingsBlock)
+            .replace("{history}", history != null && !history.trim().isEmpty() ? history : "None (Initial Step)")
+            .replace("{domContext}", domContext)
+            .replace("{previousAction}", previousActionStr != null ? previousActionStr : "None (Initial Step)");
+    }
+
+    /**
+     * Gets the system exploration prompt, optionally injecting the assertion instructions.
+     *
+     * @param includeValidations whether to include the validation instructions
+     * @return the formatted system exploration prompt
+     */
+    public static String getSystemExplorationPrompt(final boolean includeValidations)
+    {
+        if (includeValidations)
+        {
+            final String assertionsBlock = """
+          CRITICAL INSTRUCTION FOR Assertions:
+          You MUST systematically inject ASSERT actions. Target elements that are functionally and visually interactable to the user (e.g., "Validate the Login button is visible") or structurally important text on the page.
+          Whenever you land on a new page or new modal, your FIRST actions in your array MUST be multiple `ASSERT` actions to validate the new state.
+          Make sure to check for IMPORTANT information that matches the page's purpose (e.g. check if the expected text matches the page context). We don't need to check that text is character-perfect, so DO NOT include a "value" field for `ASSERT` actions unless absolutely necessary. Simply providing the `target` and a `description` will check if the element is visible on the page, which is sufficient for structural validation.
+          - NEVER use structural terms like "heading" or "page headline" in your assertion descriptions. Just refer to the text itself (e.g., use "Validate the text North Boston is visible" instead of "Validate the 'North Boston' heading is visible").
+    """;
+            return SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", assertionsBlock);
+        }
+        return SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", "");
+    }
+
+    /**
+     * Gets the V2 system exploration prompt, optionally injecting the assertion instructions.
+     *
+     * @param includeValidations whether to include the validation instructions
+     * @return the formatted V2 system exploration prompt
+     */
+    public static String getV2SystemExplorationPrompt(final boolean includeValidations)
+    {
+        if (includeValidations)
+        {
+            final String assertionsBlock = """
+          CRITICAL INSTRUCTION FOR Assertions:
+          You MUST systematically inject ASSERT actions. Target elements that are functionally and visually interactable to the user (e.g., "Validate the Login button is visible") or structurally important text on the page...
+    """;
+            return V2_SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", assertionsBlock);
+        }
+        return V2_SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", "");
+    }
+
+    /**
+     * Builds the user prompt with the instruction and DOM context.
+     *
+     * @param instruction the task instruction
+     * @param sutContext  application specific instructions
+     * @param domContext  current DOM representation
+     * @return the formatted user prompt
+     */
+    public static String buildUserPrompt(final String instruction, final String sutContext, final String domContext)
+    {
+        String sutContextBlock = "";
+        if (sutContext != null && !sutContext.trim().isEmpty())
+        {
+            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+        }
+        return USER_PROMPT_TEMPLATE
+            .replace("{instruction}", instruction)
+            .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{domContext}", domContext);
+    }
+
+    /**
+     * Builds a retry prompt with error context.
+     *
+     * @param instruction the task instruction
+     * @param sutContext  application specific instructions
+     * @param domContext  current DOM representation
+     * @param error       the error that caused the previous failure
+     * @return the formatted retry prompt
+     */
+    public static String buildRetryPrompt(final String instruction, final String sutContext, final String domContext,
+        final String error)
+    {
+        String sutContextBlock = "";
+        if (sutContext != null && !sutContext.trim().isEmpty())
+        {
+            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+        }
+        return RETRY_PROMPT_TEMPLATE
+            .replace("{instruction}", instruction)
+            .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{domContext}", domContext)
+            .replace("{error}", error);
+    }
+
+    /**
+     * Builds a retry prompt for when no actions were returned.
+     *
+     * @param instruction the task instruction
+     * @param sutContext  application specific instructions
+     * @param domContext  current DOM representation
+     * @return the formatted prompt
+     */
+    public static String buildNoActionsRetryPrompt(final String instruction, final String sutContext, final String domContext)
+    {
+        String sutContextBlock = "";
+        if (sutContext != null && !sutContext.trim().isEmpty())
+        {
+            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+        }
+        return NO_ACTIONS_RETRY_PROMPT_TEMPLATE
+            .replace("{instruction}", instruction)
+            .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{domContext}", domContext);
+    }
+
+    /**
+     * Builds a prompt for healing an invalid or broken playbook step.
+     *
+     * @param instruction       the original task instruction
+     * @param originalReasoning the AI's reasoning from the broken step
+     * @param domContext        the current page DOM
+     * @param error             the execution error that occurred
+     * @param step              the broken playbook step
+     * @return the formatted healing prompt
+     */
+    public static String buildHealingPrompt(final String instruction, final String originalReasoning,
+        final String domContext, final String error, final PlaybookStep step)
+    {
+        String elemCtx = "None";
+        if (step != null && step.getActions() != null && !step.getActions().isEmpty())
+        {
+            final Map<String, String> ctx = step.getActions().get(0).getElementContext();
+            if (ctx != null)
+            {
+                elemCtx = ctx.toString();
+            }
+        }
+
+        return HEALING_PROMPT_TEMPLATE
+            .replace("{instruction}", instruction)
+            .replace("{originalReasoning}", originalReasoning != null ? originalReasoning : "None")
+            .replace("{elementContext}", elemCtx)
+            .replace("{error}", error != null ? error : "Unknown error")
+            .replace("{domContext}", domContext);
+    }
+
+    /**
+     * Injects the dynamic plugin metadata (available actions and their descriptions) into a prompt template.
+     *
+     * @param promptTemplate the raw template containing {actionTypes} and {actionDescriptions} placeholders
+     * @return the final prompt with plugins injected
+     */
+    public static String injectPluginMetadata(final String promptTemplate)
+    {
+        if (promptTemplate == null)
+        {
+            return null;
+        }
+
+        final Collection<AiActionPlugin> plugins = ActionRegistry.getAllPlugins();
+
+        final List<String> typeNames = new ArrayList<>();
+        final StringBuilder descriptions = new StringBuilder();
+
+        for (final AiActionPlugin plugin : plugins)
+        {
+            typeNames.add(plugin.getActionName());
+            final String desc = plugin.getPromptInstructions();
+            if (desc != null && !desc.isBlank())
+            {
+                descriptions.append("- ").append(desc).append("\n");
+            }
+        }
+
+        final String typesStr = String.join(" | ", typeNames);
+
+        return promptTemplate.replace("{actionTypes}", typesStr)
+            .replace("{actionDescriptions}", descriptions.toString());
+    }
+
+    /**
+     * Retrieves the base system prompt with all plugins dynamically injected.
+     *
+     * @return the fully prepared system prompt
+     */
+    public static String getSystemPrompt()
+    {
+        return injectPluginMetadata(SYSTEM_PROMPT);
+    }
 }
