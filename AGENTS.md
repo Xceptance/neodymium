@@ -17,12 +17,4 @@
 - **Git:** No fast-forward merges. Ask before stashing. Branch naming: `(feat|fix|chore|docs)/kebab-case`.
 
 ## Testing & Specifications
-- **Maintenance:** Tests MUST be created/updated for any logic or UI changes (reinforces TDD). Strictly adhere to `doc/tests/README.md`; use `doc/tests/TEMPLATE.md` for new cases.
-
-## Security: CSRF Protection
-ALL state-changing HTTP operations require CSRF protection.
-1. **Thymeleaf:** Forms (`method="post"`) MUST use `th:action` (auto-injects tokens), never hardcoded `action`.
-2. **HTMX:** State-modifying requests MUST include CSRF headers. Verify `<meta name="_csrf" th:content="${_csrf.token}"/>` is present in layouts.
-3. **Endpoints:** Spring Security auto-protects POST/PUT/DELETE/PATCH. Exempt: `/api/v2/**`. Document and justify any other exceptions.
-4. **Testing:** New state-changing endpoints MUST include CSRF tests (Valid token -> 200/302, Invalid/None -> 403).
-
+- **Maintenance:** Tests MUST be created/updated for any logic or UI changes (reinforces TDD).

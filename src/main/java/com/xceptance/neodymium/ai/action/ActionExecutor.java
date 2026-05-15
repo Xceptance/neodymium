@@ -57,6 +57,8 @@ import io.qameta.allure.Step;
 */
 public class ActionExecutor {
     private static final Logger LOG = LoggerFactory.getLogger(ActionExecutor.class);
+    private final java.util.Set<String> actionLogs = new java.util.HashSet<>();
+    
 
     private static final Duration ELEMENT_TIMEOUT = Duration.ofSeconds(10);
 
@@ -79,6 +81,7 @@ public class ActionExecutor {
      */
     @Step("{action.description}  - {action.type} {action.replay} ")
     public void execute(final Action action) {
+        actionLogs.clear();
         LOG.debug("   🤖 {}", action.getDescription());
 
         preCheckAction(action);
@@ -88,6 +91,10 @@ public class ActionExecutor {
         if (plugin != null) {
             try {
                 plugin.execute(action, test, this);
+                
+                if (action.getElementContext() != null && !action.getElementContext().isEmpty()) {
+                    LOG.debug("   ✅ Interacted with element: {}", action.getElementContext());
+                }
             } finally {
                 if (plugin != null) {
                     plugin.cleanup(action, this);
@@ -138,14 +145,13 @@ public class ActionExecutor {
             try {
                 SelenideElement element = $(By.cssSelector("[data-neodymium-automation-id='" + target + "']"));
                 if (element.exists()) {
+                    logDebug("   🔍 Resolved using Strategy 0: Neodymium Automation ID [{}]", target);
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 } else {
-                    LOG.debug("Automation ID match failed for target '{}' and text '{}'", target,
-                            action.getElementDetails());
+                    logDebug("   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neodymium-automation-id='{}']]", target);
                 }
             } catch (final Exception e) {
-                LOG.debug("Automation ID match failed for target '{}' and text '{}' with message: {}", target,
-                        action.getElementDetails(), e.getMessage());
+                logDebug("   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neodymium-automation-id='{}']] with error: {}", target, e.getMessage());
             }
         }
 
@@ -160,19 +166,19 @@ public class ActionExecutor {
             try {
                 SelenideElement element = $(Selectors.shadowCss(shadowTarget, shadowHosts));
                 if (element.exists()) {
+                    logDebug("   🔍 Resolved using Strategy 0.5: Shadow DOM selector [{}]", target);
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 } else {
-                    LOG.debug("Explicit Shadow DOM selector failed for target '{}' and text '{}'", target,
-                            action.getElementDetails());
+                    logDebug("   ❌ Strategy 0.5 failed: Shadow DOM selector [{}]", target);
                 }
             } catch (final Exception e) {
-                LOG.debug("Explicit Shadow DOM selector failed for target '{}' and text '{}' with message: {}", target,
-                        action.getElementDetails(), e.getMessage());
+                logDebug("   ❌ Strategy 0.5 failed: Shadow DOM selector [{}] with error: {}", target, e.getMessage());
             }
         }
 
         // In some cases the ai tries this, so just give it what it wants
         if (action.getTarget().equals("document.title") || action.getTarget().equals("pageTitle")) {
+            logDebug("   🔍 Resolved using Title Strategy [{}]", action.getTarget());
             return $("head > title");
         }
 
@@ -180,13 +186,13 @@ public class ActionExecutor {
         try {
             SelenideElement element = $(By.cssSelector(target));
             if (element.exists()) {
+                logDebug("   🔍 Resolved using Strategy 1: CSS selector [{}]", target);
                 return element.should(Condition.exist, ELEMENT_TIMEOUT);
             } else {
-                LOG.debug("CSS selector failed for target '{}' and text '{}'", target, action.getElementDetails());
+                logDebug("   ❌ Strategy 1 failed: CSS selector [{}]", target);
             }
         } catch (final Exception e) {
-            LOG.debug("CSS selector failed for target '{}' and text '{}' with message: {}", target,
-                    action.getElementDetails(), e.getMessage());
+            logDebug("   ❌ Strategy 1 failed: CSS selector [{}] with error: {}", target, e.getMessage());
         }
 
         // Strategy 1.5: Try deep Shadow DOM CSS selector
@@ -194,14 +200,13 @@ public class ActionExecutor {
             try {
                 SelenideElement element = $(Selectors.shadowDeepCss(target));
                 if (element.exists()) {
+                    logDebug("   🔍 Resolved using Strategy 1.5: Deep Shadow DOM CSS selector [{}]", target);
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 } else {
-                    LOG.debug("Deep Shadow DOM selector failed for target '{}' and text '{}'", target,
-                            action.getElementDetails());
+                    logDebug("   ❌ Strategy 1.5 failed: Deep Shadow DOM selector [{}]", target);
                 }
             } catch (final Exception e) {
-                LOG.debug("Deep Shadow DOM selector failed for target '{}' and text '{}' with message: {}", target,
-                        action.getElementDetails(), e.getMessage());
+                logDebug("   ❌ Strategy 1.5 failed: Deep Shadow DOM selector [{}] with error: {}", target, e.getMessage());
             }
         }
 
@@ -210,13 +215,13 @@ public class ActionExecutor {
             try {
                 SelenideElement element = $(By.cssSelector(target));
                 if (element.exists()) {
+                    logDebug("   🔍 Resolved using Strategy 2: XPath [{}]", target);
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 } else {
-                    LOG.debug("CSS selector failed for target '{}' and text '{}'", target, action.getElementDetails());
+                    logDebug("   ❌ Strategy 2 failed: XPath (tried as CSS) [{}]", target);
                 }
             } catch (final Exception e) {
-                LOG.debug("CSS selector failed for target '{}' and text '{}' with message: {}", target,
-                        action.getElementDetails(), e.getMessage());
+                logDebug("   ❌ Strategy 2 failed: XPath (tried as CSS) [{}] with error: {}", target, e.getMessage());
             }
         } else {
             LOG.debug("Target '{}' is not a valid CSS selector. Skipping CSS strategy.", target);
@@ -228,13 +233,13 @@ public class ActionExecutor {
                 try {
                     SelenideElement element = $x(target);
                     if (element.exists()) {
+                        logDebug("   🔍 Resolved using Strategy 2: XPath [{}]", target);
                         return element.should(Condition.exist, ELEMENT_TIMEOUT);
                     } else {
-                        LOG.debug("XPath failed for target '{}' and text '{}'", target, action.getElementDetails());
+                        logDebug("   ❌ Strategy 2 failed: XPath [{}]", target);
                     }
                 } catch (final Exception e) {
-                    LOG.debug("XPath failed for target '{}' and text '{}' with message: {}", target,
-                            action.getElementDetails(), e.getMessage());
+                    logDebug("   ❌ Strategy 2 failed: XPath [{}] with error: {}", target, e.getMessage());
                 }
             } else {
                 LOG.debug("Target '{}' is not a valid XPath. Skipping XPath strategy.", target);
@@ -245,20 +250,22 @@ public class ActionExecutor {
         try {
             SelenideElement element = $(By.linkText(target));
             if (element.exists()) {
+                logDebug("   🔍 Resolved using Strategy 3: Link text [{}]", target);
                 return element.should(Condition.exist, ELEMENT_TIMEOUT);
             }
-            LOG.debug("Link text failed for target '{}'", target);
+            logDebug("   ❌ Strategy 3 failed: Link text [{}]", target);
 
             final String elementText = action.getElementDetails();
             if (elementText != null && !elementText.isBlank() && !elementText.equals(target)) {
                 element = $(By.linkText(elementText));
                 if (element.exists()) {
+                    logDebug("   🔍 Resolved using Strategy 3: Link text [{}]", elementText);
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 }
-                LOG.debug("Link text failed for text '{}'", elementText);
+                logDebug("   ❌ Strategy 3 failed: Link text [{}]", elementText);
             }
         } catch (final Exception e) {
-            LOG.debug("Link text resolution failed with message: {}", e.getMessage());
+            logDebug("   ❌ Strategy 3 failed: Link text resolution with error: {}", e.getMessage());
         }
 
         // Strategy 4: Try finding by text content via XPath (first target, then element
@@ -271,9 +278,10 @@ public class ActionExecutor {
                     targetXpath, targetXpath, targetXpath);
             SelenideElement element = $x(xpath);
             if (element.exists()) {
+                logDebug("   🔍 Resolved using Strategy 4: Text content XPath [{}]", xpath);
                 return element.should(Condition.exist, ELEMENT_TIMEOUT);
             }
-            LOG.debug("Text content search failed for target '{}'", target);
+            logDebug("   ❌ Strategy 4 failed: Text content XPath [{}]", xpath);
 
             // Then try with element text if available and different
             final String elementText = action.getElementDetails();
@@ -284,13 +292,14 @@ public class ActionExecutor {
                         elementTextXpath, elementTextXpath, elementTextXpath);
                 element = $x(xpath);
                 if (element.exists()) {
+                    logDebug("   🔍 Resolved using Strategy 4: Text content XPath [{}]", xpath);
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 }
-                LOG.debug("Text content search failed for text '{}'", elementText);
+                logDebug("   ❌ Strategy 4 failed: Text content XPath [{}]", xpath);
             }
 
         } catch (final Exception e) {
-            LOG.debug("Text content search failed with message: {}", e.getMessage());
+            logDebug("   ❌ Strategy 4 failed: Text content search with error: {}", e.getMessage());
         }
 
         throw new ActionExecutionException(String.format("Could not find element for target '%s' or text '%s'", target,
@@ -310,7 +319,10 @@ public class ActionExecutor {
         if (target.matches("^xc_.*")) {
             try {
                 com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(By.cssSelector("[data-neodymium-automation-id='" + target + "']"));
-                if (!elements.isEmpty()) return elements;
+                if (!elements.isEmpty()) {
+                    logDebug("   🔍 Resolved using Strategy 0: Neodymium Automation ID [{}]", target);
+                    return elements;
+                }
             } catch (Exception e) {}
         }
 
@@ -318,18 +330,25 @@ public class ActionExecutor {
         if (target.contains("::shadow")) {
             try {
                 com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(resolveLocator(target));
-                if (!elements.isEmpty()) return elements;
+                if (!elements.isEmpty()) {
+                    logDebug("   🔍 Resolved using Strategy 0.5: Shadow DOM selector [{}]", target);
+                    return elements;
+                }
             } catch (Exception e) {}
         }
 
         if (target.equals("document.title") || target.equals("pageTitle")) {
+            logDebug("   🔍 Resolved using Title Strategy [{}]", target);
             return com.codeborne.selenide.Selenide.$$("head > title");
         }
 
         // Strategy 1: Try as CSS selector
         try {
             com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(By.cssSelector(target));
-            if (!elements.isEmpty()) return elements;
+            if (!elements.isEmpty()) {
+                logDebug("   🔍 Resolved using Strategy 1: CSS selector [{}]", target);
+                return elements;
+            }
         } catch (Exception e) {}
 
         // Strategy 2: Try as XPath
@@ -337,7 +356,10 @@ public class ActionExecutor {
             if (isValidXPath(target)) {
                 try {
                     com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$x(target);
-                    if (!elements.isEmpty()) return elements;
+                    if (!elements.isEmpty()) {
+                        logDebug("   🔍 Resolved using Strategy 2: XPath [{}]", target);
+                        return elements;
+                    }
                 } catch (Exception e) {}
             }
         }
@@ -345,12 +367,18 @@ public class ActionExecutor {
         // Strategy 3: Try as link text
         try {
             com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(By.linkText(target));
-            if (!elements.isEmpty()) return elements;
+            if (!elements.isEmpty()) {
+                logDebug("   🔍 Resolved using Strategy 3: Link text [{}]", target);
+                return elements;
+            }
 
             final String elementText = action.getElementDetails();
             if (elementText != null && !elementText.isBlank() && !elementText.equals(target)) {
                 elements = com.codeborne.selenide.Selenide.$$(By.linkText(elementText));
-                if (!elements.isEmpty()) return elements;
+                if (!elements.isEmpty()) {
+                    logDebug("   🔍 Resolved using Strategy 3: Link text [{}]", elementText);
+                    return elements;
+                }
             }
         } catch (Exception e) {}
 
@@ -361,7 +389,10 @@ public class ActionExecutor {
                     "//*[contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s)]",
                     targetXpath, targetXpath, targetXpath);
             com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$x(xpath);
-            if (!elements.isEmpty()) return elements;
+            if (!elements.isEmpty()) {
+                logDebug("   🔍 Resolved using Strategy 4: Text content XPath [{}]", xpath);
+                return elements;
+            }
 
             final String elementText = action.getElementDetails();
             if (elementText != null && !elementText.isBlank() && !elementText.equals(target)) {
@@ -370,7 +401,10 @@ public class ActionExecutor {
                         "//*[contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s)]",
                         elementTextXpath, elementTextXpath, elementTextXpath);
                 elements = com.codeborne.selenide.Selenide.$$x(xpath);
-                if (!elements.isEmpty()) return elements;
+                if (!elements.isEmpty()) {
+                    logDebug("   🔍 Resolved using Strategy 4: Try finding by text content via XPath");
+                    return elements;
+                }
             }
         } catch (Exception e) {}
 
@@ -543,6 +577,15 @@ public class ActionExecutor {
             boolean found = attribute.contains(value);
 
             return new CheckResult(found, attribute);
+        }
+    }
+
+    private void logDebug(String format, Object... args) {
+        if (LOG.isDebugEnabled()) {
+            String message = org.slf4j.helpers.MessageFormatter.arrayFormat(format, args).getMessage();
+            if (actionLogs.add(message)) {
+                LOG.debug(message);
+            }
         }
     }
 }

@@ -69,6 +69,15 @@ public class AssertAction implements AiActionPlugin {
             if (expected == null) {
                 throw new ActionExecutor.ActionExecutionException("URL assertion requires a 'value' (the expected URL)");
             }
+            if (action.isSilent()) {
+                String actualUrl = com.codeborne.selenide.WebDriverRunner.url();
+                if (actualUrl == null || !actualUrl.contains(expected)) {
+                    throw new ActionExecutor.ActionExecutionException("Silent condition not met: URL does not contain '" + expected + "'");
+                }
+                LOG.debug("   ✅ Silent URL Assertion passed for: '{}'", expected);
+                return;
+            }
+
             try {
                 Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected));
                 LOG.debug("   ✅ URL Assertion passed for: '{}'", expected);
@@ -84,16 +93,28 @@ public class AssertAction implements AiActionPlugin {
         final SelenideElement element = executor.findElement(action);
 
         if (expected == null) {
-            element.should(Condition.exist);
+            if (action.isSilent()) {
+                if (!element.is(Condition.exist)) {
+                    throw new ActionExecutor.ActionExecutionException("Silent condition not met: Element does not exist");
+                }
+            } else {
+                element.should(Condition.exist);
+            }
             LOG.debug("   ✅ Element exists: {}", action);
             return;
         }
 
         try {
             if ("visible".equals(expected)) {
-                element.shouldBe(Condition.visible);
+                if (action.isSilent()) {
+                    if (!element.is(Condition.visible)) {
+                        throw new ActionExecutor.ActionExecutionException("Silent condition not met: Element not visible");
+                    }
+                } else {
+                    element.shouldBe(Condition.visible);
+                }
             } else {
-                element.should(Condition.or("Assertion for " + expected,
+                com.codeborne.selenide.WebElementCondition cond = Condition.or("Assertion for " + expected,
                         Condition.exactText(expected),
                         Condition.partialText(expected),
                         Condition.value(expected),
@@ -103,9 +124,19 @@ public class AssertAction implements AiActionPlugin {
                         Condition.attribute("src", expected),
                         Condition.attribute("title", expected),
                         Condition.attribute("placeholder", expected),
-                        new ActionExecutor.DataAttributeMatches("data-.*", ".*" + Pattern.quote(expected) + ".*")));
+                        new ActionExecutor.DataAttributeMatches("data-.*", ".*" + Pattern.quote(expected) + ".*"));
+                
+                if (action.isSilent()) {
+                    if (!element.is(cond)) {
+                        throw new ActionExecutor.ActionExecutionException("Silent condition not met: Element does not match '" + expected + "'");
+                    }
+                } else {
+                    element.should(cond);
+                }
             }
             LOG.debug("   ✅ Assertion passed for: '{}'", expected);
+        } catch (ActionExecutor.ActionExecutionException e) {
+            throw e;
         } catch (Throwable e) {
             String actualDetails = String.format("Text: '%s', Value: '%s', Alt: '%s'", element.getText(), element.getValue(), element.getAttribute("alt"));
             SelenideAddons.wrapAssertionError(() -> {

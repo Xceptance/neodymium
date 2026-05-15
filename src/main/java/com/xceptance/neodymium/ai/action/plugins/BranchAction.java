@@ -67,6 +67,10 @@ public class BranchAction implements AiActionPlugin
     {
         if (action.getCondition() != null && !action.getCondition().isEmpty())
         {
+            for (Action condAction : action.getCondition())
+            {
+                condAction.setSilent(true);
+            }
             boolean conditionMet = true;
             try
             {

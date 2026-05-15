@@ -250,7 +250,55 @@ public class ActionParser {
     // Note: This is a heuristic and might need tuning.
     json = json.replaceAll("(\"[^\"]+\"\\s*:\\s*(?:\"[^\"]*\"|\\d+|true|false|null))\\s*,\\s*\\{", "$1 } , {");
 
-    return json;
+    // Use a state machine to fix unescaped newlines and close truncated JSON
+    StringBuilder sb = new StringBuilder(json.length() + 20);
+    boolean inString = false;
+    boolean escapeNext = false;
+    java.util.Stack<Character> contextStack = new java.util.Stack<>();
+
+    for (int i = 0; i < json.length(); i++) {
+        char c = json.charAt(i);
+        if (escapeNext) {
+            sb.append(c);
+            escapeNext = false;
+        } else if (c == '\\') {
+            sb.append(c);
+            escapeNext = true;
+        } else if (c == '"') {
+            inString = !inString;
+            sb.append(c);
+        } else if (c == '\n') {
+            if (inString) sb.append("\\n");
+            else sb.append(c);
+        } else if (c == '\r') {
+            if (inString) sb.append("\\r");
+            else sb.append(c);
+        } else if (c == '\t') {
+            if (inString) sb.append("\\t");
+            else sb.append(c);
+        } else {
+            sb.append(c);
+            if (!inString) {
+                if (c == '{') contextStack.push('}');
+                else if (c == '[') contextStack.push(']');
+                else if (c == '}' || c == ']') {
+                    if (!contextStack.isEmpty() && contextStack.peek() == c) {
+                        contextStack.pop();
+                    }
+                }
+            }
+        }
+    }
+
+    if (inString) {
+        sb.append("\"");
+    }
+
+    while (!contextStack.isEmpty()) {
+        sb.append(contextStack.pop());
+    }
+
+    return sb.toString();
   }
 
     private Action parseAction(final JsonObject obj)

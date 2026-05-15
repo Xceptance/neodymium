@@ -391,13 +391,14 @@ public class AiAgent
             catch (ActionExecutionException e)
             {
                 // something went wrong, but we can try to retry
-                PlaybookStep step = playbook.getCurrentStep();
+                final PlaybookStep step = playbook.getCurrentStep();
                 step.setFailure(e);
 
-                LOG.warn("    ⚠️ Actions failed: {} (Attempt {}/{})", e.getMessage(), errorCount + 1, maxRetries);
+                errorCount++;
+                LOG.warn("    ⚠️ Actions failed: {} (Attempt {}/{})", e.getMessage(), errorCount, maxRetries + 1);
                 executionLog.logWarning("Action failed: " + e + ". Retrying...");
 
-                if (errorCount >= maxRetries)
+                if (errorCount > maxRetries)
                 {
                     final Throwable finalThrowable = e.getCause() != null ? e.getCause() : e;
                     executionLog.logError("Max retries for errors reached.");
@@ -405,17 +406,20 @@ public class AiAgent
                     {
                         final List<String> plannedStrs = new ArrayList<>();
                         plannedStrs.add("⚠️ " + instruction);
-                        if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
+                        if (futureInstructions != null)
+                        {
+                            plannedStrs.addAll(futureInstructions);
+                        }
                         Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
-                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Max retries reached: " + e.getMessage(), false);
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                                "Max retries reached: " + e.getMessage(), false);
                         waitForHudAction(false); // Never auto-skip errors
                         errorCount = 0;
                     }
                     else
                     {
-                        SelenideAddons.wrapAssertionError(() ->
-                        {
-                            throw new AssertionError("Instruction '" + instruction + "' failed (" + maxRetries
+                        SelenideAddons.wrapAssertionError(() -> {
+                            throw new AssertionError("Instruction '" + instruction + "' failed (" + (maxRetries + 1)
                                     + " tries):\n\n" + finalThrowable.getMessage(), finalThrowable);
                         });
                     }
@@ -427,16 +431,19 @@ public class AiAgent
                     {
                         final List<String> plannedStrs = new ArrayList<>();
                         plannedStrs.add("⚠️ " + instruction);
-                        if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
+                        if (futureInstructions != null)
+                        {
+                            plannedStrs.addAll(futureInstructions);
+                        }
                         Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
-                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Action Failed: " + e.getMessage(), false);
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                                "Action Failed: " + e.getMessage(), false);
                         waitForHudAction(false); // Never auto-skip errors
                     }
                     else
                     {
                         sleep(1000);
                     }
-                    errorCount++;
                 }
             }
             catch (final HudActionException e)
@@ -818,7 +825,7 @@ public class AiAgent
                             });
                         }
                         LOG.warn(
-                                "    ⚠️ LLM returned no actions for instruction: {}. Retrying with pressure prompt (attempt {}/{})",
+                                "    ⚠️ LLM returned no actions for instruction: {}. Retrying with pressure prompt (Retry {}/{})",
                                 instruction, noActionsCount, NO_ACTIONS_MAX_RETRIES);
                         executionLog.logWarning("No actions returned. Retrying...");
                         lastWasNoActions = true;
@@ -858,16 +865,15 @@ public class AiAgent
                 lastError = e.getMessage();
                 lastThrowable = e.getCause() != null ? e.getCause() : e;
                 lastWasNoActions = false;
-                LOG.warn("    ⚠️ Action failed: {} (Attempt {}/{})", lastError, errorCount, maxRetries);
+                LOG.warn("    ⚠️ Action failed: {} (Attempt {}/{})", lastError, errorCount, maxRetries + 1);
                 executionLog.logWarning("Action failed: " + lastError + ". Retrying...");
 
-                if (errorCount >= maxRetries)
+                if (errorCount > maxRetries)
                 {
                     final Throwable finalThrowable = lastThrowable;
                     executionLog.logError("Max retries for errors reached.");
-                    SelenideAddons.wrapAssertionError(() ->
-                    {
-                        throw new AssertionError("Instruction '" + instruction + "' failed (" + maxRetries
+                    SelenideAddons.wrapAssertionError(() -> {
+                        throw new AssertionError("Instruction '" + instruction + "' failed (" + (maxRetries + 1)
                                 + " tries):\n\n" + finalThrowable.getMessage(), finalThrowable);
                     });
                 }

@@ -61,6 +61,8 @@ public class Action
     @com.google.gson.annotations.SerializedName("else")
     private List<Action> elseActions;
 
+    private transient boolean silent = false;
+
     public Action()
     {
     }
@@ -228,5 +230,13 @@ public class Action
 
     public void setElseActions(List<Action> elseActions) {
         this.elseActions = elseActions;
+    }
+
+    public boolean isSilent() {
+        return silent;
+    }
+
+    public void setSilent(boolean silent) {
+        this.silent = silent;
     }
 }
