@@ -88,29 +88,38 @@ public class PlaybookManager {
             playbookId = "unknown";
         }
 
-        playbookId = playbookId.replaceAll("[^_a-zA-Z0-9.-]", "_").replace("Browser", "").trim().replaceAll("_+", "_");
-
-        // Find last dot
-        int lastDotIndex = playbookId.lastIndexOf('.');
-
-        // Find first underscore after last dot
-        int underscoreIndex = playbookId.indexOf('_', lastDotIndex);
-
-        // Split into path part and filename part
         String pathPart;
         String filePart;
-        if (underscoreIndex == -1) {
-            if (lastDotIndex != -1) {
-                pathPart = playbookId.substring(0, lastDotIndex);
-                filePart = playbookId.substring(lastDotIndex + 1);
-            } else {
-                pathPart = "";
-                filePart = playbookId;
-            }
+
+        int separatorIndex = playbookId.indexOf(" :: ");
+        if (separatorIndex != -1) {
+            pathPart = playbookId.substring(0, separatorIndex);
+            filePart = playbookId.substring(separatorIndex + 4);
+
+            // Clean up both parts independently
+            pathPart = pathPart.replaceAll("[^_a-zA-Z0-9.-]", "_").trim().replaceAll("_+", "_");
+            filePart = filePart.replaceAll("[^_a-zA-Z0-9.-]", "_").replace("Browser", "").trim().replaceAll("_+", "_");
         } else {
-            pathPart = playbookId.substring(0, underscoreIndex);
-            filePart = playbookId.substring(underscoreIndex + 1);
+            String cleanId = playbookId.replaceAll("[^_a-zA-Z0-9.-]", "_").replace("Browser", "").trim().replaceAll("_+", "_");
+            int lastDotIndex = cleanId.lastIndexOf('.');
+            int underscoreIndex = cleanId.indexOf('_', lastDotIndex);
+
+            if (underscoreIndex == -1) {
+                if (lastDotIndex != -1) {
+                    pathPart = cleanId.substring(0, lastDotIndex);
+                    filePart = cleanId.substring(lastDotIndex + 1);
+                } else {
+                    pathPart = "";
+                    filePart = cleanId;
+                }
+            } else {
+                pathPart = cleanId.substring(0, underscoreIndex);
+                filePart = cleanId.substring(underscoreIndex + 1);
+            }
         }
+
+        // Remove trailing or leading underscores from filePart that might have been left over
+        filePart = filePart.replaceAll("^_|_$", "");
 
         // Convert path: replace dots with slashes
         String path = pathPart.replace('.', '/');
