@@ -86,12 +86,15 @@ public class AiAgent {
 
     /**
      * Executes a block of natural language instructions. The instructions are split
-     * into individual steps (by
-     * line/sentence), and each step is processed through the LLM → action →
-     * execution loop.
+     * into individual steps (by line/sentence), and each step is processed through
+     * the LLM → action → execution loop.
+     * <p>
+     * This method manages a stateful loop that can be interrupted by an interactive HUD.
+     * The loop index ({@code i}) is mutated directly within the catch blocks of 
+     * {@link HudActionException} to support features like rewinding, editing, or 
+     * adding steps dynamically during execution.
      *
-     * @param instructions
-     *                     natural language test instructions
+     * @param instructions natural language test instructions
      */
     public void execute(final String instructions) {
 
@@ -319,8 +322,17 @@ public class AiAgent {
 
     /**
      * Executes a single instruction step. First tries to handle it directly (e.g.
-     * navigation), then falls back to the
-     * playbook replay or LLM with retry logic.
+     * navigation), then falls back to the playbook replay or LLM with retry logic.
+     * <p>
+     * If the step execution fails, it retries up to {@code maxRetries} times.
+     * During interactive mode, it displays the failure in the HUD and blocks
+     * until the user resolves it.
+     *
+     * @param instruction           the resolved test instruction to execute
+     * @param performedInstructions list of already executed instructions for HUD state
+     * @param unresolvedInstruction the original unresolved instruction string
+     * @param futureInstructions    list of remaining instructions for HUD state
+     * @throws HudActionException if the user triggers a control-flow change via the HUD
      */
     private void executeStep(final String instruction, final List<String> performedInstructions, final String unresolvedInstruction,
             final List<String> futureInstructions) throws HudActionException {
@@ -453,6 +465,17 @@ public class AiAgent {
         }
     }
 
+    /**
+     * Blocks the current execution thread and polls the interactive HUD for user action.
+     * <p>
+     * Implements a polling loop that checks for user input every second, up to a maximum
+     * of 1 hour (3600 seconds). Depending on the user's input, it parses the JSON response
+     * and throws a specific {@link HudActionException} to signal the outer execution loop
+     * to modify its state (e.g., skip, rewind, add, edit).
+     *
+     * @param allowAutoSkip whether to immediately return if the user has enabled auto-skip
+     * @throws HudActionException thrown to control the flow of the main execution loop
+     */
     private void waitForHudAction(final boolean allowAutoSkip) throws HudActionException {
         if (allowAutoSkip && this.autoSkip) {
             final Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
