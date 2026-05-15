@@ -16,7 +16,10 @@ CRITICAL INSTRUCTION: Do not include markdown code blocks like ```json ... ```. 
       "target": "locator string (prefer id or data-neodymium-automation-id)",
       "value": "optional",
       "description": "what this does",
-      "elementDetails": "(mandatory) text, name, id OR a short description of the targeted element (especially important if data-neodymium-automation-id is used)"
+      "elementDetails": "(mandatory) text, name, id OR a short description of the targeted element (especially important if data-neodymium-automation-id is used)",
+      "condition": [ "... nested actions for BRANCH type (optional) ..." ],
+      "then": [ "... nested actions for BRANCH type (optional) ..." ],
+      "else": [ "... nested actions for BRANCH type (optional) ..." ]
     }
   ],
   "done": true/false,

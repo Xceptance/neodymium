@@ -192,9 +192,9 @@ public class AiAgent {
 
                 LOG.debug("───────────────────────────────────────────────────────────");
                 if (isReplay) {
-                    LOG.debug("     Step [{}/{}]: {} (REPLAY)", i + 1, stepsList.size(), step);
+                    LOG.debug(" 👣 Step [{}/{}]: {} (REPLAY)", i + 1, stepsList.size(), step);
                 } else {
-                    LOG.debug("     Step [{}/{}]: {}", i + 1, stepsList.size(), step);
+                    LOG.debug(" 👣 Step [{}/{}]: {}", i + 1, stepsList.size(), step);
                 }
                 LOG.debug("───────────────────────────────────────────────────────────");
 
@@ -756,18 +756,6 @@ public class AiAgent {
         for (AiActionPlugin plugin : ActionRegistry.getAllPlugins()) {
             List<Action> actions = plugin.parseDirectInstruction(instruction);
             if (actions != null && !actions.isEmpty()) {
-                if ("IF_CONDITION".equals(actions.get(0).getType())) {
-                    String condition = actions.get(0).getTarget();
-                    String command = actions.get(0).getValue();
-                    LOG.debug("🧠 [THOUGHT] Execution: If statement with condition '{}' and command '{}'", condition,
-                            command);
-                    List<Action> ifActions = getStepActions(condition, new Playbook(UUID.randomUUID().toString()));
-                    playbookStep.setActions(ifActions);
-                    playbookStep.setPromptLine(instruction);
-                    playbookStep.setReasoning("directly parsed (if-condition)");
-                    playbookStep.setFailure(null);
-                    return ifActions;
-                }
                 playbookStep.setActions(actions);
                 playbookStep.setPromptLine(instruction);
                 playbookStep.setReasoning("directly parsed");

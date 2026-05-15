@@ -278,6 +278,33 @@ public class ActionParser {
                 action.setElementContext(ctxMap);
             }
 
+            if (obj.has("condition") && obj.get("condition").isJsonArray()) {
+                List<Action> condActions = new ArrayList<>();
+                for (JsonElement e : obj.getAsJsonArray("condition")) {
+                    Action a = parseAction(e.getAsJsonObject());
+                    if (a != null) condActions.add(a);
+                }
+                action.setCondition(condActions);
+            }
+
+            if (obj.has("then") && obj.get("then").isJsonArray()) {
+                List<Action> thenActions = new ArrayList<>();
+                for (JsonElement e : obj.getAsJsonArray("then")) {
+                    Action a = parseAction(e.getAsJsonObject());
+                    if (a != null) thenActions.add(a);
+                }
+                action.setThen(thenActions);
+            }
+
+            if (obj.has("else") && obj.get("else").isJsonArray()) {
+                List<Action> elseActions = new ArrayList<>();
+                for (JsonElement e : obj.getAsJsonArray("else")) {
+                    Action a = parseAction(e.getAsJsonObject());
+                    if (a != null) elseActions.add(a);
+                }
+                action.setElseActions(elseActions);
+            }
+
             return action;
         }
         catch (final Exception e)

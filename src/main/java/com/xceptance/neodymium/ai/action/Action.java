@@ -29,6 +29,13 @@ public class Action
 
     private String replay = "";
 
+    private List<Action> condition;
+
+    private List<Action> then;
+
+    @com.google.gson.annotations.SerializedName("else")
+    private List<Action> elseActions;
+
     public Action()
     {
     }
@@ -172,5 +179,29 @@ public class Action
 
     public String getReplay() {
         return replay;
+    }
+
+    public List<Action> getCondition() {
+        return condition;
+    }
+
+    public void setCondition(List<Action> condition) {
+        this.condition = condition;
+    }
+
+    public List<Action> getThen() {
+        return then;
+    }
+
+    public void setThen(List<Action> then) {
+        this.then = then;
+    }
+
+    public List<Action> getElseActions() {
+        return elseActions;
+    }
+
+    public void setElseActions(List<Action> elseActions) {
+        this.elseActions = elseActions;
     }
 }

@@ -62,7 +62,10 @@
                  "value": "concrete text to inject (for WAIT: max timeout in ms)",
                  "dataBindings": { },
                  "description": "Enter '${firstName}'...",
-                 "elementDetails": "description of target"
+                 "elementDetails": "description of target",
+                 "condition": [ "... nested actions for BRANCH type (optional) ..." ],
+                 "then": [ "... nested actions for BRANCH type (optional) ..." ],
+                 "else": [ "... nested actions for BRANCH type (optional) ..." ]
             }
         ]
       }
