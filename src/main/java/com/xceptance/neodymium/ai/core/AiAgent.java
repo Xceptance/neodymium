@@ -615,22 +615,27 @@ public class AiAgent {
                     throw new ActionExecutionException(e.getMessage(), e);
                 }
                 if (actions.isEmpty()) {
-                    noActionsCount++;
-                    if (noActionsCount > NO_ACTIONS_MAX_RETRIES) {
-                        executionLog.logError("Max retries for empty response reached.");
-                        SelenideAddons.wrapAssertionError(() -> {
-                            throw new AssertionError("could not fulfill '" + instruction + "' retried "
-                                    + NO_ACTIONS_MAX_RETRIES + " times (no actions returned)");
-                        });
+                    if (actionParser.isSuccess(llmResponse) && actionParser.isDone(llmResponse)) {
+                        LOG.info("    ✅ LLM returned no actions, but indicated success and completion. Treating as 'No Action Needed'.");
+                        executionLog.logInfo("No actions needed based on LLM evaluation.");
+                    } else {
+                        noActionsCount++;
+                        if (noActionsCount > NO_ACTIONS_MAX_RETRIES) {
+                            executionLog.logError("Max retries for empty response reached.");
+                            SelenideAddons.wrapAssertionError(() -> {
+                                throw new AssertionError("could not fulfill '" + instruction + "' retried "
+                                        + NO_ACTIONS_MAX_RETRIES + " times (no actions returned)");
+                            });
+                        }
+                        LOG.warn(
+                                "    ⚠️ LLM returned no actions for instruction: {}. Retrying with pressure prompt (attempt {}/{})",
+                                instruction, noActionsCount, NO_ACTIONS_MAX_RETRIES);
+                        executionLog.logWarning("No actions returned. Retrying...");
+                        lastWasNoActions = true;
+                        lastError = null;
+                        sleep(1000);
+                        continue;
                     }
-                    LOG.warn(
-                            "    ⚠️ LLM returned no actions for instruction: {}. Retrying with pressure prompt (attempt {}/{})",
-                            instruction, noActionsCount, NO_ACTIONS_MAX_RETRIES);
-                    executionLog.logWarning("No actions returned. Retrying...");
-                    lastWasNoActions = true;
-                    lastError = null;
-                    sleep(1000);
-                    continue;
                 }
 
                 executionLog.logActions(actions);

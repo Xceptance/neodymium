@@ -36,6 +36,7 @@ CRITICAL INSTRUCTION: Do not include markdown code blocks like ```json ... ```. 
 - When "success" is false, you MUST include an "error" field explaining what failed.
 - NEVER set "success" to true if a verification does not match the actual page state.
   This is critical — false positives are the worst possible outcome.
+- If the instruction is conditional (e.g. "If the mini-cart is open then close it") and the condition is NOT met (e.g. mini-cart is closed), set "success" to true, "done" to true, and return an empty "actions" array.
 
 ## Rules
 1. Analyze the provided screenshot AND the DOM structure to understand the current page state.
