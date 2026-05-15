@@ -152,7 +152,13 @@ public class PageAnalyzer
 
                         count++;
                         var autoId = assignId(el);
-                        var text = (el.innerText || '').trim();
+                        var text = (el.innerText || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                        var options = null;
+                        if (el.tagName.toLowerCase() === 'select') {
+                            options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
+                            if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
+                        }
+
                         results.push({
                             label: label,
                             text: text.length <= MAX_TEXT ? text : '',
@@ -175,6 +181,7 @@ public class PageAnalyzer
                             disabled: el.hasAttribute('disabled') ? 'true' : null,
                             multiple: el.hasAttribute('multiple') ? 'true' : null,
                             value: label !== 'input' ? truncate(el.getAttribute('value'), MAX_VALUE) : null,
+                            options: options,
                             selector: generateSelector(el),
                             automationId: autoId,
                             domElement: el
@@ -200,7 +207,13 @@ public class PageAnalyzer
 
                         count++;
                         var autoId = assignId(el);
-                        var text = (el.innerText || '').trim();
+                        var text = (el.innerText || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                        var options = null;
+                        if (el.tagName.toLowerCase() === 'select') {
+                            options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
+                            if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
+                        }
+
                         results.push({
                             label: label,
                             text: text.length <= MAX_TEXT ? text : '',
@@ -223,6 +236,7 @@ public class PageAnalyzer
                             disabled: el.hasAttribute('disabled') ? 'true' : null,
                             multiple: el.hasAttribute('multiple') ? 'true' : null,
                             value: label !== 'input' ? truncate(el.getAttribute('value'), MAX_VALUE) : null,
+                            options: options,
                             selector: generateSelector(el),
                             automationId: autoId,
                             domElement: el
@@ -248,12 +262,17 @@ public class PageAnalyzer
                             if (!isVisible(inp)) continue;
                             var autoId = assignId(inp);
 
-                            fields.push({
-                                type: inp.getAttribute('type') || '',
+                            var field = {
+                                type: inp.tagName.toLowerCase() === 'select' ? 'select' : (inp.getAttribute('type') || ''),
                                 name: inp.getAttribute('name') || '',
                                 id: inp.id || '',
                                 automationId: autoId
-                            });
+                            };
+                            if (inp.tagName.toLowerCase() === 'select') {
+                                field.options = Array.from(inp.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
+                                if (inp.options.length > 50) field.options += '... (total ' + inp.options.length + ')';
+                            }
+                            fields.push(field);
                         }
 
                         results.push({
@@ -425,8 +444,14 @@ public class PageAnalyzer
                         for (final Map<String, Object> field : fields)
                         {
                             dom.append(String.format(
-                                                     "\t\t[form-field] type='%s' name='%s' id='%s' data-neodymium-automation-id='%s' \n",
-                                                     field.get("type"), field.get("name"), field.get("id"), field.get("automationId")));
+                                                 "\t\t[form-field] type='%s' name='%s' id='%s' data-neodymium-automation-id='%s'",
+                                                 field.get("type"), field.get("name"), field.get("id"), field.get("automationId")));
+
+                        if (field.containsKey("options"))
+                        {
+                            dom.append(String.format(" options='[%s]'", field.get("options")));
+                        }
+                        dom.append("\n");
                         }
                     }
                 }
@@ -497,6 +522,7 @@ public class PageAnalyzer
         appendIfPresent(dom, "disabled", el.get("disabled"));
         appendIfPresent(dom, "multiple", el.get("multiple"));
         appendIfPresent(dom, "value", el.get("value"));
+        appendIfPresent(dom, "options", el.get("options"));
 
         appendIfPresent(dom, "data-neodymium-automation-id", el.get("automationId"));
         dom.append(String.format("selector='%s' ", el.get("selector")));
