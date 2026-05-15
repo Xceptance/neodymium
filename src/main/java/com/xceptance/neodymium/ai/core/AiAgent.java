@@ -108,7 +108,7 @@ public class AiAgent
      */
     public AiAgent(final LlmClient llmClient, final PageAnalyzer pageAnalyzer,
             final ActionExecutor actionExecutor, final AiConfiguration config)
-            {
+    {
         this.llmClient = llmClient;
         this.pageAnalyzer = pageAnalyzer;
         this.actionExecutor = actionExecutor;
@@ -201,7 +201,8 @@ public class AiAgent
                                             "");
                             // Block execution until the user responds to the prompt
                             waitForHudAction(false);
-                        } catch (HudActionException e)
+                        }
+                        catch (HudActionException e)
                         {
                             // If the user chooses to rewind, edit, or add during the final prompt,
                             // we update the loop index 'i' and continue from the new position
@@ -222,12 +223,12 @@ public class AiAgent
                 // Check if we have an active, non-recording playbook matching the current step
                 if (playbookForCheck != null && !playbookForCheck.isRecording()
                         && playbookForCheck.getCurrentStep() != null)
-                        {
+                {
                     final PlaybookStep stepObj = playbookForCheck.getCurrentStep();
                     // Mark as replay only if the previous run didn't fail and prompts match exactly
                     if (!stepObj.failed() && stepObj.getPromptLine() != null
                             && stepObj.getPromptLine().equals(stepUnresolved))
-                            {
+                    {
                         isReplay = true;
                     }
                 }
@@ -236,7 +237,8 @@ public class AiAgent
                 if (isReplay)
                 {
                     LOG.debug(" 👣 Step [{}/{}]: {} (REPLAY)", i + 1, stepsList.size(), step);
-                } else
+                }
+                else
                 {
                     LOG.debug(" 👣 Step [{}/{}]: {}", i + 1, stepsList.size(), step);
                 }
@@ -252,19 +254,22 @@ public class AiAgent
                     }
                     executeStep(step, performedInstructions, stepUnresolved, futureInstructions);
                     performedInstructions.add(stepUnresolved);
-                } catch (HudActionException e)
+                }
+                catch (HudActionException e)
                 {
                     i = processHudActionException(e, i, stepsList, performedInstructions);
                     if (i < 0) break;
                     continue;
-                } finally
+                }
+                finally
                 {
                     executionLog.endStep();
                 }
             }
 
             LOG.debug("======== 🎉 AI Agent: All steps completed successfully ========");
-        } finally
+        }
+        finally
         {
             final Playbook playbook = Neodymium.getAiPlaybook();
             if (playbook != null)
@@ -315,7 +320,7 @@ public class AiAgent
      */
     private void executeStep(final String instruction, final List<String> performedInstructions, final String unresolvedInstruction,
             final List<String> futureInstructions) throws HudActionException
-            {
+    {
         int errorCount = 0;
         final Playbook playbook = Neodymium.getAiPlaybook();
         final boolean isInteractive = config.aiInteractive();
@@ -362,7 +367,7 @@ public class AiAgent
                         // If playbook is not recording, it's a replay of an existing step
                         if (!playbook.isRecording() && stepObj.getPromptLine() != null
                                 && stepObj.getPromptLine().equals(instruction))
-                                {
+                        {
                             isReplay = true;
                         }
                     }
@@ -382,7 +387,8 @@ public class AiAgent
                 playbook.nextStep();
 
                 return;
-            } catch (ActionExecutionException e)
+            }
+            catch (ActionExecutionException e)
             {
                 // something went wrong, but we can try to retry
                 PlaybookStep step = playbook.getCurrentStep();
@@ -404,7 +410,8 @@ public class AiAgent
                                 performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Max retries reached: " + e.getMessage(), false);
                         waitForHudAction(false); // Never auto-skip errors
                         errorCount = 0;
-                    } else
+                    }
+                    else
                     {
                         SelenideAddons.wrapAssertionError(() ->
                         {
@@ -412,7 +419,8 @@ public class AiAgent
                                     + " tries):\n\n" + finalThrowable.getMessage(), finalThrowable);
                         });
                     }
-                } else
+                }
+                else
                 {
                     // Wait before retry
                     if (isInteractive)
@@ -423,16 +431,19 @@ public class AiAgent
                         Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                                 performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Action Failed: " + e.getMessage(), false);
                         waitForHudAction(false); // Never auto-skip errors
-                    } else
+                    }
+                    else
                     {
                         sleep(1000);
                     }
                     errorCount++;
                 }
-            } catch (final HudActionException e)
+            }
+            catch (final HudActionException e)
             {
                 throw e; // Rethrow to be caught by the outer loop
-            } catch (final AssertionError e)
+            }
+            catch (final AssertionError e)
             {
                 final PlaybookStep step = playbook.getCurrentStep();
                 step.setFailure(new ActionExecutionException(e.getMessage(), e));
@@ -448,11 +459,13 @@ public class AiAgent
                     Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                             performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Assertion Failed: " + e.getMessage(), false);
                     waitForHudAction(false); // Never auto-skip errors
-                } else
+                }
+                else
                 {
                     throw e; // Bubble up immediately to fail the test without retries
                 }
-            } catch (final Exception e)
+            }
+            catch (final Exception e)
             {
                 LOG.error("Unexpected error executing step: {}", instruction, e);
                 if (isInteractive)
@@ -463,7 +476,8 @@ public class AiAgent
                     Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                             performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Unexpected Error: " + e.getMessage(), false);
                     waitForHudAction(false); // Never auto-skip errors
-                } else
+                }
+                else
                 {
                     SelenideAddons.wrapAssertionError(() ->
                     {
@@ -519,7 +533,8 @@ public class AiAgent
                 try
                 {
                     typeEnum = HudActionType.valueOf(actionType);
-                } catch (IllegalArgumentException e)
+                }
+                catch (IllegalArgumentException e)
                 {
                     // Ignore unknown actions
                 }
@@ -528,21 +543,25 @@ public class AiAgent
                 {
                     handled = true;
                     break;
-                } else if (typeEnum == HudActionType.SKIP)
+                }
+                else if (typeEnum == HudActionType.SKIP)
                 {
                     Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.SKIP, null, 0);
-                } else if (typeEnum == HudActionType.REWIND)
+                }
+                else if (typeEnum == HudActionType.REWIND)
                 {
                     final int rIdx = actionObj.get("index").getAsInt();
                     Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.REWIND, null, rIdx);
-                } else if (typeEnum == HudActionType.ADD)
+                }
+                else if (typeEnum == HudActionType.ADD)
                 {
                     final String instructionAdd = actionObj.get("instruction").getAsString();
                     Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.ADD, instructionAdd, 0);
-                } else if (typeEnum == HudActionType.EDIT)
+                }
+                else if (typeEnum == HudActionType.EDIT)
                 {
                     final String instructionEdit = actionObj.get("instruction").getAsString();
                     final int eIdx = actionObj.has("index") ? actionObj.get("index").getAsInt() : 0;
@@ -557,7 +576,8 @@ public class AiAgent
                     }
                     Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.EDIT, instructionEdit, eIdx, bindingsMap);
-                } else if (typeEnum == HudActionType.SAVE_EXIT)
+                }
+                else if (typeEnum == HudActionType.SAVE_EXIT)
                 {
                     Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.SAVE_EXIT, null, 0);
@@ -595,7 +615,8 @@ public class AiAgent
                     playbook.setRecording(true);
                     playbook.removeFutureSteps();
                     step = playbook.getCurrentStep();
-                } else
+                }
+                else
                 {
                     final boolean isValidation = isValidationInstruction(instruction);
                     pageAnalyzer.getPageContext(isValidation);
@@ -626,7 +647,8 @@ public class AiAgent
                     try
                     {
                         plugin.prepare(a, actionExecutor);
-                    } catch (ActionExecutionException e)
+                    }
+                    catch (ActionExecutionException e)
                     {
                         LOG.warn("Failed to prepare action: {}", e.getMessage(), e);
                     }
@@ -646,7 +668,8 @@ public class AiAgent
         {
             // Intent extracted, but it requires the LLM to process it fully (or actions empty)
             actions = getActionsFromLLM(instruction, step, playbook, requiresScreenshot);
-        } else
+        }
+        else
         {
             // Simple action that can be executed directly, or local replay comparison succeeded
             if (playbook.isRecording())
@@ -662,7 +685,7 @@ public class AiAgent
 
     private List<Action> getActionsFromLLM(final String instruction, final PlaybookStep playbookStep, final Playbook playbook,
             final boolean requiresScreenshot)
-            {
+    {
         // If we are inside a playbook replay and failed, we have an initial error
         // already.
         String lastError;
@@ -670,7 +693,8 @@ public class AiAgent
         {
             AllureAddons.printToReport("Self Heal Playbook step '" + playbookStep.getPromptLine() + "'");
             lastError = playbookStep.getLastFailure();
-        } else
+        }
+        else
         {
             lastError = null;
         }
@@ -703,11 +727,13 @@ public class AiAgent
                     LOG.info("    🔄 Retry attempt (no actions returned) {}/{} for instruction: {}", noActionsCount,
                             NO_ACTIONS_MAX_RETRIES, instruction);
                     userPrompt = AiAgentPrompts.buildNoActionsRetryPrompt(instruction, sutContext, domContext);
-                } else if (lastError != null)
+                }
+                else if (lastError != null)
                 {
                     LOG.info("    🔄 Retry attempt (error) {}/{} — previous error: {}", errorCount, maxRetries, lastError);
                     userPrompt = AiAgentPrompts.buildRetryPrompt(instruction, sutContext, domContext, lastError);
-                } else
+                }
+                else
                 {
                     userPrompt = AiAgentPrompts.buildUserPrompt(instruction, sutContext, domContext);
                 }
@@ -725,11 +751,13 @@ public class AiAgent
                     {
                         llmResponse = llmClient.chatWithScreenshot(
                                 AiAgentPrompts.getSystemPrompt(), userPrompt, screenshot);
-                    } else
+                    }
+                    else
                     {
                         llmResponse = llmClient.chat(AiAgentPrompts.getSystemPrompt(), userPrompt);
                     }
-                } catch (Exception e)
+                }
+                catch (Exception e)
                 {
                     LOG.warn("LLM call failed or timed out: {}", e.getMessage());
                     throw new ActionExecutionException("LLM call failed or timed out: " + e.getMessage(), e);
@@ -763,7 +791,8 @@ public class AiAgent
                 try
                 {
                     actions = actionParser.parse(llmResponse);
-                } catch (final ActionParser.ActionParserException e)
+                }
+                catch (final ActionParser.ActionParserException e)
                 {
                     LOG.warn("JSON parsing failed: {}", e.getMessage());
                     executionLog.logWarning("JSON parsing failed: " + e.getMessage() + ". Retrying...");
@@ -775,7 +804,8 @@ public class AiAgent
                     {
                         LOG.info("    ✅ LLM returned no actions, but indicated success and completion. Treating as 'No Action Needed'.");
                         executionLog.logInfo("No actions needed based on LLM evaluation.");
-                    } else
+                    }
+                    else
                     {
                         noActionsCount++;
                         if (noActionsCount > NO_ACTIONS_MAX_RETRIES)
@@ -821,7 +851,8 @@ public class AiAgent
                 playbookStep.setFailure(null);
 
                 return actions;
-            } catch (final ActionExecutor.ActionExecutionException e)
+            }
+            catch (final ActionExecutor.ActionExecutionException e)
             {
                 errorCount++;
                 lastError = e.getMessage();
@@ -843,14 +874,16 @@ public class AiAgent
 
                 // Wait before retry
                 sleep(1000);
-            } catch (final Exception e)
+            }
+            catch (final Exception e)
             {
                 LOG.error("Unexpected error executing step: {}", instruction, e);
                 SelenideAddons.wrapAssertionError(() ->
                 {
                     throw new AiAgentException("Unexpected error executing step: " + instruction, e);
                 });
-            } finally
+            }
+            finally
             {
                 executionLog.endAttempt();
             }
@@ -891,7 +924,8 @@ public class AiAgent
         try
         {
             Thread.sleep(ms);
-        } catch (final InterruptedException e)
+        }
+        catch (final InterruptedException e)
         {
             Thread.currentThread().interrupt();
         }
@@ -958,7 +992,7 @@ public class AiAgent
      */
     private int processHudActionException(final HudActionException e, final int i,
             final List<String> stepsList, final List<String> performedInstructions)
-            {
+    {
         if (HudActionType.REWIND == e.actionType)
         {
             final int rIdx = e.index;
@@ -973,11 +1007,13 @@ public class AiAgent
             }
             LOG.info("Rewound execution back to step index {}", rIdx);
             return rIdx - 1;
-        } else if (HudActionType.SAVE_EXIT == e.actionType)
+        }
+        else if (HudActionType.SAVE_EXIT == e.actionType)
         {
             this.hudSaveExit = saveYamlAndExit(i, performedInstructions);
             return -1; // signal break
-        } else if (HudActionType.ADD == e.actionType)
+        }
+        else if (HudActionType.ADD == e.actionType)
         {
             final String newInstr = e.instruction;
             stepsList.add(i, newInstr);
@@ -996,7 +1032,8 @@ public class AiAgent
             this.hudPromptChanged = true;
             LOG.info("Inserted new action: {}", newInstr);
             return i - 1;
-        } else if (HudActionType.EDIT == e.actionType)
+        }
+        else if (HudActionType.EDIT == e.actionType)
         {
             final String editInstr = e.instruction;
             final Map<String, String> updatedBindings = e.bindings;
@@ -1022,7 +1059,8 @@ public class AiAgent
             this.hudPromptChanged = true;
             LOG.info("Edited current action to: {}", editInstr);
             return i - 1;
-        } else if (HudActionType.SKIP == e.actionType)
+        }
+        else if (HudActionType.SKIP == e.actionType)
         {
             final String step = stepsList.get(i);
             LOG.info("Skipped step: {}", step);
