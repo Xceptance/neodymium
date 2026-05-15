@@ -72,7 +72,7 @@ public class BranchAction implements AiActionPlugin
             {
                 executor.executeAll(action.getCondition());
             }
-            catch (final Throwable e)
+            catch (final Exception | AssertionError e)
             {
                 conditionMet = false;
             }
