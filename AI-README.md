@@ -89,6 +89,8 @@ public class MyDataDrivenAiTest {
 }
 ```
 
+> **Tip:** You can include comments within your multi-line prompts to annotate test steps without affecting the AI's execution or the generated playbooks. Any line starting with `#` or `//` will be automatically ignored by the agent.
+
 ---
 
 ## 🔀 Advanced Conditional Logic (AST Branching)

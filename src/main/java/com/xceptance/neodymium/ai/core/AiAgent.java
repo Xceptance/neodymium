@@ -909,13 +909,13 @@ public class AiAgent
 
     /**
      * Splits a multi-line instruction block into individual steps. Each non-empty
-     * line becomes a step.
+     * line becomes a step. Lines starting with # or // are treated as comments and ignored.
      */
     String[] splitInstructions(final String instructions)
     {
         return instructions.strip().lines()
                 .map(String::strip)
-                .filter(line -> !line.isEmpty())
+                .filter(line -> !line.isEmpty() && !line.startsWith("#") && !line.startsWith("//"))
                 .toArray(String[]::new);
     }
 
