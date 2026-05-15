@@ -131,7 +131,7 @@ public class ActionExecutor {
 
     /**
      * Finds an element using multiple strategies in order of preference: 0.
-     * data-neo-aid 1. CSS
+     * data-neo-ref 1. CSS
      * selector 2. XPath 3. Link text / partial link text 4. Text content via XPath
      */
     public SelenideElement findElement(final Action action) {

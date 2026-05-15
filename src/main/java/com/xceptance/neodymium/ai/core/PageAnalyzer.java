@@ -57,8 +57,8 @@ public class PageAnalyzer
             var usedIds = {};
             // Pre-populate registry from IDs already stamped on this page
             // (handles repeated script injections on the same page)
-            document.querySelectorAll('[data-neo-aid]').forEach(function(el) {
-                usedIds[el.getAttribute('data-neo-aid')] = true;
+            document.querySelectorAll('[data-neo-ref]').forEach(function(el) {
+                usedIds[el.getAttribute('data-neo-ref')] = true;
             });
 
             // djb2 hash – very low computation cost, good distribution
@@ -138,7 +138,7 @@ public class PageAnalyzer
                     var parts = cls.trim().split(/\\s+/);
                     if (parts.length <= 3) return tag + '.' + parts.join('.');
                 }
-                return tag;
+                return '';
             }
 
             function captureElements(cssSelector, label) {
@@ -525,7 +525,7 @@ public class PageAnalyzer
         appendIfPresent(dom, "options", el.get("options"));
 
         appendIfPresent(dom, "data-neo-ref", el.get("automationId"));
-        dom.append(String.format("selector='%s' ", el.get("selector")));
+        appendIfPresent(dom, "selector", el.get("selector"));
         dom.append("\n");
     }
 
