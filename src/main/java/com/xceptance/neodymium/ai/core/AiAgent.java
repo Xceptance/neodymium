@@ -1,8 +1,10 @@
 package com.xceptance.neodymium.ai.core;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
-import java.util.UUID;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
@@ -17,11 +19,15 @@ import com.xceptance.neodymium.ai.action.ActionParser;
 import com.xceptance.neodymium.ai.action.ActionRegistry;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 import com.xceptance.neodymium.ai.config.AiConfiguration;
+import com.xceptance.neodymium.ai.generator.InteractiveHud;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.SelenideAddons;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import io.qameta.allure.Allure;
 
@@ -103,7 +109,7 @@ public class AiAgent {
         boolean hudSaveExit = false;
 
         try {
-            List<String> stepsList = new ArrayList<>(java.util.Arrays.asList(splitInstructions(instructions)));
+            List<String> stepsList = new ArrayList<>(Arrays.asList(splitInstructions(instructions)));
             LOG.debug("Split into {} step(s)", stepsList.size());
 
             Neodymium.initializePlaybook();
@@ -112,7 +118,7 @@ public class AiAgent {
 
             for (int i = 0; i <= stepsList.size(); i++) {
                 if (isInteractive) {
-                    Boolean currentAutoSkipStatus = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                    Boolean currentAutoSkipStatus = Neodymium.getOrCreateInteractiveHud()
                             .checkAutoSkipStatus();
                     if (currentAutoSkipStatus != null) {
                         this.autoSkip = currentAutoSkipStatus;
@@ -130,7 +136,7 @@ public class AiAgent {
                         try {
                             List<String> finishedStrs = new ArrayList<>();
                             finishedStrs.add("🎉 Execution Complete! Click Save & Exit to store changes.");
-                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                            Neodymium.getOrCreateInteractiveHud()
                                     .injectOrUpdateHud(finishedStrs, performedInstructions, this.autoSkip, true, true,
                                             "");
                             waitForHudAction(false);
@@ -156,7 +162,7 @@ public class AiAgent {
 
                                 Playbook playbook = Neodymium.getAiPlaybook();
                                 if (playbook != null && playbook.getSteps().size() >= i) {
-                                    com.xceptance.neodymium.ai.playbook.PlaybookStep emptyStep = new com.xceptance.neodymium.ai.playbook.PlaybookStep();
+                                    PlaybookStep emptyStep = new PlaybookStep();
                                     emptyStep.setPromptLine(newInstr);
                                     emptyStep.setReasoning("Manually added by user via HUD at the end");
                                     playbook.getSteps().add(i, emptyStep);
@@ -177,7 +183,7 @@ public class AiAgent {
                 }
 
                 final String stepUnresolved = stepsList.get(i);
-                final String step = com.xceptance.neodymium.ai.core.AiBrowser.resolveTestDataToPrompt(stepUnresolved);
+                final String step = AiBrowser.resolveTestDataToPrompt(stepUnresolved);
 
                 boolean isReplay = false;
                 Playbook playbookForCheck = Neodymium.getAiPlaybook();
@@ -225,7 +231,7 @@ public class AiAgent {
 
                         Playbook playbook = Neodymium.getAiPlaybook();
                         if (playbook != null && playbook.getSteps().size() >= i) {
-                            com.xceptance.neodymium.ai.playbook.PlaybookStep emptyStep = new com.xceptance.neodymium.ai.playbook.PlaybookStep();
+                            PlaybookStep emptyStep = new PlaybookStep();
                             emptyStep.setPromptLine(newInstr);
                             emptyStep.setReasoning("Manually added by user via HUD");
                             playbook.getSteps().add(i, emptyStep);
@@ -239,11 +245,11 @@ public class AiAgent {
                         continue;
                     } else if (HudActionType.EDIT == e.actionType) {
                         String editInstr = e.instruction;
-                        java.util.Map<String, String> updatedBindings = e.bindings;
+                        Map<String, String> updatedBindings = e.bindings;
                         if (updatedBindings != null && !updatedBindings.isEmpty()) {
-                            com.xceptance.neodymium.util.Neodymium.getData().putAll(updatedBindings);
-                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().setDataBindings(
-                                    new java.util.HashMap<>(com.xceptance.neodymium.util.Neodymium.getData()));
+                            Neodymium.getData().putAll(updatedBindings);
+                            Neodymium.getOrCreateInteractiveHud().setDataBindings(
+                                    new HashMap<>(Neodymium.getData()));
                         }
 
                         stepsList.set(i, editInstr);
@@ -333,7 +339,7 @@ public class AiAgent {
 
                     // Show HUD immediately so the user doesn't wait forever, indicating reasoning
                     // is loading
-                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                    Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                             performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
                             "Loading reasoning...", false);
                 }
@@ -359,7 +365,7 @@ public class AiAgent {
                         }
                     }
 
-                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                    Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                             performedInstructions, this.autoSkip, false, false, unresolvedInstruction, reasoning,
                             isReplay);
 
@@ -386,7 +392,7 @@ public class AiAgent {
                         List<String> plannedStrs = new ArrayList<>();
                         plannedStrs.add("⚠️ " + instruction);
                         if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
-                        com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                                 performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Max retries reached: " + e.getMessage(), false);
                         waitForHudAction(false); // Never auto-skip errors
                         errorCount = 0;
@@ -402,7 +408,7 @@ public class AiAgent {
                         List<String> plannedStrs = new ArrayList<>();
                         plannedStrs.add("⚠️ " + instruction);
                         if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
-                        com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                                 performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Action Failed: " + e.getMessage(), false);
                         waitForHudAction(false); // Never auto-skip errors
                     } else {
@@ -423,7 +429,7 @@ public class AiAgent {
                     List<String> plannedStrs = new ArrayList<>();
                     plannedStrs.add("⚠️ " + instruction);
                     if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
-                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                    Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                             performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Assertion Failed: " + e.getMessage(), false);
                     waitForHudAction(false); // Never auto-skip errors
                 } else {
@@ -435,7 +441,7 @@ public class AiAgent {
                     List<String> plannedStrs = new ArrayList<>();
                     plannedStrs.add("⚠️ " + instruction);
                     if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
-                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                    Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                             performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Unexpected Error: " + e.getMessage(), false);
                     waitForHudAction(false); // Never auto-skip errors
                 } else {
@@ -449,7 +455,7 @@ public class AiAgent {
 
     private void waitForHudAction(boolean allowAutoSkip) throws HudActionException {
         if (allowAutoSkip && this.autoSkip) {
-            Boolean s = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
+            Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
             if (s != null) {
                 this.autoSkip = s;
             }
@@ -461,13 +467,13 @@ public class AiAgent {
         LOG.info("Waiting for user action in HUD...");
         boolean handled = false;
         for (int wait = 0; wait < 3600; wait++) {
-            String hudActionStr = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkHudAction();
+            String hudActionStr = Neodymium.getOrCreateInteractiveHud().checkHudAction();
             if (hudActionStr != null) {
-                Boolean s = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
+                Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
                 if (s != null)
                     this.autoSkip = s;
 
-                com.google.gson.JsonObject actionObj = com.google.gson.JsonParser.parseString(hudActionStr)
+                JsonObject actionObj = JsonParser.parseString(hudActionStr)
                         .getAsJsonObject();
                 String actionType = actionObj.has("action") ? actionObj.get("action").getAsString() : "";
 
@@ -482,30 +488,30 @@ public class AiAgent {
                     handled = true;
                     break;
                 } else if (typeEnum == HudActionType.SKIP) {
-                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.SKIP, null, 0);
                 } else if (typeEnum == HudActionType.REWIND) {
                     int rIdx = actionObj.get("index").getAsInt();
-                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.REWIND, null, rIdx);
                 } else if (typeEnum == HudActionType.ADD) {
                     String instructionAdd = actionObj.get("instruction").getAsString();
-                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.ADD, instructionAdd, 0);
                 } else if (typeEnum == HudActionType.EDIT) {
                     String instructionEdit = actionObj.get("instruction").getAsString();
                     int eIdx = actionObj.has("index") ? actionObj.get("index").getAsInt() : 0;
-                    java.util.Map<String, String> bindingsMap = new java.util.HashMap<>();
+                    Map<String, String> bindingsMap = new HashMap<>();
                     if (actionObj.has("bindings")) {
-                        com.google.gson.JsonObject bObj = actionObj.getAsJsonObject("bindings");
+                        JsonObject bObj = actionObj.getAsJsonObject("bindings");
                         for (String key : bObj.keySet()) {
                             bindingsMap.put(key, bObj.get(key).getAsString());
                         }
                     }
-                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.EDIT, instructionEdit, eIdx, bindingsMap);
                 } else if (typeEnum == HudActionType.SAVE_EXIT) {
-                    com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.SAVE_EXIT, null, 0);
                 }
             }
@@ -514,7 +520,7 @@ public class AiAgent {
         if (!handled) {
             throw new RuntimeException("User did not approve the actions within 1 hour. Halting execution.");
         }
-        com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+        Neodymium.getOrCreateInteractiveHud().resetHudAction();
     }
 
     private List<Action> getStepActions(final String instruction, Playbook playbook) {
@@ -786,7 +792,7 @@ public class AiAgent {
     }
 
     private boolean isValidationInstruction(final String instruction) {
-        String pattern = com.xceptance.neodymium.util.Neodymium.configuration().getProperty(
+        String pattern = Neodymium.configuration().getProperty(
                 "neodymium.ai.agent.pattern.validation",
                 "(?i)^(?:verify|check|validate|ensure|assert|prüfe|verifiziere|überprüfe|bestätige|checke)\\b.*");
         return Pattern.compile(pattern).matcher(instruction.strip()).find();
@@ -815,7 +821,7 @@ public class AiAgent {
             playbook.setChanged(true);
         }
 
-        com.xceptance.neodymium.ai.generator.InteractiveHud hud = com.xceptance.neodymium.util.Neodymium
+        InteractiveHud hud = Neodymium
                 .getOrCreateInteractiveHud();
         hud.saveYamlDataFileIfModified(performedInstructions);
         return true;
