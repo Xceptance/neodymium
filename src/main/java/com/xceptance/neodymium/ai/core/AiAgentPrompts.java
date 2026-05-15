@@ -72,16 +72,15 @@ public final class AiAgentPrompts {
       final String domContext, final String previousActionStr, final java.util.Map<String, String> knownBindings) {
     String sutContextBlock = "";
     if (sutContext != null && !sutContext.trim().isEmpty()) {
-      sutContextBlock = "\n      ## SUT Specific Instructions (Application Context)\n      " + sutContext + "\n";
+      sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
     }
-
     String knownBindingsBlock = "";
     if (knownBindings != null && !knownBindings.isEmpty()) {
       StringBuilder sb = new StringBuilder();
       for (java.util.Map.Entry<String, String> entry : knownBindings.entrySet()) {
-        sb.append("      ${").append(entry.getKey()).append("} = '").append(entry.getValue()).append("'\n");
+        sb.append("  ${").append(entry.getKey()).append("} = '").append(entry.getValue()).append("'\n");
       }
-      knownBindingsBlock = "\n      ## Known Data Bindings\n" + sb.toString();
+      knownBindingsBlock = "\n## Known Data Bindings\n" + sb.toString();
     }
     return EXPLORATION_PROMPT_TEMPLATE
         .replace("{intent}", intent)
@@ -97,16 +96,15 @@ public final class AiAgentPrompts {
       final String domContext, final String previousActionStr, final java.util.Map<String, String> knownBindings) {
     String sutContextBlock = "";
     if (sutContext != null && !sutContext.trim().isEmpty()) {
-      sutContextBlock = "\n      ## SUT Specific Instructions (Application Context)\n      " + sutContext + "\n";
+      sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
     }
-
     String knownBindingsBlock = "";
     if (knownBindings != null && !knownBindings.isEmpty()) {
       StringBuilder sb = new StringBuilder();
       for (java.util.Map.Entry<String, String> entry : knownBindings.entrySet()) {
-        sb.append("      ${").append(entry.getKey()).append("} = '").append(entry.getValue()).append("'\n");
+        sb.append("  ${").append(entry.getKey()).append("} = '").append(entry.getValue()).append("'\n");
       }
-      knownBindingsBlock = "\n      ## Known Data Bindings\n" + sb.toString();
+      knownBindingsBlock = "\n## Known Data Bindings\n" + sb.toString();
     }
     return V2_EXPLORATION_PROMPT_TEMPLATE
         .replace("{intent}", intent)
@@ -149,7 +147,7 @@ public final class AiAgentPrompts {
   public static String buildUserPrompt(final String instruction, final String sutContext, final String domContext) {
     String sutContextBlock = "";
     if (sutContext != null && !sutContext.trim().isEmpty()) {
-      sutContextBlock = "\n      ## SUT Specific Instructions (Application Context)\n      " + sutContext + "\n";
+      sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
     }
     return USER_PROMPT_TEMPLATE
         .replace("{instruction}", instruction)
@@ -164,7 +162,7 @@ public final class AiAgentPrompts {
       final String error) {
     String sutContextBlock = "";
     if (sutContext != null && !sutContext.trim().isEmpty()) {
-      sutContextBlock = "\n      ## SUT Specific Instructions (Application Context)\n      " + sutContext + "\n";
+      sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
     }
     return RETRY_PROMPT_TEMPLATE
         .replace("{instruction}", instruction)
@@ -179,7 +177,7 @@ public final class AiAgentPrompts {
   public static String buildNoActionsRetryPrompt(final String instruction, final String sutContext, final String domContext) {
     String sutContextBlock = "";
     if (sutContext != null && !sutContext.trim().isEmpty()) {
-      sutContextBlock = "\n      ## SUT Specific Instructions (Application Context)\n      " + sutContext + "\n";
+      sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
     }
     return NO_ACTIONS_RETRY_PROMPT_TEMPLATE
         .replace("{instruction}", instruction)

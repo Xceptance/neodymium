@@ -54,7 +54,7 @@ public class AssertAction implements AiActionPlugin {
     @Override
     public String getPromptInstructions() { 
         return "ASSERT: Verify element or page state. Requires \"target\".\n" +
-               "  For elements: Provide \"target\" (locator string, prefer id attribute over `data-neodymium-automation-id`, over CSS selector, XPath, or text label). Optional \"value\" for text content check.\n" +
+               "  For elements: Provide \"target\" (locator string, prefer id attribute over `data-neo-ref`, over CSS selector, XPath, or text label). Optional \"value\" for text content check.\n" +
                "    If \"value\" is provided, assert that the element's text contains the value.\n" +
                "    If trying to check if an element is visible use \"visible\" as value.\n" +
                "    If asked to verify a text, choose an element, that contains this text.\n" +

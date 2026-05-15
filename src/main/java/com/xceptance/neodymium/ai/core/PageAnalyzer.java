@@ -57,8 +57,8 @@ public class PageAnalyzer
             var usedIds = {};
             // Pre-populate registry from IDs already stamped on this page
             // (handles repeated script injections on the same page)
-            document.querySelectorAll('[data-neodymium-automation-id]').forEach(function(el) {
-                usedIds[el.getAttribute('data-neodymium-automation-id')] = true;
+            document.querySelectorAll('[data-neo-aid]').forEach(function(el) {
+                usedIds[el.getAttribute('data-neo-aid')] = true;
             });
 
             // djb2 hash – very low computation cost, good distribution
@@ -84,8 +84,8 @@ public class PageAnalyzer
             }
 
             function assignId(el) {
-                if (el.hasAttribute('data-neodymium-automation-id')) {
-                    return el.getAttribute('data-neodymium-automation-id');
+                if (el.hasAttribute('data-neo-ref')) {
+                    return el.getAttribute('data-neo-ref');
                 }
                 var base = fingerprint(el);
                 var candidate = base;
@@ -95,7 +95,7 @@ public class PageAnalyzer
                     candidate = base + '_' + suffix;
                 }
                 usedIds[candidate] = true;
-                el.setAttribute('data-neodymium-automation-id', candidate);
+                el.setAttribute('data-neo-ref', candidate);
                 return candidate;
             }
 
@@ -419,7 +419,7 @@ public class PageAnalyzer
 
                     for (final Map<String, Object> el : elements)
                     {
-                        dom.append("\t");
+                        dom.append("  ");
                         formatElement(dom, el);
                     }
                 }
@@ -434,7 +434,7 @@ public class PageAnalyzer
 
                 for (final Map<String, Object> form : forms)
                 {
-                    dom.append(String.format("\t[form] id='%s' action='%s' data-neodymium-automation-id='%s'\n",
+                    dom.append(String.format("  [form] id='%s' action='%s' data-neo-ref='%s'\n",
                                              form.get("id"), form.get("action"), form.get("automationId")));
 
                     final List<Map<String, Object>> fields = (List<Map<String, Object>>) form.get("fields");
@@ -444,7 +444,7 @@ public class PageAnalyzer
                         for (final Map<String, Object> field : fields)
                         {
                             dom.append(String.format(
-                                                 "\t\t[form-field] type='%s' name='%s' id='%s' data-neodymium-automation-id='%s'",
+                                                 "    [form-field] type='%s' name='%s' id='%s' data-neo-ref='%s'",
                                                  field.get("type"), field.get("name"), field.get("id"), field.get("automationId")));
 
                         if (field.containsKey("options"))
@@ -524,7 +524,7 @@ public class PageAnalyzer
         appendIfPresent(dom, "value", el.get("value"));
         appendIfPresent(dom, "options", el.get("options"));
 
-        appendIfPresent(dom, "data-neodymium-automation-id", el.get("automationId"));
+        appendIfPresent(dom, "data-neo-ref", el.get("automationId"));
         dom.append(String.format("selector='%s' ", el.get("selector")));
         dom.append("\n");
     }

@@ -131,7 +131,7 @@ public class ActionExecutor {
 
     /**
      * Finds an element using multiple strategies in order of preference: 0.
-     * data-neodymium-automation-id 1. CSS
+     * data-neo-aid 1. CSS
      * selector 2. XPath 3. Link text / partial link text 4. Text content via XPath
      */
     public SelenideElement findElement(final Action action) {
@@ -140,18 +140,24 @@ public class ActionExecutor {
             throw new ActionExecutionException("Action target is null or empty");
         }
 
+        // Clean up common AI hallucinations for Neodymium IDs
+        if (target.startsWith("#xc_")) {
+            target = target.substring(1);
+            logDebug("   ⚠️ Auto-corrected AI hallucination: removed '#' from Neodymium ID [{}]", target);
+        }
+
         // Strategy 0: Direct Match for Neodymium Automation ID
         if (target.matches("^xc_.*")) {
             try {
-                SelenideElement element = $(By.cssSelector("[data-neodymium-automation-id='" + target + "']"));
+                SelenideElement element = $(By.cssSelector("[data-neo-ref='" + target + "']"));
                 if (element.exists()) {
                     logDebug("   🔍 Resolved using Strategy 0: Neodymium Automation ID [{}]", target);
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
                 } else {
-                    logDebug("   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neodymium-automation-id='{}']]", target);
+                    logDebug("   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neo-ref='{}']]", target);
                 }
             } catch (final Exception e) {
-                logDebug("   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neodymium-automation-id='{}']] with error: {}", target, e.getMessage());
+                logDebug("   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neo-ref='{}']] with error: {}", target, e.getMessage());
             }
         }
 
@@ -208,23 +214,6 @@ public class ActionExecutor {
             } catch (final Exception e) {
                 logDebug("   ❌ Strategy 1.5 failed: Deep Shadow DOM selector [{}] with error: {}", target, e.getMessage());
             }
-        }
-
-        // Strategy 2: Try as XPath
-        if (target.startsWith("/") || target.startsWith("(")) {
-            try {
-                SelenideElement element = $(By.cssSelector(target));
-                if (element.exists()) {
-                    logDebug("   🔍 Resolved using Strategy 2: XPath [{}]", target);
-                    return element.should(Condition.exist, ELEMENT_TIMEOUT);
-                } else {
-                    logDebug("   ❌ Strategy 2 failed: XPath (tried as CSS) [{}]", target);
-                }
-            } catch (final Exception e) {
-                logDebug("   ❌ Strategy 2 failed: XPath (tried as CSS) [{}] with error: {}", target, e.getMessage());
-            }
-        } else {
-            LOG.debug("Target '{}' is not a valid CSS selector. Skipping CSS strategy.", target);
         }
 
         // Strategy 2: Try as XPath
@@ -315,10 +304,16 @@ public class ActionExecutor {
             throw new ActionExecutionException("Action target is null or empty");
         }
 
+        // Clean up common AI hallucinations for Neodymium IDs
+        if (target.startsWith("#xc_")) {
+            target = target.substring(1);
+            logDebug("   ⚠️ Auto-corrected AI hallucination: removed '#' from Neodymium ID [{}]", target);
+        }
+
         // Strategy 0: Direct Match for Neodymium Automation ID
         if (target.matches("^xc_.*")) {
             try {
-                com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(By.cssSelector("[data-neodymium-automation-id='" + target + "']"));
+                com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(By.cssSelector("[data-neo-ref='" + target + "']"));
                 if (!elements.isEmpty()) {
                     logDebug("   🔍 Resolved using Strategy 0: Neodymium Automation ID [{}]", target);
                     return elements;

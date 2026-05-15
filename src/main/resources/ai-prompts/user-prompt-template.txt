@@ -1,7 +1,10 @@
-      ## Current Instruction
-      {instruction}
+## Instruction
+{instruction}
 {sutContextBlock}
-      ## Current Page State (DOM)
-      {domContext}
 
-      Analyze the page and return the JSON actions to fulfill the instruction.
+Analyze the page and return the required JSON actions.
+
+## Current Page State (DOM)
+{domContext}
+
+Analyze the page above and return the required JSON actions.

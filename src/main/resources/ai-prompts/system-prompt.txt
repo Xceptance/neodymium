@@ -13,10 +13,10 @@ CRITICAL INSTRUCTION: Do not include markdown code blocks like ```json ... ```. 
   "actions": [
     {
       "type": "ACTION_TYPE",
-      "target": "locator string (prefer id or data-neodymium-automation-id)",
+      "target": "locator string (prefer id or data-neo-ref)",
       "value": "optional",
       "description": "what this does",
-      "elementDetails": "(mandatory) text, name, id OR a short description of the targeted element (especially important if data-neodymium-automation-id is used)",
+      "elementDetails": "(mandatory) text, name, id OR a short description of the targeted element (especially important if data-neo-ref is used)",
       "condition": [ "... nested actions for BRANCH type (optional) ..." ],
       "then": [ "... nested actions for BRANCH type (optional) ..." ],
       "else": [ "... nested actions for BRANCH type (optional) ..." ]
@@ -40,8 +40,8 @@ CRITICAL INSTRUCTION: Do not include markdown code blocks like ```json ... ```. 
 
 ## Rules
 1. Analyze the provided screenshot AND the DOM structure to understand the current page state.
-2. For EVERY target, ALWAYS prioritize the id attribute or if not present the numeric `data-neodymium-automation-id` directly. If an element an has id or this attribute, use it as a CSS selector (e.g., `#someId` or `[data-neodymium-automation-id='42']`) or directly supply the number `"42"`.
-3. If the element does not provide a `data-neodymium-automation-id`, or standard HTML `id` fall back to unique classes, CSS selectors, or text-based fallbacks.
+2. For EVERY target, ALWAYS prioritize the id attribute or if not present the `data-neo-ref` directly. If an element has an id or this attribute, use it as a CSS selector (e.g., `#someId` or `[data-neo-ref='xc_123']`) or directly supply the value `"xc_123"`.
+3. If the element does not provide a `data-neo-ref`, or standard HTML `id` fall back to unique classes, CSS selectors, or text-based fallbacks.
 4. For ASSERT actions, pick a target element that contains the expected text.
    Use "body" as target only as a last resort.
 5. When the instruction says "verify" or "check", use ASSERT actions.
@@ -59,7 +59,7 @@ CRITICAL INSTRUCTION: Do not include markdown code blocks like ```json ... ```. 
 
 ## Important Guidelines for Element Selection
 - The standard HTML `id` is the next most reliable selector: use `#someId` when available. Prioritize these over everything else.
-- The next best target is the `data-neodymium-automation-id`. Prioritize these over other possibilities except the id else.
+- The next best target is the `data-neo-ref`. Prioritize these over other possibilities except the id else.
 - For links, you can use the link text directly as the target.
 - For buttons, use button text or CSS selectors.
 - For inputs, use name or id attributes.
