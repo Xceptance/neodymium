@@ -67,6 +67,9 @@ public class AiAgent {
 
     private boolean autoSkip = false;
 
+    private boolean hudPromptChanged = false;
+    private boolean hudSaveExit = false;
+
     private static final int NO_ACTIONS_MAX_RETRIES = 15;
 
     public AiAgent(final LlmClient llmClient, final PageAnalyzer pageAnalyzer,
@@ -108,8 +111,8 @@ public class AiAgent {
         LOG.debug("======== 🚀 AI Agent: Processing instructions ========");
         LOG.debug("SUT Context: {}", sutContext);
 
-        boolean hudPromptChanged = false;
-        boolean hudSaveExit = false;
+        this.hudPromptChanged = false;
+        this.hudSaveExit = false;
 
         try {
             final List<String> stepsList = new ArrayList<>(Arrays.asList(splitInstructions(instructions)));
@@ -144,42 +147,9 @@ public class AiAgent {
                                             "");
                             waitForHudAction(false);
                         } catch (HudActionException e) {
-                            if (HudActionType.REWIND == e.actionType) {
-                                final int rIdx = e.index;
-                                i = rIdx - 1; // rewind loop
-                                final Playbook playbook = Neodymium.getAiPlaybook();
-                                if (playbook != null) {
-                                    playbook.setCursor(rIdx);
-                                }
-                                if (performedInstructions.size() > rIdx) {
-                                    performedInstructions.subList(rIdx, performedInstructions.size()).clear();
-                                }
-                                LOG.info("Rewound execution back to step index {}", rIdx);
-                                continue;
-                            } else if (HudActionType.SAVE_EXIT == e.actionType) {
-                                hudSaveExit = saveYamlAndExit(i, performedInstructions);
-                                break;
-                            } else if (HudActionType.ADD == e.actionType) {
-                                final String newInstr = e.instruction;
-                                stepsList.add(i, newInstr);
-
-                                final Playbook playbook = Neodymium.getAiPlaybook();
-                                if (playbook != null && playbook.getSteps().size() >= i) {
-                                    final PlaybookStep emptyStep = new PlaybookStep();
-                                    emptyStep.setPromptLine(newInstr);
-                                    emptyStep.setReasoning("Manually added by user via HUD at the end");
-                                    playbook.getSteps().add(i, emptyStep);
-                                    playbook.setRecording(true);
-                                    playbook.setChanged(true);
-                                }
-
-                                hudPromptChanged = true;
-                                i--; // Re-process this index so the added action runs first
-                                LOG.info("Inserted new action at the end: {}", newInstr);
-                                continue;
-                            } else {
-                                break;
-                            }
+                            i = processHudActionException(e, i, stepsList, performedInstructions);
+                            if (i < 0) break;
+                            continue;
                         }
                     }
                     break;
@@ -216,76 +186,9 @@ public class AiAgent {
                     executeStep(step, performedInstructions, stepUnresolved, futureInstructions);
                     performedInstructions.add(stepUnresolved);
                 } catch (HudActionException e) {
-                    if (HudActionType.REWIND == e.actionType) {
-                        final int rIdx = e.index;
-                        i = rIdx - 1; // rewind loop
-                        final Playbook playbook = Neodymium.getAiPlaybook();
-                        if (playbook != null) {
-                            playbook.setCursor(rIdx);
-                        }
-                        if (performedInstructions.size() > rIdx) {
-                            performedInstructions.subList(rIdx, performedInstructions.size()).clear();
-                        }
-                        LOG.info("Rewound execution back to step index {}", rIdx);
-                        continue;
-                    } else if (HudActionType.ADD == e.actionType) {
-                        final String newInstr = e.instruction;
-                        stepsList.add(i, newInstr);
-
-                        final Playbook playbook = Neodymium.getAiPlaybook();
-                        if (playbook != null && playbook.getSteps().size() >= i) {
-                            final PlaybookStep emptyStep = new PlaybookStep();
-                            emptyStep.setPromptLine(newInstr);
-                            emptyStep.setReasoning("Manually added by user via HUD");
-                            playbook.getSteps().add(i, emptyStep);
-                            playbook.setRecording(true);
-                            playbook.setChanged(true);
-                        }
-
-                        hudPromptChanged = true;
-                        i--; // Re-process this index so the added action runs first
-                        LOG.info("Inserted new action: {}", newInstr);
-                        continue;
-                    } else if (HudActionType.EDIT == e.actionType) {
-                        final String editInstr = e.instruction;
-                        final Map<String, String> updatedBindings = e.bindings;
-                        if (updatedBindings != null && !updatedBindings.isEmpty()) {
-                            Neodymium.getData().putAll(updatedBindings);
-                            Neodymium.getOrCreateInteractiveHud().setDataBindings(
-                                    new HashMap<>(Neodymium.getData()));
-                        }
-
-                        stepsList.set(i, editInstr);
-
-                        final Playbook playbook = Neodymium.getAiPlaybook();
-                        if (playbook != null && playbook.getSteps().size() > i) {
-                            playbook.getSteps().get(i).setPromptLine(editInstr);
-                            playbook.getSteps().get(i).setReasoning("Manually edited by user via HUD");
-                            playbook.getSteps().get(i).setActions(new ArrayList<>());
-                            playbook.setRecording(true);
-                            playbook.setChanged(true);
-                        }
-
-                        hudPromptChanged = true;
-                        i--; // Re-process this index so the edited action runs
-                        LOG.info("Edited current action to: {}", editInstr);
-                        continue;
-                    } else if (HudActionType.SAVE_EXIT == e.actionType) {
-                        hudSaveExit = saveYamlAndExit(i, performedInstructions);
-                        break;
-                    } else if (HudActionType.SKIP == e.actionType) {
-                        LOG.info("Skipped step: {}", step);
-                        final Playbook playbook = Neodymium.getAiPlaybook();
-                        if (playbook != null && playbook.getSteps().size() > i) {
-                            playbook.getSteps().remove(i);
-                            playbook.setRecording(true);
-                            playbook.setChanged(true);
-                        }
-                        hudPromptChanged = true;
-                        stepsList.remove(i);
-                        i--; // Process the next item at this index
-                        continue; // Do not add to performedInstructions
-                    }
+                    i = processHudActionException(e, i, stepsList, performedInstructions);
+                    if (i < 0) break;
+                    continue;
                 } finally {
                     executionLog.endStep();
                 }
@@ -848,5 +751,84 @@ public class AiAgent {
                 .getOrCreateInteractiveHud();
         hud.saveYamlDataFileIfModified(performedInstructions);
         return true;
+    }
+
+    /**
+     * Processes a HUD action exception and updates the test playbook, instruction list,
+     * and loop index accordingly.
+     * 
+     * @return the new loop index (i), or -1 to break the execution loop.
+     */
+    private int processHudActionException(final HudActionException e, final int i,
+            final List<String> stepsList, final List<String> performedInstructions) {
+        if (HudActionType.REWIND == e.actionType) {
+            final int rIdx = e.index;
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null) {
+                playbook.setCursor(rIdx);
+            }
+            if (performedInstructions.size() > rIdx) {
+                performedInstructions.subList(rIdx, performedInstructions.size()).clear();
+            }
+            LOG.info("Rewound execution back to step index {}", rIdx);
+            return rIdx - 1;
+        } else if (HudActionType.SAVE_EXIT == e.actionType) {
+            this.hudSaveExit = saveYamlAndExit(i, performedInstructions);
+            return -1; // signal break
+        } else if (HudActionType.ADD == e.actionType) {
+            final String newInstr = e.instruction;
+            stepsList.add(i, newInstr);
+
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null && playbook.getSteps().size() >= i) {
+                final PlaybookStep emptyStep = new PlaybookStep();
+                emptyStep.setPromptLine(newInstr);
+                emptyStep.setReasoning("Manually added by user via HUD");
+                playbook.getSteps().add(i, emptyStep);
+                playbook.setRecording(true);
+                playbook.setChanged(true);
+            }
+
+            this.hudPromptChanged = true;
+            LOG.info("Inserted new action: {}", newInstr);
+            return i - 1;
+        } else if (HudActionType.EDIT == e.actionType) {
+            final String editInstr = e.instruction;
+            final Map<String, String> updatedBindings = e.bindings;
+            if (updatedBindings != null && !updatedBindings.isEmpty()) {
+                Neodymium.getData().putAll(updatedBindings);
+                Neodymium.getOrCreateInteractiveHud().setDataBindings(
+                        new HashMap<>(Neodymium.getData()));
+            }
+
+            stepsList.set(i, editInstr);
+
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null && playbook.getSteps().size() > i) {
+                playbook.getSteps().get(i).setPromptLine(editInstr);
+                playbook.getSteps().get(i).setReasoning("Manually edited by user via HUD");
+                playbook.getSteps().get(i).setActions(new ArrayList<>());
+                playbook.setRecording(true);
+                playbook.setChanged(true);
+            }
+
+            this.hudPromptChanged = true;
+            LOG.info("Edited current action to: {}", editInstr);
+            return i - 1;
+        } else if (HudActionType.SKIP == e.actionType) {
+            final String step = stepsList.get(i);
+            LOG.info("Skipped step: {}", step);
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null && playbook.getSteps().size() > i) {
+                playbook.getSteps().remove(i);
+                playbook.setRecording(true);
+                playbook.setChanged(true);
+            }
+            this.hudPromptChanged = true;
+            stepsList.remove(i);
+            return i - 1;
+        }
+        
+        return -1; // Unhandled or generic break
     }
 }
