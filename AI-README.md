@@ -148,6 +148,46 @@ public void generateCheckoutFlow() {
 
 ---
 
+## 🎯 Locator Hints
+
+Sometimes you may want to explicitly guide the AI on which element to interact with, bypassing its own DOM analysis to speed up execution or resolve ambiguity. You can do this using **Inline Hints**.
+
+### Inline Hints
+You can provide a hint directly within the instruction using the `(hint: ...)` syntax.
+
+```yaml
+prompt: |
+  Click the search button (hint: .btn-search).
+  Type '${searchTerm}' into the search field (hint: #header-search-text).
+```
+
+### Using the Hints Dictionary for Placeholders
+If you prefer to separate locators from the natural language, or have hints you want to apply across the whole playbook, you can define a `hints` block at the root of your YAML playbook. 
+
+This is a simple dictionary mapping semantic element names to explicit CSS or XPath locators. Behind the scenes, the framework seamlessly merges these into the dataset so they can be interpolated into your prompt!
+
+```yaml
+prompt: |
+  Click the login button (hint: ${loginButton}).
+  Type '${user}' into the username field (hint: ${usernameField}).
+hints:
+  loginButton: ".nav-login-btn"
+  usernameField: "#user-id"
+data:
+  - testId: 1
+    user: "test@example.com"
+```
+
+**How it works:**
+1. The framework resolves `${loginButton}` using the `hints` map, generating the final instruction: `Click the login button (hint: .nav-login-btn).`
+2. The AI reads the natural language instruction.
+3. It detects the inline hint `(hint: .nav-login-btn)` and will *prioritize* using that exact provided locator for its first interaction attempt.
+4. **Fallback:** If the provided hint is broken or stale (e.g., the element doesn't exist or is not interactable), the AI will recognize the error and automatically fall back to its own standard DOM analysis to find the correct element during the retry loop.
+
+This "Zero-Code" approach allows you to inject deterministic element targeting while retaining the self-healing benefits of the AI agent, all while preserving strict token efficiency by only sending the locators you explicitly need for that step!
+
+---
+
 ## 🛠️ Prompt Overriding
 
 To provide maximum flexibility and allow testing strategies to be customized per project, the core LLM instructions and prompt templates have been externalized. By default, the framework loads its prompt templates from the `neodymium.jar` classpath at `ai-prompts/`. 

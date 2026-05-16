@@ -91,6 +91,7 @@ public class AiAgent
 
     private String sutContext;
 
+
     private boolean autoSkip = false;
 
     private boolean hudPromptChanged = false;
@@ -127,6 +128,7 @@ public class AiAgent
     {
         this.sutContext = sutContext;
     }
+
 
     /**
      * Executes a block of natural language instructions. The instructions are split
@@ -776,7 +778,7 @@ public class AiAgent
                 final String reasoning = actionParser.getReasoning(llmResponse);
                 if (!reasoning.isEmpty())
                 {
-                    LOG.debug("--- 🧠 LLM Reasoning ---");
+                    LOG.debug("   🧠 --- LLM Reasoning ---");
                     LOG.debug("     {}", reasoning);
                     executionLog.logReasoning(reasoning);
                 }
@@ -837,7 +839,7 @@ public class AiAgent
 
                 executionLog.logActions(actions);
 
-                LOG.debug("--- 📋 LLM Proposed Actions ---");
+                LOG.debug("   📋 --- LLM Proposed Actions ---");
                 for (int actIdx = 0; actIdx < actions.size(); actIdx++)
                 {
                     LOG.debug("     {}. {}", actIdx + 1, actions.get(actIdx));

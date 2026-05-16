@@ -152,6 +152,7 @@ public class AiBrowser implements AutoCloseable {
             agent.setSutContext(resolveTestDataToPrompt(Neodymium.getData().asString("context")));
         }
 
+
         agent.execute(naturalLanguageInstructions);
     }
 
@@ -181,6 +182,7 @@ public class AiBrowser implements AutoCloseable {
         if (Neodymium.getData().exists("context")) {
             agent.setSutContext(resolveTestDataToPrompt(Neodymium.getData().asString("context")));
         }
+
 
         Throwable testError = null;
 
