@@ -33,6 +33,7 @@ public class YamlFileReader {
             Object before = null;
             Object after = null;
             Object context = null;
+            Object hints = null;
 
             // Scenario 1: The root is a map (complex structure, e.g., AI integration with
             // 'prompt' and 'data')
@@ -53,6 +54,9 @@ public class YamlFileReader {
                 }
                 if (rootMap.containsKey("after")) {
                     after = rootMap.get("after");
+                }
+                if (rootMap.containsKey("hints")) {
+                    hints = rootMap.get("hints");
                 }
 
                 if (rootMap.containsKey("data") && rootMap.get("data") instanceof List) {
@@ -122,6 +126,16 @@ public class YamlFileReader {
                                 newDataSet.put("context", GSON.toJson(context));
                             } else {
                                 newDataSet.put("context", String.valueOf(context));
+                            }
+                        }
+
+                        if (hints != null && hints instanceof Map) {
+                            Map<?, ?> hintsMap = (Map<?, ?>) hints;
+                            for (Map.Entry<?, ?> hintEntry : hintsMap.entrySet()) {
+                                String hintKey = String.valueOf(hintEntry.getKey());
+                                if (!newDataSet.containsKey(hintKey)) {
+                                    newDataSet.put(hintKey, String.valueOf(hintEntry.getValue()));
+                                }
                             }
                         }
 
