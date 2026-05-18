@@ -627,8 +627,7 @@ public class AiAgent
                 }
                 else
                 {
-                    final boolean isValidation = isValidationInstruction(instruction);
-                    pageAnalyzer.getPageContext(isValidation);
+                    pageAnalyzer.getPageContext(true);
 
                     executionLog.logInfo("Replaying actions from playbook.");
                     actions.addAll(step.getActions());
@@ -723,8 +722,7 @@ public class AiAgent
             try
             {
                 // 1. Capture page state
-                final boolean isValidation = isValidationInstruction(instruction);
-                final String domContext = pageAnalyzer.getPageContext(isValidation);
+                final String domContext = pageAnalyzer.getPageContext(true);
                 final String screenshot = requiresScreenshot
                         ? pageAnalyzer.captureScreenshot("Step: " + instruction)
                         : null;
@@ -939,13 +937,6 @@ public class AiAgent
         }
     }
 
-    private boolean isValidationInstruction(final String instruction)
-    {
-        final String pattern = Neodymium.configuration().getProperty(
-                "neodymium.ai.agent.pattern.validation",
-                "(?i)^(?:verify|check|validate|ensure|assert|prüfe|verifiziere|überprüfe|bestätige|checke)\\b.*");
-        return Pattern.compile(pattern).matcher(instruction.strip()).find();
-    }
 
     /**
      * Exception thrown when the AI agent cannot complete an instruction.
