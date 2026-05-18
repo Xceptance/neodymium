@@ -715,10 +715,11 @@ public class AiAgent
         // Always start LEAN — no keyword detection, no trigger words.
         // The LLM tells us when it needs more by failing or returning ESCALATE.
         // Exception: if this step was previously healed at a higher level, start there.
-        ContextLevel contextLevel = playbookStep.getHealedContextLevel() != null
-                ? playbookStep.getHealedContextLevel()
-                : ContextLevel.LEAN;
-
+        ContextLevel contextLevel = playbookStep.getHealedContextLevel();
+        if (contextLevel == null)
+        {
+            contextLevel = instruction.toLowerCase().contains("(hint:") ? ContextLevel.HINT : ContextLevel.LEAN;
+        }
         while (true)
         {
             final String attemptLabel = lastWasNoActions ? "Retry (No Actions) " + noActionsCount

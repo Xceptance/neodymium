@@ -425,6 +425,14 @@ public final class AiAgentPrompts
     {
         return switch (level)
         {
+            case HINT -> """
+
+                ## Context Level: HINT
+                You are receiving MINIMAL context (no DOM elements). This is because the user provided an explicit inline locator hint (e.g., "(hint: #myId)") in the instruction.
+
+                CRITICAL: Use the provided hint to generate the requested action JSON immediately. Do not attempt to verify the element's existence in the DOM (since no DOM is provided). If you cannot fulfill the instruction based on the hint alone, respond with:
+                {"success": false, "status": "ESCALATE", "reasoning": "I need the actual DOM to determine the action", "actions": []}
+                """;
             case LEAN -> """
 
                 ## Context Level: LEAN

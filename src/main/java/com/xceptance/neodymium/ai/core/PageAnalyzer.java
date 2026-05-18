@@ -332,25 +332,27 @@ public class PageAnalyzer
                 delete elObj.domElement;
             }
 
-            sections.push({heading: '=== Interactive Elements ===', elements: interactiveElements});
-
-            // Page structure
-            sections.push({heading: '\\n=== Page Structure ===', elements:
-                captureElements('h1', 'heading')
-                .concat(captureElements('h2', 'heading'))
-                .concat(captureElements('h3', 'heading'))
-                .concat(captureElements('h4', 'heading'))
-                .concat(captureElements('h5', 'heading'))
-            });
-
             if (level >= 1) {
+                sections.push({heading: '=== Interactive Elements ===', elements: interactiveElements});
+
+                // Page structure
+                sections.push({heading: '\\n=== Page Structure ===', elements:
+                    captureElements('h1', 'heading')
+                    .concat(captureElements('h2', 'heading'))
+                    .concat(captureElements('h3', 'heading'))
+                    .concat(captureElements('h4', 'heading'))
+                    .concat(captureElements('h5', 'heading'))
+                });
+            }
+
+            if (level >= 2) {
                 sections.push({heading: '\\n=== Text Content (Validation Mode) ===', elements:
                     captureElements('p, span, li, td, div', 'text')
                     .filter(function(e) { return e.text.length > 0; })
                 });
             }
 
-            return {sections: sections, forms: captureForms()};
+            return {sections: sections, forms: level >= 1 ? captureForms() : []};
         })(arguments[0]);
         """;
 

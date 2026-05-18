@@ -39,6 +39,12 @@ import org.junit.jupiter.api.Test;
 class ContextLevelTest
 {
     @Test
+    void escalate_fromHint_returnsLean()
+    {
+        assertEquals(ContextLevel.LEAN, ContextLevel.HINT.escalate());
+    }
+
+    @Test
     void escalate_fromLean_returnsStandard()
     {
         assertEquals(ContextLevel.STANDARD, ContextLevel.LEAN.escalate());
@@ -59,6 +65,7 @@ class ContextLevelTest
     @Test
     void includesScreenshot_onlyVisual()
     {
+        assertFalse(ContextLevel.HINT.includesScreenshot());
         assertFalse(ContextLevel.LEAN.includesScreenshot());
         assertFalse(ContextLevel.STANDARD.includesScreenshot());
         assertTrue(ContextLevel.VISUAL.includesScreenshot());
@@ -67,6 +74,7 @@ class ContextLevelTest
     @Test
     void includesTextContent_standardAndVisual()
     {
+        assertFalse(ContextLevel.HINT.includesTextContent());
         assertFalse(ContextLevel.LEAN.includesTextContent());
         assertTrue(ContextLevel.STANDARD.includesTextContent());
         assertTrue(ContextLevel.VISUAL.includesTextContent());
@@ -75,8 +83,11 @@ class ContextLevelTest
     @Test
     void escalationChain_coversAllLevels()
     {
-        // Verify the full escalation chain: LEAN -> STANDARD -> VISUAL -> null
-        ContextLevel current = ContextLevel.LEAN;
+        // Verify the full escalation chain: HINT -> LEAN -> STANDARD -> VISUAL -> null
+        ContextLevel current = ContextLevel.HINT;
+        assertEquals(ContextLevel.HINT, current);
+
+        current = current.escalate();
         assertEquals(ContextLevel.LEAN, current);
 
         current = current.escalate();

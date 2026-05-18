@@ -37,6 +37,11 @@ package com.xceptance.neodymium.ai.core;
 public enum ContextLevel
 {
     /**
+     * Minimal context with ZERO DOM elements. Used when an explicit inline (hint: #id) is provided.
+     */
+    HINT,
+
+    /**
      * Interactive elements only: links, buttons, inputs, selects, textareas,
      * clickable div/span, headings (h1-h5), and forms.
      * No text content blocks. No screenshot.
@@ -77,6 +82,7 @@ public enum ContextLevel
     {
         return switch (this)
         {
+            case HINT -> LEAN;
             case LEAN -> STANDARD;
             case STANDARD -> VISUAL;
             case VISUAL -> null;

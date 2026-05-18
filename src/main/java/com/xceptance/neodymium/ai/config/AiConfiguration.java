@@ -59,7 +59,7 @@ public interface AiConfiguration extends Mutable
     public int agentMaxRetries();
 
     @Key("neodymium.ai.agent.screenshotBeforeAction")
-    @DefaultValue("true")
+    @DefaultValue("false")
     public boolean agentScreenshotBeforeAction();
 
     @Key("neodymium.ai.report.attachTokenUsage")
