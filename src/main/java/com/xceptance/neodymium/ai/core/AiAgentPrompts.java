@@ -388,11 +388,84 @@ public final class AiAgentPrompts
 
     /**
      * Retrieves the base system prompt with all plugins dynamically injected.
+     * Uses {@link ContextLevel#STANDARD} for backward compatibility.
      *
      * @return the fully prepared system prompt
      */
     public static String getSystemPrompt()
     {
-        return injectPluginMetadata(SYSTEM_PROMPT);
+        return getSystemPrompt(ContextLevel.STANDARD);
+    }
+
+    /**
+     * Retrieves the system prompt tailored to the given context level.
+     * Injects plugin metadata and appends context-level-specific instructions
+     * that tell the LLM what data it is receiving and when to request escalation.
+     *
+     * @param level the current context level
+     * @return the fully prepared system prompt with context-level guidance
+     */
+    public static String getSystemPrompt(final ContextLevel level)
+    {
+        final String base = injectPluginMetadata(SYSTEM_PROMPT);
+        final String contextGuidance = getContextLevelGuidance(level);
+        return base + "\n" + contextGuidance;
+    }
+
+    /**
+     * Returns context-level-specific instructions to append to the system prompt.
+     * These instructions make the LLM a conscious participant in the escalation
+     * protocol by telling it exactly what data it is receiving and when to
+     * respond with {@code "status": "ESCALATE"} instead of guessing.
+     *
+     * @param level the current context level
+     * @return the context guidance text to append
+     */
+    private static String getContextLevelGuidance(final ContextLevel level)
+    {
+        return switch (level)
+        {
+            case LEAN -> """
+
+                ## Context Level: LEAN
+                You are receiving a LEAN context that only includes interactive elements \
+                (buttons, links, inputs, selects, textareas), clickable elements, and headings. \
+                Text content like paragraphs, spans, table cells, and list items is NOT included.
+
+                CRITICAL: If you cannot find the requested element, or if you need text content \
+                to disambiguate between multiple similar elements (e.g. multiple 'View Details' links), \
+                or if the instruction requires reading text that is not shown, you MUST respond with:
+                {"success": false, "status": "ESCALATE", "reasoning": "explain what additional data you need", "actions": []}
+
+                Do NOT guess. Do NOT pick an arbitrary element when multiple matches exist. \
+                Request escalation instead.
+                """;
+
+            case STANDARD -> """
+
+                ## Context Level: STANDARD
+                You are receiving a STANDARD context that includes all interactive elements \
+                AND all visible text content (paragraphs, spans, list items, table cells, divs).
+
+                If you still cannot find the target element or fulfill the instruction, \
+                you may respond with:
+                {"success": false, "status": "ESCALATE", "reasoning": "explain what you need", "actions": []}
+                to request visual context (a screenshot will be provided on the next attempt).
+
+                Do NOT guess if you are uncertain about which element to target.
+                """;
+
+            case VISUAL -> """
+
+                ## Context Level: VISUAL
+                You are receiving the STANDARD text context PLUS a screenshot of the current page. \
+                Use the screenshot to visually identify the target element, then map it to the \
+                closest element in the text context using its `data-neo-ref` identifier.
+
+                This is the maximum available context. If you cannot fulfill the instruction, \
+                respond with {"success": false, "error": "explain what failed", "actions": []}. \
+                Do not request escalation — there is no higher level.
+                """;
+        };
     }
 }

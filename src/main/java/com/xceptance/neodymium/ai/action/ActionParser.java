@@ -206,6 +206,31 @@ public class ActionParser {
     }
 
     /**
+     * Checks whether the LLM explicitly requested more context data by
+     * returning a {@code "status": "ESCALATE"} field. This signals that
+     * the provided context level is insufficient to fulfill the instruction
+     * and the framework should escalate to a richer context level before
+     * retrying.
+     *
+     * @param llmResponse raw response from the LLM
+     * @return {@code true} if the LLM requested context escalation
+     */
+    public boolean isEscalateRequested(final String llmResponse)
+    {
+        try
+        {
+            final String json = extractJson(llmResponse);
+            final JsonObject root = GSON.fromJson(json, JsonObject.class);
+            return root.has("status")
+                    && "ESCALATE".equalsIgnoreCase(root.get("status").getAsString());
+        }
+        catch (final Exception e)
+        {
+            return false;
+        }
+    }
+
+    /**
      * Extracts JSON from a response that might be wrapped in
      * markdown code fences (```json...```).
      */

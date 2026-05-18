@@ -30,6 +30,7 @@ import java.util.List;
 
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
+import com.xceptance.neodymium.ai.core.ContextLevel;
 
 public class PlaybookStep {
 
@@ -38,6 +39,13 @@ public class PlaybookStep {
     private List<Action> actions;
 
     private transient String lastFailure;
+
+    /**
+     * The context level that was needed when this step was last healed.
+     * {@code null} if never healed. Used to skip predictable escalation
+     * failures on subsequent healing attempts.
+     */
+    private transient ContextLevel healedContextLevel;
 
     public PlaybookStep() {
         this.actions = new ArrayList<Action>();
@@ -90,6 +98,29 @@ public class PlaybookStep {
     public String getLastFailure()
     {
         return lastFailure;
+    }
+
+    /**
+     * Returns the context level that was needed when this step was last
+     * successfully healed, or {@code null} if this step was never healed.
+     *
+     * @return the healed context level, or {@code null}
+     */
+    public ContextLevel getHealedContextLevel()
+    {
+        return healedContextLevel;
+    }
+
+    /**
+     * Records the context level that was needed for healing. This allows
+     * subsequent healing attempts to start at this level instead of
+     * {@link ContextLevel#LEAN}, avoiding a predictable wasted call.
+     *
+     * @param level the context level that succeeded during healing
+     */
+    public void setHealedContextLevel(final ContextLevel level)
+    {
+        this.healedContextLevel = level;
     }
 
     @Override
