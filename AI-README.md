@@ -93,6 +93,27 @@ public class MyDataDrivenAiTest {
 
 ---
 
+## 📥 Native State Capture (Variables)
+
+Neodymium AI supports dynamic runtime variable extraction using the `STORE` action. This allows you to capture text from the application during a test and reuse it in subsequent steps—perfect for verifying totals, tracking generated order IDs, or validating dynamic workflows.
+
+**Example Playbook:**
+```yaml
+prompt: |
+  Capture the line item price shown in the line item row. Save it as variable 'unitPrice'.
+  Capture the subtotal amount. Save it as variable 'subtotal'.
+  Verify that 'subtotal' is greater than 'unitPrice'.
+```
+
+### How It Works
+1. **Extraction**: When the LLM encounters a command like `Capture`, `Store`, or `Record`, it automatically receives the full text-context of the page. It locates the target element and extracts its inner text natively.
+2. **Storage**: The string value is saved into the execution context for the duration of the current test run.
+3. **Interpolation**: You can seamlessly reuse stored variables in later steps using the `${variableName}` syntax or by referring to them by name. The `ActionExecutor` automatically resolves these placeholders in real-time before executing the action.
+
+> **Note:** Variables extracted during runtime using the `STORE` action are scoped to the current test execution. If a runtime variable shares the same name as a static variable injected via `TestData` or `@DataFolder`, the runtime variable takes precedence.
+
+---
+
 ## 🔀 Advanced Conditional Logic (AST Branching)
 
 Neodymium AI natively understands conditional logic without requiring rigid syntax or keywords. You can use natural language to express `If... then... else` logic directly in your test instructions.
