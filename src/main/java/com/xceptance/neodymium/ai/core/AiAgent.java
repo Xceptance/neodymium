@@ -396,7 +396,25 @@ public class AiAgent
                 final PlaybookStep step = playbook.getCurrentStep();
                 step.setFailure(e);
 
-                errorCount++;
+                // Escalate Context Level
+                ContextLevel currentLevel = step.getHealedContextLevel();
+                if (currentLevel == null)
+                {
+                    currentLevel = instruction.toLowerCase().contains("(hint:") ? ContextLevel.HINT : ContextLevel.LEAN;
+                }
+                final ContextLevel escalated = currentLevel.escalate();
+                if (escalated != null)
+                {
+                    step.setHealedContextLevel(escalated);
+                    LOG.info("    📈 Escalating context from {} to {} after execution error: {}", currentLevel, escalated, e.getMessage());
+                    executionLog.logInfo("Context escalation: " + currentLevel + " → " + escalated + " (error: " + e.getMessage() + ")");
+                    // Do not increment error count when escalating
+                }
+                else
+                {
+                    errorCount++;
+                }
+
                 LOG.warn("    ⚠️ Actions failed: {} (Attempt {}/{})", e.getMessage(), errorCount, maxRetries + 1);
                 executionLog.logWarning("Action failed: " + e + ". Retrying...");
 
