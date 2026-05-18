@@ -146,6 +146,21 @@ Because the LLM pre-compiles this logic during the initial generation phase, the
 
 ---
 
+## 📈 Escalating Context (Token Optimization)
+
+Neodymium AI uses a multi-tier **Escalating Context** strategy to minimize LLM token costs while maximizing reliability. Instead of blindly sending massive HTML dumps to the LLM, the framework progressively reveals more data only when necessary.
+
+There are four context levels:
+1. **`HINT` (Zero DOM)**: Triggered automatically if your instruction contains `(hint: ...)`. No DOM is sent. The LLM simply translates the hint into the correct JSON action.
+2. **`LEAN` (Interactive Only)**: The default starting level. Sends only interactive elements (buttons, links, inputs) and headings. Text paragraphs are excluded. Covers ~80% of typical actions.
+3. **`STANDARD` (Full Text)**: Sends interactive elements plus all visible text content. Required for assertions or disambiguating similar elements (e.g. 5 identical "View Details" links).
+4. **`VISUAL` (Screenshot)**: Sends the `STANDARD` DOM alongside a Base64-encoded screenshot of the page. Used as a last resort for complex SVG, canvas, or shadow-DOM interactions.
+
+**How Escalation Works:**
+The LLM is a conscious participant in this loop. If it receives a `LEAN` context but cannot figure out what to do, it explicitly returns `{"status": "ESCALATE"}` instead of guessing. The framework catches this, widens the context to `STANDARD`, and tries again without consuming a retry budget. This ensures you only pay for the tokens you actually need!
+
+---
+
 ## 💡 Advanced: Intent-Based Prompt Generation
 
 Neodymium AI includes an experimental `AiPromptGenerator`. Instead of writing the step-by-step natural language yourself, you provide an end-goal (an "intent"), and the AI will explore the application to figure out how to achieve it, generating a reusable playbook in the process.
@@ -169,9 +184,11 @@ public void generateCheckoutFlow() {
 
 ---
 
-## 🎯 Locator Hints
+## 🎯 Locator Hints & Zero-DOM Execution
 
 Sometimes you may want to explicitly guide the AI on which element to interact with, bypassing its own DOM analysis to speed up execution or resolve ambiguity. You can do this using **Inline Hints**.
+
+When you provide a hint directly within the instruction using the `(hint: ...)` syntax, Neodymium AI enters **Zero-DOM Execution mode (`ContextLevel.HINT`)**. The LLM is asked to translate your instruction into JSON using *only* the hint you provided. ZERO DOM elements are extracted or sent to the LLM. This makes hint-based steps unbelievably fast and costs practically zero input tokens!
 
 ### Inline Hints
 You can provide a hint directly within the instruction using the `(hint: ...)` syntax.
@@ -201,11 +218,11 @@ data:
 
 **How it works:**
 1. The framework resolves `${loginButton}` using the `hints` map, generating the final instruction: `Click the login button (hint: .nav-login-btn).`
-2. The AI reads the natural language instruction.
-3. It detects the inline hint `(hint: .nav-login-btn)` and will *prioritize* using that exact provided locator for its first interaction attempt.
-4. **Fallback:** If the provided hint is broken or stale (e.g., the element doesn't exist or is not interactable), the AI will recognize the error and automatically fall back to its own standard DOM analysis to find the correct element during the retry loop.
+2. The AI detects the inline hint `(hint: .nav-login-btn)` and starts execution at `ContextLevel.HINT` (Zero DOM elements sent to the LLM).
+3. The LLM translates the instruction into JSON for practically 0 tokens.
+4. **Fallback / Self-Healing:** If the provided hint is broken or stale (e.g., the element doesn't exist on the live page), Selenium throws an exception. The AI catches this error, **escalates the context to `LEAN`**, grabs the actual live DOM, and uses it to automatically self-heal and find the *new* correct selector!
 
-This "Zero-Code" approach allows you to inject deterministic element targeting while retaining the self-healing benefits of the AI agent, all while preserving strict token efficiency by only sending the locators you explicitly need for that step!
+This "Zero-Code" approach allows you to inject deterministic element targeting while retaining the self-healing benefits of the AI agent, all while preserving strict token efficiency by sending absolutely no DOM data unless the hint fails.
 
 ---
 
