@@ -844,8 +844,8 @@ public class AiAgent
 
                 executionLog.logResponse(llmResponse);
                 
-                LOG.debug("   📝 --- Raw LLM Response ---");
-                LOG.debug("\n{}", llmResponse);
+                LOG.trace("   📄 --- Raw LLM Response ---");
+                LOG.trace("\n{}", llmResponse);
 
                 // Log reasoning
                 final String reasoning = actionParser.getReasoning(llmResponse);
