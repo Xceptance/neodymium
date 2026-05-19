@@ -42,6 +42,7 @@ import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.output.TokenUsage;
 
@@ -116,6 +117,7 @@ public class LlmClient {
                 .modelName(modelName)
                 .temperature(temperature)
                 .maxOutputTokens(4096)
+                .responseFormat(ResponseFormat.JSON)
                 .timeout(Duration.ofSeconds(config.geminiTimeoutSeconds()))
                 .build();
         return model;
