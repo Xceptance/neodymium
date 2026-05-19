@@ -33,6 +33,7 @@ import java.util.Map.Entry;
 
 import com.xceptance.neodymium.ai.action.ActionRegistry;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 
 /**
@@ -148,7 +149,7 @@ public final class AiAgentPrompts
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
-            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+            sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
         
         String knownBindingsBlock = "";
@@ -190,7 +191,7 @@ public final class AiAgentPrompts
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
-            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+            sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
         
         String knownBindingsBlock = "";
@@ -257,6 +258,7 @@ public final class AiAgentPrompts
 
     /**
      * Builds the user prompt with the instruction and DOM context.
+     * No step history is included (used for first-attempt happy path).
      *
      * @param instruction the task instruction
      * @param sutContext  application specific instructions
@@ -265,19 +267,38 @@ public final class AiAgentPrompts
      */
     public static String buildUserPrompt(final String instruction, final String sutContext, final String domContext)
     {
+        return buildUserPrompt(instruction, sutContext, domContext, "");
+    }
+
+    /**
+     * Builds the user prompt with the instruction, DOM context, and optional step history.
+     * Step history provides the LLM with context about previously completed steps,
+     * which is useful during context escalation to help disambiguate elements.
+     *
+     * @param instruction  the task instruction
+     * @param sutContext   application specific instructions
+     * @param domContext   current DOM representation
+     * @param historyBlock pre-formatted step history block, or empty string if none
+     * @return the formatted user prompt
+     */
+    public static String buildUserPrompt(final String instruction, final String sutContext, final String domContext,
+        final String historyBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
-            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+            sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
         return USER_PROMPT_TEMPLATE
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext);
     }
 
     /**
      * Builds a retry prompt with error context.
+     * No step history is included.
      *
      * @param instruction the task instruction
      * @param sutContext  application specific instructions
@@ -288,20 +309,39 @@ public final class AiAgentPrompts
     public static String buildRetryPrompt(final String instruction, final String sutContext, final String domContext,
         final String error)
     {
+        return buildRetryPrompt(instruction, sutContext, domContext, error, "");
+    }
+
+    /**
+     * Builds a retry prompt with error context and optional step history.
+     * Step history helps the LLM reason about expected page state when recovering from errors.
+     *
+     * @param instruction  the task instruction
+     * @param sutContext   application specific instructions
+     * @param domContext   current DOM representation
+     * @param error        the error that caused the previous failure
+     * @param historyBlock pre-formatted step history block, or empty string if none
+     * @return the formatted retry prompt
+     */
+    public static String buildRetryPrompt(final String instruction, final String sutContext, final String domContext,
+        final String error, final String historyBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
-            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+            sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
         return RETRY_PROMPT_TEMPLATE
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext)
             .replace("{error}", error);
     }
 
     /**
      * Builds a retry prompt for when no actions were returned.
+     * No step history is included.
      *
      * @param instruction the task instruction
      * @param sutContext  application specific instructions
@@ -310,15 +350,86 @@ public final class AiAgentPrompts
      */
     public static String buildNoActionsRetryPrompt(final String instruction, final String sutContext, final String domContext)
     {
+        return buildNoActionsRetryPrompt(instruction, sutContext, domContext, "");
+    }
+
+    /**
+     * Builds a retry prompt for when no actions were returned, with optional step history.
+     * Step history helps the LLM understand the broader test flow context when it
+     * failed to produce actions on a previous attempt.
+     *
+     * @param instruction  the task instruction
+     * @param sutContext   application specific instructions
+     * @param domContext   current DOM representation
+     * @param historyBlock pre-formatted step history block, or empty string if none
+     * @return the formatted prompt
+     */
+    public static String buildNoActionsRetryPrompt(final String instruction, final String sutContext,
+        final String domContext, final String historyBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
-            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+            sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
         return NO_ACTIONS_RETRY_PROMPT_TEMPLATE
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext);
+    }
+
+    /**
+     * Builds a compact step history block from completed playbook steps.
+     * Returns a formatted markdown section listing all steps that have been
+     * successfully executed before the current one, giving the LLM context
+     * about the test flow leading to this point.
+     * <p>
+     * Only includes steps with a non-null, non-blank {@code promptLine}.
+     * Returns an empty string if no completed steps exist, ensuring the
+     * {@code {historyBlock}} placeholder is cleanly removed from the template.
+     *
+     * @param playbook the current playbook (may be {@code null})
+     * @return the formatted history block, or empty string if no history
+     */
+    public static String buildStepHistory(final Playbook playbook)
+    {
+        if (playbook == null)
+        {
+            return "";
+        }
+
+        final int cursor = playbook.getCursor();
+        final List<PlaybookStep> steps = playbook.getSteps();
+
+        if (cursor <= 0 || steps == null || steps.isEmpty())
+        {
+            return "";
+        }
+
+        final int limit = Math.min(cursor, steps.size());
+        final StringBuilder sb = new StringBuilder();
+        sb.append("\n### Completed Steps (for context)\n");
+
+        int lineNum = 1;
+        for (int i = 0; i < limit; i++)
+        {
+            final PlaybookStep step = steps.get(i);
+            final String promptLine = step.getPromptLine();
+            if (promptLine != null && !promptLine.isBlank())
+            {
+                sb.append(lineNum++).append(". ").append(promptLine).append("\n");
+            }
+        }
+
+        // If all steps had null/blank promptLines, return empty
+        if (lineNum == 1)
+        {
+            return "";
+        }
+
+        sb.append("[CURRENT] → see Instruction above\n");
+        return sb.toString();
     }
 
     /**

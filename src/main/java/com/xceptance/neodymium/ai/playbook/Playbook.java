@@ -118,6 +118,17 @@ public class Playbook {
         this.cursor = cursor;
     }
 
+    /**
+     * Returns the current cursor position (zero-based index of the next step to execute).
+     * Steps at indices {@code 0} to {@code getCursor() - 1} have already been completed.
+     *
+     * @return the current cursor position
+     */
+    public int getCursor()
+    {
+        return cursor;
+    }
+
     public PlaybookStep getCurrentStep()
     {
         PlaybookStep step;

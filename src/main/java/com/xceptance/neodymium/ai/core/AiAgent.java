@@ -229,7 +229,7 @@ public class AiAgent
                     final PlaybookStep stepObj = playbookForCheck.getCurrentStep();
                     // Mark as replay only if the previous run didn't fail and prompts match exactly
                     if (!stepObj.failed() && stepObj.getPromptLine() != null
-                            && stepObj.getPromptLine().equals(stepUnresolved))
+                            && stepObj.getPromptLine().equals(step))
                     {
                         isReplay = true;
                     }
@@ -238,11 +238,11 @@ public class AiAgent
                 LOG.debug("───────────────────────────────────────────────────────────");
                 if (isReplay)
                 {
-                    LOG.debug(" 👣 Step [{}/{}]: {} (REPLAY)", i + 1, stepsList.size(), step);
+                    LOG.debug("👣 Step 🔄 [{}/{}]: {}", i + 1, stepsList.size(), step);
                 }
                 else
                 {
-                    LOG.debug(" 👣 Step [{}/{}]: {}", i + 1, stepsList.size(), step);
+                    LOG.debug("👣 Step 🧠 [{}/{}]: {}", i + 1, stepsList.size(), step);
                 }
                 LOG.debug("───────────────────────────────────────────────────────────");
 
@@ -269,7 +269,9 @@ public class AiAgent
                 }
             }
 
-            LOG.debug("======== 🎉 AI Agent: All steps completed successfully ========");
+            LOG.debug("───────────────────────────────────────────────────────────");
+            LOG.debug("🏆 All steps completed successfully!");
+            LOG.debug("───────────────────────────────────────────────────────────");
         }
         finally
         {
@@ -297,11 +299,8 @@ public class AiAgent
             }
             if (config.attachTokenUsageToReport())
             {
-                final TokenStats stats = llmClient.getTokenStats();
-                final String tokenSummary = String.format(
-                        "Token Usage Summary\n\nInput Tokens:  %d\nOutput Tokens: %d\nTotal Tokens:  %d\nTotal Calls:   %d",
-                        stats.getInputTokens(), stats.getOutputTokens(), stats.getTotalTokens(), stats.getCallCount());
-                Allure.addAttachment("Token Usage", "text/plain", tokenSummary, ".txt");
+                final AiStats stats = llmClient.getAiStats();
+                Allure.addAttachment("AI Execution Statistics", "text/plain", stats.toSummaryString(), ".txt");
             }
         }
     }
@@ -408,6 +407,7 @@ public class AiAgent
                     step.setHealedContextLevel(escalated);
                     LOG.info("    📈 Escalating context from {} to {} after execution error: {}", currentLevel, escalated, e.getMessage());
                     executionLog.logInfo("Context escalation: " + currentLevel + " → " + escalated + " (error: " + e.getMessage() + ")");
+                    llmClient.getAiStats().recordEscalation(false);
                     // Do not increment error count when escalating
                 }
                 else
@@ -474,6 +474,38 @@ public class AiAgent
             {
                 final PlaybookStep step = playbook.getCurrentStep();
                 step.setFailure(new ActionExecutionException(e.getMessage(), e));
+
+                // Escalate Context Level before bubbling up
+                ContextLevel currentLevel = step.getHealedContextLevel();
+                if (currentLevel == null)
+                {
+                    currentLevel = instruction.toLowerCase().contains("(hint:") ? ContextLevel.HINT : ContextLevel.LEAN;
+                }
+                final ContextLevel escalated = currentLevel.escalate();
+                if (escalated != null)
+                {
+                    step.setHealedContextLevel(escalated);
+                    LOG.info("    📈 Escalating context from {} to {} after assertion failure: {}", currentLevel, escalated, e.getMessage());
+                    executionLog.logInfo("Context escalation: " + currentLevel + " → " + escalated + " (assertion failed: " + e.getMessage() + ")");
+                    llmClient.getAiStats().recordEscalation(false);
+                    
+                    LOG.warn("    ⚠️ Assertion failed: {}. Retrying with escalated context.", e.getMessage());
+                    
+                    if (isInteractive)
+                    {
+                        final List<String> plannedStrs = new ArrayList<>();
+                        plannedStrs.add("⚠️ " + instruction);
+                        if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
+                        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Assertion Failed: " + e.getMessage(), false);
+                        waitForHudAction(false); // Never auto-skip errors
+                    }
+                    else
+                    {
+                        sleep(1000);
+                    }
+                    continue;
+                }
 
                 LOG.warn("    ⚠️ Assertion failed: {}", e.getMessage());
                 executionLog.logError("Assertion failed: " + e.getMessage());
@@ -648,6 +680,7 @@ public class AiAgent
                     pageAnalyzer.getPageContext(ContextLevel.STANDARD);
 
                     executionLog.logInfo("Replaying actions from playbook.");
+                    llmClient.getAiStats().recordReplay();
                     actions.addAll(step.getActions());
                 }
             }
@@ -729,6 +762,7 @@ public class AiAgent
         int noActionsCount = 0;
         Throwable lastThrowable = null;
         boolean lastWasNoActions = false;
+        boolean isRecoveryAttempt = lastError != null;
 
         // Always start LEAN — no keyword detection, no trigger words.
         // The LLM tells us when it needs more by failing or returning ESCALATE.
@@ -755,25 +789,32 @@ public class AiAgent
                         ? pageAnalyzer.captureScreenshot("Step: " + instruction)
                         : null;
 
-                // 2. Build prompt
+                // 2. Build step history — only during recovery attempts (retry, escalation,
+                //    no-actions-retry) to give the LLM context about the test flow.
+                //    First-attempt happy path gets no history to keep prompts lean.
+                final String historyBlock = isRecoveryAttempt
+                        ? AiAgentPrompts.buildStepHistory(playbook)
+                        : "";
+
+                // 3. Build prompt
                 final String userPrompt;
                 if (lastWasNoActions)
                 {
                     LOG.info("    🔄 Retry attempt (no actions returned) {}/{} for instruction: {}", noActionsCount,
                             NO_ACTIONS_MAX_RETRIES, instruction);
-                    userPrompt = AiAgentPrompts.buildNoActionsRetryPrompt(instruction, sutContext, domContext);
+                    userPrompt = AiAgentPrompts.buildNoActionsRetryPrompt(instruction, sutContext, domContext, historyBlock);
                 }
                 else if (lastError != null)
                 {
                     LOG.info("    🔄 Retry attempt (error) {}/{} — previous error: {}", errorCount, maxRetries, lastError);
-                    userPrompt = AiAgentPrompts.buildRetryPrompt(instruction, sutContext, domContext, lastError);
+                    userPrompt = AiAgentPrompts.buildRetryPrompt(instruction, sutContext, domContext, lastError, historyBlock);
                 }
                 else
                 {
-                    userPrompt = AiAgentPrompts.buildUserPrompt(instruction, sutContext, domContext);
+                    userPrompt = AiAgentPrompts.buildUserPrompt(instruction, sutContext, domContext, historyBlock);
                 }
 
-                // 3. Send to LLM with context-level-aware system prompt
+                // 4. Send to LLM with context-level-aware system prompt
                 LOG.trace("🗣️ --- User Prompt ---");
                 LOG.trace("\n{}", userPrompt);
                 executionLog.logPrompt(userPrompt);
@@ -781,6 +822,7 @@ public class AiAgent
                 final String systemPrompt = AiAgentPrompts.getSystemPrompt(contextLevel);
 
                 LOG.debug("   💬 Sending prompt to LLM... [context: {}]", contextLevel);
+                llmClient.getAiStats().recordContextLevel(contextLevel);
                 final String llmResponse;
                 try
                 {
@@ -822,9 +864,11 @@ public class AiAgent
                         executionLog.logInfo("Context escalation: " + contextLevel + " → " + escalated
                                 + " (LLM requested: " + reasoning + ")");
                         contextLevel = escalated;
+                        llmClient.getAiStats().recordEscalation(true);
                         // Do NOT increment errorCount — escalation is not a retry
                         lastError = null;
                         lastWasNoActions = false;
+                        isRecoveryAttempt = true;
                         continue;
                     }
                     // Already at max level — fall through to normal failure handling
@@ -843,7 +887,7 @@ public class AiAgent
                     throw new ActionExecutionException(message, null);
                 }
 
-                // 4. Parse actions
+                // 5. Parse actions
                 final List<Action> actions;
                 try
                 {
@@ -865,6 +909,7 @@ public class AiAgent
                     else
                     {
                         noActionsCount++;
+                        llmClient.getAiStats().recordRetry(true);
                         if (noActionsCount > NO_ACTIONS_MAX_RETRIES)
                         {
                             executionLog.logError("Max retries for empty response reached.");
@@ -880,6 +925,7 @@ public class AiAgent
                         executionLog.logWarning("No actions returned. Retrying...");
                         lastWasNoActions = true;
                         lastError = null;
+                        isRecoveryAttempt = true;
                         sleep(1000);
                         continue;
                     }
@@ -926,15 +972,19 @@ public class AiAgent
                     contextLevel = escalated;
                     lastError = null;
                     lastWasNoActions = false;
+                    isRecoveryAttempt = true;
+                    llmClient.getAiStats().recordEscalation(false);
                     // Do NOT increment errorCount — escalation is not a retry
                     continue;
                 }
 
                 // Already at max context level — now it's a real retry
                 errorCount++;
+                llmClient.getAiStats().recordRetry(false);
                 lastError = e.getMessage();
                 lastThrowable = e.getCause() != null ? e.getCause() : e;
                 lastWasNoActions = false;
+                isRecoveryAttempt = true;
                 LOG.warn("    ⚠️ Action failed: {} (Attempt {}/{}) [context: {}]",
                         lastError, errorCount, maxRetries + 1, contextLevel);
                 executionLog.logWarning("Action failed: " + lastError + ". Retrying...");
@@ -981,6 +1031,7 @@ public class AiAgent
                 playbookStep.setPromptLine(instruction);
                 playbookStep.setReasoning("directly parsed");
                 playbookStep.setFailure(null);
+                llmClient.getAiStats().recordDirectParse();
                 return actions;
             }
         }
