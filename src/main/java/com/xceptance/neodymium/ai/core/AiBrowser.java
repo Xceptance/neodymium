@@ -60,7 +60,7 @@ public class AiBrowser implements AutoCloseable {
     private final AiAgent agent;
 
     private final AiConfiguration config;
-    private final TokenStats tokenStats;
+    private final AiStats aiStats;
 
     private Object test;
 
@@ -80,7 +80,7 @@ public class AiBrowser implements AutoCloseable {
     public AiBrowser(final AiConfiguration config, Object test) {
         this.test = test;
         this.config = config;
-        this.tokenStats = new TokenStats();
+        this.aiStats = new AiStats();
         this.agent = createAgent(config);
 
         LOG.debug("AiBrowser initialized — model: {}", config.aiModel());
@@ -273,13 +273,13 @@ public class AiBrowser implements AutoCloseable {
     @Override
     public void close() {
         // Log cumulative token usage before shutdown
-        if (tokenStats.getCallCount() > 0) {
-            tokenStats.logSummary();
+        if (aiStats.getCallCount() > 0) {
+            aiStats.logSummary();
         }
     }
 
     private AiAgent createAgent(final AiConfiguration config) {
-        final LlmClient llmClient = new LlmClient(config, tokenStats);
+        final LlmClient llmClient = new LlmClient(config, aiStats);
         final PageAnalyzer pageAnalyzer = new PageAnalyzer();
         final ActionExecutor actionExecutor = new ActionExecutor(test);
         return new AiAgent(llmClient, pageAnalyzer, actionExecutor, config);
@@ -476,7 +476,7 @@ public class AiBrowser implements AutoCloseable {
 
         // 4. Trigger logic utilizing a generator-mode LLM Client
         // (uses neodymium.ai.generate.temperature, not the agent temperature)
-        final LlmClient generatorClient = new LlmClient(config, tokenStats, LlmMode.GENERATOR);
+        final LlmClient generatorClient = new LlmClient(config, aiStats, LlmMode.GENERATOR);
         com.xceptance.neodymium.ai.generator.AiPromptGenerator generator = new com.xceptance.neodymium.ai.generator.AiPromptGenerator();
         generator.generate(generatorClient, url, intent, resolvedSutContext, outputPath);
     }

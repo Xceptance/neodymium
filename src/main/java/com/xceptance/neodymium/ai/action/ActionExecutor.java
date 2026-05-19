@@ -161,7 +161,8 @@ public class ActionExecutor {
     public void executeAll(final List<Action> actions) {
         for (int i = 0; i < actions.size(); i++) {
             final Action action = actions.get(i);
-            LOG.debug("   --------------------------------------------------------");
+                       
+            LOG.debug("-----------------------------------------------------------");
             LOG.debug("▶️ [EXEC] Executing Action [{}/{}]: {}", i + 1, actions.size(), action.getType());
 
             execute(action);

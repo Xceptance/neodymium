@@ -44,7 +44,7 @@ import com.xceptance.neodymium.ai.core.AiAgentPrompts;
 import com.xceptance.neodymium.ai.core.LlmClient;
 import com.xceptance.neodymium.ai.core.LlmMode;
 import com.xceptance.neodymium.ai.core.PageAnalyzer;
-import com.xceptance.neodymium.ai.core.TokenStats;
+import com.xceptance.neodymium.ai.core.AiStats;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.util.Neodymium;
 
@@ -65,8 +65,8 @@ public class AiPromptGenerator {
      * @param outputPath The path to output the generated YAML file.
      */
     public void generate(String url, String intent, String sutContext, String outputPath) {
-        TokenStats tokenStats = new TokenStats();
-        LlmClient llmClient = new LlmClient(Neodymium.aiConfiguration(), tokenStats);
+        AiStats aiStats = new AiStats();
+        LlmClient llmClient = new LlmClient(Neodymium.aiConfiguration(), aiStats);
         generate(llmClient, url, intent, sutContext, outputPath);
     }
 
@@ -355,7 +355,7 @@ public class AiPromptGenerator {
                                 LOG.warn(
                                         "Validation failed. Attempting reactive healing with deterministic Validator Agent...");
                                 ValidationAgent validator = new ValidationAgent(
-                                        new LlmClient(Neodymium.aiConfiguration(), new TokenStats(), LlmMode.AGENT));
+                                        new LlmClient(Neodymium.aiConfiguration(), new AiStats(), LlmMode.AGENT));
                                 String healedDescription = validator.healValidation(nextAction.getDescription(),
                                         e.getMessage(), dom);
                                 if (healedDescription != null) {
@@ -397,7 +397,7 @@ public class AiPromptGenerator {
                             LOG.warn(
                                     "Validation failed. Attempting reactive healing with deterministic Validator Agent...");
                             ValidationAgent validator = new ValidationAgent(
-                                    new LlmClient(Neodymium.aiConfiguration(), new TokenStats(), LlmMode.AGENT));
+                                    new LlmClient(Neodymium.aiConfiguration(), new AiStats(), LlmMode.AGENT));
                             String healedDescription = validator.healValidation(nextAction.getDescription(),
                                     e.getMessage(), dom);
                             if (healedDescription != null) {

@@ -165,7 +165,7 @@ public final class AiAgentPrompts
         
         return EXPLORATION_PROMPT_TEMPLATE
             .replace("{intent}", intent)
-            .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{sutContextBlock}", sutContextBlock == null || sutContextBlock.trim().isEmpty() ? "None" : sutContextBlock)
             .replace("{subgoal}", subgoal != null && !subgoal.isEmpty() ? subgoal : "None (Starting First Phase)")
             .replace("{knownBindingsBlock}", knownBindingsBlock)
             .replace("{history}", history != null && !history.trim().isEmpty() ? history : "None (Initial Step)")

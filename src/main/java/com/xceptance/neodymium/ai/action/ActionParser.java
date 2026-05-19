@@ -80,7 +80,7 @@ public class ActionParser {
                 final List<Action> actions = parseInternal(repairedJson);
                 LOG.debug("JSON successfully repaired and parsed");
                 return actions;
-            } catch (final JsonSyntaxException e2) {
+            } catch (final Exception e2) {
                 // 3. Both failed — report error back to AI
                 final String errorMessage = "Failed to parse AI response as JSON. Error: " + e2.getMessage()
                         + (repairedJson.equals(rawJson) ? "" : "\nRepaired version also failed.");
@@ -101,9 +101,17 @@ public class ActionParser {
         }
 
         final List<Action> actions = new ArrayList<>();
-        for (final JsonElement element : actionsArray) {
+        for (int i = 0; i < actionsArray.size(); i++)
+        {
+            final JsonElement element = actionsArray.get(i);
+            if (element == null || element.isJsonNull())
+            {
+                LOG.warn("Skipping null action element at index {}", i);
+                continue;
+            }
             final Action action = parseAction(element.getAsJsonObject());
-            if (action != null) {
+            if (action != null)
+            {
                 actions.add(action);
             }
         }

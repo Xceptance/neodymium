@@ -411,11 +411,16 @@ public class PageAnalyzer
     @SuppressWarnings("unchecked")
     public String captureSimplifiedDom(final ContextLevel level)
     {
-        LOG.debug("   📄 Capturing simplified DOM for: {} (level: {})", com.codeborne.selenide.WebDriverRunner.url(),
-                  level);
+        final String url = com.codeborne.selenide.WebDriverRunner.url();
+        final boolean isEmptyPage = "data:,".equals(url) || "about:blank".equals(url);
+
+        if (!isEmptyPage)
+        {
+            LOG.debug("🔴 Capturing simplified DOM for: {} (level: {})", url, level);
+        }
 
         final StringBuilder dom = new StringBuilder();
-        dom.append("Page URL: ").append(com.codeborne.selenide.WebDriverRunner.url()).append("\n");
+        dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
         dom.append("Page Title: ").append(com.codeborne.selenide.Selenide.title()).append("\n\n");
 
         try
@@ -481,7 +486,10 @@ public class PageAnalyzer
         }
 
         final String result = dom.toString();
-        LOG.debug("   📄 Simplified DOM size: {} chars", result.length());
+        if (!isEmptyPage)
+        {
+            LOG.debug("   📄 Simplified DOM size: {} chars", result.length());
+        }
         return result;
     }
 

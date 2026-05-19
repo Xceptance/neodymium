@@ -99,7 +99,7 @@ public class AiPromptGeneratorTest
             }
 
             TestableGenerator generator = new TestableGenerator();
-            List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.TokenStats()), "https://example.com", "intent", null, "output.yml");
+            List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.AiStats()), "https://example.com", "intent", null, "output.yml");
 
             // We expect the path to contain ONLY the NAVIGATE action because the CLICK action was marked as failed
             Assertions.assertEquals(1, path.size());
@@ -152,7 +152,7 @@ public class AiPromptGeneratorTest
             }
 
             TestableGenerator generator = new TestableGenerator();
-            List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.TokenStats()), "https://example.com", "intent", null, "output.yml");
+            List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.AiStats()), "https://example.com", "intent", null, "output.yml");
 
             Assertions.assertEquals(3, path.size());
             Assertions.assertEquals(com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME, path.get(0).getType());
@@ -215,7 +215,7 @@ public class AiPromptGeneratorTest
             }
 
             TestableGenerator generator = new TestableGenerator();
-            List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.TokenStats()), "https://example.com", "intent", null, "output.yml");
+            List<Action> path = generator.explore(new com.xceptance.neodymium.ai.core.LlmClient(com.xceptance.neodymium.util.Neodymium.aiConfiguration(), new com.xceptance.neodymium.ai.core.AiStats()), "https://example.com", "intent", null, "output.yml");
 
             // We expect the path to contain ONLY the first ASSERT and the CLICK action because the duplicate ASSERT was skipped
             Assertions.assertEquals(2, path.size());
