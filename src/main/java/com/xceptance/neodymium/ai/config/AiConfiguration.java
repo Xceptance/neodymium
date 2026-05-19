@@ -59,7 +59,7 @@ public interface AiConfiguration extends Mutable
     public int agentMaxRetries();
 
     @Key("neodymium.ai.agent.screenshotBeforeAction")
-    @DefaultValue("true")
+    @DefaultValue("false")
     public boolean agentScreenshotBeforeAction();
 
     @Key("neodymium.ai.report.attachTokenUsage")
@@ -122,4 +122,18 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.plugins")
     @DefaultValue("")
     public java.util.List<String> aiPlugins();
+
+    /**
+     * Comma-separated list of fully qualified class names that the {@code JAVA_METHOD} action
+     * plugin should scan for static utility methods when a method is not found on the test
+     * instance itself. The built-in {@code AiAssertions} class is included by default.
+     * <p>
+     * To add project-specific utility classes, append them to this property:
+     * <pre>
+     * neodymium.ai.agent.javaMethod.utilityClasses=com.xceptance.neodymium.ai.util.AiAssertions,com.myproject.MyAssertions
+     * </pre>
+     */
+    @Key("neodymium.ai.agent.javaMethod.utilityClasses")
+    @DefaultValue("com.xceptance.neodymium.ai.util.AiAssertions")
+    public java.util.List<String> aiJavaMethodUtilityClasses();
 }

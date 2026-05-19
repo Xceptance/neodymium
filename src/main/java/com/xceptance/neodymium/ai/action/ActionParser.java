@@ -80,7 +80,7 @@ public class ActionParser {
                 final List<Action> actions = parseInternal(repairedJson);
                 LOG.debug("JSON successfully repaired and parsed");
                 return actions;
-            } catch (final JsonSyntaxException e2) {
+            } catch (final Exception e2) {
                 // 3. Both failed — report error back to AI
                 final String errorMessage = "Failed to parse AI response as JSON. Error: " + e2.getMessage()
                         + (repairedJson.equals(rawJson) ? "" : "\nRepaired version also failed.");
@@ -101,9 +101,17 @@ public class ActionParser {
         }
 
         final List<Action> actions = new ArrayList<>();
-        for (final JsonElement element : actionsArray) {
+        for (int i = 0; i < actionsArray.size(); i++)
+        {
+            final JsonElement element = actionsArray.get(i);
+            if (element == null || element.isJsonNull())
+            {
+                LOG.warn("Skipping null action element at index {}", i);
+                continue;
+            }
             final Action action = parseAction(element.getAsJsonObject());
-            if (action != null) {
+            if (action != null)
+            {
                 actions.add(action);
             }
         }
@@ -202,6 +210,31 @@ public class ActionParser {
         catch (final Exception e)
         {
             return "";
+        }
+    }
+
+    /**
+     * Checks whether the LLM explicitly requested more context data by
+     * returning a {@code "status": "ESCALATE"} field. This signals that
+     * the provided context level is insufficient to fulfill the instruction
+     * and the framework should escalate to a richer context level before
+     * retrying.
+     *
+     * @param llmResponse raw response from the LLM
+     * @return {@code true} if the LLM requested context escalation
+     */
+    public boolean isEscalateRequested(final String llmResponse)
+    {
+        try
+        {
+            final String json = extractJson(llmResponse);
+            final JsonObject root = GSON.fromJson(json, JsonObject.class);
+            return root.has("status")
+                    && "ESCALATE".equalsIgnoreCase(root.get("status").getAsString());
+        }
+        catch (final Exception e)
+        {
+            return false;
         }
     }
 

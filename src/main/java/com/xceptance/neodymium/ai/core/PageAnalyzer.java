@@ -49,7 +49,7 @@ public class PageAnalyzer
      * (null means hidden for non-fixed/non-body elements) and getComputedStyle as fallback.
      */
     private static final String CAPTURE_SCRIPT = """
-        return (function(forValidation) {
+        return (function(level) {
             var MAX_PER_SELECTOR = 150;
             var MAX_TEXT = 200;
             var MAX_HREF = 180;
@@ -332,25 +332,27 @@ public class PageAnalyzer
                 delete elObj.domElement;
             }
 
-            sections.push({heading: '=== Interactive Elements ===', elements: interactiveElements});
+            if (level >= 1) {
+                sections.push({heading: '=== Interactive Elements ===', elements: interactiveElements});
 
-            // Page structure
-            sections.push({heading: '\\n=== Page Structure ===', elements:
-                captureElements('h1', 'heading')
-                .concat(captureElements('h2', 'heading'))
-                .concat(captureElements('h3', 'heading'))
-                .concat(captureElements('h4', 'heading'))
-                .concat(captureElements('h5', 'heading'))
-            });
+                // Page structure
+                sections.push({heading: '\\n=== Page Structure ===', elements:
+                    captureElements('h1', 'heading')
+                    .concat(captureElements('h2', 'heading'))
+                    .concat(captureElements('h3', 'heading'))
+                    .concat(captureElements('h4', 'heading'))
+                    .concat(captureElements('h5', 'heading'))
+                });
+            }
 
-            if (forValidation) {
+            if (level >= 2) {
                 sections.push({heading: '\\n=== Text Content (Validation Mode) ===', elements:
                     captureElements('p, span, li, td, div', 'text')
                     .filter(function(e) { return e.text.length > 0; })
                 });
             }
 
-            return {sections: sections, forms: captureForms()};
+            return {sections: sections, forms: level >= 1 ? captureForms() : []};
         })(arguments[0]);
         """;
 
@@ -380,7 +382,7 @@ public class PageAnalyzer
      */
     public String captureSimplifiedDom()
     {
-        return captureSimplifiedDom(false);
+        return captureSimplifiedDom(ContextLevel.LEAN);
     }
 
     /**
@@ -390,21 +392,41 @@ public class PageAnalyzer
      * @param forValidation
      *            whether to include more text content for validation
      * @return simplified DOM as a structured text
+     * @deprecated Use {@link #captureSimplifiedDom(ContextLevel)} instead.
+     */
+    @Deprecated
+    public String captureSimplifiedDom(final boolean forValidation)
+    {
+        return captureSimplifiedDom(forValidation ? ContextLevel.STANDARD : ContextLevel.LEAN);
+    }
+
+    /**
+     * Captures a simplified representation of the current page's DOM at the
+     * specified context level. Uses a single JavaScript execution for performance.
+     *
+     * @param level
+     *            the context level controlling how much DOM data to capture
+     * @return simplified DOM as a structured text
      */
     @SuppressWarnings("unchecked")
-    public String captureSimplifiedDom(boolean forValidation)
+    public String captureSimplifiedDom(final ContextLevel level)
     {
-        LOG.debug("   📄 Capturing simplified DOM for: {} (validation: {})", com.codeborne.selenide.WebDriverRunner.url(),
-                  forValidation);
+        final String url = com.codeborne.selenide.WebDriverRunner.url();
+        final boolean isEmptyPage = "data:,".equals(url) || "about:blank".equals(url);
+
+        if (!isEmptyPage)
+        {
+            LOG.debug("🔴 Capturing simplified DOM for: {} (level: {})", url, level);
+        }
 
         final StringBuilder dom = new StringBuilder();
-        dom.append("Page URL: ").append(com.codeborne.selenide.WebDriverRunner.url()).append("\n");
+        dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
         dom.append("Page Title: ").append(com.codeborne.selenide.Selenide.title()).append("\n\n");
 
         try
         {
             final Map<String, Object> data = (Map<String, Object>) com.codeborne.selenide.Selenide
-                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, forValidation);
+                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, level.ordinal());
 
             // Render element sections
             final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");
@@ -464,27 +486,45 @@ public class PageAnalyzer
         }
 
         final String result = dom.toString();
-        LOG.debug("   📄 Simplified DOM size: {} chars", result.length());
+        if (!isEmptyPage)
+        {
+            LOG.debug("   📄 Simplified DOM size: {} chars", result.length());
+        }
         return result;
     }
 
     /**
      * Returns a compact page context combining URL, title, and key element info.
+     * Uses {@link ContextLevel#LEAN} by default.
      */
     public String getPageContext()
     {
-        return getPageContext(false);
+        return getPageContext(ContextLevel.LEAN);
     }
 
     /**
      * Returns a compact page context combining URL, title, and key element info.
-     * 
+     *
      * @param forValidation
      *            whether to include more text content for validation
+     * @deprecated Use {@link #getPageContext(ContextLevel)} instead.
      */
-    public String getPageContext(boolean forValidation)
+    @Deprecated
+    public String getPageContext(final boolean forValidation)
     {
-        return captureSimplifiedDom(forValidation);
+        return captureSimplifiedDom(forValidation ? ContextLevel.STANDARD : ContextLevel.LEAN);
+    }
+
+    /**
+     * Returns a compact page context at the specified context level.
+     *
+     * @param level
+     *            the context level controlling how much DOM data to capture
+     * @return simplified DOM as a structured text
+     */
+    public String getPageContext(final ContextLevel level)
+    {
+        return captureSimplifiedDom(level);
     }
 
     /**

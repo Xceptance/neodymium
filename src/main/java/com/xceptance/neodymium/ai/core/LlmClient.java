@@ -48,7 +48,7 @@ import dev.langchain4j.model.output.TokenUsage;
 /**
  * Wraps LangChain4j to communicate with Google Gemini.
  * Supports sending text prompts with optional screenshots (vision).
- * Tracks token usage via {@link TokenStats}.
+ * Tracks token usage via {@link AiStats}.
   *
  * // AI-generated: Gemini 2.0 Flash
 */
@@ -57,7 +57,7 @@ public class LlmClient {
 
     private ChatLanguageModel model;
     private final AiConfiguration config;
-    private final TokenStats tokenStats;
+    private final AiStats aiStats;
     private final LlmMode mode;
 
     /**
@@ -65,10 +65,10 @@ public class LlmClient {
      * Uses {@code neodymium.ai.temperature} (deterministic, for {@code @NeodymiumTest}).
      *
      * @param config     application configuration
-     * @param tokenStats token usage tracker
+     * @param aiStats AI execution statistics tracker
      */
-    public LlmClient(final AiConfiguration config, final TokenStats tokenStats) {
-        this(config, tokenStats, LlmMode.AGENT);
+    public LlmClient(final AiConfiguration config, final AiStats aiStats) {
+        this(config, aiStats, LlmMode.AGENT);
     }
 
     /**
@@ -80,17 +80,17 @@ public class LlmClient {
      * </ul>
      *
      * @param config     application configuration
-     * @param tokenStats token usage tracker
-     * @param mode       the operational mode controlling temperature selection
+     * @param aiStats AI execution statistics tracker
+     * @param mode    the operational mode controlling temperature selection
      */
-    public LlmClient(final AiConfiguration config, final TokenStats tokenStats, final LlmMode mode) {
+    public LlmClient(final AiConfiguration config, final AiStats aiStats, final LlmMode mode) {
         this.config = config;
-        this.tokenStats = tokenStats;
+        this.aiStats = aiStats;
         this.mode = mode;
     }
 
-    public TokenStats getTokenStats() {
-        return this.tokenStats;
+    public AiStats getAiStats() {
+        return this.aiStats;
     }
 
     private ChatLanguageModel getChatModel() {
@@ -184,7 +184,7 @@ public class LlmClient {
         if (usage != null) {
             final long input = usage.inputTokenCount() != null ? usage.inputTokenCount() : 0;
             final long output = usage.outputTokenCount() != null ? usage.outputTokenCount() : 0;
-            tokenStats.record(input, output);
+            aiStats.record(input, output);
         }
     }
 }

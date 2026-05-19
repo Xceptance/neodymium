@@ -1,10 +1,8 @@
 ## Instruction
 {instruction}
 {sutContextBlock}
-
-Analyze the page and return the required JSON actions.
-
+{historyBlock}
 ## Current Page State (DOM)
 {domContext}
 
-Analyze the page above and return the required JSON actions.
+Based on the Instruction and context above, analyze the DOM and return the required JSON actions.
