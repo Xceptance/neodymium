@@ -138,17 +138,104 @@ public class PageAnalyzer
 
             // Builds a highly unique, compact CSS selector for the element to serve as alternative locator
             function generateSelector(el) {
-                var id = el.id;
-                if (id) return '#' + id;
-                var name = el.getAttribute('name');
-                var tag = el.tagName.toLowerCase();
-                if (name) return tag + "[name='" + name + "']";
-                var cls = el.className;
-                if (typeof cls === 'string' && cls.trim()) {
-                    var parts = cls.trim().split(/\\s+/);
-                    if (parts.length <= 3) return tag + '.' + parts.join('.');
+                // Helper to check if a selector matches exactly one element in the current DOM scope
+                function isUnique(sel) {
+                    try {
+                        return document.querySelectorAll(sel).length === 1;
+                    } catch (e) {
+                        return false;
+                    }
                 }
-                return '';
+
+                // Helper to safely escape special CSS characters (such as dots or colons in IDs or class names)
+                function escapeIdentifier(str) {
+                    if (typeof CSS !== 'undefined' && CSS.escape) {
+                        return CSS.escape(str);
+                    }
+                    // Fallback escaping mechanism for older or non-standard browser contexts
+                    return str.replace(/([!"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])/g, '\\\\$1');
+                }
+
+                // Step 1: Check for unique immediate attributes (ID or Name) to keep selectors minimal
+                if (el.id) {
+                    var idSel = '#' + escapeIdentifier(el.id);
+                    if (isUnique(idSel)) {
+                        return idSel;
+                    }
+                }
+
+                var tag = el.tagName.toLowerCase();
+                var name = el.getAttribute('name');
+                if (name) {
+                    var nameSel = tag + "[name='" + name.replace(/'/g, "\\\\'") + "']";
+                    if (isUnique(nameSel)) {
+                        return nameSel;
+                    }
+                }
+
+                // Step 2: Climb the DOM hierarchy to construct a highly specific unique path
+                var path = [];
+                var current = el;
+
+                // Walk upwards until we hit the root/body element or null
+                while (current && current.nodeType === 1) { // 1 represents Node.ELEMENT_NODE
+                    var currentTag = current.tagName.toLowerCase();
+
+                    // If we reach body or html, append and terminate the path climbing
+                    if (currentTag === 'body' || currentTag === 'html') {
+                        path.unshift(currentTag);
+                        break;
+                    }
+
+                    // Terminate early if the ancestor has a globally unique ID
+                    if (current.id) {
+                        var idSel = '#' + escapeIdentifier(current.id);
+                        if (isUnique(idSel)) {
+                            path.unshift(idSel);
+                            break;
+                        }
+                    }
+
+                    // Construct current path segment starting with tag name
+                    var segment = currentTag;
+
+                    // Append class names to segment to increase specificity
+                    var className = current.className;
+                    if (typeof className === 'string' && className.trim()) {
+                        // Split by whitespace to extract individual class names
+                        var classes = className.trim().split(/\\s+/).filter(Boolean);
+                        if (classes.length > 0) {
+                            segment += '.' + classes.map(escapeIdentifier).join('.');
+                        }
+                    }
+
+                    // Disambiguate among siblings sharing the same tag using :nth-of-type(index)
+                    if (current.parentNode) {
+                        var siblings = Array.from(current.parentNode.children);
+                        var sameTagSiblings = siblings.filter(function(s) {
+                            return s.tagName === current.tagName;
+                        });
+                        if (sameTagSiblings.length > 1) {
+                            var index = sameTagSiblings.indexOf(current) + 1;
+                            segment += ':nth-of-type(' + index + ')';
+                        }
+                    }
+
+                    // Insert the computed segment at the beginning of the path
+                    path.unshift(segment);
+
+                    // Check if the current accumulated path is already globally unique
+                    var currentPath = path.join(' > ');
+                    if (isUnique(currentPath)) {
+                        return currentPath;
+                    }
+
+                    // Walk up to parent node
+                    current = current.parentNode;
+                }
+
+                // Return final constructed path
+                return path.join(' > ');
             }
 
             // Captures structured information for matched DOM elements (inputs, links, buttons, etc.)
