@@ -38,7 +38,9 @@ CRITICAL ARRAY FORMATTING: If your response requires multiple actions, you MUST 
 - NEVER set "success" to true if a verification does not match the actual page state.
   This is critical — false positives are the worst possible outcome.
 - If the instruction is conditional (e.g. "If the mini-cart is open then close it") and the condition is NOT met (e.g. mini-cart is closed), set "success" to true, "done" to true, and return an empty "actions" array.
-- For purely visual verifications (e.g. verifying colors, layout, styling, font, visual design, logo details, alignment, or image content) where you receive a screenshot in VISUAL mode, you MUST act as the validator yourself by inspecting the screenshot. If the visual condition is met, set "success" to true, "done" to true, and return an empty "actions" array. If the visual condition is not met, set "success" to false, "done" to true, and return an empty "actions" array along with an "error" field explaining the mismatch.
+- For purely visual verifications or extractions (e.g. verifying colors, layout, styling, font, visual design, logo details, alignment, or image content) where you receive a screenshot in VISUAL mode, you MUST act as the validator/extractor yourself by inspecting the screenshot.
+  - For visual assertions: If the visual condition is met, set "success" to true, "done" to true, and return an empty "actions" array. If not met, set "success" to false, "done" to true, return an empty "actions" array, and supply an "error" explaining the mismatch.
+  - For visual extractions (e.g. storing a visually-identified value in a variable): Emit a "STORE" action using the dual-mode literal format. Set "target" to null, "value" to a JSON array containing ["variableName", "literalValue"] (e.g. ["animal", "brown"]), "success" to true, and "done" to true.
 
 ## Rules
 1. Analyze the provided DOM structure (and the screenshot, if one is provided) to understand the current page state.

@@ -478,6 +478,76 @@ Even if you do not explicitly include the `(visual)` tag, the LLM is instructed 
 
 ---
 
+## ⚡ Perceptual Visual Replay Caching (dHash & Hamming Distance)
+
+Capturing base64 screenshots and executing full visual validations via the LLM (`ContextLevel.VISUAL`) is highly powerful, but it is also the most latency-heavy and token-expensive operation in AI-driven automation. To solve this, Neodymium AI employs an automatic **Perceptual Visual Replay Caching** mechanism that runs locally, offline, and in microseconds.
+
+### The Problem
+During test execution, visual assertion steps (such as checking if a brown bear photo is visible, verifying logo presence, or inspecting page layouts) require a screenshot to be sent to the LLM. If the SUT is visually identical on subsequent runs, repeatedly querying the LLM for the same validation is a waste of time and API costs.
+
+### The Solution: Perceptual Hashing & Hamming Distance
+When Neodymium AI executes a visual step, it computes a compact, robust **perceptual difference hash (dHash)** of the screenshot and records it directly in the playbook's JSON cache under the `screenshotHash` field of the step. 
+
+On replay, Neodymium AI compares the live screenshot against the recorded hash using a local CPU-bound **Hamming distance** bit-count check. If the difference is below a safe tolerance threshold, the step succeeds instantly offline without contacting the LLM!
+
+```mermaid
+graph TD
+    A[Start Replay Step] --> B{Has screenshotHash?}
+    B -- No --> C[Fetch STANDARD DOM & Replay Actions]
+    B -- Yes --> D[Capture Current Base64 Screenshot]
+    D --> E[Compute 256-bit dHash of current screenshot]
+    E --> F[Calculate Hamming Distance between recorded and current hash]
+    F --> G{Distance <= 15?}
+    G -- Yes --> H[Visual Match Succeeded!]
+    H --> I{Actions List Empty?}
+    I -- Yes --> J[Skip DOM Query & Return Successfully <br> ⚡ Total Offline Bypass ⚡]
+    I -- No --> K[Query STANDARD DOM & Execute Actions]
+    G -- No --> L[Throw ActionExecutionException <br> ⚠️ Trigger Self-Healing Pipeline ⚠️]
+```
+
+### 🧠 The dHash Algorithm
+The difference hash (dHash) focuses on structural gradients rather than exact pixel values, making it highly resilient to minor rendering changes:
+
+1. **Downscaling**: The screenshot is downsampled to `17x16` pixels. This acts as a low-pass filter, flattening high-frequency noise, ignoring layout shifts of a few pixels, and smoothing out browser/device differences.
+2. **Grayscale Conversion**: The image is converted to grayscale (`BufferedImage.TYPE_BYTE_GRAY`) to ignore color saturation shifts or brightness variations.
+3. **Horizontal Gradients**: For each of the 16 rows, the algorithm compares the relative brightness of adjacent pixel columns horizontally. If the left pixel is brighter than the right pixel ($p_1 > p_2$), it outputs a `1` bit; otherwise, it outputs a `0` bit.
+4. **Hex Compression**: The resulting `16 * 16 = 256` bit stream is compressed into a 64-character hexadecimal representation (e.g. `0f123c...`).
+
+```java
+// Under the hood: ScreenshotHasher.computeDHash(BufferedImage img)
+final int width = 17;
+final int height = 16;
+final BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
+// ... scaling and painting ...
+final StringBuilder sb = new StringBuilder();
+for (int y = 0; y < height; y++)
+{
+    for (int x = 0; x < width - 1; x++)
+    {
+        final int p1 = resized.getRaster().getSample(x, y, 0);
+        final int p2 = resized.getRaster().getSample(x + 1, y, 0);
+        sb.append(p1 > p2 ? "1" : "0");
+    }
+}
+```
+
+### 📊 Hamming Distance & Tolerance Threshold
+The Hamming distance measures the exact number of bits that differ between the recorded hash and the live hash (out of 256 bits total).
+
+* **Perfect Match (Distance = 0)**: The layout and visual details are mathematically identical.
+* **Micro-Variances Tolerance (Distance <= 15)**: A threshold of **`<= 15` bits** allows the test to pass seamlessly in the presence of minor rendering artifacts (like font anti-aliasing differences, OS scrollbar styles, minor subpixel shifts, or different operating system window renders) while maintaining strong visual integrity.
+* **Mismatches (Distance > 15)**: If the distance is greater than 15, the page is visually distinct. Neodymium immediately throws an `ActionExecutionException`, which catches the mismatch and triggers the standard **Self-Healing Pipeline** (context escalation, LLM re-evaluation, and playbook auto-update).
+
+### ⚡ Double DOM Query Avoidance (Resource Optimization)
+To make visual assertions unbelievably fast, the framework includes a smart conditional context bypass:
+If a visual step has a successful visual hash match and contains an empty list of recorded browser actions (which is typical for simple visual checks or assertions), **it completely skips querying and parsing the DOM**. This completely avoids serialization overhead and returns success in a fraction of a millisecond.
+
+> [Tip]
+> **Playbook Version Control**:
+> Because the `screenshotHash` is recorded inside the playbook JSON file, make sure to commit your updated playbooks to Git. This guarantees that your CI/CD pipelines run completely offline and with extreme speed.
+
+---
+
 ## 🛠️ Prompt Overriding
 
 To provide maximum flexibility and allow testing strategies to be customized per project, the core LLM instructions and prompt templates have been externalized. By default, the framework loads its prompt templates from the `neodymium.jar` classpath at `ai-prompts/`. 

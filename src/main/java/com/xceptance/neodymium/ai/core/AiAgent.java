@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
@@ -48,6 +49,7 @@ import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.SelenideAddons;
+import com.xceptance.neodymium.ai.util.ScreenshotHasher;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -603,6 +605,7 @@ public class AiAgent {
     private List<Action> getStepActions(final String instruction, final Playbook playbook) {
         List<Action> actions = new ArrayList<Action>();
         PlaybookStep step = playbook.getCurrentStep();
+        boolean visualMatchSucceeded = false;
 
         // 1. Are we replaying a playbook?
         if (playbook.isRecording() == false) {
@@ -627,17 +630,21 @@ public class AiAgent {
                         try
                         {
                             final String currentScreenshot = pageAnalyzer.captureScreenshot("Replay: " + instruction);
-                            final String currentHash = com.xceptance.neodymium.ai.util.ScreenshotHasher.computeHash(currentScreenshot);
-                            final int distance = com.xceptance.neodymium.ai.util.ScreenshotHasher.getHammingDistance(step.getScreenshotHash(), currentHash);
+                            final String currentHash = ScreenshotHasher.computeHash(currentScreenshot);
+                            final int distance = ScreenshotHasher.getHammingDistance(step.getScreenshotHash(), currentHash);
                             LOG.info("    📊 Replay Screenshot dHash comparison: Distance = {}, Recorded: {}, Current: {}", distance, step.getScreenshotHash(), currentHash);
 
                             if (distance <= 15)
                             {
                                 LOG.info("    ✅ Visual match succeeded (Hamming distance {} <= 15). Proceeding with recorded actions.", distance);
-                                pageAnalyzer.getPageContext(ContextLevel.STANDARD);
+                                if (!step.getActions().isEmpty())
+                                {
+                                    pageAnalyzer.getPageContext(ContextLevel.STANDARD);
+                                }
                                 executionLog.logInfo("Replaying actions from playbook (visual match succeeded, Hamming distance: " + distance + ").");
                                 llmClient.getAiStats().recordReplay();
                                 actions.addAll(step.getActions());
+                                visualMatchSucceeded = true;
                             }
                             else
                             {
@@ -668,12 +675,12 @@ public class AiAgent {
         }
 
         // 2. Try to identify the action intent upfront.
-        if (actions.isEmpty()) {
+        if (actions.isEmpty() && !visualMatchSucceeded) {
             actions = identifyActions(instruction, step);
         }
 
         // 3. Prepare Phase and LLM Check
-        boolean requiresLlm = actions.isEmpty();
+        boolean requiresLlm = actions.isEmpty() && !visualMatchSucceeded;
         boolean requiresScreenshot = screenshotBeforeAction;
 
         if (!actions.isEmpty()) {
@@ -706,6 +713,7 @@ public class AiAgent {
                 step.setPromptLine(instruction);
                 step.setReasoning("directly parsed or local validation succeeded");
                 step.setActions(actions);
+                playbook.setChanged(true);
             }
         }
 
@@ -925,14 +933,12 @@ public class AiAgent {
                 playbookStep.setActions(actions);
                 playbookStep.setPromptLine(instruction);
                 playbookStep.setReasoning(reasoning);
-                if (screenshot != null)
+                final String oldHash = playbookStep.getScreenshotHash();
+                final String newHash = (screenshot != null) ? ScreenshotHasher.computeHash(screenshot) : null;
+                if (!Objects.equals(oldHash, newHash))
                 {
-                    final String hash = com.xceptance.neodymium.ai.util.ScreenshotHasher.computeHash(screenshot);
-                    playbookStep.setScreenshotHash(hash);
-                }
-                else
-                {
-                    playbookStep.setScreenshotHash(null);
+                    playbookStep.setScreenshotHash(newHash);
+                    playbook.setChanged(true);
                 }
                 playbookStep.setFailure(null);
 
