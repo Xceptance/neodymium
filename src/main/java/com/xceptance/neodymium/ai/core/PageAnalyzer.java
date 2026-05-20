@@ -50,15 +50,23 @@ public class PageAnalyzer
      */
     private static final String CAPTURE_SCRIPT = """
         return (function(forValidation) {
-            var MAX_PER_SELECTOR = 150;
+            var MAX_PER_SELECTOR = 400;
             var MAX_TEXT = 200;
             var MAX_HREF = 180;
             var MAX_VALUE = 150;
             var usedIds = {};
+            var seenRefs = {};
             // Pre-populate registry from IDs already stamped on this page
-            // (handles repeated script injections on the same page)
+            // (handles repeated script injections on the same page).
+            // Also detects duplicates caused by JS cloning and removes the attribute so a unique one is generated.
             document.querySelectorAll('[data-neo-ref]').forEach(function(el) {
-                usedIds[el.getAttribute('data-neo-ref')] = true;
+                var ref = el.getAttribute('data-neo-ref');
+                if (seenRefs[ref]) {
+                    el.removeAttribute('data-neo-ref');
+                } else {
+                    seenRefs[ref] = true;
+                    usedIds[ref] = true;
+                }
             });
 
             // djb2 hash – very low computation cost, good distribution
@@ -72,10 +80,10 @@ public class PageAnalyzer
             }
 
             function fingerprint(el) {
-                var tag   = el.tagName.toLowerCase();
+                var tag   = el.tagName ? el.tagName.toLowerCase() : '';
                 var id    = el.id || '';
-                var cls   = (typeof el.className === 'string' ? el.className : '').trim().replace(/\\s+/g, ' ');
-                var ptag  = el.parentElement ? el.parentElement.tagName.toLowerCase() : '';
+                var cls   = (typeof el.className === 'string' ? el.className : '').trim().replace(/\s+/g, ' ');
+                var ptag  = el.parentElement && el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '';
                 var type  = el.getAttribute('type') || '';
                 var name  = el.getAttribute('name') || el.getAttribute('alt') || '';
                 var text  = (el.innerText || el.value || '').trim().substring(0, 40);
@@ -131,11 +139,11 @@ public class PageAnalyzer
                 var id = el.id;
                 if (id) return '#' + id;
                 var name = el.getAttribute('name');
-                var tag = el.tagName.toLowerCase();
+                var tag = el.tagName ? el.tagName.toLowerCase() : '';
                 if (name) return tag + "[name='" + name + "']";
                 var cls = el.className;
                 if (typeof cls === 'string' && cls.trim()) {
-                    var parts = cls.trim().split(/\\s+/);
+                    var parts = cls.trim().split(/\s+/);
                     if (parts.length <= 3) return tag + '.' + parts.join('.');
                 }
                 return '';
@@ -152,9 +160,9 @@ public class PageAnalyzer
 
                         count++;
                         var autoId = assignId(el);
-                        var text = (el.innerText || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                        var text = (el.innerText || '').trim().replace(/\s*\n\s*/g, ' ');
                         var options = null;
-                        if (el.tagName.toLowerCase() === 'select') {
+                        if (el.tagName && el.tagName.toLowerCase() === 'select') {
                             options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
                             if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
                         }
@@ -199,7 +207,7 @@ public class PageAnalyzer
                     for (var i = 0; i < els.length && count < MAX_PER_SELECTOR; i++) {
                         var el = els[i];
                         if (!isVisible(el)) continue;
-                        if (el.closest('a')) continue;
+                        if (el.closest && el.closest('a')) continue;
 
                         var style = window.getComputedStyle(el);
                         var isClickable = style.cursor === 'pointer' || el.hasAttribute('onclick') || typeof el.onclick === 'function';
@@ -207,9 +215,9 @@ public class PageAnalyzer
 
                         count++;
                         var autoId = assignId(el);
-                        var text = (el.innerText || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                        var text = (el.innerText || '').trim().replace(/\s*\n\s*/g, ' ');
                         var options = null;
-                        if (el.tagName.toLowerCase() === 'select') {
+                        if (el.tagName && el.tagName.toLowerCase() === 'select') {
                             options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
                             if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
                         }
@@ -263,12 +271,12 @@ public class PageAnalyzer
                             var autoId = assignId(inp);
 
                             var field = {
-                                type: inp.tagName.toLowerCase() === 'select' ? 'select' : (inp.getAttribute('type') || ''),
+                                type: (inp.tagName && inp.tagName.toLowerCase() === 'select') ? 'select' : (inp.getAttribute('type') || ''),
                                 name: inp.getAttribute('name') || '',
                                 id: inp.id || '',
                                 automationId: autoId
                             };
-                            if (inp.tagName.toLowerCase() === 'select') {
+                            if (inp.tagName && inp.tagName.toLowerCase() === 'select') {
                                 field.options = Array.from(inp.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
                                 if (inp.options.length > 50) field.options += '... (total ' + inp.options.length + ')';
                             }
@@ -295,9 +303,9 @@ public class PageAnalyzer
                 .concat(captureElements('select', 'select'))
                 .concat(captureElements('option', 'option'))
                 .concat(captureElements('textarea', 'textarea'))
-                .concat(captureClickableElements('div, span, tr, td, th', 'clickable'));
+                .concat(captureClickableElements('div, span, tr, td, th, li, label, dialog, svg, img', 'clickable'));
 
-            var getDisplayLabel = function(elObj) {
+            var getDisplayLabel = function(elObj) {j) {
                 return elObj.text || elObj.placeholder || elObj.value || elObj.ariaLabel || elObj.title || elObj.name || '';
             };
 
