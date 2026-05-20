@@ -49,7 +49,7 @@ public class PageAnalyzer
      * (null means hidden for non-fixed/non-body elements) and getComputedStyle as fallback.
      */
     private static final String CAPTURE_SCRIPT = """
-        return (function(level) {
+        return (function(level, includesText) {
             // Configuration constants to prevent payload bloat
             var MAX_PER_SELECTOR = 150; // Safeguard against massive list rendering
             var MAX_TEXT = 200;         // Max characters captured for element text labels
@@ -477,9 +477,8 @@ public class PageAnalyzer
                     .concat(captureElements('h5', 'heading'))
                 });
             }
-
             // LEVEL 2 (STANDARD Mode): Capture visible paragraph and plain text contents for full validation
-            if (level >= 2) {
+            if (includesText) {
                 sections.push({heading: '\\n=== Text Content (Validation Mode) ===', elements:
                     captureElements('p, span, li, td, div', 'text')
                     .filter(function(e) { return e.text.length > 0; })
@@ -487,7 +486,7 @@ public class PageAnalyzer
             }
 
             return {sections: sections, forms: level >= 1 ? captureForms() : []};
-        })(arguments[0]);
+        })(arguments[0], arguments[1]);
         """;
 
     public PageAnalyzer()
@@ -560,7 +559,7 @@ public class PageAnalyzer
         try
         {
             final Map<String, Object> data = (Map<String, Object>) com.codeborne.selenide.Selenide
-                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, level.ordinal());
+                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent());
 
             // Render element sections
             final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");

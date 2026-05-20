@@ -458,6 +458,26 @@ This "Zero-Code" approach allows you to inject deterministic element targeting w
 
 ---
 
+## 👁️ Explicit Visual Validation & (visual) Tag
+
+In addition to locator hints, you can guide the AI to immediately perform visual validation by appending the `(visual)` tag to your instruction.
+
+When this tag is present (fully case-insensitively, e.g., `(visual)`, `(VISUAL)`, `(ViSuAl)`), the AI framework skips the default incremental escalation steps and starts the instruction immediately at **`ContextLevel.VISUAL`**. This captures and sends a page screenshot to the LLM on the very first attempt.
+
+This is extremely useful for explicit visual assertions where a screenshot is mandatory (e.g., verifying colors, visual elements, layout, alignment, or logos).
+
+### Example
+```yaml
+steps: |
+  Verify that the company logo has a red X (visual).
+  Check that the page background is mainly white and blue (VISUAL).
+```
+
+### Auto-Escalation for Visual Validation
+Even if you do not explicitly include the `(visual)` tag, the LLM is instructed to detect visual instructions (e.g. asking about colors, layouts, or visual details) in `LEAN` or `STANDARD` modes. When the LLM encounters such instructions, it will immediately trigger the escalation protocol (returning `ESCALATE`) to request a screenshot on the next attempt rather than guessing.
+
+---
+
 ## 🛠️ Prompt Overriding
 
 To provide maximum flexibility and allow testing strategies to be customized per project, the core LLM instructions and prompt templates have been externalized. By default, the framework loads its prompt templates from the `neodymium.jar` classpath at `ai-prompts/`. 

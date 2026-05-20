@@ -372,11 +372,9 @@ public class AiAgent {
                 boolean escalatedOk = false;
                 if (!isDirectInstruction(instruction))
                 {
-                    ContextLevel currentLevel = step.getHealedContextLevel();
-                    if (currentLevel == null)
-                    {
-                        currentLevel = instruction.toLowerCase().contains("(hint:") ? ContextLevel.HINT : ContextLevel.LEAN;
-                    }
+                    final ContextLevel currentLevel = step.getHealedContextLevel() != null
+                            ? step.getHealedContextLevel()
+                            : getInitialContextLevel(instruction);
                     final ContextLevel escalated = currentLevel.escalate();
                     if (escalated != null)
                     {
@@ -445,11 +443,9 @@ public class AiAgent {
                 boolean escalatedOk = false;
                 if (!isDirectInstruction(instruction))
                 {
-                    ContextLevel currentLevel = step.getHealedContextLevel();
-                    if (currentLevel == null)
-                    {
-                        currentLevel = instruction.toLowerCase().contains("(hint:") ? ContextLevel.HINT : ContextLevel.LEAN;
-                    }
+                    final ContextLevel currentLevel = step.getHealedContextLevel() != null
+                            ? step.getHealedContextLevel()
+                            : getInitialContextLevel(instruction);
                     final ContextLevel escalated = currentLevel.escalate();
                     if (escalated != null)
                     {
@@ -679,6 +675,31 @@ public class AiAgent {
         return actions;
     }
 
+    /**
+     * Determines the initial context level for a given instruction.
+     * Case-insensitively checks for "(visual)" to start at VISUAL context level,
+     * and "(hint:" to start at HINT context level, falling back to LEAN.
+     *
+     * @param instruction the instruction to check
+     * @return the initial context level
+     */
+    private static final ContextLevel getInitialContextLevel(final String instruction)
+    {
+        final String lower = instruction.toLowerCase();
+        if (lower.contains("(visual)"))
+        {
+            return ContextLevel.VISUAL_LEAN;
+        }
+        else if (lower.contains("(hint:"))
+        {
+            return ContextLevel.HINT;
+        }
+        else
+        {
+            return ContextLevel.LEAN;
+        }
+    }
+
     private List<Action> getActionsFromLLM(final String instruction, final PlaybookStep playbookStep,
             final Playbook playbook,
             final boolean requiresScreenshot) {
@@ -702,8 +723,9 @@ public class AiAgent {
         // The LLM tells us when it needs more by failing or returning ESCALATE.
         // Exception: if this step was previously healed at a higher level, start there.
         ContextLevel contextLevel = playbookStep.getHealedContextLevel();
-        if (contextLevel == null) {
-            contextLevel = instruction.toLowerCase().contains("(hint:") ? ContextLevel.HINT : ContextLevel.LEAN;
+        if (contextLevel == null)
+        {
+            contextLevel = getInitialContextLevel(instruction);
         }
         while (true) {
             final String attemptLabel = lastWasNoActions ? "Retry (No Actions) " + noActionsCount
