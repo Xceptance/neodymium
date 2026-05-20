@@ -51,7 +51,7 @@ public class AiIntegrationTest extends NeodymiumTest {
                 addPropertiesForTest("testDirectExecutionWithoutValidKey.properties", properties);
 
                 Result result = run(AiBrowserDirectExecutionTest.class);
-                checkPass(result, 5, 0);
+                checkPass(result, 6, 0);
         }
 
         @Test
@@ -69,6 +69,6 @@ public class AiIntegrationTest extends NeodymiumTest {
                 // This test simulates execution where a playbook already exists.
                 // Healing and prompt changes will hit the LLM and fail properly
                 Result result = run(com.xceptance.neodymium.junit4.testclasses.ai.AiBrowserPlaybookTest.class);
-                checkPass(result, 7, 0);
+                checkPass(result, 8, 0);
         }
 }

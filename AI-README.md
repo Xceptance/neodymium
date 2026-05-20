@@ -11,7 +11,7 @@ Neodymium AI introduces a paradigm shift in test automation: **Native Language A
 1. **Natural Language Execution**: Write tests like `Open the login page.`, `Type 'user' into the username field.`, and `Click Submit.`.
 2. **Playbooks (Caching for Speed & Cost)**: When the AI successfully executes a test, it records the exact DOM elements and actions into a JSON "Playbook". Subsequent runs replay the fast, deterministic Selenium actions without calling the LLM, saving time and API costs.
 3. **Self-Healing Tests**: If a replay fails (e.g., a button ID changes or the UI is overhauled), the AI agent catches the failure, re-analyzes the live page using the LLM, fixes the test execution dynamically, and updates the Playbook.
-4. **Data-Driven Prompts**: Full integration with Neodymium's `@DataFolder` and `TestData`. You can inject datasets directly into your natural language prompts using `${variable}` syntax.
+4. **Data-Driven Steps**: Full integration with Neodymium's `@DataFolder` and `TestData`. You can inject datasets directly into your natural language steps using `${variable}` syntax.
 5. **AI Discussion Logging**: Detailed Allure report attachments that show exactly what the LLM "saw", what it "thought" (reasoning), and what actions it decided to take.
 
 ---
@@ -60,7 +60,7 @@ You can move your instructions into Neodymium TestData (e.g., a YAML file) and r
 
 **`data.yml`**
 ```yaml
-prompt: 'Open ${neodymium.url}.
+steps: 'Open ${neodymium.url}.
   Navigate to the login page.
   Enter email "${email}" and password "${password}".
   Click login.
@@ -81,8 +81,8 @@ data:
 public class MyDataDrivenAiTest {
     
     @NeodymiumTest
-    public void executeAiPrompt() throws Throwable {
-        // Automatically picks up the 'prompt' key from the dataset
+    public void executeAiSteps() throws Throwable {
+        // Automatically picks up the 'steps' key from the dataset
         // and resolves the ${variables} before sending to the AI.
         Neodymium.ai().execute();
     }
@@ -99,7 +99,7 @@ Neodymium AI supports dynamic runtime variable extraction using the `STORE` acti
 
 **Example Playbook:**
 ```yaml
-prompt: |
+steps: |
   Capture the line item price shown in the line item row. Save it as variable 'unitPrice'.
   Capture the subtotal amount. Save it as variable 'subtotal'.
   Verify that 'subtotal' is greater than 'unitPrice'.
@@ -111,6 +111,19 @@ prompt: |
 3. **Interpolation**: You can seamlessly reuse stored variables in later steps using the `${variableName}` syntax or by referring to them by name. The `ActionExecutor` automatically resolves these placeholders in real-time before executing the action.
 
 > **Note:** Variables extracted during runtime using the `STORE` action are scoped to the current test execution. If a runtime variable shares the same name as a static variable injected via `TestData` or `@DataFolder`, the runtime variable takes precedence.
+
+### 🔢 Numeric & Price Normalization (`adjust: true`)
+
+By default, the `STORE` action captures and saves the raw text exactly as it appears in the DOM (e.g. `14,96 €` or `$15.00`). While this is perfect for asserting exact text layouts, it is problematic when comparing or calculating values across different localized formats.
+
+To handle this, the `STORE` action accepts an optional parameter: `"adjust": true`. 
+
+* **How to Trigger**: In your natural language prompts, instruct the AI that the stored value will be used in calculations (e.g., *"Capture the subtotal amount. Save it as variable 'subtotal' and store with adjustment."*). Alternatively, the `StoreAction` prompt guides the agent to automatically output `"adjust": true` in the compiled JSON playbook whenever it detects that a variable is destined for subsequent mathematical comparisons or calculations.
+* **Heuristics & Normalization**: Under the hood, the system uses a **zero-knowledge, locale-agnostic normalizer** (`AiAssertions.normalizeNumericOrPrice`):
+  * **Classification**: It identifies if the text is a number or a price (it must contain digits, may contain standard separators, signs, or currency symbols, and at most one short letter sequence ≤ 3 characters like `USD` or `kr`). 
+  * **Exclusions**: Standard text or alphanumeric IDs (such as order numbers like `ORD-12345678`, test labels like `TC-001`, or descriptors like `Page 1 of 5`) are left completely untouched.
+  * **US Decimal Conversion**: Valid numbers and prices are normalized into clean, standardized US decimals (e.g., `14,96 €` and `$15.00` are both normalized and stored as `"14.96"` and `"15.00"`).
+* **Downstream Integration**: Once adjusted/normalized, these variables can be cleanly used in standard mathematical calculations (e.g., via `verifyCalculation`) or in the new numeric comparison assertions without formatting mismatches.
 
 ---
 
@@ -157,8 +170,19 @@ Neodymium ships with a default utility class, `com.xceptance.neodymium.ai.util.A
 | Method | Description |
 |--------|-------------|
 | `assertPriceGreaterThanZero(String)` | Validates that a price string (any locale/currency) represents a value > 0 |
+| `assertNumberGreaterThan(String)` | Asserts that the first number/price is strictly greater than the second (e.g., `14,96 €, 0.00` or JSON `["15.00", "10.00"]`) |
+| `assertNumberGreaterThanOrEqual(String)` | Asserts that the first number/price is greater than or equal to the second |
+| `assertNumberLessThan(String)` | Asserts that the first number/price is strictly less than the second |
+| `assertNumberLessThanOrEqual(String)` | Asserts that the first number/price is less than or equal to the second |
+| `assertNumberEqual(String)` | Asserts that the first number/price is equal to the second |
+| `verifyCalculation(String)` | Securely validates mathematical equations (e.g. `0,90 € = (14,96 € + 0,00 €) * 6,00%`) programmatically via JDK JShell (locale-agnostic) |
 
 These methods are automatically available to the AI in every test class.
+
+> [!NOTE]
+> **Exact Precision via `BigDecimal`**:
+> Under the hood, all numeric assertions use `BigDecimal` for exact mathematical comparisons, avoiding floating-point binary representation errors (e.g. `0.90 - 0.88` yielding `0.020000000000000018`).
+> For mathematical equations, `verifyCalculation` evaluates the right-hand side using JDK JShell, parses the result to `BigDecimal`, scales/rounds it to the left-hand side's detected display precision using `RoundingMode.HALF_UP`, and asserts that the absolute difference does not exceed the allowed tolerance of `0.02`.
 
 ### Extending with Custom Utility Classes
 
@@ -185,9 +209,9 @@ To add your own project-specific assertion methods:
    neodymium.ai.agent.javaMethod.utilityClasses=com.xceptance.neodymium.ai.util.AiAssertions,com.myproject.test.util.MyProjectAssertions
    ```
 
-3. **Use it naturally** in your YAML prompts:
+3. **Use it naturally** in your YAML steps:
    ```yaml
-   prompt: |
+   steps: |
      Verify the discount was applied to the displayed price.
    ```
    The AI will emit `JAVA_METHOD: assertDiscountApplied`, and the framework will automatically find it in your registered utility class.
@@ -260,6 +284,26 @@ Only the instruction text is included — no DOM snapshots, no action details, n
 The history is built by `AiAgentPrompts.buildStepHistory(Playbook)`, which iterates the playbook's completed steps (indices `0` to `cursor - 1`). Steps with null or blank prompt lines are gracefully skipped. The resulting block is injected into the `{historyBlock}` placeholder in the prompt templates (`user-prompt-template.txt`, `retry-prompt-template.txt`, `no-actions-retry-prompt-template.txt`).
 
 An `isRecoveryAttempt` flag in `AiAgent.getActionsFromLLM()` tracks whether the current iteration is a recovery scenario. On the first attempt, the flag is `false` and the history block is empty. It flips to `true` whenever an escalation, error retry, or no-actions retry occurs.
+---
+
+## 🔄 Playbook Resilience & Transient Retries
+
+During test replay, transient browser conditions can occasionally cause a recorded playbook action to fail. Examples include:
+- A dynamic overlay (like a Bootstrap offcanvas menu or loading spinner) disappearing slightly slower than usual.
+- A momentary DOM rendering or animation delay.
+- An element being temporarily blocked by a scrolling effect.
+
+Historically, any failure during a replayed action would immediately mark the playbook step as failed and fall back to the LLM to self-heal. While self-healing is a powerful feature, invoking an LLM call for a simple timing glitch is slow, costly, and unnecessary.
+
+### 🛡️ One-Shot Action Retry Protocol
+
+To prevent unnecessary LLM calls and improve execution stability, Neodymium AI employs an automatic **One-Shot Action Retry** mechanism:
+
+1. **Transient Catch**: If a replayed action throws a selenium-based `ActionExecutionException` (e.g., due to timing, blocking, or stale elements), the `AiAgent` intercepts the failure *before* marking the step as failed.
+2. **Recorded Retry**: The agent increments a step-scoped retry counter and immediately retries the recorded actions exactly once. In many cases, the transient condition (such as a loading spinner disappearing or a transition completing) resolves, allowing the retry to succeed instantly.
+3. **LLM Fallback**: If the second replay attempt also fails, the failure is treated as a genuine structural change (e.g., a relocated button or modified page layout). The step is then marked as failed, and the agent falls back to the LLM self-healing pipeline to analyze the page and update the playbook.
+
+This automatic recovery protocol ensures that your tests remain highly resilient to flaky browser execution while preserving 100% token efficiency and maximum execution speed.
 
 ---
 
@@ -382,7 +426,7 @@ When you provide a hint directly within the instruction using the `(hint: ...)` 
 You can provide a hint directly within the instruction using the `(hint: ...)` syntax.
 
 ```yaml
-prompt: |
+steps: |
   Click the search button (hint: .btn-search).
   Type '${searchTerm}' into the search field (hint: #header-search-text).
 ```
@@ -390,10 +434,10 @@ prompt: |
 ### Using the Hints Dictionary for Placeholders
 If you prefer to separate locators from the natural language, or have hints you want to apply across the whole playbook, you can define a `hints` block at the root of your YAML playbook. 
 
-This is a simple dictionary mapping semantic element names to explicit CSS or XPath locators. Behind the scenes, the framework seamlessly merges these into the dataset so they can be interpolated into your prompt!
+This is a simple dictionary mapping semantic element names to explicit CSS or XPath locators. Behind the scenes, the framework seamlessly merges these into the dataset so they can be interpolated into your steps!
 
 ```yaml
-prompt: |
+steps: |
   Click the login button (hint: ${loginButton}).
   Type '${user}' into the username field (hint: ${usernameField}).
 hints:

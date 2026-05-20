@@ -78,8 +78,7 @@ public class PageAnalyzer
                 var ptag  = el.parentElement ? el.parentElement.tagName.toLowerCase() : '';
                 var type  = el.getAttribute('type') || '';
                 var name  = el.getAttribute('name') || el.getAttribute('alt') || '';
-                var text  = (el.innerText || el.value || '').trim().substring(0, 40);
-                var raw   = [tag, id, cls, ptag, type, name, text].join('|');
+                var raw   = [tag, id, cls, ptag, type, name].join('|');
                 return 'xc_' + djb2(raw);
             }
 

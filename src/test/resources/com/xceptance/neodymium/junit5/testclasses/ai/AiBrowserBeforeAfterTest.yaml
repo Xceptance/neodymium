@@ -2,7 +2,7 @@ data:
   - testId: happyPath
     before: 
       - java before1()
-    prompt: java prompt1()
+    steps: java prompt1()
     after:
       - java after1()
       - java after2()
@@ -12,14 +12,14 @@ data:
       - java before1()
       - java beforeFail()
       - java before2()
-    prompt: java prompt1()
+    steps: java prompt1()
     after:
       - java after1()
 
   - testId: failPrompt
     before:
       - java before1()
-    prompt: java promptFail()
+    steps: java promptFail()
     after:
       - java after1()
       - java after2()
@@ -27,7 +27,7 @@ data:
   - testId: failAfters
     before:
       - java before1()
-    prompt: java promptFail()
+    steps: java promptFail()
     after:
       - java afterFail1()
       - java after1()

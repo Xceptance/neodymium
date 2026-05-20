@@ -51,9 +51,9 @@ import com.xceptance.neodymium.util.Neodymium;
  *             """);
  * }
  * }</pre>
-  *
+ *
  * // AI-generated: Gemini 2.0 Flash
-*/
+ */
 public class AiBrowser implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(AiBrowser.class);
 
@@ -77,23 +77,27 @@ public class AiBrowser implements AutoCloseable {
      * @param config
      *               the configuration to use
      */
-    public AiBrowser(final AiConfiguration config, Object test) {
+    public AiBrowser(final AiConfiguration config, final Object test) {
         this.test = test;
         this.config = config;
         this.aiStats = new AiStats();
         this.agent = createAgent(config);
 
-        LOG.debug("AiBrowser initialized — model: {}", config.aiModel());
+        LOG.debug("╔════════════════════════════════════════════════════════════════════════════════════");
+        LOG.debug("║ 🎬 STARTING TEST CASE: {}", Neodymium.getTestName());
+        LOG.debug("║ 🤖 AI Model:           {}", config.aiModel());
+        LOG.debug("╚════════════════════════════════════════════════════════════════════════════════════");
     }
 
     /**
-     * Set the main prompt to be executed.
+     * Set the main steps to be executed.
      * 
-     * @param instructions the main prompt instructions
+     * @param instructions the main steps instructions
      * @return the current AiBrowser instance
      */
-    public AiBrowser prompt(String instructions) {
-        Neodymium.getData().put("prompt", instructions);
+    public AiBrowser steps(final String instructions)
+    {
+        Neodymium.getData().put("steps", instructions);
         return this;
     }
 
@@ -152,21 +156,22 @@ public class AiBrowser implements AutoCloseable {
             agent.setSutContext(resolveTestDataToPrompt(Neodymium.getData().asString("context")));
         }
 
-
         agent.execute(naturalLanguageInstructions);
     }
 
     /**
      * Executes natural language test instructions derived implicitly from the
-     * active test dataset. Expects a `prompt`
+     * active test dataset. Expects a `steps`
      * variable to be defined within the currently injected dataset (e.g. via YAML).
      * 
      * @throws Throwable
      */
-    public void execute() throws Throwable {
-        if (!Neodymium.getData().exists("prompt")) {
+    public void execute() throws Throwable
+    {
+        if (!Neodymium.getData().exists("steps"))
+        {
             throw new IllegalArgumentException(
-                    "Cannot execute AI instruction implicitly: 'prompt' property is missing from the test dataset.");
+                    "Cannot execute AI instruction implicitly: 'steps' property is missing from the test dataset.");
         }
         // retrieve all data once, to only have ONE test data attachment
         Neodymium.getDataAndAddToReport();
@@ -183,7 +188,6 @@ public class AiBrowser implements AutoCloseable {
             agent.setSutContext(resolveTestDataToPrompt(Neodymium.getData().asString("context")));
         }
 
-
         Throwable testError = null;
 
         try {
@@ -191,9 +195,10 @@ public class AiBrowser implements AutoCloseable {
                 executeList(Neodymium.getData().asString("before"));
             }
 
-            execute(Neodymium.getData().asString("prompt"));
+            execute(Neodymium.getData().asString("steps"));
 
-        } catch (Throwable t) {
+        } catch (final Throwable t)
+        {
             testError = t;
             throw t;
         } finally {

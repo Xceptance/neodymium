@@ -36,11 +36,11 @@ public class YamlFileReaderTest
     }
 
     @Test
-    @DisplayName("Verify extracting global prompt wrapping a 'data' array and conditionally injecting it")
-    public void testAiPromptAndDataIsolation()
+    @DisplayName("Verify extracting global steps wrapping a 'data' array and conditionally injecting it")
+    public void testAiStepsAndDataIsolation()
     {
-        String yamlContent = 
-            "prompt: |\n" +
+        final String yamlContent = 
+            "steps: |\n" +
             "  Verify that the user login succeeds\n" +
             "  Ensure to click submit\n" +
             "data:\n" +
@@ -48,21 +48,21 @@ public class YamlFileReaderTest
             "    user: test@example.com\n" +
             "  - testId: aiCase2\n" +
             "    user: dev@example.com\n" +
-            "    prompt: This dataset overrides the global prompt";
+            "    steps: This dataset overrides the global steps";
             
-        List<Map<String, String>> data = YamlFileReader.readFile(new ByteArrayInputStream(yamlContent.getBytes(StandardCharsets.UTF_8)));
+        final List<Map<String, String>> data = YamlFileReader.readFile(new ByteArrayInputStream(yamlContent.getBytes(StandardCharsets.UTF_8)));
         
         assertEquals(2, data.size());
         
-        // Assert iteration 1 matches including the global implicitly injected 'prompt' var
+        // Assert iteration 1 matches including the global implicitly injected 'steps' var
         assertEquals("aiCase1", data.get(0).get("testId"));
         assertEquals("test@example.com", data.get(0).get("user"));
-        assertTrue(data.get(0).get("prompt").contains("Verify that the user login succeeds"));
+        assertTrue(data.get(0).get("steps").contains("Verify that the user login succeeds"));
         
-        // Assert iteration 2 isolates iteration mapping but retains local prompt override
+        // Assert iteration 2 isolates iteration mapping but retains local steps override
         assertEquals("aiCase2", data.get(1).get("testId"));
         assertEquals("dev@example.com", data.get(1).get("user"));
-        assertTrue(data.get(1).get("prompt").contains("This dataset overrides the global prompt"));
+        assertTrue(data.get(1).get("steps").contains("This dataset overrides the global steps"));
     }
 
     @Test

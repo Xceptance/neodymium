@@ -15,19 +15,19 @@ public class CanReadDataSetYamlMulti
     @Test
     public void test()
     {
-        Map<String, String> data = Neodymium.getData();
+        final Map<String, String> data = Neodymium.getData();
         Assert.assertTrue(data.size() >= 3);
         
-        String testId = data.get("testId");
+        final String testId = data.get("testId");
         if ("Iteration1".equals(testId))
         {
             Assert.assertEquals("john@example.com", data.get("user"));
-            Assert.assertEquals("Verify login logic", data.get("prompt"));
+            Assert.assertEquals("Verify login logic", data.get("steps"));
         }
         else if ("Iteration2".equals(testId))
         {
             Assert.assertEquals("jane@example.com", data.get("user"));
-            Assert.assertEquals("Local override prompt logic", data.get("prompt"));
+            Assert.assertEquals("Local override prompt logic", data.get("steps"));
         }
         else
         {

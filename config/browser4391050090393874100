@@ -1,0 +1,36 @@
+browserprofile.testEnvironmentFlags.deviceName=MyDevice
+browserprofile.testEnvironmentFlags.browser=chrome
+browserprofile.testEnvironmentFlags.idleTimeout=1234
+browserprofile.firefox.name=Mozilla Firefox
+browserprofile.multiChrome.name=Multi Argument Chrome
+browserprofile.testEnvironmentFlags2.platform=Windows 10
+browserprofile.chrome.name=Google Chrome
+browserprofile.firefox.browser=firefox
+browserprofile.firefox.preferences=media.navigator.permission.disabled=true ; browser.startup.homepage=https://www.xceptance.com ; app.update.backgroundMaxErrors=1
+browserprofile.testEnvironmentFlags2.seleniumVersion=3.1234
+browserprofile.testEnvironmentFlags2.deviceOrientation=portrait
+browserprofile.multiFirefox.browser=firefox
+browserprofile.chrome.preferences=homepage=https://www.xceptance.com ; geolocation.enabled=true ; renderer.memory_cache.size=120000
+browserprofile.testEnvironmentFlags.seleniumVersion=3.1234
+browserprofile.testEnvironmentFlags.deviceOrientation=landscape
+browserprofile.multiFirefox.arguments=-headless ; -width=1024; -height=768 
+browserprofile.testEnvironmentFlags.maxDuration=5678
+browserprofile.testEnvironmentFlags2.browser=chrome
+browserprofile.chrome.browser=chrome
+browserprofile.testEnvironmentFlags.name=Test Environment Browser
+browserprofile.multiFirefox.name=Multi Argument Firefox
+browserprofile.multiChrome.browser=chrome
+browserprofile.multiChrome.arguments= -crash-test ; -window-position=0,0 ;-window-size=1024,768 
+browserprofile.chrome.testEnvironment=local
+browserprofile.firefox.downloadDirectory=target
+browserprofile.chrome.arguments=headless
+browserprofile.chrome.downloadDirectory=target
+browserprofile.testEnvironmentFlags2.idleTimeout=1234
+browserprofile.firefox.arguments=headless
+browserprofile.testEnvironmentFlags.platform=Windows 10
+browserprofile.testEnvironmentFlags2.deviceName=MyDevice
+browserprofile.testEnvironmentFlags.screenResolution=800x600
+browserprofile.testEnvironmentFlags2.name=Test Environment Browser
+browserprofile.testEnvironmentFlags2.screenResolution=800x600
+browserprofile.chrome.acceptInsecureCertificates=true
+browserprofile.testEnvironmentFlags2.maxDuration=5678
