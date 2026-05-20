@@ -50,27 +50,31 @@ public class PageAnalyzer
      */
     private static final String CAPTURE_SCRIPT = """
         return (function(level) {
-            var MAX_PER_SELECTOR = 150;
-            var MAX_TEXT = 200;
-            var MAX_HREF = 180;
-            var MAX_VALUE = 150;
+            // Configuration constants to prevent payload bloat
+            var MAX_PER_SELECTOR = 150; // Safeguard against massive list rendering
+            var MAX_TEXT = 200;         // Max characters captured for element text labels
+            var MAX_HREF = 180;         // Max URL length for captured links
+            var MAX_VALUE = 150;        // Max characters for option/input value properties
+            
+            // Map of assigned automation IDs (data-neo-ref) to handle unique stamping
             var usedIds = {};
-            // Pre-populate registry from IDs already stamped on this page
-            // (handles repeated script injections on the same page)
+            
+            // Pre-populate usedIds map with existing refs to avoid duplicates during consecutive runs
             document.querySelectorAll('[data-neo-ref]').forEach(function(el) {
                 usedIds[el.getAttribute('data-neo-ref')] = true;
             });
 
-            // djb2 hash – very low computation cost, good distribution
+            // Fast, low-overhead djb2 hashing algorithm to compute consistent element fingerprint hashes
             function djb2(str) {
                 var hash = 5381;
                 for (var i = 0; i < str.length; i++) {
                     hash = ((hash << 5) + hash) + str.charCodeAt(i);
-                    hash = hash & 0x7fffffff; // keep positive 31-bit int
+                    hash = hash & 0x7fffffff; // Keep hash as a positive 31-bit integer
                 }
-                return hash.toString(36); // compact alphanumeric
+                return hash.toString(36); // Compact alphanumeric base-36 representation
             }
 
+            // Generates a stable fingerprint string for an element based on tags, IDs, classes, and parents
             function fingerprint(el) {
                 var tag   = el.tagName.toLowerCase();
                 var id    = el.id || '';
@@ -82,6 +86,7 @@ public class PageAnalyzer
                 return 'xc_' + djb2(raw);
             }
 
+            // Retrieves or generates and stamps a unique 'data-neo-ref' ID on the DOM element
             function assignId(el) {
                 if (el.hasAttribute('data-neo-ref')) {
                     return el.getAttribute('data-neo-ref');
@@ -89,6 +94,7 @@ public class PageAnalyzer
                 var base = fingerprint(el);
                 var candidate = base;
                 var suffix = 0;
+                // Collision resolution in case elements compute the identical fingerprint
                 while (usedIds[candidate]) {
                     suffix++;
                     candidate = base + '_' + suffix;
@@ -98,8 +104,10 @@ public class PageAnalyzer
                 return candidate;
             }
 
+            // Evaluates element visibility accurately by checking DOM connection, HUD boundaries, display, and layout rects
             function isVisible(el) {
                 if (!el.isConnected) return false;
+                // Never extract elements located inside the Neodymium AI Interactive HUD itself
                 if (el.closest && el.closest('.neodymium-ai-hud')) return false;
 
                 const style = window.getComputedStyle(el);
@@ -109,11 +117,13 @@ public class PageAnalyzer
                 return rect.width > 0 && rect.height > 0;
             }
 
+            // Standard truncation helper to keep token sizes predictable and clean
             function truncate(s, max) {
                 if (!s) return s;
                 return s.length <= max ? s : s.substring(0, max) + '…';
             }
 
+            // Deep DOM query selector supporting crawling through Shadow DOM roots recursively
             function queryAllDeep(selector, root) {
                 root = root || document;
                 var results = Array.from(root.querySelectorAll(selector));
@@ -126,6 +136,7 @@ public class PageAnalyzer
                 return results;
             }
 
+            // Builds a highly unique, compact CSS selector for the element to serve as alternative locator
             function generateSelector(el) {
                 var id = el.id;
                 if (id) return '#' + id;
@@ -140,6 +151,7 @@ public class PageAnalyzer
                 return '';
             }
 
+            // Captures structured information for matched DOM elements (inputs, links, buttons, etc.)
             function captureElements(cssSelector, label) {
                 var results = [];
                 try {
@@ -153,6 +165,7 @@ public class PageAnalyzer
                         var autoId = assignId(el);
                         var text = (el.innerText || '').trim().replace(/\\s*\\n\\s*/g, ' ');
                         var options = null;
+                        // Format select dropdown options neatly
                         if (el.tagName.toLowerCase() === 'select') {
                             options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
                             if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
@@ -190,6 +203,7 @@ public class PageAnalyzer
                 return results;
             }
 
+            // Identifies and extracts custom elements acting as clickable targets (e.g. styled divs/spans)
             function captureClickableElements(cssSelector, label) {
                 var results = [];
                 try {
@@ -198,9 +212,10 @@ public class PageAnalyzer
                     for (var i = 0; i < els.length && count < MAX_PER_SELECTOR; i++) {
                         var el = els[i];
                         if (!isVisible(el)) continue;
-                        if (el.closest('a')) continue;
+                        if (el.closest('a')) continue; // Skip if already wrapped inside standard anchor link
 
                         var style = window.getComputedStyle(el);
+                        // A custom element is considered clickable if it has pointer cursor, onclick attribute, or onclick handler
                         var isClickable = style.cursor === 'pointer' || el.hasAttribute('onclick') || typeof el.onclick === 'function';
                         if (!isClickable) continue;
 
@@ -245,6 +260,7 @@ public class PageAnalyzer
                 return results;
             }
 
+            // Extracts forms along with their respective interactive fields to build standard logical input scopes
             function captureForms() {
                 var results = [];
                 try {
@@ -287,7 +303,7 @@ public class PageAnalyzer
 
             var sections = [];
 
-            // Interactive elements
+            // Compile all standard target elements that represent interactive page actions
             var interactiveElements = captureElements('a', 'link')
                 .concat(captureElements('button', 'button'))
                 .concat(captureElements('input', 'input'))
@@ -296,10 +312,12 @@ public class PageAnalyzer
                 .concat(captureElements('textarea', 'textarea'))
                 .concat(captureClickableElements('div, span, tr, td, th', 'clickable'));
 
+            // Helper to retrieve the most meaningful text label representation of an element
             var getDisplayLabel = function(elObj) {
                 return elObj.text || elObj.placeholder || elObj.value || elObj.ariaLabel || elObj.title || elObj.name || '';
             };
 
+            // Compute element label frequency map to identify duplicate labels requiring parent text context
             var textCounts = {};
             for (var i = 0; i < interactiveElements.length; i++) {
                 var lbl = getDisplayLabel(interactiveElements[i]);
@@ -308,33 +326,62 @@ public class PageAnalyzer
                 }
             }
 
+            // Perform parent walk to disambiguate elements sharing the identical display label
             for (var i = 0; i < interactiveElements.length; i++) {
                 var elObj = interactiveElements[i];
                 var lbl = getDisplayLabel(elObj);
                 if (lbl && textCounts[lbl] > 1 && elObj.domElement) {
+                    // If multiple elements share the same label on this page, resolve a local parent text 
+                    // block (e.g. card name, list item, or table cell) to disambiguate them.
                     var parentText = '';
                     var p = elObj.domElement.parentElement;
-                    while (p && p !== document.body) {
+                    var depth = 0;
+                    
+                    // Cap parent traversal to 3 levels to guarantee context remains local to the component (e.g. card/grid cell)
+                    while (p && p !== document.body && depth < 3) {
+                        var tag = p.tagName.toLowerCase();
+                        var role = p.getAttribute('role') || '';
+                        var cls = (typeof p.className === 'string' ? p.className : '').toLowerCase();
+                        var id = (p.id || '').toLowerCase();
+
+                        // Heuristic 1: Stop climbing if we reach major HTML5 semantic landmarks
+                        if (tag === 'header' || tag === 'footer' || tag === 'nav' || tag === 'aside') {
+                            break;
+                        }
+                        // Heuristic 2: Stop climbing if we hit standard global ARIA landmark roles
+                        if (role === 'banner' || role === 'navigation' || role === 'contentinfo' || role === 'complementary') {
+                            break;
+                        }
+                        // Heuristic 3: Stop climbing at typical layout containers (generic class/ID names)
+                        if (cls.includes('navbar') || cls.includes('header') || cls.includes('footer') ||
+                            id.includes('navbar') || id.includes('header') || id.includes('footer')) {
+                            break;
+                        }
+
                         var pText = (p.innerText || '').trim();
+                        // Only capture context if it's descriptive (longer than the label itself) but compact (< 300 chars)
                         if (pText.length > lbl.length && pText.length < 300) {
                             parentText = pText;
                         }
+                        // Prevent pulling in massive generic containers
                         if (pText.length >= 300) {
                             break;
                         }
                         p = p.parentElement;
+                        depth++;
                     }
                     if (parentText) {
                         elObj.parentText = truncate(parentText.replace(/\\s*\\n\\s*/g, ' | '), MAX_TEXT);
                     }
                 }
-                delete elObj.domElement;
+                delete elObj.domElement; // Remove reference to allow browser garbage collection
             }
 
+            // LEVEL 1 (LEAN Mode): Capture all compiled interactive elements and page structure headings
             if (level >= 1) {
                 sections.push({heading: '=== Interactive Elements ===', elements: interactiveElements});
 
-                // Page structure
+                // Capture semantic headings to help the LLM structure the page logically
                 sections.push({heading: '\\n=== Page Structure ===', elements:
                     captureElements('h1', 'heading')
                     .concat(captureElements('h2', 'heading'))
@@ -344,6 +391,7 @@ public class PageAnalyzer
                 });
             }
 
+            // LEVEL 2 (STANDARD Mode): Capture visible paragraph and plain text contents for full validation
             if (level >= 2) {
                 sections.push({heading: '\\n=== Text Content (Validation Mode) ===', elements:
                     captureElements('p, span, li, td, div', 'text')
