@@ -27,6 +27,7 @@ package com.xceptance.neodymium.ai.action.plugins;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -54,6 +55,8 @@ import com.xceptance.neodymium.util.Neodymium;
 public class JavaMethodAction implements AiActionPlugin
 {
     private static final Logger LOG = LoggerFactory.getLogger(JavaMethodAction.class);
+
+    private volatile String cachedUtilityMethodsDescription = null;
 
     @Override
     public String getActionName()
@@ -92,9 +95,109 @@ public class JavaMethodAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "JAVA_METHOD: Invoke a Java method on the current test instance class via reflection. "
-                + "target = the simple method name (no class name or dots). "
-                + "value = the single String argument passed to the method.";
+        final StringBuilder instructions = new StringBuilder();
+        instructions.append("JAVA_METHOD: Invoke a Java method on the current test instance class via reflection. ")
+                .append("target = the simple method name (no class name or dots). ")
+                .append("value = the single String argument passed to the method.");
+
+        if (cachedUtilityMethodsDescription == null)
+        {
+            synchronized (this)
+            {
+                if (cachedUtilityMethodsDescription == null)
+                {
+                    cachedUtilityMethodsDescription = getUtilityMethodsDescription();
+                }
+            }
+        }
+
+        if (!cachedUtilityMethodsDescription.isEmpty())
+        {
+            instructions.append(cachedUtilityMethodsDescription);
+        }
+
+        return instructions.toString();
+    }
+
+    /**
+     * Reflectively scans all configured utility classes for public static methods
+     * that can be invoked via the JAVA_METHOD action and formats their signatures and descriptions.
+     *
+     * @return a formatted string listing available utility methods, or an empty string
+     */
+    private String getUtilityMethodsDescription()
+    {
+        final List<String> utilityClassNames = Neodymium.aiConfiguration().aiJavaMethodUtilityClasses();
+        if (utilityClassNames == null || utilityClassNames.isEmpty())
+        {
+            return "";
+        }
+
+        final StringBuilder sb = new StringBuilder();
+        sb.append("\n  Available utility methods you can invoke:");
+
+        for (final String className : utilityClassNames)
+        {
+            final String trimmed = className.trim();
+            if (trimmed.isEmpty())
+            {
+                continue;
+            }
+
+            try
+            {
+                final Class<?> clazz = Class.forName(trimmed);
+                final Method[] methods = clazz.getMethods();
+
+                for (final Method method : methods)
+                {
+                    final int modifiers = method.getModifiers();
+                    if (Modifier.isPublic(modifiers) && Modifier.isStatic(modifiers))
+                    {
+                        final Class<?>[] params = method.getParameterTypes();
+                        if (params.length == 0 || (params.length == 1 && params[0] == String.class))
+                        {
+                            final String paramStr = params.length == 0 ? "" : "String";
+                            final String desc = getMethodExplanation(method.getName());
+                            sb.append("\n    - ").append(method.getName()).append("(").append(paramStr).append(")");
+                            if (!desc.isEmpty())
+                            {
+                                sb.append(": ").append(desc);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                // Ignore classpath load issues for prompt construction
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Returns a concise description for the built-in assertion methods to guide the LLM's selection.
+     *
+     * @param methodName the name of the method
+     * @return the description string, or empty string if not a built-in method
+     */
+    private String getMethodExplanation(final String methodName)
+    {
+        return switch (methodName)
+        {
+            case "assertPriceGreaterThanZero" -> "Asserts that the price string (any locale/currency, e.g. '$17.99', '12,50 €') represents a value strictly greater than zero.";
+            case "assertGreaterThanZero" -> "Asserts that the numeric/price string represents a value strictly greater than zero.";
+            case "verifyLessOrEqual" -> "Verifies that the first extracted number is less than or equal to the second. Expects a JSON array with exactly two values (e.g. '[\"10\", \"15\"]').";
+            case "assertNumberGreaterThan" -> "Asserts that the first number is strictly greater than the second. Expects a comma-separated string or a JSON array of two values (e.g. '15.00, 10.00' or '[\"15.00\", \"10.00\"]').";
+            case "assertNumberGreaterThanOrEqual" -> "Asserts that the first number is greater than or equal to the second. Expects two values.";
+            case "assertNumberLessThan" -> "Asserts that the first number is strictly less than the second. Expects two values.";
+            case "assertNumberLessThanOrEqual" -> "Asserts that the first number is less than or equal to the second. Expects two values.";
+            case "assertNumberEqual" -> "Asserts that the first number is equal to the second. Expects two values.";
+            case "assertMatchesRegex" -> "Asserts that the provided value matches the given regular expression pattern. Expects two values (e.g. 'ORD-123, ^ORD-[0-9]{3}$' or '[\"ORD-123\", \"^ORD-[0-9]{3}$\"]').";
+            case "verifyCalculation" -> "Verifies that the mathematical equation is correct within an allowed tolerance of 0.02 (e.g. '0,90 € = (14,96 € + 0,00 €) * 6,00%').";
+            default -> "";
+        };
     }
 
     @Override

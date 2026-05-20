@@ -29,18 +29,18 @@ public class YamlFileReader {
             }
 
             List<?> iterationList = null;
-            String prompt = null;
+            String steps = null;
             Object before = null;
             Object after = null;
             Object context = null;
             Object hints = null;
 
             // Scenario 1: The root is a map (complex structure, e.g., AI integration with
-            // 'prompt' and 'data')
+            // 'steps' and 'data')
             if (data instanceof Map) {
                 Map<?, ?> rootMap = (Map<?, ?>) data;
-                if (rootMap.containsKey("prompt")) {
-                    prompt = String.valueOf(rootMap.get("prompt"));
+                if (rootMap.containsKey("steps")) {
+                    steps = String.valueOf(rootMap.get("steps"));
                 }
                 if (rootMap.containsKey("context")) {
                     context = rootMap.get("context");
@@ -99,10 +99,10 @@ public class YamlFileReader {
                             }
                         }
 
-                        // Inject the AI global prompt into every iteration context transparently if not
+                        // Inject the AI global steps into every iteration context transparently if not
                         // locally overridden
-                        if (prompt != null && !newDataSet.containsKey("prompt")) {
-                            newDataSet.put("prompt", prompt);
+                        if (steps != null && !newDataSet.containsKey("steps")) {
+                            newDataSet.put("steps", steps);
                         }
 
                         if (before != null && !newDataSet.containsKey("before")) {

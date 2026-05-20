@@ -116,6 +116,37 @@ public class AiBrowserPlaybookTest {
         Assert.assertEquals("java executeDummy3()", playbook.getSteps().get(2).getPromptLine());
         Assert.assertTrue(playbook.isRecording());
     }
+
+    private int flakyAttempts = 0;
+
+    @Test
+    public void testPlaybookReplaySkipsLLMOnRetryWhenHealingDisabled()
+    {
+        flakyAttempts = 0;
+        injectTestPlaybook("executeFlaky", null, null);
+
+        Neodymium.ai().execute("java executeFlaky()");
+
+        Assert.assertEquals(Arrays.asList("flakySuccess"), executionOrder);
+        Assert.assertEquals(2, flakyAttempts);
+
+        final Playbook playbook = Neodymium.getAiPlaybook();
+        Assert.assertEquals(1, playbook.getSteps().size());
+        Assert.assertEquals("java executeFlaky()", playbook.getSteps().get(0).getPromptLine());
+        Assert.assertFalse(playbook.isRecording());
+        Assert.assertFalse(playbook.getSteps().get(0).failed());
+    }
+
+    public void executeFlaky()
+    {
+        flakyAttempts++;
+        if (flakyAttempts < 2)
+        {
+            throw new AssertionError("Transient failure simulation");
+        }
+        executionOrder.add("flakySuccess");
+    }
+
     public void executeDummy1() { executionOrder.add("dummy1"); }
     public void executeDummy2() { executionOrder.add("dummy2"); }
     public void executeDummy3() { executionOrder.add("dummy3"); }

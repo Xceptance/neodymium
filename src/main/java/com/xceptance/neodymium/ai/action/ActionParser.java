@@ -365,9 +365,11 @@ public class ActionParser {
             final String elementDetails = obj.has("elementDetails") && !obj.get("elementDetails").isJsonNull()
                                                                                                        ? obj.get("elementDetails").getAsString()
                                                                                                        : null;
+            final boolean adjust = obj.has("adjust") && !obj.get("adjust").isJsonNull() && obj.get("adjust").getAsBoolean();
 
             final Action action = new Action(type, target, value, description);
             action.setElementDetails(elementDetails);
+            action.setAdjust(adjust);
             
             if (obj.has("reasoning") && !obj.get("reasoning").isJsonNull()) {
                 action.setReasoning(obj.get("reasoning").getAsString());

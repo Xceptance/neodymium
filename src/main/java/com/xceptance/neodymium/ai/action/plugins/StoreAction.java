@@ -35,6 +35,7 @@ import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.ai.util.AiAssertions;
 
 /**
  * Plugin action that captures text from an element and stores it as a variable
@@ -62,7 +63,7 @@ public final class StoreAction implements AiActionPlugin {
 
     @Override
     public String getPromptInstructions() {
-        return "STORE: Capture text from an element to use later. Requires \"target\" (the element to capture from) and \"value\" (the variable name to store the data under, e.g., 'subtotalPrice'). The captured text can be used in later actions as ${variableName}.";
+        return "STORE: Capture text from an element to use later. Requires \"target\" (the element to capture from) and \"value\" (the variable name to store the data under, e.g., 'subtotalPrice'). The captured text can be used in later actions as ${variableName}. If the stored value is a number or price that will be used for subsequent mathematical calculations, set the optional parameter \"adjust\": true.";
     }
 
     @Override
@@ -75,11 +76,23 @@ public final class StoreAction implements AiActionPlugin {
         final SelenideElement element = executor.findElement(action);
         final String text = element.getText();
         
-        if (text != null) {
+        if (text != null)
+        {
             final String trimmedText = text.trim();
-            executor.setVariable(variableName, trimmedText);
-            LOG.debug("   ✅ STORED variable '{}' with value '{}'", variableName, trimmedText);
-        } else {
+            final String valueToStore;
+            if (action.getAdjust())
+            {
+                valueToStore = AiAssertions.normalizeNumericOrPrice(trimmedText);
+            }
+            else
+            {
+                valueToStore = trimmedText;
+            }
+            executor.setVariable(variableName, valueToStore);
+            LOG.debug("   ✅ STORED variable '{}' with value '{}'", variableName, valueToStore);
+        }
+        else
+        {
             throw new ActionExecutionException("STORE action failed: element text is null");
         }
     }

@@ -25,19 +25,21 @@ package com.xceptance.neodymium.ai.action;
 
 import java.util.List;
 import java.util.HashMap;
+import com.google.gson.annotations.JsonAdapter;
 
 /**
  * Represents a single browser action parsed from the LLM's response. Each action maps to a concrete Selenium
  * interaction.
   *
  * // AI-generated: Gemini 2.0 Flash
-*/
+ */
 public class Action
 {
     private String type;
 
     private String target;
 
+    @JsonAdapter(ValueListTypeAdapter.class)
     private List<String> value;
 
     private String description;
@@ -62,6 +64,8 @@ public class Action
     private List<Action> elseActions;
 
     private transient boolean silent = false;
+
+    private boolean adjust = false;
 
     public Action()
     {
@@ -192,8 +196,8 @@ public class Action
     @Override
     public String toString()
     {
-        return String.format("Action{type=%s, target='%s', value='%s', desc='%s', elementDetails='%s', reasoning='%s', context=%s}",
-                             type, target, value, description, elementDetails, reasoning, elementContext != null ? "yes" : "no");
+        return String.format("Action{type=%s, target='%s', value='%s', desc='%s', elementDetails='%s', reasoning='%s', context=%s, adjust=%b}",
+                             type, target, value, description, elementDetails, reasoning, elementContext != null ? "yes" : "no", adjust);
     }
 
     public String getScreenshotPath() {
@@ -238,5 +242,15 @@ public class Action
 
     public void setSilent(boolean silent) {
         this.silent = silent;
+    }
+
+    public boolean getAdjust()
+    {
+        return adjust;
+    }
+
+    public void setAdjust(final boolean adjust)
+    {
+        this.adjust = adjust;
     }
 }

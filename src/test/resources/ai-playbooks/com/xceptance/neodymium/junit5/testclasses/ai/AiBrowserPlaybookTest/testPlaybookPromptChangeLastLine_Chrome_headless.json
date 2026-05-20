@@ -13,7 +13,8 @@
           ],
           "description": "Mock action",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
       ]
     },
@@ -29,7 +30,8 @@
           ],
           "description": "Mock action",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
       ]
     },
@@ -45,7 +47,8 @@
           ],
           "description": "Call executeDummy3 with param ",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
       ]
     }
