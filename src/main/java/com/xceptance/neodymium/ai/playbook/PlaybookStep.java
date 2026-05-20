@@ -38,6 +38,8 @@ public class PlaybookStep {
     private String reasoning;
     private List<Action> actions;
 
+    private String screenshotHash;
+
     private transient String lastFailure;
 
     /**
@@ -80,6 +82,16 @@ public class PlaybookStep {
 
     public void setActions(List<Action> actions) {
         this.actions = actions;
+    }
+
+    public String getScreenshotHash()
+    {
+        return screenshotHash;
+    }
+
+    public void setScreenshotHash(final String screenshotHash)
+    {
+        this.screenshotHash = screenshotHash;
     }
 
     public boolean failed()
@@ -126,6 +138,6 @@ public class PlaybookStep {
     @Override
     public String toString()
     {
-        return "PlaybookStep [promptLine=" + promptLine + ", reasoning=" + reasoning + ", actions=" + actions + "]";
+        return "PlaybookStep [promptLine=" + promptLine + ", reasoning=" + reasoning + ", actions=" + actions + ", screenshotHash=" + screenshotHash + "]";
     }
 }

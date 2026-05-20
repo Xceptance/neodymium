@@ -621,11 +621,48 @@ public class AiAgent {
                     playbook.removeFutureSteps();
                     step = playbook.getCurrentStep();
                 } else {
-                    pageAnalyzer.getPageContext(ContextLevel.STANDARD);
+                    if (step.getScreenshotHash() != null)
+                    {
+                        LOG.info("    🔍 Step has visual screenshot hash recorded. Verifying visual match first...");
+                        try
+                        {
+                            final String currentScreenshot = pageAnalyzer.captureScreenshot("Replay: " + instruction);
+                            final String currentHash = com.xceptance.neodymium.ai.util.ScreenshotHasher.computeHash(currentScreenshot);
+                            final int distance = com.xceptance.neodymium.ai.util.ScreenshotHasher.getHammingDistance(step.getScreenshotHash(), currentHash);
+                            LOG.info("    📊 Replay Screenshot dHash comparison: Distance = {}, Recorded: {}, Current: {}", distance, step.getScreenshotHash(), currentHash);
 
-                    executionLog.logInfo("Replaying actions from playbook.");
-                    llmClient.getAiStats().recordReplay();
-                    actions.addAll(step.getActions());
+                            if (distance <= 15)
+                            {
+                                LOG.info("    ✅ Visual match succeeded (Hamming distance {} <= 15). Proceeding with recorded actions.", distance);
+                                pageAnalyzer.getPageContext(ContextLevel.STANDARD);
+                                executionLog.logInfo("Replaying actions from playbook (visual match succeeded, Hamming distance: " + distance + ").");
+                                llmClient.getAiStats().recordReplay();
+                                actions.addAll(step.getActions());
+                            }
+                            else
+                            {
+                                LOG.warn("    ⚠️ Visual match failed (Hamming distance {} > 15). The page's visual appearance has changed. Initiating self-healing/re-verification...", distance);
+                                throw new ActionExecutionException("Visual screenshot hash mismatch (distance: " + distance + ")", null);
+                            }
+                        }
+                        catch (final ActionExecutionException e)
+                        {
+                            throw e;
+                        }
+                        catch (final Exception e)
+                        {
+                            LOG.error("    ❌ Error during replay visual hash comparison", e);
+                            throw new ActionExecutionException("Error during visual hash verification: " + e.getMessage(), e);
+                        }
+                    }
+                    else
+                    {
+                        pageAnalyzer.getPageContext(ContextLevel.STANDARD);
+
+                        executionLog.logInfo("Replaying actions from playbook.");
+                        llmClient.getAiStats().recordReplay();
+                        actions.addAll(step.getActions());
+                    }
                 }
             }
         }
@@ -888,6 +925,15 @@ public class AiAgent {
                 playbookStep.setActions(actions);
                 playbookStep.setPromptLine(instruction);
                 playbookStep.setReasoning(reasoning);
+                if (screenshot != null)
+                {
+                    final String hash = com.xceptance.neodymium.ai.util.ScreenshotHasher.computeHash(screenshot);
+                    playbookStep.setScreenshotHash(hash);
+                }
+                else
+                {
+                    playbookStep.setScreenshotHash(null);
+                }
                 playbookStep.setFailure(null);
 
                 return actions;
@@ -951,6 +997,7 @@ public class AiAgent {
                 playbookStep.setActions(actions);
                 playbookStep.setPromptLine(instruction);
                 playbookStep.setReasoning("directly parsed");
+                playbookStep.setScreenshotHash(null);
                 playbookStep.setFailure(null);
                 llmClient.getAiStats().recordDirectParse();
                 return actions;
