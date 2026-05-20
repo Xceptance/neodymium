@@ -356,9 +356,31 @@ public class ActionParser {
             final String target = obj.has("target") && !obj.get("target").isJsonNull()
                                                                                        ? obj.get("target").getAsString()
                                                                                        : null;
-            final String value = obj.has("value") && !obj.get("value").isJsonNull()
-                                                                                     ? obj.get("value").getAsString()
-                                                                                     : null;
+
+            final List<String> valueList;
+            if (obj.has("value") && !obj.get("value").isJsonNull())
+            {
+                final JsonElement valElem = obj.get("value");
+                if (valElem.isJsonArray())
+                {
+                    final JsonArray arr = valElem.getAsJsonArray();
+                    final List<String> list = new ArrayList<>();
+                    for (final JsonElement item : arr)
+                    {
+                        list.add(item.getAsString());
+                    }
+                    valueList = list;
+                }
+                else
+                {
+                    valueList = List.of(valElem.getAsString());
+                }
+            }
+            else
+            {
+                valueList = null;
+            }
+
             final String description = obj.has("description") && !obj.get("description").isJsonNull()
                                                                                                  ? obj.get("description").getAsString()
                                                                                                  : "";
@@ -367,7 +389,7 @@ public class ActionParser {
                                                                                                        : null;
             final boolean adjust = obj.has("adjust") && !obj.get("adjust").isJsonNull() && obj.get("adjust").getAsBoolean();
 
-            final Action action = new Action(type, target, value, description);
+            final Action action = new Action(type, target, valueList, description);
             action.setElementDetails(elementDetails);
             action.setAdjust(adjust);
             

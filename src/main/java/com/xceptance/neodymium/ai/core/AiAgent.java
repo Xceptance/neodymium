@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
@@ -48,6 +49,7 @@ import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.SelenideAddons;
+import com.xceptance.neodymium.ai.util.ScreenshotHasher;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -372,11 +374,9 @@ public class AiAgent {
                 boolean escalatedOk = false;
                 if (!isDirectInstruction(instruction))
                 {
-                    ContextLevel currentLevel = step.getHealedContextLevel();
-                    if (currentLevel == null)
-                    {
-                        currentLevel = instruction.toLowerCase().contains("(hint:") ? ContextLevel.HINT : ContextLevel.LEAN;
-                    }
+                    final ContextLevel currentLevel = step.getHealedContextLevel() != null
+                            ? step.getHealedContextLevel()
+                            : getInitialContextLevel(instruction);
                     final ContextLevel escalated = currentLevel.escalate();
                     if (escalated != null)
                     {
@@ -445,11 +445,9 @@ public class AiAgent {
                 boolean escalatedOk = false;
                 if (!isDirectInstruction(instruction))
                 {
-                    ContextLevel currentLevel = step.getHealedContextLevel();
-                    if (currentLevel == null)
-                    {
-                        currentLevel = instruction.toLowerCase().contains("(hint:") ? ContextLevel.HINT : ContextLevel.LEAN;
-                    }
+                    final ContextLevel currentLevel = step.getHealedContextLevel() != null
+                            ? step.getHealedContextLevel()
+                            : getInitialContextLevel(instruction);
                     final ContextLevel escalated = currentLevel.escalate();
                     if (escalated != null)
                     {
@@ -607,6 +605,7 @@ public class AiAgent {
     private List<Action> getStepActions(final String instruction, final Playbook playbook) {
         List<Action> actions = new ArrayList<Action>();
         PlaybookStep step = playbook.getCurrentStep();
+        boolean visualMatchSucceeded = false;
 
         // 1. Are we replaying a playbook?
         if (playbook.isRecording() == false) {
@@ -625,22 +624,63 @@ public class AiAgent {
                     playbook.removeFutureSteps();
                     step = playbook.getCurrentStep();
                 } else {
-                    pageAnalyzer.getPageContext(ContextLevel.STANDARD);
+                    if (step.getScreenshotHash() != null)
+                    {
+                        LOG.info("    🔍 Step has visual screenshot hash recorded. Verifying visual match first...");
+                        try
+                        {
+                            final String currentScreenshot = pageAnalyzer.captureScreenshot("Replay: " + instruction);
+                            final String currentHash = ScreenshotHasher.computeHash(currentScreenshot);
+                            final int distance = ScreenshotHasher.getHammingDistance(step.getScreenshotHash(), currentHash);
+                            LOG.info("    📊 Replay Screenshot dHash comparison: Distance = {}, Recorded: {}, Current: {}", distance, step.getScreenshotHash(), currentHash);
 
-                    executionLog.logInfo("Replaying actions from playbook.");
-                    llmClient.getAiStats().recordReplay();
-                    actions.addAll(step.getActions());
+                            if (distance <= 15)
+                            {
+                                LOG.info("    ✅ Visual match succeeded (Hamming distance {} <= 15). Proceeding with recorded actions.", distance);
+                                if (!step.getActions().isEmpty())
+                                {
+                                    pageAnalyzer.getPageContext(ContextLevel.STANDARD);
+                                }
+                                executionLog.logInfo("Replaying actions from playbook (visual match succeeded, Hamming distance: " + distance + ").");
+                                llmClient.getAiStats().recordReplay();
+                                actions.addAll(step.getActions());
+                                visualMatchSucceeded = true;
+                            }
+                            else
+                            {
+                                LOG.warn("    ⚠️ Visual match failed (Hamming distance {} > 15). The page's visual appearance has changed. Initiating self-healing/re-verification...", distance);
+                                throw new ActionExecutionException("Visual screenshot hash mismatch (distance: " + distance + ")", null);
+                            }
+                        }
+                        catch (final ActionExecutionException e)
+                        {
+                            throw e;
+                        }
+                        catch (final Exception e)
+                        {
+                            LOG.error("    ❌ Error during replay visual hash comparison", e);
+                            throw new ActionExecutionException("Error during visual hash verification: " + e.getMessage(), e);
+                        }
+                    }
+                    else
+                    {
+                        pageAnalyzer.getPageContext(ContextLevel.STANDARD);
+
+                        executionLog.logInfo("Replaying actions from playbook.");
+                        llmClient.getAiStats().recordReplay();
+                        actions.addAll(step.getActions());
+                    }
                 }
             }
         }
 
         // 2. Try to identify the action intent upfront.
-        if (actions.isEmpty()) {
+        if (actions.isEmpty() && !visualMatchSucceeded) {
             actions = identifyActions(instruction, step);
         }
 
         // 3. Prepare Phase and LLM Check
-        boolean requiresLlm = actions.isEmpty();
+        boolean requiresLlm = actions.isEmpty() && !visualMatchSucceeded;
         boolean requiresScreenshot = screenshotBeforeAction;
 
         if (!actions.isEmpty()) {
@@ -673,10 +713,36 @@ public class AiAgent {
                 step.setPromptLine(instruction);
                 step.setReasoning("directly parsed or local validation succeeded");
                 step.setActions(actions);
+                playbook.setChanged(true);
             }
         }
 
         return actions;
+    }
+
+    /**
+     * Determines the initial context level for a given instruction.
+     * Case-insensitively checks for "(visual)" to start at VISUAL context level,
+     * and "(hint:" to start at HINT context level, falling back to LEAN.
+     *
+     * @param instruction the instruction to check
+     * @return the initial context level
+     */
+    private static final ContextLevel getInitialContextLevel(final String instruction)
+    {
+        final String lower = instruction.toLowerCase();
+        if (lower.contains("(visual)"))
+        {
+            return ContextLevel.VISUAL_LEAN;
+        }
+        else if (lower.contains("(hint:"))
+        {
+            return ContextLevel.HINT;
+        }
+        else
+        {
+            return ContextLevel.LEAN;
+        }
     }
 
     private List<Action> getActionsFromLLM(final String instruction, final PlaybookStep playbookStep,
@@ -702,8 +768,9 @@ public class AiAgent {
         // The LLM tells us when it needs more by failing or returning ESCALATE.
         // Exception: if this step was previously healed at a higher level, start there.
         ContextLevel contextLevel = playbookStep.getHealedContextLevel();
-        if (contextLevel == null) {
-            contextLevel = instruction.toLowerCase().contains("(hint:") ? ContextLevel.HINT : ContextLevel.LEAN;
+        if (contextLevel == null)
+        {
+            contextLevel = getInitialContextLevel(instruction);
         }
         while (true) {
             final String attemptLabel = lastWasNoActions ? "Retry (No Actions) " + noActionsCount
@@ -866,6 +933,13 @@ public class AiAgent {
                 playbookStep.setActions(actions);
                 playbookStep.setPromptLine(instruction);
                 playbookStep.setReasoning(reasoning);
+                final String oldHash = playbookStep.getScreenshotHash();
+                final String newHash = (screenshot != null) ? ScreenshotHasher.computeHash(screenshot) : null;
+                if (!Objects.equals(oldHash, newHash))
+                {
+                    playbookStep.setScreenshotHash(newHash);
+                    playbook.setChanged(true);
+                }
                 playbookStep.setFailure(null);
 
                 return actions;
@@ -929,6 +1003,7 @@ public class AiAgent {
                 playbookStep.setActions(actions);
                 playbookStep.setPromptLine(instruction);
                 playbookStep.setReasoning("directly parsed");
+                playbookStep.setScreenshotHash(null);
                 playbookStep.setFailure(null);
                 llmClient.getAiStats().recordDirectParse();
                 return actions;

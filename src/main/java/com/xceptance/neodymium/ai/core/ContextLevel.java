@@ -62,6 +62,13 @@ public enum ContextLevel
     STANDARD,
 
     /**
+     * Lean DOM (same as {@link #LEAN}) plus a page screenshot.
+     * Used as the initial context when the instruction is explicitly tagged with `(visual)`.
+     * Escalates directly to {@link #VISUAL} if needed.
+     */
+    VISUAL_LEAN,
+
+    /**
      * Same DOM as {@link #STANDARD} plus a page screenshot sent as a
      * multimodal input. The LLM can visually identify elements that are
      * hidden from the DOM extractor (CSS pseudo-elements, SVG text,
@@ -85,6 +92,7 @@ public enum ContextLevel
             case HINT -> LEAN;
             case LEAN -> STANDARD;
             case STANDARD -> VISUAL;
+            case VISUAL_LEAN -> VISUAL;
             case VISUAL -> null;
         };
     }
@@ -96,7 +104,7 @@ public enum ContextLevel
      */
     public boolean includesScreenshot()
     {
-        return this == VISUAL;
+        return this == VISUAL_LEAN || this == VISUAL;
     }
 
     /**

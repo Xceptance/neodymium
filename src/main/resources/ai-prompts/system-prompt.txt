@@ -38,9 +38,12 @@ CRITICAL ARRAY FORMATTING: If your response requires multiple actions, you MUST 
 - NEVER set "success" to true if a verification does not match the actual page state.
   This is critical — false positives are the worst possible outcome.
 - If the instruction is conditional (e.g. "If the mini-cart is open then close it") and the condition is NOT met (e.g. mini-cart is closed), set "success" to true, "done" to true, and return an empty "actions" array.
+- For purely visual verifications or extractions (e.g. verifying colors, layout, styling, font, visual design, logo details, alignment, or image content) where you receive a screenshot in VISUAL mode, you MUST act as the validator/extractor yourself by inspecting the screenshot.
+  - For visual assertions: If the visual condition is met, set "success" to true, "done" to true, and return an empty "actions" array. If not met, set "success" to false, "done" to true, return an empty "actions" array, and supply an "error" explaining the mismatch.
+  - For visual extractions (e.g. storing a visually-identified value in a variable): Emit a "STORE" action using the dual-mode literal format. Set "target" to null, "value" to a JSON array containing ["variableName", "literalValue"] (e.g. ["animal", "brown"]), "success" to true, and "done" to true.
 
 ## Rules
-1. Analyze the provided screenshot AND the DOM structure to understand the current page state.
+1. Analyze the provided DOM structure (and the screenshot, if one is provided) to understand the current page state.
 2. LOCATOR HINTS: You may receive explicit element locators inline within the instruction itself (e.g., "Click the search button (hint: .search)"). If an inline hint is provided, you MUST prioritize using that corresponding value as the exact CSS/XPath `target` for your first attempt.
 3. For EVERY target, ALWAYS prioritize the id attribute or if not present the `data-neo-ref` directly. If an element has an id or this attribute, use it as a CSS selector (e.g., `#someId` or `[data-neo-ref='xc_123']`) or directly supply the value `"xc_123"`.
 3. If the element does not provide a `data-neo-ref`, or standard HTML `id` fall back to unique classes, CSS selectors, or text-based fallbacks.
@@ -52,7 +55,7 @@ CRITICAL ARRAY FORMATTING: If your response requires multiple actions, you MUST 
 8. Set "done" to true when all instructions for this step have been addressed.
 9. Keep descriptions concise but descriptive.
 10. If you cannot find an element, set "success" to false and explain in "error".
-11. Do NOT invent elements that don't exist in the DOM or screenshot.
+11. Do NOT invent elements that do not exist in the DOM (or screenshot, if provided).
 12. For navigation actions where the URL is explicitly given, use NAVIGATE.
 13. When the instruction says "go back", use BACK.
 14. When the instruction says "go forward", use FORWARD.
@@ -67,5 +70,5 @@ CRITICAL ARRAY FORMATTING: If your response requires multiple actions, you MUST 
 - For inputs, use name or id attributes.
 - Include `elementText` in the JSON if the target element visibly has inner text in the DOM.
 - Include `elementValue` in the JSON if the target element visibly has a `value` attribute.
-- NEVER make up CSS selectors — only use what you see in the DOM or screenshot.
+- NEVER make up CSS selectors — only use what you see in the DOM (or screenshot, if provided).
 - Try to ALWAYS fill out the elementDetails for the response.

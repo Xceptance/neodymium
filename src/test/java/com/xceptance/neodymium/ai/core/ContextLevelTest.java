@@ -57,17 +57,24 @@ class ContextLevelTest
     }
 
     @Test
+    void escalate_fromVisualLean_returnsVisual()
+    {
+        assertEquals(ContextLevel.VISUAL, ContextLevel.VISUAL_LEAN.escalate());
+    }
+
+    @Test
     void escalate_fromVisual_returnsNull()
     {
         assertNull(ContextLevel.VISUAL.escalate());
     }
 
     @Test
-    void includesScreenshot_onlyVisual()
+    void includesScreenshot_visualLevels()
     {
         assertFalse(ContextLevel.HINT.includesScreenshot());
         assertFalse(ContextLevel.LEAN.includesScreenshot());
         assertFalse(ContextLevel.STANDARD.includesScreenshot());
+        assertTrue(ContextLevel.VISUAL_LEAN.includesScreenshot());
         assertTrue(ContextLevel.VISUAL.includesScreenshot());
     }
 
@@ -77,13 +84,14 @@ class ContextLevelTest
         assertFalse(ContextLevel.HINT.includesTextContent());
         assertFalse(ContextLevel.LEAN.includesTextContent());
         assertTrue(ContextLevel.STANDARD.includesTextContent());
+        assertFalse(ContextLevel.VISUAL_LEAN.includesTextContent());
         assertTrue(ContextLevel.VISUAL.includesTextContent());
     }
 
     @Test
     void escalationChain_coversAllLevels()
     {
-        // Verify the full escalation chain: HINT -> LEAN -> STANDARD -> VISUAL -> null
+        // Verify the standard escalation chain: HINT -> LEAN -> STANDARD -> VISUAL -> null
         ContextLevel current = ContextLevel.HINT;
         assertEquals(ContextLevel.HINT, current);
 
@@ -92,6 +100,20 @@ class ContextLevelTest
 
         current = current.escalate();
         assertEquals(ContextLevel.STANDARD, current);
+
+        current = current.escalate();
+        assertEquals(ContextLevel.VISUAL, current);
+
+        final ContextLevel terminal = current.escalate();
+        assertNull(terminal);
+    }
+
+    @Test
+    void escalationChain_fromVisualLean()
+    {
+        // Verify the visual tag escalation chain: VISUAL_LEAN -> VISUAL -> null
+        ContextLevel current = ContextLevel.VISUAL_LEAN;
+        assertEquals(ContextLevel.VISUAL_LEAN, current);
 
         current = current.escalate();
         assertEquals(ContextLevel.VISUAL, current);
