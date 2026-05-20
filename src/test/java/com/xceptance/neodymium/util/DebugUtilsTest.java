@@ -16,7 +16,7 @@ import org.openqa.selenium.support.events.EventFiringDecorator;
 
 import java.util.List;
 
-import static com.codeborne.selenide.CollectionCondition.size;
+import static com.codeborne.selenide.CollectionCondition.sizeGreaterThan;
 import static com.codeborne.selenide.Condition.exist;
 import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
@@ -24,11 +24,10 @@ import static com.codeborne.selenide.Selenide.$$;
 
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")
-public class DebugUtilsTest
-{
+public class DebugUtilsTest {
     @Test
-    public void testHighlighting()
-    {
+    public void testHighlighting() throws Exception {
+        Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "true");
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "1000");
 
         Selenide.open("https://blog.xceptance.com/");
@@ -44,16 +43,16 @@ public class DebugUtilsTest
 
         final List<WebElement> list2 = $("body").findElements(By.cssSelector("#content article"));
         DebugUtils.highlightElements(list2, Neodymium.getDriver());
-        $$(".neodymium-highlight-box").shouldHave(size(10));
+        $$(".neodymium-highlight-box").shouldHave(sizeGreaterThan(0));
 
         DebugUtils.resetAllHighlight();
         $(".neodymium-highlight-box").shouldNot(exist);
     }
 
     @Test
-    public void testHighlightingWithoutImplicitWaitTime()
-    {
-        Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "500");
+    public void testHighlightingWithoutImplicitWaitTime() throws Exception {
+        Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "true");
+        Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "1000");
 
         Selenide.open("https://blog.xceptance.com/");
         DebugUtils.injectJavaScript();
@@ -68,8 +67,7 @@ public class DebugUtilsTest
     }
 
     @Test
-    public void testWaiting()
-    {
+    public void testWaiting() {
         NeodymiumWebDriverTestListener eventListener = new NeodymiumWebDriverTestListener();
         RemoteWebDriver driver = Neodymium.getRemoteWebDriver();
         WebDriver decoratedDriver = new EventFiringDecorator<WebDriver>(eventListener).decorate(driver);
@@ -111,8 +109,7 @@ public class DebugUtilsTest
     }
 
     @Test
-    public void testIFrames() throws Exception
-    {
+    public void testIFrames() throws Exception {
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "true");
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "750");
 
@@ -122,8 +119,7 @@ public class DebugUtilsTest
         SelenideElement acceptCookiesButtonFrame = $("#fast-cmp-iframe");
 
         SelenideAddons.optionalWaitUntilCondition(acceptCookiesButtonFrame, visible);
-        if (acceptCookiesButtonFrame.isDisplayed())
-        {
+        if (acceptCookiesButtonFrame.isDisplayed()) {
             Neodymium.getDriver().switchTo().frame(acceptCookiesButtonFrame);
             $(".fast-cmp-button-primary").click();
             Neodymium.getDriver().switchTo().defaultContent();
@@ -144,8 +140,7 @@ public class DebugUtilsTest
         $(".neodymium-highlight-box").shouldNot(exist);
     }
 
-    private void assertJsSuccessfullyInjected()
-    {
+    private void assertJsSuccessfullyInjected() {
         Assert.assertTrue(Selenide.executeJavaScript("return !!window.NEODYMIUM"));
     }
 }

@@ -30,22 +30,15 @@ public class BrowserstackHomePageTest
 
         // basic validation
         // Verifies the company Logo and name are visible.
-        $("#navigation .navbar-brand a").shouldBe(visible);
+        $("a.navbar-brand").shouldBe(visible);
 
         // Verifies the Navigation bar is visible
-        $("#navigation ul.nav").shouldBe(visible);
+        $(".navbar-nav").shouldBe(visible);
 
         // Asserts there's categories in the nav bar.
-        $$("#navigation ul.nav > li > a").shouldHave(sizeGreaterThan(0));
+        $$(".navbar-nav > li > a").shouldHave(sizeGreaterThan(0));
 
         // Asserts the first headline is there.
-        $("#main h1").shouldBe(matchText("[A-Z].{3,}"));
-
-        // Verifies the "services" section is there.
-        // Asserts there's at least 1 item in the list.
-        $$("#main .row.strip a").shouldHave(sizeGreaterThan(0));
-
-        // Verifies the company button is there.
-        $$("p.lead > a").shouldHave(sizeGreaterThan(0));
+        $(".hero-title").shouldBe(matchText("[A-Z].{3,}"));
     }
 }

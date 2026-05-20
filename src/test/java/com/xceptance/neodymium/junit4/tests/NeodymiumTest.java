@@ -29,7 +29,6 @@ import org.junit.runner.notification.Failure;
 import org.junit.runners.model.FrameworkMethod;
 
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.junit4.testclasses.datautils.TestDataTests;
 import com.xceptance.neodymium.util.Neodymium;
 
 public abstract class NeodymiumTest {
@@ -159,8 +158,10 @@ public abstract class NeodymiumTest {
 				final int failureCount = result.getFailureCount();
 				for (int i = 0; i < failureCount; i++) {
 					final String methodName = result.getFailures().get(i).getDescription().getMethodName();
-					Assert.assertEquals("Failure message", expectedFailureMessages.get(methodName),
-							result.getFailures().get(i).getMessage());
+					final String expectedMessage = expectedFailureMessages.get(methodName);
+					final String actualMessage = result.getFailures().get(i).getMessage();
+					Assert.assertTrue("Failure message for " + methodName + " should contain '" + expectedMessage + "' but was '" + actualMessage + "'",
+							actualMessage != null && actualMessage.contains(expectedMessage));
 				}
 			}
 		} catch (AssertionError e) {

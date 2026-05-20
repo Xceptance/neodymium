@@ -1,0 +1,4 @@
+prompt: Verify login logic
+data:
+  - user: john@example.com
+    password: password123

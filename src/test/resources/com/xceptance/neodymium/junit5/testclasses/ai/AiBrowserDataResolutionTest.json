@@ -1,0 +1,15 @@
+[
+  {
+    "testId": "NestedObjectTest",
+    "user": {
+      "profile": {
+        "preferences": {
+          "theme": "dark",
+          "greetingTemplate": "Welcome to ${user.profile.preferences.theme} theme!"
+        }
+      }
+    },
+    "simple": "value",
+    "reference": "${simple}"
+  }
+]

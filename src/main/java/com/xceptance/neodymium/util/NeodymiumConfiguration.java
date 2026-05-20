@@ -1,6 +1,7 @@
 package com.xceptance.neodymium.util;
 
 import com.xceptance.neodymium.junit4.NeodymiumRunner.DescriptionMode;
+import org.aeonbits.owner.Accessible;
 import org.aeonbits.owner.Config.LoadPolicy;
 import org.aeonbits.owner.Config.LoadType;
 import org.aeonbits.owner.Config.Sources;
@@ -16,7 +17,7 @@ import org.aeonbits.owner.Mutable;
   "file:config/credentials.properties",
   "file:config/neodymium.properties"
 })
-public interface NeodymiumConfiguration extends Mutable
+public interface NeodymiumConfiguration extends Mutable, Accessible
 {
     @Key("neodymium.debugUtils.highlight")
     @DefaultValue("false")
@@ -337,6 +338,12 @@ public interface NeodymiumConfiguration extends Mutable
 
     @Key("neodymium.testNameFilter")
     public String getTestNameFilter();
+
+    @Key("neodymium.testIdFilter")
+    public String getTestIdFilter();
+
+    @Key("neodymium.testFileFilter")
+    public String getTestFileFilter();
 
     @Key("neodymium.workInProgress")
     @DefaultValue("false")

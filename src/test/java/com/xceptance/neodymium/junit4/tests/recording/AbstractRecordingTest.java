@@ -43,6 +43,7 @@ public abstract class AbstractRecordingTest extends NeodymiumTest
         properties1.put(format + ".filmAutomatically", Boolean.toString(filmAutomatically));
         properties1.put(format + ".enableFilming", "true");
         properties1.put(format + ".deleteRecordingsAfterAddingToAllureReport", "false");
+        properties1.put(format + ".ffmpegLogFile", "target/ffmpeg_output_msg_" + UUID.randomUUID() + ".txt");
         final String fileLocation = "config/temp-" + format + "-" + filmAutomatically +UUID.randomUUID()+ ".properties";
         File tempConfigFile1 = new File("./" + fileLocation);
         writeMapToPropertiesFile(properties1, tempConfigFile1);

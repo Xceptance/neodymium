@@ -55,12 +55,16 @@ public class NeodymiumLocalization
         return getText(key, null);
     }
 
-    public String getText(final String key, final String localeParam)
+    public String tryGetText(final String key)
+    {
+        return tryGetText(key, null);
+    }
+
+    public String tryGetText(final String key, final String localeParam)
     {
         if (properties == null)
         {
-            // if properties is not set then the localization yaml file was not found or is empty / invalid
-            throw new RuntimeException("Localization file was not found or is invalid");
+            return key;
         }
 
         final String localeString;
@@ -98,10 +102,29 @@ public class NeodymiumLocalization
         {
             result = properties.getProperty("default." + key);
         }
+        
+        if (result == null)
+        {
+            return key;
+        }
+        
+        return result;
+
+    }
+
+    public String getText(final String key, final String localeParam)
+    {
+        // if properties is not set then the localization yaml file was not found or is empty / invalid
+        if (properties == null)
+        {
+            throw new RuntimeException("Localization file was not found or is invalid");
+        }
+
+        String result = tryGetText(key, localeParam);
 
         if (result == null)
         {
-            Assert.fail(MessageFormat.format("Cannot find localization for ''{0}'' and locale {1}", key, localeString));
+            Assert.fail(MessageFormat.format("Cannot find localization for ''{0}'' and locale {1}", key, localeParam));
         }
 
         return result;

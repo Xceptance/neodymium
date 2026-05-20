@@ -1,12 +1,6 @@
 package com.xceptance.neodymium.common;
 
-import com.codeborne.selenide.logevents.LogEvent;
-import com.codeborne.selenide.logevents.LogEventListener;
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.JavaScriptUtils;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.PropertiesUtil;
-import org.junit.jupiter.api.Assertions;
+import static org.openqa.selenium.support.ui.ExpectedConditions.alertIsPresent;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -17,7 +11,14 @@ import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.regex.Pattern;
 
-import static org.openqa.selenium.support.ui.ExpectedConditions.alertIsPresent;
+import org.junit.jupiter.api.Assertions;
+
+import com.codeborne.selenide.logevents.LogEvent;
+import com.codeborne.selenide.logevents.LogEventListener;
+import com.xceptance.neodymium.util.AllureAddons;
+import com.xceptance.neodymium.util.JavaScriptUtils;
+import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.PropertiesUtil;
 
 public class TestStepListener implements LogEventListener
 {
@@ -105,7 +106,7 @@ public class TestStepListener implements LogEventListener
         if (this.includeList != null && !this.includeList.isEmpty())
         {
             Assertions.assertTrue(this.includeList.stream().anyMatch(s -> Pattern.compile(s).matcher(currentUrl).find()),
-                                  "Opened Link was outside permitted URLs: " + currentUrl);
+                                  "Opened Link was outside permitted URLs: " + currentUrl + "did not match any of the include list: " + this.includeList);
         }
 
         // check URL is not excluded

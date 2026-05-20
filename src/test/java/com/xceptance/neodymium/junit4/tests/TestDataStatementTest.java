@@ -2,18 +2,20 @@ package com.xceptance.neodymium.junit4.tests;
 
 import org.junit.Before;
 import org.junit.Test;
-
 import org.junit.runner.Result;
 
-import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit4.testclasses.data.RandomDataSetsException;
 import com.xceptance.neodymium.junit4.testclasses.data.RandomnessOfDataSets;
 import com.xceptance.neodymium.junit4.testclasses.data.annotation.InstantiateDtoViaAnnotation;
 import com.xceptance.neodymium.junit4.testclasses.data.annotation.InstantiateDtoViaJsonPathInAnnotation;
+import com.xceptance.neodymium.junit4.testclasses.data.annotation.InstantiateDtoViaYamlAnnotation;
 import com.xceptance.neodymium.junit4.testclasses.data.annotation.InstantiateFieldViaAnnotation;
 import com.xceptance.neodymium.junit4.testclasses.data.annotation.inheritance.ChildInheritingDtoFromAnnotation;
 import com.xceptance.neodymium.junit4.testclasses.data.annotation.inheritance.ChildInheritingValuesFromAnnotation;
 import com.xceptance.neodymium.junit4.testclasses.data.file.xml.CanNotReadDataSetXml;
+import com.xceptance.neodymium.junit4.testclasses.data.file.yaml.CanReadDataSetYaml;
+import com.xceptance.neodymium.junit4.testclasses.data.file.yaml.CanReadDataSetYamlMulti;
+import com.xceptance.neodymium.junit4.testclasses.data.file.yaml.YamlOverridesJson;
 import com.xceptance.neodymium.junit4.testclasses.data.inheritance.child.PackageTestDataInheritance;
 import com.xceptance.neodymium.junit4.testclasses.data.inheritance.child.grandchild.GrandChildPackageTestDataInheritance;
 import com.xceptance.neodymium.junit4.testclasses.data.inheritance.child.grandchild.set.DataSetOverridesPackageData;
@@ -49,6 +51,9 @@ import com.xceptance.neodymium.junit4.testclasses.data.set.json.CanReadDataSetJs
 import com.xceptance.neodymium.junit4.testclasses.data.set.testid.DuplicateTestId;
 import com.xceptance.neodymium.junit4.testclasses.data.set.testid.SpecialCharacterTestId;
 import com.xceptance.neodymium.junit4.testclasses.data.set.xml.CanReadDataSetXML;
+import com.xceptance.neodymium.junit4.testclasses.data.folder.ValidDataFolder;
+import com.xceptance.neodymium.junit4.testclasses.data.folder.InvalidIdDataFolder;
+import com.xceptance.neodymium.junit4.testclasses.data.folder.UnsupportedFileDataFolder;
 import com.xceptance.neodymium.util.Neodymium;
 
 public class TestDataStatementTest extends NeodymiumTest
@@ -108,6 +113,38 @@ public class TestDataStatementTest extends NeodymiumTest
     }
 
     @Test
+    public void testCanReadDataSetYaml()
+    {
+        // test data set yaml is read seamlessly including prompt integration
+        Result result = run(CanReadDataSetYaml.class);
+        checkPass(result, 1, 0);
+    }
+
+    @Test
+    public void testCanReadDataSetYamlMulti()
+    {
+        // test multi data sets executing uniquely mapping dynamically swapped properties
+        Result result = run(CanReadDataSetYamlMulti.class);
+        checkPass(result, 2, 0); // 2 iteration cycles
+    }
+
+    @Test
+    public void testYamlOverridesJson()
+    {
+        // test yaml precedence resolution against json fallback
+        Result result = run(YamlOverridesJson.class);
+        checkPass(result, 1, 0);
+    }
+
+    @Test
+    public void testInstantiateDtoViaYamlAnnotation()
+    {
+        // test complex object unmarshalling against SnakeYAML and Gson logic
+        Result result = run(InstantiateDtoViaYamlAnnotation.class);
+        checkPass(result, 1, 0);
+    }
+
+    @Test
     public void testCanReadDataSetXML()
     {
         // test data set xml is read
@@ -154,6 +191,27 @@ public class TestDataStatementTest extends NeodymiumTest
         // parenthesis will be converted to to brackets
         Result result = run(SpecialCharacterTestId.class);
         checkPass(result, 7, 0);
+    }
+
+    @Test
+    public void testValidDataFolder()
+    {
+        Result result = run(ValidDataFolder.class);
+        checkPass(result, 3, 0);
+    }
+
+    @Test
+    public void testInvalidIdDataFolder()
+    {
+        Result result = run(InvalidIdDataFolder.class);
+        checkFail(result, 1, 0, 1, "java.lang.RuntimeException: Duplicate test dataset ID 'same_id' found in file");
+    }
+
+    @Test
+    public void testUnsupportedFileDataFolder()
+    {
+        Result result = run(UnsupportedFileDataFolder.class);
+        checkPass(result, 1, 0);
     }
 
     ///////////////////////

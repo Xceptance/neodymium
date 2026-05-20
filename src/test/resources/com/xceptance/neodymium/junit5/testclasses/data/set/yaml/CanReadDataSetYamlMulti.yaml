@@ -1,0 +1,7 @@
+prompt: Verify login logic
+data:
+  - testId: Iteration1
+    user: john@example.com
+  - testId: Iteration2
+    user: jane@example.com
+    prompt: Local override prompt logic

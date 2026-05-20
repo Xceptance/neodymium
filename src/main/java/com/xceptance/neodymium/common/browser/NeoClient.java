@@ -122,4 +122,21 @@ public class NeoClient implements HttpClient
         return jdkClient.openSocket(request, listener);
     }
 
+    @Override
+    public <T> java.net.http.HttpResponse<T> sendNative(java.net.http.HttpRequest request, java.net.http.HttpResponse.BodyHandler<T> responseHandler) throws IOException, InterruptedException
+    {
+        if (jdkClient == null) {
+            jdkClient = new JdkHttpClient.Factory().createClient(config);
+        }
+        return jdkClient.sendNative(request, responseHandler);
+    }
+
+    @Override
+    public <T> java.util.concurrent.CompletableFuture<java.net.http.HttpResponse<T>> sendAsyncNative(java.net.http.HttpRequest request, java.net.http.HttpResponse.BodyHandler<T> responseHandler)
+    {
+        if (jdkClient == null) {
+            jdkClient = new JdkHttpClient.Factory().createClient(config);
+        }
+        return jdkClient.sendAsyncNative(request, responseHandler);
+    }
 }

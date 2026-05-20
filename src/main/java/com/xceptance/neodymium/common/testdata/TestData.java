@@ -1,5 +1,17 @@
 package com.xceptance.neodymium.common.testdata;
 
+import static com.xceptance.neodymium.util.AllureAddons.JSON_VIEWER_SCRIPT_PATH;
+import static com.xceptance.neodymium.util.AllureAddons.addDataAsJsonToReport;
+
+import java.io.Serial;
+import java.lang.reflect.Type;
+import java.util.HashMap;
+
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.RandomStringGenerator;
+import org.apache.commons.text.TextRandomProvider;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -13,18 +25,8 @@ import com.jayway.jsonpath.spi.json.GsonJsonProvider;
 import com.jayway.jsonpath.spi.mapper.GsonMappingProvider;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
+
 import io.qameta.allure.Allure;
-import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.text.RandomStringGenerator;
-import org.apache.commons.text.TextRandomProvider;
-
-import java.io.Serial;
-import java.lang.reflect.Type;
-import java.util.HashMap;
-
-import static com.xceptance.neodymium.util.AllureAddons.JSON_VIEWER_SCRIPT_PATH;
-import static com.xceptance.neodymium.util.AllureAddons.addDataAsJsonToReport;
 
 /**
  * TestData class to store the test data in a {@link HashMap}. It provides utility methods to access the data and can convert it automatically to most of the
@@ -42,6 +44,8 @@ public class TestData extends HashMap<String, String>
                                                                             .mappingProvider(new GsonMappingProvider(GSON)).build();
 
     private boolean testDataUsed = false;
+
+    private transient final java.util.Set<String> attachedParts = new java.util.HashSet<>();
 
     /**
      * Returns a random email address. <br> The random part contains characters that would match the following regular expression: \[a-z0-9]*\<br> The length of
@@ -111,6 +115,11 @@ public class TestData extends HashMap<String, String>
      */
     public JsonObject getDataAsJsonObject()
     {
+        return getAsJsonObject(true);
+    }
+
+    private JsonObject getAsJsonObject(boolean markAsUsed)
+    {
         final JsonObject jsonObject = new JsonObject();
 
         // iterate over every data entry and parse the entries to prepare complex structures for object mapping
@@ -133,7 +142,10 @@ public class TestData extends HashMap<String, String>
             }
         }
 
-        setTestDataUsed();
+        if (markAsUsed)
+        {
+            setTestDataUsed();
+        }
 
         return jsonObject;
     }
@@ -151,7 +163,6 @@ public class TestData extends HashMap<String, String>
     public <T> T get(final Class<T> clazz)
     {
         String dataObjectJson = getDataAsJsonObject().toString();
-        setTestDataUsed();
 
         return GSON.fromJson(dataObjectJson, clazz);
     }
@@ -181,8 +192,8 @@ public class TestData extends HashMap<String, String>
     {
         try
         {
-            T dataObject = (T) JsonPath.using(JSONPATH_CONFIGURATION).parse(getDataAsJsonObject()).read(jsonPath, clazz);
-            if (testDataUsed)
+            T dataObject = JsonPath.using(JSONPATH_CONFIGURATION).parse(getAsJsonObject(false)).read(jsonPath, clazz);
+            if (Neodymium.configuration().addTestDataToReport() && !testDataUsed && attachedParts.add(jsonPath))
             {
                 AllureAddons.addDataAsJsonToReport("Testdata (" + jsonPath + ")", dataObject);
             }
@@ -198,8 +209,8 @@ public class TestData extends HashMap<String, String>
     {
         try
         {
-            T dataObject = GSON.fromJson(JsonPath.using(JSONPATH_CONFIGURATION).parse(getDataAsJsonObject()).read(jsonPath).toString(), type);
-            if (testDataUsed)
+            T dataObject = GSON.fromJson(JsonPath.using(JSONPATH_CONFIGURATION).parse(getAsJsonObject(false)).read(jsonPath).toString(), type);
+            if (Neodymium.configuration().addTestDataToReport() && !testDataUsed && attachedParts.add(jsonPath))
             {
                 AllureAddons.addDataAsJsonToReport("Testdata (" + jsonPath + ")", dataObject);
             }
@@ -263,7 +274,10 @@ public class TestData extends HashMap<String, String>
             throw new IllegalArgumentException("Test data could not be found for key: " + key);
         }
 
-        setTestDataUsed();
+        if (Neodymium.configuration().addTestDataToReport() && !testDataUsed && attachedParts.add(key))
+        {
+            AllureAddons.addDataAsJsonToReport("Testdata (" + key + ")", value);
+        }
 
         return value;
     }

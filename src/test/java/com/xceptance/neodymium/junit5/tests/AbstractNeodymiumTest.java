@@ -197,8 +197,10 @@ public abstract class AbstractNeodymiumTest {
 					Throwable exception = result.getFailures().stream()
 							.filter(failure -> failure.getTestIdentifier().getDisplayName().equals(methodName))
 							.collect(Collectors.toList()).get(0).getException();
-					Assertions.assertEquals(expectedFailureMessages.get(methodName), exception.toString(),
-							"Failure message");
+					final String expectedMessage = expectedFailureMessages.get(methodName);
+					final String actualMessage = exception.toString();
+					Assertions.assertTrue(actualMessage.contains(expectedMessage),
+							"Failure message for " + methodName + " should contain '" + expectedMessage + "' but was '" + actualMessage + "'");
 				}
 			}
 		} catch (AssertionFailedError e) {

@@ -5,7 +5,6 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,11 +20,12 @@ import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.Point;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chromium.HasCdp;
 import org.openqa.selenium.devtools.DevTools;
 import org.openqa.selenium.devtools.HasDevTools;
-import org.openqa.selenium.devtools.v137.page.Page;
-import org.openqa.selenium.devtools.v137.page.model.Viewport;
+import org.openqa.selenium.devtools.v147.page.Page;
+import org.openqa.selenium.devtools.v147.page.model.Viewport;
 import org.openqa.selenium.firefox.HasFullPageScreenshot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,47 +64,53 @@ public class ScreenshotWriter
         return Path.of(System.getProperty("java.io.tmpdir") + Neodymium.configuration().reportsPath()).normalize().toString();
     }
 
-    public static boolean doScreenshot(String filename) throws IOException
+    public static String doScreenshot(String filename) throws IOException
     {
         return doScreenshot(filename, getFormatedReportsPath());
     }
 
-    public static boolean doScreenshot(String filename, String pathname) throws IOException
+    public static String doScreenshot(String filename, String pathname) throws IOException
     {
-        return doScreenshot(filename, pathname, false);
+        return doScreenshot(filename, pathname, false, true);
     }
 
-    public static boolean doScreenshot(String filename, boolean didSelenideScreenshot) throws IOException
+    public static String doScreenshot(String filename, boolean didSelenideScreenshot) throws IOException
     {
-        return doScreenshot(filename, getFormatedReportsPath(), didSelenideScreenshot);
+        return doScreenshot(filename, getFormatedReportsPath(), didSelenideScreenshot, true);
     }
 
-    public static boolean doScreenshot(String filename, String pathname, boolean didSelenideScreenshot) throws IOException
+    public static String doScreenshot(String filename, String pathname, boolean didSelenideScreenshot, boolean attach) throws IOException
     {
-        boolean errorDuringScreenshots = false;
+        String base64Image = null;
 
         // do viewport first otherwise the screen may be moved
         // viewport: !didSelenideScreenshot && enableViewportScreenshot
         if (!didSelenideScreenshot && Neodymium.configuration().enableViewportScreenshot())
         {
-            errorDuringScreenshots = takeScreenshot(filename, pathname, Capture.VIEWPORT);
+            String vpBase64 = takeScreenshot(filename, pathname, Capture.VIEWPORT, attach);
+            if (vpBase64 != null) {
+                base64Image = vpBase64;
+            }
         }
 
         // full page logic block
         if (Neodymium.configuration().enableAdvancedScreenShots() && Neodymium.configuration().enableFullPageCapture())
         {
-            errorDuringScreenshots = takeScreenshot(filename, pathname, Capture.FULL) && errorDuringScreenshots;
+            String fpBase64 = takeScreenshot(filename, pathname, Capture.FULL, attach);
+            if (fpBase64 != null) {
+                base64Image = fpBase64;
+            }
         }
 
-        return errorDuringScreenshots;
+        return base64Image;
     }
 
-    private static boolean takeScreenshot(String filename, String pathname, Capture captureMode) throws IOException
+    private static String takeScreenshot(String filename, String pathname, Capture captureMode, boolean attach) throws IOException
     {
         // If no driver is available, we cannot take a screenshot
         if (!Neodymium.hasDriver())
         {
-            return false;
+            return null;
         }
 
         WebDriver driver = Neodymium.getDriver();
@@ -180,28 +186,42 @@ public class ScreenshotWriter
 
             if (Neodymium.configuration().enableHighlightLastElement() && Neodymium.hasLastUsedElement())
             {
-                try
+                WebElement lastUsedElement = Neodymium.getLastUsedElement();
+                if (lastUsedElement != null)
                 {
-                    double devicePixelRatio = Double.parseDouble("" + ((JavascriptExecutor) driver).executeScript("return window.devicePixelRatio"));
-                    image = highlightScreenShot(image, new Coordinates(Neodymium.getLastUsedElement(), devicePixelRatio),
-                                                Color.decode(Neodymium.configuration().screenshotElementHighlightColor()));
-                }
-                catch (NoSuchElementException e)
-                {
-                    // If the test is breaking because we can't find an element, we also can't highlight this element...
-                    // so a NoSuchElementException is expected and can be ignored.
+                    try
+                    {
+                        double devicePixelRatio = Double.parseDouble("" + ((JavascriptExecutor) driver).executeScript("return window.devicePixelRatio"));
+                        image = highlightScreenShot(image, new Coordinates(lastUsedElement, devicePixelRatio),
+                                                    Color.decode(Neodymium.configuration().screenshotElementHighlightColor()));
+                    }
+                    catch (NoSuchElementException e)
+                    {
+                        // If the test is breaking because we can't find an element, we also can't highlight this
+                        // element...
+                        // so a NoSuchElementException is expected and can be ignored.
+                    }
                 }
             }
-            log.info("captured Screenshot to: " + imagePath);
+            log.debug("captured Screenshot to: " + imagePath);
 
-            boolean result = ImageIO.write(image, "png", outputfile);
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            boolean result = ImageIO.write(image, "png", baos);
             if (result)
             {
+                byte[] imageBytes = baos.toByteArray();
+                java.nio.file.Files.write(outputfile.toPath(), imageBytes);
+
                 // The idea is to put the screenshot to the best place in the report,
                 // but for before methods, this is not possible due to allure limitations
                 // so we just add it normally when the allure lifecycle does not allow to be altered
                 boolean screenshotAdded;
-                Allure.getLifecycle().addAttachment(captureMode == Capture.FULL? "Screenshot" : "View Port Screenshot", "image/png", ".png", new FileInputStream(imagePath));
+                if (attach)
+                {
+                    Allure.getLifecycle().addAttachment(captureMode == Capture.FULL ? "Screenshot" : "View Port Screenshot", "image/png", ".png",
+                                                        new java.io.ByteArrayInputStream(imageBytes));
+                }
+                // This will still be set to true, since the attach mode just wants to return a screenshot
                 screenshotAdded = true;
 
                 // to spare disk space, remove the file if we already used it inside the report
@@ -209,11 +229,13 @@ public class ScreenshotWriter
                 {
                     outputfile.delete();
                 }
+
+                return java.util.Base64.getEncoder().encodeToString(imageBytes);
             }
-            return result;
+            return null;
         }
 
-        return false;
+        return null;
     }
 
     public static <WD extends WebDriver & HasDevTools & JavascriptExecutor, ResultType> Optional<ResultType> takeScreenshot(
