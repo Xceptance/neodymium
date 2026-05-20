@@ -712,7 +712,11 @@ public class PageAnalyzer
                                         (selStr.equals("#" + idStr) ||
                                          selStr.equals("#" + escapeCssIdentifier(idStr)));
 
-            if (!isSimpleId)
+            // Omit long, wishy-washy climbing selectors that contain child/descendant combinators,
+            // since data-neo-ref is 100% unique and much more stable.
+            final boolean isWishyWashy = selStr.contains(" > ");
+
+            if (!isSimpleId && !isWishyWashy)
             {
                 dom.append(String.format("selector='%s' ", selStr));
             }
