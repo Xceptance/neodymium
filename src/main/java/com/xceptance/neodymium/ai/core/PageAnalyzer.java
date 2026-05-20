@@ -699,8 +699,34 @@ public class PageAnalyzer
         appendIfPresent(dom, "options", el.get("options"));
 
         appendIfPresent(dom, "data-neo-ref", el.get("automationId"));
-        appendIfPresent(dom, "selector", el.get("selector"));
+
+        final Object selector = el.get("selector");
+        if (selector != null && !selector.toString().isEmpty())
+        {
+            final String selStr = selector.toString();
+            final Object id = el.get("id");
+            final String idStr = id != null ? id.toString() : "";
+
+            // Check if the selector is simply the ID selector (either raw or escaped) to prevent redundant printout
+            final boolean isSimpleId = !idStr.isEmpty() &&
+                                        (selStr.equals("#" + idStr) ||
+                                         selStr.equals("#" + escapeCssIdentifier(idStr)));
+
+            if (!isSimpleId)
+            {
+                dom.append(String.format("selector='%s' ", selStr));
+            }
+        }
+
         dom.append("\n");
+    }
+
+    /**
+     * Escapes special CSS characters in an identifier to match the CSS.escape specification.
+     */
+    private String escapeCssIdentifier(final String str)
+    {
+        return str.replaceAll("([!\"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])", "\\\\$1");
     }
 
     private void appendIfPresent(final StringBuilder dom, final String key, final Object value)
