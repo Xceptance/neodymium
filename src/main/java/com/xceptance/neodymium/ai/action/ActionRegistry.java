@@ -101,6 +101,7 @@ public class ActionRegistry {
         register(new com.xceptance.neodymium.ai.action.plugins.AssertAction());
         register(new com.xceptance.neodymium.ai.action.plugins.CheckAction());
         register(new com.xceptance.neodymium.ai.action.plugins.WaitAction());
+        register(new com.xceptance.neodymium.ai.action.plugins.StoreAction());
         register(new com.xceptance.neodymium.ai.action.plugins.BranchAction());
         register(new com.xceptance.neodymium.ai.action.plugins.JavaMethodAction());
         register(new com.xceptance.neodymium.ai.action.plugins.ScrollAction());

@@ -49,24 +49,16 @@ public class PageAnalyzer
      * (null means hidden for non-fixed/non-body elements) and getComputedStyle as fallback.
      */
     private static final String CAPTURE_SCRIPT = """
-        return (function(forValidation) {
-            var MAX_PER_SELECTOR = 400;
+        return (function(level) {
+            var MAX_PER_SELECTOR = 150;
             var MAX_TEXT = 200;
             var MAX_HREF = 180;
             var MAX_VALUE = 150;
             var usedIds = {};
-            var seenRefs = {};
             // Pre-populate registry from IDs already stamped on this page
-            // (handles repeated script injections on the same page).
-            // Also detects duplicates caused by JS cloning and removes the attribute so a unique one is generated.
+            // (handles repeated script injections on the same page)
             document.querySelectorAll('[data-neo-ref]').forEach(function(el) {
-                var ref = el.getAttribute('data-neo-ref');
-                if (seenRefs[ref]) {
-                    el.removeAttribute('data-neo-ref');
-                } else {
-                    seenRefs[ref] = true;
-                    usedIds[ref] = true;
-                }
+                usedIds[el.getAttribute('data-neo-ref')] = true;
             });
 
             // djb2 hash – very low computation cost, good distribution
@@ -80,10 +72,10 @@ public class PageAnalyzer
             }
 
             function fingerprint(el) {
-                var tag   = el.tagName ? el.tagName.toLowerCase() : '';
+                var tag   = el.tagName.toLowerCase();
                 var id    = el.id || '';
-                var cls   = (typeof el.className === 'string' ? el.className : '').trim().replace(/\s+/g, ' ');
-                var ptag  = el.parentElement && el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '';
+                var cls   = (typeof el.className === 'string' ? el.className : '').trim().replace(/\\s+/g, ' ');
+                var ptag  = el.parentElement ? el.parentElement.tagName.toLowerCase() : '';
                 var type  = el.getAttribute('type') || '';
                 var name  = el.getAttribute('name') || el.getAttribute('alt') || '';
                 var text  = (el.innerText || el.value || '').trim().substring(0, 40);
@@ -139,11 +131,11 @@ public class PageAnalyzer
                 var id = el.id;
                 if (id) return '#' + id;
                 var name = el.getAttribute('name');
-                var tag = el.tagName ? el.tagName.toLowerCase() : '';
+                var tag = el.tagName.toLowerCase();
                 if (name) return tag + "[name='" + name + "']";
                 var cls = el.className;
                 if (typeof cls === 'string' && cls.trim()) {
-                    var parts = cls.trim().split(/\s+/);
+                    var parts = cls.trim().split(/\\s+/);
                     if (parts.length <= 3) return tag + '.' + parts.join('.');
                 }
                 return '';
@@ -160,9 +152,9 @@ public class PageAnalyzer
 
                         count++;
                         var autoId = assignId(el);
-                        var text = (el.innerText || '').trim().replace(/\s*\n\s*/g, ' ');
+                        var text = (el.innerText || '').trim().replace(/\\s*\\n\\s*/g, ' ');
                         var options = null;
-                        if (el.tagName && el.tagName.toLowerCase() === 'select') {
+                        if (el.tagName.toLowerCase() === 'select') {
                             options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
                             if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
                         }
@@ -207,7 +199,7 @@ public class PageAnalyzer
                     for (var i = 0; i < els.length && count < MAX_PER_SELECTOR; i++) {
                         var el = els[i];
                         if (!isVisible(el)) continue;
-                        if (el.closest && el.closest('a')) continue;
+                        if (el.closest('a')) continue;
 
                         var style = window.getComputedStyle(el);
                         var isClickable = style.cursor === 'pointer' || el.hasAttribute('onclick') || typeof el.onclick === 'function';
@@ -215,9 +207,9 @@ public class PageAnalyzer
 
                         count++;
                         var autoId = assignId(el);
-                        var text = (el.innerText || '').trim().replace(/\s*\n\s*/g, ' ');
+                        var text = (el.innerText || '').trim().replace(/\\s*\\n\\s*/g, ' ');
                         var options = null;
-                        if (el.tagName && el.tagName.toLowerCase() === 'select') {
+                        if (el.tagName.toLowerCase() === 'select') {
                             options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
                             if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
                         }
@@ -271,12 +263,12 @@ public class PageAnalyzer
                             var autoId = assignId(inp);
 
                             var field = {
-                                type: (inp.tagName && inp.tagName.toLowerCase() === 'select') ? 'select' : (inp.getAttribute('type') || ''),
+                                type: inp.tagName.toLowerCase() === 'select' ? 'select' : (inp.getAttribute('type') || ''),
                                 name: inp.getAttribute('name') || '',
                                 id: inp.id || '',
                                 automationId: autoId
                             };
-                            if (inp.tagName && inp.tagName.toLowerCase() === 'select') {
+                            if (inp.tagName.toLowerCase() === 'select') {
                                 field.options = Array.from(inp.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
                                 if (inp.options.length > 50) field.options += '... (total ' + inp.options.length + ')';
                             }
@@ -303,9 +295,9 @@ public class PageAnalyzer
                 .concat(captureElements('select', 'select'))
                 .concat(captureElements('option', 'option'))
                 .concat(captureElements('textarea', 'textarea'))
-                .concat(captureClickableElements('div, span, tr, td, th, li, label, dialog, svg, img', 'clickable'));
+                .concat(captureClickableElements('div, span, tr, td, th', 'clickable'));
 
-            var getDisplayLabel = function(elObj) {j) {
+            var getDisplayLabel = function(elObj) {
                 return elObj.text || elObj.placeholder || elObj.value || elObj.ariaLabel || elObj.title || elObj.name || '';
             };
 
@@ -340,25 +332,27 @@ public class PageAnalyzer
                 delete elObj.domElement;
             }
 
-            sections.push({heading: '=== Interactive Elements ===', elements: interactiveElements});
+            if (level >= 1) {
+                sections.push({heading: '=== Interactive Elements ===', elements: interactiveElements});
 
-            // Page structure
-            sections.push({heading: '\\n=== Page Structure ===', elements:
-                captureElements('h1', 'heading')
-                .concat(captureElements('h2', 'heading'))
-                .concat(captureElements('h3', 'heading'))
-                .concat(captureElements('h4', 'heading'))
-                .concat(captureElements('h5', 'heading'))
-            });
+                // Page structure
+                sections.push({heading: '\\n=== Page Structure ===', elements:
+                    captureElements('h1', 'heading')
+                    .concat(captureElements('h2', 'heading'))
+                    .concat(captureElements('h3', 'heading'))
+                    .concat(captureElements('h4', 'heading'))
+                    .concat(captureElements('h5', 'heading'))
+                });
+            }
 
-            if (forValidation) {
+            if (level >= 2) {
                 sections.push({heading: '\\n=== Text Content (Validation Mode) ===', elements:
                     captureElements('p, span, li, td, div', 'text')
                     .filter(function(e) { return e.text.length > 0; })
                 });
             }
 
-            return {sections: sections, forms: captureForms()};
+            return {sections: sections, forms: level >= 1 ? captureForms() : []};
         })(arguments[0]);
         """;
 
@@ -388,7 +382,7 @@ public class PageAnalyzer
      */
     public String captureSimplifiedDom()
     {
-        return captureSimplifiedDom(false);
+        return captureSimplifiedDom(ContextLevel.LEAN);
     }
 
     /**
@@ -398,21 +392,41 @@ public class PageAnalyzer
      * @param forValidation
      *            whether to include more text content for validation
      * @return simplified DOM as a structured text
+     * @deprecated Use {@link #captureSimplifiedDom(ContextLevel)} instead.
+     */
+    @Deprecated
+    public String captureSimplifiedDom(final boolean forValidation)
+    {
+        return captureSimplifiedDom(forValidation ? ContextLevel.STANDARD : ContextLevel.LEAN);
+    }
+
+    /**
+     * Captures a simplified representation of the current page's DOM at the
+     * specified context level. Uses a single JavaScript execution for performance.
+     *
+     * @param level
+     *            the context level controlling how much DOM data to capture
+     * @return simplified DOM as a structured text
      */
     @SuppressWarnings("unchecked")
-    public String captureSimplifiedDom(boolean forValidation)
+    public String captureSimplifiedDom(final ContextLevel level)
     {
-        LOG.debug("   📄 Capturing simplified DOM for: {} (validation: {})", com.codeborne.selenide.WebDriverRunner.url(),
-                  forValidation);
+        final String url = com.codeborne.selenide.WebDriverRunner.url();
+        final boolean isEmptyPage = "data:,".equals(url) || "about:blank".equals(url);
+
+        if (!isEmptyPage)
+        {
+            LOG.debug("🔴 Capturing simplified DOM for: {} (level: {})", url, level);
+        }
 
         final StringBuilder dom = new StringBuilder();
-        dom.append("Page URL: ").append(com.codeborne.selenide.WebDriverRunner.url()).append("\n");
+        dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
         dom.append("Page Title: ").append(com.codeborne.selenide.Selenide.title()).append("\n\n");
 
         try
         {
             final Map<String, Object> data = (Map<String, Object>) com.codeborne.selenide.Selenide
-                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, forValidation);
+                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, level.ordinal());
 
             // Render element sections
             final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");
@@ -472,27 +486,45 @@ public class PageAnalyzer
         }
 
         final String result = dom.toString();
-        LOG.debug("   📄 Simplified DOM size: {} chars", result.length());
+        if (!isEmptyPage)
+        {
+            LOG.debug("   📄 Simplified DOM size: {} chars", result.length());
+        }
         return result;
     }
 
     /**
      * Returns a compact page context combining URL, title, and key element info.
+     * Uses {@link ContextLevel#LEAN} by default.
      */
     public String getPageContext()
     {
-        return getPageContext(false);
+        return getPageContext(ContextLevel.LEAN);
     }
 
     /**
      * Returns a compact page context combining URL, title, and key element info.
-     * 
+     *
      * @param forValidation
      *            whether to include more text content for validation
+     * @deprecated Use {@link #getPageContext(ContextLevel)} instead.
      */
-    public String getPageContext(boolean forValidation)
+    @Deprecated
+    public String getPageContext(final boolean forValidation)
     {
-        return captureSimplifiedDom(forValidation);
+        return captureSimplifiedDom(forValidation ? ContextLevel.STANDARD : ContextLevel.LEAN);
+    }
+
+    /**
+     * Returns a compact page context at the specified context level.
+     *
+     * @param level
+     *            the context level controlling how much DOM data to capture
+     * @return simplified DOM as a structured text
+     */
+    public String getPageContext(final ContextLevel level)
+    {
+        return captureSimplifiedDom(level);
     }
 
     /**

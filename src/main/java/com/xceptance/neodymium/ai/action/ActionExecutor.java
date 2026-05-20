@@ -67,8 +67,50 @@ public class ActionExecutor {
      */
     private Object test;
 
+    /**
+     * Context map for variables captured during playbook execution (e.g. via STORE action).
+     */
+    private final Map<String, String> executionVariables = new HashMap<>();
+
     public ActionExecutor(Object test) {
         this.test = test;
+    }
+
+    public void setVariable(String key, String value) {
+        if (key != null && value != null) {
+            executionVariables.put(key, value);
+        }
+    }
+
+    public String getVariable(String key) {
+        return executionVariables.get(key);
+    }
+
+    private String interpolate(String text) {
+        if (text == null || text.isBlank() || !text.contains("${")) {
+            return text;
+        }
+        String result = text;
+        for (Map.Entry<String, String> entry : executionVariables.entrySet()) {
+            String placeholder = "${" + entry.getKey() + "}";
+            if (result.contains(placeholder)) {
+                result = result.replace(placeholder, entry.getValue());
+            }
+        }
+        return result;
+    }
+
+    private void interpolateAction(Action action) {
+        if (action.getTarget() != null) {
+            action.setTarget(interpolate(action.getTarget()));
+        }
+        if (action.getValues() != null) {
+            List<String> newValues = new java.util.ArrayList<>();
+            for (String val : action.getValues()) {
+                newValues.add(interpolate(val));
+            }
+            action.setValue(newValues);
+        }
     }
 
     /**
@@ -83,6 +125,8 @@ public class ActionExecutor {
     public void execute(final Action action) {
         actionLogs.clear();
         LOG.debug("   🤖 {}", action.getDescription());
+
+        interpolateAction(action);
 
         preCheckAction(action);
 
@@ -117,7 +161,8 @@ public class ActionExecutor {
     public void executeAll(final List<Action> actions) {
         for (int i = 0; i < actions.size(); i++) {
             final Action action = actions.get(i);
-            LOG.debug("   --------------------------------------------------------");
+                       
+            LOG.debug("-----------------------------------------------------------");
             LOG.debug("▶️ [EXEC] Executing Action [{}/{}]: {}", i + 1, actions.size(), action.getType());
 
             execute(action);
@@ -144,6 +189,15 @@ public class ActionExecutor {
         if (target.startsWith("#xc_")) {
             target = target.substring(1);
             logDebug("   ⚠️ Auto-corrected AI hallucination: removed '#' from Neodymium ID [{}]", target);
+        }
+
+        // Clean up common AI hallucinations for Selenium prefixes
+        if (target.toLowerCase().startsWith("xpath=")) {
+            target = target.substring(6);
+            logDebug("   ⚠️ Auto-corrected AI hallucination: removed 'xpath=' prefix [{}]", target);
+        } else if (target.toLowerCase().startsWith("css=")) {
+            target = target.substring(4);
+            logDebug("   ⚠️ Auto-corrected AI hallucination: removed 'css=' prefix [{}]", target);
         }
 
         // Strategy 0: Direct Match for Neodymium Automation ID
@@ -308,6 +362,15 @@ public class ActionExecutor {
         if (target.startsWith("#xc_")) {
             target = target.substring(1);
             logDebug("   ⚠️ Auto-corrected AI hallucination: removed '#' from Neodymium ID [{}]", target);
+        }
+
+        // Clean up common AI hallucinations for Selenium prefixes
+        if (target.toLowerCase().startsWith("xpath=")) {
+            target = target.substring(6);
+            logDebug("   ⚠️ Auto-corrected AI hallucination: removed 'xpath=' prefix [{}]", target);
+        } else if (target.toLowerCase().startsWith("css=")) {
+            target = target.substring(4);
+            logDebug("   ⚠️ Auto-corrected AI hallucination: removed 'css=' prefix [{}]", target);
         }
 
         // Strategy 0: Direct Match for Neodymium Automation ID

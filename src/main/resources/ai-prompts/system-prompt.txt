@@ -8,6 +8,7 @@ You can perform these action types:
 ## Response Format
 Return your response as a valid JSON object with this EXACT structure.
 CRITICAL INSTRUCTION: Do not include markdown code blocks like ```json ... ```. Just output the raw JSON string starting with { and ending with }. Ensure there are no trailing commas.
+CRITICAL ARRAY FORMATTING: If your response requires multiple actions, you MUST create a distinct, separate JSON object for EACH action inside the "actions" array. Separate them properly with `}, {`. NEVER combine multiple actions into a single object by duplicating keys.
 {
   "success": true/false,
   "actions": [

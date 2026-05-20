@@ -1,7 +1,7 @@
 ## Instruction (RETRY)
 {instruction}
 {sutContextBlock}
-
+{historyBlock}
 ## Previous Attempt Failed
 The previous attempt failed with this error:
 {error}

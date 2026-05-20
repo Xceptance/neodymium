@@ -33,6 +33,7 @@ import java.util.Map.Entry;
 
 import com.xceptance.neodymium.ai.action.ActionRegistry;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 
 /**
@@ -148,7 +149,7 @@ public final class AiAgentPrompts
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
-            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+            sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
         
         String knownBindingsBlock = "";
@@ -164,7 +165,7 @@ public final class AiAgentPrompts
         
         return EXPLORATION_PROMPT_TEMPLATE
             .replace("{intent}", intent)
-            .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{sutContextBlock}", sutContextBlock == null || sutContextBlock.trim().isEmpty() ? "None" : sutContextBlock)
             .replace("{subgoal}", subgoal != null && !subgoal.isEmpty() ? subgoal : "None (Starting First Phase)")
             .replace("{knownBindingsBlock}", knownBindingsBlock)
             .replace("{history}", history != null && !history.trim().isEmpty() ? history : "None (Initial Step)")
@@ -190,7 +191,7 @@ public final class AiAgentPrompts
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
-            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+            sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
         
         String knownBindingsBlock = "";
@@ -257,6 +258,7 @@ public final class AiAgentPrompts
 
     /**
      * Builds the user prompt with the instruction and DOM context.
+     * No step history is included (used for first-attempt happy path).
      *
      * @param instruction the task instruction
      * @param sutContext  application specific instructions
@@ -265,19 +267,38 @@ public final class AiAgentPrompts
      */
     public static String buildUserPrompt(final String instruction, final String sutContext, final String domContext)
     {
+        return buildUserPrompt(instruction, sutContext, domContext, "");
+    }
+
+    /**
+     * Builds the user prompt with the instruction, DOM context, and optional step history.
+     * Step history provides the LLM with context about previously completed steps,
+     * which is useful during context escalation to help disambiguate elements.
+     *
+     * @param instruction  the task instruction
+     * @param sutContext   application specific instructions
+     * @param domContext   current DOM representation
+     * @param historyBlock pre-formatted step history block, or empty string if none
+     * @return the formatted user prompt
+     */
+    public static String buildUserPrompt(final String instruction, final String sutContext, final String domContext,
+        final String historyBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
-            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+            sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
         return USER_PROMPT_TEMPLATE
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext);
     }
 
     /**
      * Builds a retry prompt with error context.
+     * No step history is included.
      *
      * @param instruction the task instruction
      * @param sutContext  application specific instructions
@@ -288,20 +309,39 @@ public final class AiAgentPrompts
     public static String buildRetryPrompt(final String instruction, final String sutContext, final String domContext,
         final String error)
     {
+        return buildRetryPrompt(instruction, sutContext, domContext, error, "");
+    }
+
+    /**
+     * Builds a retry prompt with error context and optional step history.
+     * Step history helps the LLM reason about expected page state when recovering from errors.
+     *
+     * @param instruction  the task instruction
+     * @param sutContext   application specific instructions
+     * @param domContext   current DOM representation
+     * @param error        the error that caused the previous failure
+     * @param historyBlock pre-formatted step history block, or empty string if none
+     * @return the formatted retry prompt
+     */
+    public static String buildRetryPrompt(final String instruction, final String sutContext, final String domContext,
+        final String error, final String historyBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
-            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+            sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
         return RETRY_PROMPT_TEMPLATE
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext)
             .replace("{error}", error);
     }
 
     /**
      * Builds a retry prompt for when no actions were returned.
+     * No step history is included.
      *
      * @param instruction the task instruction
      * @param sutContext  application specific instructions
@@ -310,15 +350,86 @@ public final class AiAgentPrompts
      */
     public static String buildNoActionsRetryPrompt(final String instruction, final String sutContext, final String domContext)
     {
+        return buildNoActionsRetryPrompt(instruction, sutContext, domContext, "");
+    }
+
+    /**
+     * Builds a retry prompt for when no actions were returned, with optional step history.
+     * Step history helps the LLM understand the broader test flow context when it
+     * failed to produce actions on a previous attempt.
+     *
+     * @param instruction  the task instruction
+     * @param sutContext   application specific instructions
+     * @param domContext   current DOM representation
+     * @param historyBlock pre-formatted step history block, or empty string if none
+     * @return the formatted prompt
+     */
+    public static String buildNoActionsRetryPrompt(final String instruction, final String sutContext,
+        final String domContext, final String historyBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
-            sutContextBlock = "\n## SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
+            sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
         return NO_ACTIONS_RETRY_PROMPT_TEMPLATE
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext);
+    }
+
+    /**
+     * Builds a compact step history block from completed playbook steps.
+     * Returns a formatted markdown section listing all steps that have been
+     * successfully executed before the current one, giving the LLM context
+     * about the test flow leading to this point.
+     * <p>
+     * Only includes steps with a non-null, non-blank {@code promptLine}.
+     * Returns an empty string if no completed steps exist, ensuring the
+     * {@code {historyBlock}} placeholder is cleanly removed from the template.
+     *
+     * @param playbook the current playbook (may be {@code null})
+     * @return the formatted history block, or empty string if no history
+     */
+    public static String buildStepHistory(final Playbook playbook)
+    {
+        if (playbook == null)
+        {
+            return "";
+        }
+
+        final int cursor = playbook.getCursor();
+        final List<PlaybookStep> steps = playbook.getSteps();
+
+        if (cursor <= 0 || steps == null || steps.isEmpty())
+        {
+            return "";
+        }
+
+        final int limit = Math.min(cursor, steps.size());
+        final StringBuilder sb = new StringBuilder();
+        sb.append("\n### Completed Steps (for context)\n");
+
+        int lineNum = 1;
+        for (int i = 0; i < limit; i++)
+        {
+            final PlaybookStep step = steps.get(i);
+            final String promptLine = step.getPromptLine();
+            if (promptLine != null && !promptLine.isBlank())
+            {
+                sb.append(lineNum++).append(". ").append(promptLine).append("\n");
+            }
+        }
+
+        // If all steps had null/blank promptLines, return empty
+        if (lineNum == 1)
+        {
+            return "";
+        }
+
+        sb.append("[CURRENT] → see Instruction above\n");
+        return sb.toString();
     }
 
     /**
@@ -388,11 +499,92 @@ public final class AiAgentPrompts
 
     /**
      * Retrieves the base system prompt with all plugins dynamically injected.
+     * Uses {@link ContextLevel#STANDARD} for backward compatibility.
      *
      * @return the fully prepared system prompt
      */
     public static String getSystemPrompt()
     {
-        return injectPluginMetadata(SYSTEM_PROMPT);
+        return getSystemPrompt(ContextLevel.STANDARD);
+    }
+
+    /**
+     * Retrieves the system prompt tailored to the given context level.
+     * Injects plugin metadata and appends context-level-specific instructions
+     * that tell the LLM what data it is receiving and when to request escalation.
+     *
+     * @param level the current context level
+     * @return the fully prepared system prompt with context-level guidance
+     */
+    public static String getSystemPrompt(final ContextLevel level)
+    {
+        final String base = injectPluginMetadata(SYSTEM_PROMPT);
+        final String contextGuidance = getContextLevelGuidance(level);
+        return base + "\n" + contextGuidance;
+    }
+
+    /**
+     * Returns context-level-specific instructions to append to the system prompt.
+     * These instructions make the LLM a conscious participant in the escalation
+     * protocol by telling it exactly what data it is receiving and when to
+     * respond with {@code "status": "ESCALATE"} instead of guessing.
+     *
+     * @param level the current context level
+     * @return the context guidance text to append
+     */
+    private static String getContextLevelGuidance(final ContextLevel level)
+    {
+        return switch (level)
+        {
+            case HINT -> """
+
+                ## Context Level: HINT
+                You are receiving MINIMAL context (no DOM elements). This is because the user provided an explicit inline locator hint (e.g., "(hint: #myId)") in the instruction.
+
+                CRITICAL: Use the provided hint to generate the requested action JSON immediately. Do not attempt to verify the element's existence in the DOM (since no DOM is provided). If you cannot fulfill the instruction based on the hint alone, respond with:
+                {"success": false, "status": "ESCALATE", "reasoning": "I need the actual DOM to determine the action", "actions": []}
+                """;
+            case LEAN -> """
+
+                ## Context Level: LEAN
+                You are receiving a LEAN context that only includes interactive elements \
+                (buttons, links, inputs, selects, textareas), clickable elements, and headings. \
+                Text content like paragraphs, spans, table cells, and list items is NOT included.
+
+                CRITICAL: If you cannot find the requested element, or if you need text content \
+                to disambiguate between multiple similar elements (e.g. multiple 'View Details' links), \
+                or if the instruction requires reading text that is not shown, you MUST respond with:
+                {"success": false, "status": "ESCALATE", "reasoning": "explain what additional data you need", "actions": []}
+
+                Do NOT guess. Do NOT pick an arbitrary element when multiple matches exist. \
+                Request escalation instead.
+                """;
+
+            case STANDARD -> """
+
+                ## Context Level: STANDARD
+                You are receiving a STANDARD context that includes all interactive elements \
+                AND all visible text content (paragraphs, spans, list items, table cells, divs).
+
+                If you still cannot find the target element or fulfill the instruction, \
+                you may respond with:
+                {"success": false, "status": "ESCALATE", "reasoning": "explain what you need", "actions": []}
+                to request visual context (a screenshot will be provided on the next attempt).
+
+                Do NOT guess if you are uncertain about which element to target.
+                """;
+
+            case VISUAL -> """
+
+                ## Context Level: VISUAL
+                You are receiving the STANDARD text context PLUS a screenshot of the current page. \
+                Use the screenshot to visually identify the target element, then map it to the \
+                closest element in the text context using its `data-neo-ref` identifier.
+
+                This is the maximum available context. If you cannot fulfill the instruction, \
+                respond with {"success": false, "error": "explain what failed", "actions": []}. \
+                Do not request escalation — there is no higher level.
+                """;
+        };
     }
 }
