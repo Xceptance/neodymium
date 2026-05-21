@@ -227,18 +227,13 @@ public final class AssertAction implements AiActionPlugin
                     else
                     {
                         // Create a composite condition that searches for the expected text across 
-                        // all common visible attributes, input values, and text content areas.
+                        // all common visible attributes, input values, text content areas, and all actual DOM attributes.
                         cond = Condition.or("Assertion for " + expected,
                                 Condition.exactText(expected),
                                 Condition.partialText(expected),
                                 Condition.value(expected),
                                 new PartialTextContent(expected),
-                                Condition.attribute("href", expected),
-                                Condition.attribute("alt", expected),
-                                Condition.attribute("src", expected),
-                                Condition.attribute("title", expected),
-                                Condition.attribute("placeholder", expected),
-                                new DataAttributeMatches("data-.*", ".*" + Pattern.quote(expected) + ".*"));
+                                new AnyAttributeContains(expected));
                     }
                 }
 
@@ -262,10 +257,26 @@ public final class AssertAction implements AiActionPlugin
         }
         catch (final Throwable e)
         {
-            final String actualDetails = String.format("Text: '%s', Value: '%s', Alt: '%s'", element.getText(), element.getValue(), element.getAttribute("alt"));
+            String attributesStr = "Error retrieving attributes";
+            try
+            {
+                final Map<String, String> attributes = Selenide.executeJavaScript(
+                        "var items = {}; " +
+                                "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
+                                "  items[attrs[i].name] = attrs[i].value; " +
+                                "} " +
+                                "return items;",
+                        element);
+                attributesStr = attributes != null ? attributes.toString() : "{}";
+            }
+            catch (final Exception ex)
+            {
+                // Ignore JS execution errors
+            }
+            final String actualDetails = String.format("Text: '%s', Value: '%s', Attributes: %s", element.getText(), element.getValue(), attributesStr);
             SelenideAddons.wrapAssertionError(() ->
             {
-                throw new AssertionError(String.format("Assertion failed: '%s' not found in common attributes. Found: [%s]", expected, actualDetails), e);
+                throw new AssertionError(String.format("Assertion failed: '%s' not found in common or element attributes. Found: [%s]", expected, actualDetails), e);
             });
         }
     }
@@ -330,18 +341,7 @@ public final class AssertAction implements AiActionPlugin
                 return new CheckResult(true, value);
             }
 
-            // 4. Common attributes: href, alt, src, title, placeholder
-            final String[] attrs = {"href", "alt", "src", "title", "placeholder"};
-            for (final String attr : attrs)
-            {
-                final String val = element.getAttribute(attr);
-                if (val != null && pattern.matcher(val).find())
-                {
-                    return new CheckResult(true, String.format("attribute %s: %s", attr, val));
-                }
-            }
-
-            // 5. Data attributes
+            // 4. Check all DOM attributes
             try
             {
                 final Map<String, String> attributes = driver.executeJavaScript(
@@ -355,14 +355,10 @@ public final class AssertAction implements AiActionPlugin
                 {
                     for (final var entry : attributes.entrySet())
                     {
-                        final String name = entry.getKey();
-                        if (name != null && name.startsWith("data-"))
+                        final String val = entry.getValue();
+                        if (val != null && pattern.matcher(val).find())
                         {
-                            final String val = entry.getValue();
-                            if (val != null && pattern.matcher(val).find())
-                            {
-                                return new CheckResult(true, String.format("data-attribute %s: %s", name, val));
-                            }
+                            return new CheckResult(true, String.format("attribute %s: %s", entry.getKey(), val));
                         }
                     }
                 }
@@ -373,6 +369,52 @@ public final class AssertAction implements AiActionPlugin
             }
 
             return new CheckResult(false, text);
+        }
+    }
+
+    /**
+     * Selenide condition that matches if any of the element's actual DOM attributes
+     * (e.g. type, id, name, class, custom attributes, etc.) contains the expected value.
+     */
+    private static final class AnyAttributeContains extends WebElementCondition
+    {
+        private final String expectedValue;
+
+        public AnyAttributeContains(final String expectedValue)
+        {
+            super("AnyAttributeContains");
+            this.expectedValue = expectedValue;
+        }
+
+        @Override
+        public CheckResult check(final Driver driver, final WebElement element)
+        {
+            try
+            {
+                final Map<String, String> attributes = driver.executeJavaScript(
+                        "var items = {}; " +
+                                "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
+                                "  items[attrs[i].name] = attrs[i].value; " +
+                                "} " +
+                                "return items;",
+                        element);
+                if (attributes != null)
+                {
+                    for (final var entry : attributes.entrySet())
+                    {
+                        final String val = entry.getValue();
+                        if (val != null && val.contains(expectedValue))
+                        {
+                            return new CheckResult(true, String.format("attribute %s: %s", entry.getKey(), val));
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                // Ignore JS execution errors
+            }
+            return new CheckResult(false, null);
         }
     }
 }
