@@ -142,4 +142,70 @@ public class AssertActionTest
             assertAction.execute(action, this, executor);
         });
     }
+
+    /**
+     * Verifies that literal attribute assertions successfully match when the element has the specified attribute.
+     */
+    @NeodymiumTest
+    public final void testAttributeAssertionSuccess()
+    {
+        Selenide.open("data:text/html,<html><body><input id='test-input' type='text' value='hello'/></body></html>");
+
+        final AssertAction assertAction = new AssertAction();
+        final ActionExecutor executor = new ActionExecutor(this);
+
+        final Action action = new Action();
+        action.setType("ASSERT");
+        action.setTarget("#test-input");
+        action.setValue(List.of("type=\"text\""));
+
+        Assertions.assertDoesNotThrow(() ->
+        {
+            assertAction.execute(action, this, executor);
+        });
+    }
+
+    /**
+     * Verifies that literal attribute assertions without quotes successfully match when the element has the specified attribute.
+     */
+    @NeodymiumTest
+    public final void testAttributeAssertionNoQuotesSuccess()
+    {
+        Selenide.open("data:text/html,<html><body><input id='test-input' type='text' value='hello'/></body></html>");
+
+        final AssertAction assertAction = new AssertAction();
+        final ActionExecutor executor = new ActionExecutor(this);
+
+        final Action action = new Action();
+        action.setType("ASSERT");
+        action.setTarget("#test-input");
+        action.setValue(List.of("type=text"));
+
+        Assertions.assertDoesNotThrow(() ->
+        {
+            assertAction.execute(action, this, executor);
+        });
+    }
+
+    /**
+     * Verifies that attribute assertions throw AssertionError when the attribute doesn't have the expected value.
+     */
+    @NeodymiumTest
+    public final void testAttributeAssertionFailure()
+    {
+        Selenide.open("data:text/html,<html><body><input id='test-input' type='text' value='hello'/></body></html>");
+
+        final AssertAction assertAction = new AssertAction();
+        final ActionExecutor executor = new ActionExecutor(this);
+
+        final Action action = new Action();
+        action.setType("ASSERT");
+        action.setTarget("#test-input");
+        action.setValue(List.of("type=\"password\""));
+
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            assertAction.execute(action, this, executor);
+        });
+    }
 }
