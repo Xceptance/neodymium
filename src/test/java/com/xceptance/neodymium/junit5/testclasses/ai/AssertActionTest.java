@@ -208,4 +208,50 @@ public class AssertActionTest
             assertAction.execute(action, this, executor);
         });
     }
+
+    /**
+     * Verifies that checking an attribute value directly (e.g., asserting 'password' on an input of type='password')
+     * successfully resolves via the dynamic DOM attribute check.
+     */
+    @NeodymiumTest
+    public final void testDynamicAttributeAssertionSuccess()
+    {
+        Selenide.open("data:text/html,<html><body><input id='test-password' type='password' value='secret'/></body></html>");
+
+        final AssertAction assertAction = new AssertAction();
+        final ActionExecutor executor = new ActionExecutor(this);
+
+        final Action action = new Action();
+        action.setType("ASSERT");
+        action.setTarget("#test-password");
+        action.setValue(List.of("password"));
+
+        Assertions.assertDoesNotThrow(() ->
+        {
+            assertAction.execute(action, this, executor);
+        });
+    }
+
+    /**
+     * Verifies that dynamic attribute assertion still throws an AssertionError if the value cannot be found in any attribute.
+     */
+    @NeodymiumTest
+    public final void testDynamicAttributeAssertionFailure()
+    {
+        Selenide.open("data:text/html,<html><body><input id='test-password' type='password' value='secret'/></body></html>");
+
+        final AssertAction assertAction = new AssertAction();
+        final ActionExecutor executor = new ActionExecutor(this);
+
+        final Action action = new Action();
+        action.setType("ASSERT");
+        action.setTarget("#test-password");
+        action.setValue(List.of("different-value"));
+
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            assertAction.execute(action, this, executor);
+        });
+    }
 }
+
