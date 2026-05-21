@@ -11,16 +11,21 @@
 - [ ] Build a native `AuraCaptureListener` that hooks directly into JUnit 5 and Selenide logging
 - [ ] Implement step context serialization to cleanly support dynamic steps, self-healing retries, and visual hashes
 
-## Component: File System Reader & Ingester
+## Component: File System Reader & Ingester (Direct Disk Writing)
 - [ ] Define standardized JSON schemas for `run-info.json` and `<testCase>.json`
+- [ ] Document the schema layout publicly to allow third-party runners to write directly in our format
 - [ ] Create `AuraFileIngester` service to scan directories on startup
 - [ ] Implement file signature hashing to skip already-indexed run directories
 - [ ] Write integration tests for bulk database import of historical run folders
 
-## Component: Live Redirection Stream
-- [ ] Build a WebSocket event endpoint in Aura Server (`/api/live-stream`)
+## Component: Open API Ingestion & Live Stream (Centralized Writing)
+- [ ] Build `/api/v1/ingest` POST HTTP endpoint in Aura Server to receive generic run/step/screenshot payloads
+- [ ] Create `AuraDiskWriterService` in Aura Server to serialize incoming API payloads directly to the flat-file directory structure
+- [ ] Build a WebSocket event endpoint in Aura Server (`/api/v1/stream`) for active live-streaming
 - [ ] Create `AuraLiveStreamAppender` in Neodymium to stream JSON event packets asynchronously
 - [ ] Implement grace-handling so Neodymium skips streaming if Aura Server is offline
+- [ ] Write integration tests verifying that API-ingested test runs successfully serialize to disk and populate the database
+
 
 ## Component: Thymeleaf & HTMX Dashboard
 - [ ] Build dashboard home with Chart.js (failure trends, duration stats, Git-commit timeline)

@@ -8,6 +8,7 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
 
 **Goals:**
 - **Open-File Source of Truth**: Keep execution history, step timelines, playbooks, and screenshots in flat, highly inspectable directories on disk.
+- **Framework-Agnostic Open Standard**: The intermediate data schemas (JSON layouts) and streaming event protocols must be fully open, public, and generic. Any testing framework (e.g., Playwright, Cypress, Cypress/Webdriver in Python, or unit tests) can serialize results to this format or stream events directly to the server.
 - **Ultra-Fast Local Index**: Scan and index hundreds of runs in under a second on startup using H2 or SQLite.
 - **Interactive Visual Lab**: Provide side-by-side swipe sliders for visual mismatches, complete with a "manual baseline approval" engine.
 - **AI Diagnostics Workspace**: Integrate LangChain4j (Gemini) to inspect step failures, DOMs, and logs directly from the UI.
@@ -24,21 +25,26 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
 - **Alternative**: Keep using Allure listeners and translate their step formats into Aura files, or use reflection to capture lifecycle hooks.
 - **Rationale**: Relying on Allure binds the framework to heavy external dependencies, rigid execution models (unable to cleanly represent dynamic AI paths, self-healing retries, or perceptual hashes), and static single-thread context limitations. By owning the lifecycle capture, we achieve absolute design flexibility, maximum runtime execution speed, and zero external reporting bloat.
 
-### 2. Unified Directory Layout
-- **Decision**: All results are stored in `target/aura-results/run_<timestamp>_<branch>_<commit>/` as flat files:
-  - `run-info.json`: Execution summary, branch/commit SHA, browser environment.
-  - `test-cases/<className>_<methodName>.json`: Structured chronological step results, visual hashes, and locator performance.
-  - `screenshots/*.png`: Visual snapshots.
-  - `logs/<className>_ai.json`: LLM prompts, reasoning, and DOM extracts.
-- **Rationale**: Keeps data fully open, transparent, easy to clean up, and highly version-controllable.
+### 2. Universal, Open Directory Layout & Schema (Source Flexibility)
+- **Decision**: All results are stored in `target/aura-results/run_<timestamp>_<branch>_<commit>/` using a documented, generic JSON/PNG layout:
+  - `run-info.json`: Execution summary, branch/commit SHA, browser environment, and total metrics.
+  - `test-cases/<className>_<methodName>.json`: Structured chronological step results, actions, statuses, locators, and perceptual visual hashes.
+  - `screenshots/*.png`: Visual execution captures.
+  - `logs/<className>_ai.json`: Dynamic AI discussions, DOM extracts, and prompts.
+- **Alternative**: Couple the schema tightly to Neodymium's internal class objects.
+- **Rationale**: Keeping the intermediate data representation fully open and generic provides maximum **source flexibility** and avoids closing the ecosystem. Any external tool, framework, or developer can **write directly in our defined way** (e.g., standard files on disk) without running the server at all. Aura Server will ingest and display them flawlessly, making Aura a universal test intelligence platform rather than a proprietary silo.
 
 ### 3. Spring Boot + H2 Speed Index Layer
 - **Decision**: Built on **Spring Boot 3.x**, **JDK 21 Virtual Threads**, and **H2/SQLite**. On boot, an `AuraFileIngester` scans the results directory, compares file signatures, and bulk-inserts/updates runs in a lightweight database.
 - **Rationale**: Keeps UI operations (searching, trend graphing, filtering by flakiness) extremely fast. Rebuilding the database takes seconds if files are deleted or modified.
 
-### 4. Live Stream Redirection Pipe
-- **Decision**: An `AuraLiveStreamAppender` in Neodymium checks if `localhost:8080` is reachable. If so, it stream-redirects JSON event packets (e.g. `testStarted`, `stepCompleted`, `screenshotCaptured`) over a WebSocket or standard port pipe to the running Aura receiver.
-- **Rationale**: Provides immediate, real-time feedback during execution in a unified live console, while ensuring the definitive results are still written to disk at the end of the run.
+### 4. Open Centralized Writer API & Live-Stream Event Receiver
+- **Decision**: Aura Server hosts a public, generic HTTP/WebSocket ingestion and event-stream receiver (`/api/v1/ingest` and `/api/v1/stream`). 
+  - **Dynamic Ingestion (Someone Else Sends, We Write)**: If an external test runner, CI worker, or custom script runs in a separate environment (where it cannot write directly to the server's local file system), it can POST its run metadata, step JSONs, and screenshot base64 payloads to this API. **Aura Server will act as the centralized writer**, serializing these incoming payloads directly into the standard flat-file directory layout on the host disk as the primary source of truth, while simultaneously updating the in-memory/H2 index.
+  - **Live Progress**: An `AuraLiveStreamAppender` streams live execution updates during active runs to update the interactive HTMX dashboard in real-time.
+- **Rationale**: This guarantees absolute deployment flexibility. Ecosystem clients have a choice: they can write standard Aura files directly to disk themselves, or they can send the raw data to the server's endpoint and let the server handle disk serialization for them. This keeps the ecosystem 100% open, standard, and accessible from any environment.
+
+
 
 ### 5. Perceptual dHash Visual Lab & Baseline Approval
 - **Decision**: The UI includes an interactive comparison workspace. Visual regression steps display a dual-layer horizontal swipe slider. Clicking "Approve Baseline" makes the Aura Server copy the actual execution screenshot over the baseline screenshot, updating the visual hash directly.
