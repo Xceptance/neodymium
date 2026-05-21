@@ -42,6 +42,12 @@ public enum ContextLevel
     HINT,
 
     /**
+     * Compact browser-native accessibility tree. Provides structural and semantic outline
+     * of the interactive DOM elements for ultra-low token consumption.
+     */
+    AXTREE,
+
+    /**
      * Interactive elements only: links, buttons, inputs, selects, textareas,
      * clickable div/span, headings (h1-h5), and forms.
      * No text content blocks. No screenshot.
@@ -89,7 +95,8 @@ public enum ContextLevel
     {
         return switch (this)
         {
-            case HINT -> LEAN;
+            case HINT -> AXTREE;
+            case AXTREE -> LEAN;
             case LEAN -> STANDARD;
             case STANDARD -> VISUAL;
             case VISUAL_LEAN -> VISUAL;

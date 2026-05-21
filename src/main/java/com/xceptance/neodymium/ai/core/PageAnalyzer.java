@@ -24,9 +24,14 @@
 package com.xceptance.neodymium.ai.core;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chromium.HasCdp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -556,6 +561,28 @@ public class PageAnalyzer
         dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
         dom.append("Page Title: ").append(com.codeborne.selenide.Selenide.title()).append("\n\n");
 
+        if (level == ContextLevel.AXTREE)
+        {
+            try
+            {
+                final String axTreeContent = captureAXTreeDOM();
+                if (axTreeContent != null)
+                {
+                    dom.append(axTreeContent);
+                    final String result = dom.toString();
+                    if (!isEmptyPage)
+                    {
+                        LOG.debug("   📄 Simplified AXTree DOM size: {} chars", result.length());
+                    }
+                    return result;
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.warn("Failed to capture AXTree via CDP, falling back to LEAN extraction: {}", e.getMessage());
+            }
+        }
+
         try
         {
             final Map<String, Object> data = (Map<String, Object>) com.codeborne.selenide.Selenide
@@ -738,5 +765,266 @@ public class PageAnalyzer
         {
             dom.append(String.format("%s='%s' ", key, value));
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String captureAXTreeDOM()
+    {
+        final WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
+        if (!(driver instanceof final HasCdp cdpDriver))
+        {
+            LOG.debug("Driver does not support CDP, AXTree is unavailable. Falling back to LEAN.");
+            return null;
+        }
+
+        final Map<String, Object> axTree = cdpDriver.executeCdpCommand("Accessibility.getFullAXTree", Map.of());
+        if (axTree == null || !axTree.containsKey("nodes"))
+        {
+            return null;
+        }
+
+        final List<Map<String, Object>> nodes = (List<Map<String, Object>>) axTree.get("nodes");
+        if (nodes == null || nodes.isEmpty())
+        {
+            return null;
+        }
+
+        final Set<String> interactiveRoles = Set.of(
+            "button", "link", "checkbox", "radio", "combobox", "listbox", "searchbox",
+            "textbox", "slider", "spinbutton", "switch", "tab", "menuitem",
+            "menuitemcheckbox", "menuitemradio", "input", "textarea", "select",
+            "option", "treeitem", "tabpanel", "dialog", "menu"
+        );
+
+        final Set<String> landmarkRoles = Set.of(
+            "heading", "form", "main", "navigation", "banner", "contentinfo", "alert", "status"
+        );
+
+        final StringBuilder dom = new StringBuilder();
+        dom.append("=== Accessibility Tree (AXTree) ===\n");
+
+        for (final Map<String, Object> node : nodes)
+        {
+            final boolean ignored = Boolean.TRUE.equals(node.get("ignored"));
+            if (ignored)
+            {
+                continue;
+            }
+
+            final Object backendDOMNodeIdObj = node.get("backendDOMNodeId");
+            if (backendDOMNodeIdObj == null)
+            {
+                continue;
+            }
+            final int backendDOMNodeId = ((Number) backendDOMNodeIdObj).intValue();
+
+            // Parse role
+            final Object roleObj = node.get("role");
+            String role = "";
+            if (roleObj instanceof final Map<?, ?> roleMap)
+            {
+                role = String.valueOf(roleMap.get("value"));
+            }
+            else if (roleObj != null)
+            {
+                role = String.valueOf(roleObj);
+            }
+
+            // Filter roles
+            if (!interactiveRoles.contains(role) && !landmarkRoles.contains(role))
+            {
+                continue;
+            }
+
+            // Parse name
+            final Object nameObj = node.get("name");
+            String name = "";
+            if (nameObj instanceof final Map<?, ?> nameMap)
+            {
+                name = String.valueOf(nameMap.get("value"));
+            }
+            else if (nameObj != null)
+            {
+                role = String.valueOf(nameObj);
+            }
+
+            // Parse value
+            final Object valueObj = node.get("value");
+            String value = "";
+            if (valueObj instanceof final Map<?, ?> valueMap)
+            {
+                value = String.valueOf(valueMap.get("value"));
+            }
+            else if (valueObj != null)
+            {
+                value = String.valueOf(valueObj);
+            }
+
+            // Parse properties
+            final List<Map<String, Object>> properties = (List<Map<String, Object>>) node.get("properties");
+            boolean disabled = false;
+            boolean required = false;
+            boolean readonly = false;
+            boolean checked = false;
+            String autocomplete = "";
+            String placeholder = "";
+
+            if (properties != null)
+            {
+                for (final Map<String, Object> prop : properties)
+                {
+                    final String propName = String.valueOf(prop.get("name"));
+                    final Object propValObj = prop.get("value");
+                    String propValue = "";
+                    if (propValObj instanceof final Map<?, ?> propValMap)
+                    {
+                        propValue = String.valueOf(propValMap.get("value"));
+                    }
+                    else if (propValObj != null)
+                    {
+                        propValue = String.valueOf(propValObj);
+                    }
+
+                    if ("disabled".equals(propName))
+                    {
+                        disabled = Boolean.parseBoolean(propValue);
+                    }
+                    else if ("required".equals(propName))
+                    {
+                        required = Boolean.parseBoolean(propValue);
+                    }
+                    else if ("readonly".equals(propName))
+                    {
+                        readonly = Boolean.parseBoolean(propValue);
+                    }
+                    else if ("checked".equals(propName))
+                    {
+                        checked = "true".equals(propValue) || "mixed".equals(propValue);
+                    }
+                    else if ("autocomplete".equals(propName))
+                    {
+                        autocomplete = propValue;
+                    }
+                    else if ("placeholder".equals(propName))
+                    {
+                        placeholder = propValue;
+                    }
+                }
+            }
+
+            // Stamping data-neo-ref via Runtime.callFunctionOn
+            String refId = "";
+            try
+            {
+                final Map<String, Object> resolveParams = Map.of("backendNodeId", backendDOMNodeId);
+                final Map<String, Object> resolvedNode = cdpDriver.executeCdpCommand("DOM.resolveNode", resolveParams);
+                if (resolvedNode != null && resolvedNode.containsKey("object"))
+                {
+                    final Map<String, Object> objectInfo = (Map<String, Object>) resolvedNode.get("object");
+                    final String objectId = (String) objectInfo.get("objectId");
+                    if (objectId != null)
+                    {
+                        final String functionDeclaration = """
+                            function() {
+                                if (this.hasAttribute('data-neo-ref')) {
+                                    return this.getAttribute('data-neo-ref');
+                                }
+                                var usedIds = {};
+                                document.querySelectorAll('[data-neo-ref]').forEach(function(el) {
+                                    usedIds[el.getAttribute('data-neo-ref')] = true;
+                                });
+                                
+                                function djb2(str) {
+                                    var hash = 5381;
+                                    for (var i = 0; i < str.length; i++) {
+                                        hash = ((hash << 5) + hash) + str.charCodeAt(i);
+                                        hash = hash & 0x7fffffff;
+                                    }
+                                    return hash.toString(36);
+                                }
+                                
+                                var tag = this.tagName.toLowerCase();
+                                var id = this.id || '';
+                                var cls = (typeof this.className === 'string' ? this.className : '').trim().replace(/\\s+/g, ' ');
+                                var ptag = this.parentElement ? this.parentElement.tagName.toLowerCase() : '';
+                                var type = this.getAttribute('type') || '';
+                                var name = this.getAttribute('name') || this.getAttribute('alt') || '';
+                                var raw = [tag, id, cls, ptag, type, name].join('|');
+                                var base = 'xc_ax_' + djb2(raw);
+                                
+                                var candidate = base;
+                                var suffix = 0;
+                                while (usedIds[candidate]) {
+                                    suffix++;
+                                    candidate = base + '_' + suffix;
+                                }
+                                this.setAttribute('data-neo-ref', candidate);
+                                return candidate;
+                            }
+                            """;
+
+                        final Map<String, Object> callParams = Map.of(
+                            "objectId", objectId,
+                            "functionDeclaration", functionDeclaration,
+                            "returnByValue", true
+                        );
+
+                        final Map<String, Object> callResult = cdpDriver.executeCdpCommand("Runtime.callFunctionOn", callParams);
+                        if (callResult != null && callResult.containsKey("result"))
+                        {
+                            final Map<String, Object> resultVal = (Map<String, Object>) callResult.get("result");
+                            refId = String.valueOf(resultVal.get("value"));
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.debug("Failed to resolve or stamp node with backendNodeId {}: {}", backendDOMNodeId, e.getMessage());
+            }
+
+            final StringBuilder nodeText = new StringBuilder();
+            nodeText.append("  [").append(role).append("] ");
+            if (!refId.isEmpty())
+            {
+                nodeText.append("data-neo-ref='").append(refId).append("' ");
+            }
+            if (!name.isEmpty())
+            {
+                nodeText.append("name='").append(name.replaceAll("'", "\\\\'")).append("' ");
+            }
+            if (!value.isEmpty())
+            {
+                nodeText.append("value='").append(value.replaceAll("'", "\\\\'")).append("' ");
+            }
+            if (disabled)
+            {
+                nodeText.append("disabled='true' ");
+            }
+            if (checked)
+            {
+                nodeText.append("checked='true' ");
+            }
+            if (required)
+            {
+                nodeText.append("required='true' ");
+            }
+            if (readonly)
+            {
+                nodeText.append("readonly='true' ");
+            }
+            if (!placeholder.isEmpty())
+            {
+                nodeText.append("placeholder='").append(placeholder.replaceAll("'", "\\\\'")).append("' ");
+            }
+            if (!autocomplete.isEmpty())
+            {
+                nodeText.append("autocomplete='").append(autocomplete).append("' ");
+            }
+
+            dom.append(nodeText.toString().trim()).append("\n");
+        }
+
+        return dom.toString();
     }
 }
