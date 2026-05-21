@@ -23,6 +23,7 @@ By completely replacing Allure with our own native capture framework and introdu
 
 - `aura-server`: Statefully index test histories, visual regression baselines, AI healing pipelines, and flakiness heuristics. **No initial access control layer** (zero authentication, zero-config MVP) is required, ensuring zero developer friction. The design maintains compatibility for hosted, multi-tenant concepts in the future.
 - `aura-capture`: Native Neodymium test lifecycle listener and annotations, providing 100% self-sufficient step, screenshot, and visual hash capture.
+- `aura-trace-viewer`: Interactive post-mortem diagnostic console displaying complete step-by-step timelines with DOM snapshots, network request/response headers, browser console logs, and screenshots, enabling instant debugging without re-running tests.
 - `aura-live-stream`: Real-time streaming tap for ongoing test suites to receive updates dynamically in the dashboard.
 - `aura-open-ingestion`: Support for third-party frameworks to either write directly to our open filesystem layout or POST structured payloads to our receiver, ensuring we do not close the ecosystem.
 - `aura-static-generator`: A command-line tool / output option that generates a self-contained **offline static report** (HTML + client-side JS + local file asset links) representing a snapshot of the run's state. Users can host this statically on S3, GitHub Pages, or any static server for zero-infrastructure sharing.

@@ -27,11 +27,13 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
 - **Alternative**: Keep using Allure listeners and translate their step formats into Aura files, or use reflection to capture lifecycle hooks.
 - **Rationale**: Relying on Allure binds the framework to heavy external dependencies, rigid execution models (unable to cleanly represent dynamic AI paths, self-healing retries, or perceptual hashes), and static single-thread context limitations. By owning the lifecycle capture, we achieve absolute design flexibility, maximum runtime execution speed, and zero external reporting bloat.
 
-### 2. Universal, Open Directory Layout & Schema (Source Flexibility)
 - **Decision**: All results are stored in `target/aura-results/run_<timestamp>_<branch>_<commit>/` using a documented, generic JSON/PNG layout:
   - `run-info.json`: Execution summary, branch/commit SHA, browser environment, and total metrics.
-  - `test-cases/<className>_<methodName>.json`: Structured chronological step results, actions, statuses, locators, and perceptual visual hashes.
+  - `test-cases/<className>_<methodName>.json`: Structured chronological step results, actions, statuses, locators, perceptual visual hashes, and links to trace files.
   - `screenshots/*.png`: Visual execution captures.
+  - `dom-snapshots/<className>_<methodName>_step<stepIndex>.html`: Full, serialized HTML DOM snapshots taken at each step.
+  - `traces/<className>_<methodName>_network.json`: Complete browser network requests (endpoints, response statuses, headers, sizes, durations) grouped by step.
+  - `traces/<className>_<methodName>_console.json`: Browser console error, warning, and info logs captured at each step.
   - `logs/<className>_ai.json`: Dynamic AI discussions, DOM extracts, and prompts.
 - **Alternative**: Couple the schema tightly to Neodymium's internal class objects.
 - **Rationale**: Keeping the intermediate data representation fully open and generic provides maximum **source flexibility** and avoids closing the ecosystem. Any external tool, framework, or developer can **write directly in our defined way** (e.g., standard files on disk) without running the server at all. Aura Server will ingest and display them flawlessly, making Aura a universal test intelligence platform rather than a proprietary silo.
@@ -48,17 +50,29 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
 
 
 
-### 5. Perceptual dHash Visual Lab & Baseline Approval
+### 5. Multi-Dimension Timeline Capture & Interactive Trace Viewer
+- **Decision**: Build an interactive Trace Viewer interface that supports full post-mortem analysis of failures without needing to re-run the tests. Neodymium captures four key data vectors at every test execution step:
+  - **DOM Snapshots**: Serialized static outerHTML is captured via Javascript at every step and saved as a standalone file. The dashboard renders these inside sandboxed `<iframe>` panels, enabling developers to inspect elements, check locators, and review CSS layout states exactly as they were at the step's execution moment.
+  - **Network Traces**: A dedicated background thread captures Chrome DevTools Protocol (CDP) network events (`Network.requestWillBeSent`, `Network.responseReceived`), matching requests with responses and slicing them into step timeline buckets.
+  - **Console Logs**: CDP log handlers stream browser-level errors, warnings, and standard console output to step records.
+  - **Screenshots**: High-resolution screenshots are captured before/after actions and linked to step timelines.
+  - **Layout**: The Aura dashboard displays this as a split-pane diagnostic workspace:
+    - *Left sidebar*: A chronological step/action list.
+    - *Right workspace*: Tabbed panels for (1) Interactive DOM Snapshot, (2) Network Requests Table, (3) Browser Console Logs, and (4) High-Res Screenshots.
+- **Alternative**: Rerun failed tests with live debuggers or rely on stdout logs.
+- **Rationale**: Re-running tests to diagnose flaky failures in CI is extremely time-consuming and often fails to reproduce the exact state due to dynamic page states. Serializing DOM snapshots, network traffic, and console messages directly into the open filesystem at the moment of execution allows developers to inspect the exact failure context offline.
+
+### 6. Perceptual dHash Visual Lab & Baseline Approval
 - **Decision**: The UI includes an interactive comparison workspace. Visual regression steps display a dual-layer horizontal swipe slider. Clicking "Approve Baseline" makes the Aura Server copy the actual execution screenshot over the baseline screenshot, updating the visual hash directly.
 - **Rationale**: Eliminates manual file copying and lets developers visually manage design diffs in seconds.
 
-### 6. Conversational AI Workspace (LangChain4j)
+### 7. Conversational AI Workspace (LangChain4j)
 - **Decision**: Integrate LangChain4j to connect the dashboard to Gemini. The UI features:
   - An "Analyze Failure" widget that sends the exact DOM segment and stack trace to Gemini for root-cause analysis.
   - An interactive chat panel to query suite statistics naturally (e.g., *"How many tests have failed because of locator changes on the login page this week?"*).
 - **Rationale**: Turns the report from a static failure list into an active assistant that explains *why* the failure occurred and how to fix it.
 
-### 7. Declarative Quality Gates & CI Pipeline Integrations
+### 8. Declarative Quality Gates & CI Pipeline Integrations
 - **Decision**: Aura supports automated run health checks by evaluating declarative rules stored in `quality-gates.json` or configured via the UI.
   - **KPI Assessments**: Quality gates evaluate rules based on overall Failure Rate % thresholds, mandatory success for critical target suites/components, and **New Regression Detection** (ensuring no *new* unique failure signatures exist that weren't present in the previous baseline/commit run).
   - **CI/CD Integration**: The server hosts a public GET/POST endpoint `/api/v1/runs/{id}/evaluate`. CI/CD systems (GitHub Actions, Jenkins, GitLab) can perform a quick curl request to evaluate the run status, receiving a clear JSON pass/fail verdict with detailed rule breach listings to determine build pass/fail gates instantly.

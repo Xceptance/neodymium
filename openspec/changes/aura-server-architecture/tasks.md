@@ -10,6 +10,9 @@
 - [ ] Implement native Neodymium annotations (e.g. `@TestStep`, `@VisualAssertion`, `@ExpectedFailure`)
 - [ ] Build a native `AuraCaptureListener` that hooks directly into JUnit 5 and Selenide logging
 - [ ] Implement step context serialization to cleanly support dynamic steps, self-healing retries, and visual hashes
+- [ ] Implement DOM snapshot capture (extracting outerHTML via JavaScript) at the end of each step
+- [ ] Implement CDP network request interceptor matching requests/responses and slicing them into step trace buffers
+- [ ] Implement CDP console log collector capturing browser console errors, warnings, and messages per step
 
 ## Component: File System Reader & Ingester (Direct Disk Writing)
 - [ ] Define standardized JSON schemas for `run-info.json` and `<testCase>.json`
@@ -32,6 +35,10 @@
 - [ ] Implement live console view updating step progress in real-time via HTMX WebSockets
 - [ ] Create **Visual Regression Lab** with interactive before/after horizontal swipe sliders
 - [ ] Implement "Approve Baseline" controller that overwrites disk baselines and updates visual hashes
+- [ ] Implement **Trace Viewer workspace** inside the dashboard featuring a split-pane layout (left: chronological steps list, right: tabbed diagnostic details)
+- [ ] Implement interactive sandboxed `<iframe>` to render historical DOM snapshots at each step
+- [ ] Build interactive Network Request tables with search/filter, displaying request/response parameters
+- [ ] Build a Console tab reproducing browser console logs color-coded by log level (Error, Warn, Info)
 
 ## Component: AI Failure Analyst
 - [ ] Integrate LangChain4j and configure connection to Gemini (using env keys)
