@@ -40,6 +40,11 @@ public class PlaybookStep {
 
     private String screenshotHash;
 
+    private boolean expectedFailure;
+    private String bugId;
+    private String expectedErrorType;
+    private String expectedErrorMessage;
+
     private transient String lastFailure;
 
     /**
@@ -135,9 +140,49 @@ public class PlaybookStep {
         this.healedContextLevel = level;
     }
 
+    public boolean isExpectedFailure()
+    {
+        return expectedFailure;
+    }
+
+    public void setExpectedFailure(final boolean expectedFailure)
+    {
+        this.expectedFailure = expectedFailure;
+    }
+
+    public String getBugId()
+    {
+        return bugId;
+    }
+
+    public void setBugId(final String bugId)
+    {
+        this.bugId = bugId;
+    }
+
+    public String getExpectedErrorType()
+    {
+        return expectedErrorType;
+    }
+
+    public void setExpectedErrorType(final String expectedErrorType)
+    {
+        this.expectedErrorType = expectedErrorType;
+    }
+
+    public String getExpectedErrorMessage()
+    {
+        return expectedErrorMessage;
+    }
+
+    public void setExpectedErrorMessage(final String expectedErrorMessage)
+    {
+        this.expectedErrorMessage = expectedErrorMessage;
+    }
+
     @Override
     public String toString()
     {
-        return "PlaybookStep [promptLine=" + promptLine + ", reasoning=" + reasoning + ", actions=" + actions + ", screenshotHash=" + screenshotHash + "]";
+        return "PlaybookStep [promptLine=" + promptLine + ", reasoning=" + reasoning + ", actions=" + actions + ", screenshotHash=" + screenshotHash + ", expectedFailure=" + expectedFailure + ", bugId=" + bugId + ", expectedErrorType=" + expectedErrorType + ", expectedErrorMessage=" + expectedErrorMessage + "]";
     }
 }

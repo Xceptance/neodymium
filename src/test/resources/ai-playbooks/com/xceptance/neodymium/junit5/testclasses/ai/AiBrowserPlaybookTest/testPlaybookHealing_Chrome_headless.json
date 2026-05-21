@@ -2,7 +2,8 @@
   "id": "com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserPlaybookTest :: testPlaybookHealing :: Browser Chrome_headless",
   "steps": [
     {
-      "actions": []
+      "actions": [],
+      "expectedFailure": false
     }
   ]
 }

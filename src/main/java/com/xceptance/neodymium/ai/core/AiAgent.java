@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
@@ -99,6 +100,8 @@ public class AiAgent {
 
     private static final int NO_ACTIONS_MAX_RETRIES = 15;
 
+    private static final Pattern BUG_TAG_PATTERN = Pattern.compile("(?i)\\(bug(?:\\s*:\\s*([^)]+))?\\)");
+
     /**
      * Constructs a new AiAgent.
      *
@@ -162,6 +165,8 @@ public class AiAgent {
             Neodymium.initializePlaybook();
             final boolean isInteractive = config.aiInteractive();
             final List<String> performedInstructions = new ArrayList<>();
+            boolean abortedDueToExpectedFailure = false;
+            String abortedBugId = null;
 
             for (int i = 0; i <= stepsList.size(); i++) {
                 if (isInteractive) {
@@ -207,6 +212,22 @@ public class AiAgent {
                 final String stepUnresolved = stepsList.get(i);
                 final String step = AiBrowser.resolveTestDataToPrompt(stepUnresolved);
 
+                // Extract and strip expected failure tags
+                boolean expectedFailure = false;
+                String bugId = null;
+                String strippedStep = step;
+                final Matcher bugMatcher = BUG_TAG_PATTERN.matcher(step);
+                if (bugMatcher.find())
+                {
+                    expectedFailure = true;
+                    bugId = bugMatcher.group(1);
+                    if (bugId != null)
+                    {
+                        bugId = bugId.trim();
+                    }
+                    strippedStep = bugMatcher.replaceAll("").replaceAll("\\s+", " ").trim();
+                }
+
                 boolean isReplay = false;
                 final Playbook playbookForCheck = Neodymium.getAiPlaybook();
                 // Check if we have an active, non-recording playbook matching the current step
@@ -215,39 +236,47 @@ public class AiAgent {
                     final PlaybookStep stepObj = playbookForCheck.getCurrentStep();
                     // Mark as replay only if the previous run didn't fail and prompts match exactly
                     if (!stepObj.failed() && stepObj.getPromptLine() != null
-                            && stepObj.getPromptLine().equals(step)) {
+                            && stepObj.getPromptLine().equals(strippedStep)) {
                         isReplay = true;
                     }
                 }
 
                 LOG.debug("───────────────────────────────────────────────────────────");
                 if (isReplay) {
-                    LOG.debug("👣 Step 🔄 [{}/{}]: {}", i + 1, stepsList.size(), step);
+                    LOG.debug("👣 Step 🔄 [{}/{}]: {}", i + 1, stepsList.size(), strippedStep);
                 } else {
-                    LOG.debug("👣 Step 🧠 [{}/{}]: {}", i + 1, stepsList.size(), step);
+                    LOG.debug("👣 Step 🧠 [{}/{}]: {}", i + 1, stepsList.size(), strippedStep);
                 }
                 LOG.debug("───────────────────────────────────────────────────────────");
 
                 try {
-                    executionLog.startStep(i + 1, stepsList.size(), step);
+                    executionLog.startStep(i + 1, stepsList.size(), strippedStep);
                     final List<String> futureInstructions = new ArrayList<>();
                     for (int j = i + 1; j < stepsList.size(); j++) {
                         futureInstructions.add(stepsList.get(j));
                     }
-                    executeStep(step, performedInstructions, stepUnresolved, futureInstructions);
+                    executeStep(strippedStep, expectedFailure, bugId, performedInstructions, stepUnresolved, futureInstructions);
                     performedInstructions.add(stepUnresolved);
                 } catch (HudActionException e) {
                     i = processHudActionException(e, i, stepsList, performedInstructions);
                     if (i < 0)
                         break;
                     continue;
+                } catch (final ExpectedFailureAbortException e) {
+                    abortedDueToExpectedFailure = true;
+                    abortedBugId = e.getBugId();
+                    break;
                 } finally {
                     executionLog.endStep();
                 }
             }
 
             LOG.debug("───────────────────────────────────────────────────────────");
-            LOG.debug("🏆 All steps completed successfully!");
+            if (abortedDueToExpectedFailure) {
+                LOG.debug("🛑 Early abort: Expected failure matched recorded state (Bug: {})!", abortedBugId != null ? abortedBugId : "unspecified");
+            } else {
+                LOG.debug("🏆 All steps completed successfully!");
+            }
             LOG.debug("───────────────────────────────────────────────────────────");
         } finally {
             final Playbook playbook = Neodymium.getAiPlaybook();
@@ -290,7 +319,8 @@ public class AiAgent {
      * @throws HudActionException if the user triggers a control-flow change via the
      *                            HUD
      */
-    private void executeStep(final String instruction, final List<String> performedInstructions,
+    private void executeStep(final String instruction, final boolean expectedFailure, final String bugId,
+            final List<String> performedInstructions,
             final String unresolvedInstruction,
             final List<String> futureInstructions) throws HudActionException {
         int errorCount = 0;
@@ -316,7 +346,7 @@ public class AiAgent {
 
                 // Try to resolve the required actions (from playbook cache, direct plugins, or
                 // LLM)
-                final List<Action> actions = getStepActions(instruction, playbook);
+                final List<Action> actions = getStepActions(instruction, playbook, expectedFailure, bugId);
 
                 if (isInteractive) {
                     // Update the HUD with the proposed actions and reasoning before executing them
@@ -352,8 +382,14 @@ public class AiAgent {
                 // Move the playbook cursor forward upon successful execution
                 playbook.nextStep();
 
-                return;
+                break;
             } catch (final ActionExecutionException e) {
+                if (expectedFailure)
+                {
+                    handleExpectedFailure(playbook.getCurrentStep(), instruction, unresolvedInstruction, bugId, e, playbook);
+                    return;
+                }
+
                 final PlaybookStep step = playbook.getCurrentStep();
 
                 if (!playbook.isRecording() && step.getPromptLine() != null
@@ -439,6 +475,12 @@ public class AiAgent {
                 throw e; // Rethrow to be caught by the outer loop
             } catch (final AssertionError e) {
                 final PlaybookStep step = playbook.getCurrentStep();
+                if (expectedFailure)
+                {
+                    handleExpectedFailure(step, instruction, unresolvedInstruction, bugId, e, playbook);
+                    return;
+                }
+
                 step.setFailure(new ActionExecutionException(e.getMessage(), e));
 
                 // Escalate Context Level before bubbling up
@@ -496,6 +538,13 @@ public class AiAgent {
                     throw e; // Bubble up immediately to fail the test without retries
                 }
             } catch (final Exception e) {
+                final PlaybookStep step = playbook.getCurrentStep();
+                if (expectedFailure)
+                {
+                    handleExpectedFailure(step, instruction, unresolvedInstruction, bugId, e, playbook);
+                    return;
+                }
+
                 LOG.error("Unexpected error executing step: {}", instruction, e);
                 if (isInteractive) {
                     final List<String> plannedStrs = new ArrayList<>();
@@ -512,6 +561,86 @@ public class AiAgent {
                     });
                 }
             }
+        }
+
+        if (expectedFailure)
+        {
+            final String msg = "Expected step to fail with " + (bugId != null ? "bug: " + bugId : "expected failure") + ", but it succeeded.";
+            LOG.error("    ❌ {}", msg);
+            throw new AssertionError(msg);
+        }
+    }
+
+    private void handleExpectedFailure(final PlaybookStep step, final String instruction, final String unresolvedInstruction,
+            final String bugId, final Throwable t, final Playbook playbook)
+    {
+        final boolean isVisual = unresolvedInstruction.toLowerCase().contains("(visual)");
+        final String errorType = t.getClass().getName();
+        final String errorMessage = t.getMessage() != null ? t.getMessage() : "";
+
+        if (playbook.isRecording())
+        {
+            LOG.info("    🎯 Recording expected failure for bug: {} (Error Type: {}, Message: {})", bugId, errorType, errorMessage);
+            step.setExpectedFailure(true);
+            step.setBugId(bugId);
+            step.setExpectedErrorType(errorType);
+            step.setExpectedErrorMessage(errorMessage);
+            step.setPromptLine(instruction);
+            if (step.getReasoning() == null || step.getReasoning().isEmpty())
+            {
+                step.setReasoning("Expected failure recorded for bug: " + (bugId != null ? bugId : "unspecified"));
+            }
+
+            if (isVisual)
+            {
+                try
+                {
+                    final String screenshot = pageAnalyzer.captureScreenshot("Defective State: " + instruction);
+                    final String dHash = ScreenshotHasher.computeHash(screenshot);
+                    step.setScreenshotHash(dHash);
+                    LOG.info("    📸 Captured defective state screenshot dHash: {}", dHash);
+                }
+                catch (final Exception ex)
+                {
+                    LOG.warn("    ⚠️ Failed to capture defective state screenshot: {}", ex.getMessage());
+                }
+            }
+            playbook.setChanged(true);
+            playbook.nextStep();
+            throw new ExpectedFailureAbortException(bugId, t);
+        }
+        else
+        {
+            LOG.info("    🔍 Replaying expected failure for bug: {}. Proceeding successfully because the step failed as expected.", bugId);
+
+            if (isVisual && step.getScreenshotHash() != null)
+            {
+                try
+                {
+                    final String screenshot = pageAnalyzer.captureScreenshot("Defective State Verification: " + instruction);
+                    final String currentHash = ScreenshotHasher.computeHash(screenshot);
+                    final int distance = ScreenshotHasher.getHammingDistance(step.getScreenshotHash(), currentHash);
+                    LOG.info("    📊 Defective State Screenshot dHash comparison: Distance = {}, Recorded: {}, Current: {}", distance, step.getScreenshotHash(), currentHash);
+
+                    if (distance > 15)
+                    {
+                        final String msg = "Visual defect appearance changed! Defective state screenshot mismatch (Hamming distance " + distance + " > 15).";
+                        LOG.error("    ❌ {}", msg);
+                        throw new AssertionError(msg, t);
+                    }
+                    LOG.info("    ✅ Visual defect appearance verified (Hamming distance {} <= 15).", distance);
+                }
+                catch (final Exception ex)
+                {
+                    LOG.error("    ❌ Error during defective state visual hash comparison", ex);
+                    throw new AssertionError("Error during defective state visual hash verification: " + ex.getMessage(), t);
+                }
+            }
+
+            LOG.info("    ✅ Expected failure verified (step failed). Proceeding successfully!");
+            executionLog.logInfo("Expected failure verified (step failed) (Bug: " + (bugId != null ? bugId : "unspecified") + ").");
+            playbook.nextStep();
+            throw new ExpectedFailureAbortException(bugId, t);
         }
     }
 
@@ -602,7 +731,7 @@ public class AiAgent {
         Neodymium.getOrCreateInteractiveHud().resetHudAction();
     }
 
-    private List<Action> getStepActions(final String instruction, final Playbook playbook) {
+    private List<Action> getStepActions(final String instruction, final Playbook playbook, final boolean expectedFailure, final String bugId) {
         List<Action> actions = new ArrayList<Action>();
         PlaybookStep step = playbook.getCurrentStep();
         boolean visualMatchSucceeded = false;
@@ -624,7 +753,7 @@ public class AiAgent {
                     playbook.removeFutureSteps();
                     step = playbook.getCurrentStep();
                 } else {
-                    if (step.getScreenshotHash() != null)
+                    if (step.getScreenshotHash() != null && !step.isExpectedFailure())
                     {
                         LOG.info("    🔍 Step has visual screenshot hash recorded. Verifying visual match first...");
                         try
@@ -705,7 +834,7 @@ public class AiAgent {
         if (requiresLlm) {
             // Intent extracted, but it requires the LLM to process it fully (or actions
             // empty)
-            actions = getActionsFromLLM(instruction, step, playbook, requiresScreenshot);
+            actions = getActionsFromLLM(instruction, step, playbook, requiresScreenshot, expectedFailure, bugId);
         } else {
             // Simple action that can be executed directly, or local replay comparison
             // succeeded
@@ -747,7 +876,7 @@ public class AiAgent {
 
     private List<Action> getActionsFromLLM(final String instruction, final PlaybookStep playbookStep,
             final Playbook playbook,
-            final boolean requiresScreenshot) {
+            final boolean requiresScreenshot, final boolean expectedFailure, final String bugId) {
         // If we are inside a playbook replay and failed, we have an initial error
         // already.
         String lastError;
@@ -885,11 +1014,15 @@ public class AiAgent {
                     throw new ActionExecutionException(e.getMessage(), e);
                 }
                 if (actions.isEmpty()) {
-                    if (actionParser.isSuccess(llmResponse) && actionParser.isDone(llmResponse)) {
+                    if (actionParser.isDone(llmResponse) && actionParser.isSuccess(llmResponse)) {
                         LOG.info(
                                 "    ✅ LLM returned no actions, but indicated success and completion. Treating as 'No Action Needed'.");
                         executionLog.logInfo("No actions needed based on LLM evaluation.");
                     } else {
+                        if (expectedFailure)
+                        {
+                            throw new ActionExecutionException("LLM returned no actions for instruction: " + instruction, null);
+                        }
                         noActionsCount++;
                         llmClient.getAiStats().recordRetry(true);
                         if (noActionsCount > NO_ACTIONS_MAX_RETRIES) {
@@ -944,6 +1077,10 @@ public class AiAgent {
 
                 return actions;
             } catch (final ActionExecutor.ActionExecutionException e) {
+                if (expectedFailure)
+                {
+                    throw e;
+                }
                 // Try escalating context BEFORE burning a retry count
                 final ContextLevel escalated = contextLevel.escalate();
                 if (escalated != null && contextLevel != escalated) {
@@ -987,6 +1124,10 @@ public class AiAgent {
                 sleep(1000);
             } catch (final Exception e) {
                 LOG.error("Unexpected error executing step: {}", instruction, e);
+                if (expectedFailure)
+                {
+                    throw new ActionExecutionException("Unexpected error executing step: " + e.getMessage(), e);
+                }
                 SelenideAddons.wrapAssertionError(() -> {
                     throw new AiAgentException("Unexpected error executing step: " + instruction, e);
                 });
@@ -1164,4 +1305,22 @@ public class AiAgent {
 
         return -1; // Unhandled or generic break
     }
+
+    private static final class ExpectedFailureAbortException extends RuntimeException
+    {
+        private static final long serialVersionUID = 1L;
+        private final String bugId;
+
+        public ExpectedFailureAbortException(final String bugId, final Throwable cause)
+        {
+            super("Expected failure abort for bug: " + bugId, cause);
+            this.bugId = bugId;
+        }
+
+        public String getBugId()
+        {
+            return this.bugId;
+        }
+    }
 }
+

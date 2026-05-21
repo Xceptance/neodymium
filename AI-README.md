@@ -478,6 +478,65 @@ Even if you do not explicitly include the `(visual)` tag, the LLM is instructed 
 
 ---
 
+## 🐞 Unified Expected Failures & (bug) Tags
+
+Neodymium features a language-agnostic expected failure mechanism designed to let tests pass even when they hit known, unresolved bugs. It "freezes" that defective behavior, meaning:
+1. If the bug is still present, the test **passes** (preventing false alarms on CI).
+2. If the bug is suddenly fixed (the step succeeds) or fails in a different way, the test **fails** (forcing you to remove or update the tag).
+
+This is supported in both **AI Playbooks** (natural language steps) and **Programmatic Selenide/Java tests**.
+
+### 1. Expected Failures in AI Playbooks (`(bug)` tag)
+You can mark any natural language step in any language as a known bug by appending `(bug)` or `(bug: TICKET_ID)` to the instruction:
+
+```yaml
+steps: |
+  Click the 'Add to Cart' button.
+  Verify that the error message 'Out of Stock' is displayed (bug: APP-9171).
+  Verify that the product price is $29.99 (visual) (bug: APP-9172).
+```
+
+#### How It Works
+* **Tag Stripping**: The framework automatically parses and strips `(bug...)` tags case-insensitively from instructions *before* parsing or compile-time prompting. The LLM is completely unaware of the expected failure, ensuring it tries its best to perform and evaluate the step.
+* **Recording/Creation Mode**: When a tagged step fails, Neodymium catches the exception and serializes the exact defective state metadata (error type, message, and a visual dHash if it's a visual step) directly into the `PlaybookStep` file under the playbook directory. The execution then proceeds successfully to the next step. If the step succeeds, the framework throws an `AssertionError` (expected failure succeeded).
+* **Replay/CI Mode**: During replay, the recorded actions are executed. If they succeed, or if they fail with a different error type/message, or if a visual step has a visual mismatch (Hamming distance of the defect screenshot > 15), the framework raises an `AssertionError`. If they fail in the exact recorded defective way, it proceeds successfully.
+
+---
+
+### 2. Programmatic Expected Failures (`Neodymium.expectFailure`)
+For traditional programmatic JUnit 5 / Selenide tests, Neodymium provides a fluent API to wrap code blocks that are expected to fail:
+
+```java
+// Simple expected failure
+Neodymium.expectFailure("APP-1234", () -> {
+    $("#errorMessage").shouldHave(text("Success"));
+});
+
+// Fluent expected failure filtering by Exception Type
+Neodymium.expectFailure("APP-1234")
+         .ofType(IllegalArgumentException.class)
+         .run(() -> {
+             // code expected to throw IllegalArgumentException
+         });
+
+// Fluent expected failure filtering by Message Substring
+Neodymium.expectFailure("APP-1234")
+         .withMessage("connection timed out")
+         .run(() -> {
+             // code expected to throw an exception containing the message
+         });
+
+// Full fluent expected failure matching type and message
+Neodymium.expectFailure("APP-1234")
+         .ofType(IllegalStateException.class)
+         .withMessage("invalid state")
+         .run(() -> {
+             // code expected to fail
+         });
+```
+
+---
+
 ## ⚡ Perceptual Visual Replay Caching (dHash & Hamming Distance)
 
 Capturing base64 screenshots and executing full visual validations via the LLM (`ContextLevel.VISUAL`) is highly powerful, but it is also the most latency-heavy and token-expensive operation in AI-driven automation. To solve this, Neodymium AI employs an automatic **Perceptual Visual Replay Caching** mechanism that runs locally, offline, and in microseconds.

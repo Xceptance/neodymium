@@ -16,7 +16,8 @@
           "replay": "",
           "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     },
     {
       "promptLine": "java executeDummy2()",
@@ -33,7 +34,8 @@
           "replay": "",
           "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     },
     {
       "promptLine": "java executeDummy3()",
@@ -50,7 +52,8 @@
           "replay": "",
           "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     }
   ]
 }
