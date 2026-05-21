@@ -51,54 +51,24 @@ graph TD
 ```
 
 #### 2. Eliminating Hallucinations with Programmatic Fallbacks (`JAVA_METHOD`)
-A significant pitfall of visual/NLP-based AI automation tools (like ZeroStep or Midscene) is that they rely on LLMs to perform complex mathematical verification, date comparisons, or string formatting assertions. This results in frequent hallucinations, false positives/negatives, and standard floating-point representation bugs (e.g., `0.90 - 0.88` yielding `0.020000000000000018`).
-* **Neodymium's Edge:** Neodymium uniquely introduces the `JAVA_METHOD` action. If a step involves numerical checks or custom business rules (e.g., *"Verify the calculated tax is 6%"*), the AI delegates execution to a registered Java utility class (such as `AiAssertions`).
-* **Under the Hood:** It leverages JVM reflection to execute Java methods, and uses **JDK JShell** with `BigDecimal` and a locale-agnostic normalizer (`normalizeNumericOrPrice`) to calculate and assert values programmatically. This guarantees **100% mathematical precision** while preserving the simplicity of natural language.
+A significant pitfall of visual/NLP-based AI automation tools is that they rely on LLMs to perform complex mathematical verification, date comparisons, or string formatting assertions. This results in frequent hallucinations and floating-point bugs.
+* **Neodymium's Edge:** Neodymium uniquely introduces the `JAVA_METHOD` action. If a step involves numerical checks or custom business rules, the AI delegates execution to a registered Java utility class to calculate and assert values programmatically.
+*(See [Programmatic Assertions](#-programmatic-assertions-java_method) for more details.)*
 
 #### 3. Extremely Efficient Escalating Context System
 Sending an entire HTML page to an LLM on every step consumes vast amounts of prompt tokens, limits execution speed, and often exceeds LLM token windows.
-* **Neodymium's Edge:** Instead of blind DOM dumps, Neodymium uses an **Escalating Context** approach:
-  1. **`HINT` (Zero DOM):** If an instruction has a `(hint: .selector)`, Neodymium skips element search completely. The LLM simply translates the instruction into JSON under practically **0 token cost**.
-  2. **`LEAN` (Interactive Elements):** The default mode. Sends only clickable buttons, links, inputs, and page headings (~80% reduction in DOM size).
-  3. **`STANDARD` (Full Text):** Injected only if the LLM requests it to resolve ambiguity or execute text assertions.
-  4. **`VISUAL` (Screenshot):** A last-resort visual verification.
-* **Adaptive Recovery:** Step history is omitted on happy paths to conserve tokens, but dynamically injected during error recovery (`Selective Step History`) to help the LLM orient itself.
+* **Neodymium's Edge:** Instead of blind DOM dumps, Neodymium uses an **Escalating Context** approach. It starts with a `LEAN` mode (interactive elements only) and only escalates to `STANDARD` (full text) or `VISUAL` (screenshot) if the LLM explicitly requests more information to resolve ambiguity.
+*(See [Escalating Context](#-escalating-context-token-optimization) for more details.)*
 
 #### 4. Perceptual Visual Caching (dHash & Hamming Distance)
-Traditional visual validation frameworks either perform pixel-by-pixel comparisons (which fail continuously due to font anti-aliasing, OS scrollbar variations, or sub-pixel shifts) or require expensive cloud visual testing platform integrations.
-* **Neodymium's Edge:** Visual steps (annotated with `(visual)`) are cached locally using **perceptual hashing (dHash)**.
-* **Algorithm:** Screenshots are downsampled to a tiny `17x16` grayscale grid. Horizontal gradients are evaluated to output a robust **256-bit dHash** stored directly in the playbook.
-* **Replay:** The live screen's dHash is compared locally using **Hamming distance**. If the distance is `<= 15` bits, it represents a visual match. Neodymium **bypasses all DOM parsing and LLM visual queries entirely**, executing visual assertions locally in microseconds.
-
-```java
-// Our Local Grayscale dHash Downsampler
-final int width = 17;
-final int height = 16;
-final BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
-// ... scaling and painting ...
-final StringBuilder sb = new StringBuilder();
-for (int y = 0; y < height; y++)
-{
-    for (int x = 0; x < width - 1; x++)
-    {
-        final int p1 = resized.getRaster().getSample(x, y, 0);
-        final int p2 = resized.getRaster().getSample(x + 1, y, 0);
-        sb.append(p1 > p2 ? "1" : "0");
-    }
-}
-```
+Traditional visual validation frameworks either perform pixel-by-pixel comparisons or require expensive cloud visual testing platform integrations.
+* **Neodymium's Edge:** Visual steps are cached locally using **perceptual hashing (dHash)**. On replay, the live screen's dHash is compared locally using **Hamming distance**. This bypasses all DOM parsing and LLM visual queries entirely, executing visual assertions locally in microseconds.
+*(See [Perceptual Visual Replay Caching](#-perceptual-visual-replay-caching-dhash--hamming-distance) for more details and code examples.)*
 
 #### 5. Known Defect Management via Expected Failures
-In real-world QA, test suites are constantly plagued by known, unresolved bugs. Most frameworks force teams to either disable the test completely (losing all regression coverage) or suffer constant CI failures (causing "alert fatigue").
-* **Neodymium's Edge:** Features a **Unified Expected Failure** system. Steps can be tagged with `(bug: APP-1234)`.
-* **State Freezing:** Neodymium captures and "freezes" the exact defect signature (exception type, error message, and screenshot dHash) in the Playbook. 
-* **Smart Verification:**
-  - If the bug is still present on the SUT, the test **passes** (no CI false alarms).
-  - If the bug is suddenly fixed (the step succeeds), Neodymium throws an `AssertionError`, forcing developers to remove the outdated bug tag.
-  - If the bug changes or fails in a different way, Neodymium fails, preventing regression slips.
-
----
-
+In real-world QA, test suites are constantly plagued by known, unresolved bugs. Most frameworks force teams to either disable the test completely or suffer constant CI failures.
+* **Neodymium's Edge:** Features a **Unified Expected Failure** system. Steps can be tagged with `(bug: APP-1234)`. Neodymium captures and "freezes" the exact defect signature in the Playbook. If the bug is suddenly fixed or changes behavior, the test fails, preventing regression slips.
+*(See [Unified Expected Failures](#-unified-expected-failures--bug-tags) for more details.)*
 
 ---
 
