@@ -69,7 +69,7 @@ final class AiAgentVisualTagTest
     @Test
     void testGetInitialContextLevel_withoutTags() throws Exception
     {
-        assertEquals(ContextLevel.LEAN, invokeGetInitialContextLevel("Type 'text' in input"));
+        assertEquals(ContextLevel.AXTREE, invokeGetInitialContextLevel("Type 'text' in input"));
     }
 
     @Test

@@ -101,6 +101,9 @@ public class AiAgent {
     private boolean hudPromptChanged = false;
     private boolean hudSaveExit = false;
 
+    // AI-generated: Gemini 3.5 Flash - tracks whether the last LLM response indicated completion
+    private boolean lastLlmDone = true;
+
     private static final int NO_ACTIONS_MAX_RETRIES = 15;
 
     private static final Pattern BUG_TAG_PATTERN = Pattern.compile("(?i)\\(bug(?:\\s*:\\s*([^)]+))?\\)");
@@ -414,62 +417,95 @@ public class AiAgent {
         {
             try
             {
-                if (isInteractive)
+                // AI-generated: Gemini 3.5 Flash - Reset compound step tracking on each attempt
+                final List<Action> accumulatedActions = new ArrayList<>();
+                this.lastLlmDone = true;
+
+                while (true)
                 {
-                    final List<String> plannedStrs = new ArrayList<>();
-                    plannedStrs.add(instruction);
-                    if (futureInstructions != null)
+                    if (isInteractive)
                     {
-                        plannedStrs.addAll(futureInstructions);
-                    }
-
-                    // Show HUD immediately so the user doesn't wait forever, indicating reasoning
-                    // is loading
-                    Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
-                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
-                            "Loading reasoning...", false);
-                }
-
-                // Try to resolve the required actions (from playbook cache, direct plugins, or
-                // LLM)
-                final List<Action> actions = getStepActions(instruction, playbook, expectedFailure, bugId);
-
-                if (isInteractive)
-                {
-                    // Update the HUD with the proposed actions and reasoning before executing them
-                    final List<String> plannedStrs = new ArrayList<>();
-                    plannedStrs.add(instruction);
-                    if (futureInstructions != null)
-                    {
-                        plannedStrs.addAll(futureInstructions);
-                    }
-
-                    String reasoning = null;
-                    boolean isReplay = false;
-                    final PlaybookStep stepObj = playbook.getCurrentStep();
-                    if (stepObj != null)
-                    {
-                        reasoning = stepObj.getReasoning();
-                        // If playbook is not recording, it's a replay of an existing step
-                        if (!playbook.isRecording() && stepObj.getPromptLine() != null
-                                && stepObj.getPromptLine().equals(instruction))
+                        final List<String> plannedStrs = new ArrayList<>();
+                        plannedStrs.add(instruction);
+                        if (futureInstructions != null)
                         {
-                            isReplay = true;
+                            plannedStrs.addAll(futureInstructions);
                         }
+
+                        // Show HUD immediately so the user doesn't wait forever, indicating reasoning
+                        // is loading
+                        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                                "Loading reasoning...", false);
                     }
 
-                    Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
-                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction, reasoning,
-                            isReplay);
+                    // Clear actions of the current step if this is a continuation turn during recording/healing
+                    if (!accumulatedActions.isEmpty() && playbook.isRecording())
+                    {
+                        playbook.getCurrentStep().getActions().clear();
+                    }
 
-                    // Block and wait for the user to approve the actions
-                    waitForHudAction(true);
+                    // Try to resolve the required actions (from playbook cache, direct plugins, or
+                    // LLM)
+                    final List<Action> actions = getStepActions(instruction, playbook, expectedFailure, bugId, accumulatedActions);
+
+                    if (isInteractive)
+                    {
+                        // Update the HUD with the proposed actions and reasoning before executing them
+                        final List<String> plannedStrs = new ArrayList<>();
+                        plannedStrs.add(instruction);
+                        if (futureInstructions != null)
+                        {
+                            plannedStrs.addAll(futureInstructions);
+                        }
+
+                        String reasoning = null;
+                        boolean isReplay = false;
+                        final PlaybookStep stepObj = playbook.getCurrentStep();
+                        if (stepObj != null)
+                        {
+                            reasoning = stepObj.getReasoning();
+                            // If playbook is not recording, it's a replay of an existing step
+                            if (!playbook.isRecording() && stepObj.getPromptLine() != null
+                                    && stepObj.getPromptLine().equals(instruction))
+                            {
+                                isReplay = true;
+                            }
+                        }
+
+                        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction, reasoning,
+                                isReplay);
+
+                        // Block and wait for the user to approve the actions
+                        waitForHudAction(true);
+                    }
+
+                    // Execute the approved actions via Selenium/WebDriver
+                    actionExecutor.executeAll(actions);
+
+                    // Accumulate executed actions
+                    accumulatedActions.addAll(actions);
+
+                    // If LLM returned "done": false and we are in recording/healing mode, loop to ask for subsequent turns
+                    if (playbook.isRecording() && !this.lastLlmDone)
+                    {
+                        LOG.info("    🔄 Multi-stage compound step: LLM indicated 'done: false'. Looping for next actions...");
+                        continue;
+                    }
+
+                    break;
                 }
 
-                // Execute the approved actions via Selenium/WebDriver
-                actionExecutor.executeAll(actions);
+                // If recording, assign all accumulated actions to the current playbook step
+                final PlaybookStep finalStep = playbook.getCurrentStep();
+                if (playbook.isRecording() && finalStep != null)
+                {
+                    finalStep.setActions(new ArrayList<>(accumulatedActions));
+                    playbook.setChanged(true);
+                }
 
-                // Move the playbook cursor forward upon successful execution
+                // Move the playbook cursor forward upon successful execution of all compound actions
                 playbook.nextStep();
 
                 break;
@@ -893,7 +929,8 @@ public class AiAgent {
         Neodymium.getOrCreateInteractiveHud().resetHudAction();
     }
 
-    private List<Action> getStepActions(final String instruction, final Playbook playbook, final boolean expectedFailure, final String bugId) {
+    private List<Action> getStepActions(final String instruction, final Playbook playbook,
+            final boolean expectedFailure, final String bugId, final List<Action> accumulatedActions) {
         List<Action> actions = new ArrayList<Action>();
         PlaybookStep step = playbook.getCurrentStep();
         boolean visualMatchSucceeded = false;
@@ -996,7 +1033,7 @@ public class AiAgent {
         if (requiresLlm) {
             // Intent extracted, but it requires the LLM to process it fully (or actions
             // empty)
-            actions = getActionsFromLLM(instruction, step, playbook, requiresScreenshot, expectedFailure, bugId);
+            actions = getActionsFromLLM(instruction, step, playbook, requiresScreenshot, expectedFailure, bugId, accumulatedActions);
         } else {
             // Simple action that can be executed directly, or local replay comparison
             // succeeded
@@ -1037,8 +1074,8 @@ public class AiAgent {
     }
 
     private List<Action> getActionsFromLLM(final String instruction, final PlaybookStep playbookStep,
-            final Playbook playbook,
-            final boolean requiresScreenshot, final boolean expectedFailure, final String bugId) {
+            final Playbook playbook, final boolean requiresScreenshot, final boolean expectedFailure,
+            final String bugId, final List<Action> accumulatedActions) {
         // If we are inside a playbook replay and failed, we have an initial error
         // already.
         String lastError;
@@ -1081,9 +1118,24 @@ public class AiAgent {
                 // 2. Build step history — only during recovery attempts (retry, escalation,
                 // no-actions-retry) to give the LLM context about the test flow.
                 // First-attempt happy path gets no history to keep prompts lean.
-                final String historyBlock = isRecoveryAttempt
+                String historyBlock = isRecoveryAttempt
                         ? AiAgentPrompts.buildStepHistory(playbook)
                         : "";
+                if (!accumulatedActions.isEmpty())
+                {
+                    final StringBuilder sb = new StringBuilder(historyBlock);
+                    if (sb.length() > 0 && !historyBlock.endsWith("\n"))
+                    {
+                        sb.append("\n");
+                    }
+                    sb.append("\n### Actions Executed In This Step So Far\n");
+                    int actNum = 1;
+                    for (final Action act : accumulatedActions)
+                    {
+                        sb.append(actNum++).append(". ").append(act.toString()).append("\n");
+                    }
+                    historyBlock = sb.toString();
+                }
 
                 // 3. Build prompt
                 final String userPrompt;
@@ -1175,6 +1227,7 @@ public class AiAgent {
                     executionLog.logWarning("JSON parsing failed: " + e.getMessage() + ". Retrying...");
                     throw new ActionExecutionException(e.getMessage(), e);
                 }
+                this.lastLlmDone = actionParser.isDone(llmResponse);
                 if (actions.isEmpty()) {
                     if (actionParser.isDone(llmResponse) && actionParser.isSuccess(llmResponse)) {
                         LOG.info(
@@ -1228,12 +1281,15 @@ public class AiAgent {
                 playbookStep.setActions(actions);
                 playbookStep.setPromptLine(instruction);
                 playbookStep.setReasoning(reasoning);
-                final String oldHash = playbookStep.getScreenshotHash();
-                final String newHash = (screenshot != null) ? ScreenshotHasher.computeHash(screenshot) : null;
-                if (!Objects.equals(oldHash, newHash))
+                if (accumulatedActions.isEmpty())
                 {
-                    playbookStep.setScreenshotHash(newHash);
-                    playbook.setChanged(true);
+                    final String oldHash = playbookStep.getScreenshotHash();
+                    final String newHash = (screenshot != null) ? ScreenshotHasher.computeHash(screenshot) : null;
+                    if (!Objects.equals(oldHash, newHash))
+                    {
+                        playbookStep.setScreenshotHash(newHash);
+                        playbook.setChanged(true);
+                    }
                 }
                 playbookStep.setFailure(null);
 
