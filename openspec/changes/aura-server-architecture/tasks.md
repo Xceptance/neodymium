@@ -5,6 +5,12 @@
 - [ ] Configure zero-dependency H2/SQLite embedded database
 - [ ] Implement JPA entity mappings for `Runs`, `TestCases`, `Steps`, and `VisualBaselines`
 
+## Component: Neodymium Native Lifecycle Capture (Allure Elimination)
+- [ ] Remove `io.qameta.allure` Maven dependencies from `pom.xml`
+- [ ] Implement native Neodymium annotations (e.g. `@TestStep`, `@VisualAssertion`, `@ExpectedFailure`)
+- [ ] Build a native `AuraCaptureListener` that hooks directly into JUnit 5 and Selenide logging
+- [ ] Implement step context serialization to cleanly support dynamic steps, self-healing retries, and visual hashes
+
 ## Component: File System Reader & Ingester
 - [ ] Define standardized JSON schemas for `run-info.json` and `<testCase>.json`
 - [ ] Create `AuraFileIngester` service to scan directories on startup
@@ -31,3 +37,4 @@
 - [ ] Write comprehensive unit tests for ingestion heuristics
 - [ ] Conduct end-to-end execution verification with posters-demo-store test suite
 - [ ] Create a comprehensive README and startup scripts
+

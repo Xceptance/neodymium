@@ -19,7 +19,12 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
 
 ## Decisions
 
-### 1. Unified Directory Layout
+### 1. Complete Ownership of Test Lifecycle (Zero-Allure Dependency)
+- **Decision**: Eliminate all `io.qameta.allure` annotations (`@Step`, `@Attachment`, etc.) and runtime libraries. Introduce native Neodymium metadata annotations (e.g. `@TestStep`, `@VisualAssertion`, `@ExpectedFailure`) and implement a native `AuraCaptureListener` hooking directly into JUnit 5/Selenide execution.
+- **Alternative**: Keep using Allure listeners and translate their step formats into Aura files, or use reflection to capture lifecycle hooks.
+- **Rationale**: Relying on Allure binds the framework to heavy external dependencies, rigid execution models (unable to cleanly represent dynamic AI paths, self-healing retries, or perceptual hashes), and static single-thread context limitations. By owning the lifecycle capture, we achieve absolute design flexibility, maximum runtime execution speed, and zero external reporting bloat.
+
+### 2. Unified Directory Layout
 - **Decision**: All results are stored in `target/aura-results/run_<timestamp>_<branch>_<commit>/` as flat files:
   - `run-info.json`: Execution summary, branch/commit SHA, browser environment.
   - `test-cases/<className>_<methodName>.json`: Structured chronological step results, visual hashes, and locator performance.
@@ -27,19 +32,19 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
   - `logs/<className>_ai.json`: LLM prompts, reasoning, and DOM extracts.
 - **Rationale**: Keeps data fully open, transparent, easy to clean up, and highly version-controllable.
 
-### 2. Spring Boot + H2 Speed Index Layer
+### 3. Spring Boot + H2 Speed Index Layer
 - **Decision**: Built on **Spring Boot 3.x**, **JDK 21 Virtual Threads**, and **H2/SQLite**. On boot, an `AuraFileIngester` scans the results directory, compares file signatures, and bulk-inserts/updates runs in a lightweight database.
 - **Rationale**: Keeps UI operations (searching, trend graphing, filtering by flakiness) extremely fast. Rebuilding the database takes seconds if files are deleted or modified.
 
-### 3. Live Stream Redirection Pipe
+### 4. Live Stream Redirection Pipe
 - **Decision**: An `AuraLiveStreamAppender` in Neodymium checks if `localhost:8080` is reachable. If so, it stream-redirects JSON event packets (e.g. `testStarted`, `stepCompleted`, `screenshotCaptured`) over a WebSocket or standard port pipe to the running Aura receiver.
 - **Rationale**: Provides immediate, real-time feedback during execution in a unified live console, while ensuring the definitive results are still written to disk at the end of the run.
 
-### 4. Perceptual dHash Visual Lab & Baseline Approval
+### 5. Perceptual dHash Visual Lab & Baseline Approval
 - **Decision**: The UI includes an interactive comparison workspace. Visual regression steps display a dual-layer horizontal swipe slider. Clicking "Approve Baseline" makes the Aura Server copy the actual execution screenshot over the baseline screenshot, updating the visual hash directly.
 - **Rationale**: Eliminates manual file copying and lets developers visually manage design diffs in seconds.
 
-### 5. Conversational AI Workspace (LangChain4j)
+### 6. Conversational AI Workspace (LangChain4j)
 - **Decision**: Integrate LangChain4j to connect the dashboard to Gemini. The UI features:
   - An "Analyze Failure" widget that sends the exact DOM segment and stack trace to Gemini for root-cause analysis.
   - An interactive chat panel to query suite statistics naturally (e.g., *"How many tests have failed because of locator changes on the login page this week?"*).
@@ -47,5 +52,8 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
 
 ## Risks / Trade-offs
 
+- **Risk**: Upgrading existing test suites to remove Allure annotations might require user rework.
+- **Mitigation**: Introduce standard deprecation cycles, providing a clean compile-time migration path or simple script converters to map `@Step` to `@TestStep` seamlessly.
 - **Risk**: Disk space bloat due to hundreds of runs capturing high-resolution PNGs.
 - **Mitigation**: Introduce a background scavenger policy in Aura Server to automatically compress, downscale, or purge screenshots older than `X` days, while retaining historical execution JSON metadata for long-term trend analysis.
+
