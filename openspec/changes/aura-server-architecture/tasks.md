@@ -38,8 +38,16 @@
 - [ ] Implement failure analysis endpoint (sending DOM context + stack trace to LLM)
 - [ ] Create a conversational chat panel inside the run inspector UI
 
+## Component: Aura Static HTML Generator
+- [ ] Create a static compiler utility (`AuraStaticGenerator`) in Java
+- [ ] Implement asset bundling (copying vanilla CSS/JS and linked screenshot PNG files into an target directory)
+- [ ] Implement FreeMarker/Thymeleaf-based static rendering to output self-contained `index.html` and static run pages
+- [ ] Provide command-line triggers to export static snapshots from any local `target/aura-results` folder
+
 ## Component: Verification & Hardening
 - [ ] Write comprehensive unit tests for ingestion heuristics
 - [ ] Conduct end-to-end execution verification with posters-demo-store test suite
+- [ ] Validate generated offline static HTML files for proper navigation, local styling, and visual asset linking
 - [ ] Create a comprehensive README and startup scripts
+
 

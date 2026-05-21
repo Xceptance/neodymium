@@ -13,10 +13,12 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
 - **Interactive Visual Lab**: Provide side-by-side swipe sliders for visual mismatches, complete with a "manual baseline approval" engine.
 - **AI Diagnostics Workspace**: Integrate LangChain4j (Gemini) to inspect step failures, DOMs, and logs directly from the UI.
 - **Zero-Config Developer Flow**: Boot the server on `localhost:8080` with a zero-dependencies embedded database.
+- **Static HTML Export (Offline Snapshot)**: Support compiling any test run folder into a completely static offline-viewable layout consisting of standalone HTML, standard vanilla JS, and links to local screenshot files. This provides an easily distributable and hostable static snapshot of a specific run state.
 
 **Non-Goals:**
 - Forcing a persistent cloud database; the system is designed to run locally, offline, and self-contained on the developer's machine or a local CI agent.
 - Modifying standard JUnit test dispatch mechanisms.
+- **User Authentication, Accounts, & Roles in MVP**: To keep local development fast and zero-overhead, the dynamic server will launch without any access control layer (no rights, roles, or accounts). We explicitly design the underlying schema so it can be extended into a multi-tenant hosted service later, but we will start completely open and authentication-free.
 
 ## Decisions
 
