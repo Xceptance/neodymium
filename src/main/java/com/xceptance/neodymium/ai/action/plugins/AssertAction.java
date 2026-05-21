@@ -27,6 +27,7 @@ package com.xceptance.neodymium.ai.action.plugins;
 
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.openqa.selenium.TimeoutException;
@@ -211,19 +212,34 @@ public final class AssertAction implements AiActionPlugin
                 }
                 else
                 {
-                    // Create a composite condition that searches for the expected text across 
-                    // all common visible attributes, input values, and text content areas.
-                    cond = Condition.or("Assertion for " + expected,
-                            Condition.exactText(expected),
-                            Condition.partialText(expected),
-                            Condition.value(expected),
-                            new PartialTextContent(expected),
-                            Condition.attribute("href", expected),
-                            Condition.attribute("alt", expected),
-                            Condition.attribute("src", expected),
-                            Condition.attribute("title", expected),
-                            Condition.attribute("placeholder", expected),
-                            new DataAttributeMatches("data-.*", ".*" + Pattern.quote(expected) + ".*"));
+                    final Matcher attributeMatcher = Pattern.compile("^([a-zA-Z0-9_-]+)=[\"']?(.*?)[\"']?$").matcher(expected);
+                    if (attributeMatcher.matches())
+                    {
+                        final String attrName = attributeMatcher.group(1);
+                        final String attrValue = attributeMatcher.group(2);
+                        cond = Condition.or("Assertion for " + expected,
+                                Condition.attribute(attrName, attrValue),
+                                Condition.exactText(expected),
+                                Condition.partialText(expected),
+                                Condition.value(expected),
+                                new PartialTextContent(expected));
+                    }
+                    else
+                    {
+                        // Create a composite condition that searches for the expected text across 
+                        // all common visible attributes, input values, and text content areas.
+                        cond = Condition.or("Assertion for " + expected,
+                                Condition.exactText(expected),
+                                Condition.partialText(expected),
+                                Condition.value(expected),
+                                new PartialTextContent(expected),
+                                Condition.attribute("href", expected),
+                                Condition.attribute("alt", expected),
+                                Condition.attribute("src", expected),
+                                Condition.attribute("title", expected),
+                                Condition.attribute("placeholder", expected),
+                                new DataAttributeMatches("data-.*", ".*" + Pattern.quote(expected) + ".*"));
+                    }
                 }
 
                 if (action.isSilent())
