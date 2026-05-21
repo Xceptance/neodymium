@@ -501,6 +501,31 @@ steps: |
 * **Recording/Creation Mode**: When a tagged step fails, Neodymium catches the exception and serializes the exact defective state metadata (error type, message, and a visual dHash if it's a visual step) directly into the `PlaybookStep` file under the playbook directory. The execution then proceeds successfully to the next step. If the step succeeds, the framework throws an `AssertionError` (expected failure succeeded).
 * **Replay/CI Mode**: During replay, the recorded actions are executed. If they succeed, or if they fail with a different error type/message, or if a visual step has a visual mismatch (Hamming distance of the defect screenshot > 15), the framework raises an `AssertionError`. If they fail in the exact recorded defective way, it proceeds successfully.
 
+#### Verifying a Bug-Gone Scenario in Tests
+The main goal of using expected failures is to **freeze the current defective behavior** (the bug) so that any accidental changes to it (either an unexpected fix or a different failure type/message) are immediately detected. 
+
+If you want to explicitly test this escalation behavior (i.e. verifying that when a bug is resolved or its behavior changes, an `AssertionError` is raised so you are forced to review the change and update/remove the tag), you can wrap the execution in a JUnit 5 `assertThrows`:
+
+```java
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+@NeodymiumTest
+final void verifyBugIsGone() throws Throwable
+{
+    assertThrows(AssertionError.class, () ->
+    {
+        Neodymium.ai()
+                .steps("""
+                        # Homepage
+                        Open ${neodymium.url}
+                        # The bug is gone (the minicart actually has 0 items), so this step succeeds!
+                        Verify that the minicart shows 0 items (bug).
+                        """)
+                .execute();
+    });
+}
+```
+
 ---
 
 ### 2. Programmatic Expected Failures (`Neodymium.expectFailure`)
