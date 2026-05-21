@@ -44,10 +44,18 @@
 - [ ] Implement FreeMarker/Thymeleaf-based static rendering to output self-contained `index.html` and static run pages
 - [ ] Provide command-line triggers to export static snapshots from any local `target/aura-results` folder
 
+## Component: Aura Quality Gates
+- [ ] Define the JSON schema for `quality-gates.json` declarative rules
+- [ ] Implement the `QualityGateEvaluator` service in Aura Server evaluating Failure Rate %, Critical Component success, and New Failure Regressions
+- [ ] Create the `/api/v1/runs/{id}/evaluate` REST endpoint returning unified pass/fail verdicts and breach logs
+- [ ] Build a simple quality gate configuration interface in the Thymeleaf dashboard
+
 ## Component: Verification & Hardening
 - [ ] Write comprehensive unit tests for ingestion heuristics
 - [ ] Conduct end-to-end execution verification with posters-demo-store test suite
 - [ ] Validate generated offline static HTML files for proper navigation, local styling, and visual asset linking
+- [ ] Write integration tests for Quality Gate evaluation, verifying both successful and breached gates under different criteria
 - [ ] Create a comprehensive README and startup scripts
+
 
 

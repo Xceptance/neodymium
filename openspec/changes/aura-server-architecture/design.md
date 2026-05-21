@@ -58,6 +58,13 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
   - An interactive chat panel to query suite statistics naturally (e.g., *"How many tests have failed because of locator changes on the login page this week?"*).
 - **Rationale**: Turns the report from a static failure list into an active assistant that explains *why* the failure occurred and how to fix it.
 
+### 7. Declarative Quality Gates & CI Pipeline Integrations
+- **Decision**: Aura supports automated run health checks by evaluating declarative rules stored in `quality-gates.json` or configured via the UI.
+  - **KPI Assessments**: Quality gates evaluate rules based on overall Failure Rate % thresholds, mandatory success for critical target suites/components, and **New Regression Detection** (ensuring no *new* unique failure signatures exist that weren't present in the previous baseline/commit run).
+  - **CI/CD Integration**: The server hosts a public GET/POST endpoint `/api/v1/runs/{id}/evaluate`. CI/CD systems (GitHub Actions, Jenkins, GitLab) can perform a quick curl request to evaluate the run status, receiving a clear JSON pass/fail verdict with detailed rule breach listings to determine build pass/fail gates instantly.
+- **Rationale**: Automating build-triaging via structured quality rules turns Aura from a passive reporting tool into an active, automated pipeline guard, matching premium enterprise tool capabilities (like ReportPortal) with zero setup friction.
+
+
 ## Risks / Trade-offs
 
 - **Risk**: Upgrading existing test suites to remove Allure annotations might require user rework.

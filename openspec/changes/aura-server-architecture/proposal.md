@@ -26,10 +26,11 @@ By completely replacing Allure with our own native capture framework and introdu
 - `aura-live-stream`: Real-time streaming tap for ongoing test suites to receive updates dynamically in the dashboard.
 - `aura-open-ingestion`: Support for third-party frameworks to either write directly to our open filesystem layout or POST structured payloads to our receiver, ensuring we do not close the ecosystem.
 - `aura-static-generator`: A command-line tool / output option that generates a self-contained **offline static report** (HTML + client-side JS + local file asset links) representing a snapshot of the run's state. Users can host this statically on S3, GitHub Pages, or any static server for zero-infrastructure sharing.
+- `aura-quality-gates`: Continuous testing guard that assesses run quality against declarative failure rate thresholds, critical component successes, and regression gates. Exposes API endpoints for CI pipelines to instantly get a pass/fail verdict.
 
 ### Modified Capabilities
 
-- `reporting`: Complete deprecation and removal of Allure reporting XML/JSON outputs, replacing them with standardized Aura external file bundles (`target/aura-results/`) and the ability to trigger a static offline report compile step.
+- `reporting`: Complete deprecation and removal of Allure reporting XML/JSON outputs, replacing them with standardized Aura external file bundles (`target/aura-results/`) and the ability to trigger a static offline report compile step or query automated quality gates.
 - `test-management`: Connect automated test suite runs statefully with the manual test cases backlog.
 
 ## Impact
@@ -37,7 +38,8 @@ By completely replacing Allure with our own native capture framework and introdu
 - **Dependency Clean Up**: Delete all `io.qameta.allure` Maven dependencies from Neodymium's `pom.xml`.
 - **New Subproject**: `aura-server/` (Spring Boot project, Thymeleaf/HTMX UI, H2 database, LangChain4j integration).
 - **Test Automation Integration**: Implement `@TestStep` and the native `AuraCaptureListener` in Neodymium to write standardized JSON results and stream live updates if the Aura Server is online.
-- **Unified Ingestion & Export Framework**: Provide documented JSON schemas and endpoint contracts for third-party environments to send or write test data in a standardized manner, along with a static offline compilation engine.
+- **Unified Ingestion, Export, & Quality Framework**: Provide documented JSON schemas and endpoint contracts for third-party environments to send or write test data in a standardized manner, along with a static offline compilation engine and automated Quality Gates for CI/CD gates.
+
 
 
 
