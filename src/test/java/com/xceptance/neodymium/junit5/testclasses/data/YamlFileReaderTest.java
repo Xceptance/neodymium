@@ -85,4 +85,43 @@ public class YamlFileReaderTest
         assertTrue(data.get(0).get("user").contains("\"firstName\":\"Max\""));
         assertTrue(data.get(0).get("user").contains("\"lastName\":\"Mustermann\""));
     }
+
+    @Test
+    @DisplayName("Verify parsing of step line numbers for both global and local steps")
+    public void testYamlStepLineNumbers()
+    {
+        final String yamlContent = 
+            "# Line 1\n" +
+            "steps: |\n" + // Line 2: start mark should be line 2 (0-indexed line 1)
+            "  Verify login\n" + // Line 3 (index 0)
+            "  # A comment inside steps\n" + // Line 4
+            "  Click submit\n" + // Line 5 (index 1)
+            "data:\n" + // Line 6
+            "  - testId: case1\n" + // Line 7
+            "  - testId: case2\n" + // Line 8
+            "    steps: |\n" + // Line 9: start mark for local steps
+            "      Local action 1\n" + // Line 10 (index 0)
+            "      Local action 2"; // Line 11 (index 1)
+
+        final List<Map<String, String>> data = YamlFileReader.readFile(new ByteArrayInputStream(yamlContent.getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals(2, data.size());
+
+        // Check global step line numbers (Case 1)
+        final String globalStepLinesJson = data.get(0).get("neodymium.stepLineNumbers");
+        assertNotNull(globalStepLinesJson);
+        final List<Double> globalStepLines = new com.google.gson.Gson().fromJson(globalStepLinesJson, new com.google.gson.reflect.TypeToken<List<Double>>(){}.getType());
+        assertEquals(2, globalStepLines.size());
+        assertEquals(3, globalStepLines.get(0).intValue());
+        assertEquals(5, globalStepLines.get(1).intValue());
+
+        // Check local step line numbers (Case 2)
+        final String localStepLinesJson = data.get(1).get("neodymium.stepLineNumbers");
+        assertNotNull(localStepLinesJson);
+        final List<Double> localStepLines = new com.google.gson.Gson().fromJson(localStepLinesJson, new com.google.gson.reflect.TypeToken<List<Double>>(){}.getType());
+        assertEquals(2, localStepLines.size());
+        assertEquals(10, localStepLines.get(0).intValue());
+        assertEquals(11, localStepLines.get(1).intValue());
+    }
 }
+

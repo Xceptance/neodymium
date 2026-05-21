@@ -1,15 +1,24 @@
 package com.xceptance.neodymium.common.testdata.util;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.nodes.MappingNode;
+import org.yaml.snakeyaml.nodes.Node;
+import org.yaml.snakeyaml.nodes.NodeTuple;
+import org.yaml.snakeyaml.nodes.ScalarNode;
+import org.yaml.snakeyaml.nodes.SequenceNode;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -17,15 +26,93 @@ import com.google.gson.GsonBuilder;
 public class YamlFileReader {
     private final static Gson GSON = new GsonBuilder().serializeNulls().create();
 
-    public static List<Map<String, String>> readFile(InputStream inputStream) {
-        List<Map<String, String>> resultData = new LinkedList<>();
-        Yaml yaml = new Yaml();
+    public static List<Map<String, String>> readFile(final InputStream inputStream)
+    {
+        final List<Map<String, String>> resultData = new LinkedList<>();
+        final Yaml yaml = new Yaml();
 
-        try {
-            Object data = yaml.load(inputStream);
+        try
+        {
+            final byte[] yamlBytes;
+            try (final InputStream is = inputStream)
+            {
+                yamlBytes = is.readAllBytes();
+            }
 
-            if (data == null) {
+            final Object data = yaml.load(new ByteArrayInputStream(yamlBytes));
+
+            if (data == null)
+            {
                 return resultData;
+            }
+
+            final String yamlStr = new String(yamlBytes, StandardCharsets.UTF_8);
+            final List<String> yamlLines = yamlStr.lines().toList();
+
+            String globalStepsLinesJson = null;
+            final List<String> localStepsLinesJsons = new ArrayList<>();
+
+            try
+            {
+                final Node rootNode = yaml.compose(new InputStreamReader(new ByteArrayInputStream(yamlBytes), StandardCharsets.UTF_8));
+                if (rootNode instanceof MappingNode rootMapping)
+                {
+                    final Node globalStepsNode = getMappingValue(rootMapping, "steps");
+                    if (globalStepsNode instanceof ScalarNode stepsScalar)
+                    {
+                        globalStepsLinesJson = parseStepLineNumbers(stepsScalar, yamlLines);
+                    }
+
+                    final Node dataNode = getMappingValue(rootMapping, "data");
+                    if (dataNode instanceof SequenceNode dataSequence)
+                    {
+                        for (final Node itemNode : dataSequence.getValue())
+                        {
+                            if (itemNode instanceof MappingNode itemMapping)
+                            {
+                                final Node localStepsNode = getMappingValue(itemMapping, "steps");
+                                if (localStepsNode instanceof ScalarNode localStepsScalar)
+                                {
+                                    localStepsLinesJsons.add(parseStepLineNumbers(localStepsScalar, yamlLines));
+                                }
+                                else
+                                {
+                                    localStepsLinesJsons.add(null);
+                                }
+                            }
+                            else
+                            {
+                                localStepsLinesJsons.add(null);
+                            }
+                        }
+                    }
+                }
+                else if (rootNode instanceof SequenceNode rootSequence)
+                {
+                    for (final Node itemNode : rootSequence.getValue())
+                    {
+                        if (itemNode instanceof MappingNode itemMapping)
+                        {
+                            final Node localStepsNode = getMappingValue(itemMapping, "steps");
+                            if (localStepsNode instanceof ScalarNode localStepsScalar)
+                            {
+                                localStepsLinesJsons.add(parseStepLineNumbers(localStepsScalar, yamlLines));
+                            }
+                            else
+                            {
+                                localStepsLinesJsons.add(null);
+                            }
+                        }
+                        else
+                        {
+                            localStepsLinesJsons.add(null);
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                // Soft fail Node parsing so normal load remains fully functional
             }
 
             List<?> iterationList = null;
@@ -77,6 +164,7 @@ public class YamlFileReader {
             // Map each element into Map<String, String> preserving JSON-style serialization
             // for nesting
             if (iterationList != null) {
+                int datasetIdx = 0;
                 for (Object item : iterationList) {
                     if (item instanceof Map) {
                         Map<?, ?> dataset = (Map<?, ?>) item;
@@ -139,7 +227,24 @@ public class YamlFileReader {
                             }
                         }
 
+                        // Determine and inject step line numbers for this dataset
+                        String stepLineNumbersJson = null;
+                        if (datasetIdx < localStepsLinesJsons.size() && localStepsLinesJsons.get(datasetIdx) != null)
+                        {
+                            stepLineNumbersJson = localStepsLinesJsons.get(datasetIdx);
+                        }
+                        else
+                        {
+                            stepLineNumbersJson = globalStepsLinesJson;
+                        }
+
+                        if (stepLineNumbersJson != null)
+                        {
+                            newDataSet.put("neodymium.stepLineNumbers", stepLineNumbersJson);
+                        }
+
                         resultData.add(newDataSet);
+                        datasetIdx++;
                     }
                 }
             }
@@ -148,6 +253,89 @@ public class YamlFileReader {
         }
 
         return resultData;
+    }
+
+    /**
+     * Finds the value node associated with a specific key in a mapping node.
+     *
+     * @param mappingNode the mapping node to search
+     * @param key         the key to search for
+     * @return the value node, or null if not found
+     */
+    private static Node getMappingValue(final MappingNode mappingNode, final String key)
+    {
+        for (final NodeTuple tuple : mappingNode.getValue())
+        {
+            if (tuple.getKeyNode() instanceof ScalarNode keyNode && key.equals(keyNode.getValue()))
+            {
+                return tuple.getValueNode();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Parses the line numbers of steps inside a steps scalar node.
+     *
+     * @param stepsNode the steps scalar node
+     * @param yamlLines the lines of the YAML document
+     * @return the serialized JSON list of step line numbers
+     */
+    private static String parseStepLineNumbers(final ScalarNode stepsNode, final List<String> yamlLines)
+    {
+        final List<Integer> lineNumbers = new LinkedList<>();
+        final String stepsContent = stepsNode.getValue();
+        if (stepsContent == null)
+        {
+            return GSON.toJson(lineNumbers);
+        }
+
+        final int startLineIdx = stepsNode.getStartMark().getLine();
+        int currentY = startLineIdx;
+
+        final String[] contentLines = stepsContent.split("\\r?\\n", -1);
+
+        for (final String line : contentLines)
+        {
+            while (currentY < yamlLines.size())
+            {
+                final String yamlLine = yamlLines.get(currentY);
+                if (matchesLine(yamlLine, line))
+                {
+                    final String trimmedLine = line.strip();
+                    if (!trimmedLine.isEmpty() && !trimmedLine.startsWith("#") && !trimmedLine.startsWith("//"))
+                    {
+                        lineNumbers.add(currentY + 1);
+                    }
+                    break;
+                }
+                currentY++;
+            }
+            currentY++;
+        }
+        return GSON.toJson(lineNumbers);
+    }
+
+    /**
+     * Helper to check if a YAML line matches the content line.
+     *
+     * @param yamlLine    the line from the YAML file
+     * @param contentLine the line from the steps scalar value
+     * @return true if they match, false otherwise
+     */
+    private static boolean matchesLine(final String yamlLine, final String contentLine)
+    {
+        final String trimmedContent = contentLine.strip();
+        final String trimmedYaml = yamlLine.strip();
+        if (trimmedContent.isEmpty())
+        {
+            return trimmedYaml.isEmpty() || trimmedYaml.startsWith("#") || trimmedYaml.startsWith("//");
+        }
+        if (trimmedContent.startsWith("#") || trimmedContent.startsWith("//"))
+        {
+            return trimmedYaml.contains(trimmedContent) || trimmedYaml.startsWith("#") || trimmedYaml.startsWith("//");
+        }
+        return trimmedYaml.contains(trimmedContent);
     }
 
     public static List<Map<String, String>> readFile(File file) {
