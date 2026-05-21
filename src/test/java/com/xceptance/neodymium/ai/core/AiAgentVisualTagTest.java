@@ -78,4 +78,84 @@ final class AiAgentVisualTagTest
         // Visual tag should take precedence over hint tags
         assertEquals(ContextLevel.VISUAL_LEAN, invokeGetInitialContextLevel("Check that visual displays (VISUAL) and has (hint: .img)"));
     }
+
+    @Test
+    void testFormatFailureMessage() throws Exception
+    {
+        final Method formatFailureMessageMethod = AiAgent.class.getDeclaredMethod(
+            "formatFailureMessage",
+            String.class,
+            Integer.class,
+            String.class,
+            String.class
+        );
+        formatFailureMessageMethod.setAccessible(true);
+
+        // Case 1: both present
+        final String res1 = (String) formatFailureMessageMethod.invoke(
+            null,
+            "Click button",
+            42,
+            "test.yaml",
+            ": click failed"
+        );
+        assertEquals("Instruction 'Click button' failed at line 42 in test.yaml: click failed", res1);
+
+        // Case 2: only line number
+        final String res2 = (String) formatFailureMessageMethod.invoke(
+            null,
+            "Click button",
+            42,
+            null,
+            ": click failed"
+        );
+        assertEquals("Instruction 'Click button' failed at line 42: click failed", res2);
+
+        // Case 3: only source file
+        final String res3 = (String) formatFailureMessageMethod.invoke(
+            null,
+            "Click button",
+            null,
+            "test.yaml",
+            ": click failed"
+        );
+        assertEquals("Instruction 'Click button' failed in test.yaml: click failed", res3);
+
+        // Case 4: neither
+        final String res4 = (String) formatFailureMessageMethod.invoke(
+            null,
+            "Click button",
+            null,
+            null,
+            ": click failed"
+        );
+        assertEquals("Instruction 'Click button' failed: click failed", res4);
+    }
+
+    @Test
+    void testFormatFailureLogContext() throws Exception
+    {
+        final Method formatFailureLogContextMethod = AiAgent.class.getDeclaredMethod(
+            "formatFailureLogContext",
+            Integer.class,
+            String.class
+        );
+        formatFailureLogContextMethod.setAccessible(true);
+
+        // Case 1: both present
+        final String res1 = (String) formatFailureLogContextMethod.invoke(null, 42, "path/to/test.yaml");
+        assertEquals(" (test.yaml:42)", res1);
+
+        // Case 2: only line number
+        final String res2 = (String) formatFailureLogContextMethod.invoke(null, 42, null);
+        assertEquals(" (line 42)", res2);
+
+        // Case 3: only source file
+        final String res3 = (String) formatFailureLogContextMethod.invoke(null, null, "path/to/test.yaml");
+        assertEquals(" (test.yaml)", res3);
+
+        // Case 4: neither
+        final String res4 = (String) formatFailureLogContextMethod.invoke(null, null, null);
+        assertEquals("", res4);
+    }
 }
