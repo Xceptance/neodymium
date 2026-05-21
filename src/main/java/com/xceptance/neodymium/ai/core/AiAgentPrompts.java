@@ -544,6 +544,17 @@ public final class AiAgentPrompts
                 CRITICAL: Use the provided hint to generate the requested action JSON immediately. Do not attempt to verify the element's existence in the DOM (since no DOM is provided). If you cannot fulfill the instruction based on the hint alone, respond with:
                 {"success": false, "status": "ESCALATE", "reasoning": "I need the actual DOM to determine the action", "actions": []}
                 """;
+            case AXTREE -> """
+
+                ## Context Level: AXTREE
+                You are receiving a native Accessibility Tree (AXTree) context representing the semantic, interactive structure of the page.
+                This contains links, buttons, inputs, headings, forms, and landmark sections with their resolved accessibility names and states.
+
+                CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you cannot find the requested element, or if you need full plain text content (like paragraph bodies, table cells, or static list item texts) to disambiguate between multiple elements, you MUST immediately respond with:
+                {"success": false, "status": "ESCALATE", "reasoning": "This step requires visual validation or additional plain text context which is not available in AXTREE context", "actions": []}
+
+                Do NOT guess. Do NOT pick an arbitrary element when multiple matches exist. Request escalation instead.
+                """;
             case LEAN -> """
 
                 ## Context Level: LEAN

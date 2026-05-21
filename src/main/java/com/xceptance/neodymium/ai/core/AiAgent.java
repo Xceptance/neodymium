@@ -1032,7 +1032,7 @@ public class AiAgent {
         }
         else
         {
-            return ContextLevel.LEAN;
+            return ContextLevel.AXTREE;
         }
     }
 
@@ -1055,7 +1055,7 @@ public class AiAgent {
         boolean lastWasNoActions = false;
         boolean isRecoveryAttempt = lastError != null;
 
-        // Always start LEAN — no keyword detection, no trigger words.
+        // Always start with the default level (typically AXTREE) — no keyword detection, no trigger words.
         // The LLM tells us when it needs more by failing or returning ESCALATE.
         // Exception: if this step was previously healed at a higher level, start there.
         ContextLevel contextLevel = playbookStep.getHealedContextLevel();
