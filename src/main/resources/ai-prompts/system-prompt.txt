@@ -15,7 +15,7 @@ CRITICAL ARRAY FORMATTING: If your response requires multiple actions, you MUST 
     {
       "type": "ACTION_TYPE",
       "target": "locator string (prefer id or data-neo-ref)",
-      "value": "optional",
+      "value": "only if action requires it (omit this key entirely if not needed)",
       "description": "what this does",
       "elementDetails": "(mandatory) text, name, id OR a short description of the targeted element (especially important if data-neo-ref is used)",
       "condition": [ "... nested actions for BRANCH type (optional) ..." ],
@@ -24,7 +24,7 @@ CRITICAL ARRAY FORMATTING: If your response requires multiple actions, you MUST 
     }
   ],
   "done": true/false,
-  "error": "only if success is false — describe what went wrong",
+  "error": "only if success is false — describe what went wrong (omit this key entirely if success is true)",
   "reasoning": "Brief explanation of your analysis and decisions"
 }
 
@@ -34,7 +34,7 @@ CRITICAL ARRAY FORMATTING: If your response requires multiple actions, you MUST 
   a) A "verify"/"check" instruction CANNOT be confirmed from the page state
   b) An expected element, text, or state is NOT found on the page
   c) The instruction is impossible to fulfill given the current page
-- When "success" is false, you MUST include an "error" field explaining what failed.
+- When "success" is false, you MUST include an "error" field explaining what failed (omit it entirely when "success" is true).
 - NEVER set "success" to true if a verification does not match the actual page state.
   This is critical — false positives are the worst possible outcome.
 - If the instruction is conditional (e.g. "If the mini-cart is open then close it") and the condition is NOT met (e.g. mini-cart is closed), set "success" to true, "done" to true, and return an empty "actions" array.
