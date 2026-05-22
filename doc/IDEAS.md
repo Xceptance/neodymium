@@ -30,7 +30,17 @@ While JSON Playbooks are human-readable, modifying complex paths or tracking dyn
 
 ---
 
-### 2. Autonomous Intent-Based QA Explorer
+### 2. Empirical Learning (Observed Execution Caching)
+Web applications exhibit distinct runtime timing profiles, page loading characteristics, and visual stability periods (e.g., dynamic CSS animations, slow modal fades, or AJAX-driven element reveals).
+* **Concept:** Implement a local, offline telemetry engine that learns the execution dynamics of the SUT over successive test runs.
+* **Capabilities:**
+  * **Adaptive Page Stability Waiting:** Automatically calculate the ideal stabilization delays between actions based on historically observed DOM mutations and visual changes, replacing static delays.
+  * **Dynamic Timing/Timeout Profiling:** Track how long specific elements take to load or interact on a page. Cache these dynamic execution profiles to automatically set fine-grained, adaptive command timeouts for each step.
+  * **Context Level Optimization:** Observe the exact context escalation paths that previously succeeded for specific instructions, proactively starting subsequent runs at the exact required context level to bypass wasted fallback cycles.
+
+---
+
+### 3. Autonomous Intent-Based QA Explorer
 Evolve the experimental `AiPromptGenerator` (`@NeodymiumTestGenerator`) into a fully autonomous QA bot.
 * **Concept:** Instead of step-by-step instructions, the QA engineer defines high-level goals (e.g., *"Test the checkout flow under 5 different currencies"* or *"Find broken links on the catalog page"*).
 * **Execution:** 
@@ -41,7 +51,7 @@ Evolve the experimental `AiPromptGenerator` (`@NeodymiumTestGenerator`) into a f
 
 ---
 
-### 3. Perceptual Screen Element-Level Masking for dHash Replay
+### 4. Perceptual Screen Element-Level Masking for dHash Replay
 Perceptual visual hashing (dHash) is highly effective, but dynamic UI components (such as live clocks, active usernames, changing banners, or personalized recommendations) will cause the Hamming distance comparison to fail (exceeding the threshold of 15).
 * **Concept:** Introduce region or locator-based visual masking using inline NLP or standard configurations.
 * **Example Instruction:**
@@ -53,7 +63,7 @@ Perceptual visual hashing (dHash) is highly effective, but dynamic UI components
 
 ---
 
-### 4. Enterprise Zero-Trust / Local VLM Support
+### 5. Enterprise Zero-Trust / Local VLM Support
 Enterprise companies are often restricted from sending SUT screenshots, DOM states, or proprietary data to external cloud APIs (like Google Gemini or OpenAI).
 * **Concept:** Expand Neodymium's LLM engine to support local, on-premise execution using lightweight, open-source Vision-Language Models (VLMs) like **UI-TARS**, **Llama-3-Vision**, or **Qwen2-VL**.
 * **Integration:**
@@ -62,7 +72,7 @@ Enterprise companies are often restricted from sending SUT screenshots, DOM stat
 
 ---
 
-### 5. Continuous Self-Learning Playbook Optimizer
+### 6. Continuous Self-Learning Playbook Optimizer
 Test suites degrade in speed when web apps experience network jitter or minor DOM rendering slows.
 * **Concept:** Implement a background optimization engine that monitors test execution telemetry over time.
 * **Capabilities:**
@@ -71,7 +81,7 @@ Test suites degrade in speed when web apps experience network jitter or minor DO
 
 ---
 
-### 6. AI-Driven Data Mutation & Dynamic Fuzzing
+### 7. AI-Driven Data Mutation & Dynamic Fuzzing
 Natural language steps often require complex test data. Instead of hardcoding edge cases, let the AI generate them dynamically at runtime.
 * **Concept:** Integrate dynamic fuzzing directly into steps using dynamic AI dataset generation.
 * **Example Instruction:**
