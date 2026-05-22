@@ -23,6 +23,7 @@
  */
 package com.xceptance.neodymium.ai.core;
 
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -237,8 +238,67 @@ public class LlmClient {
         {
             final long input = usage.inputTokenCount() != null ? usage.inputTokenCount() : 0;
             final long output = usage.outputTokenCount() != null ? usage.outputTokenCount() : 0;
+            final long cached = extractCachedTokens(response);
             final LlmMode activeMode = currentCallMode.get() != null ? currentCallMode.get() : this.mode;
-            aiStats.record(activeMode, input, output);
+            aiStats.record(activeMode, input, output, cached);
         }
+    }
+
+    /**
+     * Safely extracts cached input token counts from vendor-specific TokenUsage structures.
+     * Uses reflection to ensure zero hard dependencies or ClassCastException risks.
+     *
+     * @param response the ChatResponse from the LLM
+     * @return the number of cached input tokens, or 0 if not present or unsupported
+     */
+    private long extractCachedTokens(final ChatResponse response)
+    {
+        if (response == null || response.tokenUsage() == null)
+        {
+            return 0;
+        }
+
+        final TokenUsage usage = response.tokenUsage();
+
+        try
+        {
+            // 1. Check Google Gemini-specific token usage
+            if (usage.getClass().getSimpleName().equals("GoogleAiGeminiTokenUsage"))
+            {
+                final Method method = usage.getClass().getMethod("cachedContentTokenCount");
+                final Object result = method.invoke(usage);
+                if (result instanceof Integer)
+                {
+                    return ((Integer) result).longValue();
+                }
+            }
+
+            // 2. Check OpenAI-specific token usage (promptTokensDetails -> cachedTokens)
+            try
+            {
+                final Method detailsMethod = usage.getClass().getMethod("promptTokensDetails");
+                final Object details = detailsMethod.invoke(usage);
+                if (details != null)
+                {
+                    final Method cachedMethod = details.getClass().getMethod("cachedTokens");
+                    final Object cached = cachedMethod.invoke(details);
+                    if (cached instanceof Integer)
+                    {
+                        return ((Integer) cached).longValue();
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                // Fall through for non-OpenAI models
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.trace("Failed to dynamically extract cached tokens for provider class: {}",
+                    usage.getClass().getName(), e);
+        }
+
+        return 0;
     }
 }
