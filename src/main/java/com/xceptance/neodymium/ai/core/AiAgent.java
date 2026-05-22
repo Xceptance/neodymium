@@ -55,6 +55,7 @@ import com.xceptance.neodymium.util.SelenideAddons;
 import com.xceptance.neodymium.ai.util.ScreenshotHasher;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -257,20 +258,8 @@ public class AiAgent {
                 }
                 else
                 {
-                    for (int idx = 0; idx < stepsList.size(); idx++)
-                    {
-                        if (idx >= playbook.getSteps().size())
-                        {
-                            needsPesap = true;
-                            break;
-                        }
-                        final PlaybookStep pbStep = playbook.getSteps().get(idx);
-                        if (pbStep.getHealedContextLevel() == null)
-                        {
-                            needsPesap = true;
-                            break;
-                        }
-                    }
+                    // In replay mode, do not perform PESAP; fall back to defaults and escalations
+                    needsPesap = false;
                 }
             }
             else
@@ -1630,8 +1619,19 @@ public class AiAgent {
 
                 executionLog.logResponse(llmResponse);
 
-                LOG.trace("   📄 --- Raw LLM Response ---");
-                LOG.trace("\n{}", llmResponse);
+                LOG.trace("   📄 --- LLM Response (Pretty-Printed) ---");
+                String formattedResponse = llmResponse;
+                try
+                {
+                    final String json = actionParser.extractJson(llmResponse);
+                    final JsonElement jsonElement = JsonParser.parseString(json);
+                    formattedResponse = new GsonBuilder().setPrettyPrinting().create().toJson(jsonElement);
+                }
+                catch (final Exception e)
+                {
+                    // Fallback to raw response on parsing failure
+                }
+                LOG.trace("\n{}", formattedResponse);
 
                 // Log reasoning
                 final String reasoning = actionParser.getReasoning(llmResponse);

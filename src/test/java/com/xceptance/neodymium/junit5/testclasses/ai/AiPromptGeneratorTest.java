@@ -83,12 +83,12 @@ public class AiPromptGeneratorTest
                 protected String executeExplorationLlmCall(com.xceptance.neodymium.ai.core.LlmClient llmClient, String prompt) {
                     callCount++;
                     if (callCount == 1) {
-                        return "{\"actions\": [{\"type\": \"CLICK\", \"target\": \"#btn\", \"description\": \"Click button\"}]}";
+                        return "{\"a\": [{\"t\": \"CLICK\", \"tg\": \"#btn\", \"d\": \"Click button\"}]}";
                     } else if (callCount == 2) {
                         // AI reports failure of previous action
-                        return "{\"dropLastNActions\": 1, \"actions\": [{\"type\": \"NAVIGATE\", \"value\": \"http://example.com\", \"description\": \"try again\"}]}";
+                        return "{\"dl\": 1, \"a\": [{\"t\": \"NAVIGATE\", \"v\": \"http://example.com\", \"d\": \"try again\"}]}";
                     } else {
-                        return "{\"previousActionSuccess\": true, \"overallIntentAchieved\": true}";
+                        return "{\"oia\": true}";
                     }
                 }
                 
@@ -135,13 +135,13 @@ public class AiPromptGeneratorTest
                 protected String executeExplorationLlmCall(com.xceptance.neodymium.ai.core.LlmClient llmClient, String prompt) {
                     callCount++;
                     if (callCount == 1) {
-                        return "{\"actions\": [{\"type\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"target\": \"#email\", \"description\": \"Validate there is an input field for the email address\"}]}";
+                        return "{\"a\": [{\"t\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"tg\": \"#email\", \"d\": \"Validate there is an input field for the email address\"}]}";
                     } else if (callCount == 2) {
-                        return "{\"actions\": [{\"type\": \"TYPE\", \"target\": \"#email\", \"value\": \"John Doe\", \"dataBindings\": {\"firstName\": \"John\", \"lastName\": \"Doe\"}, \"description\": \"Enter '${firstName} ${lastName}' into the user field\"}]}";
+                        return "{\"a\": [{\"t\": \"TYPE\", \"tg\": \"#email\", \"v\": \"John Doe\", \"db\": {\"firstName\": \"John\", \"lastName\": \"Doe\"}, \"d\": \"Enter '${firstName} ${lastName}' into the user field\"}]}";
                     } else if (callCount == 3) {
-                        return "{\"actions\": [{\"type\": \"CLICK\", \"target\": \"#login\", \"description\": \"Click the login button\"}]}";
+                        return "{\"a\": [{\"t\": \"CLICK\", \"tg\": \"#login\", \"d\": \"Click the login button\"}]}";
                     } else {
-                        return "{\"previousActionSuccess\": true, \"overallIntentAchieved\": true}";
+                        return "{\"oia\": true}";
                     }
                 }
                 
@@ -197,14 +197,14 @@ public class AiPromptGeneratorTest
                 protected String executeExplorationLlmCall(com.xceptance.neodymium.ai.core.LlmClient llmClient, String prompt) {
                     callCount++;
                     if (callCount == 1) {
-                        return "{\"actions\": [{\"type\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"target\": \"#msg\", \"description\": \"Validate msg\"}]}";
+                        return "{\"a\": [{\"t\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"tg\": \"#msg\", \"d\": \"Validate msg\"}]}";
                     } else if (callCount == 2) {
                         // AI returns the EXACT SAME assert, should be skipped
-                        return "{\"actions\": [{\"type\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"target\": \"#msg\", \"description\": \"Validate msg\"}]}";
+                        return "{\"a\": [{\"t\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"tg\": \"#msg\", \"d\": \"Validate msg\"}]}";
                     } else if (callCount == 3) {
-                        return "{\"actions\": [{\"type\": \"CLICK\", \"target\": \"#btn\", \"description\": \"Click button\"}]}";
+                        return "{\"a\": [{\"t\": \"CLICK\", \"tg\": \"#btn\", \"d\": \"Click button\"}]}";
                     } else {
-                        return "{\"previousActionSuccess\": true, \"overallIntentAchieved\": true}";
+                        return "{\"oia\": true}";
                     }
                 }
                 
