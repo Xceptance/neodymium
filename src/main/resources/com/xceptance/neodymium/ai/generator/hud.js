@@ -81,23 +81,13 @@
                     var hitBreakpoint = false;
                     var pList = window.neoPlannedList || [];
                     if (pList && pList.length > 0) {
-                        var currentText = pList[0] ? pList[0].replace(/^⚠️\s*/, '') : '';
-                        if (window.neoBreakpoints && window.neoBreakpoints.indexOf(currentText) !== -1) {
+                        var currentStepIdx = (window.neoPerformedList || []).length;
+                        if (window.neoBreakpoints && window.neoBreakpoints.indexOf(currentStepIdx) !== -1) {
                             hitBreakpoint = true;
                         }
                     }
                     if (!hitBreakpoint) {
-                        var approveBtn = document.getElementById('neo-approve-btn');
-                        var plannedContainer = document.getElementById('neo-planned-actions');
-                        if (approveBtn && !approveBtn.disabled && plannedContainer && plannedContainer.style.display !== 'none') {
-                            if (approveBtn.dataset.isFinished === 'true') {
-                                window.neoSubmitAction({ action: "SAVE_EXIT" });
-                            } else {
-                                window.neoSubmitAction({ action: "APPROVE" });
-                            }
-                            approveBtn.disabled = true;
-                            approveBtn.style.opacity = '0.5';
-                        }
+                        // Java will automatically detect the autoSkip state and break out of its wait loop.
                     } else {
                         // User tried to fast-forward on a breakpoint. We immediately pause it again.
                         window.neoHudAutoSkip = false;
@@ -571,12 +561,11 @@
                     var td = e.target.closest('td.neo-bp-col');
                     if (td) {
                         var idxInList = parseInt(td.getAttribute('data-idx'));
-                        var rawText = window.neoCurrentRenderedSteps[idxInList];
-                        if (rawText) {
+                        if (!isNaN(idxInList)) {
                             if (!window.neoBreakpoints) window.neoBreakpoints = [];
-                            var bpIdx = window.neoBreakpoints.indexOf(rawText);
+                            var bpIdx = window.neoBreakpoints.indexOf(idxInList);
                             if (bpIdx === -1) {
-                                window.neoBreakpoints.push(rawText);
+                                window.neoBreakpoints.push(idxInList);
                             } else {
                                 window.neoBreakpoints.splice(bpIdx, 1);
                             }
@@ -612,7 +601,7 @@
                 var stepIdx = window.neoCurrentRenderedSteps.length;
                 window.neoCurrentRenderedSteps.push(cleanText);
                 
-                var isBp = window.neoBreakpoints && window.neoBreakpoints.indexOf(cleanText) !== -1;
+                var isBp = window.neoBreakpoints && window.neoBreakpoints.indexOf(stepIdx) !== -1;
                 var bpDisplay = isBp ? '🛑' : '<span style="opacity:0.2;">⚪</span>';
                 
                 var rowStyle = 'border-bottom:1px solid #333;';
@@ -690,6 +679,14 @@
 
     window.neoPerformedList = performed;
     window.neoPlannedList = planned;
+
+    if (window.neoHudAutoSkip && window.neoPlannedList && window.neoPlannedList.length > 0) {
+        var currentStepIdx = (window.neoPerformedList || []).length;
+        if (window.neoBreakpoints && window.neoBreakpoints.indexOf(currentStepIdx) !== -1) {
+            window.neoHudAutoSkip = false;
+            if (window.updateAutoSkipBtn) window.updateAutoSkipBtn();
+        }
+    }
 
     var currentHud = document.getElementById('neo-ai-hud');
     var minCircle = document.getElementById('neo-min-circle');
@@ -815,12 +812,16 @@
         if (window.neoHudAutoSkip) {
             var hitBreakpoint = false;
             if (planned && planned.length > 0) {
-                var currentText = planned[0] ? planned[0].replace(/^⚠️\s*/, '') : '';
-                if (window.neoBreakpoints && window.neoBreakpoints.indexOf(currentText) !== -1) {
+                var currentStepIdx = (performed || []).length;
+                if (window.neoBreakpoints && window.neoBreakpoints.indexOf(currentStepIdx) !== -1) {
                     hitBreakpoint = true;
                 }
             }
             if (hitBreakpoint) {
+                window.neoHudAutoSkip = false;
+                if (window.updateAutoSkipBtn) window.updateAutoSkipBtn();
+                if (window.neoMaximizeHud) window.neoMaximizeHud();
+            } else if (reasoning && (reasoning.indexOf("Action Failed:") !== -1 || reasoning.indexOf("Assertion Failed:") !== -1 || reasoning.indexOf("Unexpected Error:") !== -1 || reasoning.indexOf("Max retries reached:") !== -1)) {
                 window.neoHudAutoSkip = false;
                 if (window.updateAutoSkipBtn) window.updateAutoSkipBtn();
                 if (window.neoMaximizeHud) window.neoMaximizeHud();

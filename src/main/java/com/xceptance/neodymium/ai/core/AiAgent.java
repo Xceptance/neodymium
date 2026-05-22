@@ -28,13 +28,14 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Assertions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
@@ -48,9 +49,6 @@ import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.SelenideAddons;
-
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 
 import io.qameta.allure.Allure;
 
@@ -577,12 +575,22 @@ public class AiAgent
         boolean handled = false;
         for (int wait = 0; wait < 3600; wait++)
         {
-            final String hudActionStr = Neodymium.getOrCreateInteractiveHud().checkHudAction();
-            if (hudActionStr != null)
+            if (allowAutoSkip)
             {
                 final Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
                 if (s != null)
+                {
                     this.autoSkip = s;
+                }
+                if (this.autoSkip)
+                {
+                    return;
+                }
+            }
+
+            final String hudActionStr = Neodymium.getOrCreateInteractiveHud().checkHudAction();
+            if (hudActionStr != null)
+            {
 
                 final JsonObject actionObj = JsonParser.parseString(hudActionStr)
                         .getAsJsonObject();
