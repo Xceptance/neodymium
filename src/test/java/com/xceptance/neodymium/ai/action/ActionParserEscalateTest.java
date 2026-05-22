@@ -23,17 +23,19 @@
  */
 package com.xceptance.neodymium.ai.action;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+import com.google.gson.Gson;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests for the {@link ActionParser#isEscalateRequested(String)} method,
- * verifying detection of the ESCALATE response status used in the
- * escalating context protocol.
+ * Tests for the {@link ActionParser} compact key format parsing and validation.
  *
- * // AI-generated: Gemini 3.1 Pro
+ * // AI-generated: Gemini 2.5 Pro
  */
 class ActionParserEscalateTest
 {
@@ -44,10 +46,10 @@ class ActionParserEscalateTest
     {
         final String response = """
                 {
-                  "success": false,
-                  "status": "ESCALATE",
-                  "reasoning": "I see 5 'View Details' links but cannot distinguish them.",
-                  "actions": []
+                  "s": false,
+                  "st": "ESCALATE",
+                  "r": "I see 5 'View Details' links but cannot distinguish them.",
+                  "a": []
                 }
                 """;
         assertTrue(parser.isEscalateRequested(response));
@@ -58,10 +60,10 @@ class ActionParserEscalateTest
     {
         final String response = """
                 {
-                  "success": false,
-                  "status": "escalate",
-                  "reasoning": "Need more context",
-                  "actions": []
+                  "s": false,
+                  "st": "escalate",
+                  "r": "Need more context",
+                  "a": []
                 }
                 """;
         assertTrue(parser.isEscalateRequested(response));
@@ -72,10 +74,10 @@ class ActionParserEscalateTest
     {
         final String response = """
                 {
-                  "success": false,
-                  "status": "Escalate",
-                  "reasoning": "Need more context",
-                  "actions": []
+                  "s": false,
+                  "st": "Escalate",
+                  "r": "Need more context",
+                  "a": []
                 }
                 """;
         assertTrue(parser.isEscalateRequested(response));
@@ -86,10 +88,10 @@ class ActionParserEscalateTest
     {
         final String response = """
                 {
-                  "success": false,
-                  "status": "BUG",
-                  "reasoning": "Element not found",
-                  "actions": []
+                  "s": false,
+                  "st": "BUG",
+                  "r": "Element not found",
+                  "a": []
                 }
                 """;
         assertFalse(parser.isEscalateRequested(response));
@@ -100,8 +102,8 @@ class ActionParserEscalateTest
     {
         final String response = """
                 {
-                  "success": true,
-                  "actions": [{"type": "CLICK", "target": "#btn"}]
+                  "s": true,
+                  "a": [{"t": "CLICK", "tg": "#btn"}]
                 }
                 """;
         assertFalse(parser.isEscalateRequested(response));
@@ -126,13 +128,69 @@ class ActionParserEscalateTest
         final String response = """
                 ```json
                 {
-                  "success": false,
-                  "status": "ESCALATE",
-                  "reasoning": "Need text content to find the price",
-                  "actions": []
+                  "s": false,
+                  "st": "ESCALATE",
+                  "r": "Need text content to find the price",
+                  "a": []
                 }
                 ```
                 """;
         assertTrue(parser.isEscalateRequested(response));
+    }
+
+    @Test
+    void parse_withCompactKeys_correctlyMapsToActions()
+    {
+        final String response = """
+                {
+                  "s": true,
+                  "r": "Test compact key parsing logic",
+                  "a": [
+                    {
+                      "t": "TYPE",
+                      "tg": "#username",
+                      "v": "testuser",
+                      "d": "type username",
+                      "ed": "Username input field",
+                      "ad": true
+                    }
+                  ]
+                }
+                """;
+        final List<Action> actions = parser.parse(response);
+        assertNotNull(actions);
+        assertEquals(1, actions.size());
+
+        final Action action = actions.get(0);
+        assertEquals("TYPE", action.getType());
+        assertEquals("#username", action.getTarget());
+        assertNotNull(action.getValues());
+        assertEquals("testuser", action.getValues().get(0));
+        assertEquals("type username", action.getDescription());
+        assertEquals("Username input field", action.getElementDetails());
+        assertTrue(action.getAdjust());
+    }
+
+    @Test
+    void actionSerialization_producesStandardLongKeys()
+    {
+        final Action action = new Action("TYPE", "#username", List.of("testuser"), "type username");
+        action.setElementDetails("Username input field");
+        action.setAdjust(true);
+
+        final Gson gson = new Gson();
+        final String json = gson.toJson(action);
+
+        // Standard serializations must use the long names to prevent breaking recorded playbooks on disk
+        assertTrue(json.contains("\"type\":\"TYPE\""));
+        assertTrue(json.contains("\"target\":\"#username\""));
+        assertTrue(json.contains("\"description\":\"type username\""));
+        assertTrue(json.contains("\"elementDetails\":\"Username input field\""));
+        assertTrue(json.contains("\"adjust\":true"));
+
+        // Confirm that the serialized JSON does NOT contain compact keys
+        assertFalse(json.contains("\"t\":"));
+        assertFalse(json.contains("\"tg\":"));
+        assertFalse(json.contains("\"ed\":"));
     }
 }
