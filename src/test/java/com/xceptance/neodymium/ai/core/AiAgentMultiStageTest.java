@@ -60,6 +60,8 @@ public final class AiAgentMultiStageTest
 
         // Ensure an API key is set so AiAgent initialization doesn't fail
         System.setProperty("neodymium.ai.apiKey", "mock-api-key");
+        // Disable PESAP explicitly so it doesn't consume our step execution mock LLM responses
+        System.setProperty("neodymium.ai.pesap.enabled", "false");
 
         originalPlaybook = Neodymium.getAiPlaybook();
         originalApiKey = Neodymium.aiConfiguration().aiApiKey();
@@ -77,6 +79,7 @@ public final class AiAgentMultiStageTest
         {
             System.clearProperty("neodymium.ai.apiKey");
         }
+        System.clearProperty("neodymium.ai.pesap.enabled");
         Neodymium.clearThreadContext();
     }
 

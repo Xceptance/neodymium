@@ -345,6 +345,115 @@ To eliminate this overhead, Neodymium AI introduces **Smart Escalation Jumps**. 
 
 ---
 
+### 🔮 Pre-Execution Static Analysis Phase (PESAP)
+
+To minimize the number of sequential escalation loops on the very first execution of a test (where no playbook cache exists yet), Neodymium AI implements a highly efficient **Pre-Execution Static Analysis Phase (PESAP)**.
+
+#### 💡 High-Level Overview
+When executing a brand new playbook or instruction set, the framework does not know in advance which steps require a standard text outline, which steps can run on a minimal accessibility tree, or which steps require explicit screenshots (visual checks). If all steps started at the lowest level (`AXTREE`), steps that perform complex text assertions or visual validations would repeatedly trigger sequential or jump escalations, increasing latency.
+
+To solve this, when PESAP is enabled, Neodymium runs a single, lightweight remote query to the LLM *before* the browser even opens or the first page loads. This query sends absolutely no DOM or screenshot data (meaning it consumes negligible tokens and completes in milliseconds).
+
+The LLM statically analyzes the entire list of natural language steps and predicts:
+1. **Starting Context Level**: The minimal required starting context level (`AXTREE`, `STANDARD`, or `VISUAL_LEAN`) for each step based on the step's semantic intent.
+   * *Interactive steps* (e.g. click a button, type a field) default to `AXTREE`.
+   * *Assertive/Structural steps* (e.g. verify specific paragraph text) are predicted as `STANDARD`.
+   * *Visual steps* (e.g. checking layouts, colors, or steps containing visual words) are predicted as `VISUAL_LEAN`.
+2. **Unified Semantic Warnings**: The remote LLM also performs smart, context-aware multilingual linting, detecting instruction ambiguity and anti-patterns directly in this start call.
+
+The agent caches these predictions locally. When executing each step, instead of starting from the absolute lowest context level, Neodymium starts **exactly** at the predicted PESAP context level. This eliminates startup latency and avoids redundant escalation loops on the first execution.
+
+> [!TIP]
+> **Why is `LEAN` never predicted?** The `LEAN` context level (interactive DOM elements with full attributes) is deliberately excluded from PESAP's prediction vocabulary. The distinction between `AXTREE` (browser accessibility tree) and `LEAN` (framework DOM extraction) is an internal implementation detail that the LLM cannot reliably reason about from step text alone. Since the runtime escalation from `AXTREE → LEAN` is automatic and costs zero retry budget, it is always more robust to predict `AXTREE` for interaction steps and let the framework escalate to `LEAN` on demand if needed.
+
+---
+
+#### 📊 Example Console Output (Analysis & Quality)
+When PESAP executes, it outputs clear diagnostic information to the terminal, aiding both early execution analysis and test-case quality reviews:
+
+```text
+[INFO]  🤖 Starting Pre-Execution Static Analysis Phase (PESAP) for guest-checkout.yaml...
+[DEBUG]    🔮 Step 1 (line 3) -> PESAP Predicted ContextLevel: AXTREE
+[DEBUG]    🔮 Step 2 (line 7) -> PESAP Predicted ContextLevel: STANDARD
+[DEBUG]    🔮 Step 3 (line 12) -> PESAP Predicted ContextLevel: VISUAL_LEAN
+
+[WARN]  ⚠️ AI Instructions Semantic Linter Warnings in guest-checkout.yaml:
+[WARN]      - Step 2 (line 7): "Click the button" - Lacks element targeting. Suggest specifying a label/text (e.g., 'click the "Login" button') or adding an inline locator hint `(hint: selector)`.
+[WARN]      - Step 4 (line 15): "Type email" - Missing explicit value to input. Suggest specifying the value in quotes (e.g., 'type "user@example.com" into the email field').
+[WARN]      - Step 5 (line 20): "Verify page" - Vague action description. Suggest using precise assertion text or structural validation descriptions (e.g., 'verify that the page header contains "Dashboard"').
+```
+
+During step execution, the logs will verify the starting context being optimized dynamically:
+```text
+[INFO]      🔮 Using PESAP predicted starting ContextLevel: STANDARD
+```
+
+---
+
+#### ⚙️ Configuration Properties
+You can fully configure or granularly disable the Pre-Execution Static Analysis Phase (PESAP) and its sub-phases via your `neodymium.properties`, `ai.properties`, or system properties.
+
+| Property | Default Value | Description |
+| :--- | :--- | :--- |
+| `neodymium.ai.pesap.enabled` | `true` | **Master Switch**. Enables or disables the entire PESAP phase. If set to `false`, Neodymium skips the remote static query entirely and falls back directly to the local offline linter. |
+| `neodymium.ai.pesap.classify.enabled` | `true` | **Context Classification Sub-Switch**. Controls whether the static starting context level prediction query is run. If set to `false`, steps will start at the default minimum context level (`AXTREE`). |
+| `neodymium.ai.pesap.linter.enabled` | `true` | **Semantic Linter Sub-Switch**. Controls whether the LLM-powered static semantic step linting query is run. If set to `false`, remote semantic warnings are skipped. |
+
+##### Example Configuration (Disable PESAP completely):
+```properties
+neodymium.ai.pesap.enabled=false
+```
+
+##### Example Configuration (Run Classification but Disable LLM Linter):
+```properties
+neodymium.ai.pesap.classify.enabled=true
+neodymium.ai.pesap.linter.enabled=false
+```
+
+> [!NOTE]
+> If PESAP is disabled or a remote query fails, Neodymium seamlessly falls back to the **Local Offline Step Linter** and starts execution at the default minimum context level (`AXTREE`), ensuring high reliability under all circumstances.
+
+##### 🔄 Dynamic YAML and Thread-Local Overrides
+
+For maximum convenience, you can override any PESAP configuration properties (`neodymium.ai.pesap.enabled`, `neodymium.ai.pesap.classify.enabled`, `neodymium.ai.pesap.linter.enabled`) directly inside your YAML playbook files or dynamically in code. Neodymium resolves these overrides with the following precedence order:
+
+1. **Local (Dataset/Iteration Level) YAML Overrides**: Defined inside a specific dataset under `data:`. This has the highest precedence.
+2. **Global (Root Level) YAML Overrides**: Defined at the root of the playbook YAML file. Automatically propagates to all datasets/iterations unless overridden locally.
+3. **Thread-Local Programmatic Overrides**: Programmatically set via the thread-local context `Neodymium.getData().put("neodymium.ai.pesap.enabled", "false")`.
+4. **Static Configuration**: Defined statically in `neodymium.properties`, `ai.properties`, or system properties.
+
+###### Example: Overriding at Playbook Root Level
+To turn off PESAP completely for all iterations defined in a specific playbook:
+
+```yaml
+neodymium.ai.pesap.enabled: false
+
+steps: |
+  Open the homepage.
+  Click "Sign In".
+
+data:
+  - username: "user1"
+  - username: "user2"
+```
+
+###### Example: Overriding at Playbook Dataset Level
+To granularly disable semantic linting only for a specific test iteration:
+
+```yaml
+steps: |
+  Open the homepage.
+  Click "Sign In".
+
+data:
+  - username: "user1"
+    neodymium.ai.pesap.linter.enabled: false # Linting disabled only for user1
+  - username: "user2"
+    # standard PESAP rules apply to user2
+```
+
+---
+
 ### 🧠 Playbook-Based Memory Persistence (Historical Learning)
 
 While escalating on the fly is powerful, repeating the same escalation loop on subsequent test runs is wasteful. Neodymium AI solves this via **Playbook-Based Memory Persistence**.
@@ -603,7 +712,16 @@ Even if you do not explicitly include the `(visual)` tag, the LLM is instructed 
 
 To ensure maximum test robustness and eliminate AI execution ambiguity before reaching the browser runtime, Neodymium features a state-of-the-art **Semantic Step Linter**. 
 
-The linter runs statically before execution on the split steps list, analyzing instructions against common anti-patterns and printing clear warning suggestions to the developer console.
+#### Execution Modes
+The linter has two operational modes based on configuration:
+1. **Remote LLM-Powered Linter (PESAP Enabled)**: When `neodymium.ai.pesap.enabled=true` (the default), the semantic linter runs directly as part of the Pre-Execution Static Analysis Phase (PESAP) remote LLM query. In this mode, the LLM analyzes all steps statically for semantic and instruction anti-patterns in whatever language the playbook is written (English, German, etc.), leveraging deep language understanding instead of simple heuristics.
+2. **Local Offline Linter (PESAP Disabled / Fallback)**: If PESAP is disabled or fails, Neodymium falls back to the high-performance local offline `StepLinter` which uses regex and keyword heuristics to inspect steps statically.
+
+In both modes, any detected warnings are clearly logged in the developer console with line numbers and filename tags:
+```text
+⚠️ AI Instructions Semantic Linter Warnings
+    - Step 2 (TC_ACC_005_PasswordVisibility.yaml:12): "Click the button" - Lacks element targeting. Suggest specifying a label/text (e.g., 'click the "Login" button') or adding an inline locator hint `(hint: selector)`.
+```
 
 ### 🛡️ Common Checked Anti-Patterns
 
@@ -619,8 +737,25 @@ The linter runs statically before execution on the split steps list, analyzing i
 
 3. **Vague Actions**
    * **The Problem:** Vague steps like `"verify page"`, `"check it"`, `"do something"`, or `"test this"` lack criteria for success, forcing the LLM to invent assertions.
-   * **Linter Interception:** Catches steps that perform generic verification on the page or it without specific validation properties.
+   * **Linter Interception:** Catches steps that perform generic verification where the sole target is `"page"`, `"it"`, `"this"`, `"something"`, or `"everything"`.
    * **Suggestion:** Use precise assertion text or structural descriptions (e.g., `"verify that the page header contains 'Dashboard'"`).
+   * **Note:** Steps with a concrete subject like `"Verify the billing address form is displayed"` or `"Verify the payment form is displayed"` are **not** flagged — the subject is specific enough.
+
+4. **Ambiguous Pronouns**
+   * **The Problem:** Steps like `"Click on it"` or `"Verify that"` use a pronoun as the sole target without any clear referent, forcing the LLM to guess based on execution history.
+   * **Linter Interception:** Detects steps where `"it"`, `"that"`, or `"this"` is the only target element.
+   * **Suggestion:** Name the target element explicitly (e.g., `"click on the Submit button"`).
+
+5. **Overly Compound Steps**
+   * **The Problem:** Steps like `"Click login, then verify dashboard, then navigate to settings"` combine multiple unrelated actions in a single instruction. This reduces playbook granularity and makes self-healing harder since a failure in any sub-action invalidates the entire step.
+   * **Linter Interception:** Detects steps that chain fundamentally different operations (navigate + verify + click).
+   * **Suggestion:** Split into separate steps for better playbook granularity and self-healing reliability.
+   * **Note:** Closely related actions as a natural unit (e.g., `"Select size '16x12' and finish 'Matte'"` or `"Fill out the form using: First Name 'John', Last Name 'Doe'"`) are **not** flagged.
+
+6. **Hardcoded Waits/Sleeps**
+   * **The Problem:** Steps like `"Wait 5 seconds"` or `"Pause for 3s"` introduce explicit time-based waits, which are a test automation anti-pattern that causes slow, flaky tests.
+   * **Linter Interception:** Detects explicit sleep/wait/pause instructions with time values.
+   * **Suggestion:** Remove explicit waits and rely on the framework's built-in element readiness checks, which handle timing automatically.
 
 ---
 
@@ -705,6 +840,52 @@ Neodymium.expectFailure("APP-1234")
              // code expected to fail
          });
 ```
+
+---
+
+## 🏷️ Explicit Step Control Tags (optional, soft, timeout)
+
+Neodymium supports a set of special, language-agnostic tags that allow developers to explicitly control step execution flow, assertion behaviors, and browser timeouts directly from natural language instructions.
+
+These tags are stripped case-insensitively from the instruction before it is processed or sent to the LLM, ensuring zero overhead or interference with the AI's natural language comprehension.
+
+### 1. Optional Execution Bypassing: `(optional)` and `(soft)`
+
+When a step is tagged with `(optional)` or `(soft)`, it indicates that the action is not critical for the overall success of the test case. If the step fails (e.g., due to an element not being found, a runtime exception, or a failed assertion), Neodymium catches the failure, logs a detailed warning to the developer console, and safely advances to the next step without failing the test or triggering a self-healing pipeline.
+
+#### Example
+```yaml
+steps: |
+  Open the homepage.
+  Click the newsletter close button (optional).
+  Verify that the special discount banner is visible (soft).
+  Click the 'Add to Cart' button.
+```
+
+#### How It Works
+* **Failure Handling**: If a step with `(optional)` or `(soft)` throws an `ActionExecutionException`, an `AssertionError`, or any generic runtime error, Neodymium intercepts the exception.
+* **Playbook Documentation**: A warning message containing the error details is written to the step's `reasoning` field inside the playbook JSON file, ensuring the execution flow remains fully transparent.
+* **Clean Bypassing**: The test run prints a warning in the console and continues seamlessly with the next step.
+
+---
+
+### 2. Custom Execution Timeouts: `(timeout: Xs / Xms / X)`
+
+By default, Neodymium actions respect Selenide's global element search timeout (configured via `com.codeborne.selenide.Configuration.timeout`). However, some steps might require a much longer or shorter waiting time (e.g., waiting for an external payment gateway redirect or checking a quick transition).
+
+You can temporarily override the Selenide timeout for a single step by appending `(timeout: ...)` to the instruction. The timeout can be specified in seconds (e.g., `(timeout: 5s)`), milliseconds (e.g., `(timeout: 500ms)`), or as raw milliseconds (e.g., `(timeout: 2000)`).
+
+#### Example
+```yaml
+steps: |
+  Click the 'Submit Order' button.
+  Wait for the confirmation page to load (timeout: 10s).
+  Check the fast notification toast (timeout: 400ms).
+```
+
+#### How It Works
+* **Timeout Isolation**: When a custom timeout is detected, Neodymium dynamically overrides `com.codeborne.selenide.Configuration.timeout` right before executing the actions for that step.
+* **Strict Try-Finally Rollback**: Neodymium wraps the execution in a strict `try-finally` block. Under all possible outcomes (successful action, failed action, or unexpected exception), the original global timeout is guaranteed to be restored to its exact original value, ensuring zero side-effects on subsequent steps.
 
 ---
 
@@ -889,3 +1070,9 @@ Templates used to feed error context back into the LLM if an action fails or the
 
 - **`retry-prompt-template.txt`**: Used when a chosen action fails (e.g., ElementNotInteractableException). It provides the exception and tells the AI to pick a new approach.
 - **`no-actions-retry-prompt-template.txt`**: Used when the AI successfully returns JSON but hallucinates an empty actions array. Instructs the AI that it must output at least one action.
+
+#### 6. Pre-Execution Static Analysis Phase (PESAP)
+Templates used during the Pre-Execution Static Analysis Phase (PESAP) before browser runtime execution, to predict starting context levels and detect semantic linter warnings.
+
+- **`pesap-classify-prompt.txt`**: The system instructions for statically predicting the starting context level based on the semantic intent of steps.
+- **`pesap-linter-prompt.txt`**: The system instructions for multilingual static semantic linting and instruction ambiguity checking.

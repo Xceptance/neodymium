@@ -122,6 +122,7 @@ public class YamlFileReader {
             Object context = null;
             Object hints = null;
             Object skipReplay = null;
+            final Map<String, Object> rootOverrides = new HashMap<>();
 
             // Scenario 1: The root is a map (complex structure, e.g., AI integration with
             // 'steps' and 'data')
@@ -148,6 +149,17 @@ public class YamlFileReader {
                 }
                 if (rootMap.containsKey("skipReplay")) {
                     skipReplay = rootMap.get("skipReplay");
+                }
+
+                for (final Map.Entry<?, ?> entry : rootMap.entrySet())
+                {
+                    final String key = entry.getKey().toString();
+                    if (!key.equals("steps") && !key.equals("context") && !key.equals("systemContext") &&
+                        !key.equals("before") && !key.equals("after") && !key.equals("hints") &&
+                        !key.equals("skipReplay") && !key.equals("data"))
+                    {
+                        rootOverrides.put(key, entry.getValue());
+                    }
                 }
 
                 if (rootMap.containsKey("data") && rootMap.get("data") instanceof List) {
@@ -233,6 +245,27 @@ public class YamlFileReader {
 
                         if (skipReplay != null && !newDataSet.containsKey("skipReplay")) {
                             newDataSet.put("skipReplay", String.valueOf(skipReplay));
+                        }
+
+                        for (final Map.Entry<String, Object> overrideEntry : rootOverrides.entrySet())
+                        {
+                            final String overrideKey = overrideEntry.getKey();
+                            if (!newDataSet.containsKey(overrideKey))
+                            {
+                                final Object value = overrideEntry.getValue();
+                                if (value == null)
+                                {
+                                    newDataSet.put(overrideKey, null);
+                                }
+                                else if (value instanceof Map || value instanceof List)
+                                {
+                                    newDataSet.put(overrideKey, GSON.toJson(value));
+                                }
+                                else
+                                {
+                                    newDataSet.put(overrideKey, String.valueOf(value));
+                                }
+                            }
                         }
 
                         // Determine and inject step line numbers for this dataset

@@ -127,10 +127,8 @@ public class PlaybookManager {
         // Build filename
         String fileName = filePart + ".json";
         if (!path.isEmpty()) {
-            LOG.debug("Playbook target path: {}", path + "/" + fileName);
             return new File(new File(PLAYBOOK_DIR, path), fileName);
         } else {
-            LOG.debug("Playbook target path: {}", fileName);
             return new File(PLAYBOOK_DIR, fileName);
         }
     }
