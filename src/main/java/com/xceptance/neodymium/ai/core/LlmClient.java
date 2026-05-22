@@ -41,7 +41,7 @@ import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
@@ -54,10 +54,11 @@ import dev.langchain4j.model.output.TokenUsage;
   *
  * // AI-generated: Gemini 2.0 Flash
 */
-public class LlmClient {
+public class LlmClient
+{
     private static final Logger LOG = LoggerFactory.getLogger(LlmClient.class);
 
-    private ChatLanguageModel model;
+    private ChatModel model;
     private final AiConfiguration config;
     private final AiStats aiStats;
     private final LlmMode mode;
@@ -97,15 +98,18 @@ public class LlmClient {
         return this.aiStats;
     }
 
-    private ChatLanguageModel getChatModel() {
-        if (model != null) {
+    private ChatModel getChatModel()
+    {
+        if (model != null)
+        {
             return model;
         }
 
         final String apiKey = config.aiApiKey();
         final String modelName = config.aiModel();
 
-        if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey())) {
+        if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey()))
+        {
             Assertions.fail(
                     "AI API key not configured. Set in your ai.properties, neodymium.properties or as an evironment variable.");
         }

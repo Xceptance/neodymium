@@ -24,6 +24,8 @@
 package com.xceptance.neodymium.ai.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -260,5 +262,19 @@ class AiStatsTest
 
         // Ensure logSummary runs without throwing exceptions
         stats.logSummary();
+    }
+
+    @Test
+    void testClassExists()
+    {
+        try
+        {
+            final Class<?> clazz = Class.forName("dev.langchain4j.model.googleai.GoogleAiGeminiTokenUsage");
+            assertNotNull(clazz);
+        }
+        catch (final ClassNotFoundException e)
+        {
+            fail("dev.langchain4j.model.googleai.GoogleAiGeminiTokenUsage class not found: " + e.getMessage());
+        }
     }
 }
