@@ -36,6 +36,7 @@ CRITICAL INSTRUCTION: Do not include markdown code blocks like ```json ... ```. 
     {
       "type": "ACTION_TYPE",
       "target": "locator string (prefer id or data-neo-ref)",
+      "frameId": "(optional) the frameId attribute of the element, if present in the DOM representation",
       "value": "optional",
       "description": "what this does",
       "elementDetails": "(mandatory) text, name, id OR a short description of the targeted element (especially important if data-neo-ref is used)"

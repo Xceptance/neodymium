@@ -7,8 +7,11 @@
       "actions": [
         {
           "type": "NAVIGATE",
-          "value": "https://xceptance.com",
+          "value": [
+            "https://xceptance.com"
+          ],
           "description": "Navigate to https://xceptance.com",
+          "elementContext": {},
           "replay": ""
         }
       ]

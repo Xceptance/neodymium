@@ -61,6 +61,7 @@ JSON Response Format:
       {
            "type": "{actionTypes}",
            "target": "css locator (for WAIT: the element to wait for)",
+           "frameId": "(optional) the frameId attribute of the element, if present in the DOM representation",
            "value": "concrete text to inject (for WAIT: max timeout in ms)",
            "dataBindings": { },
            "description": "Enter '${firstName}'...",

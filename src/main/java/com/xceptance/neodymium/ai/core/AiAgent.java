@@ -71,6 +71,16 @@ public class AiAgent
 
     private static final Logger LOG = LoggerFactory.getLogger(AiAgent.class);
 
+    private void logPauseReason(String reason) {
+        try {
+            java.io.File file = new java.io.File("tmp/neodymium-ai.log");
+            if (!file.getParentFile().exists()) file.getParentFile().mkdirs();
+            java.nio.file.Files.writeString(file.toPath(), java.time.Instant.now() + " - PAUSE: " + reason + "\n", java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception e) {
+            LOG.warn("Could not write to neodymium-ai.log", e);
+        }
+    }
+
     private final LlmClient llmClient;
 
     private final PageAnalyzer pageAnalyzer;
@@ -174,6 +184,9 @@ public class AiAgent
                             .checkAutoSkipStatus();
                     if (currentAutoSkipStatus != null)
                     {
+                        if (this.autoSkip && !currentAutoSkipStatus) {
+                            logPauseReason("HUD Fast-Forward paused (e.g., Breakpoint reached or manual pause)");
+                        }
                         this.autoSkip = currentAutoSkipStatus;
                     }
                 }
@@ -196,6 +209,8 @@ public class AiAgent
                             // Show a final confirmation dialog to save the interactive session changes
                             final List<String> finishedStrs = new ArrayList<>();
                             finishedStrs.add("🎉 Execution Complete! Click Save & Exit to store changes.");
+                            if (this.autoSkip) { logPauseReason("Execution Complete Dialog reached"); }
+                            this.autoSkip = false;
                             Neodymium.getOrCreateInteractiveHud()
                                     .injectOrUpdateHud(finishedStrs, performedInstructions, this.autoSkip, true, true,
                                             "");
@@ -428,6 +443,8 @@ public class AiAgent
                         {
                             plannedStrs.addAll(futureInstructions);
                         }
+                        if (this.autoSkip) { logPauseReason("Action Failed with Error: " + e.getMessage()); }
+                        this.autoSkip = false;
                         Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                                 performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
                                 "Max retries reached: " + e.getMessage(), false);
@@ -453,6 +470,8 @@ public class AiAgent
                         {
                             plannedStrs.addAll(futureInstructions);
                         }
+                        if (this.autoSkip) { logPauseReason("Action Failed: " + e.getMessage()); }
+                        this.autoSkip = false;
                         Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                                 performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
                                 "Action Failed: " + e.getMessage(), false);
@@ -494,6 +513,8 @@ public class AiAgent
                         final List<String> plannedStrs = new ArrayList<>();
                         plannedStrs.add("⚠️ " + instruction);
                         if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
+                        if (this.autoSkip) { logPauseReason("Assertion Failed: " + e.getMessage()); }
+                        this.autoSkip = false;
                         Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                                 performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Assertion Failed: " + e.getMessage(), false);
                         waitForHudAction(false); // Never auto-skip errors
@@ -513,6 +534,8 @@ public class AiAgent
                     final List<String> plannedStrs = new ArrayList<>();
                     plannedStrs.add("⚠️ " + instruction);
                     if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
+                    if (this.autoSkip) { logPauseReason("Assertion Failed: " + e.getMessage()); }
+                    this.autoSkip = false;
                     Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                             performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Assertion Failed: " + e.getMessage(), false);
                     waitForHudAction(false); // Never auto-skip errors
@@ -530,6 +553,8 @@ public class AiAgent
                     final List<String> plannedStrs = new ArrayList<>();
                     plannedStrs.add("⚠️ " + instruction);
                     if (futureInstructions != null) plannedStrs.addAll(futureInstructions);
+                    if (this.autoSkip) { logPauseReason("Unexpected Error: " + e.getMessage()); }
+                    this.autoSkip = false;
                     Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
                             performedInstructions, this.autoSkip, false, false, unresolvedInstruction, "Unexpected Error: " + e.getMessage(), false);
                     waitForHudAction(false); // Never auto-skip errors
@@ -648,6 +673,50 @@ public class AiAgent
                 {
                     Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.SAVE_EXIT, null, 0);
+                }
+                else if (typeEnum == HudActionType.DUMP)
+                {
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    try {
+                        String dom = pageAnalyzer.getPageContext(ContextLevel.VISUAL);
+                        String history = AiAgentPrompts.buildStepHistory(Neodymium.getAiPlaybook());
+                        
+                        StringBuilder rawDom = new StringBuilder();
+                        try {
+                            com.codeborne.selenide.Selenide.switchTo().defaultContent();
+                            rawDom.append("<!-- MAIN PAGE -->\n");
+                            rawDom.append((String) com.codeborne.selenide.Selenide.executeJavaScript("return document.documentElement.outerHTML;"));
+                            
+                            com.codeborne.selenide.ElementsCollection frames = com.codeborne.selenide.Selenide.$$("iframe, frame");
+                            for (int f = 0; f < frames.size(); f++) {
+                                try {
+                                    com.codeborne.selenide.Selenide.switchTo().frame(frames.get(f));
+                                    rawDom.append("\n\n<!-- IFRAME ").append(f).append(" -->\n");
+                                    rawDom.append((String) com.codeborne.selenide.Selenide.executeJavaScript("return document.documentElement.outerHTML;"));
+                                } catch(Exception ignored) {}
+                                finally {
+                                    com.codeborne.selenide.Selenide.switchTo().defaultContent();
+                                }
+                            }
+                        } catch(Exception e) {
+                            rawDom.append("\nError extracting raw DOM: ").append(e.getMessage());
+                        }
+
+                        long timestamp = System.currentTimeMillis();
+                        String content = "======== AI DEBUG DUMP ========\n\n" +
+                                         "--- SUT CONTEXT ---\n" + sutContext + "\n\n" +
+                                         "--- HISTORY ---\n" + history + "\n\n" +
+                                         "--- AI PARSED DOM ---\n" + dom + "\n";
+                        java.io.File txtFile = new java.io.File("tmp/neodymium-ai-dump-" + timestamp + ".txt");
+                        java.io.File htmlFile = new java.io.File("tmp/neodymium-ai-dump-" + timestamp + ".html");
+                        if (!txtFile.getParentFile().exists()) txtFile.getParentFile().mkdirs();
+                        java.nio.file.Files.writeString(txtFile.toPath(), content);
+                        java.nio.file.Files.writeString(htmlFile.toPath(), rawDom.toString());
+                        LOG.info("Debug context dumped to: " + txtFile.getAbsolutePath() + " and " + htmlFile.getName());
+                    } catch (Exception e) {
+                        LOG.error("Failed to dump context", e);
+                    }
+                    continue; // Keep waiting
                 }
             }
             sleep(1000);

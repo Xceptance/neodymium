@@ -454,66 +454,29 @@ public class PageAnalyzer
         dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
         dom.append("Page Title: ").append(com.codeborne.selenide.Selenide.title()).append("\n\n");
 
-        try
-        {
-            final Map<String, Object> data = (Map<String, Object>) com.codeborne.selenide.Selenide
-                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, level.ordinal());
-
-            // Render element sections
-            final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");
-
-            for (final Map<String, Object> section : sections)
-            {
-                final List<Map<String, Object>> elements = (List<Map<String, Object>>) section.get("elements");
-
-                if (elements != null && !elements.isEmpty())
-                {
-                    dom.append(section.get("heading")).append("\n");
-
-                    for (final Map<String, Object> el : elements)
-                    {
-                        dom.append("  ");
-                        formatElement(dom, el);
-                    }
-                }
-            }
-
-            // Render forms
-            final List<Map<String, Object>> forms = (List<Map<String, Object>>) data.get("forms");
-
-            if (forms != null && !forms.isEmpty())
-            {
-                dom.append("\n=== Forms ===\n");
-
-                for (final Map<String, Object> form : forms)
-                {
-                    dom.append(String.format("  [form] id='%s' action='%s' data-neo-ref='%s'\n",
-                                             form.get("id"), form.get("action"), form.get("automationId")));
-
-                    final List<Map<String, Object>> fields = (List<Map<String, Object>>) form.get("fields");
-
-                    if (fields != null)
-                    {
-                        for (final Map<String, Object> field : fields)
-                        {
-                            dom.append(String.format(
-                                                 "    [form-field] type='%s' name='%s' id='%s' data-neo-ref='%s'",
-                                                 field.get("type"), field.get("name"), field.get("id"), field.get("automationId")));
-
-                        if (field.containsKey("options"))
-                        {
-                            dom.append(String.format(" options='[%s]'", field.get("options")));
-                        }
-                        dom.append("\n");
-                        }
-                    }
-                }
-            }
+        if (isEmptyPage) {
+            return dom.toString();
         }
-        catch (final Exception e)
-        {
-            LOG.warn("Failed to capture DOM via JavaScript, falling back to empty DOM: {}",
-                     e.getMessage());
+
+        org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
+        String currentWindow = driver.getWindowHandle();
+        
+        try {
+            java.util.Set<String> windowHandles = driver.getWindowHandles();
+            for (String windowHandle : windowHandles) {
+                driver.switchTo().window(windowHandle);
+                dom.append("=== Window: ").append(windowHandle).append(" ===\n");
+                dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
+                dom.append("Title: ").append(driver.getTitle()).append("\n\n");
+                captureFrameTree(dom, level, windowHandle, "main");
+            }
+        } catch (Exception e) {
+            LOG.warn("Error capturing full frame tree: {}", e.getMessage());
+        } finally {
+            try {
+                driver.switchTo().window(currentWindow);
+                driver.switchTo().defaultContent();
+            } catch (Exception e) {}
         }
 
         final String result = dom.toString();
@@ -522,6 +485,74 @@ public class PageAnalyzer
             LOG.debug("   📄 Simplified DOM size: {} chars", result.length());
         }
         return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void captureFrameTree(StringBuilder dom, ContextLevel level, String windowHandle, String framePath) {
+        String frameId = windowHandle + ":" + framePath;
+        try {
+            final Map<String, Object> data = (Map<String, Object>) com.codeborne.selenide.Selenide
+                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, level.ordinal());
+            // Render element sections
+            final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");
+            if (sections != null) {
+                for (final Map<String, Object> section : sections) {
+                    final List<Map<String, Object>> elements = (List<Map<String, Object>>) section.get("elements");
+                    if (elements != null && !elements.isEmpty()) {
+                        dom.append(section.get("heading")).append(" (Frame: ").append(frameId).append(")\n");
+                        for (final Map<String, Object> el : elements) {
+                            el.put("frameId", frameId);
+                            dom.append("  ");
+                            formatElement(dom, el);
+                        }
+                    }
+                }
+            }
+
+            // Render forms
+            final List<Map<String, Object>> forms = (List<Map<String, Object>>) data.get("forms");
+            if (forms != null && !forms.isEmpty()) {
+                dom.append("\n=== Forms === (Frame: ").append(frameId).append(")\n");
+                for (final Map<String, Object> form : forms) {
+                    dom.append(String.format("  [form] id='%s' action='%s' data-neo-ref='%s' frameId='%s'\n",
+                                             form.get("id"), form.get("action"), form.get("automationId"), frameId));
+                    final List<Map<String, Object>> fields = (List<Map<String, Object>>) form.get("fields");
+                    if (fields != null) {
+                        for (final Map<String, Object> field : fields) {
+                            dom.append(String.format(
+                                                 "    [form-field] type='%s' name='%s' id='%s' data-neo-ref='%s' frameId='%s'",
+                                                 field.get("type"), field.get("name"), field.get("id"), field.get("automationId"), frameId));
+                            if (field.containsKey("options")) {
+                                dom.append(String.format(" options='[%s]'", field.get("options")));
+                            }
+                            dom.append("\n");
+                        }
+                    }
+                }
+            }
+            
+            // Now recursively process iframes in this frame
+            com.codeborne.selenide.ElementsCollection frames = com.codeborne.selenide.Selenide.$$("iframe, frame");
+            for (int i = 0; i < frames.size(); i++) {
+                try {
+                    com.codeborne.selenide.Selenide.switchTo().frame(frames.get(i));
+                    captureFrameTree(dom, level, windowHandle, framePath + "." + i);
+                    com.codeborne.selenide.Selenide.switchTo().parentFrame();
+                } catch (Exception e) {
+                    LOG.debug("Could not switch to frame {}: {}", i, e.getMessage());
+                    com.codeborne.selenide.Selenide.switchTo().defaultContent();
+                    // Recover path
+                    if (!"main".equals(framePath)) {
+                        String[] indices = framePath.substring(5).split("\\."); // remove "main."
+                        for (String indexStr : indices) {
+                            com.codeborne.selenide.Selenide.switchTo().frame(Integer.parseInt(indexStr));
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to capture DOM for frame {}: {}", frameId, e.getMessage());
+        }
     }
 
     /**
@@ -597,6 +628,7 @@ public class PageAnalyzer
 
         appendIfPresent(dom, "data-neo-ref", el.get("automationId"));
         appendIfPresent(dom, "selector", el.get("selector"));
+        appendIfPresent(dom, "frameId", el.get("frameId"));
         dom.append("\n");
     }
 

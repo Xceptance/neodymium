@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Frame 2</title>
+</head>
+<body style="background-color: lightblue;">
+    <h3>Level 2 Frame</h3>
+    <button id="deep-btn" data-neo-ref="btn_deep">Deep Button</button>
+    <div id="result" data-neo-ref="div_result"></div>
+
+    <script>
+        document.getElementById('deep-btn').addEventListener('click', function() {
+            document.getElementById('result').textContent = 'Button was clicked!';
+        });
+    </script>
+</body>
+</html>

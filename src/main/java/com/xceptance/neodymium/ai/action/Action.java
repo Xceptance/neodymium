@@ -61,6 +61,8 @@ public class Action
     @com.google.gson.annotations.SerializedName("else")
     private List<Action> elseActions;
 
+    private String frameId;
+
     private transient boolean silent = false;
 
     public Action()
@@ -192,8 +194,8 @@ public class Action
     @Override
     public String toString()
     {
-        return String.format("Action{type=%s, target='%s', value='%s', desc='%s', elementDetails='%s', reasoning='%s', context=%s}",
-                             type, target, value, description, elementDetails, reasoning, elementContext != null ? "yes" : "no");
+        return String.format("Action{type=%s, target='%s', value='%s', frameId='%s', desc='%s', elementDetails='%s', reasoning='%s', context=%s}",
+                             type, target, value, frameId, description, elementDetails, reasoning, elementContext != null ? "yes" : "no");
     }
 
     public String getScreenshotPath() {
@@ -238,5 +240,13 @@ public class Action
 
     public void setSilent(boolean silent) {
         this.silent = silent;
+    }
+
+    public String getFrameId() {
+        return frameId;
+    }
+
+    public void setFrameId(String frameId) {
+        this.frameId = frameId;
     }
 }

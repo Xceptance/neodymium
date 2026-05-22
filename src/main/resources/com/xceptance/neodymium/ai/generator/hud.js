@@ -488,6 +488,23 @@
             }
         });
 
+        var dumpBtn = document.getElementById('neo-dump-btn');
+        if (dumpBtn) {
+            dumpBtn.addEventListener('click', function() {
+                if (!this.disabled) {
+                    window.neoHudAction = JSON.stringify({ action: "DUMP" });
+                    this.disabled = true;
+                    this.style.opacity = '0.5';
+                    this.innerText = '⏳ Dumping...';
+                    setTimeout(function() {
+                        dumpBtn.disabled = false;
+                        dumpBtn.style.opacity = '1';
+                        dumpBtn.innerText = '📥 Dump Debug Context';
+                    }, 2000);
+                }
+            });
+        }
+
 
 
         // Keyboard shortcuts logic
@@ -729,15 +746,19 @@
     var addBtn = document.getElementById('neo-add-overlay-btn');
     var rewindBtn = document.getElementById('neo-rewind-btn');
 
+    var dumpContainer = document.getElementById('neo-dump-container');
+
     if (planned && planned.length > 0) {
         if (planned[0] && planned[0].startsWith && planned[0].startsWith('⚠️')) {
             statusDiv.innerText = 'Debug - Error';
             statusDiv.style.background = '#f44336';
             statusDiv.style.color = '#fff';
+            if (dumpContainer) dumpContainer.style.display = 'block';
         } else {
             statusDiv.innerText = 'Pending';
             statusDiv.style.background = '#FF9800';
             statusDiv.style.color = '#000';
+            if (dumpContainer) dumpContainer.style.display = 'none';
         }
         nextActionDiv.innerText = planned[0];
         plannedContainer.style.display = 'block';

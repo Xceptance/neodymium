@@ -1,0 +1,24 @@
+{
+  "id": "com.xceptance.neodymium.ai.ClickActionTest :: testClickStandardButton",
+  "steps": [
+    {
+      "promptLine": "Click the Submit Order button.",
+      "reasoning": "The instruction is to click the \u0027Submit Order\u0027 button. I found a button with id \u0027btn-submit\u0027 and text \u0027Submit Order\u0027 in the DOM, which matches the instruction.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit",
+          "description": "Click the Submit Order button",
+          "elementDetails": "Submit Order button with id \u0027btn-submit\u0027",
+          "elementContext": {
+            "text": "Submit Order",
+            "id": "btn-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

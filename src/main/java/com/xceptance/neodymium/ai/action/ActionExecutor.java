@@ -222,6 +222,7 @@ public class ActionExecutor {
         LOG.debug("   🤖 {}", action.getDescription());
 
         interpolateAction(action);
+        switchFrameContext(action.getFrameId());
 
         preCheckAction(action);
 
@@ -288,6 +289,7 @@ public class ActionExecutor {
      * Finds all elements using the same strategies as findElement.
      */
     public com.codeborne.selenide.ElementsCollection findElements(final Action action) {
+        switchFrameContext(action.getFrameId());
         String target = cleanTarget(action.getTarget());
 
         // Strategy 0: Direct Match for Neodymium Automation ID
@@ -637,6 +639,33 @@ public class ActionExecutor {
             if (actionLogs.add(message)) {
                 LOG.debug(message);
             }
+        }
+    }
+
+    private void switchFrameContext(String targetFrameId) {
+        if (targetFrameId == null || targetFrameId.isBlank()) return;
+        String[] parts = targetFrameId.split(":");
+        if (parts.length != 2) return;
+        
+        String windowHandle = parts[0];
+        String framePath = parts[1];
+        
+        org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
+        try {
+            driver.switchTo().window(windowHandle);
+            driver.switchTo().defaultContent();
+            
+            if (!"main".equals(framePath)) {
+                String[] indices = framePath.split("\\.");
+                for (String indexStr : indices) {
+                    if (!indexStr.equals("main") && !indexStr.isBlank()) {
+                        int index = Integer.parseInt(indexStr);
+                        driver.switchTo().frame(index);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logDebug("   ⚠️ Could not switch to frame {}: {}", targetFrameId, e.getMessage());
         }
     }
 }

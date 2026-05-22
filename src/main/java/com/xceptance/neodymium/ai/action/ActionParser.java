@@ -369,6 +369,10 @@ public class ActionParser {
             final Action action = new Action(type, target, value, description);
             action.setElementDetails(elementDetails);
             
+            if (obj.has("frameId") && !obj.get("frameId").isJsonNull()) {
+                action.setFrameId(obj.get("frameId").getAsString());
+            }
+
             if (obj.has("reasoning") && !obj.get("reasoning").isJsonNull()) {
                 action.setReasoning(obj.get("reasoning").getAsString());
             }
