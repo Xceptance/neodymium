@@ -29,6 +29,19 @@ public class AiBrowserPlaybookTest {
     }
 
     @Test
+    public void testPlaybookSkipReplay() {
+        Neodymium.initializePlaybook();
+        Assert.assertFalse(Neodymium.getAiPlaybook().isRecording());
+
+        Neodymium.setAiPlaybook(null);
+        Neodymium.getData().put("skipReplay", "true");
+
+        Neodymium.initializePlaybook();
+        Assert.assertTrue(Neodymium.getAiPlaybook().isRecording());
+    }
+
+
+    @Test
     public void testPlaybookHealing() {
         try {
         } catch (Throwable error) {

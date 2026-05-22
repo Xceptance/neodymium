@@ -123,5 +123,44 @@ public class YamlFileReaderTest
         assertEquals(10, localStepLines.get(0).intValue());
         assertEquals(11, localStepLines.get(1).intValue());
     }
+
+    @Test
+    @DisplayName("Verify parsing of global skipReplay at the root level")
+    public void testYamlSkipReplayGlobal()
+    {
+        final String yamlContent = 
+            "skipReplay: true\n" +
+            "steps: |\n" +
+            "  Verify login\n" +
+            "data:\n" +
+            "  - testId: case1\n" +
+            "  - testId: case2\n";
+
+        final List<Map<String, String>> data = YamlFileReader.readFile(new ByteArrayInputStream(yamlContent.getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals(2, data.size());
+        assertEquals("true", data.get(0).get("skipReplay"));
+        assertEquals("true", data.get(1).get("skipReplay"));
+    }
+
+    @Test
+    @DisplayName("Verify parsing of local skipReplay at the dataset level")
+    public void testYamlSkipReplayLocal()
+    {
+        final String yamlContent = 
+            "steps: |\n" +
+            "  Verify login\n" +
+            "data:\n" +
+            "  - testId: case1\n" +
+            "  - testId: case2\n" +
+            "    skipReplay: true\n";
+
+        final List<Map<String, String>> data = YamlFileReader.readFile(new ByteArrayInputStream(yamlContent.getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals(2, data.size());
+        assertEquals(null, data.get(0).get("skipReplay"));
+        assertEquals("true", data.get(1).get("skipReplay"));
+    }
 }
+
 
