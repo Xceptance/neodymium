@@ -121,6 +121,7 @@ public class YamlFileReader {
             Object after = null;
             Object context = null;
             Object hints = null;
+            Object skipReplay = null;
 
             // Scenario 1: The root is a map (complex structure, e.g., AI integration with
             // 'steps' and 'data')
@@ -144,6 +145,9 @@ public class YamlFileReader {
                 }
                 if (rootMap.containsKey("hints")) {
                     hints = rootMap.get("hints");
+                }
+                if (rootMap.containsKey("skipReplay")) {
+                    skipReplay = rootMap.get("skipReplay");
                 }
 
                 if (rootMap.containsKey("data") && rootMap.get("data") instanceof List) {
@@ -225,6 +229,10 @@ public class YamlFileReader {
                                     newDataSet.put(hintKey, String.valueOf(hintEntry.getValue()));
                                 }
                             }
+                        }
+
+                        if (skipReplay != null && !newDataSet.containsKey("skipReplay")) {
+                            newDataSet.put("skipReplay", String.valueOf(skipReplay));
                         }
 
                         // Determine and inject step line numbers for this dataset

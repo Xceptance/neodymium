@@ -698,6 +698,64 @@ If a visual step has a successful visual hash match and contains an empty list o
 
 ---
 
+## ⏭️ Bypassing Replays & Forcing Recording Mode (skipReplay)
+
+By default, Neodymium AI will always attempt to load and replay a cached JSON Playbook from `src/test/resources/ai-playbooks` if one exists for the current test. This is the optimal execution path for CI/CD environments as it operates completely offline and saves LLM API costs.
+
+However, during local development or when you need to deliberately update or regenerate the playbook from scratch (e.g. after a major SUT layout redesign or when developing new flows), you can urge or force the library to bypass the cached JSON playbook and execute the steps completely from scratch (i.e. in learning/recording mode) by configuring the `skipReplay: true` key.
+
+### Configuration Methods
+
+You can configure `skipReplay` either **globally** (for all test iterations) or **locally** (specifically for one test case or dataset iteration) within your playbook YAML files.
+
+#### 1. Global (Root Level) Configuration
+To bypass playbook replays for all datasets/iterations defined in a specific YAML file, declare `skipReplay: true` at the root level of your playbook:
+
+```yaml
+# Force all test iterations to run in recording mode and bypass local JSON caches
+skipReplay: true
+
+steps: |
+  Open the login page.
+  Enter credentials and click login.
+
+data:
+  - email: "user1@example.com"
+  - email: "user2@example.com"
+```
+
+#### 2. Local (Dataset Level) Configuration
+To skip replays only for a specific dataset iteration while allowing other iterations to execute from the cached playbooks, add `skipReplay: true` inside a specific data entry:
+
+```yaml
+steps: |
+  Open the login page.
+  Enter credentials and click login.
+
+data:
+  - email: "user1@example.com"
+    # Runs in standard replay mode (uses cache if available)
+  - email: "user2@example.com"
+    # Bypasses the cache and executes this iteration completely from scratch (recording mode)
+    skipReplay: true
+```
+
+#### 3. Programmatic Configuration
+You can also set the flag dynamically within your Java test code before initializing the playbook:
+
+```java
+@NeodymiumTest
+public void testDynamicFlow()
+{
+    // Programmatically bypass the cached playbook for this run
+    Neodymium.getData().put("skipReplay", "true");
+    
+    Neodymium.ai().execute("Click on the guest checkout button.");
+}
+```
+
+---
+
 ## 🛠️ Prompt Overriding
 
 To provide maximum flexibility and allow testing strategies to be customized per project, the core LLM instructions and prompt templates have been externalized. By default, the framework loads its prompt templates from the `neodymium.jar` classpath at `ai-prompts/`. 

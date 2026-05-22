@@ -75,6 +75,6 @@ public class AiIntegrationTest extends AbstractNeodymiumTest
         // If the playback works, it succeeds natively without hitting the LLM
         // Healing and prompt changes will hit the LLM and fail properly
         NeodymiumTestExecutionSummary result = run(com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserPlaybookTest.class);
-        checkPass(result, 8, 0);
+        checkPass(result, 9, 0);
     }
 }

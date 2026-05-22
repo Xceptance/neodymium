@@ -27,6 +27,19 @@ public class AiBrowserPlaybookTest {
     }
 
     @NeodymiumTest
+    public void testPlaybookSkipReplay() {
+        Neodymium.initializePlaybook();
+        Assertions.assertFalse(Neodymium.getAiPlaybook().isRecording());
+
+        Neodymium.setAiPlaybook(null);
+        Neodymium.getData().put("skipReplay", "true");
+
+        Neodymium.initializePlaybook();
+        Assertions.assertTrue(Neodymium.getAiPlaybook().isRecording());
+    }
+
+
+    @NeodymiumTest
     public void testPlaybookHealing() {
         // Will try to click #does-not-exist found in playbook, fail, retry with LLM, and fail due to invalid key
         Throwable error = org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> {

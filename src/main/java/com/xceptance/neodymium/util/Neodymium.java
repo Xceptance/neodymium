@@ -842,9 +842,14 @@ public class Neodymium
         Playbook playbook = Neodymium.getAiPlaybook();
         if (playbook == null)
         {
-            String playbookId = getTestName();
+            final String playbookId = getTestName();
 
-            playbook = PlaybookManager.loadPlaybook(playbookId);
+            final boolean skipReplay = Neodymium.getData().exists("skipReplay") && Neodymium.getData().asBoolean("skipReplay", false);
+
+            if (!skipReplay)
+            {
+                playbook = PlaybookManager.loadPlaybook(playbookId);
+            }
 
             if (playbook != null)
             {
