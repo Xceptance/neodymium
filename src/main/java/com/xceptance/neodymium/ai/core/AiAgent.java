@@ -169,6 +169,17 @@ public class AiAgent {
             final List<String> stepsList = new ArrayList<>(Arrays.asList(splitInstructions(instructions)));
             LOG.debug("Split into {} step(s)", stepsList.size());
 
+            // Run the semantic linter and print warnings if any step is suboptimal
+            final List<String> lintWarnings = StepLinter.lint(stepsList);
+            if (!lintWarnings.isEmpty())
+            {
+                LOG.warn("⚠️ AI Instructions Semantic Linter Warnings found:");
+                for (final String warning : lintWarnings)
+                {
+                    LOG.warn("    - {}", warning);
+                }
+            }
+
             final String sourceFileVal;
             if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.sourceFile"))
             {

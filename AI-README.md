@@ -599,6 +599,31 @@ Even if you do not explicitly include the `(visual)` tag, the LLM is instructed 
 
 ---
 
+## 🔍 Semantic Step Linter & Ambiguity Warnings
+
+To ensure maximum test robustness and eliminate AI execution ambiguity before reaching the browser runtime, Neodymium features a state-of-the-art **Semantic Step Linter**. 
+
+The linter runs statically before execution on the split steps list, analyzing instructions against common anti-patterns and printing clear warning suggestions to the developer console.
+
+### 🛡️ Common Checked Anti-Patterns
+
+1. **Lacking Element Targeting**
+   * **The Problem:** Instructions like `"Click the button"`, `"Click the link"`, or `"Click it"` are extremely vague. Without identifying labels or descriptive markers, the LLM has to make guesses, which can lead to high error rates and fragile tests.
+   * **Linter Interception:** Detects click/hover actions that target generic elements without label text or hint selectors.
+   * **Suggestion:** Specify a label/text (e.g., `"click the 'Login' button"`) or add an inline locator hint `(hint: .selector-class)`.
+
+2. **Missing Input Values**
+   * **The Problem:** Steps like `"type email"`, `"enter password"`, or `"input something"` are missing the actual text value to type.
+   * **Linter Interception:** Catches input/typing actions containing keywords like `email`, `password`, `username` but without any explicit string quotes or numbers.
+   * **Suggestion:** Specify the value in quotes (e.g., `"type 'user@example.com' into the email field"`).
+
+3. **Vague Actions**
+   * **The Problem:** Vague steps like `"verify page"`, `"check it"`, `"do something"`, or `"test this"` lack criteria for success, forcing the LLM to invent assertions.
+   * **Linter Interception:** Catches steps that perform generic verification on the page or it without specific validation properties.
+   * **Suggestion:** Use precise assertion text or structural descriptions (e.g., `"verify that the page header contains 'Dashboard'"`).
+
+---
+
 ## 🐞 Unified Expected Failures & (bug) Tags
 
 Neodymium features a language-agnostic expected failure mechanism designed to let tests pass even when they hit known, unresolved bugs. It "freezes" that defective behavior, meaning:
