@@ -19,7 +19,7 @@ Neodymium AI is an exceptionally robust, enterprise-ready, JVM-native solution. 
 | **CI/CD Replay Efficiency** | ⚡ **Playbook Caching (100% Offline)**. No LLM calls or API latency on replay. | Cloud-based caching; requires cloud connection. | Dynamic caching; has LLM latency overhead | Agentic planning overhead; slow and expensive | DB lookup latency; offline-capable for healed locators |
 | **Self-Healing Model** | **Local Auto-Update**. LLM heals DOM, then updates the Git-tracked Playbook JSON. | SaaS-controlled cloud updates | Dynamic visual recovery | Vision-based replanning | Postgres DB stores alternatives; plugin writes back to code |
 | **Business Logic Assertions** | 🛠️ **`JAVA_METHOD` Programmatic Fallback** (JShell, BigDecimal, AiAssertions) | Vision/LLM reasoning (prone to hallucinations/floats) | LLM prompt verification or TypeScript code checks | LLM prompt visual evaluation | Traditional Selenium Java Assertions |
-| **Token Optimization** | 🧠 **Escalating Context**: `HINT` (0 DOM) ➔ `LEAN` ➔ `STANDARD` ➔ `VISUAL` | Sent entirely to cloud API | Extracts interactive map | Sends visual coordinates/DOM | N/A (ML selector imitator, no LLM tokens) |
+| **Token Optimization** | 🧠 **Escalating Context**: `HINT` ➔ `AXTREE` ➔ `LEAN` ➔ `STANDARD` ➔ `VISUAL` (with smart jumps & historical learning) | Sent entirely to cloud API | Extracts interactive map | Sends visual coordinates/DOM | N/A (ML selector imitator, no LLM tokens) |
 | **Visual Assertion Cost** | 👁️ **Perceptual dHash & Hamming Distance** (Local, offline, microsecond checks) | Cloud Vision API call | Cloud browser screenshot | Cloud Vision API / VLM | Traditional pixel-by-pixel comparisons |
 | **Known Bug Management** | 🐞 **Unified Expected Failures** (`(bug)` tag in NLP, `expectFailure` in Java) | None (Requires disabling steps) | None | None | None |
 | **Language & Ecosystem** | **JVM-Native (Java 21, JUnit 5, Selenide)** | TypeScript / Playwright | TypeScript / Playwright | TypeScript / Puppeteer / Playwright | Java / C# / Python (Selenium wrapper) |
@@ -57,7 +57,7 @@ A significant pitfall of visual/NLP-based AI automation tools is that they rely 
 
 #### 3. Extremely Efficient Escalating Context System
 Sending an entire HTML page to an LLM on every step consumes vast amounts of prompt tokens, limits execution speed, and often exceeds LLM token windows.
-* **Neodymium's Edge:** Instead of blind DOM dumps, Neodymium uses an **Escalating Context** approach. It starts with a `LEAN` mode (interactive elements only) and only escalates to `STANDARD` (full text) or `VISUAL` (screenshot) if the LLM explicitly requests more information to resolve ambiguity.
+* **Neodymium's Edge:** Instead of blind DOM dumps, Neodymium uses an **Escalating Context** approach with **Smart Escalation Jumps** and **Playbook-Based Memory Persistence (Historical Learning)**. The runner starts with a highly optimized context level (such as `AXTREE` or `LEAN`) and escalates directly to the level requested by the LLM (e.g. jumping straight to `VISUAL` or `STANDARD`). The successfully resolved context level is stored in the playbook JSON cache, so subsequent runs skip predictable intermediate failure/escalation loops entirely.
 *(See [Escalating Context](#-escalating-context-token-optimization) for more details.)*
 
 #### 4. Perceptual Visual Caching (dHash & Hamming Distance)
@@ -303,14 +303,67 @@ To add your own project-specific assertion methods:
 
 Neodymium AI uses a multi-tier **Escalating Context** strategy to minimize LLM token costs while maximizing reliability. Instead of blindly sending massive HTML dumps to the LLM, the framework progressively reveals more data only when necessary.
 
-There are four context levels:
-1. **`HINT` (Zero DOM)**: Triggered automatically if your instruction contains `(hint: ...)`. No DOM is sent. The LLM simply translates the hint into the correct JSON action.
-2. **`LEAN` (Interactive Only)**: The default starting level. Sends only interactive elements (buttons, links, inputs) and headings. Text paragraphs are excluded. Covers ~80% of typical actions.
-3. **`STANDARD` (Full Text)**: Sends interactive elements plus all visible text content. Required for assertions or disambiguating similar elements (e.g. 5 identical "View Details" links).
-4. **`VISUAL` (Screenshot)**: Sends the `STANDARD` DOM alongside a Base64-encoded screenshot of the page. Used as a last resort for complex SVG, canvas, or shadow-DOM interactions.
+### 📐 The Six Context Levels
 
-**How Escalation Works:**
-The LLM is a conscious participant in this loop. If it receives a `LEAN` context but cannot figure out what to do, it explicitly returns `{"status": "ESCALATE"}` instead of guessing. The framework catches this, widens the context to `STANDARD`, and tries again without consuming a retry budget. This ensures you only pay for the tokens you actually need!
+The framework defines six distinct context levels:
+
+1. **`HINT` (Zero DOM)**: Minimal context with ZERO DOM elements, triggered automatically when you specify an explicit inline locator `(hint: ...)`. No DOM is sent. The LLM translates the hint directly into JSON.
+2. **`AXTREE` (Accessibility Tree)**: Compact browser-native accessibility tree providing structural and semantic outline of interactive elements for ultra-low token consumption.
+3. **`LEAN` (Interactive Only)**: Sends only interactive elements (buttons, links, inputs, selects, textareas, headings). Text paragraphs are excluded. Covers ~80% of typical actions.
+4. **`STANDARD` (Full Text)**: Sends interactive elements plus all visible text content (paragraphs, list items, table cells). Required for assertions or disambiguating similar elements (e.g. 5 identical "View Details" links).
+5. **`VISUAL_LEAN` (Lean DOM + Screenshot)**: Initial level used for instructions explicitly tagged with `(visual)`. Useful when you need visual validation but do not need text content.
+6. **`VISUAL` (Full DOM + Screenshot)**: Maximum context. Sends the full `STANDARD` DOM alongside a Base64-encoded screenshot of the page. Used as a last resort for complex canvas, SVG, or shadow-DOM interactions.
+
+---
+
+### 🔄 How Escalation Works
+
+The LLM is a conscious participant in the execution loop. If it receives a lean context (e.g., `LEAN` or `AXTREE`) but cannot reliably determine what to do (e.g., it needs full paragraph text to perform an assertion, or visual cues to check color), it does not guess. Instead, it returns `{"status": "ESCALATE"}`. The framework catches this request, raises the context level, and queries the LLM again.
+
+Escalations do **not** consume the test retry budget—they are a normal, highly optimized progression to fetch more data.
+
+---
+
+### 📈 Smart Escalation Jumps
+
+In previous versions, context escalations were strictly sequential (e.g., `AXTREE` ➔ `LEAN` ➔ `STANDARD` ➔ `VISUAL`), which could lead to redundant LLM calls and latency overhead if the model immediately knew it required a screenshot or full text.
+
+To eliminate this overhead, Neodymium AI introduces **Smart Escalation Jumps**. When returning an `ESCALATE` status, the LLM can specify a `"targetContext"` parameter in its response JSON. The runner intercepts this parameter and jumps **directly** to the requested context level on the next attempt, saving valuable time and API cost.
+
+> [!NOTE]
+> **Example Smart Escalation Request from LLM:**
+> ```json
+> {
+>   "success": false,
+>   "status": "ESCALATE",
+>   "targetContext": "VISUAL",
+>   "reasoning": "This step asks to verify the logo has a red border, which requires visual context.",
+>   "actions": []
+> }
+> ```
+> Under the hood, if the parser extracts a target context level that is higher than the current context level, `AiAgent` skips sequential progression and escalates straight to that target level.
+
+---
+
+### 🧠 Playbook-Based Memory Persistence (Historical Learning)
+
+While escalating on the fly is powerful, repeating the same escalation loop on subsequent test runs is wasteful. Neodymium AI solves this via **Playbook-Based Memory Persistence**.
+
+Whenever an escalation is successfully resolved (either during a normal generation run or a self-healing session), the successfully resolved context level is stored directly in the playbook JSON cache file under the `healedContextLevel` field of the step:
+
+```json
+{
+  "prompt": "Verify the logo is red (visual)",
+  "actions": [],
+  "healedContextLevel": "VISUAL"
+}
+```
+
+On subsequent test execution runs or self-healing attempts, the framework loads this value from the JSON cache and starts execution **directly at the resolved context level** (`playbookStep.getHealedContextLevel()`).
+
+#### ⚡ Key Benefits:
+- **Zero Sequential Overhead:** Predictable context failures are completely avoided on future replays.
+- **Dynamic Adaptability:** If the page structure changes and a healed locator fails, the agent will dynamically self-heal, re-determine the needed context, and persist the new level back to the playbook.
 
 ---
 
@@ -414,9 +467,11 @@ Shows how many LLM calls were made at each context level. This directly reflects
 | Level | What's sent to the LLM | Typical use |
 |---|---|---|
 | **HINT** | Zero DOM — only the inline hint locator | Fastest, cheapest. Used when instructions contain `(hint: ...)` |
-| **LEAN** | Interactive elements only (buttons, links, inputs, headings) | Default starting level. Handles ~80% of actions |
-| **STANDARD** | LEAN + all visible text content (paragraphs, spans, table cells) | Needed for assertions, text verification, disambiguation |
-| **VISUAL** | STANDARD + Base64 screenshot | Last resort for complex visual layouts |
+| **AXTREE** | Compact accessibility tree structure | Ultra-lean semantic-only outline of interactive elements |
+| **LEAN** | Interactive DOM elements and headings only | Default standard starting level. Handles ~80% of standard user interactions |
+| **STANDARD** | LEAN DOM + all visible text content (paragraphs, list items, table cells) | Needed for text-based assertions, verifications, and link disambiguation |
+| **VISUAL_LEAN** | LEAN DOM + Base64 screenshot | Initial visual check. Efficient visual context when text content is not needed |
+| **VISUAL** | STANDARD DOM + Base64 screenshot | Maximum multimodal context. Handles complex canvas/SVG, layout, and visual validations |
 
 **Reading the example:** 12 LEAN + 4 STANDARD + 2 VISUAL = 18 total LLM calls. The majority resolved at LEAN (cheapest), with some needing more context.
 
