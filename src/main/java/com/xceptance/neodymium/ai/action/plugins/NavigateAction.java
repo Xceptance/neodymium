@@ -26,15 +26,18 @@
 package com.xceptance.neodymium.ai.action.plugins;
 
 import java.util.List;
+
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import com.codeborne.selenide.AuthenticationType;
 import com.codeborne.selenide.BasicAuthCredentials;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.util.Neodymium;
 
 public class NavigateAction implements AiActionPlugin {
     private static final Logger LOG = LoggerFactory.getLogger(NavigateAction.class);
@@ -44,25 +47,47 @@ public class NavigateAction implements AiActionPlugin {
 
     @Override
     public List<Action> parseDirectInstruction(String instruction) {
-        String urlPatternStr = com.xceptance.neodymium.util.Neodymium.configuration().getProperty("neodymium.ai.agent.pattern.url", "(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(\\.)*$");
+        String authPatternStr = com.xceptance.neodymium.util.Neodymium.configuration().getProperty("neodymium.ai.agent.pattern.urlWithBasicAuth", "(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(?:\\s+.*?\\b(?:with|using)?\\s*basic\\s+auth\\s+(?:username|user)\\s+['\"](?<username>.*?)['\"]\\s+(?:and\\s+)?(?:password|pass)\\s+['\"](?<password>.*?)['\"]).*$");
+        java.util.regex.Matcher authMatcher = java.util.regex.Pattern.compile(authPatternStr).matcher(instruction.strip());
+        String urlPatternStr = com.xceptance.neodymium.util.Neodymium.configuration()
+            .getProperty("neodymium.ai.agent.pattern.url",
+                "(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(\\.)*$");
         java.util.regex.Matcher urlMatcher = java.util.regex.Pattern.compile(urlPatternStr).matcher(instruction.strip());
-        if (urlMatcher.find()) {
+
+        // let's check if our prompt needs this or if we have it inside our config
+        if (authMatcher.find() || (urlMatcher.find() && Neodymium.configuration().basicAuthUsername() != null)) {
+            if (authMatcher.find() ) {
+                final String url = authMatcher.group(1);
+                final String username = authMatcher.group("username");
+                final String password = authMatcher.group("password");
+                if (username != null && password != null)
+                {
+                    LOG.debug("▶️ [EXEC] Direct navigation to: {}", url);
+                    return List.of(new Action("NAVIGATE", url, List.of(username, password), "Navigate to " + url + " with basic auth (user: " + username
+                                                                                            + ", pass: " + password + ")"));
+                }
+            }
+            else
+            {
+                final String url = urlMatcher.group(1);
+                final String username = Neodymium.configuration().basicAuthUsername();
+                final String password = Neodymium.configuration().basicAuthPassword();
+                if (username != null && password != null)
+                {
+                    LOG.debug("▶️ [EXEC] Direct navigation to: {}", url);
+                    return List.of(new Action("NAVIGATE", url, List.of(username, password), "Navigate to " + url + " with basic auth (user: " + username
+                                                                                            + ", pass: " + password + ")"));
+                }
+            }
+        }
+
+        if (urlMatcher.find())
+        {
             final String url = urlMatcher.group(1);
             LOG.debug("▶️ [EXEC] Direct navigation to: {}", url);
             return List.of(new Action("NAVIGATE", null, url, "Navigate to " + url));
         }
 
-        String authPatternStr = com.xceptance.neodymium.util.Neodymium.configuration().getProperty("neodymium.ai.agent.pattern.urlWithBasicAuth", "(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(?:\\s+.*?\\b(?:with|using)?\\s*basic\\s+auth\\s+(?:username|user)\\s+['\"](?<username>.*?)['\"]\\s+(?:and\\s+)?(?:password|pass)\\s+['\"](?<password>.*?)['\"]).*$");
-        java.util.regex.Matcher authMatcher = java.util.regex.Pattern.compile(authPatternStr).matcher(instruction.strip());
-        if (authMatcher.find()) {
-            final String url = authMatcher.group(1);
-            final String username = authMatcher.group("username");
-            final String password = authMatcher.group("password");
-            if (username != null && password != null) {
-                LOG.debug("▶️ [EXEC] Direct navigation to: {}", url);
-                return List.of(new Action("NAVIGATE", url, List.of(username, password), "Navigate to " + url + " with basic auth (user: " + username + ", pass: " + password + ")"));
-            }
-        }
         return null;
     }
 
