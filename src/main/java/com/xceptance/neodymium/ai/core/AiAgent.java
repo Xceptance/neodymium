@@ -967,7 +967,7 @@ public class AiAgent {
                                 LOG.info("    ✅ Visual match succeeded (Hamming distance {} <= 15). Proceeding with recorded actions.", distance);
                                 if (!step.getActions().isEmpty())
                                 {
-                                    pageAnalyzer.getPageContext(ContextLevel.STANDARD);
+                                    pageAnalyzer.getPageContext(ContextLevel.LEAN);
                                 }
                                 executionLog.logInfo("Replaying actions from playbook (visual match succeeded, Hamming distance: " + distance + ").");
                                 llmClient.getAiStats().recordReplay();
@@ -992,7 +992,7 @@ public class AiAgent {
                     }
                     else
                     {
-                        pageAnalyzer.getPageContext(ContextLevel.STANDARD);
+                        pageAnalyzer.getPageContext(ContextLevel.LEAN);
 
                         executionLog.logInfo("Replaying actions from playbook.");
                         llmClient.getAiStats().recordReplay();
