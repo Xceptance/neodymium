@@ -49,6 +49,11 @@ public class AiStats
     private final AtomicLong outputTokens = new AtomicLong();
     private final AtomicInteger callCount = new AtomicInteger();
 
+    // === PESAP Token usage ===
+    private final AtomicLong pesapInputTokens = new AtomicLong();
+    private final AtomicLong pesapOutputTokens = new AtomicLong();
+    private final AtomicInteger pesapCallCount = new AtomicInteger();
+
     // === Context level distribution ===
     private final EnumMap<ContextLevel, AtomicInteger> contextLevelCounts = new EnumMap<>(ContextLevel.class);
 
@@ -80,19 +85,43 @@ public class AiStats
     // ──────────────────────────────────────────────────────────────
 
     /**
-     * Records a single LLM call's token usage.
+     * Records standard (AGENT/GENERATOR) token usage.
      *
      * @param input  number of input (prompt) tokens
      * @param output number of output (completion) tokens
      */
     public void record(final long input, final long output)
     {
-        inputTokens.addAndGet(input);
-        outputTokens.addAndGet(output);
-        callCount.incrementAndGet();
+        record(LlmMode.AGENT, input, output);
+    }
 
-        LOG.debug("   📊 Tokens: {} in → {} out  (call #{})",
-                input, output, callCount.get());
+    /**
+     * Records token usage based on the specified operational mode.
+     *
+     * @param mode   the operational mode under which the call was made
+     * @param input  number of input (prompt) tokens
+     * @param output number of output (completion) tokens
+     */
+    public void record(final LlmMode mode, final long input, final long output)
+    {
+        if (mode == LlmMode.PESAP)
+        {
+            pesapInputTokens.addAndGet(input);
+            pesapOutputTokens.addAndGet(output);
+            pesapCallCount.incrementAndGet();
+
+            LOG.debug("   📊 PESAP Tokens: {} in → {} out  (call #{})",
+                    input, output, pesapCallCount.get());
+        }
+        else
+        {
+            inputTokens.addAndGet(input);
+            outputTokens.addAndGet(output);
+            callCount.incrementAndGet();
+
+            LOG.debug("   📊 Tokens: {} in → {} out  (call #{})",
+                    input, output, callCount.get());
+        }
     }
 
     public long getInputTokens()
@@ -108,6 +137,46 @@ public class AiStats
     public long getTotalTokens()
     {
         return inputTokens.get() + outputTokens.get();
+    }
+
+    public long getPesapInputTokens()
+    {
+        return pesapInputTokens.get();
+    }
+
+    public long getPesapOutputTokens()
+    {
+        return pesapOutputTokens.get();
+    }
+
+    public long getPesapTotalTokens()
+    {
+        return pesapInputTokens.get() + pesapOutputTokens.get();
+    }
+
+    public int getPesapCallCount()
+    {
+        return pesapCallCount.get();
+    }
+
+    public long getOverallInputTokens()
+    {
+        return inputTokens.get() + pesapInputTokens.get();
+    }
+
+    public long getOverallOutputTokens()
+    {
+        return outputTokens.get() + pesapOutputTokens.get();
+    }
+
+    public long getOverallTotalTokens()
+    {
+        return getTotalTokens() + getPesapTotalTokens();
+    }
+
+    public int getOverallCallCount()
+    {
+        return callCount.get() + pesapCallCount.get();
     }
 
     public int getCallCount()
@@ -264,15 +333,36 @@ public class AiStats
      */
     public void logSummary()
     {
-        final long totalIn = inputTokens.get();
-        final long totalOut = outputTokens.get();
-        final long total = totalIn + totalOut;
+        final long standardIn = inputTokens.get();
+        final long standardOut = outputTokens.get();
+        final long standardTotal = standardIn + standardOut;
+
+        final long pesapIn = pesapInputTokens.get();
+        final long pesapOut = pesapOutputTokens.get();
+        final long pesapTotal = pesapIn + pesapOut;
+
+        final long overallIn = standardIn + pesapIn;
+        final long overallOut = standardOut + pesapOut;
+        final long overallTotal = standardTotal + pesapTotal;
 
         LOG.debug("======== 📊 AI Execution Statistics ========");
-        LOG.debug("   LLM calls:        {}", callCount.get());
-        LOG.debug("   Input tokens:     {}", totalIn);
-        LOG.debug("   Output tokens:    {}", totalOut);
-        LOG.debug("   Total tokens:     {}", total);
+        LOG.debug("   LLM Standard:");
+        LOG.debug("     Calls:          {}", callCount.get());
+        LOG.debug("     Input tokens:   {}", standardIn);
+        LOG.debug("     Output tokens:  {}", standardOut);
+        LOG.debug("     Total tokens:   {}", standardTotal);
+        LOG.debug("   ---");
+        LOG.debug("   PESAP (Pre-Execution Static Analysis):");
+        LOG.debug("     Calls:          {}", pesapCallCount.get());
+        LOG.debug("     Input tokens:   {}", pesapIn);
+        LOG.debug("     Output tokens:  {}", pesapOut);
+        LOG.debug("     Total tokens:   {}", pesapTotal);
+        LOG.debug("   ---");
+        LOG.debug("   Total:");
+        LOG.debug("     Calls:          {}", callCount.get() + pesapCallCount.get());
+        LOG.debug("     Input tokens:   {}", overallIn);
+        LOG.debug("     Output tokens:  {}", overallOut);
+        LOG.debug("     Total tokens:   {}", overallTotal);
         LOG.debug("   ---");
         LOG.debug("   Context Levels:");
         for (final ContextLevel level : ContextLevel.values())
@@ -300,10 +390,24 @@ public class AiStats
         final StringBuilder sb = new StringBuilder();
 
         sb.append("Token Usage Summary\n\n");
-        sb.append(String.format("Input Tokens:  %d%n", inputTokens.get()));
-        sb.append(String.format("Output Tokens: %d%n", outputTokens.get()));
-        sb.append(String.format("Total Tokens:  %d%n", getTotalTokens()));
-        sb.append(String.format("Total Calls:   %d%n", callCount.get()));
+        
+        sb.append("LLM Standard:\n");
+        sb.append(String.format("  Input Tokens:  %d%n", inputTokens.get()));
+        sb.append(String.format("  Output Tokens: %d%n", outputTokens.get()));
+        sb.append(String.format("  Total Tokens:  %d%n", getTotalTokens()));
+        sb.append(String.format("  Total Calls:   %d%n", callCount.get()));
+        
+        sb.append("\nPESAP:\n");
+        sb.append(String.format("  Input Tokens:  %d%n", pesapInputTokens.get()));
+        sb.append(String.format("  Output Tokens: %d%n", pesapOutputTokens.get()));
+        sb.append(String.format("  Total Tokens:  %d%n", getPesapTotalTokens()));
+        sb.append(String.format("  Total Calls:   %d%n", pesapCallCount.get()));
+
+        sb.append("\nTotal:\n");
+        sb.append(String.format("  Input Tokens:  %d%n", getOverallInputTokens()));
+        sb.append(String.format("  Output Tokens: %d%n", getOverallOutputTokens()));
+        sb.append(String.format("  Total Tokens:  %d%n", getOverallTotalTokens()));
+        sb.append(String.format("  Total Calls:   %d%n", getOverallCallCount()));
 
         sb.append("\nExecution Statistics\n\n");
         sb.append("Context Levels Used:\n");
@@ -330,6 +434,10 @@ public class AiStats
         inputTokens.set(0);
         outputTokens.set(0);
         callCount.set(0);
+
+        pesapInputTokens.set(0);
+        pesapOutputTokens.set(0);
+        pesapCallCount.set(0);
 
         for (final AtomicInteger counter : contextLevelCounts.values())
         {

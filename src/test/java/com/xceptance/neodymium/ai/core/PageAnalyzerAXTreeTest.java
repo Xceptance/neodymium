@@ -164,9 +164,9 @@ class PageAnalyzerAXTreeTest
         assertTrue(result.contains("Page URL: https://example.com/test-axtree"));
         assertTrue(result.contains("Page Title: Mock AXTree Test Page"));
         assertTrue(result.contains("=== Accessibility Tree (AXTree) ==="));
-        assertTrue(result.contains("[button] data-neo-ref='xc_ax_ref_1001' name='Click Me'"));
-        assertTrue(result.contains("[link] data-neo-ref='xc_ax_ref_1002' name='Go to Google' value='https://google.com'"));
-        assertTrue(result.contains("[textbox] data-neo-ref='xc_ax_ref_1003' name='Username' required='true' placeholder='Enter Username'"));
+        assertTrue(result.contains("<button data-neo-ref=\"xc_ax_ref_1001\" name=\"Click Me\"/>"));
+        assertTrue(result.contains("<link data-neo-ref=\"xc_ax_ref_1002\" name=\"Go to Google\" value=\"https://google.com\"/>"));
+        assertTrue(result.contains("<textbox data-neo-ref=\"xc_ax_ref_1003\" name=\"Username\" required=\"true\" placeholder=\"Enter Username\"/>"));
         
         // Assert that Node 4 with generic/ignored role is correctly filtered out
         assertTrue(!result.contains("generic") && !result.contains("some container"));
@@ -300,9 +300,9 @@ class PageAnalyzerAXTreeTest
         final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
 
         assertNotNull(result);
-        assertTrue(result.contains("[button] data-neo-ref='xc_ref_search' name='Search Icon'"));
-        assertTrue(result.contains("[button] data-neo-ref='xc_ref_cart' name='Cart Icon: 1'"));
-        assertTrue(result.contains("[button] data-neo-ref='xc_ref_flag' name='🇩🇪'"));
+        assertTrue(result.contains("<button data-neo-ref=\"xc_ref_search\" name=\"Search Icon\"/>"));
+        assertTrue(result.contains("<button data-neo-ref=\"xc_ref_cart\" name=\"Cart Icon: 1\"/>"));
+        assertTrue(result.contains("<button data-neo-ref=\"xc_ref_flag\" name=\"🇩🇪\"/>"));
     }
 }
 

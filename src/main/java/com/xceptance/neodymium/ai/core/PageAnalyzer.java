@@ -601,7 +601,6 @@ public class PageAnalyzer
 
                     for (final Map<String, Object> el : elements)
                     {
-                        dom.append("  ");
                         formatElement(dom, el);
                     }
                 }
@@ -616,25 +615,31 @@ public class PageAnalyzer
 
                 for (final Map<String, Object> form : forms)
                 {
-                    dom.append(String.format("  [form] id='%s' action='%s' data-neo-ref='%s'\n",
-                                             form.get("id"), form.get("action"), form.get("automationId")));
+                    dom.append("<form");
+                    appendAttribute(dom, "id", form.get("id"));
+                    appendAttribute(dom, "action", form.get("action"));
+                    appendAttribute(dom, "data-neo-ref", form.get("automationId"));
 
                     final List<Map<String, Object>> fields = (List<Map<String, Object>>) form.get("fields");
 
-                    if (fields != null)
+                    if (fields != null && !fields.isEmpty())
                     {
+                        dom.append(">\n");
                         for (final Map<String, Object> field : fields)
                         {
-                            dom.append(String.format(
-                                                 "    [form-field] type='%s' name='%s' id='%s' data-neo-ref='%s'",
-                                                 field.get("type"), field.get("name"), field.get("id"), field.get("automationId")));
-
-                        if (field.containsKey("options"))
-                        {
-                            dom.append(String.format(" options='[%s]'", field.get("options")));
+                            dom.append("<form-field");
+                            appendAttribute(dom, "type", field.get("type"));
+                            appendAttribute(dom, "name", field.get("name"));
+                            appendAttribute(dom, "id", field.get("id"));
+                            appendAttribute(dom, "data-neo-ref", field.get("automationId"));
+                            appendAttribute(dom, "options", field.get("options"));
+                            dom.append("/>\n");
                         }
-                        dom.append("\n");
-                        }
+                        dom.append("</form>\n");
+                    }
+                    else
+                    {
+                        dom.append("/>\n");
                     }
                 }
             }
@@ -693,38 +698,35 @@ public class PageAnalyzer
      */
     private void formatElement(final StringBuilder dom, final Map<String, Object> el)
     {
-        dom.append(String.format("[%s] ", el.get("label")));
+        final String label = el.get("label") != null ? el.get("label").toString() : "element";
+        dom.append("<").append(label);
 
-        appendIfPresent(dom, "id", el.get("id"));
-        appendIfPresent(dom, "name", el.get("name"));
-        appendIfPresent(dom, "type", el.get("type"));
+        appendAttribute(dom, "id", el.get("id"));
+        appendAttribute(dom, "name", el.get("name"));
+        appendAttribute(dom, "type", el.get("type"));
 
         final String text = (String) el.get("text");
-        if (text != null && !text.isEmpty())
-        {
-            dom.append(String.format("text='%s' ", text));
-        }
 
-        appendIfPresent(dom, "parentText", el.get("parentText"));
-        appendIfPresent(dom, "href", el.get("href"));
-        appendIfPresent(dom, "placeholder", el.get("placeholder"));
-        appendIfPresent(dom, "aria-label", el.get("ariaLabel"));
-        appendIfPresent(dom, "pattern", el.get("pattern"));
-        appendIfPresent(dom, "title", el.get("title"));
-        appendIfPresent(dom, "min", el.get("min"));
-        appendIfPresent(dom, "max", el.get("max"));
-        appendIfPresent(dom, "minlength", el.get("minlength"));
-        appendIfPresent(dom, "maxlength", el.get("maxlength"));
-        appendIfPresent(dom, "step", el.get("step"));
-        appendIfPresent(dom, "autocomplete", el.get("autocomplete"));
-        appendIfPresent(dom, "required", el.get("required"));
-        appendIfPresent(dom, "readonly", el.get("readonly"));
-        appendIfPresent(dom, "disabled", el.get("disabled"));
-        appendIfPresent(dom, "multiple", el.get("multiple"));
-        appendIfPresent(dom, "value", el.get("value"));
-        appendIfPresent(dom, "options", el.get("options"));
+        appendAttribute(dom, "parentText", el.get("parentText"));
+        appendAttribute(dom, "href", el.get("href"));
+        appendAttribute(dom, "placeholder", el.get("placeholder"));
+        appendAttribute(dom, "aria-label", el.get("ariaLabel"));
+        appendAttribute(dom, "pattern", el.get("pattern"));
+        appendAttribute(dom, "title", el.get("title"));
+        appendAttribute(dom, "min", el.get("min"));
+        appendAttribute(dom, "max", el.get("max"));
+        appendAttribute(dom, "minlength", el.get("minlength"));
+        appendAttribute(dom, "maxlength", el.get("maxlength"));
+        appendAttribute(dom, "step", el.get("step"));
+        appendAttribute(dom, "autocomplete", el.get("autocomplete"));
+        appendAttribute(dom, "required", el.get("required"));
+        appendAttribute(dom, "readonly", el.get("readonly"));
+        appendAttribute(dom, "disabled", el.get("disabled"));
+        appendAttribute(dom, "multiple", el.get("multiple"));
+        appendAttribute(dom, "value", el.get("value"));
+        appendAttribute(dom, "options", el.get("options"));
 
-        appendIfPresent(dom, "data-neo-ref", el.get("automationId"));
+        appendAttribute(dom, "data-neo-ref", el.get("automationId"));
 
         final Object selector = el.get("selector");
         if (selector != null && !selector.toString().isEmpty())
@@ -744,11 +746,18 @@ public class PageAnalyzer
 
             if (!isSimpleId && !isWishyWashy)
             {
-                dom.append(String.format("selector='%s' ", selStr));
+                appendAttribute(dom, "selector", selStr);
             }
         }
 
-        dom.append("\n");
+        if (text != null && !text.isEmpty())
+        {
+            dom.append(">").append(escapeHtmlText(text)).append("</").append(label).append(">\n");
+        }
+        else
+        {
+            dom.append("/>\n");
+        }
     }
 
     /**
@@ -759,12 +768,44 @@ public class PageAnalyzer
         return str.replaceAll("([!\"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])", "\\\\$1");
     }
 
-    private void appendIfPresent(final StringBuilder dom, final String key, final Object value)
+    /**
+     * Appends an attribute name and its escaped double-quoted value to the dom builder if present.
+     */
+    private void appendAttribute(final StringBuilder dom, final String key, final Object value)
     {
         if (value != null && !value.toString().isEmpty())
         {
-            dom.append(String.format("%s='%s' ", key, value));
+            dom.append(" ").append(key).append("=\"").append(escapeAttributeValue(value.toString())).append("\"");
         }
+    }
+
+    /**
+     * Escapes special XML/HTML entity characters in attribute values.
+     */
+    private String escapeAttributeValue(final String val)
+    {
+        if (val == null)
+        {
+            return "";
+        }
+        return val.replace("&", "&amp;")
+                  .replace("\"", "&quot;")
+                  .replace("<", "&lt;")
+                  .replace(">", "&gt;");
+    }
+
+    /**
+     * Escapes standard HTML entity characters in text content.
+     */
+    private String escapeHtmlText(final String val)
+    {
+        if (val == null)
+        {
+            return "";
+        }
+        return val.replace("&", "&amp;")
+                  .replace("<", "&lt;")
+                  .replace(">", "&gt;");
     }
 
     @SuppressWarnings("unchecked")
@@ -1047,45 +1088,46 @@ public class PageAnalyzer
             value = cleanAccessibleText(value);
 
             final StringBuilder nodeText = new StringBuilder();
-            nodeText.append("  [").append(role).append("] ");
+            nodeText.append("<").append(role);
             if (!refId.isEmpty())
             {
-                nodeText.append("data-neo-ref='").append(refId).append("' ");
+                nodeText.append(" data-neo-ref=\"").append(escapeAttributeValue(refId)).append("\"");
             }
             if (!name.isEmpty())
             {
-                nodeText.append("name='").append(name.replaceAll("'", "\\\\'")).append("' ");
+                nodeText.append(" name=\"").append(escapeAttributeValue(name)).append("\"");
             }
             if (!value.isEmpty())
             {
-                nodeText.append("value='").append(value.replaceAll("'", "\\\\'")).append("' ");
+                nodeText.append(" value=\"").append(escapeAttributeValue(value)).append("\"");
             }
             if (disabled)
             {
-                nodeText.append("disabled='true' ");
+                nodeText.append(" disabled=\"true\"");
             }
             if (checked)
             {
-                nodeText.append("checked='true' ");
+                nodeText.append(" checked=\"true\"");
             }
             if (required)
             {
-                nodeText.append("required='true' ");
+                nodeText.append(" required=\"true\"");
             }
             if (readonly)
             {
-                nodeText.append("readonly='true' ");
+                nodeText.append(" readonly=\"true\"");
             }
             if (!placeholder.isEmpty())
             {
-                nodeText.append("placeholder='").append(placeholder.replaceAll("'", "\\\\'")).append("' ");
+                nodeText.append(" placeholder=\"").append(escapeAttributeValue(placeholder)).append("\"");
             }
             if (!autocomplete.isEmpty())
             {
-                nodeText.append("autocomplete='").append(autocomplete).append("' ");
+                nodeText.append(" autocomplete=\"").append(escapeAttributeValue(autocomplete)).append("\"");
             }
+            nodeText.append("/>\n");
 
-            dom.append(nodeText.toString().trim()).append("\n");
+            dom.append(nodeText.toString());
         }
 
         return dom.toString();

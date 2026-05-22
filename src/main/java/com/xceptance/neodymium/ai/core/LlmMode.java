@@ -42,5 +42,9 @@ public enum LlmMode
     AGENT,
 
     /** Exploratory generator mode for {@code @NeodymiumTestGenerator} prompt generation. */
-    GENERATOR
+    GENERATOR,
+
+    /** Pre-Execution Static Analysis Phase (PESAP) classification and linting mode. */
+    PESAP
 }
+
