@@ -8,8 +8,11 @@
         {
           "type": "JAVA_METHOD",
           "target": "executeDummy1",
-          "value": "",
+          "value": [
+            ""
+          ],
           "description": "Call executeDummy1 with param ",
+          "elementContext": {},
           "replay": ""
         }
       ]
@@ -21,8 +24,11 @@
         {
           "type": "JAVA_METHOD",
           "target": "executeDummy2",
-          "value": "",
+          "value": [
+            ""
+          ],
           "description": "Call executeDummy2 with param ",
+          "elementContext": {},
           "replay": ""
         }
       ]
@@ -34,8 +40,11 @@
         {
           "type": "JAVA_METHOD",
           "target": "executeDummy3",
-          "value": "",
+          "value": [
+            ""
+          ],
           "description": "Call executeDummy3 with param ",
+          "elementContext": {},
           "replay": ""
         }
       ]

@@ -7,8 +7,11 @@
       "actions": [
         {
           "type": "NAVIGATE",
-          "value": "https://www.xceptance.com/en/",
+          "value": [
+            "https://www.xceptance.com/en/"
+          ],
           "description": "Navigate to https://www.xceptance.com/en/",
+          "elementContext": {},
           "replay": ""
         }
       ]
@@ -19,8 +22,11 @@
       "actions": [
         {
           "type": "NAVIGATE",
-          "value": "https://www.xceptance.com/de/",
+          "value": [
+            "https://www.xceptance.com/de/"
+          ],
           "description": "Navigate to https://www.xceptance.com/de/",
+          "elementContext": {},
           "replay": ""
         }
       ]

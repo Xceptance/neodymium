@@ -10,7 +10,9 @@
         {
           "type": "NAVIGATE",
           "target": null,
-          "value": "https://example.com",
+          "value": [
+            "https://example.com"
+          ],
           "description": "Navigate to example page",
           "elementDetails": "",
           "elementContext": {}
