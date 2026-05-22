@@ -1299,7 +1299,7 @@ public class AiAgent {
                           AiAgentPrompts.PESAP_CLASSIFY_PROMPT, userPrompt);
                 
                 final long startTime = System.currentTimeMillis();
-                final String response = llmClient.chat(AiAgentPrompts.PESAP_CLASSIFY_PROMPT, userPrompt);
+                final String response = llmClient.chat(LlmMode.PESAP, AiAgentPrompts.PESAP_CLASSIFY_PROMPT, userPrompt);
                 final long duration = System.currentTimeMillis() - startTime;
                 
                 LOG.debug("📊 [PESAP Classification] Call took {} ms", duration);
@@ -1368,7 +1368,7 @@ public class AiAgent {
                           AiAgentPrompts.PESAP_LINTER_PROMPT, userPrompt);
                 
                 final long startTime = System.currentTimeMillis();
-                final String response = llmClient.chat(AiAgentPrompts.PESAP_LINTER_PROMPT, userPrompt);
+                final String response = llmClient.chat(LlmMode.PESAP, AiAgentPrompts.PESAP_LINTER_PROMPT, userPrompt);
                 final long duration = System.currentTimeMillis() - startTime;
                 
                 LOG.debug("📊 [PESAP Linter] Call took {} ms", duration);

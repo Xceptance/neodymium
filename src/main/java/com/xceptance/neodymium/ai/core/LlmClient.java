@@ -61,6 +61,8 @@ public class LlmClient {
     private final AiStats aiStats;
     private final LlmMode mode;
 
+    private final ThreadLocal<LlmMode> currentCallMode = ThreadLocal.withInitial(() -> null);
+
     /**
      * Creates a new LLM client in {@link LlmMode#AGENT} mode.
      * Uses {@code neodymium.ai.temperature} (deterministic, for {@code @NeodymiumTest}).
@@ -124,21 +126,43 @@ public class LlmClient {
     }
 
     /**
-     * Sends a text-only chat message.
+     * Sends a text-only chat message using the default LLM mode.
      *
      * @param systemPrompt instructions for the LLM
      * @param userPrompt   the user's request
      * @return the LLM's text response
      */
-    public String chat(final String systemPrompt, final String userPrompt) {
+    public String chat(final String systemPrompt, final String userPrompt)
+    {
         LOG.debug("   💬 Sending text-only prompt ({} chars)", userPrompt.length());
-        UserMessage userMessage = UserMessage.from(userPrompt);
+        final UserMessage userMessage = UserMessage.from(userPrompt);
 
         return chat(systemPrompt, userMessage);
     }
 
     /**
-     * Sends a multimodal chat message with a screenshot.
+     * Sends a text-only chat message with an explicit operational mode.
+     *
+     * @param callMode     the operational mode to record the usage under
+     * @param systemPrompt instructions for the LLM
+     * @param userPrompt   the user's request
+     * @return the LLM's text response
+     */
+    public String chat(final LlmMode callMode, final String systemPrompt, final String userPrompt)
+    {
+        currentCallMode.set(callMode);
+        try
+        {
+            return chat(systemPrompt, userPrompt);
+        }
+        finally
+        {
+            currentCallMode.remove();
+        }
+    }
+
+    /**
+     * Sends a multimodal chat message with a screenshot using the default LLM mode.
      *
      * @param systemPrompt     instructions for the LLM
      * @param userPrompt       the user's request
@@ -146,7 +170,8 @@ public class LlmClient {
      * @return the LLM's text response
      */
     public String chatWithScreenshot(final String systemPrompt, final String userPrompt,
-            final String base64Screenshot) {
+            final String base64Screenshot)
+    {
         LOG.debug("   💬 Sending multimodal prompt ({} chars + screenshot)", userPrompt.length());
         // Build a multimodal user message with text + image
         final UserMessage userMessage = UserMessage.from(
@@ -154,6 +179,29 @@ public class LlmClient {
                 ImageContent.from(base64Screenshot, "image/png"));
 
         return chat(systemPrompt, userMessage);
+    }
+
+    /**
+     * Sends a multimodal chat message with a screenshot with an explicit operational mode.
+     *
+     * @param callMode         the operational mode to record the usage under
+     * @param systemPrompt     instructions for the LLM
+     * @param userPrompt       the user's request
+     * @param base64Screenshot Base64-encoded PNG screenshot
+     * @return the LLM's text response
+     */
+    public String chatWithScreenshot(final LlmMode callMode, final String systemPrompt, final String userPrompt,
+            final String base64Screenshot)
+    {
+        currentCallMode.set(callMode);
+        try
+        {
+            return chatWithScreenshot(systemPrompt, userPrompt, base64Screenshot);
+        }
+        finally
+        {
+            currentCallMode.remove();
+        }
     }
 
     /**
@@ -165,7 +213,8 @@ public class LlmClient {
      *                     the user's message
      * @return the LLM's text response
      */
-    private String chat(final String systemPrompt, UserMessage userMessage) {
+    private String chat(final String systemPrompt, final UserMessage userMessage)
+    {
         final List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.from(systemPrompt));
         messages.add(userMessage);
@@ -181,12 +230,15 @@ public class LlmClient {
     /**
      * Records token usage from the response into the stats tracker.
      */
-    private void recordTokenUsage(final ChatResponse response) {
+    private void recordTokenUsage(final ChatResponse response)
+    {
         final TokenUsage usage = response.tokenUsage();
-        if (usage != null) {
+        if (usage != null)
+        {
             final long input = usage.inputTokenCount() != null ? usage.inputTokenCount() : 0;
             final long output = usage.outputTokenCount() != null ? usage.outputTokenCount() : 0;
-            aiStats.record(input, output);
+            final LlmMode activeMode = currentCallMode.get() != null ? currentCallMode.get() : this.mode;
+            aiStats.record(activeMode, input, output);
         }
     }
 }
