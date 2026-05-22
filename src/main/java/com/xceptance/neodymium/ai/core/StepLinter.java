@@ -67,6 +67,19 @@ public final class StepLinter
      */
     public static List<String> lint(final List<String> steps)
     {
+        return lint(steps, null, null);
+    }
+
+    /**
+     * Lints a list of natural language instructions with optional file name and line numbers, and returns descriptive warnings for any issues found.
+     * 
+     * @param steps       the list of natural language steps to check
+     * @param lineNumbers the line numbers corresponding to each step
+     * @param sourceFile  the path of the source file
+     * @return a list of descriptive warning messages
+     */
+    public static List<String> lint(final List<String> steps, final List<Integer> lineNumbers, final String sourceFile)
+    {
         final List<String> warnings = new ArrayList<>();
         if (steps == null)
         {
@@ -84,6 +97,17 @@ public final class StepLinter
             final String trimmed = step.trim();
             final int stepNumber = i + 1;
 
+            final String stepLabel;
+            final Integer currentLineNumber = (lineNumbers != null && i < lineNumbers.size()) ? lineNumbers.get(i) : null;
+            if (currentLineNumber != null)
+            {
+                stepLabel = "Step " + stepNumber + " (line " + currentLineNumber + ")";
+            }
+            else
+            {
+                stepLabel = "Step " + stepNumber;
+            }
+
             // 1. Check Lacking Element Targeting
             if (TARGETING_PATTERN.matcher(trimmed).find())
             {
@@ -91,8 +115,8 @@ public final class StepLinter
                 if (!trimmed.contains("(hint:") && !trimmed.contains("(selector:"))
                 {
                     warnings.add(String.format(
-                        "Step %d: \"%s\" - Lacks element targeting. Suggest specifying a label/text (e.g., 'click the \"Login\" button') or adding an inline locator hint `(hint: selector)`.",
-                        stepNumber, step
+                        "%s: \"%s\" - Lacks element targeting. Suggest specifying a label/text (e.g., 'click the \"Login\" button') or adding an inline locator hint `(hint: selector)`.",
+                        stepLabel, step
                     ));
                 }
             }
@@ -104,8 +128,8 @@ public final class StepLinter
                 if (!trimmed.contains("\"") && !trimmed.contains("'") && !trimmed.matches(".*\\d+.*"))
                 {
                     warnings.add(String.format(
-                        "Step %d: \"%s\" - Missing explicit value to input. Suggest specifying the value in quotes (e.g., 'type \"user@example.com\" into the email field').",
-                        stepNumber, step
+                        "%s: \"%s\" - Missing explicit value to input. Suggest specifying the value in quotes (e.g., 'type \"user@example.com\" into the email field').",
+                        stepLabel, step
                     ));
                 }
             }
@@ -114,8 +138,8 @@ public final class StepLinter
             if (VAGUE_PATTERN.matcher(trimmed).find() || VAGUE_SOMETHING_PATTERN.matcher(trimmed).find())
             {
                 warnings.add(String.format(
-                    "Step %d: \"%s\" - Vague action description. Suggest using precise assertion text or structural validation descriptions (e.g., 'verify that the page header contains \"Dashboard\"').",
-                    stepNumber, step
+                    "%s: \"%s\" - Vague action description. Suggest using precise assertion text or structural validation descriptions (e.g., 'verify that the page header contains \"Dashboard\"').",
+                    stepLabel, step
                 ));
             }
         }

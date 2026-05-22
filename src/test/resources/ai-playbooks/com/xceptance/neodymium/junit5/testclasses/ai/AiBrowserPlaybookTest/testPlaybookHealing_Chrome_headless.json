@@ -3,7 +3,8 @@
   "steps": [
     {
       "actions": [],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
     }
   ]
 }

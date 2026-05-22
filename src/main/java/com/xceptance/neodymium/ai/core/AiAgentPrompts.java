@@ -127,6 +127,21 @@ public final class AiAgentPrompts
     public static final String SYSTEM_HEALING_PROMPT = loadPrompt("system-healing-prompt.txt");
 
     /**
+     * System prompt for PESAP (Pre-Execution Static Analysis Phase) classification.
+     */
+    public static final String PESAP_SYSTEM_PROMPT = loadPrompt("pesap-system-prompt.txt");
+
+    /**
+     * System prompt for PESAP (Pre-Execution Static Analysis Phase) classification phase only.
+     */
+    public static final String PESAP_CLASSIFY_PROMPT = loadPrompt("pesap-classify-prompt.txt");
+
+    /**
+     * System prompt for PESAP (Pre-Execution Static Analysis Phase) semantic linter phase only.
+     */
+    public static final String PESAP_LINTER_PROMPT = loadPrompt("pesap-linter-prompt.txt");
+
+    /**
      * Prompt template for playbook healing.
      */
     public static final String HEALING_PROMPT_TEMPLATE = loadPrompt("healing-prompt-template.txt");

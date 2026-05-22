@@ -107,4 +107,24 @@ class StepLinterTest
         assertTrue(warnings.get(1).contains("Vague action description"));
         assertTrue(warnings.get(2).contains("Vague action description"));
     }
+
+    @Test
+    void lint_withContext_returnsWarningsWithLineNumbers()
+    {
+        final List<String> steps = new ArrayList<>();
+        steps.add("Click the button.");
+        steps.add("Hover the link");
+        steps.add("Click it");
+
+        final List<Integer> lineNumbers = new ArrayList<>();
+        lineNumbers.add(10);
+        lineNumbers.add(20);
+        lineNumbers.add(30);
+
+        final List<String> warnings = StepLinter.lint(steps, lineNumbers, "TC_TEST_001.yaml");
+        assertEquals(3, warnings.size());
+        assertTrue(warnings.get(0).contains("Step 1 (line 10)"));
+        assertTrue(warnings.get(1).contains("Step 2 (line 20)"));
+        assertTrue(warnings.get(2).contains("Step 3 (line 30)"));
+    }
 }

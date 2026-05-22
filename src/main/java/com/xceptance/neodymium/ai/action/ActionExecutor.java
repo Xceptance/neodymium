@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import com.codeborne.selenide.CheckResult;
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
@@ -60,7 +61,10 @@ public class ActionExecutor {
     private final java.util.Set<String> actionLogs = new java.util.HashSet<>();
     
 
-    private static final Duration ELEMENT_TIMEOUT = Duration.ofSeconds(10);
+    private final Duration getElementTimeout()
+    {
+        return Duration.ofMillis(Configuration.timeout);
+    }
 
     /**
      * The instance of the currently running Test Class
@@ -224,7 +228,7 @@ public class ActionExecutor {
                 if (element.exists())
                 {
                     logDebug("   🔍 Resolved using Strategy 0: Neodymium Automation ID [{}]", target);
-                    return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                    return element.should(Condition.exist, getElementTimeout());
                 }
                 else
                 {
@@ -249,7 +253,7 @@ public class ActionExecutor {
                 SelenideElement element = $(Selectors.shadowCss(shadowTarget, shadowHosts));
                 if (element.exists()) {
                     logDebug("   🔍 Resolved using Strategy 0.5: Shadow DOM selector [{}]", target);
-                    return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                    return element.should(Condition.exist, getElementTimeout());
                 } else {
                     logDebug("   ❌ Strategy 0.5 failed: Shadow DOM selector [{}]", target);
                 }
@@ -269,7 +273,7 @@ public class ActionExecutor {
             SelenideElement element = $(By.cssSelector(target));
             if (element.exists()) {
                 logDebug("   🔍 Resolved using Strategy 1: CSS selector [{}]", target);
-                return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                return element.should(Condition.exist, getElementTimeout());
             } else {
                 logDebug("   ❌ Strategy 1 failed: CSS selector [{}]", target);
             }
@@ -283,7 +287,7 @@ public class ActionExecutor {
                 SelenideElement element = $(Selectors.shadowDeepCss(target));
                 if (element.exists()) {
                     logDebug("   🔍 Resolved using Strategy 1.5: Deep Shadow DOM CSS selector [{}]", target);
-                    return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                    return element.should(Condition.exist, getElementTimeout());
                 } else {
                     logDebug("   ❌ Strategy 1.5 failed: Deep Shadow DOM selector [{}]", target);
                 }
@@ -299,7 +303,7 @@ public class ActionExecutor {
                     SelenideElement element = $x(target);
                     if (element.exists()) {
                         logDebug("   🔍 Resolved using Strategy 2: XPath [{}]", target);
-                        return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                        return element.should(Condition.exist, getElementTimeout());
                     } else {
                         logDebug("   ❌ Strategy 2 failed: XPath [{}]", target);
                     }
@@ -316,7 +320,7 @@ public class ActionExecutor {
             SelenideElement element = $(By.linkText(target));
             if (element.exists()) {
                 logDebug("   🔍 Resolved using Strategy 3: Link text [{}]", target);
-                return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                return element.should(Condition.exist, getElementTimeout());
             }
             logDebug("   ❌ Strategy 3 failed: Link text [{}]", target);
 
@@ -325,7 +329,7 @@ public class ActionExecutor {
                 element = $(By.linkText(elementText));
                 if (element.exists()) {
                     logDebug("   🔍 Resolved using Strategy 3: Link text [{}]", elementText);
-                    return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                    return element.should(Condition.exist, getElementTimeout());
                 }
                 logDebug("   ❌ Strategy 3 failed: Link text [{}]", elementText);
             }
@@ -344,7 +348,7 @@ public class ActionExecutor {
             SelenideElement element = $x(xpath);
             if (element.exists()) {
                 logDebug("   🔍 Resolved using Strategy 4: Text content XPath [{}]", xpath);
-                return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                return element.should(Condition.exist, getElementTimeout());
             }
             logDebug("   ❌ Strategy 4 failed: Text content XPath [{}]", xpath);
 
@@ -358,7 +362,7 @@ public class ActionExecutor {
                 element = $x(xpath);
                 if (element.exists()) {
                     logDebug("   🔍 Resolved using Strategy 4: Text content XPath [{}]", xpath);
-                    return element.should(Condition.exist, ELEMENT_TIMEOUT);
+                    return element.should(Condition.exist, getElementTimeout());
                 }
                 logDebug("   ❌ Strategy 4 failed: Text content XPath [{}]", xpath);
             }

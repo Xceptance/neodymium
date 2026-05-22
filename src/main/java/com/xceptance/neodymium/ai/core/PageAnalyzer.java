@@ -845,8 +845,9 @@ public class PageAnalyzer
             }
             else if (nameObj != null)
             {
-                role = String.valueOf(nameObj);
+                name = String.valueOf(nameObj);
             }
+            name = cleanAccessibleText(name);
 
             // Parse value
             final Object valueObj = node.get("value");
@@ -859,6 +860,7 @@ public class PageAnalyzer
             {
                 value = String.valueOf(valueObj);
             }
+            value = cleanAccessibleText(value);
 
             // Parse properties
             final List<Map<String, Object>> properties = (List<Map<String, Object>>) node.get("properties");
@@ -926,8 +928,39 @@ public class PageAnalyzer
                     {
                         final String functionDeclaration = """
                             function() {
+                                function getFallbackLabel(el) {
+                                    var iconEl = el.querySelector('[class*="bi-"], [class*="fa-"], [class*="icon-"]');
+                                    var elClassStr = typeof el.className === 'string' ? el.className : (el.getAttribute && el.getAttribute('class') || '');
+                                    if (!iconEl && (elClassStr.includes('bi-') || elClassStr.includes('fa-') || elClassStr.includes('icon-'))) {
+                                        iconEl = el;
+                                    }
+                                    if (iconEl) {
+                                        var iconClassStr = typeof iconEl.className === 'string' ? iconEl.className : (iconEl.getAttribute && iconEl.getAttribute('class') || '');
+                                        var classes = iconClassStr.split(/\\s+/);
+                                        for (var i = 0; i < classes.length; i++) {
+                                            var cls = classes[i];
+                                            var match = cls.match(/^(?:bi|fa|icon)-([a-z0-9-]+)$/);
+                                            if (match && match[1]) {
+                                                var iconName = match[1];
+                                                iconName = iconName.replace(/\\d+$/, '');
+                                                iconName = iconName.replace(/-(?:fill|outline|short|large|small)$/, '');
+                                                iconName = iconName.replace(/-/g, ' ');
+                                                return iconName.replace(/\\b\\w/g, function(l) { return l.toUpperCase(); }) + ' Icon';
+                                            }
+                                        }
+                                    }
+                                    var fallback = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || el.getAttribute('alt') || el.getAttribute('name') || el.id || '';
+                                    if (fallback) {
+                                        fallback = fallback.replace(/[-_]/g, ' ').trim();
+                                        return fallback.replace(/\\b\\w/g, function(l) { return l.toUpperCase(); });
+                                    }
+                                    return '';
+                                }
                                 if (this.hasAttribute('data-neo-ref')) {
-                                    return this.getAttribute('data-neo-ref');
+                                    return {
+                                        refId: this.getAttribute('data-neo-ref'),
+                                        fallbackLabel: getFallbackLabel(this)
+                                    };
                                 }
                                 var usedIds = {};
                                 document.querySelectorAll('[data-neo-ref]').forEach(function(el) {
@@ -959,7 +992,10 @@ public class PageAnalyzer
                                     candidate = base + '_' + suffix;
                                 }
                                 this.setAttribute('data-neo-ref', candidate);
-                                return candidate;
+                                return {
+                                    refId: candidate,
+                                    fallbackLabel: getFallbackLabel(this)
+                                };
                             }
                             """;
 
@@ -973,7 +1009,31 @@ public class PageAnalyzer
                         if (callResult != null && callResult.containsKey("result"))
                         {
                             final Map<String, Object> resultVal = (Map<String, Object>) callResult.get("result");
-                            refId = String.valueOf(resultVal.get("value"));
+                            if (resultVal != null && resultVal.containsKey("value"))
+                            {
+                                final Object stampedValueObj = resultVal.get("value");
+                                if (stampedValueObj instanceof final Map<?, ?> resultMap)
+                                {
+                                    refId = String.valueOf(resultMap.get("refId"));
+                                    final String fallbackLabel = String.valueOf(resultMap.get("fallbackLabel"));
+                                    if (fallbackLabel != null && !fallbackLabel.isEmpty() && !"null".equals(fallbackLabel))
+                                    {
+                                        final String cleanName = name == null ? "" : name.replace('\u00a0', ' ').strip().replaceAll("\\s+", " ");
+                                        if (cleanName.isEmpty())
+                                        {
+                                            name = fallbackLabel;
+                                        }
+                                        else if (cleanName.matches("^\\d+$"))
+                                        {
+                                            name = fallbackLabel + ": " + cleanName;
+                                        }
+                                    }
+                                }
+                                else if (stampedValueObj != null)
+                                {
+                                    refId = String.valueOf(stampedValueObj);
+                                }
+                            }
                         }
                     }
                 }
@@ -982,6 +1042,9 @@ public class PageAnalyzer
             {
                 LOG.debug("Failed to resolve or stamp node with backendNodeId {}: {}", backendDOMNodeId, e.getMessage());
             }
+
+            name = cleanAccessibleText(name);
+            value = cleanAccessibleText(value);
 
             final StringBuilder nodeText = new StringBuilder();
             nodeText.append("  [").append(role).append("] ");
@@ -1026,5 +1089,24 @@ public class PageAnalyzer
         }
 
         return dom.toString();
+    }
+
+    private static String cleanAccessibleText(final String text)
+    {
+        if (text == null)
+        {
+            return "";
+        }
+
+        final StringBuilder sb = new StringBuilder();
+        text.codePoints().forEach((final int cp) -> {
+            final int type = Character.getType(cp);
+            if (type != Character.PRIVATE_USE && type != Character.FORMAT && type != Character.CONTROL)
+            {
+                sb.appendCodePoint(cp);
+            }
+        });
+
+        return sb.toString().replace('\u00a0', ' ').strip().replaceAll("\\s+", " ");
     }
 }

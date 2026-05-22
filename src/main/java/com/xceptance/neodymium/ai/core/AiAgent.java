@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -54,6 +55,8 @@ import com.xceptance.neodymium.util.SelenideAddons;
 import com.xceptance.neodymium.ai.util.ScreenshotHasher;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
@@ -108,6 +111,33 @@ public class AiAgent {
 
     private static final Pattern BUG_TAG_PATTERN = Pattern.compile("(?i)\\(bug(?:\\s*:\\s*([^)]+))?\\)");
 
+    private static final Pattern OPTIONAL_TAG_PATTERN = Pattern.compile("(?i)\\((optional|soft)\\)");
+
+    private static final Pattern TIMEOUT_TAG_PATTERN = Pattern.compile("(?i)\\(timeout\\s*:\\s*(\\d+)(ms|s)?\\)");
+
+    private static final List<Pattern> STRIP_PATTERNS = List.of(
+        BUG_TAG_PATTERN,
+        OPTIONAL_TAG_PATTERN,
+        TIMEOUT_TAG_PATTERN
+    );
+
+    private final List<ContextLevel> pesapPredictions = new ArrayList<>();
+
+    // AI-generated: Gemini 2.5 Pro
+    public static String stripAllTags(final String step)
+    {
+        if (step == null)
+        {
+            return null;
+        }
+        String stripped = step;
+        for (final Pattern pattern : STRIP_PATTERNS)
+        {
+            stripped = pattern.matcher(stripped).replaceAll("");
+        }
+        return stripped.replaceAll("\\s+", " ").trim();
+    }
+
     /**
      * Constructs a new AiAgent.
      *
@@ -159,7 +189,14 @@ public class AiAgent {
         executionLog = new AiDiscussionLogger(instructions);
 
         LOG.debug("======== 🚀 AI Agent: Processing instructions ========");
-        LOG.debug("SUT Context:\n{}", sutContext);
+        if (sutContext == null)
+        {
+            LOG.debug("SUT Context: none");
+        }
+        else
+        {
+            LOG.debug("SUT Context:\n{}", sutContext);
+        }
 
         this.hudPromptChanged = false;
         this.hudSaveExit = false;
@@ -168,17 +205,6 @@ public class AiAgent {
         {
             final List<String> stepsList = new ArrayList<>(Arrays.asList(splitInstructions(instructions)));
             LOG.debug("Split into {} step(s)", stepsList.size());
-
-            // Run the semantic linter and print warnings if any step is suboptimal
-            final List<String> lintWarnings = StepLinter.lint(stepsList);
-            if (!lintWarnings.isEmpty())
-            {
-                LOG.warn("⚠️ AI Instructions Semantic Linter Warnings found:");
-                for (final String warning : lintWarnings)
-                {
-                    LOG.warn("    - {}", warning);
-                }
-            }
 
             final String sourceFileVal;
             if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.sourceFile"))
@@ -220,8 +246,70 @@ public class AiAgent {
             {
                 stepLines.add(null);
             }
-
             Neodymium.initializePlaybook();
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            boolean needsPesap = false;
+            if (playbook != null)
+            {
+                if (playbook.isRecording())
+                {
+                    needsPesap = true;
+                }
+                else
+                {
+                    for (int idx = 0; idx < stepsList.size(); idx++)
+                    {
+                        if (idx >= playbook.getSteps().size())
+                        {
+                            needsPesap = true;
+                            break;
+                        }
+                        final PlaybookStep pbStep = playbook.getSteps().get(idx);
+                        if (pbStep.getHealedContextLevel() == null)
+                        {
+                            needsPesap = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                needsPesap = true;
+            }
+
+            this.pesapPredictions.clear();
+            boolean pesapEnabledVal = config.pesapEnabled();
+            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.enabled"))
+            {
+                pesapEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.enabled", pesapEnabledVal);
+            }
+            final boolean pesapEnabled = pesapEnabledVal;
+            if (pesapEnabled && needsPesap)
+            {
+                runPesap(stepsList, stepLines, sourceFileVal);
+            }
+            else
+            {
+                // Run local offline semantic linter as fallback
+                final List<String> lintWarnings = StepLinter.lint(stepsList, stepLines, sourceFileVal);
+                if (!lintWarnings.isEmpty())
+                {
+                    if (sourceFileVal != null)
+                    {
+                        LOG.warn("⚠️ AI Instructions Semantic Linter Warnings in {}:", new java.io.File(sourceFileVal).getName());
+                    }
+                    else
+                    {
+                        LOG.warn("⚠️ AI Instructions Semantic Linter Warnings");
+                    }
+                    for (final String warning : lintWarnings)
+                    {
+                        LOG.warn("    - {}", warning);
+                    }
+                }
+            }
+
             final boolean isInteractive = config.aiInteractive();
             final List<String> performedInstructions = new ArrayList<>();
             boolean abortedDueToExpectedFailure = false;
@@ -275,10 +363,9 @@ public class AiAgent {
                 final String stepUnresolved = stepsList.get(i);
                 final String step = AiBrowser.resolveTestDataToPrompt(stepUnresolved);
 
-                // Extract and strip expected failure tags
+                // Extract expected failure tags
                 boolean expectedFailure = false;
                 String bugId = null;
-                String strippedStep = step;
                 final Matcher bugMatcher = BUG_TAG_PATTERN.matcher(step);
                 if (bugMatcher.find())
                 {
@@ -288,8 +375,35 @@ public class AiAgent {
                     {
                         bugId = bugId.trim();
                     }
-                    strippedStep = bugMatcher.replaceAll("").replaceAll("\\s+", " ").trim();
                 }
+
+                // Extract optional step tags
+                boolean optionalStep = false;
+                final Matcher optionalMatcher = OPTIONAL_TAG_PATTERN.matcher(step);
+                if (optionalMatcher.find())
+                {
+                    optionalStep = true;
+                }
+
+                // Extract custom timeout tags
+                Long customTimeoutMs = null;
+                final Matcher timeoutMatcher = TIMEOUT_TAG_PATTERN.matcher(step);
+                if (timeoutMatcher.find())
+                {
+                    final long value = Long.parseLong(timeoutMatcher.group(1));
+                    final String unit = timeoutMatcher.group(2);
+                    if (unit != null && unit.equalsIgnoreCase("s"))
+                    {
+                        customTimeoutMs = value * 1000;
+                    }
+                    else
+                    {
+                        customTimeoutMs = value;
+                    }
+                }
+
+                // Fully strip ALL registered tags beautifully via stripAllTags static helper
+                final String strippedStep = stripAllTags(step);
 
                 boolean isReplay = false;
                 final Playbook playbookForCheck = Neodymium.getAiPlaybook();
@@ -344,7 +458,7 @@ public class AiAgent {
                     {
                         futureInstructions.add(stepsList.get(j));
                     }
-                    executeStep(strippedStep, expectedFailure, bugId, performedInstructions, stepUnresolved, futureInstructions, currentLineNumber, sourceFileVal);
+                    executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs, performedInstructions, stepUnresolved, futureInstructions, currentLineNumber, sourceFileVal);
                     performedInstructions.add(stepUnresolved);
                 }
                 catch (final HudActionException e)
@@ -404,15 +518,21 @@ public class AiAgent {
      * During interactive mode, it displays the failure in the HUD and blocks
      * until the user resolves it.
      *
+     * @param stepIndex             the index of the current step
      * @param instruction           the resolved test instruction to execute
-     * @param performedInstructions list of already executed instructions for HUD
-     *                              state
+     * @param expectedFailure       whether this step is expected to fail
+     * @param bugId                 the bug ID if expected to fail
+     * @param optionalStep          whether this is an optional or soft step
+     * @param customTimeoutMs       a custom timeout override for Selenide execution
+     * @param performedInstructions list of already executed instructions for HUD state
      * @param unresolvedInstruction the original unresolved instruction string
      * @param futureInstructions    list of remaining instructions for HUD state
-     * @throws HudActionException if the user triggers a control-flow change via the
-     *                            HUD
+     * @param currentLineNumber     the line number in the source file
+     * @param sourceFile            the path to the source file
+     * @throws HudActionException if the user triggers a control-flow change via the HUD
      */
-    private void executeStep(final String instruction, final boolean expectedFailure, final String bugId,
+    private void executeStep(final int stepIndex, final String instruction, final boolean expectedFailure, final String bugId,
+            final boolean optionalStep, final Long customTimeoutMs,
             final List<String> performedInstructions,
             final String unresolvedInstruction,
             final List<String> futureInstructions,
@@ -458,7 +578,7 @@ public class AiAgent {
 
                     // Try to resolve the required actions (from playbook cache, direct plugins, or
                     // LLM)
-                    final List<Action> actions = getStepActions(instruction, playbook, expectedFailure, bugId, accumulatedActions);
+                    final List<Action> actions = getStepActions(stepIndex, instruction, playbook, expectedFailure, bugId, accumulatedActions);
 
                     if (isInteractive)
                     {
@@ -492,8 +612,23 @@ public class AiAgent {
                         waitForHudAction(true);
                     }
 
-                    // Execute the approved actions via Selenium/WebDriver
-                    actionExecutor.executeAll(actions);
+                    // Execute the approved actions via Selenium/WebDriver, applying timeout isolation
+                    final long originalTimeout = com.codeborne.selenide.Configuration.timeout;
+                    if (customTimeoutMs != null)
+                    {
+                        com.codeborne.selenide.Configuration.timeout = customTimeoutMs;
+                    }
+                    try
+                    {
+                        actionExecutor.executeAll(actions);
+                    }
+                    finally
+                    {
+                        if (customTimeoutMs != null)
+                        {
+                            com.codeborne.selenide.Configuration.timeout = originalTimeout;
+                        }
+                    }
 
                     // Accumulate executed actions
                     accumulatedActions.addAll(actions);
@@ -523,6 +658,21 @@ public class AiAgent {
             }
             catch (final ActionExecutionException e)
             {
+                if (optionalStep)
+                {
+                    LOG.warn("    ⚠️ Optional/Soft step failed: {}. Bypassing failure due to optional/soft tag.", e.getMessage());
+                    executionLog.logWarning("Optional step failed: " + e.getMessage() + ". Bypassing failure.");
+                    final PlaybookStep step = playbook.getCurrentStep();
+                    if (playbook.isRecording() && step != null)
+                    {
+                        step.setPromptLine(instruction);
+                        step.setReasoning("Optional step execution failed: " + e.getMessage());
+                        playbook.setChanged(true);
+                    }
+                    playbook.nextStep();
+                    return;
+                }
+
                 if (expectedFailure)
                 {
                     handleExpectedFailure(playbook.getCurrentStep(), instruction, unresolvedInstruction, bugId, e, playbook);
@@ -629,6 +779,21 @@ public class AiAgent {
             }
             catch (final AssertionError e)
             {
+                if (optionalStep)
+                {
+                    LOG.warn("    ⚠️ Optional/Soft step assertion failed: {}. Bypassing failure due to optional/soft tag.", e.getMessage());
+                    executionLog.logWarning("Optional step assertion failed: " + e.getMessage() + ". Bypassing failure.");
+                    final PlaybookStep step = playbook.getCurrentStep();
+                    if (playbook.isRecording() && step != null)
+                    {
+                        step.setPromptLine(instruction);
+                        step.setReasoning("Optional step assertion failed: " + e.getMessage());
+                        playbook.setChanged(true);
+                    }
+                    playbook.nextStep();
+                    return;
+                }
+
                 final PlaybookStep step = playbook.getCurrentStep();
                 if (expectedFailure)
                 {
@@ -691,8 +856,8 @@ public class AiAgent {
                         plannedStrs.addAll(futureInstructions);
                     }
                     Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
-                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
-                            "Assertion Failed: " + e.getMessage(), false);
+                                    performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                                    "Assertion Failed: " + e.getMessage(), false);
                     waitForHudAction(false); // Never auto-skip errors
                 }
                 else
@@ -702,6 +867,21 @@ public class AiAgent {
             }
             catch (final Exception e)
             {
+                if (optionalStep)
+                {
+                    LOG.warn("    ⚠️ Optional/Soft step unexpected error: {}. Bypassing failure due to optional/soft tag.", e.getMessage());
+                    executionLog.logWarning("Optional step unexpected error: " + e.getMessage() + ". Bypassing failure.");
+                    final PlaybookStep step = playbook.getCurrentStep();
+                    if (playbook.isRecording() && step != null)
+                    {
+                        step.setPromptLine(instruction);
+                        step.setReasoning("Optional step unexpected error: " + e.getMessage());
+                        playbook.setChanged(true);
+                    }
+                    playbook.nextStep();
+                    return;
+                }
+
                 final PlaybookStep step = playbook.getCurrentStep();
                 if (expectedFailure)
                 {
@@ -940,8 +1120,9 @@ public class AiAgent {
         Neodymium.getOrCreateInteractiveHud().resetHudAction();
     }
 
-    private List<Action> getStepActions(final String instruction, final Playbook playbook,
-            final boolean expectedFailure, final String bugId, final List<Action> accumulatedActions) {
+    private List<Action> getStepActions(final int stepIndex, final String instruction, final Playbook playbook,
+            final boolean expectedFailure, final String bugId, final List<Action> accumulatedActions)
+    {
         List<Action> actions = new ArrayList<Action>();
         PlaybookStep step = playbook.getCurrentStep();
         boolean visualMatchSucceeded = false;
@@ -1044,7 +1225,7 @@ public class AiAgent {
         if (requiresLlm) {
             // Intent extracted, but it requires the LLM to process it fully (or actions
             // empty)
-            actions = getActionsFromLLM(instruction, step, playbook, requiresScreenshot, expectedFailure, bugId, accumulatedActions);
+            actions = getActionsFromLLM(stepIndex, instruction, step, playbook, requiresScreenshot, expectedFailure, bugId, accumulatedActions);
         } else {
             // Simple action that can be executed directly, or local replay comparison
             // succeeded
@@ -1057,6 +1238,262 @@ public class AiAgent {
         }
 
         return actions;
+    }
+
+    // AI-generated: Gemini 2.5 Pro
+    private void runPesap(final List<String> stepsList, final List<Integer> stepLines, final String sourceFileVal)
+    {
+        if (stepsList.isEmpty())
+        {
+            return;
+        }
+
+        boolean classifyEnabledVal = config.pesapClassifyEnabled();
+        if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.classify.enabled"))
+        {
+            classifyEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.classify.enabled", classifyEnabledVal);
+        }
+        final boolean classifyEnabled = classifyEnabledVal;
+
+        boolean linterEnabledVal = config.pesapLinterEnabled();
+        if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.linter.enabled"))
+        {
+            linterEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.linter.enabled", linterEnabledVal);
+        }
+        final boolean linterEnabled = linterEnabledVal;
+
+        if (!classifyEnabled && !linterEnabled)
+        {
+            return;
+        }
+
+        if (sourceFileVal != null)
+        {
+            LOG.info("🤖 Starting Pre-Execution Static Analysis Phase (PESAP) for {}...", new File(sourceFileVal).getName());
+        }
+        else
+        {
+            LOG.info("🤖 Starting Pre-Execution Static Analysis Phase (PESAP)...");
+        }
+
+        try
+        {
+            final StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < stepsList.size(); i++)
+            {
+                final String resolved = AiBrowser.resolveTestDataToPrompt(stepsList.get(i));
+                sb.append(i).append(": ").append(stripAllTags(resolved)).append("\n");
+            }
+            final String userPrompt = sb.toString();
+
+            pesapPredictions.clear();
+            for (int i = 0; i < stepsList.size(); i++)
+            {
+                pesapPredictions.add(null);
+            }
+
+            // 1. Context Level Classification Phase
+            if (classifyEnabled)
+            {
+                LOG.debug("💬 [PESAP Classification] Sending prompt:\nSystem Prompt:\n{}\nUser Prompt:\n{}", 
+                          AiAgentPrompts.PESAP_CLASSIFY_PROMPT, userPrompt);
+                
+                final long startTime = System.currentTimeMillis();
+                final String response = llmClient.chat(AiAgentPrompts.PESAP_CLASSIFY_PROMPT, userPrompt);
+                final long duration = System.currentTimeMillis() - startTime;
+                
+                LOG.debug("📊 [PESAP Classification] Call took {} ms", duration);
+                LOG.debug("💬 [PESAP Classification] Response:\n{}", response);
+
+                try
+                {
+                    final JsonObject responseObj = JsonParser.parseString(response).getAsJsonObject();
+                    if (responseObj != null)
+                    {
+                        final JsonElement predictionsElement = responseObj.get("predictions");
+                        if (predictionsElement != null && predictionsElement.isJsonObject())
+                        {
+                            final JsonObject predictionsObj = predictionsElement.getAsJsonObject();
+                            for (final Entry<String, JsonElement> entry : predictionsObj.entrySet())
+                            {
+                                try
+                                {
+                                    final int stepIndex = Integer.parseInt(entry.getKey());
+                                    if (stepIndex >= 0 && stepIndex < stepsList.size())
+                                    {
+                                        final String levelStr = entry.getValue().getAsString();
+                                        if (levelStr != null)
+                                        {
+                                            try
+                                            {
+                                                final ContextLevel level = ContextLevel.valueOf(levelStr.toUpperCase().trim());
+                                                pesapPredictions.set(stepIndex, level);
+                                                
+                                                final Integer lineNum = (stepLines != null && stepIndex < stepLines.size()) ? stepLines.get(stepIndex) : null;
+                                                if (lineNum != null)
+                                                {
+                                                    LOG.debug("   🔮 Step {} (line {}) -> PESAP Predicted ContextLevel: {}", stepIndex + 1, lineNum, level);
+                                                }
+                                                else
+                                                {
+                                                    LOG.debug("   🔮 Step {} -> PESAP Predicted ContextLevel: {}", stepIndex + 1, level);
+                                                }
+                                            }
+                                            catch (final Exception e)
+                                            {
+                                                LOG.warn("   ⚠️ Invalid context level predicted by PESAP: {}", levelStr);
+                                            }
+                                        }
+                                    }
+                                }
+                                catch (final NumberFormatException e)
+                                {
+                                    LOG.warn("   ⚠️ Invalid step index in PESAP predictions: {}", entry.getKey());
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOG.warn("⚠️ PESAP classification JSON parsing failed (possibly due to LLM response truncation). Attempting regex recovery for partial predictions...");
+                    performRegexRecovery(response, stepsList, stepLines);
+                }
+            }
+
+            // 2. Semantic Linting Phase
+            if (linterEnabled)
+            {
+                LOG.debug("💬 [PESAP Linter] Sending prompt:\nSystem Prompt:\n{}\nUser Prompt:\n{}", 
+                          AiAgentPrompts.PESAP_LINTER_PROMPT, userPrompt);
+                
+                final long startTime = System.currentTimeMillis();
+                final String response = llmClient.chat(AiAgentPrompts.PESAP_LINTER_PROMPT, userPrompt);
+                final long duration = System.currentTimeMillis() - startTime;
+                
+                LOG.debug("📊 [PESAP Linter] Call took {} ms", duration);
+                LOG.debug("💬 [PESAP Linter] Response:\n{}", response);
+
+                try
+                {
+                    final JsonObject responseObj = JsonParser.parseString(response).getAsJsonObject();
+                    if (responseObj != null)
+                    {
+                        final JsonElement warningsElement = responseObj.get("warnings");
+                        if (warningsElement != null && warningsElement.isJsonObject())
+                        {
+                            final List<String> linterWarnings = new ArrayList<>();
+                            final JsonObject warningsObj = warningsElement.getAsJsonObject();
+                            for (final Entry<String, JsonElement> entry : warningsObj.entrySet())
+                            {
+                                try
+                                {
+                                    final int stepIndex = Integer.parseInt(entry.getKey());
+                                    if (stepIndex >= 0 && stepIndex < stepsList.size())
+                                    {
+                                        final JsonElement val = entry.getValue();
+                                        if (val != null && val.isJsonArray())
+                                        {
+                                            final String step = stepsList.get(stepIndex);
+                                            final int stepNumber = stepIndex + 1;
+                                            final Integer currentLineNumber = (stepLines != null && stepIndex < stepLines.size()) ? stepLines.get(stepIndex) : null;
+
+                                            final String stepLabel;
+                                            if (currentLineNumber != null)
+                                            {
+                                                stepLabel = "Step " + stepNumber + " (line " + currentLineNumber + ")";
+                                            }
+                                            else
+                                            {
+                                                stepLabel = "Step " + stepNumber;
+                                            }
+
+                                            for (final JsonElement warningElem : val.getAsJsonArray())
+                                            {
+                                                linterWarnings.add(String.format("%s: \"%s\" - %s", stepLabel, step, warningElem.getAsString()));
+                                            }
+                                        }
+                                    }
+                                }
+                                catch (final NumberFormatException e)
+                                {
+                                    LOG.warn("   ⚠️ Invalid step index in PESAP warnings: {}", entry.getKey());
+                                }
+                            }
+
+                            if (!linterWarnings.isEmpty())
+                            {
+                                if (sourceFileVal != null)
+                                {
+                                    LOG.warn("⚠️ AI Instructions Semantic Linter Warnings in {}:", new File(sourceFileVal).getName());
+                                }
+                                else
+                                {
+                                    LOG.warn("⚠️ AI Instructions Semantic Linter Warnings");
+                                }
+                                for (final String warning : linterWarnings)
+                                {
+                                    LOG.warn("    - {}", warning);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOG.warn("⚠️ PESAP linter JSON parsing failed (possibly due to LLM response truncation).");
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.error("❌ PESAP execution failed", e);
+        }
+    }
+
+    // AI-generated: Gemini 2.5 Pro
+    private void performRegexRecovery(final String response, final List<String> stepsList, final List<Integer> stepLines)
+    {
+        final Pattern regexPattern = Pattern.compile("\"(\\d+)\"\\s*:\\s*\"(?i)(AXTREE|LEAN|STANDARD|VISUAL_LEAN|VISUAL)\"");
+        final Matcher matcher = regexPattern.matcher(response);
+        int recoveredCount = 0;
+        while (matcher.find())
+        {
+            try
+            {
+                final int stepIndex = Integer.parseInt(matcher.group(1));
+                if (stepIndex >= 0 && stepIndex < stepsList.size())
+                {
+                    final String levelStr = matcher.group(2);
+                    final ContextLevel level = ContextLevel.valueOf(levelStr.toUpperCase().trim());
+                    pesapPredictions.set(stepIndex, level);
+                    recoveredCount++;
+                    
+                    final Integer lineNum = (stepLines != null && stepIndex < stepLines.size()) ? stepLines.get(stepIndex) : null;
+                    if (lineNum != null)
+                    {
+                        LOG.debug("   🔮 [Recovered] Step {} (line {}) -> PESAP Predicted ContextLevel: {}", stepIndex + 1, lineNum, level);
+                    }
+                    else
+                    {
+                        LOG.debug("   🔮 [Recovered] Step {} -> PESAP Predicted ContextLevel: {}", stepIndex + 1, level);
+                    }
+                }
+            }
+            catch (final Exception ex)
+            {
+                // Ignore any invalid matches during recovery
+            }
+        }
+        
+        if (recoveredCount > 0)
+        {
+            LOG.info("   ✅ Successfully recovered {} PESAP step predictions via regex scanner.", recoveredCount);
+        }
+        else
+        {
+            LOG.warn("   ❌ Failed to recover any predictions via regex scanner. Raw response was:\n{}", response);
+        }
     }
 
     /**
@@ -1084,9 +1521,10 @@ public class AiAgent {
         }
     }
 
-    private List<Action> getActionsFromLLM(final String instruction, final PlaybookStep playbookStep,
+    private List<Action> getActionsFromLLM(final int stepIndex, final String instruction, final PlaybookStep playbookStep,
             final Playbook playbook, final boolean requiresScreenshot, final boolean expectedFailure,
-            final String bugId, final List<Action> accumulatedActions) {
+            final String bugId, final List<Action> accumulatedActions)
+    {
         // If we are inside a playbook replay and failed, we have an initial error
         // already.
         String lastError;
@@ -1103,13 +1541,18 @@ public class AiAgent {
         boolean lastWasNoActions = false;
         boolean isRecoveryAttempt = lastError != null;
 
-        // Always start with the default level (typically AXTREE) — no keyword detection, no trigger words.
-        // The LLM tells us when it needs more by failing or returning ESCALATE.
-        // Exception: if this step was previously healed at a higher level, start there.
         ContextLevel contextLevel = playbookStep.getHealedContextLevel();
         if (contextLevel == null)
         {
-            contextLevel = getInitialContextLevel(instruction);
+            if (stepIndex >= 0 && stepIndex < pesapPredictions.size() && pesapPredictions.get(stepIndex) != null)
+            {
+                contextLevel = pesapPredictions.get(stepIndex);
+                LOG.info("    🔮 Using PESAP predicted starting ContextLevel: {}", contextLevel);
+            }
+            else
+            {
+                contextLevel = getInitialContextLevel(instruction);
+            }
         }
         while (true) {
             final String attemptLabel = lastWasNoActions ? "Retry (No Actions) " + noActionsCount

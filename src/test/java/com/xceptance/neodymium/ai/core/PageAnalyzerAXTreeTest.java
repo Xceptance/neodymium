@@ -205,4 +205,104 @@ class PageAnalyzerAXTreeTest
         // and falls back gracefully to an empty DOM representation with just the URL and title.
         assertTrue(!result.contains("=== Accessibility Tree (AXTree) ==="));
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void captureSimplifiedDom_withCdpSupport_resolvesFallbackIconLabelsAndCleansNames()
+    {
+        final Class<?>[] interfaces = new Class<?>[] { WebDriver.class, HasCdp.class };
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            PageAnalyzerAXTreeTest.class.getClassLoader(),
+            interfaces,
+            (proxy, method, args) -> {
+                final String methodName = method.getName();
+                if ("getCurrentUrl".equals(methodName))
+                {
+                    return "https://example.com/test-axtree-icons";
+                }
+                if ("getTitle".equals(methodName))
+                {
+                    return "Mock Icon Page";
+                }
+                if ("executeCdpCommand".equals(methodName))
+                {
+                    final String command = (String) args[0];
+                    final Map<String, Object> params = (Map<String, Object>) args[1];
+
+                    if ("Accessibility.getFullAXTree".equals(command))
+                    {
+                        final List<Map<String, Object>> nodes = new ArrayList<>();
+
+                        // Search Button with private-use icon character
+                        final Map<String, Object> searchBtn = new HashMap<>();
+                        searchBtn.put("ignored", false);
+                        searchBtn.put("backendDOMNodeId", 2001);
+                        searchBtn.put("role", Map.of("value", "button"));
+                        searchBtn.put("name", Map.of("value", "\uf4e1"));
+                        nodes.add(searchBtn);
+
+                        // Cart Button with private-use icon, non-breaking spaces and number
+                        final Map<String, Object> cartBtn = new HashMap<>();
+                        cartBtn.put("ignored", false);
+                        cartBtn.put("backendDOMNodeId", 2002);
+                        cartBtn.put("role", Map.of("value", "button"));
+                        cartBtn.put("name", Map.of("value", "\uf244\u00a0\u00a01"));
+                        nodes.add(cartBtn);
+
+                        // Custom flag button with regional indicator flags (kept)
+                        final Map<String, Object> flagBtn = new HashMap<>();
+                        flagBtn.put("ignored", false);
+                        flagBtn.put("backendDOMNodeId", 2003);
+                        flagBtn.put("role", Map.of("value", "button"));
+                        flagBtn.put("name", Map.of("value", "🇩🇪"));
+                        nodes.add(flagBtn);
+
+                        return Map.of("nodes", nodes);
+                    }
+                    else if ("DOM.resolveNode".equals(command))
+                    {
+                        final Number backendNodeId = (Number) params.get("backendNodeId");
+                        return Map.of("object", Map.of("objectId", "obj-id-" + backendNodeId));
+                    }
+                    else if ("Runtime.callFunctionOn".equals(command))
+                    {
+                        final String objectId = (String) params.get("objectId");
+                        if (objectId.endsWith("2001"))
+                        {
+                            return Map.of("result", Map.of("value", Map.of(
+                                "refId", "xc_ref_search",
+                                "fallbackLabel", "Search Icon"
+                            )));
+                        }
+                        else if (objectId.endsWith("2002"))
+                        {
+                            return Map.of("result", Map.of("value", Map.of(
+                                "refId", "xc_ref_cart",
+                                "fallbackLabel", "Cart Icon"
+                            )));
+                        }
+                        else
+                        {
+                            return Map.of("result", Map.of("value", Map.of(
+                                "refId", "xc_ref_flag",
+                                "fallbackLabel", "Flag Selector"
+                            )));
+                        }
+                    }
+                }
+                return null;
+            }
+        );
+
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final PageAnalyzer analyzer = new PageAnalyzer();
+        final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
+
+        assertNotNull(result);
+        assertTrue(result.contains("[button] data-neo-ref='xc_ref_search' name='Search Icon'"));
+        assertTrue(result.contains("[button] data-neo-ref='xc_ref_cart' name='Cart Icon: 1'"));
+        assertTrue(result.contains("[button] data-neo-ref='xc_ref_flag' name='🇩🇪'"));
+    }
 }
+
