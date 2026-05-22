@@ -185,32 +185,54 @@ public class ActionExecutor {
             throw new ActionExecutionException("Action target is null or empty");
         }
 
-        // Clean up common AI hallucinations for Neodymium IDs
-        if (target.startsWith("#xc_")) {
+        // Clean up common AI target formatting like [data-neo-ref='xc_...'] or [data-neo-ref="xc_..."]
+        if (target.startsWith("[data-neo-ref='") && target.endsWith("']"))
+        {
+            target = target.substring(15, target.length() - 2);
+            logDebug("   ⚠️ Auto-corrected AI target: extracted Neodymium ID [{}] from CSS format", target);
+        }
+        else if (target.startsWith("[data-neo-ref=\"") && target.endsWith("\"]"))
+        {
+            target = target.substring(15, target.length() - 2);
+            logDebug("   ⚠️ Auto-corrected AI target: extracted Neodymium ID [{}] from CSS format", target);
+        }
+
+        if (target.startsWith("#xc_"))
+        {
             target = target.substring(1);
             logDebug("   ⚠️ Auto-corrected AI hallucination: removed '#' from Neodymium ID [{}]", target);
         }
 
         // Clean up common AI hallucinations for Selenium prefixes
-        if (target.toLowerCase().startsWith("xpath=")) {
+        if (target.toLowerCase().startsWith("xpath="))
+        {
             target = target.substring(6);
             logDebug("   ⚠️ Auto-corrected AI hallucination: removed 'xpath=' prefix [{}]", target);
-        } else if (target.toLowerCase().startsWith("css=")) {
+        }
+        else if (target.toLowerCase().startsWith("css="))
+        {
             target = target.substring(4);
             logDebug("   ⚠️ Auto-corrected AI hallucination: removed 'css=' prefix [{}]", target);
         }
 
         // Strategy 0: Direct Match for Neodymium Automation ID
-        if (target.matches("^xc_.*")) {
-            try {
-                SelenideElement element = $(By.cssSelector("[data-neo-ref='" + target + "']"));
-                if (element.exists()) {
+        if (target.startsWith("xc_"))
+        {
+            try
+            {
+                final SelenideElement element = $(By.cssSelector("[data-neo-ref='" + target + "']"));
+                if (element.exists())
+                {
                     logDebug("   🔍 Resolved using Strategy 0: Neodymium Automation ID [{}]", target);
                     return element.should(Condition.exist, ELEMENT_TIMEOUT);
-                } else {
+                }
+                else
+                {
                     logDebug("   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neo-ref='{}']]", target);
                 }
-            } catch (final Exception e) {
+            }
+            catch (final Exception e)
+            {
                 logDebug("   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neo-ref='{}']] with error: {}", target, e.getMessage());
             }
         }
@@ -358,30 +380,51 @@ public class ActionExecutor {
             throw new ActionExecutionException("Action target is null or empty");
         }
 
-        // Clean up common AI hallucinations for Neodymium IDs
-        if (target.startsWith("#xc_")) {
+        // Clean up common AI target formatting like [data-neo-ref='xc_...'] or [data-neo-ref="xc_..."]
+        if (target.startsWith("[data-neo-ref='") && target.endsWith("']"))
+        {
+            target = target.substring(15, target.length() - 2);
+            logDebug("   ⚠️ Auto-corrected AI target: extracted Neodymium ID [{}] from CSS format", target);
+        }
+        else if (target.startsWith("[data-neo-ref=\"") && target.endsWith("\"]"))
+        {
+            target = target.substring(15, target.length() - 2);
+            logDebug("   ⚠️ Auto-corrected AI target: extracted Neodymium ID [{}] from CSS format", target);
+        }
+
+        if (target.startsWith("#xc_"))
+        {
             target = target.substring(1);
             logDebug("   ⚠️ Auto-corrected AI hallucination: removed '#' from Neodymium ID [{}]", target);
         }
 
         // Clean up common AI hallucinations for Selenium prefixes
-        if (target.toLowerCase().startsWith("xpath=")) {
+        if (target.toLowerCase().startsWith("xpath="))
+        {
             target = target.substring(6);
             logDebug("   ⚠️ Auto-corrected AI hallucination: removed 'xpath=' prefix [{}]", target);
-        } else if (target.toLowerCase().startsWith("css=")) {
+        }
+        else if (target.toLowerCase().startsWith("css="))
+        {
             target = target.substring(4);
             logDebug("   ⚠️ Auto-corrected AI hallucination: removed 'css=' prefix [{}]", target);
         }
 
         // Strategy 0: Direct Match for Neodymium Automation ID
-        if (target.matches("^xc_.*")) {
-            try {
-                com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(By.cssSelector("[data-neo-ref='" + target + "']"));
-                if (!elements.isEmpty()) {
+        if (target.startsWith("xc_"))
+        {
+            try
+            {
+                final com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$(By.cssSelector("[data-neo-ref='" + target + "']"));
+                if (!elements.isEmpty())
+                {
                     logDebug("   🔍 Resolved using Strategy 0: Neodymium Automation ID [{}]", target);
                     return elements;
                 }
-            } catch (Exception e) {}
+            }
+            catch (final Exception e)
+            {
+            }
         }
 
         // Strategy 0.5: Try explicit Shadow DOM selector

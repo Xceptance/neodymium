@@ -27,6 +27,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import com.xceptance.neodymium.ai.core.ContextLevel;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -236,6 +238,32 @@ public class ActionParser {
         {
             return false;
         }
+    }
+
+    /**
+     * Extracts the requested target context level from the LLM response if status is ESCALATE.
+     * Returns null if not specified or invalid.
+     *
+     * @param llmResponse raw response from the LLM
+     * @return the requested ContextLevel, or null
+     */
+    public final ContextLevel getTargetContextLevel(final String llmResponse)
+    {
+        try
+        {
+            final String json = extractJson(llmResponse);
+            final JsonObject root = GSON.fromJson(json, JsonObject.class);
+            if (root.has("targetContext"))
+            {
+                final String targetContextStr = root.get("targetContext").getAsString();
+                return ContextLevel.valueOf(targetContextStr.toUpperCase());
+            }
+        }
+        catch (final Exception e)
+        {
+            // Ignore syntax/parsing errors or invalid enum values
+        }
+        return null;
     }
 
     /**

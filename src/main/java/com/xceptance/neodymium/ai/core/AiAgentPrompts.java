@@ -542,7 +542,8 @@ public final class AiAgentPrompts
                 You are receiving MINIMAL context (no DOM elements). This is because the user provided an explicit inline locator hint (e.g., "(hint: #myId)") in the instruction.
 
                 CRITICAL: Use the provided hint to generate the requested action JSON immediately. Do not attempt to verify the element's existence in the DOM (since no DOM is provided). If you cannot fulfill the instruction based on the hint alone, respond with:
-                {"success": false, "status": "ESCALATE", "reasoning": "I need the actual DOM to determine the action", "actions": []}
+                {"success": false, "status": "ESCALATE", "targetContext": "STANDARD", "reasoning": "I need the actual DOM to determine the action", "actions": []}
+                (Set targetContext to AXTREE, LEAN, STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
                 """;
             case AXTREE -> """
 
@@ -551,7 +552,8 @@ public final class AiAgentPrompts
                 This contains links, buttons, inputs, headings, forms, and landmark sections with their resolved accessibility names and states.
 
                 CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you cannot find the requested element, or if you need full plain text content (like paragraph bodies, table cells, or static list item texts) to disambiguate between multiple elements, you MUST immediately respond with:
-                {"success": false, "status": "ESCALATE", "reasoning": "This step requires visual validation or additional plain text context which is not available in AXTREE context", "actions": []}
+                {"success": false, "status": "ESCALATE", "targetContext": "STANDARD", "reasoning": "This step requires standard text context which is not available in AXTREE context", "actions": []}
+                (Set targetContext to LEAN, STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
 
                 Do NOT guess. Do NOT pick an arbitrary element when multiple matches exist. Request escalation instead.
                 """;
@@ -565,7 +567,8 @@ public final class AiAgentPrompts
                 CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you cannot find the requested element, or if you need text content \
                 to disambiguate between multiple similar elements (e.g. multiple 'View Details' links), \
                 or if the instruction requires reading text that is not shown, you MUST immediately respond with:
-                {"success": false, "status": "ESCALATE", "reasoning": "This step requires visual validation or additional text context which is not available in LEAN context", "actions": []}
+                {"success": false, "status": "ESCALATE", "targetContext": "STANDARD", "reasoning": "This step requires visual validation or additional text context which is not available in LEAN context", "actions": []}
+                (Set targetContext to STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
 
                 Do NOT guess. Do NOT pick an arbitrary element when multiple matches exist. \
                 Request escalation instead.
@@ -579,7 +582,7 @@ public final class AiAgentPrompts
 
                 CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you still cannot find the target element or fulfill the instruction, \
                 you MUST immediately respond with:
-                {"success": false, "status": "ESCALATE", "reasoning": "This step requires visual validation which is not available in STANDARD context", "actions": []}
+                {"success": false, "status": "ESCALATE", "targetContext": "VISUAL", "reasoning": "This step requires visual validation which is not available in STANDARD context", "actions": []}
                 to request visual context (a screenshot will be provided on the next attempt).
 
                 Do NOT guess if you are uncertain about which element to target.
@@ -599,7 +602,7 @@ public final class AiAgentPrompts
                 - {"success": false, "done": true, "actions": [], "error": "Visual verification failed: <explanation of what did not match>", "reasoning": "Detailed analysis of why the screenshot does not match the instruction"} if the visual condition is not met.
 
                 This is the maximum available context for this initial tagged step. If you cannot fulfill the instruction (for example, if you need full text context of paragraphs or list items to complete the validation), \
-                respond with {"success": false, "status": "ESCALATE", "reasoning": "This step requires full text context which is not available in VISUAL_LEAN", "actions": []} to escalate to VISUAL.
+                respond with {"success": false, "status": "ESCALATE", "targetContext": "VISUAL", "reasoning": "This step requires full text context which is not available in VISUAL_LEAN", "actions": []} to escalate to VISUAL.
                 """;
 
             case VISUAL -> """

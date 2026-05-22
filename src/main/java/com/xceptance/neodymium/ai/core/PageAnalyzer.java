@@ -950,7 +950,7 @@ public class PageAnalyzer
                                 var type = this.getAttribute('type') || '';
                                 var name = this.getAttribute('name') || this.getAttribute('alt') || '';
                                 var raw = [tag, id, cls, ptag, type, name].join('|');
-                                var base = 'xc_ax_' + djb2(raw);
+                                var base = 'xc_' + djb2(raw);
                                 
                                 var candidate = base;
                                 var suffix = 0;
