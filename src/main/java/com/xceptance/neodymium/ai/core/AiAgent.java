@@ -1188,9 +1188,14 @@ public class AiAgent {
                 }
 
                 // Check if the LLM explicitly requested more context
-                if (actionParser.isEscalateRequested(llmResponse)) {
-                    final ContextLevel escalated = contextLevel.escalate();
-                    if (escalated != null) {
+                if (actionParser.isEscalateRequested(llmResponse))
+                {
+                    final ContextLevel targetLvl = actionParser.getTargetContextLevel(llmResponse);
+                    final ContextLevel escalated = (targetLvl != null && targetLvl.ordinal() > contextLevel.ordinal())
+                            ? targetLvl
+                            : contextLevel.escalate();
+                    if (escalated != null)
+                    {
                         LOG.info("    📈 LLM requested escalation from {} to {}: {}",
                                 contextLevel, escalated, reasoning);
                         executionLog.logInfo("Context escalation: " + contextLevel + " → " + escalated
@@ -1266,16 +1271,18 @@ public class AiAgent {
                     LOG.debug("     {}. {}", actIdx + 1, actions.get(actIdx));
                 }
 
-                if (playbookStep.failed()) {
-                    String msg = "Playbook step healed from failure. Generating new actions.";
+                if (playbookStep.failed())
+                {
+                    final String msg = "Playbook step healed from failure. Generating new actions.";
                     executionLog.logInfo(msg);
                     AllureAddons.printToReport(
                             "Playbook Healed - Prompt: " + instruction + ", Actions count: " + actions.size());
-                    playbook.setChanged(true);
+                }
 
-                    // Record the context level that was needed for healing,
-                    // so future healing attempts can skip predictable failures
+                if (playbookStep.getHealedContextLevel() != contextLevel)
+                {
                     playbookStep.setHealedContextLevel(contextLevel);
+                    playbook.setChanged(true);
                 }
 
                 playbookStep.setActions(actions);

@@ -48,11 +48,11 @@ public class PlaybookStep {
     private transient String lastFailure;
 
     /**
-     * The context level that was needed when this step was last healed.
-     * {@code null} if never healed. Used to skip predictable escalation
-     * failures on subsequent healing attempts.
+     * The context level that was successfully used for this step.
+     * {@code null} if not yet recorded. Used to skip predictable escalation
+     * failures on subsequent runs and healing attempts.
      */
-    private transient ContextLevel healedContextLevel;
+    private ContextLevel healedContextLevel;
 
     public PlaybookStep() {
         this.actions = new ArrayList<Action>();
