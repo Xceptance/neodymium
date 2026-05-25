@@ -34,12 +34,30 @@ By completely replacing Allure with our own native capture framework and introdu
 - `reporting`: Complete deprecation and removal of Allure reporting XML/JSON outputs, replacing them with standardized Aura external file bundles (`target/aura-results/`) and the ability to trigger a static offline report compile step or query automated quality gates.
 - `test-management`: Connect automated test suite runs statefully with the manual test cases backlog.
 
+## Feedback Integration & Priorities
+
+To address feedback across QA, architecture, DevOps, and business stakeholders, the following architectural guardrails and priority levels are integrated into the Aura project roadmap:
+
+### 1. High Priority (Must-Have for MVP)
+- **Non-Blocking Capture & Performance Safeguards (`aura-capture`)**: All file writing, DOM serialization, and network trace collections MUST occur asynchronously or be offloaded to a background thread to prevent introducing execution latency to the test runner.
+- **WebSocket Resiliency (`aura-live-stream`)**: The WebSocket live-stream appender MUST operate via a non-blocking queue and gracefully degrade (with near-zero overhead) if the Aura Server is unreachable or offline.
+- **Robust Re-Indexing Heuristics (`aura-server`)**: If the embedded H2/SQLite database is corrupted or deleted, the server MUST support a complete "zero-data-loss re-indexing trigger" that rebuilds the index from the raw flat files on disk.
+- **CI/CD Storage Scavenger Policy (`aura-server`)**: Implement a declarative scavenger service in the server to auto-purge or downscale raw asset files (screenshots and DOM snapshots) older than `X` days, while retaining historical metadata trends.
+
+### 2. Medium Priority (Should-Have for Hardening)
+- **Annotations Migration Bridging**: Provide a lightweight backward-compatibility adapter or custom listener mapping legacy `io.qameta.allure` annotations (e.g., `@Step`) to native `@TestStep` without requiring immediate complete codebase refactoring.
+- **Multi-Tenant Schema Readiness**: The underlying database schemas (`Runs`, `TestCases`, etc.) MUST include foundational fields for `tenant_id` and `project_id`. While the MVP runs open on `localhost:8080` without authentication, this prevents major relational rewrites for a future hosted SaaS platform.
+
+### 3. Low/Deferred Priority (Nice-to-Have / Post-MVP)
+- **Gemini API Cost & Token Budgeting**: Track and display exact Gemini token usage and estimated costs in the UI. Provide configurable caps or caching to prevent excessive API bills during mass automated test runs.
+
 ## Impact
 
 - **Dependency Clean Up**: Delete all `io.qameta.allure` Maven dependencies from Neodymium's `pom.xml`.
 - **New Subproject**: `aura-server/` (Spring Boot project, Thymeleaf/HTMX UI, H2 database, LangChain4j integration).
 - **Test Automation Integration**: Implement `@TestStep` and the native `AuraCaptureListener` in Neodymium to write standardized JSON results and stream live updates if the Aura Server is online.
 - **Unified Ingestion, Export, & Quality Framework**: Provide documented JSON schemas and endpoint contracts for third-party environments to send or write test data in a standardized manner, along with a static offline compilation engine and automated Quality Gates for CI/CD gates.
+
 
 
 
