@@ -45,7 +45,14 @@ public class ClickAction implements AiActionPlugin {
     @Override
     public void preCheck(Action action, ActionExecutor executor) {
         try {
-            executor.findElement(action).shouldBe(com.codeborne.selenide.Condition.visible);
+            SelenideElement element = executor.findElement(action);
+            // Modern web frameworks tend to hide the actual input field and show a custom box.
+            if ("input".equalsIgnoreCase(element.getTagName()) &&
+                ("checkbox".equalsIgnoreCase(element.getAttribute("type")) || "radio".equalsIgnoreCase(element.getAttribute("type"))) && element.isDisplayed() == false) {
+                element.should(com.codeborne.selenide.Condition.exist);
+            } else {
+                element.shouldBe(com.codeborne.selenide.Condition.visible);
+            }
         } catch (Throwable t) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element not found or not visible for target '%s'", action.getTarget()), t);
         }
@@ -63,7 +70,14 @@ public class ClickAction implements AiActionPlugin {
             final SelenideElement element = executor.findElement(action);
             action.setElementContext(executor.extractElementContext(element));
             executor.scrollIntoView(element);
-            element.click();
+            
+            if ("input".equalsIgnoreCase(element.getTagName()) &&
+                ("checkbox".equalsIgnoreCase(element.getAttribute("type")) || "radio".equalsIgnoreCase(element.getAttribute("type"))) &&
+                !element.isDisplayed()) {
+                com.codeborne.selenide.Selenide.executeJavaScript("arguments[0].click();", element);
+            } else {
+                element.click();
+            }
         } catch (final org.openqa.selenium.ElementClickInterceptedException e) {
             throw new ActionExecutor.ActionExecutionException(String.format("Click intercepted on target '%s' (element: '%s')", action.getTarget(), action.getElementDetails()), e);
         } catch (final org.openqa.selenium.ElementNotInteractableException e) {

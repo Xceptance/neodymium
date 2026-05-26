@@ -44,7 +44,14 @@ public class SelectAction implements AiActionPlugin {
     @Override
     public void preCheck(Action action, ActionExecutor executor) {
         try {
-            executor.findElement(action).shouldBe(com.codeborne.selenide.Condition.visible);
+            SelenideElement element = executor.findElement(action);
+            // Modern web frameworks tend to hide the actual select field and show a custom box.
+
+            if ("select".equalsIgnoreCase(element.getTagName()) && element.isDisplayed() == false) {
+                element.should(com.codeborne.selenide.Condition.exist);
+            } else {
+                element.shouldBe(com.codeborne.selenide.Condition.visible);
+            }
         } catch (Throwable t) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element not found or not visible for target '%s'", action.getTarget()), t);
         }
