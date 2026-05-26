@@ -1,7 +1,7 @@
 # Tasks
 
 ## Component: Aura Server Setup
-- [ ] Initialize Spring Boot 3.x / Java 21 subproject `/aura-server`
+- [ ] Initialize Spring Boot 1.5.x (Spring 4.x) / Java 21 subproject `/aura-server`
 - [ ] Configure zero-dependency H2/SQLite embedded database
 - [ ] Implement JPA entity mappings for `Runs`, `TestCases`, `Steps`, and `VisualBaselines`
 

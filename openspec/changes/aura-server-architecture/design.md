@@ -39,12 +39,13 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
 - **Rationale**: Keeping the intermediate data representation fully open and generic provides maximum **source flexibility** and avoids closing the ecosystem. Any external tool, framework, or developer can **write directly in our defined way** (e.g., standard files on disk) without running the server at all. Aura Server will ingest and display them flawlessly, making Aura a universal test intelligence platform rather than a proprietary silo.
 
 ### 3. Spring Boot + H2 Speed Index Layer
-- **Decision**: Built on **Spring Boot 3.x**, **JDK 21 Virtual Threads**, and **H2/SQLite**. On boot, an `AuraFileIngester` scans the results directory, compares file signatures, and bulk-inserts/updates runs in a lightweight database.
+- **Decision**: Built on **Spring Boot 1.5.x (Spring 4.x)**, **Java 8 standard thread pools**, and **H2/SQLite**. On boot, an `AuraFileIngester` scans the results directory, compares file signatures, and bulk-inserts/updates runs in a lightweight database.
 - **Rationale**: Keeps UI operations (searching, trend graphing, filtering by flakiness) extremely fast. Rebuilding the database takes seconds if files are deleted or modified.
 
 ### 4. Open Centralized Writer API & Live-Stream Event Receiver
 - **Decision**: Aura Server hosts a public, generic HTTP/WebSocket ingestion and event-stream receiver (`/api/v1/ingest` and `/api/v1/stream`). 
   - **Dynamic Ingestion (Someone Else Sends, We Write)**: If an external test runner, CI worker, or custom script runs in a separate environment (where it cannot write directly to the server's local file system), it can POST its run metadata, step JSONs, and screenshot base64 payloads to this API. **Aura Server will act as the centralized writer**, serializing these incoming payloads directly into the standard flat-file directory layout on the host disk as the primary source of truth, while simultaneously updating the in-memory/H2 index.
+  - **Ingestion Compatibility Bridge**: The dynamic ingestion API and ingester pipeline natively support parsing and indexing the structured JSON report produced by the lightweight `quick-test-report` capability (introduced in the `human-readable-test-report` change). This ensures instant Aura integration and backwards-compatibility for existing Neodymium suites running under standard JUnit 4/5 before refactoring to native Aura annotations.
   - **Live Progress**: An `AuraLiveStreamAppender` streams live execution updates during active runs to update the interactive HTMX dashboard in real-time.
 - **Rationale**: This guarantees absolute deployment flexibility. Ecosystem clients have a choice: they can write standard Aura files directly to disk themselves, or they can send the raw data to the server's endpoint and let the server handle disk serialization for them. This keeps the ecosystem 100% open, standard, and accessible from any environment.
 

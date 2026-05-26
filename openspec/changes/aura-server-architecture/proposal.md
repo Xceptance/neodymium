@@ -12,7 +12,7 @@ By completely replacing Allure with our own native capture framework and introdu
 ## What Changes
 
 1. **Allure Elimination**: Completely remove Allure libraries and annotations from Neodymium. Replace them with native Neodymium annotations (e.g. `@TestStep`, `@VisualAssertion`, `@ExpectedFailure`).
-2. **Aura Server (New App)**: Create a lightweight Spring Boot 3.x/Java 21 standalone application. On startup, it scans a configured external results directory to parse and index test run history into a local H2/SQLite database.
+2. **Aura Server (New App)**: Create a lightweight Spring Boot 1.5.x (Spring 4.x)/Java 8 standalone application. On startup, it scans a configured external results directory to parse and index test run history into a local H2/SQLite database.
 3. **Native Capture Listener**: Build a lightweight, native execution listener in Neodymium that captures step lifecycles, intercepts failures, records screenshots, and serializes the state to disk without external logging frameworks.
 4. **Dynamic Ingestion & Open Ingestion API**: Support both direct flat-file disk-writing (for ultimate offline execution) and a standard HTTP ingestion receiver where remote/external test suites (e.g. Cypress, Playwright) can send us data, and Aura Server automatically handles writing it to the open filesystem structure.
 5. **Interactive Control Panel**: A premium, responsive, glassmorphic Thymeleaf dashboard for run statistics, interactive visual regression comparison (swipe sliders with manual baseline approval), and LangChain4j failure diagnostics.
@@ -31,7 +31,7 @@ By completely replacing Allure with our own native capture framework and introdu
 
 ### Modified Capabilities
 
-- `reporting`: Complete deprecation and removal of Allure reporting XML/JSON outputs, replacing them with standardized Aura external file bundles (`target/aura-results/`) and the ability to trigger a static offline report compile step or query automated quality gates.
+- `reporting`: Complete deprecation and removal of Allure reporting XML/JSON outputs, replacing them with standardized Aura external file bundles (`target/aura-results/`) and the ability to trigger a static offline report compile step or query automated quality gates. **Transition Step**: The ingestion pipeline natively supports the structured JSON layout produced by the lightweight `quick-test-report` capability (introduced in the `human-readable-test-report` change), providing instant backward compatibility and a seamless bridge.
 - `test-management`: Connect automated test suite runs statefully with the manual test cases backlog.
 
 ## Feedback Integration & Priorities
@@ -54,7 +54,7 @@ To address feedback across QA, architecture, DevOps, and business stakeholders, 
 ## Impact
 
 - **Dependency Clean Up**: Delete all `io.qameta.allure` Maven dependencies from Neodymium's `pom.xml`.
-- **New Subproject**: `aura-server/` (Spring Boot project, Thymeleaf/HTMX UI, H2 database, LangChain4j integration).
+- **New Subproject**: `aura-server/` (Spring Boot 1.5.x (Spring 4.x) / Java 8 project, Thymeleaf/HTMX UI, H2 database, LangChain4j integration).
 - **Test Automation Integration**: Implement `@TestStep` and the native `AuraCaptureListener` in Neodymium to write standardized JSON results and stream live updates if the Aura Server is online.
 - **Unified Ingestion, Export, & Quality Framework**: Provide documented JSON schemas and endpoint contracts for third-party environments to send or write test data in a standardized manner, along with a static offline compilation engine and automated Quality Gates for CI/CD gates.
 
