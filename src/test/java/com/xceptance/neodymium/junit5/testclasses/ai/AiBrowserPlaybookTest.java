@@ -27,6 +27,19 @@ public class AiBrowserPlaybookTest {
     }
 
     @NeodymiumTest
+    public void testPlaybookSkipReplay() {
+        Neodymium.initializePlaybook();
+        Assertions.assertFalse(Neodymium.getAiPlaybook().isRecording());
+
+        Neodymium.setAiPlaybook(null);
+        Neodymium.getData().put("skipReplay", "true");
+
+        Neodymium.initializePlaybook();
+        Assertions.assertTrue(Neodymium.getAiPlaybook().isRecording());
+    }
+
+
+    @NeodymiumTest
     public void testPlaybookHealing() {
         // Will try to click #does-not-exist found in playbook, fail, retry with LLM, and fail due to invalid key
         Throwable error = org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> {
@@ -118,6 +131,36 @@ public class AiBrowserPlaybookTest {
         Assertions.assertEquals("java executeDummy2()", playbook.getSteps().get(1).getPromptLine());
         Assertions.assertEquals("java executeDummy3()", playbook.getSteps().get(2).getPromptLine());
         Assertions.assertTrue(playbook.isRecording());
+    }
+
+    private int flakyAttempts = 0;
+
+    @NeodymiumTest
+    public void testPlaybookReplaySkipsLLMOnRetryWhenHealingDisabled()
+    {
+        flakyAttempts = 0;
+        injectTestPlaybook("executeFlaky", null, null);
+
+        Neodymium.ai().execute("java executeFlaky()");
+
+        Assertions.assertIterableEquals(Arrays.asList("flakySuccess"), executionOrder);
+        Assertions.assertEquals(2, flakyAttempts);
+
+        final Playbook playbook = Neodymium.getAiPlaybook();
+        Assertions.assertEquals(1, playbook.getSteps().size());
+        Assertions.assertEquals("java executeFlaky()", playbook.getSteps().get(0).getPromptLine());
+        Assertions.assertFalse(playbook.isRecording());
+        Assertions.assertFalse(playbook.getSteps().get(0).failed());
+    }
+
+    public void executeFlaky()
+    {
+        flakyAttempts++;
+        if (flakyAttempts < 2)
+        {
+            throw new AssertionError("Transient failure simulation");
+        }
+        executionOrder.add("flakySuccess");
     }
 
     public void executeDummy1() { executionOrder.add("dummy1"); }

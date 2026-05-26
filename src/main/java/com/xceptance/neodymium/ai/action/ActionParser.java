@@ -27,6 +27,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import com.xceptance.neodymium.ai.core.ContextLevel;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -93,7 +95,7 @@ public class ActionParser {
 
     private List<Action> parseInternal(final String json) throws JsonSyntaxException {
         final JsonObject root = GSON.fromJson(json, JsonObject.class);
-        final JsonArray actionsArray = root.getAsJsonArray("actions");
+        final JsonArray actionsArray = root.getAsJsonArray("a");
 
         if (actionsArray == null || actionsArray.isEmpty()) {
             LOG.warn("No actions found in LLM response");
@@ -129,7 +131,7 @@ public class ActionParser {
         {
             final String json = extractJson(llmResponse);
             final JsonObject root = GSON.fromJson(json, JsonObject.class);
-            return root.has("done") && root.get("done").getAsBoolean();
+            return root.has("d") && root.get("d").getAsBoolean();
         }
         catch (final Exception e)
         {
@@ -146,7 +148,7 @@ public class ActionParser {
         {
             final String json = extractJson(llmResponse);
             final JsonObject root = GSON.fromJson(json, JsonObject.class);
-            return root.has("reasoning") ? root.get("reasoning").getAsString() : "";
+            return root.has("r") ? root.get("r").getAsString() : "";
         }
         catch (final Exception e)
         {
@@ -156,8 +158,8 @@ public class ActionParser {
 
     /**
      * Checks whether the LLM indicated the instruction was successful.
-     * Returns true if the "success" field is true or absent (backwards compatibility).
-     * Returns false if "success" is explicitly set to false.
+     * Returns true if the "s" field is true or absent (backwards compatibility).
+     * Returns false if "s" is explicitly set to false.
      */
     public boolean isSuccess(final String llmResponse)
     {
@@ -165,9 +167,9 @@ public class ActionParser {
         {
             final String json = extractJson(llmResponse);
             final JsonObject root = GSON.fromJson(json, JsonObject.class);
-            if (root.has("success"))
+            if (root.has("s"))
             {
-                return root.get("success").getAsBoolean();
+                return root.get("s").getAsBoolean();
             }
             // Default to true for backwards compatibility
             return true;
@@ -180,7 +182,7 @@ public class ActionParser {
 
     /**
      * Extracts the error message from the LLM response, if present.
-     * The "error" field is set when "success" is false.
+     * The "e" field is set when "s" is false.
      */
     public String getError(final String llmResponse)
     {
@@ -188,7 +190,7 @@ public class ActionParser {
         {
             final String json = extractJson(llmResponse);
             final JsonObject root = GSON.fromJson(json, JsonObject.class);
-            return root.has("error") ? root.get("error").getAsString() : "";
+            return root.has("e") ? root.get("e").getAsString() : "";
         }
         catch (final Exception e)
         {
@@ -205,7 +207,7 @@ public class ActionParser {
         {
             final String json = extractJson(llmResponse);
             final JsonObject root = GSON.fromJson(json, JsonObject.class);
-            return root.has("status") ? root.get("status").getAsString() : "";
+            return root.has("st") ? root.get("st").getAsString() : "";
         }
         catch (final Exception e)
         {
@@ -215,7 +217,7 @@ public class ActionParser {
 
     /**
      * Checks whether the LLM explicitly requested more context data by
-     * returning a {@code "status": "ESCALATE"} field. This signals that
+     * returning a {@code "st": "ESCALATE"} field. This signals that
      * the provided context level is insufficient to fulfill the instruction
      * and the framework should escalate to a richer context level before
      * retrying.
@@ -229,8 +231,8 @@ public class ActionParser {
         {
             final String json = extractJson(llmResponse);
             final JsonObject root = GSON.fromJson(json, JsonObject.class);
-            return root.has("status")
-                    && "ESCALATE".equalsIgnoreCase(root.get("status").getAsString());
+            return root.has("st")
+                    && "ESCALATE".equalsIgnoreCase(root.get("st").getAsString());
         }
         catch (final Exception e)
         {
@@ -239,10 +241,39 @@ public class ActionParser {
     }
 
     /**
+     * Extracts the requested target context level from the LLM response if status is ESCALATE.
+     * Returns null if not specified or invalid.
+     *
+     * @param llmResponse raw response from the LLM
+     * @return the requested ContextLevel, or null
+     */
+    public final ContextLevel getTargetContextLevel(final String llmResponse)
+    {
+        try
+        {
+            final String json = extractJson(llmResponse);
+            final JsonObject root = GSON.fromJson(json, JsonObject.class);
+            if (root.has("tc"))
+            {
+                final String targetContextStr = root.get("tc").getAsString();
+                return ContextLevel.valueOf(targetContextStr.toUpperCase());
+            }
+        }
+        catch (final Exception e)
+        {
+            // Ignore syntax/parsing errors or invalid enum values
+        }
+        return null;
+    }
+
+    /**
      * Extracts JSON from a response that might be wrapped in
      * markdown code fences (```json...```).
+     *
+     * @param response raw response from the LLM
+     * @return extracted JSON string, never null
      */
-    String extractJson(final String response)
+    public String extractJson(final String response)
     {
         String trimmed = response.trim();
 
@@ -338,10 +369,10 @@ public class ActionParser {
     {
         try
         {
-            final String typeStr = obj.has("type") ? obj.get("type").getAsString() : null;
+            final String typeStr = obj.has("t") ? obj.get("t").getAsString() : null;
             if (typeStr == null)
             {
-                LOG.warn("Action missing 'type' field: {}", obj);
+                LOG.warn("Action missing 't' field: {}", obj);
                 return null;
             }
 
@@ -353,32 +384,62 @@ public class ActionParser {
                 return null;
             }
 
-            final String target = obj.has("target") && !obj.get("target").isJsonNull()
-                                                                                       ? obj.get("target").getAsString()
+            final String target = obj.has("tg") && !obj.get("tg").isJsonNull()
+                                                                                       ? obj.get("tg").getAsString()
                                                                                        : null;
-            final String value = obj.has("value") && !obj.get("value").isJsonNull()
-                                                                                     ? obj.get("value").getAsString()
-                                                                                     : null;
-            final String description = obj.has("description") && !obj.get("description").isJsonNull()
-                                                                                                 ? obj.get("description").getAsString()
-                                                                                                 : "";
-            final String elementDetails = obj.has("elementDetails") && !obj.get("elementDetails").isJsonNull()
-                                                                                                       ? obj.get("elementDetails").getAsString()
-                                                                                                       : null;
 
-            final Action action = new Action(type, target, value, description);
+            final List<String> valueList;
+            if (obj.has("v") && !obj.get("v").isJsonNull())
+            {
+                final JsonElement valElem = obj.get("v");
+                if (valElem.isJsonArray())
+                {
+                    final JsonArray arr = valElem.getAsJsonArray();
+                    final List<String> list = new ArrayList<>();
+                    for (final JsonElement item : arr)
+                    {
+                        list.add(item.getAsString());
+                    }
+                    valueList = list;
+                }
+                else
+                {
+                    valueList = List.of(valElem.getAsString());
+                }
+            }
+            else
+            {
+                valueList = null;
+            }
+
+            final String description = obj.has("d") && !obj.get("d").isJsonNull()
+                                                                                                 ? obj.get("d").getAsString()
+                                                                                                 : "";
+            final String elementDetails = obj.has("ed") && !obj.get("ed").isJsonNull()
+                                                                                                       ? obj.get("ed").getAsString()
+                                                                                                       : null;
+            final boolean adjust = obj.has("ad") && !obj.get("ad").isJsonNull() && obj.get("ad").getAsBoolean();
+
+            final Action action = new Action(type, target, valueList, description);
             action.setElementDetails(elementDetails);
+            action.setAdjust(adjust);
             
-            if (obj.has("frameId") && !obj.get("frameId").isJsonNull()) {
+            if (obj.has("frameId") && !obj.get("frameId").isJsonNull())
+            {
                 action.setFrameId(obj.get("frameId").getAsString());
             }
-
-            if (obj.has("reasoning") && !obj.get("reasoning").isJsonNull()) {
-                action.setReasoning(obj.get("reasoning").getAsString());
+            else if (obj.has("fr") && !obj.get("fr").isJsonNull())
+            {
+                action.setFrameId(obj.get("fr").getAsString());
             }
 
-            if (obj.has("elementContext") && obj.get("elementContext").isJsonObject()) {
-                JsonObject ctxObj = obj.getAsJsonObject("elementContext");
+            if (obj.has("r") && !obj.get("r").isJsonNull())
+            {
+                action.setReasoning(obj.get("r").getAsString());
+            }
+
+            if (obj.has("ec") && obj.get("ec").isJsonObject()) {
+                JsonObject ctxObj = obj.getAsJsonObject("ec");
                 java.util.Map<String, String> ctxMap = new java.util.HashMap<>();
                 for (java.util.Map.Entry<String, JsonElement> entry : ctxObj.entrySet()) {
                     if (!entry.getValue().isJsonNull()) {
@@ -388,27 +449,27 @@ public class ActionParser {
                 action.setElementContext(ctxMap);
             }
 
-            if (obj.has("condition") && obj.get("condition").isJsonArray()) {
+            if (obj.has("c") && obj.get("c").isJsonArray()) {
                 List<Action> condActions = new ArrayList<>();
-                for (JsonElement e : obj.getAsJsonArray("condition")) {
+                for (JsonElement e : obj.getAsJsonArray("c")) {
                     Action a = parseAction(e.getAsJsonObject());
                     if (a != null) condActions.add(a);
                 }
                 action.setCondition(condActions);
             }
 
-            if (obj.has("then") && obj.get("then").isJsonArray()) {
+            if (obj.has("th") && obj.get("th").isJsonArray()) {
                 List<Action> thenActions = new ArrayList<>();
-                for (JsonElement e : obj.getAsJsonArray("then")) {
+                for (JsonElement e : obj.getAsJsonArray("th")) {
                     Action a = parseAction(e.getAsJsonObject());
                     if (a != null) thenActions.add(a);
                 }
                 action.setThen(thenActions);
             }
 
-            if (obj.has("else") && obj.get("else").isJsonArray()) {
+            if (obj.has("el") && obj.get("el").isJsonArray()) {
                 List<Action> elseActions = new ArrayList<>();
-                for (JsonElement e : obj.getAsJsonArray("else")) {
+                for (JsonElement e : obj.getAsJsonArray("el")) {
                     Action a = parseAction(e.getAsJsonObject());
                     if (a != null) elseActions.add(a);
                 }

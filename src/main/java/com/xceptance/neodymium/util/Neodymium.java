@@ -842,9 +842,14 @@ public class Neodymium
         Playbook playbook = Neodymium.getAiPlaybook();
         if (playbook == null)
         {
-            String playbookId = getTestName();
+            final String playbookId = getTestName();
 
-            playbook = PlaybookManager.loadPlaybook(playbookId);
+            final boolean skipReplay = Neodymium.getData().exists("skipReplay") && Neodymium.getData().asBoolean("skipReplay", false);
+
+            if (!skipReplay)
+            {
+                playbook = PlaybookManager.loadPlaybook(playbookId);
+            }
 
             if (playbook != null)
             {
@@ -856,6 +861,83 @@ public class Neodymium
                 playbook = new Playbook(playbookId);
                 Neodymium.setAiPlaybook(playbook);
             }
+        }
+    }
+
+    public static void expectFailure(final String bugId, final Runnable runnable)
+    {
+        new ExpectedFailureBuilder(bugId).run(runnable);
+    }
+
+    public static ExpectedFailureBuilder expectFailure(final String bugId)
+    {
+        return new ExpectedFailureBuilder(bugId);
+    }
+
+    public static class ExpectedFailureBuilder
+    {
+        private final String bugId;
+        private final List<Class<? extends Throwable>> exceptionTypes = new ArrayList<>();
+        private String messagePattern;
+
+        public ExpectedFailureBuilder(final String bugId)
+        {
+            this.bugId = bugId;
+        }
+
+        public ExpectedFailureBuilder ofType(final Class<? extends Throwable> exceptionType)
+        {
+            this.exceptionTypes.add(exceptionType);
+            return this;
+        }
+
+        public ExpectedFailureBuilder withMessage(final String messagePattern)
+        {
+            this.messagePattern = messagePattern;
+            return this;
+        }
+
+        public void run(final Runnable runnable)
+        {
+            try
+            {
+                runnable.run();
+            }
+            catch (final Throwable t)
+            {
+                if (!exceptionTypes.isEmpty())
+                {
+                    boolean matched = false;
+                    for (final Class<? extends Throwable> type : exceptionTypes)
+                    {
+                        if (type.isInstance(t))
+                        {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched)
+                    {
+                        final String msg = "Expected failure of type(s) " + exceptionTypes + " but got " + t.getClass().getName() + " for bug: " + bugId;
+                        throw new AssertionError(msg, t);
+                    }
+                }
+
+                if (messagePattern != null && !messagePattern.isEmpty())
+                {
+                    final String actualMsg = t.getMessage() != null ? t.getMessage() : "";
+                    if (!actualMsg.contains(messagePattern) && !messagePattern.contains(actualMsg))
+                    {
+                        final String msg = "Expected failure message pattern mismatch.\nExpected to contain or be contained in: \"" + messagePattern + "\"\nActual message: \"" + actualMsg + "\" for bug: " + bugId;
+                        throw new AssertionError(msg, t);
+                    }
+                }
+
+                return;
+            }
+
+            final String msg = "Expected code block to fail with " + (bugId != null ? "bug: " + bugId : "expected failure") + ", but it completed successfully.";
+            throw new AssertionError(msg);
         }
     }
 }

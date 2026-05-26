@@ -25,19 +25,21 @@ package com.xceptance.neodymium.ai.action;
 
 import java.util.List;
 import java.util.HashMap;
+import com.google.gson.annotations.JsonAdapter;
 
 /**
  * Represents a single browser action parsed from the LLM's response. Each action maps to a concrete Selenium
  * interaction.
   *
  * // AI-generated: Gemini 2.0 Flash
-*/
+ */
 public class Action
 {
     private String type;
 
     private String target;
 
+    @JsonAdapter(ValueListTypeAdapter.class)
     private List<String> value;
 
     private String description;
@@ -64,6 +66,8 @@ public class Action
     private String frameId;
 
     private transient boolean silent = false;
+
+    private boolean adjust = false;
 
     public Action()
     {
@@ -249,4 +253,15 @@ public class Action
     public void setFrameId(String frameId) {
         this.frameId = frameId;
     }
+    
+    public boolean getAdjust()
+    {
+        return adjust;
+    }
+
+    public void setAdjust(final boolean adjust)
+    {
+        this.adjust = adjust;
+    }
+
 }

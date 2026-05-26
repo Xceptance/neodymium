@@ -26,13 +26,18 @@
 package com.xceptance.neodymium.ai.action.plugins;
 
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.openqa.selenium.TimeoutException;
+import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codeborne.selenide.CheckResult;
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
@@ -200,19 +205,37 @@ public final class AssertAction implements AiActionPlugin
             }
             else
             {
-                // Create a composite condition that searches for the expected text across 
-                // all common visible attributes, input values, and text content areas.
-                final WebElementCondition cond = Condition.or("Assertion for " + expected,
-                        Condition.exactText(expected),
-                        Condition.partialText(expected),
-                        Condition.value(expected),
-                        new PartialTextContent(expected),
-                        Condition.attribute("href", expected),
-                        Condition.attribute("alt", expected),
-                        Condition.attribute("src", expected),
-                        Condition.attribute("title", expected),
-                        Condition.attribute("placeholder", expected),
-                        new DataAttributeMatches("data-.*", ".*" + Pattern.quote(expected) + ".*"));
+                final WebElementCondition cond;
+                if (isRegexPattern(expected))
+                {
+                    cond = new RegexMatch(expected);
+                }
+                else
+                {
+                    final Matcher attributeMatcher = Pattern.compile("^([a-zA-Z0-9_-]+)=[\"']?(.*?)[\"']?$").matcher(expected);
+                    if (attributeMatcher.matches())
+                    {
+                        final String attrName = attributeMatcher.group(1);
+                        final String attrValue = attributeMatcher.group(2);
+                        cond = Condition.or("Assertion for " + expected,
+                                Condition.attribute(attrName, attrValue),
+                                Condition.exactText(expected),
+                                Condition.partialText(expected),
+                                Condition.value(expected),
+                                new PartialTextContent(expected));
+                    }
+                    else
+                    {
+                        // Create a composite condition that searches for the expected text across 
+                        // all common visible attributes, input values, text content areas, and all actual DOM attributes.
+                        cond = Condition.or("Assertion for " + expected,
+                                Condition.exactText(expected),
+                                Condition.partialText(expected),
+                                Condition.value(expected),
+                                new PartialTextContent(expected),
+                                new AnyAttributeContains(expected));
+                    }
+                }
 
                 if (action.isSilent())
                 {
@@ -234,11 +257,164 @@ public final class AssertAction implements AiActionPlugin
         }
         catch (final Throwable e)
         {
-            final String actualDetails = String.format("Text: '%s', Value: '%s', Alt: '%s'", element.getText(), element.getValue(), element.getAttribute("alt"));
+            String attributesStr = "Error retrieving attributes";
+            try
+            {
+                final Map<String, String> attributes = Selenide.executeJavaScript(
+                        "var items = {}; " +
+                                "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
+                                "  items[attrs[i].name] = attrs[i].value; " +
+                                "} " +
+                                "return items;",
+                        element);
+                attributesStr = attributes != null ? attributes.toString() : "{}";
+            }
+            catch (final Exception ex)
+            {
+                // Ignore JS execution errors
+            }
+            final String actualDetails = String.format("Text: '%s', Value: '%s', Attributes: %s", element.getText(), element.getValue(), attributesStr);
             SelenideAddons.wrapAssertionError(() ->
             {
-                throw new AssertionError(String.format("Assertion failed: '%s' not found in common attributes. Found: [%s]", expected, actualDetails), e);
+                throw new AssertionError(String.format("Assertion failed: '%s' not found in common or element attributes. Found: [%s]", expected, actualDetails), e);
             });
+        }
+    }
+
+    /**
+     * Determines whether the given string is likely intended as a regular expression pattern
+     * rather than a literal value.
+     *
+     * @param str the string to evaluate
+     * @return true if the string appears to be a regex pattern, false otherwise
+     */
+    private boolean isRegexPattern(final String str)
+    {
+        if (str == null)
+        {
+            return false;
+        }
+        return str.contains("\\") || str.contains("[") || str.contains("]") || str.contains("{") || str.contains("}")
+                || str.contains(".*") || str.contains(".+") || str.contains("|") || str.startsWith("^") || str.endsWith("$");
+    }
+
+    /**
+     * Selenide condition that matches an element's text, textContent, value, or common/data attributes
+     * against a regular expression pattern.
+     */
+    private static final class RegexMatch extends WebElementCondition
+    {
+        private final Pattern pattern;
+
+        /**
+         * Constructor.
+         *
+         * @param regex the regular expression pattern string
+         */
+        public RegexMatch(final String regex)
+        {
+            super("RegexMatch");
+            this.pattern = Pattern.compile(regex);
+        }
+
+        @Override
+        public CheckResult check(final Driver driver, final WebElement element)
+        {
+            // 1. Text of the element
+            final String text = element.getText();
+            if (text != null && pattern.matcher(text).find())
+            {
+                return new CheckResult(true, text);
+            }
+
+            // 2. textContent of the element
+            final String textContent = element.getAttribute("textContent");
+            if (textContent != null && pattern.matcher(textContent).find())
+            {
+                return new CheckResult(true, textContent);
+            }
+
+            // 3. Value of the element (e.g. input field)
+            final String value = element.getAttribute("value");
+            if (value != null && pattern.matcher(value).find())
+            {
+                return new CheckResult(true, value);
+            }
+
+            // 4. Check all DOM attributes
+            try
+            {
+                final Map<String, String> attributes = driver.executeJavaScript(
+                        "var items = {}; " +
+                                "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
+                                "  items[attrs[i].name] = attrs[i].value; " +
+                                "} " +
+                                "return items;",
+                        element);
+                if (attributes != null)
+                {
+                    for (final var entry : attributes.entrySet())
+                    {
+                        final String val = entry.getValue();
+                        if (val != null && pattern.matcher(val).find())
+                        {
+                            return new CheckResult(true, String.format("attribute %s: %s", entry.getKey(), val));
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                // Ignore JS execution errors
+            }
+
+            return new CheckResult(false, text);
+        }
+    }
+
+    /**
+     * Selenide condition that matches if any of the element's actual DOM attributes
+     * (e.g. type, id, name, class, custom attributes, etc.) contains the expected value.
+     */
+    private static final class AnyAttributeContains extends WebElementCondition
+    {
+        private final String expectedValue;
+
+        public AnyAttributeContains(final String expectedValue)
+        {
+            super("AnyAttributeContains");
+            this.expectedValue = expectedValue;
+        }
+
+        @Override
+        public CheckResult check(final Driver driver, final WebElement element)
+        {
+            try
+            {
+                final Map<String, String> attributes = driver.executeJavaScript(
+                        "var items = {}; " +
+                                "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
+                                "  items[attrs[i].name] = attrs[i].value; " +
+                                "} " +
+                                "return items;",
+                        element);
+                if (attributes != null)
+                {
+                    for (final var entry : attributes.entrySet())
+                    {
+                        final String val = entry.getValue();
+                        if (val != null && val.contains(expectedValue))
+                        {
+                            return new CheckResult(true, String.format("attribute %s: %s", entry.getKey(), val));
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                // Ignore JS execution errors
+            }
+            return new CheckResult(false, null);
         }
     }
 }

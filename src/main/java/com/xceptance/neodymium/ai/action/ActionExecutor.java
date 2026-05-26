@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import com.codeborne.selenide.CheckResult;
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
@@ -59,7 +60,10 @@ public class ActionExecutor {
     private static final Logger LOG = LoggerFactory.getLogger(ActionExecutor.class);
     private final java.util.Set<String> actionLogs = new java.util.HashSet<>();
 
-    private static final Duration ELEMENT_TIMEOUT = Duration.ofSeconds(10);
+    private final Duration getElementTimeout()
+    {
+        return Duration.ofMillis(Configuration.timeout);
+    }
 
     private static final String SHADOW_DOM_FINDER_PREFIX = "var allRoots = [document];\n" +
             "function findShadowRoots(root) {\n" +

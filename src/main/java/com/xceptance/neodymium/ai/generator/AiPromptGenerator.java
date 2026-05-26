@@ -124,7 +124,7 @@ public class AiPromptGenerator {
         com.xceptance.neodymium.ai.core.AiDiscussionLogger executionLog = new com.xceptance.neodymium.ai.core.AiDiscussionLogger(
                 intent);
         LOG.info("Starting step-by-step exploratory run on '{}' for intent: '{}'", url, intent);
-        LOG.debug("SUT Context: {}", sutContext);
+        LOG.debug("SUT Context: {}", sutContext != null ? sutContext : "none");
 
         openBrowser(url);
 
@@ -248,17 +248,17 @@ public class AiPromptGenerator {
                     continue;
                 }
 
-                if (json.has("reasoning") && !json.get("reasoning").isJsonNull()) {
-                    executionLog.logReasoning(json.get("reasoning").getAsString());
-                    LOG.info("AI Reasoning: {}", json.get("reasoning").getAsString());
+                if (json.has("r") && !json.get("r").isJsonNull()) {
+                    executionLog.logReasoning(json.get("r").getAsString());
+                    LOG.info("AI Reasoning: {}", json.get("r").getAsString());
                 }
 
-                if (json.has("currentSubgoal") && !json.get("currentSubgoal").isJsonNull()) {
-                    currentSubgoal = json.get("currentSubgoal").getAsString();
+                if (json.has("cs") && !json.get("cs").isJsonNull()) {
+                    currentSubgoal = json.get("cs").getAsString();
                 }
 
-                if (json.has("dropLastNActions") && !json.get("dropLastNActions").isJsonNull()) {
-                    int dropCount = json.get("dropLastNActions").getAsInt();
+                if (json.has("dl") && !json.get("dl").isJsonNull()) {
+                    int dropCount = json.get("dl").getAsInt();
                     if (dropCount > 0) {
                         LOG.warn(
                                 "LOGICAL BACKTRACKING: AI requested to drop the last {} actions from the recorded script.",
@@ -279,7 +279,7 @@ public class AiPromptGenerator {
                     }
                 }
 
-                if (json.has("overallIntentAchieved") && json.get("overallIntentAchieved").getAsBoolean()) {
+                if (json.has("oia") && json.get("oia").getAsBoolean()) {
                     entireGoalAchieved = true;
                     for (Action pending : pendingActions) {
                         successfulPath.add(pending);
@@ -303,9 +303,9 @@ public class AiPromptGenerator {
                     pendingActions.clear();
                 }
 
-                if (json.has("actions") && json.get("actions").isJsonArray()
-                        && json.getAsJsonArray("actions").size() > 0) {
-                    com.google.gson.JsonArray actionsArray = json.getAsJsonArray("actions");
+                if (json.has("a") && json.get("a").isJsonArray()
+                        && json.getAsJsonArray("a").size() > 0) {
+                    com.google.gson.JsonArray actionsArray = json.getAsJsonArray("a");
                     for (com.google.gson.JsonElement actionElement : actionsArray) {
                         java.util.Map<String, String> currentKnownBindings = new java.util.HashMap<>(knownBindings);
                         for (Action pending : pendingActions) {
@@ -382,8 +382,8 @@ public class AiPromptGenerator {
                     if (pendingActions.isEmpty()) {
                         failedAttempts++;
                     }
-                } else if (json.has("action") && !json.get("action").isJsonNull()) {
-                    JsonObject actionJson = json.getAsJsonObject("action");
+                } else if (json.has("a") && !json.get("a").isJsonNull() && !json.get("a").isJsonArray()) {
+                    JsonObject actionJson = json.getAsJsonObject("a");
                     Action nextAction = parseAndValidateAction(actionJson, knownBindings);
                     logProposedAction(nextAction, knownBindings);
 
@@ -521,7 +521,7 @@ public class AiPromptGenerator {
         LOG.info("\n========================================================================");
         LOG.info("\uD83E\uDDED PHASE 1: EXPLORATION (V2)");
         LOG.info("Starting step-by-step exploratory run on '{}' for intent: '{}'", url, intent);
-        LOG.debug("SUT Context: {}", sutContext);
+        LOG.debug("SUT Context: {}", sutContext != null ? sutContext : "none");
         LOG.info("========================================================================");
         openBrowser(url);
 
@@ -615,25 +615,25 @@ public class AiPromptGenerator {
                 continue;
             }
 
-            String reasoning = json.has("reasoning") && !json.get("reasoning").isJsonNull()
-                    ? json.get("reasoning").getAsString()
+            String reasoning = json.has("r") && !json.get("r").isJsonNull()
+                    ? json.get("r").getAsString()
                     : "No reasoning";
-            if (json.has("currentSubgoal") && !json.get("currentSubgoal").isJsonNull()) {
-                currentSubgoal = json.get("currentSubgoal").getAsString();
+            if (json.has("cs") && !json.get("cs").isJsonNull()) {
+                currentSubgoal = json.get("cs").getAsString();
             }
 
-            if (json.has("overallIntentAchieved") && json.get("overallIntentAchieved").getAsBoolean()) {
+            if (json.has("oia") && json.get("oia").getAsBoolean()) {
                 entireGoalAchieved = true;
                 LOG.info("AI reports OVERALL INTENT ACHIEVED!");
                 break;
             }
 
             com.google.gson.JsonArray actionsArray = null;
-            if (json.has("actions") && json.get("actions").isJsonArray()) {
-                actionsArray = json.getAsJsonArray("actions");
-            } else if (json.has("action") && !json.get("action").isJsonNull()) {
+            if (json.has("a") && json.get("a").isJsonArray()) {
+                actionsArray = json.getAsJsonArray("a");
+            } else if (json.has("a") && !json.get("a").isJsonNull()) {
                 actionsArray = new com.google.gson.JsonArray();
-                actionsArray.add(json.getAsJsonObject("action"));
+                actionsArray.add(json.getAsJsonObject("a"));
             }
 
             if (actionsArray != null && actionsArray.size() > 0) {
@@ -1140,16 +1140,16 @@ public class AiPromptGenerator {
     }
 
     private Action parseAndValidateAction(JsonObject actionJson, java.util.Map<String, String> knownBindings) {
-        String type = actionJson.get("type").getAsString();
-        String target = actionJson.has("target") && !actionJson.get("target").isJsonNull()
-                ? actionJson.get("target").getAsString()
+        String type = actionJson.get("t").getAsString();
+        String target = actionJson.has("tg") && !actionJson.get("tg").isJsonNull()
+                ? actionJson.get("tg").getAsString()
                 : null;
-        String value = actionJson.has("value") && !actionJson.get("value").isJsonNull()
-                ? actionJson.get("value").getAsString()
+        String value = actionJson.has("v") && !actionJson.get("v").isJsonNull()
+                ? actionJson.get("v").getAsString()
                 : null;
         java.util.Map<String, String> dataBindings = new java.util.HashMap<>();
-        if (actionJson.has("dataBindings") && actionJson.get("dataBindings").isJsonObject()) {
-            com.google.gson.JsonObject bindingsObj = actionJson.getAsJsonObject("dataBindings");
+        if (actionJson.has("db") && actionJson.get("db").isJsonObject()) {
+            com.google.gson.JsonObject bindingsObj = actionJson.getAsJsonObject("db");
             for (java.util.Map.Entry<String, com.google.gson.JsonElement> entry : bindingsObj.entrySet()) {
                 if (!entry.getValue().isJsonNull()) {
                     String val = entry.getValue().getAsString();
@@ -1160,15 +1160,15 @@ public class AiPromptGenerator {
                 }
             }
         }
-        String description = actionJson.has("description") && !actionJson.get("description").isJsonNull()
-                ? actionJson.get("description").getAsString()
+        String description = actionJson.has("d") && !actionJson.get("d").isJsonNull()
+                ? actionJson.get("d").getAsString()
                 : "Generated action";
         if (description != null && description.contains("${random(")) {
             description = resolveDynamicRandoms(description);
         }
-        String elementDetails = actionJson.has("elementDetails")
-                && !actionJson.get("elementDetails").isJsonNull()
-                        ? actionJson.get("elementDetails").getAsString()
+        String elementDetails = actionJson.has("ed")
+                && !actionJson.get("ed").isJsonNull()
+                        ? actionJson.get("ed").getAsString()
                         : "";
 
         if (target != null && target.contains("${random("))

@@ -62,6 +62,18 @@ public interface AiConfiguration extends Mutable
     @DefaultValue("false")
     public boolean agentScreenshotBeforeAction();
 
+    @Key("neodymium.ai.pesap.enabled")
+    @DefaultValue("true")
+    public boolean pesapEnabled();
+
+    @Key("neodymium.ai.pesap.classify.enabled")
+    @DefaultValue("true")
+    public boolean pesapClassifyEnabled();
+
+    @Key("neodymium.ai.pesap.linter.enabled")
+    @DefaultValue("true")
+    public boolean pesapLinterEnabled();
+
     @Key("neodymium.ai.report.attachTokenUsage")
     @DefaultValue("true")
     public boolean attachTokenUsageToReport();

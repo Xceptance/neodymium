@@ -24,9 +24,14 @@
 package com.xceptance.neodymium.ai.core;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chromium.HasCdp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,11 +54,16 @@ public class PageAnalyzer
      * (null means hidden for non-fixed/non-body elements) and getComputedStyle as fallback.
      */
     private static final String CAPTURE_SCRIPT = """
-        return (function(level) {
-            var MAX_TEXT = 200;
-            var MAX_HREF = 180;
-            var MAX_VALUE = 150;
+        return (function(level, includesText) {
+            // Configuration constants to prevent payload bloat
+            var MAX_PER_SELECTOR = 150; // Safeguard against massive list rendering
+            var MAX_TEXT = 200;         // Max characters captured for element text labels
+            var MAX_HREF = 180;         // Max URL length for captured links
+            var MAX_VALUE = 150;        // Max characters for option/input value properties
+            
+            // Map of assigned automation IDs (data-neo-ref) to handle unique stamping
             var usedIds = {};
+            
             // Collect all shadow roots once to avoid O(N^2) DOM traversal
             var allRoots = [document];
             function findShadowRoots(root) {
@@ -76,8 +86,6 @@ public class PageAnalyzer
                 allRoots[i].querySelectorAll('[data-neo-ref]').forEach(function(el) {
                     var ref = el.getAttribute('data-neo-ref');
                     if (seenRefs[ref]) {
-                        console.log("REMOVED DUPLICATE NEO REF for ");
-                        console.log(el);
                         el.removeAttribute('data-neo-ref');
                     } else {
                         seenRefs[ref] = true;
@@ -86,16 +94,17 @@ public class PageAnalyzer
                 });
             }
 
-            // djb2 hash – very low computation cost, good distribution
+            // Fast, low-overhead djb2 hashing algorithm to compute consistent element fingerprint hashes
             function djb2(str) {
                 var hash = 5381;
                 for (var i = 0; i < str.length; i++) {
                     hash = ((hash << 5) + hash) + str.charCodeAt(i);
-                    hash = hash & 0x7fffffff; // keep positive 31-bit int
+                    hash = hash & 0x7fffffff; // Keep hash as a positive 31-bit integer
                 }
-                return hash.toString(36); // compact alphanumeric
+                return hash.toString(36); // Compact alphanumeric base-36 representation
             }
 
+            // Generates a stable fingerprint string for an element based on tags, IDs, classes, and parents
             function fingerprint(el) {
                 var tag   = el.tagName ? el.tagName.toLowerCase() : '';
                 var id    = el.id || '';
@@ -103,11 +112,11 @@ public class PageAnalyzer
                 var ptag  = el.parentElement && el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '';
                 var type  = el.getAttribute('type') || '';
                 var name  = el.getAttribute('name') || el.getAttribute('alt') || '';
-                var text  = (el.innerText || el.value || '').trim().substring(0, 40);
-                var raw   = [tag, id, cls, ptag, type, name, text].join('|');
+                var raw   = [tag, id, cls, ptag, type, name].join('|');
                 return 'xc_' + djb2(raw);
             }
 
+            // Retrieves or generates and stamps a unique 'data-neo-ref' ID on the DOM element
             function assignId(el) {
                 if (el.hasAttribute('data-neo-ref')) {
                     return el.getAttribute('data-neo-ref');
@@ -115,6 +124,7 @@ public class PageAnalyzer
                 var base = fingerprint(el);
                 var candidate = base;
                 var suffix = 0;
+                // Collision resolution in case elements compute the identical fingerprint
                 while (usedIds[candidate]) {
                     suffix++;
                     candidate = base + '_' + suffix;
@@ -124,8 +134,10 @@ public class PageAnalyzer
                 return candidate;
             }
 
+            // Evaluates element visibility accurately by checking DOM connection, HUD boundaries, display, and layout rects
             function isVisible(el) {
                 if (!el.isConnected) return false;
+                // Never extract elements located inside the Neodymium AI Interactive HUD itself
                 if (el.closest && el.closest('.neodymium-ai-hud')) return false;
 
                 const style = window.getComputedStyle(el);
@@ -135,11 +147,13 @@ public class PageAnalyzer
                 return rect.width > 0 && rect.height > 0;
             }
 
+            // Standard truncation helper to keep token sizes predictable and clean
             function truncate(s, max) {
                 if (!s) return s;
                 return s.length <= max ? s : s.substring(0, max) + '…';
             }
 
+            // Deep DOM query selector supporting crawling through Shadow DOM roots recursively
             function queryAllDeep(selector, root) {
                 if (root) {
                     var results = Array.from(root.querySelectorAll(selector));
@@ -162,20 +176,109 @@ public class PageAnalyzer
                 return results;
             }
 
+            // Builds a highly unique, compact CSS selector for the element to serve as alternative locator
             function generateSelector(el) {
-                var id = el.id;
-                if (id) return '#' + id;
-                var name = el.getAttribute('name');
-                var tag = el.tagName ? el.tagName.toLowerCase() : '';
-                if (name) return tag + "[name='" + name + "']";
-                var cls = el.className;
-                if (typeof cls === 'string' && cls.trim()) {
-                    var parts = cls.trim().split(/\s+/);
-                    if (parts.length <= 3) return tag + '.' + parts.join('.');
+                // Helper to check if a selector matches exactly one element in the current DOM scope
+                function isUnique(sel) {
+                    try {
+                        return document.querySelectorAll(sel).length === 1;
+                    } catch (e) {
+                        return false;
+                    }
                 }
-                return '';
+
+                // Helper to safely escape special CSS characters (such as dots or colons in IDs or class names)
+                function escapeIdentifier(str) {
+                    if (typeof CSS !== 'undefined' && CSS.escape) {
+                        return CSS.escape(str);
+                    }
+                    // Fallback escaping mechanism for older or non-standard browser contexts
+                    return str.replace(/([!"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])/g, '\\\\$1');
+                }
+
+                // Step 1: Check for unique immediate attributes (ID or Name) to keep selectors minimal
+                if (el.id) {
+                    var idSel = '#' + escapeIdentifier(el.id);
+                    if (isUnique(idSel)) {
+                        return idSel;
+                    }
+                }
+
+                var tag = el.tagName.toLowerCase();
+                var name = el.getAttribute('name');
+                if (name) {
+                    var nameSel = tag + "[name='" + name.replace(/'/g, "\\\\'") + "']";
+                    if (isUnique(nameSel)) {
+                        return nameSel;
+                    }
+                }
+
+                // Step 2: Climb the DOM hierarchy to construct a highly specific unique path
+                var path = [];
+                var current = el;
+
+                // Walk upwards until we hit the root/body element or null
+                while (current && current.nodeType === 1) { // 1 represents Node.ELEMENT_NODE
+                    var currentTag = current.tagName.toLowerCase();
+
+                    // If we reach body or html, append and terminate the path climbing
+                    if (currentTag === 'body' || currentTag === 'html') {
+                        path.unshift(currentTag);
+                        break;
+                    }
+
+                    // Terminate early if the ancestor has a globally unique ID
+                    if (current.id) {
+                        var idSel = '#' + escapeIdentifier(current.id);
+                        if (isUnique(idSel)) {
+                            path.unshift(idSel);
+                            break;
+                        }
+                    }
+
+                    // Construct current path segment starting with tag name
+                    var segment = currentTag;
+
+                    // Append class names to segment to increase specificity
+                    var className = current.className;
+                    if (typeof className === 'string' && className.trim()) {
+                        // Split by whitespace to extract individual class names
+                        var classes = className.trim().split(/\\s+/).filter(Boolean);
+                        if (classes.length > 0) {
+                            segment += '.' + classes.map(escapeIdentifier).join('.');
+                        }
+                    }
+
+                    // Disambiguate among siblings sharing the same tag using :nth-of-type(index)
+                    if (current.parentNode) {
+                        var siblings = Array.from(current.parentNode.children);
+                        var sameTagSiblings = siblings.filter(function(s) {
+                            return s.tagName === current.tagName;
+                        });
+                        if (sameTagSiblings.length > 1) {
+                            var index = sameTagSiblings.indexOf(current) + 1;
+                            segment += ':nth-of-type(' + index + ')';
+                        }
+                    }
+
+                    // Insert the computed segment at the beginning of the path
+                    path.unshift(segment);
+
+                    // Check if the current accumulated path is already globally unique
+                    var currentPath = path.join(' > ');
+                    if (isUnique(currentPath)) {
+                        return currentPath;
+                    }
+
+                    // Walk up to parent node
+                    current = current.parentNode;
+                }
+
+                // Return final constructed path
+                return path.join(' > ');
             }
 
+            // Captures structured information for matched DOM elements (inputs, links, buttons, etc.)
             function captureElements(cssSelector, label) {
                 var results = [];
                 try {
@@ -187,7 +290,8 @@ public class PageAnalyzer
                         var autoId = assignId(el);
                         var text = (el.innerText || '').trim().replace(/\\s*\\n\\s*/g, ' ');
                         var options = null;
-                        if (el.tagName && el.tagName.toLowerCase() === 'select') {
+                        // Format select dropdown options neatly
+                        if (el.tagName.toLowerCase() === 'select') {
                             options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
                             if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
                         }
@@ -224,6 +328,7 @@ public class PageAnalyzer
                 return results;
             }
 
+            // Identifies and extracts custom elements acting as clickable targets (e.g. styled divs/spans)
             function captureClickableElements(cssSelector, label) {
                 var results = [];
                 try {
@@ -231,9 +336,10 @@ public class PageAnalyzer
                     for (var i = 0; i < els.length; i++) {
                         var el = els[i];
                         if (!isVisible(el)) continue;
-                        if (el.closest && el.closest('a')) continue;
+                        if (el.closest('a')) continue; // Skip if already wrapped inside standard anchor link
 
                         var style = window.getComputedStyle(el);
+                        // A custom element is considered clickable if it has pointer cursor, onclick attribute, or onclick handler
                         var isClickable = style.cursor === 'pointer' || el.hasAttribute('onclick') || typeof el.onclick === 'function';
                         if (!isClickable) continue;
 
@@ -277,6 +383,7 @@ public class PageAnalyzer
                 return results;
             }
 
+            // Extracts forms along with their respective interactive fields to build standard logical input scopes
             function captureForms() {
                 var results = [];
                 try {
@@ -319,7 +426,7 @@ public class PageAnalyzer
 
             var sections = [];
 
-            // Interactive elements
+            // Compile all standard target elements that represent interactive page actions
             var interactiveElements = captureElements('a', 'link')
                 .concat(captureElements('button', 'button'))
                 .concat(captureElements('input', 'input'))
@@ -328,10 +435,12 @@ public class PageAnalyzer
                 .concat(captureElements('textarea', 'textarea'))
                 .concat(captureClickableElements('div, span, tr, td, th, li, label, dialog, svg, img', 'clickable'));
 
+            // Helper to retrieve the most meaningful text label representation of an element
             var getDisplayLabel = function(elObj) {
                 return elObj.text || elObj.placeholder || elObj.value || elObj.ariaLabel || elObj.title || elObj.name || '';
             };
 
+            // Compute element label frequency map to identify duplicate labels requiring parent text context
             var textCounts = {};
             for (var i = 0; i < interactiveElements.length; i++) {
                 var lbl = getDisplayLabel(interactiveElements[i]);
@@ -340,33 +449,62 @@ public class PageAnalyzer
                 }
             }
 
+            // Perform parent walk to disambiguate elements sharing the identical display label
             for (var i = 0; i < interactiveElements.length; i++) {
                 var elObj = interactiveElements[i];
                 var lbl = getDisplayLabel(elObj);
                 if (lbl && textCounts[lbl] > 1 && elObj.domElement) {
+                    // If multiple elements share the same label on this page, resolve a local parent text 
+                    // block (e.g. card name, list item, or table cell) to disambiguate them.
                     var parentText = '';
                     var p = elObj.domElement.parentElement;
-                    while (p && p !== document.body) {
+                    var depth = 0;
+                    
+                    // Cap parent traversal to 3 levels to guarantee context remains local to the component (e.g. card/grid cell)
+                    while (p && p !== document.body && depth < 3) {
+                        var tag = p.tagName.toLowerCase();
+                        var role = p.getAttribute('role') || '';
+                        var cls = (typeof p.className === 'string' ? p.className : '').toLowerCase();
+                        var id = (p.id || '').toLowerCase();
+
+                        // Heuristic 1: Stop climbing if we reach major HTML5 semantic landmarks
+                        if (tag === 'header' || tag === 'footer' || tag === 'nav' || tag === 'aside') {
+                            break;
+                        }
+                        // Heuristic 2: Stop climbing if we hit standard global ARIA landmark roles
+                        if (role === 'banner' || role === 'navigation' || role === 'contentinfo' || role === 'complementary') {
+                            break;
+                        }
+                        // Heuristic 3: Stop climbing at typical layout containers (generic class/ID names)
+                        if (cls.includes('navbar') || cls.includes('header') || cls.includes('footer') ||
+                            id.includes('navbar') || id.includes('header') || id.includes('footer')) {
+                            break;
+                        }
+
                         var pText = (p.innerText || '').trim();
+                        // Only capture context if it's descriptive (longer than the label itself) but compact (< 300 chars)
                         if (pText.length > lbl.length && pText.length < 300) {
                             parentText = pText;
                         }
+                        // Prevent pulling in massive generic containers
                         if (pText.length >= 300) {
                             break;
                         }
                         p = p.parentElement;
+                        depth++;
                     }
                     if (parentText) {
                         elObj.parentText = truncate(parentText.replace(/\\s*\\n\\s*/g, ' | '), MAX_TEXT);
                     }
                 }
-                delete elObj.domElement;
+                delete elObj.domElement; // Remove reference to allow browser garbage collection
             }
 
+            // LEVEL 1 (LEAN Mode): Capture all compiled interactive elements and page structure headings
             if (level >= 1) {
                 sections.push({heading: '=== Interactive Elements ===', elements: interactiveElements});
 
-                // Page structure
+                // Capture semantic headings to help the LLM structure the page logically
                 sections.push({heading: '\\n=== Page Structure ===', elements:
                     captureElements('h1', 'heading')
                     .concat(captureElements('h2', 'heading'))
@@ -375,8 +513,8 @@ public class PageAnalyzer
                     .concat(captureElements('h5', 'heading'))
                 });
             }
-
-            if (level >= 2) {
+            // LEVEL 2 (STANDARD Mode): Capture visible paragraph and plain text contents for full validation
+            if (includesText) {
                 sections.push({heading: '\\n=== Text Content (Validation Mode) ===', elements:
                     captureElements('p, span, li, td, div', 'text')
                     .filter(function(e) { return e.text.length > 0; })
@@ -384,7 +522,7 @@ public class PageAnalyzer
             }
 
             return {sections: sections, forms: level >= 1 ? captureForms() : []};
-        })(arguments[0]);
+        })(arguments[0], arguments[1]);
         """;
 
     public PageAnalyzer()
@@ -454,8 +592,31 @@ public class PageAnalyzer
         dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
         dom.append("Page Title: ").append(com.codeborne.selenide.Selenide.title()).append("\n\n");
 
-        if (isEmptyPage) {
+        if (isEmptyPage)
+        {
             return dom.toString();
+        }
+
+        if (level == ContextLevel.AXTREE)
+        {
+            try
+            {
+                final String axTreeContent = captureAXTreeDOM();
+                if (axTreeContent != null)
+                {
+                    dom.append(axTreeContent);
+                    final String result = dom.toString();
+                    if (!isEmptyPage)
+                    {
+                        LOG.debug("   📄 Simplified AXTree DOM size: {} chars", result.length());
+                    }
+                    return result;
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.warn("Failed to capture AXTree via CDP, falling back to frame tree extraction: {}", e.getMessage());
+            }
         }
 
         org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
@@ -595,48 +756,459 @@ public class PageAnalyzer
      */
     private void formatElement(final StringBuilder dom, final Map<String, Object> el)
     {
-        dom.append(String.format("[%s] ", el.get("label")));
+        final String label = el.get("label") != null ? el.get("label").toString() : "element";
+        dom.append("<").append(label);
 
-        appendIfPresent(dom, "id", el.get("id"));
-        appendIfPresent(dom, "name", el.get("name"));
-        appendIfPresent(dom, "type", el.get("type"));
+        appendAttribute(dom, "id", el.get("id"));
+        appendAttribute(dom, "name", el.get("name"));
+        appendAttribute(dom, "type", el.get("type"));
 
         final String text = (String) el.get("text");
-        if (text != null && !text.isEmpty())
+
+        appendAttribute(dom, "parentText", el.get("parentText"));
+        appendAttribute(dom, "href", el.get("href"));
+        appendAttribute(dom, "placeholder", el.get("placeholder"));
+        appendAttribute(dom, "aria-label", el.get("ariaLabel"));
+        appendAttribute(dom, "pattern", el.get("pattern"));
+        appendAttribute(dom, "title", el.get("title"));
+        appendAttribute(dom, "min", el.get("min"));
+        appendAttribute(dom, "max", el.get("max"));
+        appendAttribute(dom, "minlength", el.get("minlength"));
+        appendAttribute(dom, "maxlength", el.get("maxlength"));
+        appendAttribute(dom, "step", el.get("step"));
+        appendAttribute(dom, "autocomplete", el.get("autocomplete"));
+        appendAttribute(dom, "required", el.get("required"));
+        appendAttribute(dom, "readonly", el.get("readonly"));
+        appendAttribute(dom, "disabled", el.get("disabled"));
+        appendAttribute(dom, "multiple", el.get("multiple"));
+        appendAttribute(dom, "value", el.get("value"));
+        appendAttribute(dom, "options", el.get("options"));
+
+        appendAttribute(dom, "data-neo-ref", el.get("automationId"));
+
+        final Object selector = el.get("selector");
+        if (selector != null && !selector.toString().isEmpty())
         {
-            dom.append(String.format("text='%s' ", text));
+            final String selStr = selector.toString();
+            final Object id = el.get("id");
+            final String idStr = id != null ? id.toString() : "";
+
+            // Check if the selector is simply the ID selector (either raw or escaped) to prevent redundant printout
+            final boolean isSimpleId = !idStr.isEmpty() &&
+                                        (selStr.equals("#" + idStr) ||
+                                         selStr.equals("#" + escapeCssIdentifier(idStr)));
+
+            // Omit long, wishy-washy climbing selectors that contain child/descendant combinators,
+            // since data-neo-ref is 100% unique and much more stable.
+            final boolean isWishyWashy = selStr.contains(" > ");
+
+            if (!isSimpleId && !isWishyWashy)
+            {
+                appendAttribute(dom, "selector", selStr);
+            }
         }
 
-        appendIfPresent(dom, "parentText", el.get("parentText"));
-        appendIfPresent(dom, "href", el.get("href"));
-        appendIfPresent(dom, "placeholder", el.get("placeholder"));
-        appendIfPresent(dom, "aria-label", el.get("ariaLabel"));
-        appendIfPresent(dom, "pattern", el.get("pattern"));
-        appendIfPresent(dom, "title", el.get("title"));
-        appendIfPresent(dom, "min", el.get("min"));
-        appendIfPresent(dom, "max", el.get("max"));
-        appendIfPresent(dom, "minlength", el.get("minlength"));
-        appendIfPresent(dom, "maxlength", el.get("maxlength"));
-        appendIfPresent(dom, "step", el.get("step"));
-        appendIfPresent(dom, "autocomplete", el.get("autocomplete"));
-        appendIfPresent(dom, "required", el.get("required"));
-        appendIfPresent(dom, "readonly", el.get("readonly"));
-        appendIfPresent(dom, "disabled", el.get("disabled"));
-        appendIfPresent(dom, "multiple", el.get("multiple"));
-        appendIfPresent(dom, "value", el.get("value"));
-        appendIfPresent(dom, "options", el.get("options"));
+        appendAttribute(dom, "frameId", el.get("frameId"));
 
-        appendIfPresent(dom, "data-neo-ref", el.get("automationId"));
-        appendIfPresent(dom, "selector", el.get("selector"));
-        appendIfPresent(dom, "frameId", el.get("frameId"));
-        dom.append("\n");
+        if (text != null && !text.isEmpty())
+        {
+            dom.append(">").append(escapeHtmlText(text)).append("</").append(label).append(">\n");
+        }
+        else
+        {
+            dom.append("/>\n");
+        }
     }
 
-    private void appendIfPresent(final StringBuilder dom, final String key, final Object value)
+    /**
+     * Escapes special CSS characters in an identifier to match the CSS.escape specification.
+     */
+    private String escapeCssIdentifier(final String str)
+    {
+        return str.replaceAll("([!\"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])", "\\\\$1");
+    }
+
+    /**
+     * Appends an attribute name and its escaped double-quoted value to the dom builder if present.
+     */
+    private void appendAttribute(final StringBuilder dom, final String key, final Object value)
     {
         if (value != null && !value.toString().isEmpty())
         {
-            dom.append(String.format("%s='%s' ", key, value));
+            dom.append(" ").append(key).append("=\"").append(escapeAttributeValue(value.toString())).append("\"");
         }
+    }
+
+    /**
+     * Escapes special XML/HTML entity characters in attribute values.
+     */
+    private String escapeAttributeValue(final String val)
+    {
+        if (val == null)
+        {
+            return "";
+        }
+        return val.replace("&", "&amp;")
+                  .replace("\"", "&quot;")
+                  .replace("<", "&lt;")
+                  .replace(">", "&gt;");
+    }
+
+    /**
+     * Escapes standard HTML entity characters in text content.
+     */
+    private String escapeHtmlText(final String val)
+    {
+        if (val == null)
+        {
+            return "";
+        }
+        return val.replace("&", "&amp;")
+                  .replace("<", "&lt;")
+                  .replace(">", "&gt;");
+    }
+
+    @SuppressWarnings("unchecked")
+    private String captureAXTreeDOM()
+    {
+        final WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
+        if (!(driver instanceof final HasCdp cdpDriver))
+        {
+            LOG.debug("Driver does not support CDP, AXTree is unavailable. Falling back to LEAN.");
+            return null;
+        }
+
+        final Map<String, Object> axTree = cdpDriver.executeCdpCommand("Accessibility.getFullAXTree", Map.of());
+        if (axTree == null || !axTree.containsKey("nodes"))
+        {
+            return null;
+        }
+
+        final List<Map<String, Object>> nodes = (List<Map<String, Object>>) axTree.get("nodes");
+        if (nodes == null || nodes.isEmpty())
+        {
+            return null;
+        }
+
+        final Set<String> interactiveRoles = Set.of(
+            "button", "link", "checkbox", "radio", "combobox", "listbox", "searchbox",
+            "textbox", "slider", "spinbutton", "switch", "tab", "menuitem",
+            "menuitemcheckbox", "menuitemradio", "input", "textarea", "select",
+            "option", "treeitem", "tabpanel", "dialog", "menu"
+        );
+
+        final Set<String> landmarkRoles = Set.of(
+            "heading", "form", "main", "navigation", "banner", "contentinfo", "alert", "status"
+        );
+
+        final StringBuilder dom = new StringBuilder();
+        dom.append("=== Accessibility Tree (AXTree) ===\n");
+
+        for (final Map<String, Object> node : nodes)
+        {
+            final boolean ignored = Boolean.TRUE.equals(node.get("ignored"));
+            if (ignored)
+            {
+                continue;
+            }
+
+            final Object backendDOMNodeIdObj = node.get("backendDOMNodeId");
+            if (backendDOMNodeIdObj == null)
+            {
+                continue;
+            }
+            final int backendDOMNodeId = ((Number) backendDOMNodeIdObj).intValue();
+
+            // Parse role
+            final Object roleObj = node.get("role");
+            String role = "";
+            if (roleObj instanceof final Map<?, ?> roleMap)
+            {
+                role = String.valueOf(roleMap.get("value"));
+            }
+            else if (roleObj != null)
+            {
+                role = String.valueOf(roleObj);
+            }
+
+            // Filter roles
+            if (!interactiveRoles.contains(role) && !landmarkRoles.contains(role))
+            {
+                continue;
+            }
+
+            // Parse name
+            final Object nameObj = node.get("name");
+            String name = "";
+            if (nameObj instanceof final Map<?, ?> nameMap)
+            {
+                name = String.valueOf(nameMap.get("value"));
+            }
+            else if (nameObj != null)
+            {
+                name = String.valueOf(nameObj);
+            }
+            name = cleanAccessibleText(name);
+
+            // Parse value
+            final Object valueObj = node.get("value");
+            String value = "";
+            if (valueObj instanceof final Map<?, ?> valueMap)
+            {
+                value = String.valueOf(valueMap.get("value"));
+            }
+            else if (valueObj != null)
+            {
+                value = String.valueOf(valueObj);
+            }
+            value = cleanAccessibleText(value);
+
+            // Parse properties
+            final List<Map<String, Object>> properties = (List<Map<String, Object>>) node.get("properties");
+            boolean disabled = false;
+            boolean required = false;
+            boolean readonly = false;
+            boolean checked = false;
+            String autocomplete = "";
+            String placeholder = "";
+
+            if (properties != null)
+            {
+                for (final Map<String, Object> prop : properties)
+                {
+                    final String propName = String.valueOf(prop.get("name"));
+                    final Object propValObj = prop.get("value");
+                    String propValue = "";
+                    if (propValObj instanceof final Map<?, ?> propValMap)
+                    {
+                        propValue = String.valueOf(propValMap.get("value"));
+                    }
+                    else if (propValObj != null)
+                    {
+                        propValue = String.valueOf(propValObj);
+                    }
+
+                    if ("disabled".equals(propName))
+                    {
+                        disabled = Boolean.parseBoolean(propValue);
+                    }
+                    else if ("required".equals(propName))
+                    {
+                        required = Boolean.parseBoolean(propValue);
+                    }
+                    else if ("readonly".equals(propName))
+                    {
+                        readonly = Boolean.parseBoolean(propValue);
+                    }
+                    else if ("checked".equals(propName))
+                    {
+                        checked = "true".equals(propValue) || "mixed".equals(propValue);
+                    }
+                    else if ("autocomplete".equals(propName))
+                    {
+                        autocomplete = propValue;
+                    }
+                    else if ("placeholder".equals(propName))
+                    {
+                        placeholder = propValue;
+                    }
+                }
+            }
+
+            // Stamping data-neo-ref via Runtime.callFunctionOn
+            String refId = "";
+            try
+            {
+                final Map<String, Object> resolveParams = Map.of("backendNodeId", backendDOMNodeId);
+                final Map<String, Object> resolvedNode = cdpDriver.executeCdpCommand("DOM.resolveNode", resolveParams);
+                if (resolvedNode != null && resolvedNode.containsKey("object"))
+                {
+                    final Map<String, Object> objectInfo = (Map<String, Object>) resolvedNode.get("object");
+                    final String objectId = (String) objectInfo.get("objectId");
+                    if (objectId != null)
+                    {
+                        final String functionDeclaration = """
+                            function() {
+                                function getFallbackLabel(el) {
+                                    var iconEl = el.querySelector('[class*="bi-"], [class*="fa-"], [class*="icon-"]');
+                                    var elClassStr = typeof el.className === 'string' ? el.className : (el.getAttribute && el.getAttribute('class') || '');
+                                    if (!iconEl && (elClassStr.includes('bi-') || elClassStr.includes('fa-') || elClassStr.includes('icon-'))) {
+                                        iconEl = el;
+                                    }
+                                    if (iconEl) {
+                                        var iconClassStr = typeof iconEl.className === 'string' ? iconEl.className : (iconEl.getAttribute && iconEl.getAttribute('class') || '');
+                                        var classes = iconClassStr.split(/\\s+/);
+                                        for (var i = 0; i < classes.length; i++) {
+                                            var cls = classes[i];
+                                            var match = cls.match(/^(?:bi|fa|icon)-([a-z0-9-]+)$/);
+                                            if (match && match[1]) {
+                                                var iconName = match[1];
+                                                iconName = iconName.replace(/\\d+$/, '');
+                                                iconName = iconName.replace(/-(?:fill|outline|short|large|small)$/, '');
+                                                iconName = iconName.replace(/-/g, ' ');
+                                                return iconName.replace(/\\b\\w/g, function(l) { return l.toUpperCase(); }) + ' Icon';
+                                            }
+                                        }
+                                    }
+                                    var fallback = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || el.getAttribute('alt') || el.getAttribute('name') || el.id || '';
+                                    if (fallback) {
+                                        fallback = fallback.replace(/[-_]/g, ' ').trim();
+                                        return fallback.replace(/\\b\\w/g, function(l) { return l.toUpperCase(); });
+                                    }
+                                    return '';
+                                }
+                                if (this.hasAttribute('data-neo-ref')) {
+                                    return {
+                                        refId: this.getAttribute('data-neo-ref'),
+                                        fallbackLabel: getFallbackLabel(this)
+                                    };
+                                }
+                                var usedIds = {};
+                                document.querySelectorAll('[data-neo-ref]').forEach(function(el) {
+                                    usedIds[el.getAttribute('data-neo-ref')] = true;
+                                });
+                                
+                                function djb2(str) {
+                                    var hash = 5381;
+                                    for (var i = 0; i < str.length; i++) {
+                                        hash = ((hash << 5) + hash) + str.charCodeAt(i);
+                                        hash = hash & 0x7fffffff;
+                                    }
+                                    return hash.toString(36);
+                                }
+                                
+                                var tag = this.tagName.toLowerCase();
+                                var id = this.id || '';
+                                var cls = (typeof this.className === 'string' ? this.className : '').trim().replace(/\\s+/g, ' ');
+                                var ptag = this.parentElement ? this.parentElement.tagName.toLowerCase() : '';
+                                var type = this.getAttribute('type') || '';
+                                var name = this.getAttribute('name') || this.getAttribute('alt') || '';
+                                var raw = [tag, id, cls, ptag, type, name].join('|');
+                                var base = 'xc_' + djb2(raw);
+                                
+                                var candidate = base;
+                                var suffix = 0;
+                                while (usedIds[candidate]) {
+                                    suffix++;
+                                    candidate = base + '_' + suffix;
+                                }
+                                this.setAttribute('data-neo-ref', candidate);
+                                return {
+                                    refId: candidate,
+                                    fallbackLabel: getFallbackLabel(this)
+                                };
+                            }
+                            """;
+
+                        final Map<String, Object> callParams = Map.of(
+                            "objectId", objectId,
+                            "functionDeclaration", functionDeclaration,
+                            "returnByValue", true
+                        );
+
+                        final Map<String, Object> callResult = cdpDriver.executeCdpCommand("Runtime.callFunctionOn", callParams);
+                        if (callResult != null && callResult.containsKey("result"))
+                        {
+                            final Map<String, Object> resultVal = (Map<String, Object>) callResult.get("result");
+                            if (resultVal != null && resultVal.containsKey("value"))
+                            {
+                                final Object stampedValueObj = resultVal.get("value");
+                                if (stampedValueObj instanceof final Map<?, ?> resultMap)
+                                {
+                                    refId = String.valueOf(resultMap.get("refId"));
+                                    final String fallbackLabel = String.valueOf(resultMap.get("fallbackLabel"));
+                                    if (fallbackLabel != null && !fallbackLabel.isEmpty() && !"null".equals(fallbackLabel))
+                                    {
+                                        final String cleanName = name == null ? "" : name.replace('\u00a0', ' ').strip().replaceAll("\\s+", " ");
+                                        if (cleanName.isEmpty())
+                                        {
+                                            name = fallbackLabel;
+                                        }
+                                        else if (cleanName.matches("^\\d+$"))
+                                        {
+                                            name = fallbackLabel + ": " + cleanName;
+                                        }
+                                    }
+                                }
+                                else if (stampedValueObj != null)
+                                {
+                                    refId = String.valueOf(stampedValueObj);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.debug("Failed to resolve or stamp node with backendNodeId {}: {}", backendDOMNodeId, e.getMessage());
+            }
+
+            name = cleanAccessibleText(name);
+            value = cleanAccessibleText(value);
+
+            final StringBuilder nodeText = new StringBuilder();
+            nodeText.append("<").append(role);
+            if (!refId.isEmpty())
+            {
+                nodeText.append(" data-neo-ref=\"").append(escapeAttributeValue(refId)).append("\"");
+            }
+            if (!name.isEmpty())
+            {
+                nodeText.append(" name=\"").append(escapeAttributeValue(name)).append("\"");
+            }
+            if (!value.isEmpty())
+            {
+                nodeText.append(" value=\"").append(escapeAttributeValue(value)).append("\"");
+            }
+            if (disabled)
+            {
+                nodeText.append(" disabled=\"true\"");
+            }
+            if (checked)
+            {
+                nodeText.append(" checked=\"true\"");
+            }
+            if (required)
+            {
+                nodeText.append(" required=\"true\"");
+            }
+            if (readonly)
+            {
+                nodeText.append(" readonly=\"true\"");
+            }
+            if (!placeholder.isEmpty())
+            {
+                nodeText.append(" placeholder=\"").append(escapeAttributeValue(placeholder)).append("\"");
+            }
+            if (!autocomplete.isEmpty())
+            {
+                nodeText.append(" autocomplete=\"").append(escapeAttributeValue(autocomplete)).append("\"");
+            }
+            nodeText.append("/>\n");
+
+            dom.append(nodeText.toString());
+        }
+
+        return dom.toString();
+    }
+
+    private static String cleanAccessibleText(final String text)
+    {
+        if (text == null)
+        {
+            return "";
+        }
+
+        final StringBuilder sb = new StringBuilder();
+        text.codePoints().forEach((final int cp) -> {
+            final int type = Character.getType(cp);
+            if (type != Character.PRIVATE_USE && type != Character.FORMAT && type != Character.CONTROL)
+            {
+                sb.appendCodePoint(cp);
+            }
+        });
+
+        return sb.toString().replace('\u00a0', ' ').strip().replaceAll("\\s+", " ");
     }
 }

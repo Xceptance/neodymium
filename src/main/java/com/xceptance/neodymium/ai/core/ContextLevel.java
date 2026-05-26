@@ -42,6 +42,12 @@ public enum ContextLevel
     HINT,
 
     /**
+     * Compact browser-native accessibility tree. Provides structural and semantic outline
+     * of the interactive DOM elements for ultra-low token consumption.
+     */
+    AXTREE,
+
+    /**
      * Interactive elements only: links, buttons, inputs, selects, textareas,
      * clickable div/span, headings (h1-h5), and forms.
      * No text content blocks. No screenshot.
@@ -60,6 +66,13 @@ public enum ContextLevel
      * LEAN data is insufficient to disambiguate similar elements.
      */
     STANDARD,
+
+    /**
+     * Lean DOM (same as {@link #LEAN}) plus a page screenshot.
+     * Used as the initial context when the instruction is explicitly tagged with `(visual)`.
+     * Escalates directly to {@link #VISUAL} if needed.
+     */
+    VISUAL_LEAN,
 
     /**
      * Same DOM as {@link #STANDARD} plus a page screenshot sent as a
@@ -82,9 +95,11 @@ public enum ContextLevel
     {
         return switch (this)
         {
-            case HINT -> LEAN;
+            case HINT -> AXTREE;
+            case AXTREE -> LEAN;
             case LEAN -> STANDARD;
             case STANDARD -> VISUAL;
+            case VISUAL_LEAN -> VISUAL;
             case VISUAL -> null;
         };
     }
@@ -96,7 +111,7 @@ public enum ContextLevel
      */
     public boolean includesScreenshot()
     {
-        return this == VISUAL;
+        return this == VISUAL_LEAN || this == VISUAL;
     }
 
     /**

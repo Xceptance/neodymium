@@ -23,6 +23,7 @@
  */
 package com.xceptance.neodymium.ai.core;
 
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,8 +41,9 @@ import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.output.TokenUsage;
 
@@ -52,13 +54,16 @@ import dev.langchain4j.model.output.TokenUsage;
   *
  * // AI-generated: Gemini 2.0 Flash
 */
-public class LlmClient {
+public class LlmClient
+{
     private static final Logger LOG = LoggerFactory.getLogger(LlmClient.class);
 
-    private ChatLanguageModel model;
+    private ChatModel model;
     private final AiConfiguration config;
     private final AiStats aiStats;
     private final LlmMode mode;
+
+    private final ThreadLocal<LlmMode> currentCallMode = ThreadLocal.withInitial(() -> null);
 
     /**
      * Creates a new LLM client in {@link LlmMode#AGENT} mode.
@@ -93,15 +98,18 @@ public class LlmClient {
         return this.aiStats;
     }
 
-    private ChatLanguageModel getChatModel() {
-        if (model != null) {
+    private ChatModel getChatModel()
+    {
+        if (model != null)
+        {
             return model;
         }
 
         final String apiKey = config.aiApiKey();
         final String modelName = config.aiModel();
 
-        if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey())) {
+        if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey()))
+        {
             Assertions.fail(
                     "AI API key not configured. Set in your ai.properties, neodymium.properties or as an evironment variable.");
         }
@@ -116,27 +124,50 @@ public class LlmClient {
                 .modelName(modelName)
                 .temperature(temperature)
                 .maxOutputTokens(4096)
+                .responseFormat(ResponseFormat.JSON)
                 .timeout(Duration.ofSeconds(config.geminiTimeoutSeconds()))
                 .build();
         return model;
     }
 
     /**
-     * Sends a text-only chat message.
+     * Sends a text-only chat message using the default LLM mode.
      *
      * @param systemPrompt instructions for the LLM
      * @param userPrompt   the user's request
      * @return the LLM's text response
      */
-    public String chat(final String systemPrompt, final String userPrompt) {
+    public String chat(final String systemPrompt, final String userPrompt)
+    {
         LOG.debug("   💬 Sending text-only prompt ({} chars)", userPrompt.length());
-        UserMessage userMessage = UserMessage.from(userPrompt);
+        final UserMessage userMessage = UserMessage.from(userPrompt);
 
         return chat(systemPrompt, userMessage);
     }
 
     /**
-     * Sends a multimodal chat message with a screenshot.
+     * Sends a text-only chat message with an explicit operational mode.
+     *
+     * @param callMode     the operational mode to record the usage under
+     * @param systemPrompt instructions for the LLM
+     * @param userPrompt   the user's request
+     * @return the LLM's text response
+     */
+    public String chat(final LlmMode callMode, final String systemPrompt, final String userPrompt)
+    {
+        currentCallMode.set(callMode);
+        try
+        {
+            return chat(systemPrompt, userPrompt);
+        }
+        finally
+        {
+            currentCallMode.remove();
+        }
+    }
+
+    /**
+     * Sends a multimodal chat message with a screenshot using the default LLM mode.
      *
      * @param systemPrompt     instructions for the LLM
      * @param userPrompt       the user's request
@@ -144,7 +175,8 @@ public class LlmClient {
      * @return the LLM's text response
      */
     public String chatWithScreenshot(final String systemPrompt, final String userPrompt,
-            final String base64Screenshot) {
+            final String base64Screenshot)
+    {
         LOG.debug("   💬 Sending multimodal prompt ({} chars + screenshot)", userPrompt.length());
         // Build a multimodal user message with text + image
         final UserMessage userMessage = UserMessage.from(
@@ -152,6 +184,29 @@ public class LlmClient {
                 ImageContent.from(base64Screenshot, "image/png"));
 
         return chat(systemPrompt, userMessage);
+    }
+
+    /**
+     * Sends a multimodal chat message with a screenshot with an explicit operational mode.
+     *
+     * @param callMode         the operational mode to record the usage under
+     * @param systemPrompt     instructions for the LLM
+     * @param userPrompt       the user's request
+     * @param base64Screenshot Base64-encoded PNG screenshot
+     * @return the LLM's text response
+     */
+    public String chatWithScreenshot(final LlmMode callMode, final String systemPrompt, final String userPrompt,
+            final String base64Screenshot)
+    {
+        currentCallMode.set(callMode);
+        try
+        {
+            return chatWithScreenshot(systemPrompt, userPrompt, base64Screenshot);
+        }
+        finally
+        {
+            currentCallMode.remove();
+        }
     }
 
     /**
@@ -163,7 +218,8 @@ public class LlmClient {
      *                     the user's message
      * @return the LLM's text response
      */
-    private String chat(final String systemPrompt, UserMessage userMessage) {
+    private String chat(final String systemPrompt, final UserMessage userMessage)
+    {
         final List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.from(systemPrompt));
         messages.add(userMessage);
@@ -179,12 +235,74 @@ public class LlmClient {
     /**
      * Records token usage from the response into the stats tracker.
      */
-    private void recordTokenUsage(final ChatResponse response) {
+    private void recordTokenUsage(final ChatResponse response)
+    {
         final TokenUsage usage = response.tokenUsage();
-        if (usage != null) {
+        if (usage != null)
+        {
             final long input = usage.inputTokenCount() != null ? usage.inputTokenCount() : 0;
             final long output = usage.outputTokenCount() != null ? usage.outputTokenCount() : 0;
-            aiStats.record(input, output);
+            final long cached = extractCachedTokens(response);
+            final LlmMode activeMode = currentCallMode.get() != null ? currentCallMode.get() : this.mode;
+            aiStats.record(activeMode, input, output, cached);
         }
+    }
+
+    /**
+     * Safely extracts cached input token counts from vendor-specific TokenUsage structures.
+     * Uses reflection to ensure zero hard dependencies or ClassCastException risks.
+     *
+     * @param response the ChatResponse from the LLM
+     * @return the number of cached input tokens, or 0 if not present or unsupported
+     */
+    private long extractCachedTokens(final ChatResponse response)
+    {
+        if (response == null || response.tokenUsage() == null)
+        {
+            return 0;
+        }
+
+        final TokenUsage usage = response.tokenUsage();
+
+        try
+        {
+            // 1. Check Google Gemini-specific token usage
+            if (usage.getClass().getSimpleName().equals("GoogleAiGeminiTokenUsage"))
+            {
+                final Method method = usage.getClass().getMethod("cachedContentTokenCount");
+                final Object result = method.invoke(usage);
+                if (result instanceof Integer)
+                {
+                    return ((Integer) result).longValue();
+                }
+            }
+
+            // 2. Check OpenAI-specific token usage (promptTokensDetails -> cachedTokens)
+            try
+            {
+                final Method detailsMethod = usage.getClass().getMethod("promptTokensDetails");
+                final Object details = detailsMethod.invoke(usage);
+                if (details != null)
+                {
+                    final Method cachedMethod = details.getClass().getMethod("cachedTokens");
+                    final Object cached = cachedMethod.invoke(details);
+                    if (cached instanceof Integer)
+                    {
+                        return ((Integer) cached).longValue();
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                // Fall through for non-OpenAI models
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.trace("Failed to dynamically extract cached tokens for provider class: {}",
+                    usage.getClass().getName(), e);
+        }
+
+        return 0;
     }
 }

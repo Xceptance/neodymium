@@ -13,9 +13,11 @@
           ],
           "description": "Mock action",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     },
     {
       "promptLine": "java executeDummy2()",
@@ -29,9 +31,11 @@
           ],
           "description": "Call executeDummy2 with param ",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     },
     {
       "promptLine": "java executeDummy3()",
@@ -45,9 +49,11 @@
           ],
           "description": "Call executeDummy3 with param ",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     }
   ]
 }

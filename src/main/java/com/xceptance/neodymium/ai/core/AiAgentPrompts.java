@@ -127,6 +127,21 @@ public final class AiAgentPrompts
     public static final String SYSTEM_HEALING_PROMPT = loadPrompt("system-healing-prompt.txt");
 
     /**
+     * System prompt for PESAP (Pre-Execution Static Analysis Phase) classification.
+     */
+    public static final String PESAP_SYSTEM_PROMPT = loadPrompt("pesap-system-prompt.txt");
+
+    /**
+     * System prompt for PESAP (Pre-Execution Static Analysis Phase) classification phase only.
+     */
+    public static final String PESAP_CLASSIFY_PROMPT = loadPrompt("pesap-classify-prompt.txt");
+
+    /**
+     * System prompt for PESAP (Pre-Execution Static Analysis Phase) semantic linter phase only.
+     */
+    public static final String PESAP_LINTER_PROMPT = loadPrompt("pesap-linter-prompt.txt");
+
+    /**
      * Prompt template for playbook healing.
      */
     public static final String HEALING_PROMPT_TEMPLATE = loadPrompt("healing-prompt-template.txt");
@@ -542,7 +557,20 @@ public final class AiAgentPrompts
                 You are receiving MINIMAL context (no DOM elements). This is because the user provided an explicit inline locator hint (e.g., "(hint: #myId)") in the instruction.
 
                 CRITICAL: Use the provided hint to generate the requested action JSON immediately. Do not attempt to verify the element's existence in the DOM (since no DOM is provided). If you cannot fulfill the instruction based on the hint alone, respond with:
-                {"success": false, "status": "ESCALATE", "reasoning": "I need the actual DOM to determine the action", "actions": []}
+                {"success": false, "status": "ESCALATE", "targetContext": "STANDARD", "reasoning": "I need the actual DOM to determine the action", "actions": []}
+                (Set targetContext to AXTREE, LEAN, STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
+                """;
+            case AXTREE -> """
+
+                ## Context Level: AXTREE
+                You are receiving a native Accessibility Tree (AXTree) context representing the semantic, interactive structure of the page.
+                This contains links, buttons, inputs, headings, forms, and landmark sections with their resolved accessibility names and states.
+
+                CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you cannot find the requested element, or if you need full plain text content (like paragraph bodies, table cells, or static list item texts) to disambiguate between multiple elements, you MUST immediately respond with:
+                {"success": false, "status": "ESCALATE", "targetContext": "STANDARD", "reasoning": "This step requires standard text context which is not available in AXTREE context", "actions": []}
+                (Set targetContext to LEAN, STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
+
+                Do NOT guess. Do NOT pick an arbitrary element when multiple matches exist. Request escalation instead.
                 """;
             case LEAN -> """
 
@@ -551,10 +579,11 @@ public final class AiAgentPrompts
                 (buttons, links, inputs, selects, textareas), clickable elements, and headings. \
                 Text content like paragraphs, spans, table cells, and list items is NOT included.
 
-                CRITICAL: If you cannot find the requested element, or if you need text content \
+                CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you cannot find the requested element, or if you need text content \
                 to disambiguate between multiple similar elements (e.g. multiple 'View Details' links), \
-                or if the instruction requires reading text that is not shown, you MUST respond with:
-                {"success": false, "status": "ESCALATE", "reasoning": "explain what additional data you need", "actions": []}
+                or if the instruction requires reading text that is not shown, you MUST immediately respond with:
+                {"success": false, "status": "ESCALATE", "targetContext": "STANDARD", "reasoning": "This step requires visual validation or additional text context which is not available in LEAN context", "actions": []}
+                (Set targetContext to STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
 
                 Do NOT guess. Do NOT pick an arbitrary element when multiple matches exist. \
                 Request escalation instead.
@@ -566,20 +595,42 @@ public final class AiAgentPrompts
                 You are receiving a STANDARD context that includes all interactive elements \
                 AND all visible text content (paragraphs, spans, list items, table cells, divs).
 
-                If you still cannot find the target element or fulfill the instruction, \
-                you may respond with:
-                {"success": false, "status": "ESCALATE", "reasoning": "explain what you need", "actions": []}
+                CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you still cannot find the target element or fulfill the instruction, \
+                you MUST immediately respond with:
+                {"success": false, "status": "ESCALATE", "targetContext": "VISUAL", "reasoning": "This step requires visual validation which is not available in STANDARD context", "actions": []}
                 to request visual context (a screenshot will be provided on the next attempt).
 
                 Do NOT guess if you are uncertain about which element to target.
                 """;
 
+            case VISUAL_LEAN -> """
+
+                ## Context Level: VISUAL_LEAN
+                You are receiving a LEAN text context (interactive elements and headings only, NO paragraphs or list items) PLUS a screenshot of the current page. \
+                Use the screenshot to visually identify target elements, then map them to the \
+                closest element in the text context using their `data-neo-ref` identifier.
+
+                CRITICAL - VISUAL-ONLY VALIDATION:
+                If the instruction is a visual-only check (e.g. verifying colors, layout, styling, font, visual design, logo details, alignment, or image content), you MUST act as the validator yourself by inspecting the screenshot.
+                Since no browser/driver interaction is required to verify visual attributes, you do NOT need to return any browser actions. Instead, return:
+                - {"success": true, "done": true, "actions": [], "reasoning": "Detailed visual analysis explaining how the screenshot matches the instruction (e.g. explaining the colors, layouts, or visual elements you see)"} if the visual condition is met.
+                - {"success": false, "done": true, "actions": [], "error": "Visual verification failed: <explanation of what did not match>", "reasoning": "Detailed analysis of why the screenshot does not match the instruction"} if the visual condition is not met.
+
+                This is the maximum available context for this initial tagged step. If you cannot fulfill the instruction (for example, if you need full text context of paragraphs or list items to complete the validation), \
+                respond with {"success": false, "status": "ESCALATE", "targetContext": "VISUAL", "reasoning": "This step requires full text context which is not available in VISUAL_LEAN", "actions": []} to escalate to VISUAL.
+                """;
+
             case VISUAL -> """
 
                 ## Context Level: VISUAL
-                You are receiving the STANDARD text context PLUS a screenshot of the current page. \
-                Use the screenshot to visually identify the target element, then map it to the \
-                closest element in the text context using its `data-neo-ref` identifier.
+                You are receiving the FULL standard text context (interactive elements, headings, paragraphs, list items, tables, spans, divs, etc.) PLUS a page screenshot. \
+                Use the screenshot to visually identify target elements, and leverage the full text content to understand their meaning and verify copy. Map them using their `data-neo-ref` identifier.
+
+                CRITICAL - VISUAL-ONLY VALIDATION:
+                If the instruction is a visual-only check (e.g. verifying colors, layout, styling, font, visual design, logo details, alignment, or image content), you MUST act as the validator yourself by inspecting the screenshot.
+                Since no browser/driver interaction is required to verify visual attributes, you do NOT need to return any browser actions. Instead, return:
+                - {"success": true, "done": true, "actions": [], "reasoning": "Detailed visual analysis explaining how the screenshot matches the instruction (e.g. explaining the colors, layouts, or visual elements you see)"} if the visual condition is met.
+                - {"success": false, "done": true, "actions": [], "error": "Visual verification failed: <explanation of what did not match>", "reasoning": "Detailed analysis of why the screenshot does not match the instruction"} if the visual condition is not met.
 
                 This is the maximum available context. If you cannot fulfill the instruction, \
                 respond with {"success": false, "error": "explain what failed", "actions": []}. \

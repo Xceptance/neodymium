@@ -38,14 +38,21 @@ public class PlaybookStep {
     private String reasoning;
     private List<Action> actions;
 
+    private String screenshotHash;
+
+    private boolean expectedFailure;
+    private String bugId;
+    private String expectedErrorType;
+    private String expectedErrorMessage;
+
     private transient String lastFailure;
 
     /**
-     * The context level that was needed when this step was last healed.
-     * {@code null} if never healed. Used to skip predictable escalation
-     * failures on subsequent healing attempts.
+     * The context level that was successfully used for this step.
+     * {@code null} if not yet recorded. Used to skip predictable escalation
+     * failures on subsequent runs and healing attempts.
      */
-    private transient ContextLevel healedContextLevel;
+    private ContextLevel healedContextLevel;
 
     public PlaybookStep() {
         this.actions = new ArrayList<Action>();
@@ -80,6 +87,16 @@ public class PlaybookStep {
 
     public void setActions(List<Action> actions) {
         this.actions = actions;
+    }
+
+    public String getScreenshotHash()
+    {
+        return screenshotHash;
+    }
+
+    public void setScreenshotHash(final String screenshotHash)
+    {
+        this.screenshotHash = screenshotHash;
     }
 
     public boolean failed()
@@ -123,9 +140,49 @@ public class PlaybookStep {
         this.healedContextLevel = level;
     }
 
+    public boolean isExpectedFailure()
+    {
+        return expectedFailure;
+    }
+
+    public void setExpectedFailure(final boolean expectedFailure)
+    {
+        this.expectedFailure = expectedFailure;
+    }
+
+    public String getBugId()
+    {
+        return bugId;
+    }
+
+    public void setBugId(final String bugId)
+    {
+        this.bugId = bugId;
+    }
+
+    public String getExpectedErrorType()
+    {
+        return expectedErrorType;
+    }
+
+    public void setExpectedErrorType(final String expectedErrorType)
+    {
+        this.expectedErrorType = expectedErrorType;
+    }
+
+    public String getExpectedErrorMessage()
+    {
+        return expectedErrorMessage;
+    }
+
+    public void setExpectedErrorMessage(final String expectedErrorMessage)
+    {
+        this.expectedErrorMessage = expectedErrorMessage;
+    }
+
     @Override
     public String toString()
     {
-        return "PlaybookStep [promptLine=" + promptLine + ", reasoning=" + reasoning + ", actions=" + actions + "]";
+        return "PlaybookStep [promptLine=" + promptLine + ", reasoning=" + reasoning + ", actions=" + actions + ", screenshotHash=" + screenshotHash + ", expectedFailure=" + expectedFailure + ", bugId=" + bugId + ", expectedErrorType=" + expectedErrorType + ", expectedErrorMessage=" + expectedErrorMessage + "]";
     }
 }

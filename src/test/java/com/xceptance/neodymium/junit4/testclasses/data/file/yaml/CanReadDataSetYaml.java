@@ -15,10 +15,10 @@ public class CanReadDataSetYaml
     @Test
     public void test()
     {
-        Map<String, String> data = Neodymium.getData();
+        final Map<String, String> data = Neodymium.getData();
         Assert.assertEquals("john@example.com", data.get("user"));
         Assert.assertEquals("password123", data.get("password"));
-        Assert.assertEquals("Verify login logic", data.get("prompt"));
-        Assert.assertEquals(3, data.size());
+        Assert.assertEquals("Verify login logic", data.get("steps"));
+        Assert.assertEquals(4, data.size());
     }
 }

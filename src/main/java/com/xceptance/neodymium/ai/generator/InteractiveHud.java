@@ -231,35 +231,46 @@ public class InteractiveHud {
                 }
             }
 
-            String newPrompt = String.join("\n", performedInstructions) + "\n";
+            final String newSteps = String.join("\n", performedInstructions) + "\n";
 
             Map<String, Object> targetDataset = null;
 
-            if (data instanceof Map) {
-                Map<String, Object> root = (Map<String, Object>) data;
-                root.put("prompt", newPrompt);
+            if (data instanceof Map)
+            {
+                final Map<String, Object> root = (Map<String, Object>) data;
+                root.put("steps", newSteps);
                 
-                if (root.containsKey("data")) {
+                if (root.containsKey("data"))
+                {
                     targetDataset = findTargetDataset(root.get("data"), originalDataBindings);
-                } else {
+                }
+                else
+                {
                     targetDataset = root;
                 }
-            } else if (data instanceof List) {
+            }
+            else if (data instanceof List)
+            {
                 targetDataset = findTargetDataset(data, originalDataBindings);
                 
-                Map<String, Object> root = new java.util.LinkedHashMap<>();
-                root.put("prompt", newPrompt);
+                final Map<String, Object> root = new java.util.LinkedHashMap<>();
+                root.put("steps", newSteps);
                 root.put("data", data);
                 data = root;
-            } else {
-                Map<String, Object> root = new java.util.LinkedHashMap<>();
-                root.put("prompt", newPrompt);
+            }
+            else
+            {
+                final Map<String, Object> root = new java.util.LinkedHashMap<>();
+                root.put("steps", newSteps);
                 data = root;
             }
 
-            if (targetDataset != null && this.dataBindings != null) {
-                for (Map.Entry<String, String> entry : this.dataBindings.entrySet()) {
-                    if (!entry.getKey().startsWith("neodymium.") && !entry.getKey().equals("prompt")) {
+            if (targetDataset != null && this.dataBindings != null)
+            {
+                for (final Map.Entry<String, String> entry : this.dataBindings.entrySet())
+                {
+                    if (!entry.getKey().startsWith("neodymium.") && !entry.getKey().equals("steps"))
+                    {
                         targetDataset.put(entry.getKey(), entry.getValue());
                     }
                 }
