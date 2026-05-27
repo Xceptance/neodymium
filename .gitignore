@@ -42,3 +42,6 @@ embeddedLocalProxySelfSignedRootCertificate.p12
 
 newTickets.txt
 neodymium.code-workspace
+
+# Neodymium AI temporary scratch folder
+tmp/
