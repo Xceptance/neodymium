@@ -401,6 +401,39 @@ You can fully configure or granularly disable the Pre-Execution Static Analysis 
 | `neodymium.ai.pesap.enabled` | `true` | **Master Switch**. Enables or disables the entire PESAP phase. If set to `false`, Neodymium skips the remote static query entirely and falls back directly to the local offline linter. |
 | `neodymium.ai.pesap.classify.enabled` | `true` | **Context Classification Sub-Switch**. Controls whether the static starting context level prediction query is run. If set to `false`, steps will start at the default minimum context level (`AXTREE`). |
 | `neodymium.ai.pesap.linter.enabled` | `true` | **Semantic Linter Sub-Switch**. Controls whether the LLM-powered static semantic step linting query is run. If set to `false`, remote semantic warnings are skipped. |
+| `neodymium.ai.pesap.custom.file` | *(empty)* | **Custom Linter Rules File**. Specifies a path to a custom Markdown (.md) or Text (.txt) rules file to extend the default PESAP semantic linter rules list dynamically. |
+
+##### 📝 Extending PESAP Linter with Custom Rules
+
+To enforce project-specific conventions, domain terminology, or custom anti-patterns, you can define custom static analysis rules that are dynamically injected into the linter system prompt.
+
+1. **Create a Custom Rules File** (e.g. `config/pesap-custom-rules.md`):
+   For optimal results and consistent AI warning outputs, structure your custom rules to mirror the concise style of the core engine:
+   ```markdown
+   ### Brand Terminology Constraints
+   Flag any violations of our brand glossary in the step's language:
+
+   1. **Invalid Button Labels:** Action references "Buy button" instead of the official label.
+      - *Warn:* "Invalid brand terminology. Always use 'Add to Bag' instead of 'Buy'."
+   2. **Clicking Text Fields:** Step uses the word "click" on a text input field.
+      - *Warn:* "Invalid action verb. Use 'type' or 'fill' for text inputs, not 'click'."
+   ```
+
+2. **Configure the Property**: Set the property in your `ai.properties` or `neodymium.properties`:
+   ```properties
+   neodymium.ai.pesap.custom.file = config/pesap-custom-rules.md
+   ```
+
+###### 🔄 Custom Rules Resolution Precedence:
+The rules resolver dynamically evaluates and loads the rules in this exact order:
+1. **Thread-Local Programmatic Override**: Programmatically set via `Neodymium.getData().put("neodymium.ai.pesap.custom.file", "config/my-dynamic-rules.md")`.
+2. **Explicit Configuration Path**: Value of the configuration property `neodymium.ai.pesap.custom.file`.
+   * Evaluated first as a Classpath resource (e.g. `ai-prompts/custom-rules.md`).
+   * Evaluated next as a Filesystem path (e.g. `config/custom-rules.md`).
+   * *Strict Validation:* If configured but the file does not exist in either location, an initialization exception is thrown.
+3. **Default Filesystem Fallbacks**: Checks for `config/pesap-custom-rules.md` (and then `config/pesap-custom-rules.txt`) on the filesystem.
+4. **Default Classpath Fallbacks**: Checks for `ai-prompts/pesap-custom-rules.md` (and then `ai-prompts/pesap-custom-rules.txt`) on the classpath.
+5. **Disabled State**: Proceeds with default standard core linter rules only.
 
 ##### Example Configuration (Disable PESAP completely):
 ```properties
@@ -512,7 +545,7 @@ Only the instruction text is included — no DOM snapshots, no action details, n
 
 ### How It Works
 
-The history is built by `AiAgentPrompts.buildStepHistory(Playbook)`, which iterates the playbook's completed steps (indices `0` to `cursor - 1`). Steps with null or blank prompt lines are gracefully skipped. The resulting block is injected into the `{historyBlock}` placeholder in the prompt templates (`user-prompt-template.txt`, `retry-prompt-template.txt`, `no-actions-retry-prompt-template.txt`).
+The history is built by `AiAgentPrompts.buildStepHistory(Playbook)`, which iterates the playbook's completed steps (indices `0` to `cursor - 1`). Steps with null or blank prompt lines are gracefully skipped. The resulting block is injected into the `{historyBlock}` placeholder in the prompt templates (`user-prompt-template.md`, `retry-prompt-template.md`, `no-actions-retry-prompt-template.md`).
 
 An `isRecoveryAttempt` flag in `AiAgent.getActionsFromLLM()` tracks whether the current iteration is a recovery scenario. On the first attempt, the flag is `false` and the history block is empty. It flips to `true` whenever an escalation, error retry, or no-actions retry occurs.
 ---
@@ -1034,7 +1067,7 @@ Because the Java classloader prioritizes your project's `target/classes` over de
 If you want to alter the strict data binding instructions in V2 generation, you would create this file in your consuming project:
 
 ```text
-src/main/resources/ai-prompts/v2-system-exploration-prompt.txt
+src/main/resources/ai-prompts/v2-system-exploration-prompt.md
 ```
 
 *(You can copy the default file contents directly from the Neodymium source repository to serve as a starting template).*
@@ -1046,37 +1079,38 @@ Here is a breakdown of the available templates that can be overridden:
 #### 1. Test Generation (V2 Mode)
 These prompts control the V2 test generation pipeline, which emphasizes robust forward-exploration and a subsequent extraction phase to filter out mistakes.
 
-- **`v2-system-exploration-prompt.txt`**: The overarching system manual for the AI. Defines its persona, JSON formatting requirements, data parameterization rules, and instructions for recovering from UI errors.
-- **`v2-exploration-prompt-template.txt`**: The user-facing prompt injected at each step. It interpolates the current DOM state, high-level intent, previously attempted actions, and any known data bindings.
-- **`v2-extraction-prompt.txt`**: Instructions for the secondary LLM pass. It tells the AI how to analyze the messy chronological playbook and extract only the successful, linear steps.
-- **`v2-extraction-retry-prompt.txt`**: A small retry template used if the AI fails to output the extraction array in the correct JSON format.
+- **`v2-system-exploration-prompt.md`**: The overarching system manual for the AI. Defines its persona, JSON formatting requirements, data parameterization rules, and instructions for recovering from UI errors.
+- **`v2-exploration-prompt-template.md`**: The user-facing prompt injected at each step. It interpolates the current DOM state, high-level intent, previously attempted actions, and any known data bindings.
+- **`v2-extraction-prompt.md`**: Instructions for the secondary LLM pass. It tells the AI how to analyze the messy chronological playbook and extract only the successful, linear steps.
+- **`v2-extraction-retry-prompt.md`**: A small retry template used if the AI fails to output the extraction array in the correct JSON format.
 
 #### 2. Test Generation (Legacy / V1 Mode)
 These prompts govern the original test generation pipeline, which allows the AI to conceptually backtrack and delete steps mid-exploration using `dropLastNActions`.
 
-- **`system-exploration-prompt.txt`**: The system instructions for the V1 exploratory agent, including backtracking rules.
-- **`exploration-prompt-template.txt`**: The user-facing prompt template for the V1 generation loop.
+- **`system-exploration-prompt.md`**: The system instructions for the V1 exploratory agent, including backtracking rules.
+- **`exploration-prompt-template.md`**: The user-facing prompt template for the V1 generation loop.
 
 #### 3. Playbook Healing & Validation
 These prompts are utilized during the execution of a pre-recorded Playbook when a step fails (e.g., due to a changed locator or moved button).
 
-- **`system-healing-prompt.txt`**: Instructs the AI on how to act as a self-healing agent, asking it to determine if a failure is a genuine application bug or just a UI change that can be fixed.
-- **`healing-prompt-template.txt`**: The user-facing template that provides the broken instruction, original element context, the thrown exception, and the current DOM state to diagnose the issue.
+- **`system-healing-prompt.md`**: Instructs the AI on how to act as a self-healing agent, asking it to determine if a failure is a genuine application bug or just a UI change that can be fixed.
+- **`healing-prompt-template.md`**: The user-facing template that provides the broken instruction, original element context, the thrown exception, and the current DOM state to diagnose the issue.
 
 #### 4. Basic Agent Execution (Single-Shot)
 These prompts are used for direct, single-action commands when utilizing the `AiAgent` for simple instructions outside of a continuous exploration loop.
 
-- **`system-prompt.txt`**: The core system persona for basic test automation, describing available browser capabilities (`CLICK`, `TYPE`, `ASSERT`, etc.).
-- **`user-prompt-template.txt`**: The user-facing template combining the human instruction and current DOM state.
+- **`system-prompt.md`**: The core system persona for basic test automation, describing available browser capabilities (`CLICK`, `TYPE`, `ASSERT`, etc.).
+- **`user-prompt-template.md`**: The user-facing template combining the human instruction and current DOM state.
 
 #### 5. Retries & Error Handling
 Templates used to feed error context back into the LLM if an action fails or the model hallucinates an invalid response format.
 
-- **`retry-prompt-template.txt`**: Used when a chosen action fails (e.g., ElementNotInteractableException). It provides the exception and tells the AI to pick a new approach.
-- **`no-actions-retry-prompt-template.txt`**: Used when the AI successfully returns JSON but hallucinates an empty actions array. Instructs the AI that it must output at least one action.
+- **`retry-prompt-template.md`**: Used when a chosen action fails (e.g., ElementNotInteractableException). It provides the exception and tells the AI to pick a new approach.
+- **`no-actions-retry-prompt-template.md`**: Used when the AI successfully returns JSON but hallucinates an empty actions array. Instructs the AI that it must output at least one action.
 
 #### 6. Pre-Execution Static Analysis Phase (PESAP)
 Templates used during the Pre-Execution Static Analysis Phase (PESAP) before browser runtime execution, to predict starting context levels and detect semantic linter warnings.
 
-- **`pesap-classify-prompt.txt`**: The system instructions for statically predicting the starting context level based on the semantic intent of steps.
-- **`pesap-linter-prompt.txt`**: The system instructions for multilingual static semantic linting and instruction ambiguity checking.
+- **`pesap-system-prompt.md`**: The overarching system prompt used to configure the LLM environment during the static analysis phase.
+- **`pesap-classify-prompt.md`**: The system instructions for statically predicting the starting context level based on the semantic intent of steps.
+- **`pesap-linter-prompt.md`**: The system instructions for multilingual static semantic linting and instruction ambiguity checking.
