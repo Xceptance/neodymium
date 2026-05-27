@@ -4,7 +4,7 @@ In modern web development, maintaining visual consistency across an application 
 
 However:
 - Standard visual regression (pixel/SSIM) requires strict baselines per page and fails due to minor dynamic data changes, rendering shifts, or operating system differences.
-- Programmatic layout checks (e.g. `screen-diagnostics-alignment`) require developers to explicitly write layout assertions for every element, which is time-consuming and difficult to scale.
+- Programmatic layout checks (e.g. `ui-layout-diagnostics`) require developers to explicitly write layout assertions for every element, which is time-consuming and difficult to scale.
 
 This design introduces a **"glance-over" Visual Consistency Linter** that runs in the background of Neodymium tests. It collects page-state layout and styling metadata automatically, executes statistical and heuristic analysis to identify visual style drift, layout bugs, and visual collisions, and generates a visual diagnostic report.
 

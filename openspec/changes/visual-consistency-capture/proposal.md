@@ -2,7 +2,7 @@
 
 Existing solutions for visual validation are either too rigid or too labor-intensive:
 - **Pixel/SSIM Regression**: Fragile, environment-dependent, and requires maintaining static baselines for every single page state.
-- **Programmatic Layout Assertions** (e.g., `screen-diagnostics-alignment`): Extremely precise, but require developers to write manual layout assertions (e.g., `assertDistance`, `assertAlignment`) for every element, which is tedious and unscalable for large sites.
+- **Programmatic Layout Assertions** (e.g., `ui-layout-diagnostics`): Extremely precise, but require developers to write manual layout assertions (e.g., `assertDistance`, `assertAlignment`) for every element, which is tedious and unscalable for large sites.
 
 We need a lightweight, background-running visual validator that behaves like a human **"glancing over" the screens** during functional testing. A human glance does not measure exact pixel coordinates or compare against a pixel-perfect snapshot; instead, it looks for "obvious visual inconsistencies" and "common-sense layout errors."
 
