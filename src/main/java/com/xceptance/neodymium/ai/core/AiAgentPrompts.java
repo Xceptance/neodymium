@@ -74,77 +74,92 @@ public final class AiAgentPrompts
     /**
      * System prompt for standard exploration.
      */
-    public static final String SYSTEM_EXPLORATION_PROMPT = loadPrompt("system-exploration-prompt.txt");
+    public static final String SYSTEM_EXPLORATION_PROMPT = loadPrompt("system-exploration-prompt.md");
 
     /**
      * Template for standard exploration steps.
      */
-    public static final String EXPLORATION_PROMPT_TEMPLATE = loadPrompt("exploration-prompt-template.txt");
+    public static final String EXPLORATION_PROMPT_TEMPLATE = loadPrompt("exploration-prompt-template.md");
 
     /**
      * Template for v2 exploration steps.
      */
-    public static final String V2_EXPLORATION_PROMPT_TEMPLATE = loadPrompt("v2-exploration-prompt-template.txt");
+    public static final String V2_EXPLORATION_PROMPT_TEMPLATE = loadPrompt("v2-exploration-prompt-template.md");
 
     /**
      * System prompt for v2 exploration.
      */
-    public static final String V2_SYSTEM_EXPLORATION_PROMPT = loadPrompt("v2-system-exploration-prompt.txt");
+    public static final String V2_SYSTEM_EXPLORATION_PROMPT = loadPrompt("v2-system-exploration-prompt.md");
 
     /**
      * System prompt for v2 extraction.
      */
-    public static final String V2_EXTRACTION_PROMPT = loadPrompt("v2-extraction-prompt.txt");
+    public static final String V2_EXTRACTION_PROMPT = loadPrompt("v2-extraction-prompt.md");
 
     /**
      * System prompt for v2 extraction retry.
      */
-    public static final String V2_EXTRACTION_RETRY_PROMPT = loadPrompt("v2-extraction-retry-prompt.txt");
+    public static final String V2_EXTRACTION_RETRY_PROMPT = loadPrompt("v2-extraction-retry-prompt.md");
 
     /**
      * Base system prompt.
      */
-    public static final String SYSTEM_PROMPT = loadPrompt("system-prompt.txt");
+    public static final String SYSTEM_PROMPT = loadPrompt("system-prompt.md");
 
     /**
      * Standard user prompt template.
      */
-    public static final String USER_PROMPT_TEMPLATE = loadPrompt("user-prompt-template.txt");
+    public static final String USER_PROMPT_TEMPLATE = loadPrompt("user-prompt-template.md");
 
     /**
      * Prompt template for when an action fails and needs a retry.
      */
-    public static final String RETRY_PROMPT_TEMPLATE = loadPrompt("retry-prompt-template.txt");
+    public static final String RETRY_PROMPT_TEMPLATE = loadPrompt("retry-prompt-template.md");
 
     /**
      * Prompt template for when no actions were generated and a retry is needed.
      */
-    public static final String NO_ACTIONS_RETRY_PROMPT_TEMPLATE = loadPrompt("no-actions-retry-prompt-template.txt");
+    public static final String NO_ACTIONS_RETRY_PROMPT_TEMPLATE = loadPrompt("no-actions-retry-prompt-template.md");
 
     /**
      * System prompt for playbook healing.
      */
-    public static final String SYSTEM_HEALING_PROMPT = loadPrompt("system-healing-prompt.txt");
+    public static final String SYSTEM_HEALING_PROMPT = loadPrompt("system-healing-prompt.md");
 
     /**
      * System prompt for PESAP (Pre-Execution Static Analysis Phase) classification.
      */
-    public static final String PESAP_SYSTEM_PROMPT = loadPrompt("pesap-system-prompt.txt");
+    public static final String PESAP_SYSTEM_PROMPT = loadPrompt("pesap-system-prompt.md");
 
     /**
      * System prompt for PESAP (Pre-Execution Static Analysis Phase) classification phase only.
      */
-    public static final String PESAP_CLASSIFY_PROMPT = loadPrompt("pesap-classify-prompt.txt");
+    public static final String PESAP_CLASSIFY_PROMPT = loadPrompt("pesap-classify-prompt.md");
 
     /**
      * System prompt for PESAP (Pre-Execution Static Analysis Phase) semantic linter phase only.
      */
-    public static final String PESAP_LINTER_PROMPT = loadPrompt("pesap-linter-prompt.txt");
+    public static final String PESAP_LINTER_PROMPT = loadPrompt("pesap-linter-prompt.md");
+
+    /**
+     * Gets the system linter prompt, dynamically appending custom rules if present.
+     *
+     * @param customRules the custom rules to append (can be null/empty)
+     * @return the combined prompt
+     */
+    public static String getPesapLinterPrompt(final String customRules)
+    {
+        if (customRules == null || customRules.trim().isEmpty())
+        {
+            return PESAP_LINTER_PROMPT;
+        }
+        return PESAP_LINTER_PROMPT + "\n\n### Custom Semantic Linting Rules\n\nAdditional custom linting rules defined for this project/environment:\n\n" + customRules.trim();
+    }
 
     /**
      * Prompt template for playbook healing.
      */
-    public static final String HEALING_PROMPT_TEMPLATE = loadPrompt("healing-prompt-template.txt");
+    public static final String HEALING_PROMPT_TEMPLATE = loadPrompt("healing-prompt-template.md");
 
     /**
      * Builds the exploration prompt.

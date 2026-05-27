@@ -55,6 +55,7 @@ import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.SelenideAddons;
 import com.xceptance.neodymium.ai.util.ScreenshotHasher;
+import com.xceptance.neodymium.ai.util.CustomRulesLoader;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -1386,6 +1387,7 @@ public class AiAgent {
         try
         {
             final StringBuilder sb = new StringBuilder();
+            sb.append("## Test Steps\n");
             for (int i = 0; i < stepsList.size(); i++)
             {
                 final String resolved = AiBrowser.resolveTestDataToPrompt(stepsList.get(i));
@@ -1402,7 +1404,7 @@ public class AiAgent {
             // 1. Context Level Classification Phase
             if (classifyEnabled)
             {
-                LOG.debug("💬 [PESAP Classification] Sending prompt:\nSystem Prompt:\n{}\nUser Prompt:\n{}", 
+                LOG.debug("💬 [PESAP Classification] Sending prompt:\n\n=== SYSTEM PROMPT ===\n{}\n\n=== USER PROMPT ===\n{}", 
                           AiAgentPrompts.PESAP_CLASSIFY_PROMPT, userPrompt);
                 
                 final long startTime = System.currentTimeMillis();
@@ -1471,11 +1473,14 @@ public class AiAgent {
             // 2. Semantic Linting Phase
             if (linterEnabled)
             {
-                LOG.debug("💬 [PESAP Linter] Sending prompt:\nSystem Prompt:\n{}\nUser Prompt:\n{}", 
-                          AiAgentPrompts.PESAP_LINTER_PROMPT, userPrompt);
+                final String customRules = CustomRulesLoader.loadCustomRules(config.pesapCustomFile());
+                final String linterPrompt = AiAgentPrompts.getPesapLinterPrompt(customRules);
+
+                LOG.debug("💬 [PESAP Linter] Sending prompt:\n\n=== SYSTEM PROMPT ===\n{}\n\n=== USER PROMPT ===\n{}", 
+                          linterPrompt, userPrompt);
                 
                 final long startTime = System.currentTimeMillis();
-                final String response = llmClient.chat(LlmMode.PESAP, AiAgentPrompts.PESAP_LINTER_PROMPT, userPrompt);
+                final String response = llmClient.chat(LlmMode.PESAP, linterPrompt, userPrompt);
                 final long duration = System.currentTimeMillis() - startTime;
                 
                 LOG.debug("📊 [PESAP Linter] Call took {} ms", duration);
