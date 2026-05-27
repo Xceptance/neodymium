@@ -1,0 +1,44 @@
+{
+  "id": "com.xceptance.neodymium.ai.SelectActionTest :: testSelectHappyPath",
+  "steps": [
+    {
+      "promptLine": "Select 'Germany' from the Country dropdown.",
+      "reasoning": "Select Germany in the country dropdown.",
+      "actions": [
+        {
+          "type": "SELECT",
+          "target": "#country-select",
+          "description": "Select Germany from dropdown",
+          "elementDetails": "Country dropdown with id 'country-select'",
+          "elementContext": {
+            "text": "",
+            "id": "country-select",
+            "tagName": "select",
+            "type": ""
+          },
+          "value": "Germany",
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Click on the 'Submit Country' button.",
+      "reasoning": "Submit country.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit",
+          "description": "Click Submit Country",
+          "elementDetails": "Submit Country button with id 'btn-submit'",
+          "elementContext": {
+            "text": "Submit Country",
+            "id": "btn-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

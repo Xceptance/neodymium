@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Type Action Test</title>
+</head>
+<body>
+    <h1>Type Action Test</h1>
+    
+    <label for="first-name">First Name:</label>
+    <input type="text" id="first-name" placeholder="Enter first name"><br><br>
+    
+    <label for="comments">Comments:</label><br>
+    <textarea id="comments" placeholder="Enter comments"></textarea><br><br>
+    
+    <button id="btn-submit">Submit Details</button>
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('btn-submit').addEventListener('click', function() {
+            var firstName = document.getElementById('first-name').value;
+            var comments = document.getElementById('comments').value;
+            document.getElementById('result').innerText = 'Submitted: ' + firstName + ' - ' + comments;
+        });
+    </script>
+</body>
+</html>

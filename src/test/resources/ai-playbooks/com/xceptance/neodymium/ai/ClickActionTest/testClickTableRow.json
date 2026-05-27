@@ -1,0 +1,24 @@
+{
+  "id": "com.xceptance.neodymium.ai.ClickActionTest :: testClickTableRow",
+  "steps": [
+    {
+      "promptLine": "Click on the row for customer Bob Jones.",
+      "reasoning": "The instruction is to click on the row for customer Bob Jones. Looking at the table, the row with id 'row-1002' contains the text 'Bob Jones'. I will select this row as the target element to click.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#row-1002",
+          "description": "Click the table row for Bob Jones",
+          "elementDetails": "Table row with id 'row-1002' representing Bob Jones's order",
+          "elementContext": {
+            "text": "Bob Jones",
+            "id": "row-1002",
+            "tagName": "tr",
+            "type": ""
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

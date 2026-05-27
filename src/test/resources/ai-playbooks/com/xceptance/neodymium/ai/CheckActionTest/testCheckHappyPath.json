@@ -1,0 +1,62 @@
+{
+  "id": "com.xceptance.neodymium.ai.CheckActionTest :: testCheckHappyPath",
+  "steps": [
+    {
+      "promptLine": "Check the 'Subscribe to newsletter' checkbox.",
+      "reasoning": "Check the newsletter checkbox.",
+      "actions": [
+        {
+          "type": "CHECK",
+          "target": "#newsletter",
+          "description": "Check newsletter checkbox",
+          "elementDetails": "Newsletter checkbox with id 'newsletter'",
+          "elementContext": {
+            "text": "",
+            "id": "newsletter",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Check the 'Email' radio button.",
+      "reasoning": "Check the Email contact method radio button.",
+      "actions": [
+        {
+          "type": "CHECK",
+          "target": "#contact-email",
+          "description": "Check contact-email radio",
+          "elementDetails": "Email radio button with id 'contact-email'",
+          "elementContext": {
+            "text": "",
+            "id": "contact-email",
+            "tagName": "input",
+            "type": "radio"
+          },
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Click on the 'Submit Preferences' button.",
+      "reasoning": "Submit preferences.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit",
+          "description": "Click Submit Preferences",
+          "elementDetails": "Submit Preferences button with id 'btn-submit'",
+          "elementContext": {
+            "text": "Submit Preferences",
+            "id": "btn-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

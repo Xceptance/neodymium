@@ -1,0 +1,43 @@
+{
+  "id": "com.xceptance.neodymium.ai.HoverActionTest :: testHoverDropdown",
+  "steps": [
+    {
+      "promptLine": "Hover over the 'Hover Me' button.",
+      "reasoning": "Hover over the button that triggers the dropdown.",
+      "actions": [
+        {
+          "type": "HOVER",
+          "target": "#menu-btn",
+          "description": "Hover over the button",
+          "elementDetails": "Hover Me button with id 'menu-btn'",
+          "elementContext": {
+            "text": "Hover Me",
+            "id": "menu-btn",
+            "tagName": "button",
+            "type": "button"
+          },
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Click on the 'Sub Item 1' link.",
+      "reasoning": "Click on the dropdown item.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#menu-item-1",
+          "description": "Click the dropdown link",
+          "elementDetails": "Sub Item 1 link with id 'menu-item-1'",
+          "elementContext": {
+            "text": "Sub Item 1",
+            "id": "menu-item-1",
+            "tagName": "a",
+            "type": ""
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

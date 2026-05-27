@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Wait Action Test</title>
+</head>
+<body>
+    <h1>Wait Action Test</h1>
+    
+    <button id="btn-start">Start Process</button>
+    <br><br>
+    
+    <div id="loader" style="display:none; background-color: lightgrey; padding: 10px;">Processing... Please wait...</div>
+    <div id="success" style="display:none; color: green; font-weight: bold;">Process Completed Successfully!</div>
+    
+    <script>
+        document.getElementById('btn-start').addEventListener('click', function() {
+            var loader = document.getElementById('loader');
+            var success = document.getElementById('success');
+            
+            loader.style.display = 'block';
+            success.style.display = 'none';
+            
+            setTimeout(function() {
+                loader.style.display = 'none';
+                success.style.display = 'block';
+            }, 800);
+        });
+    </script>
+</body>
+</html>

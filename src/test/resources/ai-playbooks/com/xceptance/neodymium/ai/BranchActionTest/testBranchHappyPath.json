@@ -1,0 +1,33 @@
+{
+  "id": "com.xceptance.neodymium.ai.BranchActionTest :: testBranchHappyPath",
+  "steps": [
+    {
+      "promptLine": "If the cookie banner is visible, then click the 'Accept Cookies' button. Otherwise click the 'Main Action Button'.",
+      "reasoning": "Verify cookie banner presence, click Accept if visible, otherwise click Main button.",
+      "actions": [
+        {
+          "type": "BRANCH",
+          "condition": [
+            {
+              "type": "ASSERT",
+              "target": "#cookie-banner",
+              "value": "visible"
+            }
+          ],
+          "then": [
+            {
+              "type": "CLICK",
+              "target": "#btn-accept"
+            }
+          ],
+          "else": [
+            {
+              "type": "CLICK",
+              "target": "#btn-main-action"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

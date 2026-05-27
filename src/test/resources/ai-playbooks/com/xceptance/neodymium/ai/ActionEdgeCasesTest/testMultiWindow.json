@@ -1,0 +1,45 @@
+{
+  "id": "com.xceptance.neodymium.ai.ActionEdgeCasesTest :: testMultiWindow",
+  "steps": [
+    {
+      "promptLine": "Click on the 'Open Popup Window' link.",
+      "reasoning": "Click the link to open popup window.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#open-popup-link",
+          "description": "Click Open Popup Link",
+          "elementDetails": "Open Popup Link with id 'open-popup-link'",
+          "elementContext": {
+            "text": "Open Popup Window",
+            "id": "open-popup-link",
+            "tagName": "a",
+            "type": ""
+          },
+          "frameId": "main_win:main",
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Click the 'Confirm in Popup' button.",
+      "reasoning": "Switch window context to the newly opened popup window and click the confirm button.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-popup-action",
+          "description": "Click Confirm in Popup",
+          "elementDetails": "Confirm button inside popup with id 'btn-popup-action'",
+          "elementContext": {
+            "text": "Confirm in Popup",
+            "id": "btn-popup-action",
+            "tagName": "button",
+            "type": "button"
+          },
+          "frameId": "popup_win:main",
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

@@ -2,7 +2,9 @@
   "id": "com.xceptance.neodymium.ai.ClickActionTest :: testClickHiddenElement",
   "steps": [
     {
-      "actions": []
+      "actions": [],
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
     }
   ]
 }

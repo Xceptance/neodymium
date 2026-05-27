@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Scroll Action Test</title>
+</head>
+<body>
+    <h1>Scroll Action Test</h1>
+    <p>Scroll down to click the button.</p>
+    
+    <!-- Large empty space to push button off screen -->
+    <div style="height: 1200px;">Spacer to push content down</div>
+    
+    <button id="btn-bottom">Bottom Button</button>
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('btn-bottom').addEventListener('click', function() {
+            document.getElementById('result').innerText = 'Scrolled and clicked bottom button!';
+        });
+    </script>
+</body>
+</html>

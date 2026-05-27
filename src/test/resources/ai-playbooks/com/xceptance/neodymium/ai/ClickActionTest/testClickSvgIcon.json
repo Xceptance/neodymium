@@ -1,0 +1,24 @@
+{
+  "id": "com.xceptance.neodymium.ai.ClickActionTest :: testClickSvgIcon",
+  "steps": [
+    {
+      "promptLine": "Click on the Add Item button.",
+      "reasoning": "Click the button wrapping the SVG icon.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-svg",
+          "description": "Click SVG Button",
+          "elementDetails": "SVG Button with id 'btn-svg'",
+          "elementContext": {
+            "text": "Add Item",
+            "id": "btn-svg",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

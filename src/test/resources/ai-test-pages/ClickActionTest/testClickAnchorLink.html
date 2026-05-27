@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Click Action Test - Anchor Link</title>
+</head>
+<body>
+    <h1>Click Action Test</h1>
+    
+    <a id="link-nav" href="#target-destination">Go to Target Destination</a>
+    
+    <div id="target-destination" style="margin-top: 1000px;">Target Area</div>
+    <div id="result">Initial State</div>
+    
+    <script>
+        document.getElementById('link-nav').addEventListener('click', function(e) {
+            document.getElementById('result').innerText = 'Link Clicked!';
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+{
+  "id": "com.xceptance.neodymium.ai.AssertActionTest :: testAssertHappyPath",
+  "steps": [
+    {
+      "promptLine": "Assert that the page title is 'Assert Action Test'.",
+      "reasoning": "Verify page title.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "url",
+          "description": "Assert URL",
+          "elementDetails": "",
+          "elementContext": null,
+          "value": "AssertActionTest/testAssertHappyPath.html",
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Verify that the welcome message is 'Welcome to our web store!'.",
+      "reasoning": "Assert the text of welcome message element.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#welcome-message",
+          "description": "Assert welcome message text",
+          "elementDetails": "Welcome message with id 'welcome-message'",
+          "elementContext": {
+            "text": "Welcome to our web store!",
+            "id": "welcome-message",
+            "tagName": "div",
+            "type": ""
+          },
+          "value": "Welcome to our web store!",
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Assert that the 'Clickable Button' button is visible.",
+      "reasoning": "Assert that button is visible.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#visible-btn",
+          "description": "Assert button is visible",
+          "elementDetails": "Clickable Button with id 'visible-btn'",
+          "elementContext": {
+            "text": "Clickable Button",
+            "id": "visible-btn",
+            "tagName": "button",
+            "type": ""
+          },
+          "value": "visible",
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Verify that the 'Secret Button' button is hidden.",
+      "reasoning": "Assert that secret button is hidden.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#hidden-btn",
+          "description": "Assert button is hidden",
+          "elementDetails": "Secret Button with id 'hidden-btn'",
+          "elementContext": {
+            "text": "Secret Button",
+            "id": "hidden-btn",
+            "tagName": "button",
+            "type": ""
+          },
+          "value": "hidden",
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "com.xceptance.neodymium.ai.ActionEdgeCasesTest :: testElementInterceptionOverlay",
+  "steps": [
+    {
+      "promptLine": "Click on the 'Submit Transaction' button.",
+      "reasoning": "Click the submit button. Even if initially blocked by overlay, retry mechanism will succeed once the overlay hides.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-action",
+          "description": "Click Submit Transaction",
+          "elementDetails": "Submit Transaction button with id 'btn-action'",
+          "elementContext": {
+            "text": "Submit Transaction",
+            "id": "btn-action",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "id": "com.xceptance.neodymium.ai.ActionEdgeCasesTest :: testShadowDomBoundaries",
+  "steps": [
+    {
+      "promptLine": "Type 'Shadow Test Value' into the Shadow Input text field.",
+      "reasoning": "Type value inside shadow DOM text input.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#shadow-text",
+          "description": "Type in shadow input",
+          "elementDetails": "Shadow Input text input with id 'shadow-text'",
+          "elementContext": {
+            "text": "",
+            "id": "shadow-text",
+            "tagName": "input",
+            "type": "text"
+          },
+          "value": "Shadow Test Value",
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Check the 'Shadow Checkbox' checkbox.",
+      "reasoning": "Check the checkbox inside shadow DOM.",
+      "actions": [
+        {
+          "type": "CHECK",
+          "target": "#shadow-check",
+          "description": "Check shadow checkbox",
+          "elementDetails": "Shadow Checkbox with id 'shadow-check'",
+          "elementContext": {
+            "text": "",
+            "id": "shadow-check",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Check the 'Shadow Radio' radio button.",
+      "reasoning": "Check the radio button inside shadow DOM.",
+      "actions": [
+        {
+          "type": "CHECK",
+          "target": "#shadow-radio-btn",
+          "description": "Check shadow radio button",
+          "elementDetails": "Shadow Radio with id 'shadow-radio-btn'",
+          "elementContext": {
+            "text": "",
+            "id": "shadow-radio-btn",
+            "tagName": "input",
+            "type": "radio"
+          },
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Click on the 'Submit Shadow Form' button.",
+      "reasoning": "Click the submit button inside shadow DOM.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#shadow-btn",
+          "description": "Click Submit Shadow Form",
+          "elementDetails": "Submit Shadow Form button with id 'shadow-btn'",
+          "elementContext": {
+            "text": "Submit Shadow Form",
+            "id": "shadow-btn",
+            "tagName": "button",
+            "type": "button"
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

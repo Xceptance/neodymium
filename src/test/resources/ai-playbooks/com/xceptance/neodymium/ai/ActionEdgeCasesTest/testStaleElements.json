@@ -1,0 +1,24 @@
+{
+  "id": "com.xceptance.neodymium.ai.ActionEdgeCasesTest :: testStaleElements",
+  "steps": [
+    {
+      "promptLine": "Click the 'Click to Refresh State' button.",
+      "reasoning": "Click the button. If it is replaced in DOM causing stale exception, the framework re-resolves the element and succeeds.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-refresh",
+          "description": "Click Refresh State",
+          "elementDetails": "Refresh State button with id 'btn-refresh'",
+          "elementContext": {
+            "text": "Click to Refresh State",
+            "id": "btn-refresh",
+            "tagName": "button",
+            "type": "button"
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

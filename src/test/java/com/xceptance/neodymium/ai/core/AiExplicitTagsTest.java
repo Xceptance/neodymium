@@ -89,13 +89,13 @@ public final class AiExplicitTagsTest
             @Override
             public String chat(final String systemPrompt, final String userPrompt)
             {
-                return "{\"reasoning\": \"simulated reasoning\", \"actions\": [], \"done\": true}";
+                return "{\"r\": \"simulated reasoning\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#dummy-btn\", \"d\": \"Click dummy button\"}], \"d\": true}";
             }
 
             @Override
             public String chatWithScreenshot(final String systemPrompt, final String userPrompt, final String screenshot)
             {
-                return "{\"reasoning\": \"simulated reasoning\", \"actions\": [], \"done\": true}";
+                return "{\"r\": \"simulated reasoning\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#dummy-btn\", \"d\": \"Click dummy button\"}], \"d\": true}";
             }
         };
 
@@ -115,39 +115,39 @@ public final class AiExplicitTagsTest
         final Field optionalField = AiAgent.class.getDeclaredField("OPTIONAL_TAG_PATTERN");
         optionalField.setAccessible(true);
         final Pattern optionalPattern = (Pattern) optionalField.get(null);
-        assertNotNull(optionalPattern);
+        assertNotNull(optionalPattern, "Expected OPTIONAL_TAG_PATTERN to not be null");
 
         final Matcher matcher1 = optionalPattern.matcher("Click element (optional)");
-        assertTrue(matcher1.find());
-        assertEquals("optional", matcher1.group(1));
+        assertTrue(matcher1.find(), "Expected 'Click element (optional)' to match optional pattern");
+        assertEquals("optional", matcher1.group(1), "Expected matcher group 1 to be 'optional', but got: " + matcher1.group(1));
 
         final Matcher matcher2 = optionalPattern.matcher("Verify header (soft)");
-        assertTrue(matcher2.find());
-        assertEquals("soft", matcher2.group(1));
+        assertTrue(matcher2.find(), "Expected 'Verify header (soft)' to match optional pattern");
+        assertEquals("soft", matcher2.group(1), "Expected matcher group 1 to be 'soft', but got: " + matcher2.group(1));
 
         final Matcher matcher3 = optionalPattern.matcher("Click element (OPTIONAL)");
-        assertTrue(matcher3.find());
-        assertEquals("OPTIONAL", matcher3.group(1));
+        assertTrue(matcher3.find(), "Expected 'Click element (OPTIONAL)' to match optional pattern");
+        assertEquals("OPTIONAL", matcher3.group(1), "Expected matcher group 1 to be 'OPTIONAL', but got: " + matcher3.group(1));
 
         final Field timeoutField = AiAgent.class.getDeclaredField("TIMEOUT_TAG_PATTERN");
         timeoutField.setAccessible(true);
         final Pattern timeoutPattern = (Pattern) timeoutField.get(null);
-        assertNotNull(timeoutPattern);
+        assertNotNull(timeoutPattern, "Expected TIMEOUT_TAG_PATTERN to not be null");
 
         final Matcher matcher4 = timeoutPattern.matcher("Click with timeout (timeout: 500ms)");
-        assertTrue(matcher4.find());
-        assertEquals("500", matcher4.group(1));
-        assertEquals("ms", matcher4.group(2));
+        assertTrue(matcher4.find(), "Expected 'Click with timeout (timeout: 500ms)' to match timeout pattern");
+        assertEquals("500", matcher4.group(1), "Expected matcher group 1 to be '500', but got: " + matcher4.group(1));
+        assertEquals("ms", matcher4.group(2), "Expected matcher group 2 to be 'ms', but got: " + matcher4.group(2));
 
         final Matcher matcher5 = timeoutPattern.matcher("Verify content (timeout: 2s)");
-        assertTrue(matcher5.find());
-        assertEquals("2", matcher5.group(1));
-        assertEquals("s", matcher5.group(2));
+        assertTrue(matcher5.find(), "Expected 'Verify content (timeout: 2s)' to match timeout pattern");
+        assertEquals("2", matcher5.group(1), "Expected matcher group 1 to be '2', but got: " + matcher5.group(1));
+        assertEquals("s", matcher5.group(2), "Expected matcher group 2 to be 's', but got: " + matcher5.group(2));
 
         final Matcher matcher6 = timeoutPattern.matcher("Action with pure digits (timeout: 100)");
-        assertTrue(matcher6.find());
-        assertEquals("100", matcher6.group(1));
-        assertNull(matcher6.group(2));
+        assertTrue(matcher6.find(), "Expected 'Action with pure digits (timeout: 100)' to match timeout pattern");
+        assertEquals("100", matcher6.group(1), "Expected matcher group 1 to be '100', but got: " + matcher6.group(1));
+        assertNull(matcher6.group(2), "Expected matcher group 2 to be null, but got: " + matcher6.group(2));
     }
 
     /**
@@ -315,8 +315,8 @@ public final class AiExplicitTagsTest
         );
 
         // Verify the step was handled as optional and saved to playbook step
-        assertEquals("Click element", pbStep.getPromptLine());
-        assertTrue(pbStep.getReasoning().contains("Optional step execution failed"));
+        assertEquals("Click element", pbStep.getPromptLine(), "Expected prompt line to be 'Click element', but got: '" + pbStep.getPromptLine() + "'");
+        assertTrue(pbStep.getReasoning().contains("Optional step execution failed"), "Expected reasoning to contain 'Optional step execution failed', but got: '" + pbStep.getReasoning() + "'");
     }
 
     /**
@@ -359,8 +359,8 @@ public final class AiExplicitTagsTest
             new ArrayList<String>(), prompt, new ArrayList<String>(), null, null
         );
 
-        assertEquals("Verify text", pbStep.getPromptLine());
-        assertTrue(pbStep.getReasoning().contains("Optional step assertion failed"));
+        assertEquals("Verify text", pbStep.getPromptLine(), "Expected prompt line to be 'Verify text', but got: '" + pbStep.getPromptLine() + "'");
+        assertTrue(pbStep.getReasoning().contains("Optional step assertion failed"), "Expected reasoning to contain 'Optional step assertion failed', but got: '" + pbStep.getReasoning() + "'");
     }
 
     /**
@@ -403,8 +403,8 @@ public final class AiExplicitTagsTest
             new ArrayList<String>(), prompt, new ArrayList<String>(), null, null
         );
 
-        assertEquals("Click element", pbStep.getPromptLine());
-        assertTrue(pbStep.getReasoning().contains("Optional step unexpected error"));
+        assertEquals("Click element", pbStep.getPromptLine(), "Expected prompt line to be 'Click element', but got: '" + pbStep.getPromptLine() + "'");
+        assertTrue(pbStep.getReasoning().contains("Optional step unexpected error"), "Expected reasoning to contain 'Optional step unexpected error', but got: '" + pbStep.getReasoning() + "'");
     }
 
     /**

@@ -123,6 +123,11 @@ public class ActionExecutor {
      */
     private final Map<String, String> executionVariables = new HashMap<>();
 
+    /**
+     * Maps stale/recorded window handles to active window handles for robust multi-window execution.
+     */
+    private final Map<String, String> windowHandleMapping = new HashMap<>();
+
     public String cleanElementText(final String text)
     {
         if (text == null)
@@ -718,29 +723,60 @@ public class ActionExecutor {
         }
     }
 
-    private void switchFrameContext(String targetFrameId) {
-        if (targetFrameId == null || targetFrameId.isBlank()) return;
-        String[] parts = targetFrameId.split(":");
-        if (parts.length != 2) return;
+    private void switchFrameContext(final String targetFrameId)
+    {
+        if (targetFrameId == null || targetFrameId.isBlank())
+        {
+            return;
+        }
+        final String[] parts = targetFrameId.split(":");
+        if (parts.length != 2)
+        {
+            return;
+        }
         
         String windowHandle = parts[0];
-        String framePath = parts[1];
+        final String framePath = parts[1];
         
-        org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
-        try {
+        final org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
+        try
+        {
+            final java.util.Set<String> activeHandles = driver.getWindowHandles();
+            if (!activeHandles.contains(windowHandle))
+            {
+                if (!windowHandleMapping.containsKey(windowHandle))
+                {
+                    final int nextIndex = windowHandleMapping.size();
+                    final java.util.List<String> activeList = new java.util.ArrayList<>(activeHandles);
+                    if (nextIndex < activeList.size())
+                    {
+                        windowHandleMapping.put(windowHandle, activeList.get(nextIndex));
+                    }
+                    else
+                    {
+                        windowHandleMapping.put(windowHandle, activeList.get(activeList.size() - 1));
+                    }
+                }
+                windowHandle = windowHandleMapping.get(windowHandle);
+            }
             driver.switchTo().window(windowHandle);
             driver.switchTo().defaultContent();
             
-            if (!"main".equals(framePath)) {
-                String[] indices = framePath.split("\\.");
-                for (String indexStr : indices) {
-                    if (!indexStr.equals("main") && !indexStr.isBlank()) {
-                        int index = Integer.parseInt(indexStr);
+            if (!"main".equals(framePath))
+            {
+                final String[] indices = framePath.split("\\.");
+                for (final String indexStr : indices)
+                {
+                    if (!indexStr.equals("main") && !indexStr.isBlank())
+                    {
+                        final int index = Integer.parseInt(indexStr);
                         driver.switchTo().frame(index);
                     }
                 }
             }
-        } catch (Exception e) {
+        }
+        catch (final Exception e)
+        {
             logDebug("   ⚠️ Could not switch to frame {}: {}", targetFrameId, e.getMessage());
         }
     }

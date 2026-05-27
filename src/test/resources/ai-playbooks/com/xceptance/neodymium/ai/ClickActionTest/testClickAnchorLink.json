@@ -1,0 +1,24 @@
+{
+  "id": "com.xceptance.neodymium.ai.ClickActionTest :: testClickAnchorLink",
+  "steps": [
+    {
+      "promptLine": "Click on the Go to Target Destination link.",
+      "reasoning": "Click the anchor link to navigate.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#link-nav",
+          "description": "Click Anchor Link",
+          "elementDetails": "Anchor Link with id 'link-nav'",
+          "elementContext": {
+            "text": "Go to Target Destination",
+            "id": "link-nav",
+            "tagName": "a",
+            "type": ""
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

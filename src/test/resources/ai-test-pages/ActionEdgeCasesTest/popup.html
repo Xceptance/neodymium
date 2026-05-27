@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Popup Window Content</title>
+</head>
+<body>
+    <h1>Inside Popup Window</h1>
+    
+    <button id="btn-popup-action">Confirm in Popup</button>
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('btn-popup-action').addEventListener('click', function() {
+            document.getElementById('result').innerText = 'Popup Confirmed!';
+        });
+    </script>
+</body>
+</html>

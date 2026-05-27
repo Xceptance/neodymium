@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Click Action Test - Invisible Checkbox</title>
+    <style>
+        /* Hide the checkbox completely */
+        #checkbox-invisible {
+            display: none;
+        }
+        /* Custom styled label box */
+        .custom-checkbox {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #333;
+            display: inline-block;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Click Action Test</h1>
+    
+    <!-- Modern wrapper: hidden input, custom label -->
+    <label>
+        <input type="checkbox" id="checkbox-invisible">
+        <span class="custom-checkbox" id="checkbox-custom-trigger"></span>
+        Accept Terms
+    </label>
+    
+    <div id="result">Unchecked</div>
+    
+    <script>
+        const cb = document.getElementById('checkbox-invisible');
+        cb.addEventListener('change', function() {
+            document.getElementById('result').innerText = cb.checked ? 'Checked' : 'Unchecked';
+        });
+    </script>
+</body>
+</html>

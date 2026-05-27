@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Branch Action Test</title>
+</head>
+<body>
+    <h1>Branch Action Test</h1>
+    
+    <div id="cookie-banner" style="background-color: yellow; padding: 10px; margin-bottom: 10px;">
+        <span>We use cookies!</span>
+        <button id="btn-accept">Accept Cookies</button>
+    </div>
+    
+    <button id="btn-main-action">Main Action Button</button>
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('btn-accept').addEventListener('click', function() {
+            document.getElementById('cookie-banner').style.display = 'none';
+            document.getElementById('result').innerText = 'Cookies Accepted!';
+        });
+        
+        document.getElementById('btn-main-action').addEventListener('click', function() {
+            document.getElementById('result').innerText = 'Main Action Triggered!';
+        });
+    </script>
+</body>
+</html>

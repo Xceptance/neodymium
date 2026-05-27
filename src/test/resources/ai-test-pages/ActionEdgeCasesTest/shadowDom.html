@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Action Edge Cases - Shadow DOM</title>
+</head>
+<body>
+    <h1>Shadow DOM Edge Case</h1>
+    
+    <!-- Custom Element containing Shadow DOM -->
+    <shadow-container id="shadow-host"></shadow-container>
+    
+    <div id="result"></div>
+    
+    <script>
+        class ShadowContainer extends HTMLElement {
+            constructor() {
+                super();
+                const shadow = this.attachShadow({ mode: 'open' });
+                
+                shadow.innerHTML = `
+                    <div style="border: 1px solid black; padding: 10px;">
+                        <h3>Inside Shadow DOM</h3>
+                        <label for="shadow-text">Shadow Input:</label>
+                        <input type="text" id="shadow-text" placeholder="Type inside shadow"><br><br>
+                        
+                        <label>
+                            <input type="checkbox" id="shadow-check"> Shadow Checkbox
+                        </label><br><br>
+                        
+                        <label>
+                            <input type="radio" name="shadow-radio" id="shadow-radio-btn" value="yes"> Shadow Radio
+                        </label><br><br>
+                        
+                        <button id="shadow-btn">Submit Shadow Form</button>
+                    </div>
+                `;
+                
+                shadow.getElementById('shadow-btn').addEventListener('click', () => {
+                    const textVal = shadow.getElementById('shadow-text').value;
+                    const checked = shadow.getElementById('shadow-check').checked;
+                    const radioChecked = shadow.getElementById('shadow-radio-btn').checked;
+                    
+                    // Dispatch an event or update parent document
+                    window.document.getElementById('result').innerText = 
+                        'Shadow Submitted: ' + textVal + ' | Checkbox: ' + checked + ' | Radio: ' + radioChecked;
+                });
+            }
+        }
+        
+        customElements.define('shadow-container', ShadowContainer);
+    </script>
+</body>
+</html>

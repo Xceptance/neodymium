@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Check Action Test</title>
+</head>
+<body>
+    <h1>Check Action Test</h1>
+    
+    <label>
+        <input type="checkbox" id="newsletter"> Subscribe to newsletter
+    </label>
+    <br><br>
+    
+    <p>Preferred Contact Method:</p>
+    <label>
+        <input type="radio" name="contact" id="contact-email" value="email"> Email
+    </label>
+    <label>
+        <input type="radio" name="contact" id="contact-phone" value="phone"> Phone
+    </label>
+    <br><br>
+    
+    <button id="btn-submit">Submit Preferences</button>
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('btn-submit').addEventListener('click', function() {
+            var newsletter = document.getElementById('newsletter').checked;
+            var contact = '';
+            if (document.getElementById('contact-email').checked) {
+                contact = 'email';
+            } else if (document.getElementById('contact-phone').checked) {
+                contact = 'phone';
+            }
+            document.getElementById('result').innerText = 'Newsletter: ' + newsletter + ', Contact: ' + contact;
+        });
+    </script>
+</body>
+</html>

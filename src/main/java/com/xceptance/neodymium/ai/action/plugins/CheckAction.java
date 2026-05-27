@@ -26,25 +26,52 @@
 package com.xceptance.neodymium.ai.action.plugins;
 
 import java.util.List;
+import com.codeborne.selenide.SelenideElement;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 
-public class CheckAction implements AiActionPlugin {
+/**
+ * AI action plugin to check/select checkboxes and radio buttons.
+ * 
+ * // AI-generated: Antigravity (Gemini 3.5 Flash)
+ */
+public class CheckAction implements AiActionPlugin
+{
     @Override
-    public String getActionName() { return "CHECK"; }
+    public String getActionName()
+    {
+        return "CHECK";
+    }
 
     @Override
-    public List<Action> parseDirectInstruction(String instruction) { return null; }
+    public List<Action> parseDirectInstruction(final String instruction)
+    {
+        return null;
+    }
 
     @Override
-    public boolean requiresLlm(Action action) { return false; }
+    public boolean requiresLlm(final Action action)
+    {
+        return false;
+    }
 
     @Override
-    public String getPromptInstructions() { return "CHECK: Check if an element contains expected text or is in an expected state."; }
+    public String getPromptInstructions()
+    {
+        return "CHECK: Check if an element contains expected text or is in an expected state.";
+    }
 
     @Override
-    public void execute(Action action, Object testInstance, ActionExecutor executor) {
-        // Typically checks are similar to assertions but might not throw, or handled differently
+    public void execute(final Action action, final Object testInstance, final ActionExecutor executor)
+    {
+        if (action.getTarget() != null && !action.getTarget().isBlank())
+        {
+            final SelenideElement element = executor.findElement(action);
+            if (!element.isSelected())
+            {
+                element.click();
+            }
+        }
     }
 }

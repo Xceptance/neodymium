@@ -1,0 +1,24 @@
+{
+  "id": "com.xceptance.neodymium.ai.ClickActionTest :: testClickDisabledButton",
+  "steps": [
+    {
+      "promptLine": "Click the Disabled Order Button.",
+      "reasoning": "Click the disabled button.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-disabled",
+          "description": "Click Disabled Button",
+          "elementDetails": "Disabled Button with id 'btn-disabled'",
+          "elementContext": {
+            "text": "Disabled Order Button",
+            "id": "btn-disabled",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

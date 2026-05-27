@@ -94,26 +94,26 @@ public final class AiAgentMultiStageTest
         // 2. Setup mock LLM Client that responds in two stages
         final List<String> llmResponses = new ArrayList<>();
         llmResponses.add("{\n" +
-            "  \"success\": true,\n" +
-            "  \"done\": false,\n" +
-            "  \"reasoning\": \"Opening the dropdown first.\",\n" +
-            "  \"actions\": [\n" +
+            "  \"s\": true,\n" +
+            "  \"d\": false,\n" +
+            "  \"r\": \"Opening the dropdown first.\",\n" +
+            "  \"a\": [\n" +
             "    {\n" +
-            "      \"type\": \"CLICK\",\n" +
-            "      \"target\": \"#dropdown\",\n" +
-            "      \"description\": \"Click the dropdown\"\n" +
+            "      \"t\": \"CLICK\",\n" +
+            "      \"tg\": \"#dropdown\",\n" +
+            "      \"d\": \"Click the dropdown\"\n" +
             "    }\n" +
             "  ]\n" +
             "}");
         llmResponses.add("{\n" +
-            "  \"success\": true,\n" +
-            "  \"done\": true,\n" +
-            "  \"reasoning\": \"Dropdown open. Now selecting the option.\",\n" +
-            "  \"actions\": [\n" +
+            "  \"s\": true,\n" +
+            "  \"d\": true,\n" +
+            "  \"r\": \"Dropdown open. Now selecting the option.\",\n" +
+            "  \"a\": [\n" +
             "    {\n" +
-            "      \"type\": \"CLICK\",\n" +
-            "      \"target\": \"#option-item\",\n" +
-            "      \"description\": \"Click the option item\"\n" +
+            "      \"t\": \"CLICK\",\n" +
+            "      \"tg\": \"#option-item\",\n" +
+            "      \"d\": \"Click the option item\"\n" +
             "    }\n" +
             "  ]\n" +
             "}");
@@ -187,6 +187,12 @@ public final class AiAgentMultiStageTest
                 throw new IllegalStateException("Mock LlmClient: unexpected call to chat");
             }
             return responses.get(callIndex++);
+        }
+
+        @Override
+        public String chatWithScreenshot(final String systemPrompt, final String userPrompt, final String screenshot)
+        {
+            return chat(systemPrompt, userPrompt);
         }
 
         public int getCallCount()

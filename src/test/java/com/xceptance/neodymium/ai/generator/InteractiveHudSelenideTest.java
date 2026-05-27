@@ -66,10 +66,12 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
     @BeforeAll
     public static void enableInteractiveMode()
     {
+        Neodymium.clearThreadContext();
         System.setProperty("neodymium.ai.interactive", "true");
         System.setProperty("neodymium.ai.interactive.autoSkip", "false");
         System.setProperty("neodymium.ai.apiKey", "dummy-api-key");
         System.setProperty("neodymium.ai.agent.maxRetries", "0");
+        Neodymium.clearThreadContext();
     }
 
     @AfterAll
@@ -79,11 +81,13 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         System.clearProperty("neodymium.ai.interactive.autoSkip");
         System.clearProperty("neodymium.ai.apiKey");
         System.clearProperty("neodymium.ai.agent.maxRetries");
+        Neodymium.clearThreadContext();
     }
 
     @BeforeEach
     public void setupCustomPageUrl()
     {
+        Neodymium.clearThreadContext();
         currentTestUrl = String.format("http://localhost:%d/InteractiveHudSelenideTest/interactive-hud-test.html", server.getPort());
         bgThrowable = null;
         bgThread = null;

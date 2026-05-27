@@ -1,0 +1,24 @@
+{
+  "id": "com.xceptance.neodymium.ai.ClickActionTest :: testClickInvisibleCheckbox",
+  "steps": [
+    {
+      "promptLine": "Click the Accept Terms checkbox.",
+      "reasoning": "Click the hidden input checkbox to toggle it.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#checkbox-invisible",
+          "description": "Click Accept Terms checkbox",
+          "elementDetails": "Hidden checkbox with id 'checkbox-invisible'",
+          "elementContext": {
+            "text": "",
+            "id": "checkbox-invisible",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

@@ -58,4 +58,56 @@ public final class ClickActionTest extends BaseAiTest
             Neodymium.ai().execute("Click the Secret Admin Button.");
         });
     }
+
+    @NeodymiumTest
+    public void testClickDisabledButton()
+    {
+        open(currentTestUrl);
+
+        // Expect an exception because the button is disabled
+        Assertions.assertThrows(AssertionError.class, () -> {
+            Neodymium.ai().execute("Click the Disabled Order Button.");
+        });
+    }
+
+    @NeodymiumTest
+    public void testClickInvisibleCheckbox()
+    {
+        open(currentTestUrl);
+
+        // The checkbox itself is invisible, but ClickAction should fall back to a JavaScript click and succeed
+        Neodymium.ai().execute("Click the Accept Terms checkbox.");
+
+        $("#result").shouldHave(Condition.exactText("Checked"));
+    }
+
+    @NeodymiumTest
+    public void testClickAnchorLink()
+    {
+        open(currentTestUrl);
+
+        Neodymium.ai().execute("Click on the Go to Target Destination link.");
+
+        $("#result").shouldHave(Condition.exactText("Link Clicked!"));
+    }
+
+    @NeodymiumTest
+    public void testClickSvgIcon()
+    {
+        open(currentTestUrl);
+
+        Neodymium.ai().execute("Click on the Add Item button.");
+
+        $("#result").shouldHave(Condition.exactText("SVG Button Clicked!"));
+    }
+
+    @NeodymiumTest
+    public void testClickTableRow()
+    {
+        open(currentTestUrl);
+
+        Neodymium.ai().execute("Click on the row for customer Bob Jones.");
+
+        $("#result").shouldHave(Condition.exactText("Selected #1002"));
+    }
 }

@@ -1,0 +1,64 @@
+{
+  "id": "com.xceptance.neodymium.ai.TypeActionTest :: testTypeHappyPath",
+  "steps": [
+    {
+      "promptLine": "Type 'John' into the first name field.",
+      "reasoning": "Type name into the text input element.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#first-name",
+          "description": "Type name",
+          "elementDetails": "First Name text input with id 'first-name'",
+          "elementContext": {
+            "text": "",
+            "id": "first-name",
+            "tagName": "input",
+            "type": "text"
+          },
+          "value": "John",
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Type 'This is a test comment.' into the comments field.",
+      "reasoning": "Type comment into the textarea element.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#comments",
+          "description": "Type comments",
+          "elementDetails": "Comments textarea with id 'comments'",
+          "elementContext": {
+            "text": "",
+            "id": "comments",
+            "tagName": "textarea",
+            "type": ""
+          },
+          "value": "This is a test comment.",
+          "replay": ""
+        }
+      ]
+    },
+    {
+      "promptLine": "Click on the 'Submit Details' button.",
+      "reasoning": "Submit the details.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit",
+          "description": "Click Submit Details",
+          "elementDetails": "Submit Details button with id 'btn-submit'",
+          "elementContext": {
+            "text": "Submit Details",
+            "id": "btn-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": ""
+        }
+      ]
+    }
+  ]
+}

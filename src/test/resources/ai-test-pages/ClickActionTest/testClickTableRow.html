@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Click Action Test - Table Row</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            max-width: 600px;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        tr {
+            cursor: pointer;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #result {
+            margin-top: 20px;
+            font-weight: bold;
+            font-size: 1.2em;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Click Action Test - Table Row</h1>
+    <p>Please click a row in the table below to select the order.</p>
+    
+    <table id="orders-table">
+        <thead>
+            <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr id="row-1001" class="clickable-row">
+                <td>#1001</td>
+                <td>Alice Smith</td>
+                <td>$45.00</td>
+            </tr>
+            <tr id="row-1002" class="clickable-row">
+                <td>#1002</td>
+                <td>Bob Jones</td>
+                <td>$82.50</td>
+            </tr>
+            <tr id="row-1003" class="clickable-row">
+                <td>#1003</td>
+                <td>Charlie Brown</td>
+                <td>$12.99</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <div id="result">No row clicked</div>
+    
+    <script>
+        const rows = document.querySelectorAll('.clickable-row');
+        rows.forEach(row => {
+            row.addEventListener('click', function() {
+                const orderId = this.querySelector('td').innerText;
+                document.getElementById('result').innerText = 'Selected ' + orderId;
+            });
+        });
+    </script>
+</body>
+</html>
