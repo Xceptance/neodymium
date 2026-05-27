@@ -102,11 +102,13 @@ Instead of traditional driver commands, you interact with the `AiBrowser`.
 import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 
-public class MyAiTest {
-    
+public final class MyAiTest
+{
     @NeodymiumTest
-    public void testLoginWithAi() {
-        try (AiBrowser ai = new AiBrowser(this)) {
+    public void testLoginWithAi()
+    {
+        try (final AiBrowser ai = new AiBrowser(this))
+        {
             ai.execute("""
                 Open https://example.com.
                 Click on the Login link.
@@ -144,10 +146,11 @@ data:
 **`MyDataDrivenAiTest.java`**
 ```java
 @DataFolder("my/test/data")
-public class MyDataDrivenAiTest {
-    
+public final class MyDataDrivenAiTest
+{
     @NeodymiumTest
-    public void executeAiSteps() throws Throwable {
+    public void executeAiSteps() throws Throwable
+    {
         // Automatically picks up the 'steps' key from the dataset
         // and resolves the ${variables} before sending to the AI.
         Neodymium.ai().execute();
@@ -631,7 +634,8 @@ Requires the `@NeodymiumTestGenerator` annotation.
 
 ```java
 @NeodymiumTestGenerator
-public void generateCheckoutFlow() {
+public void generateCheckoutFlow()
+{
     Neodymium.ai().generatePrompt("Purchase a pair of red shoes as a guest user.");
 }
 ```
@@ -648,17 +652,17 @@ public void generateCheckoutFlow() {
 
 ## 🎯 Locator Hints & Zero-DOM Execution
 
-Sometimes you may want to explicitly guide the AI on which element to interact with, bypassing its own DOM analysis to speed up execution or resolve ambiguity. You can do this using **Inline Hints**.
+Sometimes you may want to explicitly guide the AI on which element to interact with, bypassing its own DOM analysis to speed up execution or resolve ambiguity. You can do this using **Inline Hints** or **Inline Selectors**.
 
-When you provide a hint directly within the instruction using the `(hint: ...)` syntax, Neodymium AI enters **Zero-DOM Execution mode (`ContextLevel.HINT`)**. The LLM is asked to translate your instruction into JSON using *only* the hint you provided. ZERO DOM elements are extracted or sent to the LLM. This makes hint-based steps unbelievably fast and costs practically zero input tokens!
+When you provide a locator directly within the instruction using either the standard `(hint: ...)` syntax or the developer-centric `(selector: ...)` alternative, Neodymium AI enters **Zero-DOM Execution mode (`ContextLevel.HINT`)**. The LLM is asked to translate your instruction into JSON using *only* the locator you provided. ZERO DOM elements are extracted or sent to the LLM. This makes locator-based steps unbelievably fast and costs practically zero input tokens!
 
-### Inline Hints
-You can provide a hint directly within the instruction using the `(hint: ...)` syntax.
+### Inline Hints & Selectors
+You can provide locators directly within the instruction using either the standard `(hint: ...)` syntax or the developer-centric `(selector: ...)` alternative:
 
 ```yaml
 steps: |
   Click the search button (hint: .btn-search).
-  Type '${searchTerm}' into the search field (hint: #header-search-text).
+  Type '${searchTerm}' into the search field (selector: #header-search-text).
 ```
 
 ### Using the Hints Dictionary for Placeholders
@@ -1006,7 +1010,7 @@ You can also set the flag dynamically within your Java test code before initiali
 
 ```java
 @NeodymiumTest
-public void testDynamicFlow()
+public final void testDynamicFlow()
 {
     // Programmatically bypass the cached playbook for this run
     Neodymium.getData().put("skipReplay", "true");
