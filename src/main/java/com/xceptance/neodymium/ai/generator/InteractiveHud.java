@@ -25,12 +25,16 @@
 */
 package com.xceptance.neodymium.ai.generator;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 import com.xceptance.neodymium.ai.core.HudActionException;
 import com.xceptance.neodymium.ai.core.HudActionType;
 import com.xceptance.neodymium.util.Neodymium;
@@ -199,6 +203,33 @@ public class InteractiveHud {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * Gets the list of active breakpoint step indices parsed from the JSON string.
+     *
+     * @return the list of breakpoint step indices.
+     */
+    public List<Integer> getBreakpoints()
+    {
+        final List<Integer> list = new ArrayList<>();
+        if (lastBreakpointsStr == null || lastBreakpointsStr.isEmpty() || "[]".equals(lastBreakpointsStr))
+        {
+            return list;
+        }
+        try
+        {
+            final JsonArray arr = JsonParser.parseString(lastBreakpointsStr).getAsJsonArray();
+            for (int i = 0; i < arr.size(); i++)
+            {
+                list.add(arr.get(i).getAsInt());
+            }
+        }
+        catch (final Exception e)
+        {
+            // ignore parsing errors
+        }
+        return list;
     }
 
     public void resetHudAction() {

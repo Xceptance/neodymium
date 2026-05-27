@@ -123,13 +123,27 @@ public class ActionExecutor {
      */
     private final Map<String, String> executionVariables = new HashMap<>();
 
-    private String cleanElementText(String text) {
+    public String cleanElementText(final String text)
+    {
         if (text == null)
+        {
             return null;
-        if (text.contains("'")) {
-            int firstQuote = text.indexOf("'");
-            int lastQuote = text.lastIndexOf("'");
-            if (firstQuote != lastQuote && firstQuote < lastQuote) {
+        }
+        if (text.contains("'"))
+        {
+            final int firstQuote = text.indexOf("'");
+            final int lastQuote = text.lastIndexOf("'");
+            if (firstQuote != lastQuote && firstQuote < lastQuote)
+            {
+                return text.substring(firstQuote + 1, lastQuote);
+            }
+        }
+        if (text.contains("\""))
+        {
+            final int firstQuote = text.indexOf("\"");
+            final int lastQuote = text.lastIndexOf("\"");
+            if (firstQuote != lastQuote && firstQuote < lastQuote)
+            {
                 return text.substring(firstQuote + 1, lastQuote);
             }
         }
@@ -281,7 +295,7 @@ public class ActionExecutor {
      */
     public SelenideElement findElement(final Action action) {
         try {
-            return findElements(action).first().should(Condition.exist, ELEMENT_TIMEOUT);
+            return findElements(action).first().should(Condition.exist, getElementTimeout());
         } catch (ActionExecutionException e) {
             // Rethrow using singular error message to maintain backward compatibility
             throw new ActionExecutionException(String.format("Could not find element for target '%s' or text '%s'", action.getTarget(),
@@ -390,77 +404,135 @@ public class ActionExecutor {
         }
 
         // Strategy 3: Try as link text
-        try {
+        try
+        {
             com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide
                     .$$(By.linkText(target));
-            if (!elements.isEmpty()) {
+            if (!elements.isEmpty())
+            {
                 logDebug("   🔍 Resolved using Strategy 3: Link text [{}]", target);
                 return elements;
             }
             logDebug("   ❌ Strategy 3 failed: Link text [{}]", target);
 
+            final String extractedTargetName = cleanElementText(target);
+            if (extractedTargetName != null && !extractedTargetName.equals(target))
+            {
+                elements = com.codeborne.selenide.Selenide.$$(By.linkText(extractedTargetName));
+                if (!elements.isEmpty())
+                {
+                    logDebug("   🔍 Resolved using Strategy 3 (extracted target name): Link text [{}]", extractedTargetName);
+                    return elements;
+                }
+                logDebug("   ❌ Strategy 3 failed (extracted target name): Link text [{}]", extractedTargetName);
+            }
+
             final String elementText = action.getElementDetails();
-            if (elementText != null && !elementText.isBlank() && !elementText.equals(target)) {
+            if (elementText != null && !elementText.isBlank() && !elementText.equals(target))
+            {
                 elements = com.codeborne.selenide.Selenide.$$(By.linkText(elementText));
-                if (!elements.isEmpty()) {
+                if (!elements.isEmpty())
+                {
                     logDebug("   🔍 Resolved using Strategy 3: Link text [{}]", elementText);
                     return elements;
                 }
                 logDebug("   ❌ Strategy 3 failed: Link text [{}]", elementText);
             }
-        } catch (Exception e) {
+        }
+        catch (final Exception e)
+        {
             logDebug("   ❌ Strategy 3 failed: Link text resolution with error: {}", e.getMessage());
         }
 
         // Strategy 4: Try finding by text content via XPath
-        try {
-            String targetXpath = escapeXpath(target);
+        try
+        {
+            final String targetXpath = escapeXpath(target);
             String xpath = String.format(
                     "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
                     targetXpath, targetXpath, targetXpath);
             com.codeborne.selenide.ElementsCollection elements = com.codeborne.selenide.Selenide.$$x(xpath);
-            if (!elements.isEmpty()) {
+            if (!elements.isEmpty())
+            {
                 logDebug("   🔍 Resolved using Strategy 4: Text content XPath [{}]", xpath);
                 return elements;
             }
             logDebug("   ❌ Strategy 4 failed: Text content XPath [{}]", xpath);
 
+            final String extractedTargetName = cleanElementText(target);
+            if (extractedTargetName != null && !extractedTargetName.equals(target))
+            {
+                final String extractedXpath = escapeXpath(extractedTargetName);
+                xpath = String.format(
+                        "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
+                        extractedXpath, extractedXpath, extractedXpath);
+                elements = com.codeborne.selenide.Selenide.$$x(xpath);
+                if (!elements.isEmpty())
+                {
+                    logDebug("   🔍 Resolved using Strategy 4 (extracted target name): Text content XPath [{}]", xpath);
+                    return elements;
+                }
+                logDebug("   ❌ Strategy 4 failed (extracted target name): Text content XPath [{}]", xpath);
+            }
+
             final String elementText = cleanElementText(action.getElementDetails());
-            if (elementText != null && !elementText.isBlank() && !elementText.equals(target)) {
-                String elementTextXpath = escapeXpath(elementText);
+            if (elementText != null && !elementText.isBlank() && !elementText.equals(target))
+            {
+                final String elementTextXpath = escapeXpath(elementText);
                 xpath = String.format(
                         "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
                         elementTextXpath, elementTextXpath, elementTextXpath);
                 elements = com.codeborne.selenide.Selenide.$$x(xpath);
-                if (!elements.isEmpty()) {
+                if (!elements.isEmpty())
+                {
                     logDebug("   🔍 Resolved using Strategy 4: Text content XPath [{}]", xpath);
                     return elements;
                 }
                 logDebug("   ❌ Strategy 4 failed: Text content XPath [{}]", xpath);
             }
-        } catch (Exception e) {
+        }
+        catch (final Exception e)
+        {
             logDebug("   ❌ Strategy 4 failed: Text content search with error: {}", e.getMessage());
         }
 
         // Strategy 5: Try deep Shadow DOM text search via Javascript (covers what XPath can't)
-        try {
+        try
+        {
             java.util.List<WebElement> shadowWebEls = Selenide.executeJavaScript(SHADOW_DOM_TEXT_SELECTOR_ALL, target);
-            if (shadowWebEls != null && !shadowWebEls.isEmpty()) {
+            if (shadowWebEls != null && !shadowWebEls.isEmpty())
+            {
                 logDebug("   🔍 Resolved using Strategy 5: Deep Shadow DOM text search [{}]", target);
                 return com.codeborne.selenide.Selenide.$$(shadowWebEls);
             }
             logDebug("   ❌ Strategy 5 failed: Deep Shadow DOM text search [{}]", target);
 
+            final String extractedTargetName = cleanElementText(target);
+            if (extractedTargetName != null && !extractedTargetName.equals(target))
+            {
+                shadowWebEls = Selenide.executeJavaScript(SHADOW_DOM_TEXT_SELECTOR_ALL, extractedTargetName);
+                if (shadowWebEls != null && !shadowWebEls.isEmpty())
+                {
+                    logDebug("   🔍 Resolved using Strategy 5 (extracted target name): Deep Shadow DOM text search [{}]", extractedTargetName);
+                    return com.codeborne.selenide.Selenide.$$(shadowWebEls);
+                }
+                logDebug("   ❌ Strategy 5 failed (extracted target name): Deep Shadow DOM text search [{}]", extractedTargetName);
+            }
+
             final String elementText = cleanElementText(action.getElementDetails());
-            if (elementText != null && !elementText.isBlank() && !elementText.equals(target)) {
+            if (elementText != null && !elementText.isBlank() && !elementText.equals(target))
+            {
                 shadowWebEls = Selenide.executeJavaScript(SHADOW_DOM_TEXT_SELECTOR_ALL, elementText);
-                if (shadowWebEls != null && !shadowWebEls.isEmpty()) {
+                if (shadowWebEls != null && !shadowWebEls.isEmpty())
+                {
                     logDebug("   🔍 Resolved using Strategy 5: Deep Shadow DOM text search [{}]", elementText);
                     return com.codeborne.selenide.Selenide.$$(shadowWebEls);
                 }
                 logDebug("   ❌ Strategy 5 failed: Deep Shadow DOM text search [{}]", elementText);
             }
-        } catch (Exception e) {
+        }
+        catch (final Exception e)
+        {
             logDebug("   ❌ Strategy 5 failed: Deep Shadow DOM text search with error: {}", e.getMessage());
         }
 

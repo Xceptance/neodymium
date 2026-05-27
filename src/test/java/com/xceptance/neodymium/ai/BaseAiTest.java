@@ -40,7 +40,7 @@ import com.codeborne.selenide.Selenide;
  */
 public abstract class BaseAiTest
 {
-    private static EmbeddedHtmlServer server;
+    protected static EmbeddedHtmlServer server;
     protected String currentTestUrl;
 
     /**

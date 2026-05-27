@@ -77,22 +77,11 @@
                 window.neoHudAutoSkip = !window.neoHudAutoSkip;
                 window.updateAutoSkipBtn();
                 
+                setSessionStorage('neoLastAutoSkip', window.neoHudAutoSkip ? 'true' : 'false');
+                
                 if (window.neoHudAutoSkip) {
-                    var hitBreakpoint = false;
-                    var pList = window.neoPlannedList || [];
-                    if (pList && pList.length > 0) {
-                        var currentStepIdx = (window.neoPerformedList || []).length;
-                        if (window.neoBreakpoints && window.neoBreakpoints.indexOf(currentStepIdx) !== -1) {
-                            hitBreakpoint = true;
-                        }
-                    }
-                    if (!hitBreakpoint) {
-                        // Java will automatically detect the autoSkip state and break out of its wait loop.
-                    } else {
-                        // User tried to fast-forward on a breakpoint. We immediately pause it again.
-                        window.neoHudAutoSkip = false;
-                        window.updateAutoSkipBtn();
-                    }
+                    // Java will automatically detect the autoSkip state, handle breakpoints, and break out of its wait loop.
+                    if (window.neoMinimizeHud) window.neoMinimizeHud();
                 }
             });
         }
@@ -696,6 +685,8 @@
 
     window.neoPerformedList = performed;
     window.neoPlannedList = planned;
+    window.neoHudAutoSkip = autoSkip;
+    if (window.updateAutoSkipBtn) window.updateAutoSkipBtn();
 
     if (window.neoHudAutoSkip && window.neoPlannedList && window.neoPlannedList.length > 0) {
         var currentStepIdx = (window.neoPerformedList || []).length;
@@ -715,12 +706,28 @@
         if (minCircle) { minCircle.style.right = r; minCircle.style.bottom = b; minCircle.style.left = 'auto'; minCircle.style.top = 'auto'; }
     }
 
-    if (getSessionStorage('neoHudMinimized') === 'true') {
-        if (window.neoHudAutoSkip === false) {
-            if (window.neoMaximizeHud) window.neoMaximizeHud();
-        } else {
-            if (window.neoMinimizeHud) window.neoMinimizeHud();
-        }
+    var currentNextAction = (window.neoPlannedList && window.neoPlannedList.length > 0) ? window.neoPlannedList[0] : '';
+    var currentPerfLen = (window.neoPerformedList || []).length;
+    var currentAutoSkip = window.neoHudAutoSkip === true;
+    var lastNextAction = getSessionStorage('neoLastNextAction');
+    var lastPerfLen = getSessionStorage('neoLastPerfLen');
+    var lastAutoSkip = getSessionStorage('neoLastAutoSkip');
+
+    if ((lastNextAction !== null && lastNextAction !== currentNextAction) || 
+        (lastPerfLen !== null && parseInt(lastPerfLen) !== currentPerfLen) ||
+        (lastAutoSkip === 'true' && !currentAutoSkip) ||
+        currentNextAction.startsWith('⚠️') ||
+        isFinished) {
+        setSessionStorage('neoHudMinimized', 'false');
+    }
+    setSessionStorage('neoLastNextAction', currentNextAction);
+    setSessionStorage('neoLastPerfLen', currentPerfLen.toString());
+    setSessionStorage('neoLastAutoSkip', currentAutoSkip ? 'true' : 'false');
+
+    if (window.neoHudAutoSkip === true) {
+        if (window.neoMinimizeHud) window.neoMinimizeHud();
+    } else if (getSessionStorage('neoHudMinimized') === 'true') {
+        if (window.neoMinimizeHud) window.neoMinimizeHud();
     } else {
         if (currentHud) currentHud.style.display = 'flex';
         if (minCircle) minCircle.style.display = 'none';
@@ -872,13 +879,17 @@
     }
 
     // Update history
-    if (performed) {
+    var historyContainer = document.getElementById('neo-history-container');
+    if (performed && performed.length > 0) {
+        if (historyContainer) historyContainer.style.display = 'block';
         var historyList = document.getElementById('neo-history-list');
         if (historyList) {
             historyList.innerHTML = performed.map(function(a, index) {
                 return '<li style="margin-bottom:3px; padding:2px; background:#444; cursor:pointer;" onclick="if(confirm(\'Rewind execution back to this step?\')) window.neoSubmitAction({ action: \'REWIND\', index: ' + index + ' });" title="Click to rewind">[' + index + '] ' + a + '</li>';
             }).join('');
         }
+    } else {
+        if (historyContainer) historyContainer.style.display = 'none';
     }
 
 })(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11], arguments[12], arguments[13], arguments[14]);

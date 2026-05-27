@@ -315,8 +315,14 @@ public class AiAgent {
             boolean abortedDueToExpectedFailure = false;
             String abortedBugId = null;
 
-            for (int i = 0; i <= stepsList.size(); i++) {
-                if (isInteractive) {
+            for (int i = 0; i <= stepsList.size(); i++)
+            {
+                if (Thread.currentThread().isInterrupted())
+                {
+                    throw new RuntimeException("Thread was interrupted, halting agent execution.");
+                }
+                if (isInteractive)
+                {
                     final Boolean currentAutoSkipStatus = Neodymium.getOrCreateInteractiveHud()
                             .checkAutoSkipStatus();
                     if (currentAutoSkipStatus != null)
@@ -326,6 +332,17 @@ public class AiAgent {
                             logPauseReason("HUD Fast-Forward paused (e.g., Breakpoint reached or manual pause)");
                         }
                         this.autoSkip = currentAutoSkipStatus;
+                    }
+
+                    // Eager pre-execution check: check if the upcoming step index is in the active breakpoints
+                    final List<Integer> breakpoints = Neodymium.getOrCreateInteractiveHud().getBreakpoints();
+                    if (breakpoints.contains(i))
+                    {
+                        if (this.autoSkip)
+                        {
+                            logPauseReason("HUD Fast-Forward paused (e.g., Breakpoint reached or manual pause)");
+                        }
+                        this.autoSkip = false;
                     }
                 }
 
@@ -356,7 +373,7 @@ public class AiAgent {
                             // If the user chooses to rewind, edit, or add during the final prompt,
                             // we update the loop index 'i' and continue from the new position
                             i = processHudActionException(e, i, stepsList, performedInstructions, stepLines);
-                            if (i < 0)
+                            if (i < -1)
                             {
                                 break;
                             }
@@ -471,7 +488,7 @@ public class AiAgent {
                 catch (final HudActionException e)
                 {
                     i = processHudActionException(e, i, stepsList, performedInstructions, stepLines);
-                    if (i < 0)
+                    if (i < -1)
                     {
                         break;
                     }
@@ -548,6 +565,7 @@ public class AiAgent {
     {
         int errorCount = 0;
         int playbookReplayAttempts = 0;
+        boolean hasApprovedCurrentStep = false;
         final Playbook playbook = Neodymium.getAiPlaybook();
         final boolean isInteractive = config.aiInteractive();
 
@@ -561,7 +579,7 @@ public class AiAgent {
 
                 while (true)
                 {
-                    if (isInteractive)
+                    if (isInteractive && !hasApprovedCurrentStep)
                     {
                         final List<String> plannedStrs = new ArrayList<>();
                         plannedStrs.add(instruction);
@@ -587,7 +605,7 @@ public class AiAgent {
                     // LLM)
                     final List<Action> actions = getStepActions(stepIndex, instruction, playbook, expectedFailure, bugId, accumulatedActions);
 
-                    if (isInteractive)
+                    if (isInteractive && !hasApprovedCurrentStep)
                     {
                         // Update the HUD with the proposed actions and reasoning before executing them
                         final List<String> plannedStrs = new ArrayList<>();
@@ -617,6 +635,7 @@ public class AiAgent {
 
                         // Block and wait for the user to approve the actions
                         waitForHudAction(true);
+                        hasApprovedCurrentStep = true;
                     }
 
                     // Execute the approved actions via Selenium/WebDriver, applying timeout isolation
@@ -1091,6 +1110,10 @@ public class AiAgent {
         boolean handled = false;
         for (int wait = 0; wait < 3600; wait++)
         {
+            if (Thread.currentThread().isInterrupted())
+            {
+                throw new RuntimeException("Thread was interrupted, halting agent execution.");
+            }
             if (allowAutoSkip)
             {
                 final Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
@@ -1104,19 +1127,7 @@ public class AiAgent {
                 }
             }
 
-            final String hudActionStr = Neodymium.getOrCreateInteractiveHud().checkHudAction();
-            if (hudActionStr != null)
-            {
-                final Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
-                if (s != null)
-                {
-                    this.autoSkip = s;
-                }
-                if (this.autoSkip)
-                {
-                    return;
-                }
-            }
+
 
             final String hudActionStr = Neodymium.getOrCreateInteractiveHud().checkHudAction();
             if (hudActionStr != null)
@@ -1224,7 +1235,7 @@ public class AiAgent {
         boolean visualMatchSucceeded = false;
 
         // 1. Are we replaying a playbook?
-        if (playbook.isRecording() == false) {
+        if (playbook.isRecording() == false || (step.getPromptLine() != null && step.getPromptLine().equals(instruction) && !step.getActions().isEmpty() && !step.failed())) {
             // Only if we are not trying to heal a step
             if (step.failed() == false) {
                 // Check if the prompt is still the same, or if we are at the end of the
@@ -1965,10 +1976,14 @@ public class AiAgent {
     }
 
     private void sleep(final long ms) {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new RuntimeException("Thread was interrupted, halting agent execution.");
+        }
         try {
             Thread.sleep(ms);
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
+            throw new RuntimeException("Thread was interrupted, halting agent execution.", e);
         }
     }
 
@@ -2041,7 +2056,7 @@ public class AiAgent {
         else if (HudActionType.SAVE_EXIT == e.actionType)
         {
             this.hudSaveExit = saveYamlAndExit(i, performedInstructions);
-            return -1; // signal break
+            return -2; // signal break
         }
         else if (HudActionType.ADD == e.actionType)
         {
@@ -2118,7 +2133,7 @@ public class AiAgent {
             return i - 1;
         }
 
-        return -1; // Unhandled or generic break;
+        return -2; // Unhandled or generic break;
     }
 
     private static final class ExpectedFailureAbortException extends RuntimeException

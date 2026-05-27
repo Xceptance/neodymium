@@ -95,4 +95,42 @@ public class ActionExecutorTest {
             executor.execute(action);
         }, "Executing an unknown action should not throw an exception, but handle gracefully");
     }
+
+    @Test
+    public void testCleanElementTextSingleQuotes()
+    {
+        final ActionExecutor executor = new ActionExecutor(this);
+        final String input = "button 'Save this card'";
+        final String expected = "Save this card";
+        final String actual = executor.cleanElementText(input);
+        Assertions.assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testCleanElementTextDoubleQuotes()
+    {
+        final ActionExecutor executor = new ActionExecutor(this);
+        final String input = "link \"Log in\"";
+        final String expected = "Log in";
+        final String actual = executor.cleanElementText(input);
+        Assertions.assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testCleanElementTextUnquoted()
+    {
+        final ActionExecutor executor = new ActionExecutor(this);
+        final String input = "unquoted text";
+        final String expected = "unquoted text";
+        final String actual = executor.cleanElementText(input);
+        Assertions.assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testCleanElementTextNull()
+    {
+        final ActionExecutor executor = new ActionExecutor(this);
+        final String actual = executor.cleanElementText(null);
+        Assertions.assertNull(actual);
+    }
 }
