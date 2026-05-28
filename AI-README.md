@@ -1114,3 +1114,23 @@ Templates used during the Pre-Execution Static Analysis Phase (PESAP) before bro
 - **`pesap-system-prompt.md`**: The overarching system prompt used to configure the LLM environment during the static analysis phase.
 - **`pesap-classify-prompt.md`**: The system instructions for statically predicting the starting context level based on the semantic intent of steps.
 - **`pesap-linter-prompt.md`**: The system instructions for multilingual static semantic linting and instruction ambiguity checking.
+
+---
+
+## ⚖️ Licensing
+
+Neodymium is licensed under different licenses depending on which module or features you are utilizing:
+
+### 1. Neodymium Classic (Core Framework)
+The core, non-AI test automation framework (**Neodymium Classic**) remains fully open-source and licensed under the permissive **[MIT License](LICENSE#section-a-mit-license-neodymium-classic)**. You are free to use, modify, distribute, and commercially host Neodymium Classic without restriction.
+
+### 2. Neodymium Aura AI (AI Integration Module)
+The advanced AI-powered automation integration (**Neodymium Aura AI**) is dual-licensed to support both the open-source community and enterprise environments:
+
+- **Community Edition:** Free to use for development, testing, and internal applications under the terms of the **[GNU Affero General Public License (AGPLv3)](LICENSE#section-b-gnu-affero-general-public-license-neodymium-aura-ai)**. So, if you just test your own applications, you are free to do whatever you want. If you want to sell services for Neodymium Aura AI or bundle Neodymium Aura AI or just parts, the next line is yours.
+- **Commercial Edition:** If you wish to offer Neodymium Aura AI as a hosted service, bundle it in a commercial SaaS offering, or use it without the AGPLv3 copyleft/network-disclosure requirements, you must purchase a **Commercial License**.
+- **Commercial Support:** If you want to support others in using Neodymium Aura AI or you need changes, features, or any other help, you are encouraged to purchase commercial support. This will support this project, its continuous maintenance, and keep it thriving. There is no free fixing of Neodymium Aura AI unless you are another open source project. We will address problems at our own discretion.
+- Your fixes and pull requests are always welcomed under all licenses and agreements.
+
+For commercial inquiries, licensing options, or custom agreements, please contact us at **[support@xceptance.com](mailto:support@xceptance.com)**. If you have any questions about licensing, especially if your usage is affected, please reach out to us as well. We are also open to discussing custom license modifications or tailored agreements to fit your specific business or technical requirements.
+

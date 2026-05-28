@@ -86,7 +86,22 @@ it. [Please head over to our Wiki](https://github.com/Xceptance/neodymium/wiki/)
 If you are a customer and want to be mentioned here, please let us know. We will be happy to extend your web reach by placing a link and short description here. You can also just send us a pull request with a change, if you like.
 
 ## License
-Neodymium is licensed under the MIT License.
+
+Neodymium is licensed under different licenses depending on which module or features you are utilizing:
+
+### 1. Neodymium Classic (Core Framework)
+The core, non-AI test automation framework (**Neodymium Classic**) remains fully open-source and licensed under the permissive **[MIT License](LICENSE#section-a-mit-license-neodymium-classic)**. You are free to use, modify, distribute, and commercially host Neodymium Classic without restriction.
+
+### 2. Neodymium Aura AI (AI Integration Module)
+The advanced AI-powered automation integration (**Neodymium Aura AI**) is dual-licensed to support both the open-source community and enterprise environments:
+
+- **Community Edition:** Free to use for development, testing, and internal applications under the terms of the **[GNU Affero General Public License (AGPLv3)](LICENSE#section-b-gnu-affero-general-public-license-neodymium-aura-ai)**. So, if you just test your own applications, you are free to do whatever you want. If you want to sell services for Neodymium Aura AI or bundle Neodymium Aura AI or just parts, the next line is yours.
+- **Commercial Edition:** If you wish to offer Neodymium Aura AI as a hosted service, bundle it in a commercial SaaS offering, or use it without the AGPLv3 copyleft/network-disclosure requirements, you must purchase a **Commercial License**.
+- **Commercial Support:** If you want to support others in using Neodymium Aura AI or you need changes, features, or any other help, you are encouraged to purchase commercial support. This will support this project, its continuous maintenance, and keep it thriving. There is no free fixing of Neodymium Aura AI unless you are another open source project. We will address problems at our own discretion.
+- Your fixes and pull requests are always welcomed under all licenses and agreements.
+
+For commercial inquiries, licensing options, or custom agreements, please contact us at **[support@xceptance.com](mailto:support@xceptance.com)**. If you have any questions about licensing, especially if your usage is affected, please reach out to us as well. We are also open to discussing custom license modifications or tailored agreements to fit your specific business or technical requirements.
+
 
 ## Who Are We
 We are [Xceptance](https://www.xceptance.com/en/). A software testing company with strong commerce knowledge and projects with customers from all around the world. Besides Neodymium, we have developed [Xceptance Load Test (XLT)](https://github.com/Xceptance/XLT), a load and performance test tool that is open source too (APL 2.0). It provides an extensive range of awesome features to make the tester's and developer's life easier.
