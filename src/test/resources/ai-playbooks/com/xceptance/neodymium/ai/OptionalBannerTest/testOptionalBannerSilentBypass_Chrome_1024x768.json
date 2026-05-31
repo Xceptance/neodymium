@@ -3,20 +3,20 @@
   "steps": [
     {
       "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
-      "reasoning": "Clicked the \u0027Aura Defect Controls\u0027 button using its ID as specified in the hint.",
+      "reasoning": "Found the element with id \u0027aura-trigger\u0027 as specified in the hint and instruction, and created a CLICK action for it.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#aura-trigger",
           "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
-          "elementDetails": "Aura Defect Controls",
+          "elementDetails": "Aura Defect Controls trigger button",
           "elementContext": {
             "classes": "aura-controls-trigger",
             "id": "aura-trigger",
             "tagName": "div"
           },
           "replay": "",
-          "frameId": "D931E3141E159562F88B94DCC7C501AE:main",
+          "frameId": "4BB55A4F2B976A217A8D4FAD86B6728E:main",
           "adjust": false
         }
       ],
@@ -25,13 +25,13 @@
     },
     {
       "promptLine": "Click the \u0027Show Promo Banner\u0027 toggle to hide it. (hint: label[for\u003d\u0027toggle-banner\u0027])",
-      "reasoning": "The instruction asks to click the \u0027Show Promo Banner\u0027 toggle. I identified the corresponding checkbox element in the AXTREE by its name and data-neo-ref and generated a CLICK action for it.",
+      "reasoning": "The instruction is to click the \u0027Show Promo Banner\u0027 toggle. I identified the corresponding checkbox element using its data-neo-ref attribute and its name from the AXTree and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_31bg3t",
+          "target": "[data-neo-ref\u003d\u0027xc_31bg3t\u0027]",
           "description": "Click the \u0027Show Promo Banner\u0027 toggle to hide it.",
-          "elementDetails": "Show Promo Banner Toggles optional marketing header. checkbox",
+          "elementDetails": "Show Promo Banner Toggles optional marketing header.",
           "elementContext": {
             "id": "toggle-banner",
             "tagName": "input",
@@ -46,7 +46,7 @@
     },
     {
       "promptLine": "Click \u0027Close Banner\u0027",
-      "reasoning": "Identified the \u0027×\u0027 button as the \u0027Close Banner\u0027 element based on common UI patterns and the instruction.",
+      "reasoning": "The instruction asks to click \u0027Close Banner\u0027. The accessibility tree shows a button with the name \u0027×\u0027 and data-neo-ref \u0027xc_8am3xz\u0027, which is a common icon for closing banners or modals. This is the most appropriate element to click.",
       "actions": [
         {
           "type": "CLICK",

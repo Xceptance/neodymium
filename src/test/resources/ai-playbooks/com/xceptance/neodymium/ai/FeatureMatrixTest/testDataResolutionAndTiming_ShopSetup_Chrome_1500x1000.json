@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
-      "reasoning": "Found the \u0027Full Name\u0027 textbox using its data-neo-ref \u0027xc_u90fde\u0027 and created a TYPE action to input \u0027Alice Cooper\u0027.",
+      "reasoning": "Found the \u0027Full Name\u0027 textbox using its data-neo-ref and created a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
@@ -29,7 +29,7 @@
     },
     {
       "promptLine": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Found the \u0027Email Address\u0027 textbox by its accessibility name and data-neo-ref attribute, then generated a TYPE action to input the specified email address.",
+      "reasoning": "Found the \u0027Email Address\u0027 textbox by its accessibility name and data-neo-ref, then generated a TYPE action to input the specified email address.",
       "actions": [
         {
           "type": "TYPE",
@@ -55,11 +55,11 @@
     },
     {
       "promptLine": "Click the \u0027Create Account\u0027 button.",
-      "reasoning": "Found the \u0027Create Account\u0027 button by its data-neo-ref and generated a CLICK action.",
+      "reasoning": "Found the \u0027Create Account\u0027 button using its data-neo-ref attribute and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_t6pll2",
+          "target": "[data-neo-ref\u003d\u0027xc_t6pll2\u0027]",
           "description": "Click the \u0027Create Account\u0027 button",
           "elementDetails": "Create Account",
           "elementContext": {
@@ -78,7 +78,7 @@
     },
     {
       "promptLine": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
-      "reasoning": "The success indicator \u0027Account Registered!\u0027 is clearly visible in the provided screenshot, confirming the instruction.",
+      "reasoning": "The instruction is a visual-only check. Based on the provided screenshot, the success indicator \u0027Account Registered!\u0027 is clearly visible on the page.",
       "actions": [],
       "screenshotHash": "4800605500017f017f017f010101010101010101012901090101610121008100",
       "expectedFailure": false,
