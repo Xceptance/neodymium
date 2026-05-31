@@ -9,7 +9,7 @@
 - **TDD:** Write unit/integration tests before implementing new functionality. Ensure full coverage.
 - **Style:** Allman code style (new line braces), document non-obvious logic and all public API, JDK 21 features.
 - **Attribution:** Mark exclusively AI-created files with the model name in class comments (e.g. `// AI-generated: <NAME and MODEL>`).
-- **Headers:** Add MIT license header to all new source files.
+- **Headers:** Add AGPL 3 license header to all AI-related source files, but MIT license header for the rest.
 - **Strict Java:** Aggressive `final` modifiers (variables, args, methods, fields). NO inline FQCNs; use explicit top imports.
 
 ## Dependencies & Git
