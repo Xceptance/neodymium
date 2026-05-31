@@ -2,6 +2,8 @@
 
 Currently, during test runs, the Pre-Execution Static Analysis Phase (PESAP) predicts the starting context level for each step. However, if a predicted level is too low, the agent silently escalates (fallback) or retries (incorrect attempts) until succeeding. Developers lack feedback on these escalations and retries, making it difficult to understand where predictions were inaccurate or how to optimize them. Generating a diagnostic "PESAP Verdict" at the end of a successful test run provides actionable recommendations and exact rule snippets that can be optionally put into a project's custom rules to prevent redundant escalations/retries in subsequent runs.
 
+In addition, our JSON replay is already using the correct outcome to avoid unexpeced escalations.
+
 ## What Changes
 
 - **Per-Step Statistics Tracking**: Track starting context levels (before-state), final successful context levels (after-state), escalations, and retry attempts for each playbook step dynamically during execution.
