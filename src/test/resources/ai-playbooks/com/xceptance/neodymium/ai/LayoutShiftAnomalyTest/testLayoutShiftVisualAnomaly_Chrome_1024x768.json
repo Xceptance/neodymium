@@ -1,0 +1,53 @@
+{
+  "id": "com.xceptance.neodymium.ai.LayoutShiftAnomalyTest :: testLayoutShiftVisualAnomaly :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
+      "reasoning": "Found the \u0027Aura Defect Controls\u0027 button using the provided ID hint and clicked it.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "frameId": "3A39C06CFA2A2D469EBAB540C9ADD970:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Click the \u0027Inject Layout Misalignment\u0027 toggle. (hint: label[for\u003d\u0027toggle-shift\u0027])",
+      "reasoning": "The instruction asks to click the \u0027Inject Layout Misalignment\u0027 toggle. I found a checkbox in the AXTREE with the name \u0027Inject Layout Misalignment Applies asymmetrical shifts to broken grids.\u0027 and data-neo-ref \u0027xc_dquno1\u0027. I will click this element.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_dquno1\u0027]",
+          "description": "Click the \u0027Inject Layout Misalignment\u0027 toggle.",
+          "elementDetails": "Inject Layout Misalignment checkbox",
+          "elementContext": {
+            "id": "toggle-shift",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "actions": [],
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    }
+  ]
+}

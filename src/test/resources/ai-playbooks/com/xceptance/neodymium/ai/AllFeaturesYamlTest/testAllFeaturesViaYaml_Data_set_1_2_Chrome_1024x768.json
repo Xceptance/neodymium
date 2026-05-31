@@ -1,0 +1,98 @@
+{
+  "id": "com.xceptance.neodymium.ai.AllFeaturesYamlTest :: testAllFeaturesViaYaml :: Data set 1 / 2 :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:42507/AuraGlanceTest/shop/index.html",
+      "reasoning": "The instruction is to open a specific URL, so a NAVIGATE action is used with the provided URL.",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:42507/AuraGlanceTest/shop/index.html"
+          ],
+          "description": "Open http://localhost:42507/AuraGlanceTest/shop/index.html",
+          "elementDetails": "http://localhost:42507/AuraGlanceTest/shop/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
+      "reasoning": "Clicked the button with id \u0027aura-trigger\u0027 as specified in the instruction and hint.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "frameId": "D1653FC54460D01D761704B83AD5F64F:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Click the \u0027Show Promo Banner\u0027 toggle to hide it. (hint: label[for\u003d\u0027toggle-banner\u0027])",
+      "reasoning": "Clicked the \u0027Show Promo Banner\u0027 checkbox using its data-neo-ref to toggle its state, which should hide the banner as it was initially checked.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "xc_31bg3t",
+          "description": "Click the \u0027Show Promo Banner\u0027 toggle to hide it.",
+          "elementDetails": "Show Promo Banner Toggles optional marketing header.",
+          "elementContext": {
+            "id": "toggle-banner",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click \u0027Close Banner\u0027",
+      "reasoning": "The instruction is to click \u0027Close Banner\u0027. Based on the AXTREE, the button with name \u0027×\u0027 (data-neo-ref\u003d\u0027xc_8am3xz\u0027) is the most likely candidate for closing a banner.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_8am3xz\u0027]",
+          "description": "Click \u0027Close Banner\u0027",
+          "elementDetails": "×",
+          "elementContext": {
+            "classes": "drawer-close",
+            "text": "×",
+            "id": "aura-close",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Observe page visual consistency (glance)",
+      "reasoning": "The page exhibits visual consistency. The header navigation, main banner, and product cards all maintain a uniform design, layout, and color scheme. Elements are well-aligned, and there are no apparent visual anomalies or inconsistencies.",
+      "actions": [],
+      "screenshotHash": "8041000100017d012a817f015f817f01000108019a4398c338c798c33085718e",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}

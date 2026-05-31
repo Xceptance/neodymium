@@ -1,0 +1,15 @@
+[
+  {
+    "testId": "ShopSetup",
+    "shopSubPath": "shop",
+    "userFullName": "Alice Cooper",
+    "userEmail": "alice@test.com",
+    "expectedTotal": "$19.99"
+  },
+  {
+    "testId": "DashboardSetup",
+    "dashboardSubPath": "dashboard",
+    "metricHeader": "System Visual Audits",
+    "iframeTitle": "Isolated Sandbox Sandbox"
+  }
+]

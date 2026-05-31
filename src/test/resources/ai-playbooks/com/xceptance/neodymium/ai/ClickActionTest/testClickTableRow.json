@@ -3,22 +3,26 @@
   "steps": [
     {
       "promptLine": "Click on the row for customer Bob Jones.",
-      "reasoning": "The instruction is to click on the row for customer Bob Jones. Looking at the table, the row with id 'row-1002' contains the text 'Bob Jones'. I will select this row as the target element to click.",
+      "reasoning": "Identified the clickable table row with id \u0027row-1002\u0027 that contains \u0027Bob Jones\u0027 and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#row-1002",
-          "description": "Click the table row for Bob Jones",
-          "elementDetails": "Table row with id 'row-1002' representing Bob Jones's order",
+          "description": "Click on the row for customer Bob Jones",
+          "elementDetails": "#1002 Bob Jones $82.50",
           "elementContext": {
-            "text": "Bob Jones",
+            "classes": "clickable-row",
+            "text": "#1002 Bob Jones $82.50",
             "id": "row-1002",
-            "tagName": "tr",
-            "type": ""
+            "tagName": "tr"
           },
-          "replay": ""
+          "replay": "",
+          "frameId": "B362CEBEA3259D3C2A3825C27B95D442:main",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
     }
   ]
 }

@@ -2,43 +2,51 @@
   "id": "com.xceptance.neodymium.ai.SelectActionTest :: testSelectHappyPath",
   "steps": [
     {
-      "promptLine": "Select 'Germany' from the Country dropdown.",
-      "reasoning": "Select Germany in the country dropdown.",
+      "promptLine": "Select \u0027Germany\u0027 from the Country dropdown.",
+      "reasoning": "Selected \u0027Germany\u0027 from the combobox with data-neo-ref \u0027xc_ibpqp\u0027 which is identified as the \u0027Country\u0027 dropdown.",
       "actions": [
         {
           "type": "SELECT",
-          "target": "#country-select",
-          "description": "Select Germany from dropdown",
-          "elementDetails": "Country dropdown with id 'country-select'",
+          "target": "[data-neo-ref\u003d\u0027xc_ibpqp\u0027]",
+          "value": [
+            "Germany"
+          ],
+          "description": "Select \u0027Germany\u0027 from the Country dropdown.",
+          "elementDetails": "Country: combobox",
           "elementContext": {
-            "text": "",
+            "text": "--Please choose an option--",
             "id": "country-select",
             "tagName": "select",
-            "type": ""
+            "type": "select-one"
           },
-          "value": "Germany",
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Click on the 'Submit Country' button.",
-      "reasoning": "Submit country.",
+      "promptLine": "Click on the \u0027Submit Country\u0027 button.",
+      "reasoning": "Clicked the \u0027Submit Country\u0027 button using its data-neo-ref attribute.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "#btn-submit",
-          "description": "Click Submit Country",
-          "elementDetails": "Submit Country button with id 'btn-submit'",
+          "target": "[data-neo-ref\u003d\u0027xc_rsg0is\u0027]",
+          "description": "Click on the \u0027Submit Country\u0027 button.",
+          "elementDetails": "Submit Country",
           "elementContext": {
             "text": "Submit Country",
             "id": "btn-submit",
             "tagName": "button",
             "type": "submit"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     }
   ]
 }

@@ -3,22 +3,25 @@
   "steps": [
     {
       "promptLine": "Click on the Go to Target Destination link.",
-      "reasoning": "Click the anchor link to navigate.",
+      "reasoning": "The instruction is to click on the \u0027Go to Target Destination\u0027 link. I found a link with this name and the data-neo-ref \u0027xc_4xjo5h\u0027 in the AXTREE, so I generated a CLICK action targeting it.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "#link-nav",
-          "description": "Click Anchor Link",
-          "elementDetails": "Anchor Link with id 'link-nav'",
+          "target": "[data-neo-ref\u003d\u0027xc_4xjo5h\u0027]",
+          "description": "Click on the Go to Target Destination link.",
+          "elementDetails": "Go to Target Destination",
           "elementContext": {
             "text": "Go to Target Destination",
             "id": "link-nav",
-            "tagName": "a",
-            "type": ""
+            "href": "http://localhost:36923/ClickActionTest/testClickAnchorLink.html#target-destination",
+            "tagName": "a"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     }
   ]
 }

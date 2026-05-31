@@ -744,10 +744,10 @@ public class AiAgent {
                     errorCount++;
                 }
 
-                LOG.warn("    ⚠️ Actions failed: {}{} (Attempt {}/{})", e.getMessage(), formatFailureLogContext(currentLineNumber, sourceFile), errorCount, maxRetries + 1);
+                LOG.warn("    ⚠️ Actions failed: {}{} (Attempt {}/{})", e.getMessage(), formatFailureLogContext(currentLineNumber, sourceFile), errorCount, getMaxRetries() + 1);
                 executionLog.logWarning("Action failed: " + e + ". Retrying...");
 
-                if (errorCount > maxRetries)
+                if (errorCount > getMaxRetries())
                 {
                     final Throwable finalThrowable = e.getCause() != null ? e.getCause() : e;
                     executionLog.logError("Max retries for errors reached.");
@@ -770,7 +770,7 @@ public class AiAgent {
                     else
                     {
                         SelenideAddons.wrapAssertionError(() -> {
-                            throw new AssertionError(formatFailureMessage(instruction, currentLineNumber, sourceFile, " (" + (maxRetries + 1)
+                            throw new AssertionError(formatFailureMessage(instruction, currentLineNumber, sourceFile, " (" + (getMaxRetries() + 1)
                                     + " tries):\n\n") + finalThrowable.getMessage(), finalThrowable);
                         });
                     }
@@ -1004,7 +1004,7 @@ public class AiAgent {
     private void handleExpectedFailure(final PlaybookStep step, final String instruction, final String unresolvedInstruction,
             final String bugId, final Throwable t, final Playbook playbook)
     {
-        final boolean isVisual = unresolvedInstruction.toLowerCase().contains("(visual)");
+        final boolean isVisual = unresolvedInstruction.toLowerCase().contains("(visual)") || unresolvedInstruction.toLowerCase().contains("(glance)");
         final String errorType = t.getClass().getName();
         final String errorMessage = t.getMessage() != null ? t.getMessage() : "";
 
@@ -1614,7 +1614,7 @@ public class AiAgent {
     private static final ContextLevel getInitialContextLevel(final String instruction)
     {
         final String lower = instruction.toLowerCase();
-        if (lower.contains("(visual)"))
+        if (lower.contains("(visual)") || lower.contains("(glance)"))
         {
             return ContextLevel.VISUAL_LEAN;
         }
@@ -1626,6 +1626,22 @@ public class AiAgent {
         {
             return ContextLevel.AXTREE;
         }
+    }
+
+    private int getMaxRetries()
+    {
+        if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.agent.maxRetries"))
+        {
+            try
+            {
+                return Neodymium.getData().asInt("neodymium.ai.agent.maxRetries");
+            }
+            catch (final Exception e)
+            {
+                // ignore and fall back
+            }
+        }
+        return maxRetries;
     }
 
     private List<Action> getActionsFromLLM(final int stepIndex, final String instruction, final PlaybookStep playbookStep,
@@ -1706,7 +1722,7 @@ public class AiAgent {
                     userPrompt = AiAgentPrompts.buildNoActionsRetryPrompt(instruction, sutContext, domContext,
                             historyBlock);
                 } else if (lastError != null) {
-                    LOG.info("    🔄 Retry attempt (error) {}/{} — previous error: {}", errorCount, maxRetries,
+                    LOG.info("    🔄 Retry attempt (error) {}/{} — previous error: {}", errorCount, getMaxRetries(),
                             lastError);
                     userPrompt = AiAgentPrompts.buildRetryPrompt(instruction, sutContext, domContext, lastError,
                             historyBlock);
@@ -1902,17 +1918,17 @@ public class AiAgent {
                 lastWasNoActions = false;
                 isRecoveryAttempt = true;
                 LOG.warn("    ⚠️ Action failed: {} (Attempt {}/{}) [context: {}]",
-                        lastError, errorCount, maxRetries + 1, contextLevel);
+                        lastError, errorCount, getMaxRetries() + 1, contextLevel);
                 executionLog.logWarning("Action failed: " + lastError + ". Retrying...");
 
                 // Record the level we reached for future healing attempts
                 playbookStep.setHealedContextLevel(contextLevel);
 
-                if (errorCount > maxRetries) {
+                if (errorCount > getMaxRetries()) {
                     final Throwable finalThrowable = lastThrowable;
                     executionLog.logError("Max retries for errors reached.");
                     SelenideAddons.wrapAssertionError(() -> {
-                        throw new AssertionError("Instruction '" + instruction + "' failed (" + (maxRetries + 1)
+                        throw new AssertionError("Instruction '" + instruction + "' failed (" + (getMaxRetries() + 1)
                                 + " tries):\n\n" + finalThrowable.getMessage(), finalThrowable);
                     });
                 }

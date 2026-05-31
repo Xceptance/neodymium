@@ -1,0 +1,70 @@
+{
+  "id": "com.xceptance.neodymium.ai.ReactSpaTest :: testAsynchronousReactSpaAudits :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Verify that the active sessions count \u00271,842\u0027 is visible on the page.",
+      "reasoning": "The instruction is to verify the visibility of the text \u00271,842\u0027. Since no specific element in the provided DOM explicitly contains this text, the assertion is performed on the \u0027body\u0027 element as a last resort to check for its presence on the page.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "1,842"
+          ],
+          "description": "Verify that the active sessions count \u00271,842\u0027 is visible on the page.",
+          "elementDetails": "page body",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "8B4897D9975CC9FF3335FAB9181868BC:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Click \u0027Live Feeds (AJAX)\u0027.",
+      "reasoning": "Found a button with the exact name \u0027Live Feeds (AJAX)\u0027 and clicked it using its data-neo-ref attribute.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_34cten\u0027]",
+          "description": "Click \u0027Live Feeds (AJAX)\u0027 button",
+          "elementDetails": "Live Feeds (AJAX)",
+          "elementContext": {
+            "classes": "tab-btn",
+            "text": "Live Feeds (AJAX)",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the live feeds data table displays the HTMX log \u0027Asynchronous partial HTML page swap executed successfully.\u0027.",
+      "reasoning": "The instruction is to verify the presence of specific text on the page. Since the DOM snippet does not provide specific locators for the table rows, I am asserting the text against the entire body of the main frame to confirm its visibility.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "Asynchronous partial HTML page swap executed successfully."
+          ],
+          "description": "Verify that the live feeds data table displays the HTMX log \u0027Asynchronous partial HTML page swap executed successfully.\u0027.",
+          "elementDetails": "page body",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "8B4897D9975CC9FF3335FAB9181868BC:main",
+          "adjust": false
+        }
+      ],
+      "screenshotHash": "800100017f0152817f017f010001040104010001500100010001100300010003",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    }
+  ]
+}

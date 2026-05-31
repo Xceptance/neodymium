@@ -1,0 +1,56 @@
+{
+  "id": "com.xceptance.neodymium.ai.ContrastWarningTest :: testAccessibilityLowContrastSoftWarning :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
+      "reasoning": "Clicked the button with id \u0027aura-trigger\u0027 as specified in the instruction and hint.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "frameId": "86B35013F1360F7CBC766C17FC8538C8:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Click the \u0027Inject Low Contrast\u0027 toggle. (hint: label[for\u003d\u0027toggle-contrast\u0027])",
+      "reasoning": "Identified the \u0027Inject Low Contrast\u0027 checkbox by its data-neo-ref attribute and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_2d48ip\u0027]",
+          "description": "Click the \u0027Inject Low Contrast\u0027 toggle.",
+          "elementDetails": "Inject Low Contrast Forces poor visibility on text colors.",
+          "elementContext": {
+            "id": "toggle-contrast",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Observe page visual consistency (glance)",
+      "reasoning": "The page is visually consistent with the \u0027Inject Low Contrast\u0027 defect enabled, as indicated by the active toggle in the \u0027Aura Chaos Controls\u0027 panel and the low contrast text visible on the main content area. This is an expected state for an accessibility testing page.",
+      "actions": [],
+      "screenshotHash": "106900dd80c100e081e48ae881f681cd81f080e40170017001e16de20161c162",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}

@@ -489,4 +489,14 @@ public class AiBrowser implements AutoCloseable {
     public Object getTest() {
         return test;
     }
+
+    /**
+     * Returns the cumulative AI execution statistics for the current browser session.
+     * 
+     * @return the AiStats instance
+     */
+    public AiStats getStats()
+    {
+        return aiStats;
+    }
 }

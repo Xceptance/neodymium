@@ -106,8 +106,9 @@ public class PageAnalyzer
                 var cls   = (typeof el.className === 'string' ? el.className : '').trim().replace(/\\s+/g, ' ');
                 var ptag  = el.parentElement && el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '';
                 var type  = el.getAttribute('type') || '';
-                var name  = el.getAttribute('name') || el.getAttribute('alt') || '';
-                var raw   = [tag, id, cls, ptag, type, name].join('|');
+                var name  = el.getAttribute('name') || el.getAttribute('alt') || el.getAttribute('for') || el.getAttribute('aria-label') || '';
+                var text  = (el.innerText || '').trim().substring(0, 15).toLowerCase();
+                var raw   = [tag, id, cls, ptag, type, name, text].join('|');
                 return 'xc_' + djb2(raw);
             }
 
@@ -1077,8 +1078,9 @@ public class PageAnalyzer
                                 var cls = (typeof this.className === 'string' ? this.className : '').trim().replace(/\\s+/g, ' ');
                                 var ptag = this.parentElement ? this.parentElement.tagName.toLowerCase() : '';
                                 var type = this.getAttribute('type') || '';
-                                var name = this.getAttribute('name') || this.getAttribute('alt') || '';
-                                var raw = [tag, id, cls, ptag, type, name].join('|');
+                                var name = this.getAttribute('name') || this.getAttribute('alt') || this.getAttribute('for') || this.getAttribute('aria-label') || '';
+                                var text = (this.innerText || '').trim().substring(0, 15).toLowerCase();
+                                var raw = [tag, id, cls, ptag, type, name, text].join('|');
                                 var base = 'xc_' + djb2(raw);
                                 
                                 var candidate = base;

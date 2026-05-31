@@ -16,7 +16,7 @@ To make playbooks highly organized, the framework SHALL support the standard mod
 - **`_afterAll` (Static Scope):** Teardown steps executed once after all dataset iterations complete (always runs, like a `finally` block).
 
 To allow free-text natural comments, the parser SHALL tolerate and ignore any unrecognized keys at the root level or dataset maps that do not start with a leading underscore (Human Space).
-To prevent human typos in framework directives, the parser SHALL validate all keys starting with a leading underscore (Machine Space). If an underscored key is not in the registered keys (`_meta`, `_properties`, `_context`, `_data`, `_beforeAll`, `_beforeEach`, `_steps`, `_onSuccessEach`, `_onFailureEach`, `_afterEach`, `_onSuccessAll`, `_onFailureAll`, `_afterAll`, `_include`, `_id`), the parser SHALL throw a `MalformedPlaybookException`.
+To prevent human typos in framework directives, the parser SHALL validate all keys starting with a leading underscore (Machine Space). If an underscored key is not in the registered safety keys (`_meta`, `_properties`, `_context`, `_data`, `_beforeAll`, `_beforeEach`, `_steps`, `_onSuccessEach`, `_onFailureEach`, `_afterEach`, `_onSuccessAll`, `_onFailureAll`, `_afterAll`, `_include`, `_id`, `_testId`, `_sensitive`), the parser SHALL throw a `MalformedPlaybookException`.
 
 #### Scenario: Valid lifecycle blocks and comments
 - **WHEN** the playbook contains modernized lifecycle lists and arbitrary un-underscored keys
@@ -41,6 +41,7 @@ The parser SHALL resolve variables and inclusions in an interleaved loop (max `M
 - **Static Scopes (`_beforeAll`, `_afterAll`):** Placeholders SHALL resolve once using static `_meta` variables.
 - **Iteration Scopes (`_properties`, `_context`, `_beforeEach`, `_steps`, `_afterEach`):** Placeholders SHALL resolve per dataset row using active variables overlaid on `_meta` defaults.
 - **Namespace Resolution:** Dotted prefixes SHALL be supported to explicitly access metadata fields (e.g., `${_meta._author}`) to prevent variable collisions.
+- **Classpath Resolution Bypass:** When discovering playbooks in the classpath, if the resource URL uses the `file:` protocol, the parser SHALL bypass copying the file to `/tmp` and retrieve the canonical `File` directly from the URL. If the resource protocol is `jar:file:`, relative inclusions SHALL be resolved relative to the package folder using the class loader context to prevent breaking relative inclusion directories.
 
 If a circular inclusion chain is detected, it SHALL throw a `MalformedPlaybookException` displaying the exact circular path.
 
@@ -64,7 +65,11 @@ To prevent accidental leakage of sensitive credentials or PII (Personally Identi
 - The framework SHALL support designating sensitive variable keys via an explicit in-place **`_sensitive`** map block inside dataset constants (`_constants`) or dataset maps (`_data` rows).
 - Defining a key under the `_sensitive` block SHALL implicitly register it as sensitive, eliminating any requirement for a separate global registry.
 - Each sensitive entry SHALL contain a **`_value`** (for raw local execution) and a **`_mock`** (for sanitized LLM prompting).
-- If `_mock` is missing, the framework SHALL automatically fabricate a realistic anonymized value based on the key name format (e.g., test credit cards or passwords).
+- If `_mock` is missing, the framework SHALL automatically fabricate a realistic anonymized value based on the key name format matching the following rules:
+  - Keys matching `/card|credit/i` SHALL produce a realistic fake credit card value (`4000123456789010`).
+  - Keys matching `/cvv|cvc/i` SHALL produce a realistic CVV value (`999`).
+  - Keys matching `/pass|pwd|secret/i` SHALL produce a format-realistic dummy password (`mockPassword_123`).
+  - Any other key matching sensitive pattern SHALL fallback to a format of `mock_[key]`.
 - The engine SHALL construct two parallel context maps during resolution:
   - **Native Automation Context Map (Raw):** Contains `_value` entries, accessible to the local WebDriver browser automation runtime.
   - **Guarded AI Context Map (Sanitized):** Contains `_mock` / fabricated fakes, sent to LLM prompts and written to framework logs.

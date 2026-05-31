@@ -1,0 +1,101 @@
+{
+  "id": "com.xceptance.neodymium.ai.FeatureMatrixTest :: testDataResolutionAndTiming :: ShopSetup :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
+      "reasoning": "Found the \u0027Full Name\u0027 textbox by its accessibility name and data-neo-ref attribute and generated a TYPE action.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "xc_u90fde",
+          "value": [
+            "Alice Cooper"
+          ],
+          "description": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
+          "elementDetails": "Full Name textbox",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-username",
+            "placeholder": "Enter your full name",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
+      "reasoning": "Found the \u0027Email Address\u0027 textbox by its accessibility name and data-neo-ref attribute and generated a TYPE action.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "xc_f0d4sd",
+          "value": [
+            "alice@test.com"
+          ],
+          "description": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
+          "elementDetails": "Email Address",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-email",
+            "placeholder": "name@domain.com",
+            "tagName": "input",
+            "type": "email"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the \u0027Create Account\u0027 button.",
+      "reasoning": "Found the \u0027Create Account\u0027 button by its data-neo-ref attribute and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "xc_t6pll2",
+          "description": "Click the \u0027Create Account\u0027 button",
+          "elementDetails": "Create Account",
+          "elementContext": {
+            "classes": "btn-primary",
+            "text": "Create Account",
+            "id": "btn-submit-reg",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
+      "reasoning": "The previous attempt failed to find a specific element for \u0027Account Registered!\u0027. Since the text is visually present in the screenshot and not explicitly in the DOM as a distinct element, I am asserting its presence within the entire page body as a fallback strategy.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "Account Registered!"
+          ],
+          "description": "Verify that the success indicator \u0027Account Registered!\u0027 is visible on the page.",
+          "elementDetails": "page body",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "screenshotHash": "6c09020101010101016301010101010101010109010131097101010701018003",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    }
+  ]
+}

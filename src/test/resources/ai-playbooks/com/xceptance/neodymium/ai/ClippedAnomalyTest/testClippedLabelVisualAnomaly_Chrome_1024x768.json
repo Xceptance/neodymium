@@ -1,0 +1,53 @@
+{
+  "id": "com.xceptance.neodymium.ai.ClippedAnomalyTest :: testClippedLabelVisualAnomaly :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
+      "reasoning": "The instruction explicitly provided a hint `#aura-trigger` which directly corresponds to an element in the DOM with `id\u003d\"aura-trigger\"` and `title\u003d\"Aura Defect Controls\"`. A CLICK action is appropriate for this instruction.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "frameId": "2C30E0CAF7444A3B9F214087271F2890:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Click the \u0027Inject Clipped Text\u0027 toggle. (hint: label[for\u003d\u0027toggle-clipped\u0027])",
+      "reasoning": "Found the \u0027Inject Clipped Text\u0027 checkbox using its data-neo-ref attribute and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_wykl6c\u0027]",
+          "description": "Click the \u0027Inject Clipped Text\u0027 toggle.",
+          "elementDetails": "Inject Clipped Text Clamps cards height with overflow hidden.",
+          "elementContext": {
+            "id": "toggle-clipped",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "actions": [],
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    }
+  ]
+}

@@ -3,34 +3,42 @@
   "steps": [
     {
       "promptLine": "Scroll down the page.",
-      "reasoning": "Scroll down to bring bottom elements closer to view.",
+      "reasoning": "The instruction is to scroll down the page. I\u0027ve identified a \u0027Bottom Button\u0027 element which is likely at the bottom of the page, and scrolling to it will achieve the desired effect of scrolling down.",
       "actions": [
         {
           "type": "SCROLL",
-          "target": "",
-          "description": "Scroll down the page",
-          "replay": ""
+          "target": "[data-neo-ref\u003d\u0027xc_hfuq32\u0027]",
+          "description": "Scroll down the page to the bottom button.",
+          "elementDetails": "Bottom Button",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Click on the 'Bottom Button' button.",
-      "reasoning": "Click the button at the bottom of the page.",
+      "promptLine": "Click on the \u0027Bottom Button\u0027 button.",
+      "reasoning": "Found the \u0027Bottom Button\u0027 using its data-neo-ref attribute and created a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "#btn-bottom",
-          "description": "Click Bottom Button",
-          "elementDetails": "Bottom Button with id 'btn-bottom'",
+          "target": "[data-neo-ref\u003d\u0027xc_hfuq32\u0027]",
+          "description": "Click on the \u0027Bottom Button\u0027 button.",
+          "elementDetails": "Bottom Button",
           "elementContext": {
             "text": "Bottom Button",
             "id": "btn-bottom",
             "tagName": "button",
-            "type": "button"
+            "type": "submit"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     }
   ]
 }

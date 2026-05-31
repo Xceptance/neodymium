@@ -1,0 +1,13 @@
+{
+  "id": "com.xceptance.neodymium.ai.FeatureMatrixTest :: testReplayOfflineVerify :: ShopSetup :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Observe page visual consistency (glance)",
+      "reasoning": "The page exhibits good visual consistency. The layout is clean, elements are well-aligned, and there are no apparent issues with text clipping, low contrast, or overlapping elements. The color scheme and typography are consistent across the page, and all interactive elements are clearly visible and appropriately styled.",
+      "actions": [],
+      "screenshotHash": "4800605500017e817f017f0180019951b331b331bb3153611151315111103330",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}

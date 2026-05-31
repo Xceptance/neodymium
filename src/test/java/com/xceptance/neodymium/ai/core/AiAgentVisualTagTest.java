@@ -53,6 +53,10 @@ final class AiAgentVisualTagTest
         assertEquals(ContextLevel.VISUAL_LEAN, invokeGetInitialContextLevel("Check page matches template (VISUAL)"));
         assertEquals(ContextLevel.VISUAL_LEAN, invokeGetInitialContextLevel("Check page matches template (ViSuAl)"));
         assertEquals(ContextLevel.VISUAL_LEAN, invokeGetInitialContextLevel("(visual) check logo"));
+
+        // (glance) implicitly triggers VISUAL_LEAN
+        assertEquals(ContextLevel.VISUAL_LEAN, invokeGetInitialContextLevel("Observe page visual consistency (glance)"));
+        assertEquals(ContextLevel.VISUAL_LEAN, invokeGetInitialContextLevel("Observe page visual consistency (GLANCE)"));
     }
 
     @Test

@@ -1,0 +1,149 @@
+{
+  "id": "com.xceptance.neodymium.ai.FormInteractionsTest :: testFormInteractionsAndVerifications :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Type \u0027Jane Smith\u0027 into the \u0027Full Name\u0027 field.",
+      "reasoning": "Found the \u0027Full Name\u0027 textbox by its accessibility name and data-neo-ref attribute, then created a TYPE action to input the specified text.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "xc_u90fde",
+          "value": [
+            "Jane Smith"
+          ],
+          "description": "Type \u0027Jane Smith\u0027 into the \u0027Full Name\u0027 field.",
+          "elementDetails": "Full Name",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-username",
+            "placeholder": "Enter your full name",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Type \u0027invalidemail\u0027 into the \u0027Email Address\u0027 field.",
+      "reasoning": "Found the \u0027Email Address\u0027 textbox using its data-neo-ref attribute and generated a TYPE action.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "[data-neo-ref\u003d\u0027xc_f0d4sd\u0027]",
+          "value": [
+            "invalidemail"
+          ],
+          "description": "Type \u0027invalidemail\u0027 into the \u0027Email Address\u0027 field.",
+          "elementDetails": "Email Address",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-email",
+            "placeholder": "name@domain.com",
+            "tagName": "input",
+            "type": "email"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the \u0027Create Account\u0027 button.",
+      "reasoning": "Found the \u0027Create Account\u0027 button using its data-neo-ref attribute and created a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_t6pll2\u0027]",
+          "description": "Click the \u0027Create Account\u0027 button",
+          "elementDetails": "Create Account",
+          "elementContext": {
+            "classes": "btn-primary",
+            "text": "Create Account",
+            "id": "btn-submit-reg",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the email format invalid warning \u0027This email format is invalid.\u0027 is visible.",
+      "reasoning": "The instruction is to verify the visibility of the email format invalid warning. Although a specific element for the warning is not present in the provided DOM, the screenshot clearly shows the text \u0027This email format is invalid.\u0027 below the email input field. Therefore, an ASSERT action targeting the \u0027body\u0027 with the expected text as the value is used to confirm its presence on the page.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "This email format is invalid."
+          ],
+          "description": "Verify that the email format invalid warning \u0027This email format is invalid.\u0027 is visible.",
+          "elementDetails": "page body",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "A7EB040643B2186A40E6686DB532501B:main",
+          "adjust": false
+        }
+      ],
+      "screenshotHash": "6c09020101010101016321010101010101010109010101097101310701018003",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    },
+    {
+      "promptLine": "Type \u00272\u0027 into the \u0027Neon Gradient Poster\u0027 quantity field. (hint: #qty-poster-1)",
+      "reasoning": "The instruction asks to type \u00272\u0027 into the \u0027Neon Gradient Poster\u0027 quantity field. The hint provided is \u0027#qty-poster-1\u0027. I found a spinbutton with the name \u0027Qty Poster 1\u0027 which matches the description and the hint. I will use a TYPE action targeting \u0027#qty-poster-1\u0027 with the value \u00272\u0027.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#qty-poster-1",
+          "value": [
+            "2"
+          ],
+          "description": "Type \u00272\u0027 into the \u0027Neon Gradient Poster\u0027 quantity field.",
+          "elementDetails": "Qty Poster 1",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "qty-poster-1",
+            "tagName": "input",
+            "type": "number"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the Total Price is \u0027$39.98\u0027.",
+      "reasoning": "The instruction is to verify the Total Price. Since there is no specific ID or data-neo-ref for the total price element in the provided DOM, I am asserting the text \u0027$39.98\u0027 on the body of the page, as it is clearly visible in the screenshot.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "$39.98"
+          ],
+          "description": "Verify that the Total Price is \u0027$39.98\u0027.",
+          "elementDetails": "Total Price value",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "A7EB040643B2186A40E6686DB532501B:main",
+          "adjust": false
+        }
+      ],
+      "screenshotHash": "6c09020101010101016321010101010101010109010101097101310701018003",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    }
+  ]
+}

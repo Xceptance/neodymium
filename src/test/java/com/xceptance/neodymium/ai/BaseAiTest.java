@@ -26,12 +26,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
 import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
+import com.xceptance.neodymium.ai.playbook.Playbook;
+import com.xceptance.neodymium.ai.playbook.PlaybookManager;
+import com.xceptance.neodymium.ai.core.AiStats;
+import com.xceptance.neodymium.util.Neodymium;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 
 /**
  * Base class for all AI tests. 
  * Automatically manages an embedded HTTP server and determines the test URL based on class/method name.
+ * 
+ * AI-generated: Gemini 2.5 Pro
  */
 public abstract class BaseAiTest
 {
@@ -46,10 +52,14 @@ public abstract class BaseAiTest
     @BeforeAll
     public static void startServer() throws IOException
     {
+        // Resolve key dynamically from standard environment variable to avoid hardcoding secrets in git
+        final String envKey = System.getenv("GEMINI_API_KEY");
+        if (envKey != null && !envKey.trim().isEmpty() && System.getProperty("neodymium.ai.apiKey") == null)
+        {
+            System.setProperty("neodymium.ai.apiKey", envKey.trim());
+        }
         server = new EmbeddedHtmlServer();
         server.start();
-        // Optional: you could configure Selenide here if necessary
-        // Configuration.baseUrl = "http://localhost:" + server.getPort();
     }
 
     /**
@@ -77,4 +87,93 @@ public abstract class BaseAiTest
         
         currentTestUrl = String.format("http://localhost:%d/%s/%s.html", server.getPort(), className, methodName);
     }
+
+    /**
+     * Executes the given steps in two phases:
+     * 1. Live phase: skipReplay=true, generating/saving the playbook cache baseline via LLM.
+     * 2. Replay phase: skipReplay=false, replaying the steps offline with zero LLM calls.
+     * 
+     * @param steps the natural language instructions to run
+     */
+    protected void assertTwoPhaseExecution(final String steps)
+    {
+        assertTwoPhaseExecution(() ->
+        {
+            Neodymium.ai().execute(steps);
+        });
+    }
+
+    /**
+     * Executes implicit playbook steps (from the dataset steps field) in two phases:
+     * 1. Live phase: skipReplay=true, generating/saving the playbook cache baseline via LLM.
+     * 2. Replay phase: skipReplay=false, replaying the steps offline with zero LLM calls.
+     */
+    protected void assertTwoPhaseExecution()
+    {
+        assertTwoPhaseExecution(() ->
+        {
+            try
+            {
+                Neodymium.ai().execute();
+            }
+            catch (final Throwable t)
+            {
+                if (t instanceof RuntimeException)
+                {
+                    throw (RuntimeException) t;
+                }
+                throw new RuntimeException(t);
+            }
+        });
+    }
+
+    /**
+     * Executes the given runnable steps in two phases:
+     * 1. Live phase: skipReplay=true, generating/saving the playbook cache baseline via LLM.
+     * 2. Replay phase: skipReplay=false, replaying the steps offline with zero LLM calls.
+     * 
+     * @param runSteps the runnable steps to execute
+     */
+    protected void assertTwoPhaseExecution(final Runnable runSteps)
+    {
+        // Phase 1: Live execution with LLM.
+        Neodymium.getData().put("skipReplay", "true");
+        Neodymium.setAiPlaybook(null);
+        
+        runSteps.run();
+
+        final Playbook playbook = Neodymium.getAiPlaybook();
+        if (playbook != null && playbook.isChanged())
+        {
+            PlaybookManager.savePlaybook(playbook);
+        }
+
+        final AiStats stats = Neodymium.ai().getStats();
+        final int initialCalls = stats.getOverallCallCount();
+
+        // Phase 2: Offline playback check with zero LLM calls.
+        final String activeUrl = com.codeborne.selenide.WebDriverRunner.url();
+        if (activeUrl != null && !activeUrl.equals("about:blank"))
+        {
+            Selenide.open(activeUrl);
+        }
+
+        Neodymium.setAiPlaybook(null);
+        Neodymium.getData().put("skipReplay", "false");
+
+        Neodymium.initializePlaybook();
+        final Playbook loadedPlaybook = Neodymium.getAiPlaybook();
+        if (loadedPlaybook != null)
+        {
+            loadedPlaybook.setRecording(false);
+            loadedPlaybook.setCursor(0);
+        }
+
+        runSteps.run();
+
+        final int finalCalls = stats.getOverallCallCount();
+        org.junit.jupiter.api.Assertions.assertEquals(initialCalls, finalCalls,
+            "Replay execution made LLM calls! Expected exactly 0 new LLM calls during playback.");
+    }
 }
+

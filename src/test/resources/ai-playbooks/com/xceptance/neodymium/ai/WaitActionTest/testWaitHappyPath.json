@@ -2,69 +2,72 @@
   "id": "com.xceptance.neodymium.ai.WaitActionTest :: testWaitHappyPath",
   "steps": [
     {
-      "promptLine": "Click on the 'Start Process' button.",
-      "reasoning": "Click the start button to begin processing.",
+      "promptLine": "Click on the \u0027Start Process\u0027 button.",
+      "reasoning": "Clicked the \u0027Start Process\u0027 button using its data-neo-ref attribute.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "#btn-start",
-          "description": "Click Start Process",
-          "elementDetails": "Start Process button with id 'btn-start'",
+          "target": "[data-neo-ref\u003d\u0027xc_nfmin7\u0027]",
+          "description": "Click on the \u0027Start Process\u0027 button.",
+          "elementDetails": "Start Process",
           "elementContext": {
             "text": "Start Process",
             "id": "btn-start",
             "tagName": "button",
-            "type": "button"
+            "type": "submit"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Wait for 1 second.",
-      "reasoning": "Sleep for 1000ms.",
+      "reasoning": "The instruction is to wait for 1 second, which is translated into a WAIT action with a value of 1000 milliseconds.",
       "actions": [
         {
           "type": "WAIT",
-          "target": "",
-          "description": "Sleep for 1 second",
-          "value": "1000",
-          "replay": ""
+          "value": [
+            "1000"
+          ],
+          "description": "Wait for 1 second.",
+          "elementDetails": "1 second",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Wait until 'Processing... Please wait...' is hidden.",
-      "reasoning": "Wait for loader to disappear. Since the loader has already disappeared after 1 second, we perform a brief validation wait.",
-      "actions": [
-        {
-          "type": "WAIT",
-          "target": "",
-          "description": "Short sleep",
-          "value": "100",
-          "replay": ""
-        }
-      ]
+      "promptLine": "Wait until \u0027Processing... Please wait...\u0027 is hidden.",
+      "reasoning": "The element \u0027Processing... Please wait...\u0027 is not present in the current DOM, therefore it is considered hidden, and the wait condition is already met.",
+      "actions": [],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
     },
     {
-      "promptLine": "Wait until 'Process Completed Successfully!' is visible.",
-      "reasoning": "Wait for the success message to be visible.",
+      "promptLine": "Wait until \u0027Process Completed Successfully!\u0027 is visible.",
+      "reasoning": "",
       "actions": [
         {
-          "type": "WAIT",
-          "target": "#success",
-          "description": "Wait for success message visibility",
-          "elementDetails": "Success message with id 'success'",
-          "elementContext": {
-            "text": "Process Completed Successfully!",
-            "id": "success",
-            "tagName": "div",
-            "type": ""
-          },
-          "value": "10000",
-          "replay": ""
+          "type": "ASSERT",
+          "target": "Process Completed Successfully!",
+          "value": [
+            "visible"
+          ],
+          "description": "Wait until \u0027Process Completed Successfully!\u0027 is visible.",
+          "elementDetails": "Process Completed Successfully!",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
     }
   ]
 }

@@ -3,22 +3,25 @@
   "steps": [
     {
       "promptLine": "Click on the Add Item button.",
-      "reasoning": "Click the button wrapping the SVG icon.",
+      "reasoning": "Found the \u0027Add Item\u0027 button using its data-neo-ref attribute and created a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "#btn-svg",
-          "description": "Click SVG Button",
-          "elementDetails": "SVG Button with id 'btn-svg'",
+          "target": "[data-neo-ref\u003d\u0027xc_v07c40\u0027]",
+          "description": "Click on the Add Item button",
+          "elementDetails": "Add Item button",
           "elementContext": {
             "text": "Add Item",
             "id": "btn-svg",
             "tagName": "button",
             "type": "submit"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     }
   ]
 }

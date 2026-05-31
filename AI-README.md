@@ -996,6 +996,36 @@ If a visual step has a successful visual hash match and contains an empty list o
 
 ---
 
+## 👁️ Aura Glance: Observational Visual Auditing (`(glance)`)
+
+Traditional visual regression tools can only verify that a page hasn't changed pixel-for-pixel from a baseline, but cannot reason about the *meaning* of visual states. Neodymium AI introduces **Aura Glance: Observational Visual Auditing**, which combines visual screenshot hashes with multimodal LLM visual inspections to identify design defects, layouts, and accessibility shifts on the fly.
+
+### The `(glance)` Tag vs. `(visual)` Tag
+
+To execute advanced visual auditing, Neodymium AI introduces two powerful natural language keywords/tags:
+
+* **`(glance)` — Observational Audit Goal**: Instructs the AI agent to act as a purely observational reviewer. Instead of trying to click, type, or interact with elements, the AI reviews the page visually (via screenshot) to assert layout alignment, contrast, visual design consistency, or dynamic anomalies. **Note:** Specifying `(glance)` implicitly triggers the `(visual)` viewport capture and dHash caching automatically under the hood, simplifying your instructions.
+* **`(visual)` — Viewport Capture Directive**: Directs the underlying automation driver to capture a full screenshot of the page viewport on the very first attempt and activate local **dHash caching** for offline playbacks in under 10ms.
+
+Because `(glance)` implicitly triggers `(visual)` capture, you can run high-speed offline visual assertions with a single clean instruction:
+
+1. **Verify Visual Consistency (Baseline)**:
+   ```java
+   Neodymium.ai().execute("Observe page visual consistency (glance)");
+   ```
+2. **Explicit Layout Overlap Detection**:
+   ```java
+   // Directs the LLM to inspect visual boxes and assert overlap bugs
+   Neodymium.ai().execute("Observe page visual consistency (glance). Assert that the 'Cancel' button does not overlap with the 'Security Password' field or adjacent form elements.");
+   ```
+3. **Accessibility Contrast Warnings**:
+   By adding the case-insensitive `(soft)` tag alongside `(glance)`, visual checks (like contrast shifts or styling inconsistencies) will log warnings in Allure reports and execution logs instead of throwing a blocking error:
+   ```java
+   Neodymium.ai().execute("Observe page visual consistency (soft) (glance)");
+   ```
+
+---
+
 ## ⏭️ Bypassing Replays & Forcing Recording Mode (skipReplay)
 
 By default, Neodymium AI will always attempt to load and replay a cached JSON Playbook from `src/test/resources/ai-playbooks` if one exists for the current test. This is the optimal execution path for CI/CD environments as it operates completely offline and saves LLM API costs.
