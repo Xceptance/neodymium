@@ -1,0 +1,37 @@
+# This is the new, fully updated YAML format for Phase 1.
+# Notice the strict separation: ANYTHING with an underscore is a framework command.
+# Anything without an underscore is your test data or documentation.
+
+_meta:
+  _testId: "TC_CHK_001"
+  _description: "Guest Checkout with Fixed Product (Happy Path)"
+  _version: "1.1"
+  _priority: "Critical"
+  _tags: ["guest", "checkout", "happy-path"]
+  _author: "QA Team"
+  _sensitive: ["password"]  # Registered for Dual-Context Guard!
+
+_properties:
+  neodymium:
+    ai:
+      pesap:
+        enabled: false
+      skipReplay: true  # Dotted/nested skipReplay strictly replacement
+  browser: "chrome"
+  timeout: 5000
+
+_context: "You are testing the premium checkout flow. Act as a premium user and ensure all VAT calculations apply the premium discount."
+
+_data:
+  _constants:
+    _include: fragments/premium_user.yaml
+    password_mock: "mockPassword_123"
+  _dimensions:
+    locale: ["en-US", "en-GB"]
+
+_steps:
+  - _include: fragments/setup.steps
+  - Log in with user ${username} and password ${password}
+  - Add product "Grizzly Bear" to cart
+  - _include: fragments/checkout.steps
+  - Verify cart total includes VAT for ${locale}

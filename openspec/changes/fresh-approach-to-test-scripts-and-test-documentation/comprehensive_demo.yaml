@@ -1,0 +1,142 @@
+# ==============================================================================
+# Comprehensive Demo Playbook: Modernized YAML with Dynamic Reflection Hierarchy
+# ==============================================================================
+# All framework commands/metadata are strictly prefixed with an underscore ("_").
+# Standard test data/documentation keys (Human Space) do NOT start with an underscore
+# and are tolerated/ignored by the parser at root and dataset-map levels.
+
+# ------------------------------------------------------------------------------
+# 1. ROOT PILLAR: Metadata Block (_meta)
+# STATIC LAYER: Defines static profile defaults (e.g. `${_testId}`) for this file.
+# It does NOT receive variable reflections/interpolations from the _data block.
+# ------------------------------------------------------------------------------
+_meta:
+  _testId: "TC_CHK_001_COMPREHENSIVE"
+  _version: "1.1"
+  _priority: "Critical"
+  _tags: ["checkout", "happy-path", "comprehensive"]
+  _author: "Antigravity AI"
+  _sensitive: ["password", "creditCardNumber"]  # Registered for Dual-Context Guard!
+
+# ------------------------------------------------------------------------------
+# 2. ROOT PILLAR: Properties Block (_properties)
+# TARGET LAYER (Reflective): Receives dynamic variable values from the active dataset.
+# Supported properties are nested or flattened. 
+# ------------------------------------------------------------------------------
+_properties:
+  neodymium:
+    ai:
+      pesap:
+        enabled: false   # Flattened to: neodymium.ai.pesap.enabled = false
+      skipReplay: true  # Nested & flattened to: neodymium.ai.skipReplay = true
+  browser: "${targetBrowser}"   # Dynamically resolved per dataset row!
+  timeout: "${targetTimeout}"   # Dynamically resolved per dataset row!
+
+# ------------------------------------------------------------------------------
+# 3. ROOT PILLAR: Context Prompt Block (_context)
+# TARGET LAYER (Reflective): Receives variable reflections from the dataset.
+# Injected dynamically into the LLM system prompt for execution context guidance.
+# ------------------------------------------------------------------------------
+_context: >
+  You are testing a premium checkout flow. Act as a premium user and ensure
+  all calculations match the expected values for the locale "${locale}".
+
+# ------------------------------------------------------------------------------
+# 4. ROOT PILLAR: Global Static Setup Block (_beforeAll)
+# STATIC LIFECYCLE: Runs once before any tests start.
+# Variables are resolved only from static global metadata (e.g. ${_meta._testId}).
+# ------------------------------------------------------------------------------
+_beforeAll:
+  - Open home page and verify base staging layout is ready
+  # Explicitly reference global metadata using namespace prefixes!
+  - Log execution of playbook "${_meta._testId}" authored by "${_meta._author}"
+
+# ------------------------------------------------------------------------------
+# 5. ROOT PILLAR: Setup Block (_beforeEach)
+# ITERATION LIFECYCLE: Runs before EACH dataset iteration. Fully variable-reflective.
+# ------------------------------------------------------------------------------
+_beforeEach:
+  # Dynamic step inclusion based on dataset variable setupType (e.g. fragments/setup_guest.steps)
+  - _include: fragments/setup_${setupType}.steps
+
+# ------------------------------------------------------------------------------
+# 6. ROOT PILLAR: Main Execution Step List (_steps)
+# TARGET LAYER (Reflective): Runs for each dataset iteration. Fully variable-reflective.
+# The core test steps execution sequence.
+# ------------------------------------------------------------------------------
+_steps:
+  - Log in with user "${username}" and password "${password}"
+  - Search for and select product "${productName}"
+  - Add item to cart
+  - _include: fragments/checkout.steps
+  - Verify cart total matching expected taxes for "${locale}"
+
+# ------------------------------------------------------------------------------
+# 7. ROOT PILLAR: Iteration Success Hook (_onSuccessEach)
+# ITERATION LIFECYCLE: Runs right after _steps succeeds, before _afterEach.
+# ------------------------------------------------------------------------------
+_onSuccessEach:
+  - Log iteration success to external metrics for "${username}"
+  - Take victory screenshot for locale "${locale}"
+
+# ------------------------------------------------------------------------------
+# 8. ROOT PILLAR: Iteration Failure Hook (_onFailureEach)
+# ITERATION LIFECYCLE: Runs right after _steps fails, before _afterEach.
+# ------------------------------------------------------------------------------
+_onFailureEach:
+  - Take failure screenshot for locale "${locale}"
+  - Log failure details for user "${username}" to diagnostics service
+
+# ------------------------------------------------------------------------------
+# 9. ROOT PILLAR: Teardown Block (_afterEach)
+# ITERATION LIFECYCLE: Runs after EACH dataset iteration. Fully variable-reflective.
+# ------------------------------------------------------------------------------
+_afterEach:
+  - Log out user "${username}"
+  - Clear local storage and session data for "${locale}"
+
+# ------------------------------------------------------------------------------
+# 10. ROOT PILLAR: Playbook Success Hook (_onSuccessAll)
+# STATIC LIFECYCLE: Runs once at the end if all iterations succeeded, before _afterAll.
+# ------------------------------------------------------------------------------
+_onSuccessAll:
+  - Send success notification for playbook "${_meta._testId}"
+
+# ------------------------------------------------------------------------------
+# 11. ROOT PILLAR: Playbook Failure Hook (_onFailureAll)
+# STATIC LIFECYCLE: Runs once at the end if any iteration or block failed, before _afterAll.
+# ------------------------------------------------------------------------------
+_onFailureAll:
+  - Send critical alert for playbook "${_meta._testId}" to Slack/PagerDuty
+
+# ------------------------------------------------------------------------------
+# 12. ROOT PILLAR: Global Static Teardown Block (_afterAll)
+# STATIC LIFECYCLE: Runs once after ALL test iterations complete.
+# Variables are resolved only from static global metadata.
+# ------------------------------------------------------------------------------
+_afterAll:
+  - Print global execution cleanup confirmation for playbooks
+  - Close additional background monitoring services for "${_meta._testId}"
+
+_data:
+  # Common variables merged into every active execution instance
+  _constants:
+    _include: fragments/default_user.yaml
+    setupType: "guest"
+    # Anonymized mock variables for our sensitive keys!
+    password_mock: "mockPassword_abc"
+    creditCardNumber_mock: "4000123456789010"
+
+  # Orthogonal execution dimensions crossed by the parser
+  _dimensions:
+    locale: ["en-US", "en-GB"]
+
+  # Overrides/Expected values per dimension target
+  _lookup:
+    locale:
+      en-US:
+        productName: "Grizzly Bear"
+        subtotal: "$17.00"
+      en-GB:
+        productName: "Black Eagle"
+        subtotal: "£13.43"
