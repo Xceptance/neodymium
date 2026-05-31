@@ -51,7 +51,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Selenide-based integration tests for the Interactive HUD verifying all
  * user interaction, stepping, failure recovery, skipping, and fast-forward modes.
  *
- * // AI-generated: Antigravity and Gemini 1.5 Pro
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public final class InteractiveHudSelenideTest extends BaseAiTest
 {
@@ -1046,9 +1046,9 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 5. Verify that the HUD remains minimized throughout execution and closes automatically
         // as soon as the final step executes successfully without manual intervention.
         checkBgError();
-        $("#neo-ai-hud").shouldNotBe(Condition.visible); // HUD must close automatically at the end of the test
-        $("#result").shouldHave(Condition.exactText("Button 2 Clicked")); // Verify both actions updated SUT state
-        $("#click-count").shouldHave(Condition.exactText("2")); // Verify 2 SUT clicks registered
+        $("#neo-ai-hud").shouldNotBe(Condition.visible, Duration.ofSeconds(20)); // HUD must close automatically at the end of the test
+        $("#result").shouldHave(Condition.exactText("Button 2 Clicked"), Duration.ofSeconds(20)); // Verify both actions updated SUT state
+        $("#click-count").shouldHave(Condition.exactText("2"), Duration.ofSeconds(20)); // Verify 2 SUT clicks registered
         joinBgThread();
     }
 

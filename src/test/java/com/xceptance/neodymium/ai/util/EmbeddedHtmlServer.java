@@ -39,7 +39,7 @@ import com.sun.net.httpserver.HttpsConfigurator;
  * A lightweight, embedded HTTP server for testing AI actions locally without external dependencies.
  * It serves static files from the 'src/test/resources/ai-test-pages/' classpath directory.
  * 
- * AI-generated: Gemini 2.5 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public final class EmbeddedHtmlServer
 {

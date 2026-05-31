@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
  * Tests the case-insensitive support for the (visual) tag and context-level
  * resolution in {@link AiAgent}.
  *
- * // AI-generated: Antigravity
+ * @author AI-generated: Gemini 2.5 Flash
  */
 final class AiAgentVisualTagTest
 {

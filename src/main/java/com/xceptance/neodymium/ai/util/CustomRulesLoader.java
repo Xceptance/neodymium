@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
  * Utility loader for Pre-Execution Static Analysis Phase (PESAP) custom rules files.
  * Supports loading from classpath resources, filesystem paths, and default fallback files.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public final class CustomRulesLoader
 {

@@ -37,7 +37,7 @@ import com.xceptance.neodymium.common.ScreenshotWriter;
  * and visible elements to keep token usage low while giving the LLM enough context. All DOM queries are batched into a
  * single JavaScript execution to minimize WebDriver round-trips for performance.
   *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
 */
 public class PageAnalyzer
 {

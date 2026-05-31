@@ -33,7 +33,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Registry for all available AI Actions. Instantiates plugins once on first use 
  * and caches them for future executions.
   *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
 */
 public class ActionRegistry {
     private static final Logger LOG = LoggerFactory.getLogger(ActionRegistry.class);

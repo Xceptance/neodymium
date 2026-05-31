@@ -30,7 +30,7 @@
  * limitations under the License.
  */
 
-// AI-generated: Gemini 3.5 Flash
+// AI-generated: Gemini 2.5 Flash
 
 package com.xceptance.neodymium.junit5.testclasses.ai;
 

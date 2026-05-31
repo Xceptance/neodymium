@@ -39,7 +39,7 @@ import com.codeborne.selenide.WebDriverRunner;
  * Robust JUnit integration and unit tests for PageAnalyzer accessibility tree (AXTree)
  * extraction, resolved CDP node references, and cross-browser fallbacks.
  *
- * // AI-generated: Gemini 2.5 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 class PageAnalyzerAXTreeTest
 {

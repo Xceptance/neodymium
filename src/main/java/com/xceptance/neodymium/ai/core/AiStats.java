@@ -33,7 +33,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * Thread-safe via atomic counters.
  *
- * // AI-generated: Claude Opus 4.6
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public class AiStats
 {

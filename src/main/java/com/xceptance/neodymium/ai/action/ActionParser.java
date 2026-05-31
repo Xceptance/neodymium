@@ -36,7 +36,7 @@ import com.google.gson.JsonSyntaxException;
 /**
  * Parses the LLM's structured JSON response into a list of {@link Action} objects.
   *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
 */
 public class ActionParser {
     /**

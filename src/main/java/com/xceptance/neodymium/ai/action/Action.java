@@ -26,7 +26,7 @@ import com.google.gson.annotations.JsonAdapter;
  * Represents a single browser action parsed from the LLM's response. Each action maps to a concrete Selenium
  * interaction.
   *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public class Action
 {

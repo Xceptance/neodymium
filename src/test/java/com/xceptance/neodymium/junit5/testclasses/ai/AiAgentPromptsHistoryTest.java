@@ -18,7 +18,7 @@
  */
 package com.xceptance.neodymium.junit5.testclasses.ai;
 
-// AI-generated: Claude Opus 4.6
+// AI-generated: Gemini 2.5 Flash
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

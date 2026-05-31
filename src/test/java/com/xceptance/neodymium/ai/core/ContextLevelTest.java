@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
  * Tests for the {@link ContextLevel} enum, verifying the escalation chain
  * and capability flags.
  *
- * // AI-generated: Gemini 3.1 Pro
+ * @author AI-generated: Gemini 2.5 Flash
  */
 class ContextLevelTest
 {

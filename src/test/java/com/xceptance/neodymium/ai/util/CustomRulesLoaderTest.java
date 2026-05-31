@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
  * Unit tests for CustomRulesLoader verifying classpath, filesystem, fallback,
  * and thread-local override resolution logic.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 final class CustomRulesLoaderTest
 {

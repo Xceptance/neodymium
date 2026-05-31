@@ -47,7 +47,7 @@ import dev.langchain4j.model.output.TokenUsage;
  * Supports sending text prompts with optional screenshots (vision).
  * Tracks token usage via {@link AiStats}.
   *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
 */
 public class LlmClient
 {
@@ -64,10 +64,11 @@ public class LlmClient
      * Creates a new LLM client in {@link LlmMode#AGENT} mode.
      * Uses {@code neodymium.ai.temperature} (deterministic, for {@code @NeodymiumTest}).
      *
-     * @param config     application configuration
-     * @param aiStats AI execution statistics tracker
+     * @param config     the application's AI configuration properties
+     * @param aiStats    the execution statistics and token tracker
      */
-    public LlmClient(final AiConfiguration config, final AiStats aiStats) {
+    public LlmClient(final AiConfiguration config, final AiStats aiStats)
+    {
         this(config, aiStats, LlmMode.AGENT);
     }
 
@@ -75,24 +76,37 @@ public class LlmClient
      * Creates a new LLM client with an explicit {@link LlmMode}.
      *
      * <ul>
-     *   <li>{@link LlmMode#AGENT} — reads {@code neodymium.ai.temperature}</li>
-     *   <li>{@link LlmMode#GENERATOR} — reads {@code neodymium.ai.generate.temperature}</li>
+     *   <li>{@link LlmMode#AGENT} — reads {@code neodymium.ai.temperature} for execution mode</li>
+     *   <li>{@link LlmMode#GENERATOR} — reads {@code neodymium.ai.generate.temperature} for page generator mode</li>
      * </ul>
      *
-     * @param config     application configuration
-     * @param aiStats AI execution statistics tracker
-     * @param mode    the operational mode controlling temperature selection
+     * @param config     the application's AI configuration properties
+     * @param aiStats    the execution statistics and token tracker
+     * @param mode       the operational mode controlling temperature selection
      */
-    public LlmClient(final AiConfiguration config, final AiStats aiStats, final LlmMode mode) {
+    public LlmClient(final AiConfiguration config, final AiStats aiStats, final LlmMode mode)
+    {
         this.config = config;
         this.aiStats = aiStats;
         this.mode = mode;
     }
 
-    public AiStats getAiStats() {
+    /**
+     * Retrieves the AI statistics tracker associated with this client.
+     *
+     * @return the active {@link AiStats} tracker
+     */
+    public AiStats getAiStats()
+    {
         return this.aiStats;
     }
 
+    /**
+     * Lazy-initializes and returns the LangChain4j ChatModel.
+     * Selects configuration properties dynamically based on the execution mode (Agent vs Generator).
+     *
+     * @return the initialized {@link ChatModel}
+     */
     private ChatModel getChatModel()
     {
         if (model != null)

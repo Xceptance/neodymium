@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for the {@link StepLinter} verifying semantic warning generation.
  * 
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 class StepLinterTest
 {

@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
  * Tests for the {@link AiStats} statistics tracker, verifying standard and
  * PESAP token usage counters, overall totals, resets, and summary printouts.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 class AiStatsTest
 {

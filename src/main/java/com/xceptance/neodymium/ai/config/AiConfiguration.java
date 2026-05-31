@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai.config;
 
+import java.util.List;
 import org.aeonbits.owner.Config.LoadPolicy;
 import org.aeonbits.owner.Config.LoadType;
 import org.aeonbits.owner.Config.Sources;
@@ -136,7 +137,7 @@ public interface AiConfiguration extends Mutable
 
     @Key("neodymium.ai.plugins")
     @DefaultValue("")
-    public java.util.List<String> aiPlugins();
+    public List<String> aiPlugins();
 
     /**
      * Comma-separated list of fully qualified class names that the {@code JAVA_METHOD} action
@@ -150,5 +151,5 @@ public interface AiConfiguration extends Mutable
      */
     @Key("neodymium.ai.agent.javaMethod.utilityClasses")
     @DefaultValue("com.xceptance.neodymium.ai.util.AiAssertions")
-    public java.util.List<String> aiJavaMethodUtilityClasses();
+    public List<String> aiJavaMethodUtilityClasses();
 }

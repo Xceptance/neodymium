@@ -26,7 +26,7 @@ import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
  * within the standard JUnit classpath and classloader container.
  * Keeps the server running indefinitely to allow manual interaction and visual inspection of all test pages.
  * 
- * AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public final class RunServerTest
 {

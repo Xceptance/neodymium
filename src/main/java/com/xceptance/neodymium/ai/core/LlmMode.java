@@ -29,7 +29,7 @@ package com.xceptance.neodymium.ai.core;
  *       reads {@code neodymium.ai.generate.temperature} (high / creative).</li>
  * </ul>
   *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
 */
 public enum LlmMode
 {

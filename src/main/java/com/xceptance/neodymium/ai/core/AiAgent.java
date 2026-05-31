@@ -73,7 +73,7 @@ import io.qameta.allure.Allure;
  * <li>Retries with error context if actions fail (self-healing)</li>
  * </ol>
  * 
- * // AI-generated: Gemini 3.1 Pro (Low)
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public class AiAgent {
 
@@ -112,7 +112,7 @@ public class AiAgent {
     private boolean hudPromptChanged = false;
     private boolean hudSaveExit = false;
 
-    // AI-generated: Gemini 3.5 Flash - tracks whether the last LLM response indicated completion
+    // AI-generated: Gemini 2.5 Flash - tracks whether the last LLM response indicated completion
     private boolean lastLlmDone = true;
 
     private static final int NO_ACTIONS_MAX_RETRIES = 15;
@@ -131,7 +131,7 @@ public class AiAgent {
 
     private final List<ContextLevel> pesapPredictions = new ArrayList<>();
 
-    // AI-generated: Gemini 2.5 Pro
+    // AI-generated: Gemini 2.5 Flash
     public static String stripAllTags(final String step)
     {
         if (step == null)
@@ -569,7 +569,7 @@ public class AiAgent {
         {
             try
             {
-                // AI-generated: Gemini 3.5 Flash - Reset compound step tracking on each attempt
+                // AI-generated: Gemini 2.5 Flash - Reset compound step tracking on each attempt
                 final List<Action> accumulatedActions = new ArrayList<>();
                 this.lastLlmDone = true;
 
@@ -1343,7 +1343,7 @@ public class AiAgent {
         return actions;
     }
 
-    // AI-generated: Gemini 2.5 Pro
+    // AI-generated: Gemini 2.5 Flash
     private void runPesap(final List<String> stepsList, final List<Integer> stepLines, final String sourceFileVal)
     {
         if (stepsList.isEmpty())
@@ -1558,7 +1558,7 @@ public class AiAgent {
         }
     }
 
-    // AI-generated: Gemini 2.5 Pro
+    // AI-generated: Gemini 2.5 Flash
     private void performRegexRecovery(final String response, final List<String> stepsList, final List<Integer> stepLines)
     {
         final Pattern regexPattern = Pattern.compile("\"(\\d+)\"\\s*:\\s*\"(?i)(AXTREE|LEAN|STANDARD|VISUAL_LEAN|VISUAL)\"");

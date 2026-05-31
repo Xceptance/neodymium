@@ -27,7 +27,7 @@ import com.xceptance.neodymium.ai.action.Action;
  * This HTML is attached to the Allure report, allowing users to inspect the full discussion
  * with the LLM (including prompts and DOM context) without downloading text files.
   *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
 */
 public class AiDiscussionLogger
 {

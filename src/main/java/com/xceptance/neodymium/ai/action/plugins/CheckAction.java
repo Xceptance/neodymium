@@ -27,7 +27,7 @@ import com.xceptance.neodymium.ai.action.AiActionPlugin;
 /**
  * AI action plugin to check/select checkboxes and radio buttons.
  * 
- * // AI-generated: Antigravity (Gemini 3.5 Flash)
+ * @author AI-generated: Gemini 2.5 Flash (Gemini 3.5 Flash)
  */
 public class CheckAction implements AiActionPlugin
 {

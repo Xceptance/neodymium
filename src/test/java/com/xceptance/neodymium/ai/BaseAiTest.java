@@ -37,7 +37,7 @@ import com.codeborne.selenide.Selenide;
  * Base class for all AI tests. 
  * Automatically manages an embedded HTTP server and determines the test URL based on class/method name.
  * 
- * AI-generated: Gemini 2.5 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public abstract class BaseAiTest
 {

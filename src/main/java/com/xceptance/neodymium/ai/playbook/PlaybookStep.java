@@ -20,24 +20,28 @@ package com.xceptance.neodymium.ai.playbook;
 
 import java.util.ArrayList;
 import java.util.List;
-
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
 import com.xceptance.neodymium.ai.core.ContextLevel;
 
-public class PlaybookStep {
-
+/**
+ * Represents a single execution step within a {@link Playbook}.
+ * Contains the original natural language instruction prompt, the generative AI's reasoning,
+ * the resulting executable {@link Action}s, perceptual screenshot hashes, healed states,
+ * and optional expected visual/functional bug and failure annotations.
+ *
+ * @author AI-generated: Gemini 2.5 Flash
+ */
+public final class PlaybookStep
+{
     private String promptLine;
     private String reasoning;
     private List<Action> actions;
-
     private String screenshotHash;
-
     private boolean expectedFailure;
     private String bugId;
     private String expectedErrorType;
     private String expectedErrorMessage;
-
     private transient String lastFailure;
 
     /**
@@ -47,57 +51,124 @@ public class PlaybookStep {
      */
     private ContextLevel healedContextLevel;
 
-    public PlaybookStep() {
-        this.actions = new ArrayList<Action>();
+    /**
+     * Constructs an empty PlaybookStep with an empty action list.
+     */
+    public PlaybookStep()
+    {
+        this.actions = new ArrayList<>();
     }
 
-    public PlaybookStep(String promptLine, String reasoning, List<Action> actions)
+    /**
+     * Constructs a PlaybookStep initialized with prompt, reasoning, and actions.
+     *
+     * @param promptLine the natural language instruction prompt
+     * @param reasoning  the reasoning provided by the AI
+     * @param actions    the resolved list of executable actions
+     */
+    public PlaybookStep(final String promptLine, final String reasoning, final List<Action> actions)
     {
         this.promptLine = promptLine;
         this.reasoning = reasoning;
         this.actions = actions;
     }
 
-    public String getPromptLine() {
-        return promptLine;
+    /**
+     * Gets the original natural language prompt line.
+     *
+     * @return the prompt line string
+     */
+    public String getPromptLine()
+    {
+        return this.promptLine;
     }
 
-    public void setPromptLine(String promptLine) {
+    /**
+     * Sets the natural language prompt line.
+     *
+     * @param promptLine the new prompt line string to set
+     */
+    public void setPromptLine(final String promptLine)
+    {
         this.promptLine = promptLine;
     }
 
-    public String getReasoning() {
-        return reasoning;
+    /**
+     * Gets the reasoning trace of the AI for this step.
+     *
+     * @return the reasoning string
+     */
+    public String getReasoning()
+    {
+        return this.reasoning;
     }
 
-    public void setReasoning(String reasoning) {
+    /**
+     * Sets the reasoning trace of the AI for this step.
+     *
+     * @param reasoning the new reasoning string to set
+     */
+    public void setReasoning(final String reasoning)
+    {
         this.reasoning = reasoning;
     }
 
-    public List<Action> getActions() {
-        return actions;
+    /**
+     * Gets the list of resolved, executable actions for this step.
+     *
+     * @return the list of {@link Action}s
+     */
+    public List<Action> getActions()
+    {
+        return this.actions;
     }
 
-    public void setActions(List<Action> actions) {
+    /**
+     * Sets the list of resolved, executable actions for this step.
+     *
+     * @param actions the new list of {@link Action}s
+     */
+    public void setActions(final List<Action> actions)
+    {
         this.actions = actions;
     }
 
+    /**
+     * Gets the computed perceptual screenshot hash of the SUT page before this step was executed.
+     *
+     * @return the screenshot dHash hexadecimal string
+     */
     public String getScreenshotHash()
     {
-        return screenshotHash;
+        return this.screenshotHash;
     }
 
+    /**
+     * Sets the computed perceptual screenshot hash of the SUT page.
+     *
+     * @param screenshotHash the screenshot dHash hexadecimal string to set
+     */
     public void setScreenshotHash(final String screenshotHash)
     {
         this.screenshotHash = screenshotHash;
     }
 
+    /**
+     * Checks if this step failed execution during the current run.
+     *
+     * @return {@code true} if a failure message is present, {@code false} otherwise
+     */
     public boolean failed()
     {
-        return lastFailure != null;
+        return this.lastFailure != null;
     }
 
-    public void setFailure(ActionExecutionException e)
+    /**
+     * Records the execution failure exception encountered on this step.
+     *
+     * @param e the execution exception to record
+     */
+    public void setFailure(final ActionExecutionException e)
     {
         if (e != null)
         {
@@ -105,9 +176,14 @@ public class PlaybookStep {
         }
     }
     
+    /**
+     * Gets the last recorded execution failure message.
+     *
+     * @return the failure message, or {@code null} if no failure occurred
+     */
     public String getLastFailure()
     {
-        return lastFailure;
+        return this.lastFailure;
     }
 
     /**
@@ -118,7 +194,7 @@ public class PlaybookStep {
      */
     public ContextLevel getHealedContextLevel()
     {
-        return healedContextLevel;
+        return this.healedContextLevel;
     }
 
     /**
@@ -133,41 +209,81 @@ public class PlaybookStep {
         this.healedContextLevel = level;
     }
 
+    /**
+     * Checks if this step is expected to fail (annotated visual or functional bug).
+     *
+     * @return {@code true} if expected to fail, {@code false} otherwise
+     */
     public boolean isExpectedFailure()
     {
-        return expectedFailure;
+        return this.expectedFailure;
     }
 
+    /**
+     * Sets whether this step is expected to fail.
+     *
+     * @param expectedFailure the expected failure status to set
+     */
     public void setExpectedFailure(final boolean expectedFailure)
     {
         this.expectedFailure = expectedFailure;
     }
 
+    /**
+     * Gets the associated bug/defect tracker ID for this expected failure.
+     *
+     * @return the bug ID string
+     */
     public String getBugId()
     {
-        return bugId;
+        return this.bugId;
     }
 
+    /**
+     * Sets the associated bug/defect tracker ID.
+     *
+     * @param bugId the bug ID string to set
+     */
     public void setBugId(final String bugId)
     {
         this.bugId = bugId;
     }
 
+    /**
+     * Gets the expected error class or exception type name for the failure.
+     *
+     * @return the expected error type name
+     */
     public String getExpectedErrorType()
     {
-        return expectedErrorType;
+        return this.expectedErrorType;
     }
 
+    /**
+     * Sets the expected error class or exception type name.
+     *
+     * @param expectedErrorType the expected error type to set
+     */
     public void setExpectedErrorType(final String expectedErrorType)
     {
         this.expectedErrorType = expectedErrorType;
     }
 
+    /**
+     * Gets the expected exception message string or substring.
+     *
+     * @return the expected error message substring
+     */
     public String getExpectedErrorMessage()
     {
-        return expectedErrorMessage;
+        return this.expectedErrorMessage;
     }
 
+    /**
+     * Sets the expected exception message string or substring.
+     *
+     * @param expectedErrorMessage the expected error message to set
+     */
     public void setExpectedErrorMessage(final String expectedErrorMessage)
     {
         this.expectedErrorMessage = expectedErrorMessage;

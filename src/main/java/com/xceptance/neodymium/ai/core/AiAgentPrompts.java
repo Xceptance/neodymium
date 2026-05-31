@@ -37,7 +37,7 @@ import com.xceptance.neodymium.ai.playbook.PlaybookStep;
  * Prompts are loaded from the classpath at 'ai-prompts/' to allow 
  * external projects to easily override them.
  *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public final class AiAgentPrompts
 {

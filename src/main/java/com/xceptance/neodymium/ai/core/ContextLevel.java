@@ -27,7 +27,7 @@ package com.xceptance.neodymium.ai.core;
  * Escalation does <em>not</em> count against the retry budget — it is a
  * different strategy, not a repeated attempt with the same data.
  *
- * // AI-generated: Gemini 3.1 Pro
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public enum ContextLevel
 {

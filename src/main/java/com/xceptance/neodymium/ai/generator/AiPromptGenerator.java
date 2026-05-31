@@ -47,7 +47,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Entry point for explicitly generating an AI Test Prompt via exploratory
  * browser interaction.
   *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
 */
 public class AiPromptGenerator {
     private static final Logger LOG = LoggerFactory.getLogger(AiPromptGenerator.class);

@@ -49,7 +49,7 @@ import io.qameta.allure.Step;
  * element resolution that tries multiple
  * strategies.
  *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public class ActionExecutor {
     private static final Logger LOG = LoggerFactory.getLogger(ActionExecutor.class);

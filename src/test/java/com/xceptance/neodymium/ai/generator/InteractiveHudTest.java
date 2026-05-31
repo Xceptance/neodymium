@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for the {@link InteractiveHud} class, verifying the breakpoint parsing logic.
  *
- * // AI-generated: Antigravity and Gemini 3.5 Sonnet
+ * @author AI-generated: Gemini 2.5 Flash
  */
 final class InteractiveHudTest
 {

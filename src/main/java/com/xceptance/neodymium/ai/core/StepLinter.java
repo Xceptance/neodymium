@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
  * against common anti-patterns (lacking element targeting, missing input values,
  * or vague actions) and suggests improvements before executing the test.
  * 
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public final class StepLinter
 {

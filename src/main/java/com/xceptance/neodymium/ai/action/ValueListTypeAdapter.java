@@ -31,7 +31,7 @@ import java.util.List;
  * or a JSON array of strings into a List of Strings. This ensures backward compatibility
  * with playbook configurations where a single value was saved as a raw string.
  *
- * // AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public class ValueListTypeAdapter extends TypeAdapter<List<String>>
 {

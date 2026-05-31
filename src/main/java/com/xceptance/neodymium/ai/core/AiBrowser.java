@@ -47,7 +47,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * }
  * }</pre>
  *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public class AiBrowser implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(AiBrowser.class);
