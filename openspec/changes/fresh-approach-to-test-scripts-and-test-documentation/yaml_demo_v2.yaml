@@ -5,11 +5,10 @@
 _meta:
   _testId: "TC_CHK_001"
   _description: "Guest Checkout with Fixed Product (Happy Path)"
-  _version: "1.1"
+  _version: "1.2"
   _priority: "Critical"
   _tags: ["guest", "checkout", "happy-path"]
   _author: "QA Team"
-  _sensitive: ["password"]  # Registered for Dual-Context Guard!
 
 _properties:
   neodymium:
@@ -25,7 +24,10 @@ _context: "You are testing the premium checkout flow. Act as a premium user and 
 _data:
   _constants:
     _include: fragments/premium_user.yaml
-    password_mock: "mockPassword_123"
+    _sensitive:
+      password:
+        _value: "realSecretPassword123!"
+        _mock: "mockPassword_123"
   _dimensions:
     locale: ["en-US", "en-GB"]
 

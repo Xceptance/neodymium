@@ -59,19 +59,18 @@ The framework SHALL construct and serialize a location trace string path for eve
 - **WHEN** a step expanded from an included file fails
 - **THEN** the `AiAgent` displays the exact step location trace path in failure logs
 
-### Requirement: Sensitive / Post-Data Protection (Dual-Context Guard with Stand-in Data)
+### Requirement: Sensitive / Post-Data Protection (Dual-Context Guard with nested `_sensitive` Maps)
 To prevent accidental leakage of sensitive credentials or PII (Personally Identifiable Information) to external LLM services or terminal logs while preserving data format realism for the AI:
-- The framework SHALL support designating sensitive variable keys via an explicit `_sensitive` list inside the `_meta` block.
-- The execution engine SHALL construct two parallel variable maps during resolution:
-  - **Native Automation Context Map (Raw):** Contains raw values accessible to the local WebDriver browser automation runtime.
-  - **Guarded AI Context Map (Sanitized):** Contains all keys from the native map, but with all registered sensitive keys replaced with realistic **Stand-in Data** *at the source* before placeholder interpolation occurs.
-- The Guarded AI Context Map SHALL resolve stand-in data according to the following precedence:
-  1. **User-Defined Stand-in:** An explicit alternative value defined via a corresponding `_mock` or `_standin` suffix variable (e.g. `password_mock`).
-  2. **Framework-Fabricated Stand-in:** A realistic anonymized value automatically fabricated by the framework based on the key name format (e.g., generating valid test card numbers for credit cards or `mockPassword_123` for passwords).
-- The engine SHALL run **Dual Resolution Paths** during Phase B: the Execution Path resolves placeholders using the Native Map, while the LLM/AI Path resolves placeholders using the Guarded Map containing the stand-in values.
+- The framework SHALL support designating sensitive variable keys via an explicit in-place **`_sensitive`** map block inside dataset constants (`_constants`) or dataset maps (`_data` rows).
+- Defining a key under the `_sensitive` block SHALL implicitly register it as sensitive, eliminating any requirement for a separate global registry.
+- Each sensitive entry SHALL contain a **`_value`** (for raw local execution) and a **`_mock`** (for sanitized LLM prompting).
+- If `_mock` is missing, the framework SHALL automatically fabricate a realistic anonymized value based on the key name format (e.g., test credit cards or passwords).
+- The engine SHALL construct two parallel context maps during resolution:
+  - **Native Automation Context Map (Raw):** Contains `_value` entries, accessible to the local WebDriver browser automation runtime.
+  - **Guarded AI Context Map (Sanitized):** Contains `_mock` / fabricated fakes, sent to LLM prompts and written to framework logs.
 
-#### Scenario: Sensitive data masking via Dual-Context Guard with Stand-in
-- **WHEN** a dataset row contains `password: "Secret123!"` and `password_mock: "mockPassword_abc"` registered under `_meta._sensitive`
+#### Scenario: Sensitive data masking via nested `_sensitive` map
+- **WHEN** a dataset defines a sensitive password under `_sensitive.password` with `_value: "Secret123!"` and `_mock: "mockPassword_abc"`
 - **THEN** a step `Log in with ${password}` compiles to `Log in with Secret123!` for execution, but compiles strictly to `Log in with mockPassword_abc` for LLM contexts and framework logging.
 
 ### Requirement: Layered / Test Profile Data Structure

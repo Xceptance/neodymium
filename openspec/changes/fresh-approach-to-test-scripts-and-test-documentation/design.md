@@ -134,20 +134,21 @@ All inclusion paths are resolved relative to the base context of the active play
 
 The existing block scalar format (`steps: |` with multi-line text) continues to work unchanged. The new list-based format is an **additive capability** — the parser detects whether `steps` is a `String` (block scalar, legacy) or a `List` (new format) and handles both transparently.
 
-## 6. Sensitive Data Protection (Dual-Context Resolution Guard with Stand-in Data)
+## 6. Sensitive Data Protection (Dual-Context Resolution Guard with nested `_sensitive` Maps)
 
 To protect sensitive keys (e.g., credentials, passwords, card numbers) from leaking to external AI logging contexts while preserving data format realism for the LLM, the parser executes a **Dual-Context Resolution Guard** during resolution:
 
-1. **Registry Declaration:** The parser extracts a list of sensitive key names from the `_meta._sensitive` registry list (e.g., `_sensitive: ["password", "cardNumber"]`). The sub-key `_sensitive` is explicitly registered as a valid safety-space sub-key under `_meta`.
-2. **Parallel Context Map Construction & Anonymization:**
+1. **In-Place Sensitive Declaration:** Instead of a decoupled global registry, sensitive variable keys are declared and defined completely in-place under an explicit **`_sensitive`** map block inside dataset constants (`_constants`) or dataset rows (`_data` rows).
+2. **Implicit Registry Registration:** The parser automatically flags any variable key defined inside a `_sensitive:` map block as sensitive.
+3. **Parallel Context Map Construction & Anonymization:**
    For each generated execution dataset row:
-   - **Native Automation Context Map (Raw):** Constructed containing all raw key-value pairs (including actual credentials and PII).
-   - **Guarded AI Context Map (Sanitized):** Constructed by copying the Native Map, but immediately replacing any values associated with keys present in the `_sensitive` registry list with realistic **Stand-in Data** *before* any placeholder resolution begins:
-     - **Precedence 1 (User-Defined Stand-in):** If a corresponding variable with a `_mock` or `_standin` suffix is present in the dataset (e.g., `cardNumber_mock: "4000123456789010"`), its value is used.
+   - **Native Automation Context Map (Raw):** Constructed containing all raw key-value pairs (including actual credentials and PII). For sensitive variables, the parser extracts the raw value from the nested `_value` key (e.g. `password._value`).
+   - **Guarded AI Context Map (Sanitized):** Constructed by copying the Native Map, but immediately replacing the values of sensitive keys with realistic **Stand-in Data** *before* any placeholder resolution begins:
+     - **Precedence 1 (User-Defined Stand-in):** The parser extracts the explicit mock value defined inside the nested `_mock` key (e.g., `password._mock`).
        - *Note on Markdown Parsing (Keys and Values):* When the Markdown compiler parses table headers or profile list keys:
          - If a key contains a trailing parenthetical safety indicator—specifically `(sensitive)` or `(private)` (e.g., `Card Number (sensitive)` or `Password (private)`)—the compiler flags that key as sensitive and extracts the clean, stripped camelCase/snake_case variable name (e.g., `cardNumber` or `password`) for standard variable mapping.
-         - If the value column contains inline parenthetical mock notation (e.g., `` `4111111111111111` (mock: `4000123456789010`) ``), it automatically parses it into two separate variables: the clean variable `cardNumber: "4111111111111111"` (the real value for raw execution) and `cardNumber_mock: "4000123456789010"` (the explicit mock stand-in).
-     - **Precedence 2 (Framework-Fabricated Stand-in):** If no explicit mock variable is declared, the framework automatically generates a format-realistic fake value based on the field name (e.g., using test credit card number structures for keys matching `/card|credit/i`, `999` for CVV, `mockPassword_123` for passwords, and `mock_[keyname]` as a fallback).
+         - If the value column contains inline parenthetical mock notation (e.g., `` `4111111111111111` (mock: `4000123456789010`) ``), it automatically parses it into the nested `_sensitive` Map structure: setting `_value: "4111111111111111"` (for raw execution) and `_mock: "4000123456789010"` (the explicit mock stand-in).
+     - **Precedence 2 (Framework-Fabricated Stand-in):** If `_mock` is omitted, the framework automatically generates a format-realistic fake value based on the field name (e.g., using test credit card number structures for keys matching `/card|credit/i`, `999` for CVV, `mockPassword_123` for passwords, and `mock_[keyname]` as a fallback).
 3. **Dual Resolution Paths (Phase B Loop):**
    When the Phase B interleaved loop resolves variable placeholders (`${var}`) across the playbook components:
    - **Execution Path (Local):** Resolves step instructions (`_steps`, `_beforeEach`, `_afterEach`, `_properties`) using variables from the **Native Map** to produce the exact uncensored values required by the local browser automation runtime.

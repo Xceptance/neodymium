@@ -12,11 +12,10 @@
 # ------------------------------------------------------------------------------
 _meta:
   _testId: "TC_CHK_001_COMPREHENSIVE"
-  _version: "1.1"
+  _version: "1.2"
   _priority: "Critical"
   _tags: ["checkout", "happy-path", "comprehensive"]
   _author: "Antigravity AI"
-  _sensitive: ["password", "creditCardNumber"]  # Registered for Dual-Context Guard!
 
 # ------------------------------------------------------------------------------
 # 2. ROOT PILLAR: Properties Block (_properties)
@@ -123,9 +122,13 @@ _data:
   _constants:
     _include: fragments/default_user.yaml
     setupType: "guest"
-    # Anonymized mock variables for our sensitive keys!
-    password_mock: "mockPassword_abc"
-    creditCardNumber_mock: "4000123456789010"
+    _sensitive:
+      password:
+        _value: "realSecretPassword123!"
+        _mock: "mockPassword_abc"
+      creditCardNumber:
+        _value: "4111111111111111"
+        _mock: "4000123456789010"
 
   # Orthogonal execution dimensions crossed by the parser
   _dimensions:
