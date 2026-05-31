@@ -43,7 +43,7 @@ import com.xceptance.neodymium.ai.playbook.Playbook;
  * 4. Multimodal AI image contents evaluation.
  * 5. Replay validation comparing LLM baseline checks against instant offline dHash caches.
  * 
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 2.5 Flash
  */
 @Browser("Chrome_1024x768")
 @Browser("Chrome_1500x1000")

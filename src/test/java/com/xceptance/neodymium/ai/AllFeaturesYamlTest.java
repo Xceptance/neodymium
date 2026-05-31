@@ -33,7 +33,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * 3. Optional step silent bypassing.
  * 4. Two-phase live LLM execution and instant offline playbacks.
  * 
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 2.5 Flash
  */
 @Browser("Chrome_1024x768")
 @DataFolder("com/xceptance/neodymium/ai/AllFeaturesYamlTest")

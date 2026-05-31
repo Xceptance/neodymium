@@ -31,7 +31,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * The test automatically runs for each dataset iteration defined in the YAML file and validates correct 
  * two-phase (live + offline replay) execution.
  * 
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 2.5 Flash
  */
 @Browser("Chrome_1024x768")
 @DataFolder("com/xceptance/neodymium/ai/YamlDataDrivenTest")

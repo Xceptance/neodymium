@@ -29,7 +29,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Verifies that the visual auditor can identify boundary container clipping and text truncations
  * as visual defects, throwing an AssertionError when the anomaly is present.
  * 
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 2.5 Flash
  */
 @Browser("Chrome_1024x768")
 public final class ClippedAnomalyTest extends BaseAiTest

@@ -29,7 +29,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Verifies that the visual auditor can identify asymmetrical margin misalignments and layout shifts
  * as visual defects, throwing an AssertionError when the anomaly is present.
  * 
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 2.5 Flash
  */
 @Browser("Chrome_1024x768")
 public final class LayoutShiftAnomalyTest extends BaseAiTest

@@ -39,7 +39,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Provides helper methods for executing background threads with shared Neodymium and WebDriver
  * context, creating mock LLM clients, and building custom test AiBrowser instances.
  *
- * // AI-generated: Antigravity (Gemini 2.5 Pro)
+ * // AI-generated: Antigravity (Gemini 2.5 Flash)
  */
 public final class InteractiveHudTestUtils
 {

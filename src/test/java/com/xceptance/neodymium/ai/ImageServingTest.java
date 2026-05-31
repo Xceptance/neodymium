@@ -28,7 +28,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Verifies that image MIME types served from the directory are correctly resolved
  * and rendered inside browser page components.
  * 
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 2.5 Flash
  */
 @Browser("Chrome_1024x768")
 public final class ImageServingTest extends BaseAiTest
