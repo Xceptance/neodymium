@@ -49,6 +49,7 @@ import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.SelenideAddons;
+import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.util.ScreenshotHasher;
 import com.xceptance.neodymium.ai.util.CustomRulesLoader;
 
@@ -339,6 +340,16 @@ public class AiAgent {
                             logPauseReason("HUD Fast-Forward paused (e.g., Breakpoint reached or manual pause)");
                         }
                         this.autoSkip = false;
+                        try
+                        {
+                            Selenide.executeJavaScript(
+                                    "if (typeof window !== 'undefined') { window.neoHudAutoSkip = false; try { sessionStorage.setItem('neoAutoSkip', 'false'); } catch(e){} }"
+                            );
+                        }
+                        catch (final Exception e)
+                        {
+                            // Ignore browser communication errors
+                        }
                     }
                 }
 
@@ -1102,6 +1113,9 @@ public class AiAgent {
             }
         }
 
+        // Clear any stale actions from preceding auto-skipped steps before waiting
+        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+
         LOG.info("Waiting for user action in HUD...");
         boolean handled = false;
         for (int wait = 0; wait < 3600; wait++)
@@ -1140,7 +1154,9 @@ public class AiAgent {
                     // Ignore unknown actions
                 }
 
-                if (typeEnum == HudActionType.APPROVE) {
+                if (typeEnum == HudActionType.APPROVE)
+                {
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     handled = true;
                     break;
                 } else if (typeEnum == HudActionType.SKIP) {

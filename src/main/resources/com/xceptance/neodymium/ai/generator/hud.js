@@ -686,6 +686,7 @@
     window.neoPerformedList = performed;
     window.neoPlannedList = planned;
     window.neoHudAutoSkip = autoSkip;
+    window.neoHudAction = window.neoHudAction || null;
     if (window.updateAutoSkipBtn) window.updateAutoSkipBtn();
 
     if (window.neoHudAutoSkip && window.neoPlannedList && window.neoPlannedList.length > 0) {

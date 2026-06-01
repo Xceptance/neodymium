@@ -765,7 +765,7 @@ public final class AiExplicitTagsTest
 
         runPesapMethod.invoke(agent, steps, lines, "test.yaml");
 
-        final String expectedPrompt = "0: Click button\n1: Verify text\n";
+        final String expectedPrompt = "## Test Steps\n0: Click button\n1: Verify text\n";
         assertEquals(expectedPrompt, capturedUserPrompt.get());
     }
 

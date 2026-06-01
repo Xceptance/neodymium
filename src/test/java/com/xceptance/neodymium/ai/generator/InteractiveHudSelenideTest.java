@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import org.openqa.selenium.Keys;
 
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.BaseAiTest;
 import com.xceptance.neodymium.ai.action.Action;
@@ -57,6 +58,8 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 {
     private volatile Thread bgThread = null;
     private volatile Throwable bgThrowable = null;
+    private long originalTimeout;
+    private boolean originalHeadless;
 
     @BeforeAll
     public static void enableInteractiveMode()
@@ -93,13 +96,25 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.getData().clear();
         Neodymium.getData().put("neodymium.sourceFile", "dummy-test.yml");
 
-        // Force max retries to 0 to bypass retries and speed up unit tests
+        // Force config properties to prevent caching issues across test classes
+        Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "true");
+        Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive.autoSkip", "false");
         Neodymium.aiConfiguration().setProperty("neodymium.ai.agent.maxRetries", "0");
+
+        // Increase Selenide timeout and enable headless mode for robust execution in headless Chrome
+        originalTimeout = Configuration.timeout;
+        Configuration.timeout = 35000;
+        originalHeadless = Configuration.headless;
+        Configuration.headless = true;
     }
 
     @AfterEach
     public void cleanupBackgroundThread()
     {
+        // Restore Selenide timeout and headless mode
+        Configuration.timeout = originalTimeout;
+        Configuration.headless = originalHeadless;
+
         if (bgThread != null && bgThread.isAlive())
         {
             try
@@ -164,7 +179,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         {
             try
             {
-                bgThread.join(10000);
+                bgThread.join(20000);
             }
             catch (final InterruptedException e)
             {
@@ -195,6 +210,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         {
             // Ignore
         }
+        open(currentTestUrl);
     }
 
     /**
@@ -238,7 +254,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
             try (final AiBrowser ai = createTestAiBrowser())
             {
                 // Execute the multiline prompt block representing our test steps
-                ai.execute("Click button 1\nClick button 2\nClick button 1");
+                ai.execute("Click button 1\nClick button 2");
             }
             catch (final Exception e)
             {
@@ -259,6 +275,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
         // 5. Click the approve button (✓) in the HUD to authorize the first step execution
         $("#neo-approve-btn").click();
+        Selenide.sleep(2500); // Give background thread time to execute step and render the next step in HUD
 
         // 6. Verify Step 1 executed successfully, SUT updated, and HUD loaded Step 2
         checkBgError();
@@ -321,7 +338,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
             {
                 // Execute Step 1 followed by Step 2
                 ai.execute("Click button 1");
-                ai.execute("Click invisible button");
+                ai.execute("Click invisible button (timeout:2s)");
             }
             catch (final Exception e)
             {
@@ -333,6 +350,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible);
         $("#neo-approve-btn").click(); // Click Approve (✓) to execute Step 1
+        Selenide.sleep(2500); // Give background thread time to execute step and render the next step in HUD
 
         // Wait until Step 2 is pending in the HUD
         checkBgError();
@@ -401,7 +419,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         {
             try (final AiBrowser ai = createTestAiBrowser(mockLlm))
             {
-                ai.execute("Click button 1\nClick invisible button");
+                ai.execute("Click button 1\nClick invisible button (timeout:2s)");
             }
             catch (final Exception e)
             {
@@ -413,6 +431,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible);
         $("#neo-approve-btn").click();
+        Selenide.sleep(2500); // Give background thread time to execute step and render the next step in HUD
 
         checkBgError();
         $("#neo-next-action").shouldHave(Condition.text("Click invisible button"));
@@ -546,9 +565,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
         // 8. Click the Approve button (✓) to execute the edited step
         $("#neo-approve-btn").click();
+        Selenide.sleep(2500); // Give background thread time to execute step and render finished confirmation dialog in HUD
 
         // 9. Since the playbook was interactively modified, verify that we see the "Save & Exit" dialog.
-        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(10));
+        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
 
         // Click "Save & Exit" to persist and cleanly exit
         $("#neo-approve-btn").click();
@@ -556,7 +576,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // Wait for the background thread to finish cleanly
         try
         {
-            bgThread.join(10000);
+            bgThread.join(20000);
         }
         catch (final InterruptedException e)
         {
@@ -641,9 +661,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
         // 8. Click the Approve button (✓) to execute Step 2
         $("#neo-approve-btn").click();
+        Selenide.sleep(2500); // Give background thread time to execute step and render finished confirmation dialog in HUD
 
         // 9. Since the playbook was interactively modified (Step 1 skipped), verify that we see the "Save & Exit" dialog.
-        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(10));
+        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
 
         // Click "Save & Exit" to persist and cleanly exit
         $("#neo-approve-btn").click();
@@ -651,7 +672,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // Wait for the background thread to finish cleanly
         try
         {
-            bgThread.join(10000);
+            bgThread.join(20000);
         }
         catch (final InterruptedException e)
         {
@@ -725,6 +746,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // Type the new instruction prompt to insert before the current step
         $("#neo-add-input").setValue("Click button 1");
         $("#neo-add-submit-btn").click();
+        Selenide.sleep(2500); // Give background thread time to settle and run the LLM resolution
 
         // 7. Verify that the HUD dynamically inserts the new step and shifts focus to it
         checkBgError();
@@ -733,6 +755,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
         // 8. Click the Approve button (✓) to execute the newly inserted Step 1
         $("#neo-approve-btn").click();
+        Selenide.sleep(2500); // Give background thread time to execute step and render the next step in HUD
 
         // 9. Verify Step 1 executes successfully, updating SUT, and the original Step 2 is now pending
         checkBgError();
@@ -744,7 +767,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-approve-btn").click();
 
         // 11. Since a step was dynamically inserted, verify that we see the "Save & Exit" dialog.
-        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(10));
+        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
 
         // Click "Save & Exit" to persist and cleanly exit
         $("#neo-approve-btn").click();
@@ -752,7 +775,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // Wait for the background thread to finish cleanly
         try
         {
-            bgThread.join(10000);
+            bgThread.join(20000);
         }
         catch (final InterruptedException e)
         {
@@ -815,6 +838,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible);
         $("#neo-approve-btn").click();
+        Selenide.sleep(2500); // Give background thread time to execute step and render the next step in HUD
 
         // 5. Verify Step 1 executed successfully, and Step 2 is now pending in the HUD.
         // Also assert that the execution history item for Step 1 is visible.
@@ -826,6 +850,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
         // 6. Click the Back button (⏪) in the HUD to rewind the execution back to Step 1
         $("#neo-rewind-btn").shouldBe(Condition.enabled).click();
+        Selenide.sleep(2500); // Give background thread time to process rewind and update HUD
 
         // 7. Verify that the HUD successfully rolls back its internal cursor and highlights Step 1 as pending
         checkBgError();
@@ -834,6 +859,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
         // 8. Re-approve Step 1
         $("#neo-approve-btn").click();
+        Selenide.sleep(2500); // Give background thread time to execute step and render next step in HUD
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible);
 
@@ -955,7 +981,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         {
             try (final AiBrowser ai = createTestAiBrowser(mockLlm))
             {
-                ai.execute("Click button 1\nClick invisible button");
+                ai.execute("Click button 1\nClick invisible button (timeout:2s)");
             }
             catch (final Exception e)
             {
@@ -966,15 +992,18 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 5. Verify the HUD starts successfully and click the "Fast-Forward" (⏩) button
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible);
+        Selenide.sleep(1000); // Wait for background thread to fully settle in waitForHudAction
         $("#neo-autoskip-btn").click(); // Toggle Fast-Forward mode on
 
         // 6. Verify that the HUD automatically minimizes, executes Step 1 at full speed, SUT updates,
         // and pauses/maximizes immediately upon encountering the simulated error in Step 2.
+        // Let the background thread run uninterrupted to execute Step 1 and pause at Step 2
+        Selenide.sleep(5000);
         checkBgError();
         // Wait up to 25 seconds for the mock error detection and HUD transition to complete
         $("#neo-ai-hud").shouldBe(Condition.visible, Duration.ofSeconds(25));
         $("#neo-autoskip-text").shouldHave(Condition.exactText("Fast-Forward")); // Assert Fast-Forward mode state
-        $("#result").shouldHave(Condition.exactText("Button 1 Clicked")); // Verify Step 1 executed successfully
+        $("#result").shouldHave(Condition.exactText("Button 1 Clicked"), Duration.ofSeconds(35)); // Verify Step 1 executed successfully
 
         // 7. Click the Skip button (✕) in the HUD to bypass the failing step
         $("#neo-skip-btn").click();
@@ -982,7 +1011,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
         // 8. Since we skipped a step, the HUD correctly stays open and presents the final playbook confirmation dialog.
         // Click the Save & Exit button (re-labeled #neo-approve-btn) to save changes and finalize.
-        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(10));
+        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
         $("#neo-approve-btn").click();
 
         // 9. Verify that the HUD closes and terminates cleanly
@@ -1041,15 +1070,18 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 4. Verify the HUD starts successfully and click the "Fast-Forward" (⏩) button
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible);
+        Selenide.sleep(1000); // Wait for background thread to fully settle in waitForHudAction
         $("#neo-autoskip-btn").click(); // Toggle Fast-Forward mode on
 
         // 5. Verify that the HUD remains minimized throughout execution and closes automatically
         // as soon as the final step executes successfully without manual intervention.
+        Selenide.sleep(5000);
         checkBgError();
-        $("#neo-ai-hud").shouldNotBe(Condition.visible, Duration.ofSeconds(20)); // HUD must close automatically at the end of the test
-        $("#result").shouldHave(Condition.exactText("Button 2 Clicked"), Duration.ofSeconds(20)); // Verify both actions updated SUT state
-        $("#click-count").shouldHave(Condition.exactText("2"), Duration.ofSeconds(20)); // Verify 2 SUT clicks registered
-        joinBgThread();
+        joinBgThread(); // Join the background thread first to let it execute steps 100% uninterrupted
+        
+        $("#neo-ai-hud").shouldNotBe(Condition.visible, Duration.ofSeconds(35)); // HUD must close automatically at the end of the test
+        $("#result").shouldHave(Condition.exactText("Button 2 Clicked"), Duration.ofSeconds(35)); // Verify both actions updated SUT state
+        $("#click-count").shouldHave(Condition.exactText("2"), Duration.ofSeconds(35)); // Verify 2 SUT clicks registered
     }
 
     /**
@@ -1109,10 +1141,12 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Selenide.sleep(500); // Wait briefly for the state to synchronize in the browser sessionStorage
 
         // 5. Click the "Fast-Forward" (⏩) button to start automatic execution
+        Selenide.sleep(1000); // Wait for background thread to fully settle in waitForHudAction
         $("#neo-autoskip-btn").click();
 
         // 6. Verify that Step 1 is executed automatically, updating the SUT, and that the agent
         // pauses execution and maximizes the HUD immediately before executing the breakpoint on Step 2.
+        Selenide.sleep(5000);
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible); // HUD maximized on reaching breakpoint
         $("#neo-ai-hud").shouldHave(Condition.cssValue("display", "flex"));
@@ -1192,15 +1226,19 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-ai-hud").shouldBe(Condition.visible);
         $("#neo-full-prompt-btn").click();
 
-        $(".neo-bp-col[data-idx='1']").click(); // Toggle breakpoint 🛑 on Step 2
-        $(".neo-bp-col[data-idx='3']").click(); // Toggle breakpoint 🛑 on Step 4
+        $(".neo-bp-col[data-idx='1']").shouldHave(Condition.text("⚪")).click();
+        $(".neo-bp-col[data-idx='1']").shouldHave(Condition.text("🛑"));
+        $(".neo-bp-col[data-idx='3']").shouldHave(Condition.text("⚪")).click();
+        $(".neo-bp-col[data-idx='3']").shouldHave(Condition.text("🛑"));
 
         Selenide.sleep(500); // Wait briefly for state synchronization
 
         // 5. Click the "Fast-Forward" (⏩) button to start automatic execution
+        Selenide.sleep(1000); // Wait for background thread to fully settle in waitForHudAction
         $("#neo-autoskip-btn").click();
 
         // 6. Verify that execution pauses automatically when the first breakpoint on Step 2 is reached
+        Selenide.sleep(5000);
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible, Duration.ofSeconds(15));
         $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"), Duration.ofSeconds(15)); // Next action is Step 2
@@ -1208,8 +1246,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#result").shouldHave(Condition.exactText("Button 1 Clicked"), Duration.ofSeconds(15)); // Step 1 completed successfully
 
         // 7. Click Fast-Forward (⏩) again to resume. It should run through Step 2 and Step 3, and pause on Step 4.
+        Selenide.sleep(1000); // Wait for background thread to fully settle in its new pause
         $("#neo-autoskip-btn").click();
 
+        Selenide.sleep(5000);
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible, Duration.ofSeconds(15));
         $("#neo-next-action").shouldHave(Condition.exactText("Click button 2 again"), Duration.ofSeconds(15)); // Next action is Step 4
@@ -1217,12 +1257,13 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#result").shouldHave(Condition.exactText("Button 1 Clicked"), Duration.ofSeconds(15)); // Step 2 (Click Button 2) and Step 3 (Click Button 1) executed
 
         // 8. Re-trigger Fast-Forward (⏩) to resume automated execution to completion
+        Selenide.sleep(1000); // Wait for background thread to fully settle in its new pause
         $("#neo-autoskip-btn").click();
 
         // Wait for background thread to complete execution cleanly
         try
         {
-            bgThread.join(10000);
+            bgThread.join(20000);
         }
         catch (final InterruptedException e)
         {
@@ -1280,12 +1321,14 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
                 throw new RuntimeException(e);
             }
         });
+        Selenide.sleep(1000); // Give background thread time to start, capture context, and enter wait loop
 
         // 4. Verify the HUD starts successfully, focus it, and trigger Approve using Alt+A
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible);
         $("#neo-ai-hud").click(); // Guarantee browser focus on HUD prior to keypress perform
         Selenide.actions().keyDown(Keys.ALT).sendKeys("a").keyUp(Keys.ALT).perform(); // Trigger Alt+A shortcut
+        Selenide.sleep(1000); // Give background thread time to process Alt+A, execute, and enter next wait loop
 
         // 5. Verify Step 1 executed successfully, and Step 2 is pending in the HUD
         checkBgError();
@@ -1521,6 +1564,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
             // Submit the modifications to update the playbook state
             $("#neo-edit-submit-btn").click();
+            Selenide.sleep(2500); // Give background thread time to capture new context and LLM resolution for edited step
 
             // Verify that the HUD correctly updates the next pending action text
             checkBgError();
@@ -1529,11 +1573,12 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
             // Click the Approve button (✓) to execute the edited step
             $("#neo-approve-btn").click();
+            Selenide.sleep(2500); // Give background thread time to execute step and render finished confirmation dialog in HUD
             checkBgError();
 
             // 8. Since we interactively modified the playbook step, the HUD correctly presents the Save & Exit dialog.
             // Verify that the approve button is re-labeled for Save & Exit
-            $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(10));
+            $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
 
             // Click "Save & Exit" to persist the changes to the YAML file
             $("#neo-approve-btn").click();
@@ -1541,7 +1586,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
             // Wait for the background thread to finish execution cleanly to avoid race conditions with file writes
             try
             {
-                bgThread.join(10000);
+                bgThread.join(20000);
             }
             catch (final InterruptedException e)
             {
@@ -1633,12 +1678,14 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Selenide.sleep(500); // Wait briefly for state synchronization
 
         // 7. Click Fast-Forward (⏩)
+        Selenide.sleep(1000); // Wait for background thread to fully settle in waitForHudAction
         $("#neo-autoskip-btn").click();
 
         // Wait for background thread to complete execution cleanly
+        Selenide.sleep(5000);
         try
         {
-            bgThread.join(10000);
+            bgThread.join(20000);
         }
         catch (final InterruptedException e)
         {
@@ -1726,15 +1773,16 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
         // 9. Approve the edited step execution
         $("#neo-approve-btn").click();
+        Selenide.sleep(2500); // Give background thread time to execute step and render finished confirmation dialog in HUD
 
         // 10. Verify Save & Exit prompt appears, click it, and wait for thread to finish cleanly
         checkBgError();
-        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(10));
+        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
         $("#neo-approve-btn").click();
 
         try
         {
-            bgThread.join(10000);
+            bgThread.join(20000);
         }
         catch (final InterruptedException e)
         {

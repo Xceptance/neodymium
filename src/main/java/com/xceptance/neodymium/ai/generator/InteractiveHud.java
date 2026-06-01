@@ -290,7 +290,7 @@ public final class InteractiveHud
                 }
             }
 
-            final Object status = Selenide.executeJavaScript("return window.neoHudAction;");
+            final Object status = Selenide.executeJavaScript("var val = window.neoHudAction; window.neoHudAction = null; return val;");
             if (status != null)
             {
                 return String.valueOf(status);
