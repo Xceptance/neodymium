@@ -303,6 +303,28 @@ public abstract class BaseAiTest
         final int hudCalls = stats.getOverallCallCount();
         Assertions.assertEquals(initialCalls, hudCalls,
             "HUD Replay execution made LLM calls! Expected exactly 0 new LLM calls during HUD playback.");
+
+        // Phase 4: Live LLM with HUD verification
+        if (activeUrl != null && !activeUrl.equals("about:blank"))
+        {
+            Selenide.open(activeUrl);
+        }
+
+        Neodymium.setAiPlaybook(null);
+        Neodymium.getData().put("skipReplay", "true");
+        Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "true");
+        System.setProperty("neodymium.ai.interactive.autoSkip", "true");
+
+        try
+        {
+            runSteps.run();
+        }
+        finally
+        {
+            // Restore clean offline state
+            Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "false");
+            System.setProperty("neodymium.ai.interactive.autoSkip", "false");
+        }
     }
 
     /**
