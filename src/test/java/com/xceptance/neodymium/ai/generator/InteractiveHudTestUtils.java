@@ -19,11 +19,19 @@
 package com.xceptance.neodymium.ai.generator;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
+import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WrapsDriver;
+import org.openqa.selenium.interactions.Interactive;
 
 import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
@@ -39,7 +47,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Provides helper methods for executing background threads with shared Neodymium and WebDriver
  * context, creating mock LLM clients, and building custom test AiBrowser instances.
  *
- * @author AI-generated: Gemini 2.5 Flash
+ * @author AI-generated: Gemini 2.5 Pro
  */
 public final class InteractiveHudTestUtils
 {
@@ -60,7 +68,18 @@ public final class InteractiveHudTestUtils
      */
     public static Thread runInteractiveInBg(final Runnable task, final Function<Throwable, Void> onErrorCallback)
     {
-        final WebDriver driver = WebDriverRunner.getWebDriver();
+        final WebDriver rawDriver = WebDriverRunner.getWebDriver();
+        final WebDriver proxiedDriver;
+        if (Proxy.isProxyClass(rawDriver.getClass()))
+        {
+            proxiedDriver = rawDriver;
+        }
+        else
+        {
+            proxiedDriver = createThreadSafeProxy(rawDriver);
+            WebDriverRunner.setWebDriver(proxiedDriver);
+        }
+
         final Object mainContext;
         try
         {
@@ -76,7 +95,7 @@ public final class InteractiveHudTestUtils
             try
             {
                 setNeodymiumContext(mainContext);
-                WebDriverRunner.setWebDriver(driver);
+                WebDriverRunner.setWebDriver(proxiedDriver);
                 task.run();
             }
             catch (final Throwable e)
@@ -86,6 +105,64 @@ public final class InteractiveHudTestUtils
         });
         bgThread.start();
         return bgThread;
+    }
+
+    /**
+     * Creates a thread-safe synchronized dynamic proxy for the given WebDriver instance.
+     * Every method call on the proxy is serialized on the raw driver instance to prevent
+     * concurrent ChromeDriver session corruption.
+     *
+     * @param target the target raw WebDriver instance
+     * @return the proxied thread-safe WebDriver instance
+     */
+    private static WebDriver createThreadSafeProxy(final WebDriver target)
+    {
+        final Set<Class<?>> interfaceSet = new LinkedHashSet<>();
+        interfaceSet.add(WebDriver.class);
+
+        // Add all interfaces from target's class hierarchy
+        Class<?> current = target.getClass();
+        while (current != null)
+        {
+            for (final Class<?> iface : current.getInterfaces())
+            {
+                interfaceSet.add(iface);
+            }
+            current = current.getSuperclass();
+        }
+
+        // Add standard Selenium capabilities, screenshots, and interaction interfaces
+        interfaceSet.add(JavascriptExecutor.class);
+        interfaceSet.add(TakesScreenshot.class);
+        interfaceSet.add(Interactive.class);
+        interfaceSet.add(WrapsDriver.class);
+
+        return (WebDriver) Proxy.newProxyInstance(
+            WebDriver.class.getClassLoader(),
+            interfaceSet.toArray(new Class<?>[0]),
+            new InvocationHandler()
+            {
+                @Override
+                public Object invoke(final Object proxy, final Method method, final Object[] args) throws Throwable
+                {
+                    if ("getWrappedDriver".equals(method.getName()))
+                    {
+                        return target;
+                    }
+                    synchronized (target)
+                    {
+                        try
+                        {
+                            return method.invoke(target, args);
+                        }
+                        catch (final java.lang.reflect.InvocationTargetException e)
+                        {
+                            throw e.getCause();
+                        }
+                    }
+                }
+            }
+        );
     }
 
     /**

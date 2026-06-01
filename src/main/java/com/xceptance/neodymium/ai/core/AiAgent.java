@@ -1109,12 +1109,10 @@ public class AiAgent {
                 this.autoSkip = s;
             }
             if (this.autoSkip) {
+                Neodymium.getOrCreateInteractiveHud().resetHudAction();
                 return;
             }
         }
-
-        // Clear any stale actions from preceding auto-skipped steps before waiting
-        Neodymium.getOrCreateInteractiveHud().resetHudAction();
 
         LOG.info("Waiting for user action in HUD...");
         boolean handled = false;
