@@ -269,4 +269,19 @@ public final class AiExecutionResult
     {
         this.durationMs = durationMs;
     }
+
+    public final boolean isSuccess()
+    {
+        synchronized (this.steps)
+        {
+            for (final StepDetails step : this.steps)
+            {
+                if (step.getFailureReason() != null)
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 }

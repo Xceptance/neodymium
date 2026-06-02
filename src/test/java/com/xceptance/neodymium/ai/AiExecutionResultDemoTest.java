@@ -150,14 +150,17 @@ public final class AiExecutionResultDemoTest
 
         llmClient.addResponse(mockResponse);
 
+        Neodymium.getData().put("loginLabel", "login button");
+
         final AiConfiguration config = Neodymium.aiConfiguration();
         try (final AiBrowser browser = new AiBrowser(config, this, llmClient, pageAnalyzer, actionExecutor))
         {
             Neodymium.setAiBrowser(browser);
 
-            final AiExecutionResult result = browser.execute("Click login button");
+            final AiExecutionResult result = browser.execute("Click ${loginLabel}");
             
             Assertions.assertNotNull(result);
+            Assertions.assertTrue(result.isSuccess());
             Assertions.assertEquals(100L, result.getInputTokens());
             Assertions.assertEquals(50L, result.getOutputTokens());
             Assertions.assertEquals(20L, result.getCachedTokens());
@@ -165,9 +168,14 @@ public final class AiExecutionResultDemoTest
             Assertions.assertEquals(0, result.getRetryCount());
             Assertions.assertEquals(0, result.getEscalationCount());
             
+            // Assert lookup details gathered during execute
+            Assertions.assertEquals(1, result.getLookups().size());
+            Assertions.assertEquals("loginLabel", result.getLookups().get(0).getKey());
+            Assertions.assertEquals("login button", result.getLookups().get(0).getResolvedValue());
+
             Assertions.assertEquals(1, result.getSteps().size());
             final StepDetails step = result.getSteps().get(0);
-            Assertions.assertEquals("Click login button", step.getRawInstruction());
+            Assertions.assertEquals("Click ${loginLabel}", step.getRawInstruction());
             Assertions.assertEquals("Click login button", step.getExpandedInstruction());
             Assertions.assertEquals(1, step.getActions().size());
             Assertions.assertEquals("CLICK", step.getActions().get(0).getType());
@@ -338,6 +346,7 @@ public final class AiExecutionResultDemoTest
             // Verify cached result on failure
             final AiExecutionResult result = Neodymium.getLastAiExecutionResult();
             Assertions.assertNotNull(result);
+            Assertions.assertFalse(result.isSuccess());
             Assertions.assertEquals(1, result.getSteps().size());
             
             final StepDetails step = result.getSteps().get(0);

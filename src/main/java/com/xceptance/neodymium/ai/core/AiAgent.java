@@ -419,7 +419,7 @@ public class AiAgent {
 
                 // Resolve placeholders or variables in the raw instruction string
                 final String stepUnresolved = stepsList.get(i);
-                final String step = AiBrowser.resolveTestDataToPrompt(stepUnresolved);
+                final String step = AiBrowser.resolveTestDataToPrompt(stepUnresolved, result.getLookups());
 
                 // Extract expected failure tags
                 boolean expectedFailure = false;

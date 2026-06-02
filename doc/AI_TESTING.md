@@ -36,7 +36,7 @@ Access the sequence of raw and expanded steps, timing, and static analysis (PESA
 ### B. Deep Variable Lookup Auditing (`LookupDetails`)
 Verify precisely where and how template placeholders resolved:
 ```java
-final List<LookupDetails> lookups = result.getLookupDetails();
+final List<LookupDetails> lookups = result.getLookups();
 for (final LookupDetails lookup : lookups)
 {
     System.out.println("Key: " + lookup.getKey());
@@ -89,13 +89,19 @@ An `AiMockResponse` represents a single mock response behavior from the LLM. You
 
 ```java
 // Simulates a successful click action response
-AiMockResponse.success("{\"status\": \"SUCCESS\", \"actions\": [{\"type\": \"CLICK\", \"selector\": \"#submit-btn\"}]}");
+AiMockResponse.builder()
+    .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#submit-btn\"}], \"d\": true}")
+    .build();
 
 // Simulates a 503 Service Unavailable HTTP error
-AiMockResponse.httpError(503, "Service Unavailable");
+AiMockResponse.builder()
+    .httpStatusCode(503)
+    .build();
 
 // Simulates a custom exception (e.g. connection timeout)
-AiMockResponse.exception("Connection timed out");
+AiMockResponse.builder()
+    .exception(new RuntimeException("Connection timed out"))
+    .build();
 ```
 
 ---
@@ -132,9 +138,14 @@ public final class AiExecutionResultDemoTest
 
         // 2. Set up the virtual LLM queue: a 503 failure, followed by a clean action success response
         final MockLlmClient llmClient = new MockLlmClient();
-        llmClient.enqueue(AiMockResponse.httpError(503, "Service Unavailable").withDelay(100));
-        llmClient.enqueue(AiMockResponse.success("{\"status\": \"SUCCESS\", \"actions\": [{\"type\": \"CLICK\", \"selector\": \"#btn\"}]}")
-                                       .withTokens(150, 45));
+        llmClient.addResponse(AiMockResponse.builder()
+                .httpStatusCode(503)
+                .delayMs(100L)
+                .build());
+        llmClient.addResponse(AiMockResponse.builder()
+                .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#btn\"}], \"d\": true}")
+                .tokens(150L, 45L)
+                .build());
 
         // 3. Set up page context and action interceptor stand-ins
         final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer();
@@ -187,8 +198,12 @@ public final class AiEscalationTest
         MockLlmClient.configureForOffline();
 
         final MockLlmClient llmClient = new MockLlmClient();
-        llmClient.enqueue(AiMockResponse.success("{\"status\": \"ESCALATE\", \"reason\": \"Elements overlap in layout\"}"));
-        llmClient.enqueue(AiMockResponse.success("{\"status\": \"SUCCESS\", \"actions\": [{\"type\": \"CLICK\", \"selector\": \"#menu\"}]}"));
+        llmClient.addResponse(AiMockResponse.builder()
+                .responseText("{\"st\": \"ESCALATE\", \"r\": \"Elements overlap in layout\", \"tc\": \"VISUAL\", \"a\": [], \"d\": false}")
+                .build());
+        llmClient.addResponse(AiMockResponse.builder()
+                .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#menu\"}], \"d\": true}")
+                .build());
 
         final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer();
         final MockActionExecutor actionExecutor = new MockActionExecutor();
@@ -223,7 +238,7 @@ package com.xceptance.neodymium.ai;
 import java.util.List;
 import org.junit.Assert;
 import org.junit.Test;
-import com.xceptance.neodymium.ai.core.Action;
+import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.ai.testing.AiMockResponse;
@@ -240,8 +255,12 @@ public final class AiActionSequenceTest
         MockLlmClient.configureForOffline();
 
         final MockLlmClient llmClient = new MockLlmClient();
-        llmClient.enqueue(AiMockResponse.success("{\"status\": \"SUCCESS\", \"actions\": [{\"type\": \"CLICK\", \"selector\": \"#input-field\"}]}"));
-        llmClient.enqueue(AiMockResponse.success("{\"status\": \"SUCCESS\", \"actions\": [{\"type\": \"TYPE\", \"selector\": \"#input-field\", \"text\": \"Demo\"}]}"));
+        llmClient.addResponse(AiMockResponse.builder()
+                .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#input-field\"}], \"d\": true}")
+                .build());
+        llmClient.addResponse(AiMockResponse.builder()
+                .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [{\"t\": \"TYPE\", \"tg\": \"#input-field\", \"v\": \"Demo\"}], \"d\": true}")
+                .build());
 
         final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer();
         final MockActionExecutor actionExecutor = new MockActionExecutor();
@@ -292,7 +311,9 @@ public final class AiTestDataVariableTest
         Neodymium.getData().put("accountEmail", "user@neodymium.com");
 
         final MockLlmClient llmClient = new MockLlmClient();
-        llmClient.enqueue(AiMockResponse.success("{\"status\": \"SUCCESS\", \"actions\": []}"));
+        llmClient.addResponse(AiMockResponse.builder()
+                .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [], \"d\": true}")
+                .build());
 
         final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer();
         final MockActionExecutor actionExecutor = new MockActionExecutor();
@@ -305,9 +326,9 @@ public final class AiTestDataVariableTest
             final AiExecutionResult result = mockBrowser.execute("Type '${accountEmail}' into email input");
 
             Assert.assertTrue(result.isSuccess());
-            Assert.assertEquals(1, result.getLookupDetails().size());
+            Assert.assertEquals(1, result.getLookups().size());
             
-            final LookupDetails lookup = result.getLookupDetails().getFirst();
+            final LookupDetails lookup = result.getLookups().getFirst();
             Assert.assertEquals("accountEmail", lookup.getKey());
             Assert.assertEquals("user@neodymium.com", lookup.getResolvedValue());
             Assert.assertEquals("TestData Map", lookup.getSource()); // Asserts it resolved from standard test data scope
