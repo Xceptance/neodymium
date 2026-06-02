@@ -16,6 +16,11 @@ To solve this, Neodymium Aura AI provides **total test virtualization** using st
 
 A virtual mock test is initiated by constructing an `AiBrowser` with these three mock implementations and registering it via `Neodymium.setAiBrowser(...)`. When the test completes, closing `AiBrowser` automatically releases all mock references, preventing thread-local pollution or memory leaks.
 
+To eliminate repetitive setup and teardown boilerplate in every test, you should extend the abstract base class **[BaseAiOfflineTest](../src/test/java/com/xceptance/neodymium/ai/BaseAiOfflineTest.java)**. It automatically:
+- Manages backing up and restoring system properties.
+- Configures API key credentials and disables PESAP offline.
+- Exposes pre-constructed and registered mock stand-ins (`llmClient`, `pageAnalyzer`, `actionExecutor`, `mockBrowser`) directly to subclasses.
+
 ---
 
 ## 2. Inspecting the `AiExecutionResult` Return Object
@@ -137,8 +142,8 @@ Validate that Neodymium correctly logs communication errors, handles retry rules
 // GNU AGPLv3 License
 package com.xceptance.neodymium.ai;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.ai.testing.AiMockResponse;
@@ -187,13 +192,14 @@ public final class AiExecutionResultDemoTest
             final AiExecutionResult result = mockBrowser.execute("Click on the blue button");
 
             // 6. Verify self-healing occurred
-            Assert.assertTrue(result.isSuccess());
-            Assert.assertEquals(1, result.getRetryCount());
-            Assert.assertEquals(2, result.getLlmCalls().size());
+            Assertions.assertTrue(result.isSuccess());
+            Assertions.assertEquals(1, result.getEscalationCount());
+            Assertions.assertEquals(0, result.getRetryCount());
+            Assertions.assertEquals(2, result.getLlmCalls().size());
             
             // Assert that the first call captured the 503 error details
-            Assert.assertNotNull(result.getLlmCalls().getFirst().getException());
-            Assert.assertTrue(result.getLlmCalls().getFirst().getException().getMessage().contains("503"));
+            Assertions.assertNotNull(result.getLlmCalls().getFirst().getErrorMessage());
+            Assertions.assertTrue(result.getLlmCalls().getFirst().getErrorMessage().contains("503"));
         }
     }
 }
@@ -207,8 +213,8 @@ Validate that if the SUT layout shifts or elements are obstructed under `STANDAR
 // GNU AGPLv3 License
 package com.xceptance.neodymium.ai;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.ai.testing.AiMockResponse;
@@ -258,14 +264,14 @@ public final class AiEscalationTest
 
             final AiExecutionResult result = mockBrowser.execute("Click the Menu button");
 
-            Assert.assertTrue(result.isSuccess());
-            Assert.assertEquals(1, result.getEscalationCount());
-            Assert.assertEquals(2, result.getLlmCalls().size());
+            Assertions.assertTrue(result.isSuccess());
+            Assertions.assertEquals(1, result.getEscalationCount());
+            Assertions.assertEquals(2, result.getLlmCalls().size());
             
             // Assert the escalation details
-            Assert.assertEquals(1, result.getEscalations().size());
-            Assert.assertTrue(result.getEscalations().getFirst().isLlmRequested());
-            Assert.assertTrue(result.getEscalations().getFirst().getReason().contains("Elements overlap"));
+            Assertions.assertEquals(1, result.getEscalations().size());
+            Assertions.assertTrue(result.getEscalations().getFirst().isLlmRequested());
+            Assertions.assertTrue(result.getEscalations().getFirst().getReason().contains("Elements overlap"));
         }
     }
 }
@@ -280,8 +286,8 @@ Use `MockActionExecutor` to assert that correct Selenium/WebDriver interactions 
 package com.xceptance.neodymium.ai;
 
 import java.util.List;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
@@ -306,7 +312,7 @@ public final class AiActionSequenceTest
                       "s": true,
                       "r": "Success",
                       "a": [{"t": "CLICK", "tg": "#input-field"}],
-                      "d": true
+                      "d": false
                     }
                     """)
                 .build());
@@ -332,10 +338,10 @@ public final class AiActionSequenceTest
             mockBrowser.execute("Enter 'Demo' into input field");
 
             final List<Action> actionLog = actionExecutor.getExecutedActions();
-            Assert.assertEquals(2, actionLog.size());
-            Assert.assertTrue(actionLog.get(0).toString().contains("CLICK"));
-            Assert.assertTrue(actionLog.get(1).toString().contains("TYPE"));
-            Assert.assertTrue(actionLog.get(1).toString().contains("Demo"));
+            Assertions.assertEquals(2, actionLog.size());
+            Assertions.assertTrue(actionLog.get(0).toString().contains("CLICK"));
+            Assertions.assertTrue(actionLog.get(1).toString().contains("TYPE"));
+            Assertions.assertTrue(actionLog.get(1).toString().contains("Demo"));
         }
     }
 }
@@ -349,8 +355,8 @@ Assert that instructions containing dynamic placeholders resolve variables from 
 // GNU AGPLv3 License
 package com.xceptance.neodymium.ai;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.ai.core.LookupDetails;
@@ -393,13 +399,13 @@ public final class AiTestDataVariableTest
             // Execute instruction containing placeholder
             final AiExecutionResult result = mockBrowser.execute("Type '${accountEmail}' into email input");
 
-            Assert.assertTrue(result.isSuccess());
-            Assert.assertEquals(1, result.getLookups().size());
+            Assertions.assertTrue(result.isSuccess());
+            Assertions.assertEquals(1, result.getLookups().size());
             
             final LookupDetails lookup = result.getLookups().getFirst();
-            Assert.assertEquals("accountEmail", lookup.getKey());
-            Assert.assertEquals("user@neodymium.com", lookup.getResolvedValue());
-            Assert.assertEquals("TestData Map", lookup.getSource()); // Asserts it resolved from standard test data scope
+            Assertions.assertEquals("accountEmail", lookup.getKey());
+            Assertions.assertEquals("user@neodymium.com", lookup.getResolvedValue());
+            Assertions.assertEquals("TestData Map", lookup.getSource()); // Asserts it resolved from standard test data scope
         }
     }
 }

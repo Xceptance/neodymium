@@ -19,13 +19,9 @@
 package com.xceptance.neodymium.ai;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.ai.action.Action;
@@ -41,71 +37,20 @@ import com.xceptance.neodymium.ai.core.LlmCallDetails;
 import com.xceptance.neodymium.ai.core.LookupDetails;
 import com.xceptance.neodymium.ai.core.StepDetails;
 import com.xceptance.neodymium.ai.testing.AiMockResponse;
-import com.xceptance.neodymium.ai.testing.MockLlmClient;
-import com.xceptance.neodymium.ai.testing.MockPageAnalyzer;
 import com.xceptance.neodymium.common.testdata.TestData;
 import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Rich offline integration tests validating the creation, populating, and caching
- * of the new {@link AiExecutionResult} and {@link AiTestRunResult} metrics and details.
+ * of the {@link AiExecutionResult} and {@link AiTestRunResult} metrics and details.
  * <p>
- * This class demonstrates virtualized browserless testing by mocking the LLM API,
- * DOM extraction, and browser action execution layers. It verifies self-healing retry logic,
- * visual escalations, token delta auditing, template placeholder resolution, and lifecycle hook wrapping.
+ * This class extends {@link BaseAiOfflineTest} to run visual anomalies and placeholder resolutions
+ * completely offline with zero LLM API costs.
  *
  * // AI-generated: Gemini 3.5 Flash
  */
-public final class AiExecutionResultDemoTest
+public final class AiExecutionResultDemoTest extends BaseAiOfflineTest
 {
-    private Map<String, String> originalSystemProperties;
-
-    /**
-     * Prepares the thread-local state and configuration system properties before each test.
-     * Backs up existing AI system configuration properties to restore them afterward,
-     * configures the mock LLM credentials, disables live PESAP calls, and cleanses the active test data.
-     */
-    @BeforeEach
-    public final void setup()
-    {
-        this.originalSystemProperties = new HashMap<>();
-        this.storeAndClearSystemProperty("neodymium.ai.apiKey");
-        this.storeAndClearSystemProperty("neodymium.ai.pesap.enabled");
-        this.storeAndClearSystemProperty("neodymium.ai.agent.maxRetries");
-
-        MockLlmClient.configureForOffline("mock-offline-demo-key", false);
-
-        Neodymium.setAiPlaybook(null);
-        Neodymium.getData().clear();
-    }
-
-    private void storeAndClearSystemProperty(final String key)
-    {
-        final String val = System.getProperty(key);
-        if (val != null)
-        {
-            this.originalSystemProperties.put(key, val);
-            System.clearProperty(key);
-        }
-    }
-
-    @AfterEach
-    public final void teardown()
-    {
-        Neodymium.getData().clear();
-        Neodymium.setAiPlaybook(null);
-        Neodymium.setAiBrowser(null);
-
-        System.clearProperty("neodymium.ai.apiKey");
-        System.clearProperty("neodymium.ai.pesap.enabled");
-        System.clearProperty("neodymium.ai.agent.maxRetries");
-
-        for (final Map.Entry<String, String> entry : this.originalSystemProperties.entrySet())
-        {
-            System.setProperty(entry.getKey(), entry.getValue());
-        }
-    }
-
     /**
      * Verifies that the variable resolution system parses template placeholders 
      * (e.g. {@code ${username}}) from the active TestData map, handles nested placeholders, 
@@ -153,16 +98,7 @@ public final class AiExecutionResultDemoTest
     @Test
     public final void testOfflineMockSequenceAndTokenDeltas()
     {
-        final MockLlmClient llmClient = new MockLlmClient();
-        final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer("<html><body>Mock SUT</body></html>");
-        final ActionExecutor actionExecutor = new ActionExecutor(this)
-        {
-            @Override
-            public final void executeAll(final List<Action> actions)
-            {
-                // NOOP
-            }
-        };
+        this.pageAnalyzer.setMockDomText("<html><body>Mock SUT</body></html>");
 
         final AiMockResponse mockResponse = AiMockResponse.builder()
                 .responseText(
@@ -178,49 +114,43 @@ public final class AiExecutionResultDemoTest
                 .tokens(100L, 50L, 20L)
                 .build();
 
-        llmClient.addResponse(mockResponse);
+        this.llmClient.addResponse(mockResponse);
 
         Neodymium.getData().put("loginLabel", "login button");
 
-        final AiConfiguration config = Neodymium.aiConfiguration();
-        try (final AiBrowser browser = new AiBrowser(config, this, llmClient, pageAnalyzer, actionExecutor))
-        {
-            Neodymium.setAiBrowser(browser);
+        final AiExecutionResult result = this.mockBrowser.execute("Click ${loginLabel}");
+        
+        Assertions.assertNotNull(result);
+        Assertions.assertTrue(result.isSuccess());
+        Assertions.assertEquals(100L, result.getInputTokens());
+        Assertions.assertEquals(50L, result.getOutputTokens());
+        Assertions.assertEquals(20L, result.getCachedTokens());
+        Assertions.assertEquals(150L, result.getTotalTokens());
+        Assertions.assertEquals(0, result.getRetryCount());
+        Assertions.assertEquals(0, result.getEscalationCount());
+        
+        // Assert lookup details gathered during execute
+        Assertions.assertEquals(1, result.getLookups().size());
+        Assertions.assertEquals("loginLabel", result.getLookups().get(0).getKey());
+        Assertions.assertEquals("login button", result.getLookups().get(0).getResolvedValue());
 
-            final AiExecutionResult result = browser.execute("Click ${loginLabel}");
-            
-            Assertions.assertNotNull(result);
-            Assertions.assertTrue(result.isSuccess());
-            Assertions.assertEquals(100L, result.getInputTokens());
-            Assertions.assertEquals(50L, result.getOutputTokens());
-            Assertions.assertEquals(20L, result.getCachedTokens());
-            Assertions.assertEquals(150L, result.getTotalTokens());
-            Assertions.assertEquals(0, result.getRetryCount());
-            Assertions.assertEquals(0, result.getEscalationCount());
-            
-            // Assert lookup details gathered during execute
-            Assertions.assertEquals(1, result.getLookups().size());
-            Assertions.assertEquals("loginLabel", result.getLookups().get(0).getKey());
-            Assertions.assertEquals("login button", result.getLookups().get(0).getResolvedValue());
+        Assertions.assertEquals(1, result.getSteps().size());
+        final StepDetails step = result.getSteps().get(0);
+        Assertions.assertEquals("Click ${loginLabel}", step.getRawInstruction());
+        Assertions.assertEquals("Click login button", step.getExpandedInstruction());
+        Assertions.assertEquals(1, step.getActions().size());
+        Assertions.assertEquals("CLICK", step.getActions().get(0).getType());
 
-            Assertions.assertEquals(1, result.getSteps().size());
-            final StepDetails step = result.getSteps().get(0);
-            Assertions.assertEquals("Click ${loginLabel}", step.getRawInstruction());
-            Assertions.assertEquals("Click login button", step.getExpandedInstruction());
-            Assertions.assertEquals(1, step.getActions().size());
-            Assertions.assertEquals("CLICK", step.getActions().get(0).getType());
+        Assertions.assertEquals(1, step.getLlmCalls().size());
+        final LlmCallDetails call = step.getLlmCalls().get(0);
+        Assertions.assertEquals(ContextLevel.AXTREE, call.getContextLevel());
+        Assertions.assertEquals(100L, call.getInputTokens());
+        Assertions.assertEquals(50L, call.getOutputTokens());
+        Assertions.assertEquals(20L, call.getCachedTokens());
+        Assertions.assertEquals(200, call.getResponseCode().intValue());
 
-            Assertions.assertEquals(1, step.getLlmCalls().size());
-            final LlmCallDetails call = step.getLlmCalls().get(0);
-            Assertions.assertEquals(ContextLevel.AXTREE, call.getContextLevel());
-            Assertions.assertEquals(100L, call.getInputTokens());
-            Assertions.assertEquals(50L, call.getOutputTokens());
-            Assertions.assertEquals(20L, call.getCachedTokens());
-            Assertions.assertEquals(200, call.getResponseCode().intValue());
-
-            // Static getter lookup validation
-            Assertions.assertSame(result, Neodymium.getLastAiExecutionResult());
-        }
+        // Static getter lookup validation
+        Assertions.assertSame(result, Neodymium.getLastAiExecutionResult());
     }
 
     /**
@@ -233,11 +163,8 @@ public final class AiExecutionResultDemoTest
     @Test
     public final void testSelfHealingAndContextEscalation()
     {
-        final MockLlmClient llmClient = new MockLlmClient();
-        final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer("<html><body>Mock SUT</body></html>");
-        
         final List<Action> executed = new ArrayList<>();
-        final ActionExecutor actionExecutor = new ActionExecutor(this)
+        final ActionExecutor customExecutor = new ActionExecutor(this)
         {
             private int callCount = 0;
 
@@ -283,11 +210,11 @@ public final class AiExecutionResultDemoTest
                 .tokens(100L, 50L, 10L)
                 .build();
 
-        llmClient.addResponse(mockRes1);
-        llmClient.addResponse(mockRes2);
+        this.llmClient.addResponse(mockRes1);
+        this.llmClient.addResponse(mockRes2);
 
         final AiConfiguration config = Neodymium.aiConfiguration();
-        try (final AiBrowser browser = new AiBrowser(config, this, llmClient, pageAnalyzer, actionExecutor))
+        try (final AiBrowser browser = new AiBrowser(config, this, this.llmClient, this.pageAnalyzer, customExecutor))
         {
             Neodymium.setAiBrowser(browser);
 
@@ -321,17 +248,6 @@ public final class AiExecutionResultDemoTest
     @Test
     public final void testLlmRequestedContextEscalation()
     {
-        final MockLlmClient llmClient = new MockLlmClient();
-        final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer("<html><body>Mock SUT</body></html>");
-        final ActionExecutor actionExecutor = new ActionExecutor(this)
-        {
-            @Override
-            public final void executeAll(final List<Action> actions)
-            {
-                // NOOP
-            }
-        };
-
         // Response 1: LLM directs context escalation to VISUAL
         final AiMockResponse mockRes1 = AiMockResponse.builder()
                 .responseText(
@@ -363,25 +279,19 @@ public final class AiExecutionResultDemoTest
                 .tokens(120L, 40L, 20L)
                 .build();
 
-        llmClient.addResponse(mockRes1);
-        llmClient.addResponse(mockRes2);
+        this.llmClient.addResponse(mockRes1);
+        this.llmClient.addResponse(mockRes2);
 
-        final AiConfiguration config = Neodymium.aiConfiguration();
-        try (final AiBrowser browser = new AiBrowser(config, this, llmClient, pageAnalyzer, actionExecutor))
-        {
-            Neodymium.setAiBrowser(browser);
+        final AiExecutionResult result = this.mockBrowser.execute("Verify SUT visually");
 
-            final AiExecutionResult result = browser.execute("Verify SUT visually");
-
-            Assertions.assertNotNull(result);
-            Assertions.assertEquals(1, result.getEscalationCount());
-            Assertions.assertEquals(1, result.getEscalations().size());
-            final EscalationDetails escalation = result.getEscalations().get(0);
-            Assertions.assertEquals(ContextLevel.AXTREE, escalation.getFromLevel());
-            Assertions.assertEquals(ContextLevel.VISUAL, escalation.getToLevel());
-            Assertions.assertTrue(escalation.isLlmRequested());
-            Assertions.assertEquals("Need screenshot for verification", escalation.getReason());
-        }
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(1, result.getEscalationCount());
+        Assertions.assertEquals(1, result.getEscalations().size());
+        final EscalationDetails escalation = result.getEscalations().get(0);
+        Assertions.assertEquals(ContextLevel.AXTREE, escalation.getFromLevel());
+        Assertions.assertEquals(ContextLevel.VISUAL, escalation.getToLevel());
+        Assertions.assertTrue(escalation.isLlmRequested());
+        Assertions.assertEquals("Need screenshot for verification", escalation.getReason());
     }
 
     /**
@@ -392,51 +302,34 @@ public final class AiExecutionResultDemoTest
     @Test
     public final void testHttpExceptionPreservation()
     {
-        final MockLlmClient llmClient = new MockLlmClient();
-        final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer("<html><body>Mock SUT</body></html>");
-        final ActionExecutor actionExecutor = new ActionExecutor(this)
-        {
-            @Override
-            public final void executeAll(final List<Action> actions)
-            {
-                // NOOP
-            }
-        };
-
         // Simulate 429 Too Many Requests - queue enough responses for retries
         final AiMockResponse mockRes = AiMockResponse.builder()
                 .httpStatusCode(429)
                 .build();
         for (int i = 0; i < 10; i++)
         {
-            llmClient.addResponse(mockRes);
+            this.llmClient.addResponse(mockRes);
         }
 
-        final AiConfiguration config = Neodymium.aiConfiguration();
-        try (final AiBrowser browser = new AiBrowser(config, this, llmClient, pageAnalyzer, actionExecutor))
-        {
-            Neodymium.setAiBrowser(browser);
+        final Throwable t = Assertions.assertThrows(Throwable.class, () -> {
+            this.mockBrowser.execute("Click button");
+        });
 
-            final Throwable t = Assertions.assertThrows(Throwable.class, () -> {
-                browser.execute("Click button");
-            });
+        Assertions.assertTrue(t.getMessage().contains("Simulated HTTP error code: 429") || 
+                (t.getCause() != null && t.getCause().getMessage().contains("Simulated HTTP error code: 429")));
 
-            Assertions.assertTrue(t.getMessage().contains("Simulated HTTP error code: 429") || 
-                    (t.getCause() != null && t.getCause().getMessage().contains("Simulated HTTP error code: 429")));
-
-            // Verify cached result on failure
-            final AiExecutionResult result = Neodymium.getLastAiExecutionResult();
-            Assertions.assertNotNull(result);
-            Assertions.assertFalse(result.isSuccess());
-            Assertions.assertEquals(1, result.getSteps().size());
-            
-            final StepDetails step = result.getSteps().get(0);
-            Assertions.assertTrue(step.getLlmCalls().size() >= 1);
-            
-            final LlmCallDetails call = step.getLlmCalls().get(0);
-            Assertions.assertEquals(429, call.getResponseCode().intValue());
-            Assertions.assertTrue(call.getErrorMessage().contains("Simulated HTTP error code: 429"));
-        }
+        // Verify cached result on failure
+        final AiExecutionResult result = Neodymium.getLastAiExecutionResult();
+        Assertions.assertNotNull(result);
+        Assertions.assertFalse(result.isSuccess());
+        Assertions.assertEquals(1, result.getSteps().size());
+        
+        final StepDetails step = result.getSteps().get(0);
+        Assertions.assertTrue(step.getLlmCalls().size() >= 1);
+        
+        final LlmCallDetails call = step.getLlmCalls().get(0);
+        Assertions.assertEquals(429, call.getResponseCode().intValue());
+        Assertions.assertTrue(call.getErrorMessage().contains("Simulated HTTP error code: 429"));
     }
 
     /**
@@ -448,19 +341,8 @@ public final class AiExecutionResultDemoTest
     @Test
     public final void testCompositeRunResult() throws Throwable
     {
-        final MockLlmClient llmClient = new MockLlmClient();
-        final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer("<html><body>Mock SUT</body></html>");
-        final ActionExecutor actionExecutor = new ActionExecutor(this)
-        {
-            @Override
-            public final void executeAll(final List<Action> actions)
-            {
-                // NOOP
-            }
-        };
-
         // Mock response for "before"
-        llmClient.addResponse(AiMockResponse.builder()
+        this.llmClient.addResponse(AiMockResponse.builder()
                 .responseText(
                     """
                     {
@@ -475,7 +357,7 @@ public final class AiExecutionResultDemoTest
                 .build());
 
         // Mock response for "steps"
-        llmClient.addResponse(AiMockResponse.builder()
+        this.llmClient.addResponse(AiMockResponse.builder()
                 .responseText(
                     """
                     {
@@ -490,7 +372,7 @@ public final class AiExecutionResultDemoTest
                 .build());
 
         // Mock response for "after"
-        llmClient.addResponse(AiMockResponse.builder()
+        this.llmClient.addResponse(AiMockResponse.builder()
                 .responseText(
                     """
                     {
@@ -509,23 +391,176 @@ public final class AiExecutionResultDemoTest
         data.put("steps", "Run steps");
         data.put("after", "Teardown steps");
 
-        final AiConfiguration config = Neodymium.aiConfiguration();
-        try (final AiBrowser browser = new AiBrowser(config, this, llmClient, pageAnalyzer, actionExecutor))
-        {
-            Neodymium.setAiBrowser(browser);
+        final AiTestRunResult runResult = this.mockBrowser.execute();
 
-            final AiTestRunResult runResult = browser.execute();
+        Assertions.assertNotNull(runResult);
+        Assertions.assertNotNull(runResult.getBeforeResult());
+        Assertions.assertNotNull(runResult.getStepsResult());
+        Assertions.assertEquals(1, runResult.getAfterResults().size());
 
-            Assertions.assertNotNull(runResult);
-            Assertions.assertNotNull(runResult.getBeforeResult());
-            Assertions.assertNotNull(runResult.getStepsResult());
-            Assertions.assertEquals(1, runResult.getAfterResults().size());
+        Assertions.assertEquals(10L, runResult.getBeforeResult().getInputTokens());
+        Assertions.assertEquals(20L, runResult.getStepsResult().getInputTokens());
+        Assertions.assertEquals(30L, runResult.getAfterResults().get(0).getInputTokens());
 
-            Assertions.assertEquals(10L, runResult.getBeforeResult().getInputTokens());
-            Assertions.assertEquals(20L, runResult.getStepsResult().getInputTokens());
-            Assertions.assertEquals(30L, runResult.getAfterResults().get(0).getInputTokens());
+        Assertions.assertSame(runResult, Neodymium.getLastAiTestRunResult());
+    }
 
-            Assertions.assertSame(runResult, Neodymium.getLastAiTestRunResult());
-        }
+    /**
+     * Recipe 1: Asserting Retry & Self-Healing on HTTP 503 Errors.
+     * Validate that Neodymium correctly logs communication errors, handles retry rules,
+     * and succeeds once the service returns.
+     */
+    @Test
+    public final void testSelfHealingOnHttp503Error()
+    {
+        // Set up the virtual LLM queue: a 503 failure, followed by a clean action success response
+        this.llmClient.addResponse(AiMockResponse.builder()
+                .httpStatusCode(503)
+                .delayMs(10L)
+                .build());
+        this.llmClient.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Success",
+                      "a": [{"t": "CLICK", "tg": "#btn"}],
+                      "d": true
+                    }
+                    """)
+                .tokens(150L, 45L)
+                .build());
+
+        // Execute
+        final AiExecutionResult result = this.mockBrowser.execute("Click on the blue button");
+
+        // Verify self-healing occurred
+        Assertions.assertTrue(result.isSuccess());
+        Assertions.assertEquals(1, result.getEscalationCount());
+        Assertions.assertEquals(0, result.getRetryCount());
+        Assertions.assertEquals(2, result.getLlmCalls().size());
+        
+        // Assert that the first call captured the 503 error details
+        Assertions.assertNotNull(result.getLlmCalls().get(0).getErrorMessage());
+        Assertions.assertTrue(result.getLlmCalls().get(0).getErrorMessage().contains("503"));
+    }
+
+    /**
+     * Recipe 2: Asserting Context Level Escalations.
+     * Validate that if the SUT layout shifts or elements are obstructed under STANDARD view,
+     * the engine correctly escalates to VISUAL context and executes the final action.
+     */
+    @Test
+    public final void testVisualEscalationVerification()
+    {
+        this.llmClient.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "st": "ESCALATE",
+                      "r": "Elements overlap in layout",
+                      "tc": "VISUAL",
+                      "a": [],
+                      "d": false
+                    }
+                    """)
+                .build());
+        this.llmClient.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Success",
+                      "a": [{"t": "CLICK", "tg": "#menu"}],
+                      "d": true
+                    }
+                    """)
+                .build());
+
+        final AiExecutionResult result = this.mockBrowser.execute("Click the Menu button");
+
+        Assertions.assertTrue(result.isSuccess());
+        Assertions.assertEquals(1, result.getEscalationCount());
+        Assertions.assertEquals(2, result.getLlmCalls().size());
+        
+        // Assert the escalation details
+        Assertions.assertEquals(1, result.getEscalations().size());
+        Assertions.assertTrue(result.getEscalations().get(0).isLlmRequested());
+        Assertions.assertTrue(result.getEscalations().get(0).getReason().contains("Elements overlap"));
+    }
+
+    /**
+     * Recipe 3: Intercepting and Verifying Action Sequence Order.
+     * Use MockActionExecutor to assert that correct Selenium/WebDriver interactions
+     * are performed by the execution loop in the correct relative sequence, without running real browsers.
+     */
+    @Test
+    public final void testBrowserActionSequenceVerification()
+    {
+        this.llmClient.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Success",
+                      "a": [{"t": "CLICK", "tg": "#input-field"}],
+                      "d": false
+                    }
+                    """)
+                .build());
+        this.llmClient.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Success",
+                      "a": [{"t": "TYPE", "tg": "#input-field", "v": "Demo"}],
+                      "d": true
+                    }
+                    """)
+                .build());
+
+        this.mockBrowser.execute("Enter 'Demo' into input field");
+
+        final List<Action> actionLog = this.actionExecutor.getExecutedActions();
+        Assertions.assertEquals(2, actionLog.size());
+        Assertions.assertTrue(actionLog.get(0).toString().contains("CLICK"));
+        Assertions.assertTrue(actionLog.get(1).toString().contains("TYPE"));
+        Assertions.assertTrue(actionLog.get(1).toString().contains("Demo"));
+    }
+
+    /**
+     * Recipe 4: Asserting Template Variable Lookups.
+     * Assert that instructions containing dynamic placeholders resolve variables from the correct,
+     * authorized scope sources.
+     */
+    @Test
+    public final void testTestDataVariableResolutionScope()
+    {
+        // Set up test data variables in Neodymium
+        Neodymium.getData().put("accountEmail", "user@neodymium.com");
+
+        this.llmClient.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Success",
+                      "a": [],
+                      "d": true
+                    }
+                    """)
+                .build());
+
+        // Execute instruction containing placeholder
+        final AiExecutionResult result = this.mockBrowser.execute("Type '${accountEmail}' into email input");
+
+        Assertions.assertTrue(result.isSuccess());
+        Assertions.assertEquals(1, result.getLookups().size());
+        
+        final LookupDetails lookup = result.getLookups().get(0);
+        Assertions.assertEquals("accountEmail", lookup.getKey());
+        Assertions.assertEquals("user@neodymium.com", lookup.getResolvedValue());
+        Assertions.assertEquals("TestData Map", lookup.getSource()); // Asserts it resolved from standard test data scope
     }
 }
