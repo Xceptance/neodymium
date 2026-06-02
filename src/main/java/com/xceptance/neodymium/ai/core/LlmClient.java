@@ -61,6 +61,16 @@ public class LlmClient
     private final ThreadLocal<LlmMode> currentCallMode = ThreadLocal.withInitial(() -> null);
 
     /**
+     * Protected no-arg constructor to permit browserless instantiations without live config dependencies.
+     */
+    protected LlmClient()
+    {
+        this.config = null;
+        this.aiStats = null;
+        this.mode = null;
+    }
+
+    /**
      * Creates a new LLM client in {@link LlmMode#AGENT} mode.
      * Uses {@code neodymium.ai.temperature} (deterministic, for {@code @NeodymiumTest}).
      *
