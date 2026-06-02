@@ -2,42 +2,48 @@
   "id": "com.xceptance.neodymium.ai.HoverActionTest :: testHoverDropdown",
   "steps": [
     {
-      "promptLine": "Hover over the 'Hover Me' button.",
-      "reasoning": "Hover over the button that triggers the dropdown.",
+      "promptLine": "Hover over the \u0027Hover Me\u0027 button.",
+      "reasoning": "",
       "actions": [
         {
           "type": "HOVER",
-          "target": "#menu-btn",
-          "description": "Hover over the button",
-          "elementDetails": "Hover Me button with id 'menu-btn'",
+          "target": "[data-neo-ref\u003d\u0027xc_jlp3e0\u0027]",
+          "description": "Hover over the \u0027Hover Me\u0027 button.",
+          "elementDetails": "Hover Me button",
           "elementContext": {
             "text": "Hover Me",
             "id": "menu-btn",
             "tagName": "button",
-            "type": "button"
+            "type": "submit"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Click on the 'Sub Item 1' link.",
-      "reasoning": "Click on the dropdown item.",
+      "promptLine": "Click on the \u0027Sub Item 1\u0027 link.",
+      "reasoning": "The instruction is to click on the \u0027Sub Item 1\u0027 link. I found a link element in the Accessibility Tree with the name \u0027Sub Item 1\u0027 and data-neo-ref \u0027xc_eairzn\u0027. I will use this data-neo-ref as the target for the CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "#menu-item-1",
-          "description": "Click the dropdown link",
-          "elementDetails": "Sub Item 1 link with id 'menu-item-1'",
+          "target": "[data-neo-ref\u003d\u0027xc_eairzn\u0027]",
+          "description": "Click on the \u0027Sub Item 1\u0027 link.",
+          "elementDetails": "Sub Item 1",
           "elementContext": {
+            "classes": "dropdown-item",
             "text": "Sub Item 1",
             "id": "menu-item-1",
-            "tagName": "a",
-            "type": ""
+            "tagName": "a"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     }
   ]
 }

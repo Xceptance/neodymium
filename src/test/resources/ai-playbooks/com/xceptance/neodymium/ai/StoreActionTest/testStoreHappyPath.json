@@ -2,85 +2,92 @@
   "id": "com.xceptance.neodymium.ai.StoreActionTest :: testStoreHappyPath",
   "steps": [
     {
-      "promptLine": "Capture the order ID value and save it as variable 'myOrderId'.",
-      "reasoning": "Store the order ID text inside myOrderId variable.",
+      "promptLine": "Capture the order ID value and save it as variable \u0027myOrderId\u0027.",
+      "reasoning": "The order ID is found in the element with id \u0027order-id\u0027. A STORE action is used to capture its value into the variable \u0027myOrderId\u0027.",
       "actions": [
         {
           "type": "STORE",
           "target": "#order-id",
-          "description": "Store order ID",
-          "elementDetails": "Order ID with id 'order-id'",
-          "elementContext": {
-            "text": "ORD-987654",
-            "id": "order-id",
-            "tagName": "div",
-            "type": ""
-          },
-          "value": "myOrderId",
-          "adjust": false,
-          "replay": ""
+          "value": [
+            "myOrderId"
+          ],
+          "description": "Capture the order ID value",
+          "elementDetails": "order-id",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "6D3FDADCD718CBFE91EABE16F545EEB2:main",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
     },
     {
-      "promptLine": "Capture the price amount. Save it as variable 'myPrice' and store with adjustment.",
-      "reasoning": "Store the price text inside myPrice variable with numeric adjustment.",
+      "promptLine": "Capture the price amount. Save it as variable \u0027myPrice\u0027 and store with adjustment.",
+      "reasoning": "Identified the price amount element by its ID \u0027price-amount\u0027 and created a STORE action to capture its text into the variable \u0027myPrice\u0027 with adjustment enabled.",
       "actions": [
         {
           "type": "STORE",
           "target": "#price-amount",
-          "description": "Store price with adjustment",
-          "elementDetails": "Price amount with id 'price-amount'",
-          "elementContext": {
-            "text": "14,96 €",
-            "id": "price-amount",
-            "tagName": "div",
-            "type": ""
-          },
-          "value": "myPrice",
-          "adjust": true,
-          "replay": ""
+          "value": [
+            "myPrice"
+          ],
+          "description": "Capture the price amount and store it as \u0027myPrice\u0027 with adjustment.",
+          "elementDetails": "14,96 €",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "6D3FDADCD718CBFE91EABE16F545EEB2:main",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
     },
     {
-      "promptLine": "Type the value of variable '${myOrderId}' into the verify input field.",
-      "reasoning": "Type variable content into the verify input.",
+      "promptLine": "Type the value of variable \u0027${myOrderId}\u0027 into the verify input field.",
+      "reasoning": "The instruction asks to type a variable\u0027s value into a specific input field. I identified the \u0027Verify Order ID:\u0027 textbox using its data-neo-ref attribute and created a TYPE action with the variable as its value.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "#input-target",
-          "description": "Type stored order ID",
-          "elementDetails": "Verify input field with id 'input-target'",
+          "target": "[data-neo-ref\u003d\u0027xc_kvumr8\u0027]",
+          "value": [
+            "ORD-987654"
+          ],
+          "description": "Type the value of variable \u0027${myOrderId}\u0027 into the verify input field.",
+          "elementDetails": "Verify Order ID: textbox",
           "elementContext": {
-            "text": "",
             "id": "input-target",
             "tagName": "input",
             "type": "text"
           },
-          "value": "${myOrderId}",
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Click on the 'Verify' button.",
-      "reasoning": "Click Verify button.",
+      "promptLine": "Click on the \u0027Verify\u0027 button.",
+      "reasoning": "The instruction is to click the \u0027Verify\u0027 button. I found a button with the name \u0027Verify\u0027 and data-neo-ref \u0027xc_mgyrhu\u0027 in the AXTREE, which is a direct match.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "#btn-verify",
-          "description": "Click Verify button",
-          "elementDetails": "Verify button with id 'btn-verify'",
+          "target": "[data-neo-ref\u003d\u0027xc_mgyrhu\u0027]",
+          "description": "Click on the \u0027Verify\u0027 button",
+          "elementDetails": "Verify",
           "elementContext": {
             "text": "Verify",
             "id": "btn-verify",
             "tagName": "button",
-            "type": "button"
+            "type": "submit"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     }
   ]
 }

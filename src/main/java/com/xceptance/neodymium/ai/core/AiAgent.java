@@ -1,25 +1,20 @@
 /*
- * MIT License
+ * GNU Affero General Public License (AGPLv3)
  *
  * Copyright (c) 2026 Xceptance
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.xceptance.neodymium.ai.core;
 
@@ -54,7 +49,9 @@ import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.SelenideAddons;
+import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.util.ScreenshotHasher;
+import com.xceptance.neodymium.ai.util.CustomRulesLoader;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -77,7 +74,7 @@ import io.qameta.allure.Allure;
  * <li>Retries with error context if actions fail (self-healing)</li>
  * </ol>
  * 
- * // AI-generated: Gemini 3.1 Pro (Low)
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public class AiAgent {
 
@@ -101,22 +98,18 @@ public class AiAgent {
 
     private final ActionParser actionParser;
 
-    private final int maxRetries;
 
-    private final boolean screenshotBeforeAction;
-
-    private final AiConfiguration config;
 
     private AiDiscussionLogger executionLog;
 
     private String sutContext;
 
-    private boolean autoSkip = false;
+    private boolean autoSkip;
 
     private boolean hudPromptChanged = false;
     private boolean hudSaveExit = false;
 
-    // AI-generated: Gemini 3.5 Flash - tracks whether the last LLM response indicated completion
+    // AI-generated: Gemini 2.5 Flash - tracks whether the last LLM response indicated completion
     private boolean lastLlmDone = true;
 
     private static final int NO_ACTIONS_MAX_RETRIES = 15;
@@ -135,7 +128,7 @@ public class AiAgent {
 
     private final List<ContextLevel> pesapPredictions = new ArrayList<>();
 
-    // AI-generated: Gemini 2.5 Pro
+    // AI-generated: Gemini 2.5 Flash
     public static String stripAllTags(final String step)
     {
         if (step == null)
@@ -159,14 +152,13 @@ public class AiAgent {
      * @param config         the AI configuration
      */
     public AiAgent(final LlmClient llmClient, final PageAnalyzer pageAnalyzer,
-            final ActionExecutor actionExecutor, final AiConfiguration config) {
+            final ActionExecutor actionExecutor, final AiConfiguration config)
+    {
         this.llmClient = llmClient;
         this.pageAnalyzer = pageAnalyzer;
         this.actionExecutor = actionExecutor;
         this.actionParser = new ActionParser();
-        this.maxRetries = config.agentMaxRetries();
-        this.screenshotBeforeAction = config.agentScreenshotBeforeAction();
-        this.config = config;
+        this.autoSkip = config.aiInteractiveAutoSkip();
     }
 
     /**
@@ -192,6 +184,11 @@ public class AiAgent {
      * @param instructions natural language test instructions
      */
     public void execute(final String instructions) {
+        // Dynamically reload the thread-local AI configuration to pick up any dynamic system property changes
+        Neodymium.reloadAiConfiguration();
+
+        // Re-read dynamically cached autoSkip field from the newly reloaded configuration
+        this.autoSkip = Neodymium.aiConfiguration().aiInteractiveAutoSkip();
 
         if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey())) {
             Assertions.fail(
@@ -279,7 +276,7 @@ public class AiAgent {
             }
 
             this.pesapPredictions.clear();
-            boolean pesapEnabledVal = config.pesapEnabled();
+            boolean pesapEnabledVal = Neodymium.aiConfiguration().pesapEnabled();
             if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.enabled"))
             {
                 pesapEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.enabled", pesapEnabledVal);
@@ -310,7 +307,7 @@ public class AiAgent {
                 }
             }
 
-            final boolean isInteractive = config.aiInteractive();
+            final boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
             final List<String> performedInstructions = new ArrayList<>();
             boolean abortedDueToExpectedFailure = false;
             String abortedBugId = null;
@@ -343,6 +340,16 @@ public class AiAgent {
                             logPauseReason("HUD Fast-Forward paused (e.g., Breakpoint reached or manual pause)");
                         }
                         this.autoSkip = false;
+                        try
+                        {
+                            Selenide.executeJavaScript(
+                                    "if (typeof window !== 'undefined') { window.neoHudAutoSkip = false; try { sessionStorage.setItem('neoAutoSkip', 'false'); } catch(e){} }"
+                            );
+                        }
+                        catch (final Exception e)
+                        {
+                            // Ignore browser communication errors
+                        }
                     }
                 }
 
@@ -524,10 +531,10 @@ public class AiAgent {
                 }
             }
 
-            if (config.attachFullDiscussionToReport()) {
+            if (Neodymium.aiConfiguration().attachFullDiscussionToReport()) {
                 Allure.addAttachment("AI Discussion", "text/html", executionLog.generateHtml(), ".html");
             }
-            if (config.attachTokenUsageToReport()) {
+            if (Neodymium.aiConfiguration().attachTokenUsageToReport()) {
                 final AiStats stats = llmClient.getAiStats();
                 Allure.addAttachment("AI Execution Statistics", "text/plain", stats.toSummaryString(), ".txt");
             }
@@ -567,13 +574,13 @@ public class AiAgent {
         int playbookReplayAttempts = 0;
         boolean hasApprovedCurrentStep = false;
         final Playbook playbook = Neodymium.getAiPlaybook();
-        final boolean isInteractive = config.aiInteractive();
+        final boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
 
         while (true)
         {
             try
             {
-                // AI-generated: Gemini 3.5 Flash - Reset compound step tracking on each attempt
+                // AI-generated: Gemini 2.5 Flash - Reset compound step tracking on each attempt
                 final List<Action> accumulatedActions = new ArrayList<>();
                 this.lastLlmDone = true;
 
@@ -748,10 +755,10 @@ public class AiAgent {
                     errorCount++;
                 }
 
-                LOG.warn("    ⚠️ Actions failed: {}{} (Attempt {}/{})", e.getMessage(), formatFailureLogContext(currentLineNumber, sourceFile), errorCount, maxRetries + 1);
+                LOG.warn("    ⚠️ Actions failed: {}{} (Attempt {}/{})", e.getMessage(), formatFailureLogContext(currentLineNumber, sourceFile), errorCount, getMaxRetries() + 1);
                 executionLog.logWarning("Action failed: " + e + ". Retrying...");
 
-                if (errorCount > maxRetries)
+                if (errorCount > getMaxRetries())
                 {
                     final Throwable finalThrowable = e.getCause() != null ? e.getCause() : e;
                     executionLog.logError("Max retries for errors reached.");
@@ -774,7 +781,7 @@ public class AiAgent {
                     else
                     {
                         SelenideAddons.wrapAssertionError(() -> {
-                            throw new AssertionError(formatFailureMessage(instruction, currentLineNumber, sourceFile, " (" + (maxRetries + 1)
+                            throw new AssertionError(formatFailureMessage(instruction, currentLineNumber, sourceFile, " (" + (getMaxRetries() + 1)
                                     + " tries):\n\n") + finalThrowable.getMessage(), finalThrowable);
                         });
                     }
@@ -1008,7 +1015,7 @@ public class AiAgent {
     private void handleExpectedFailure(final PlaybookStep step, final String instruction, final String unresolvedInstruction,
             final String bugId, final Throwable t, final Playbook playbook)
     {
-        final boolean isVisual = unresolvedInstruction.toLowerCase().contains("(visual)");
+        final boolean isVisual = unresolvedInstruction.toLowerCase().contains("(visual)") || unresolvedInstruction.toLowerCase().contains("(glance)");
         final String errorType = t.getClass().getName();
         final String errorMessage = t.getMessage() != null ? t.getMessage() : "";
 
@@ -1095,15 +1102,25 @@ public class AiAgent {
      * @throws HudActionException thrown to control the flow of the main execution
      *                            loop
      */
-    private void waitForHudAction(final boolean allowAutoSkip) throws HudActionException {
-        if (allowAutoSkip && this.autoSkip) {
+    private void waitForHudAction(final boolean allowAutoSkip) throws HudActionException
+    {
+        if (allowAutoSkip && this.autoSkip)
+        {
             final Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
-            if (s != null) {
+            if (s != null)
+            {
                 this.autoSkip = s;
             }
-            if (this.autoSkip) {
+            if (this.autoSkip)
+            {
+                Neodymium.getOrCreateInteractiveHud().resetHudAction();
                 return;
             }
+        }
+
+        if (com.codeborne.selenide.Configuration.headless && !Boolean.getBoolean("neodymium.ai.interactive.allowHeadlessHUD"))
+        {
+            throw new RuntimeException("HUD prompted for manual user interaction (allowAutoSkip=" + allowAutoSkip + ", autoSkip=" + this.autoSkip + ") but the test is running in HEADLESS mode. Aborting execution to prevent hanging.");
         }
 
         LOG.info("Waiting for user action in HUD...");
@@ -1144,7 +1161,9 @@ public class AiAgent {
                     // Ignore unknown actions
                 }
 
-                if (typeEnum == HudActionType.APPROVE) {
+                if (typeEnum == HudActionType.APPROVE)
+                {
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     handled = true;
                     break;
                 } else if (typeEnum == HudActionType.SKIP) {
@@ -1308,7 +1327,7 @@ public class AiAgent {
 
         // 3. Prepare Phase and LLM Check
         boolean requiresLlm = actions.isEmpty() && !visualMatchSucceeded;
-        boolean requiresScreenshot = screenshotBeforeAction;
+        boolean requiresScreenshot = Neodymium.aiConfiguration().agentScreenshotBeforeAction();
 
         if (!actions.isEmpty()) {
             for (final Action a : actions) {
@@ -1347,7 +1366,7 @@ public class AiAgent {
         return actions;
     }
 
-    // AI-generated: Gemini 2.5 Pro
+    // AI-generated: Gemini 2.5 Flash
     private void runPesap(final List<String> stepsList, final List<Integer> stepLines, final String sourceFileVal)
     {
         if (stepsList.isEmpty())
@@ -1355,14 +1374,14 @@ public class AiAgent {
             return;
         }
 
-        boolean classifyEnabledVal = config.pesapClassifyEnabled();
+        boolean classifyEnabledVal = Neodymium.aiConfiguration().pesapClassifyEnabled();
         if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.classify.enabled"))
         {
             classifyEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.classify.enabled", classifyEnabledVal);
         }
         final boolean classifyEnabled = classifyEnabledVal;
 
-        boolean linterEnabledVal = config.pesapLinterEnabled();
+        boolean linterEnabledVal = Neodymium.aiConfiguration().pesapLinterEnabled();
         if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.linter.enabled"))
         {
             linterEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.linter.enabled", linterEnabledVal);
@@ -1386,6 +1405,7 @@ public class AiAgent {
         try
         {
             final StringBuilder sb = new StringBuilder();
+            sb.append("## Test Steps\n");
             for (int i = 0; i < stepsList.size(); i++)
             {
                 final String resolved = AiBrowser.resolveTestDataToPrompt(stepsList.get(i));
@@ -1402,7 +1422,7 @@ public class AiAgent {
             // 1. Context Level Classification Phase
             if (classifyEnabled)
             {
-                LOG.debug("💬 [PESAP Classification] Sending prompt:\nSystem Prompt:\n{}\nUser Prompt:\n{}", 
+                LOG.debug("💬 [PESAP Classification] Sending prompt:\n\n=== SYSTEM PROMPT ===\n{}\n\n=== USER PROMPT ===\n{}", 
                           AiAgentPrompts.PESAP_CLASSIFY_PROMPT, userPrompt);
                 
                 final long startTime = System.currentTimeMillis();
@@ -1471,11 +1491,14 @@ public class AiAgent {
             // 2. Semantic Linting Phase
             if (linterEnabled)
             {
-                LOG.debug("💬 [PESAP Linter] Sending prompt:\nSystem Prompt:\n{}\nUser Prompt:\n{}", 
-                          AiAgentPrompts.PESAP_LINTER_PROMPT, userPrompt);
+                final String customRules = CustomRulesLoader.loadCustomRules(Neodymium.aiConfiguration().pesapCustomFile());
+                final String linterPrompt = AiAgentPrompts.getPesapLinterPrompt(customRules);
+
+                LOG.debug("💬 [PESAP Linter] Sending prompt:\n\n=== SYSTEM PROMPT ===\n{}\n\n=== USER PROMPT ===\n{}", 
+                          linterPrompt, userPrompt);
                 
                 final long startTime = System.currentTimeMillis();
-                final String response = llmClient.chat(LlmMode.PESAP, AiAgentPrompts.PESAP_LINTER_PROMPT, userPrompt);
+                final String response = llmClient.chat(LlmMode.PESAP, linterPrompt, userPrompt);
                 final long duration = System.currentTimeMillis() - startTime;
                 
                 LOG.debug("📊 [PESAP Linter] Call took {} ms", duration);
@@ -1558,7 +1581,7 @@ public class AiAgent {
         }
     }
 
-    // AI-generated: Gemini 2.5 Pro
+    // AI-generated: Gemini 2.5 Flash
     private void performRegexRecovery(final String response, final List<String> stepsList, final List<Integer> stepLines)
     {
         final Pattern regexPattern = Pattern.compile("\"(\\d+)\"\\s*:\\s*\"(?i)(AXTREE|LEAN|STANDARD|VISUAL_LEAN|VISUAL)\"");
@@ -1614,7 +1637,7 @@ public class AiAgent {
     private static final ContextLevel getInitialContextLevel(final String instruction)
     {
         final String lower = instruction.toLowerCase();
-        if (lower.contains("(visual)"))
+        if (lower.contains("(visual)") || lower.contains("(glance)"))
         {
             return ContextLevel.VISUAL_LEAN;
         }
@@ -1626,6 +1649,22 @@ public class AiAgent {
         {
             return ContextLevel.AXTREE;
         }
+    }
+
+    private int getMaxRetries()
+    {
+        if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.agent.maxRetries"))
+        {
+            try
+            {
+                return Neodymium.getData().asInt("neodymium.ai.agent.maxRetries");
+            }
+            catch (final Exception e)
+            {
+                // ignore and fall back
+            }
+        }
+        return Neodymium.aiConfiguration().agentMaxRetries();
     }
 
     private List<Action> getActionsFromLLM(final int stepIndex, final String instruction, final PlaybookStep playbookStep,
@@ -1706,7 +1745,7 @@ public class AiAgent {
                     userPrompt = AiAgentPrompts.buildNoActionsRetryPrompt(instruction, sutContext, domContext,
                             historyBlock);
                 } else if (lastError != null) {
-                    LOG.info("    🔄 Retry attempt (error) {}/{} — previous error: {}", errorCount, maxRetries,
+                    LOG.info("    🔄 Retry attempt (error) {}/{} — previous error: {}", errorCount, getMaxRetries(),
                             lastError);
                     userPrompt = AiAgentPrompts.buildRetryPrompt(instruction, sutContext, domContext, lastError,
                             historyBlock);
@@ -1902,17 +1941,17 @@ public class AiAgent {
                 lastWasNoActions = false;
                 isRecoveryAttempt = true;
                 LOG.warn("    ⚠️ Action failed: {} (Attempt {}/{}) [context: {}]",
-                        lastError, errorCount, maxRetries + 1, contextLevel);
+                        lastError, errorCount, getMaxRetries() + 1, contextLevel);
                 executionLog.logWarning("Action failed: " + lastError + ". Retrying...");
 
                 // Record the level we reached for future healing attempts
                 playbookStep.setHealedContextLevel(contextLevel);
 
-                if (errorCount > maxRetries) {
+                if (errorCount > getMaxRetries()) {
                     final Throwable finalThrowable = lastThrowable;
                     executionLog.logError("Max retries for errors reached.");
                     SelenideAddons.wrapAssertionError(() -> {
-                        throw new AssertionError("Instruction '" + instruction + "' failed (" + (maxRetries + 1)
+                        throw new AssertionError("Instruction '" + instruction + "' failed (" + (getMaxRetries() + 1)
                                 + " tries):\n\n" + finalThrowable.getMessage(), finalThrowable);
                     });
                 }

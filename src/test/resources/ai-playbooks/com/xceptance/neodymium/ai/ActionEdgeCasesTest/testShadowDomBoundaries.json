@@ -2,81 +2,94 @@
   "id": "com.xceptance.neodymium.ai.ActionEdgeCasesTest :: testShadowDomBoundaries",
   "steps": [
     {
-      "promptLine": "Type 'Shadow Test Value' into the Shadow Input text field.",
-      "reasoning": "Type value inside shadow DOM text input.",
+      "promptLine": "Type \u0027Shadow Test Value\u0027 into the Shadow Input text field.",
+      "reasoning": "Identified the \u0027Shadow Input\u0027 textbox by its data-neo-ref and name in the AXTREE and generated a TYPE action.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "#shadow-text",
-          "description": "Type in shadow input",
-          "elementDetails": "Shadow Input text input with id 'shadow-text'",
+          "target": "xc_4adg8t",
+          "value": [
+            "Shadow Test Value"
+          ],
+          "description": "Type \u0027Shadow Test Value\u0027 into the Shadow Input text field.",
+          "elementDetails": "Shadow Input:",
           "elementContext": {
-            "text": "",
             "id": "shadow-text",
+            "placeholder": "Type inside shadow",
             "tagName": "input",
             "type": "text"
           },
-          "value": "Shadow Test Value",
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Check the 'Shadow Checkbox' checkbox.",
-      "reasoning": "Check the checkbox inside shadow DOM.",
+      "promptLine": "Check the \u0027Shadow Checkbox\u0027 checkbox.",
+      "reasoning": "Identified the \u0027Shadow Checkbox\u0027 by its data-neo-ref attribute and generated a CLICK action to check it.",
       "actions": [
         {
-          "type": "CHECK",
-          "target": "#shadow-check",
-          "description": "Check shadow checkbox",
-          "elementDetails": "Shadow Checkbox with id 'shadow-check'",
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_f4oa39\u0027]",
+          "description": "Check the \u0027Shadow Checkbox\u0027 checkbox.",
+          "elementDetails": "Shadow Checkbox",
           "elementContext": {
-            "text": "",
             "id": "shadow-check",
             "tagName": "input",
             "type": "checkbox"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Check the 'Shadow Radio' radio button.",
-      "reasoning": "Check the radio button inside shadow DOM.",
+      "promptLine": "Check the \u0027Shadow Radio\u0027 radio button.",
+      "reasoning": "Identified the \u0027Shadow Radio\u0027 radio button by its data-neo-ref attribute and generated a CLICK action to check it.",
       "actions": [
         {
-          "type": "CHECK",
-          "target": "#shadow-radio-btn",
-          "description": "Check shadow radio button",
-          "elementDetails": "Shadow Radio with id 'shadow-radio-btn'",
+          "type": "CLICK",
+          "target": "xc_3m1std",
+          "description": "Check the \u0027Shadow Radio\u0027 radio button.",
+          "elementDetails": "Shadow Radio",
           "elementContext": {
-            "text": "",
+            "name": "shadow-radio",
             "id": "shadow-radio-btn",
             "tagName": "input",
             "type": "radio"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Click on the 'Submit Shadow Form' button.",
-      "reasoning": "Click the submit button inside shadow DOM.",
+      "promptLine": "Click on the \u0027Submit Shadow Form\u0027 button.",
+      "reasoning": "Found the \u0027Submit Shadow Form\u0027 button using its data-neo-ref attribute and created a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "#shadow-btn",
-          "description": "Click Submit Shadow Form",
-          "elementDetails": "Submit Shadow Form button with id 'shadow-btn'",
+          "target": "[data-neo-ref\u003d\u0027xc_rzxnpf\u0027]",
+          "description": "Click on the \u0027Submit Shadow Form\u0027 button",
+          "elementDetails": "Submit Shadow Form",
           "elementContext": {
             "text": "Submit Shadow Form",
             "id": "shadow-btn",
             "tagName": "button",
-            "type": "button"
+            "type": "submit"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     }
   ]
 }

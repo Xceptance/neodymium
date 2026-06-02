@@ -3,22 +3,25 @@
   "steps": [
     {
       "promptLine": "Click the Accept Terms checkbox.",
-      "reasoning": "Click the hidden input checkbox to toggle it.",
+      "reasoning": "The instruction is to click the \u0027Accept Terms checkbox\u0027. The DOM shows a clickable element with id \u0027checkbox-custom-trigger\u0027 which is likely the interactive element for the checkbox. I will click this element.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "#checkbox-invisible",
-          "description": "Click Accept Terms checkbox",
-          "elementDetails": "Hidden checkbox with id 'checkbox-invisible'",
+          "target": "#checkbox-custom-trigger",
+          "description": "Click the custom trigger for the Accept Terms checkbox.",
+          "elementDetails": "checkbox-custom-trigger",
           "elementContext": {
-            "text": "",
-            "id": "checkbox-invisible",
-            "tagName": "input",
-            "type": "checkbox"
+            "classes": "custom-checkbox",
+            "id": "checkbox-custom-trigger",
+            "tagName": "span"
           },
-          "replay": ""
+          "replay": "",
+          "frameId": "B362CEBEA3259D3C2A3825C27B95D442:main",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
     }
   ]
 }

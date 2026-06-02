@@ -1,0 +1,147 @@
+{
+  "id": "com.xceptance.neodymium.ai.FormInteractionsTest :: testFormInteractionsAndVerifications :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Type \u0027Jane Smith\u0027 into the \u0027Full Name\u0027 field.",
+      "reasoning": "Identified the \u0027Full Name\u0027 textbox by its data-neo-ref attribute and created a TYPE action to input the specified text.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "[data-neo-ref\u003d\u0027xc_u90fde\u0027]",
+          "value": [
+            "Jane Smith"
+          ],
+          "description": "Type \u0027Jane Smith\u0027 into the \u0027Full Name\u0027 field.",
+          "elementDetails": "Full Name textbox",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-username",
+            "placeholder": "Enter your full name",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Type \u0027invalidemail\u0027 into the \u0027Email Address\u0027 field.",
+      "reasoning": "Found the \u0027Email Address\u0027 textbox using its data-neo-ref and created a TYPE action to input the specified text.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "xc_f0d4sd",
+          "value": [
+            "invalidemail"
+          ],
+          "description": "Type \u0027invalidemail\u0027 into the \u0027Email Address\u0027 field.",
+          "elementDetails": "Email Address",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-email",
+            "placeholder": "name@domain.com",
+            "tagName": "input",
+            "type": "email"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the \u0027Create Account\u0027 button.",
+      "reasoning": "Found the \u0027Create Account\u0027 button using its data-neo-ref attribute and created a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "xc_t6pll2",
+          "description": "Click the \u0027Create Account\u0027 button",
+          "elementDetails": "Create Account",
+          "elementContext": {
+            "classes": "btn-primary",
+            "text": "Create Account",
+            "id": "btn-submit-reg",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the email format invalid warning \u0027This email format is invalid.\u0027 is visible.",
+      "reasoning": "Found the warning message \u0027This email format is invalid.\u0027 within the element with id \u0027email-error\u0027 and created an ASSERT action to verify its visibility and content.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#email-error",
+          "value": [
+            "This email format is invalid."
+          ],
+          "description": "Verify that the email format invalid warning \u0027This email format is invalid.\u0027 is visible.",
+          "elementDetails": "Email format invalid warning",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "8B8780BA891CD761A6A471A9B3611E13:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Type \u00272\u0027 into the \u0027Neon Gradient Poster\u0027 quantity field. (hint: #qty-poster-1)",
+      "reasoning": "The instruction asks to type \u00272\u0027 into the \u0027Neon Gradient Poster\u0027 quantity field. The hint provided is \u0027#qty-poster-1\u0027. I found a spinbutton with the name \u0027Qty Poster 1\u0027 which matches the description and the hint. I will use the TYPE action with the target \u0027#qty-poster-1\u0027 and value \u00272\u0027.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#qty-poster-1",
+          "value": [
+            "2"
+          ],
+          "description": "Type \u00272\u0027 into the \u0027Neon Gradient Poster\u0027 quantity field.",
+          "elementDetails": "Qty Poster 1",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "qty-poster-1",
+            "tagName": "input",
+            "type": "number"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the Total Price is \u0027$39.98\u0027.",
+      "reasoning": "Found the element with id \u0027cart-total\u0027 which displays the total price and asserted its text content matches \u0027$39.98\u0027.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#cart-total",
+          "value": [
+            "$39.98"
+          ],
+          "description": "Verify that the Total Price is \u0027$39.98\u0027.",
+          "elementDetails": "cart-total",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "8B8780BA891CD761A6A471A9B3611E13:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

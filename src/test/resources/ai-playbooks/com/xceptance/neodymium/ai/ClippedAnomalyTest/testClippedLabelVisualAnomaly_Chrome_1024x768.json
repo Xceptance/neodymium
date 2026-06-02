@@ -1,0 +1,53 @@
+{
+  "id": "com.xceptance.neodymium.ai.ClippedAnomalyTest :: testClippedLabelVisualAnomaly :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
+      "reasoning": "Clicked the button with id \u0027aura-trigger\u0027 as specified in the instruction and hint.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "frameId": "FCA2CC233D411210F0294A9AEA041A14:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Click the \u0027Inject Clipped Text\u0027 toggle. (hint: label[for\u003d\u0027toggle-clipped\u0027])",
+      "reasoning": "The instruction asks to click the \u0027Inject Clipped Text\u0027 toggle. I found a checkbox element in the AXTREE with the name \u0027Inject Clipped Text Clamps cards height with overflow hidden.\u0027 and data-neo-ref \u0027xc_wykl6c\u0027, which matches the instruction. I will use this data-neo-ref as the target for the CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_wykl6c\u0027]",
+          "description": "Click the \u0027Inject Clipped Text\u0027 toggle.",
+          "elementDetails": "Inject Clipped Text Clamps cards height with overflow hidden.",
+          "elementContext": {
+            "id": "toggle-clipped",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "actions": [],
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    }
+  ]
+}

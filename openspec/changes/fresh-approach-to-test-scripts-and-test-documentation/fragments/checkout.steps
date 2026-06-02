@@ -1,0 +1,6 @@
+Click shopping cart icon
+Click proceed to checkout button
+Type "John" into first name input
+Type "Doe" into last name input
+Select shipping method "${shippingMethod}"
+Click place order button

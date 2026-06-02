@@ -1,25 +1,20 @@
 /*
- * MIT License
+ * GNU Affero General Public License (AGPLv3)
  *
  * Copyright (c) 2026 Xceptance
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.xceptance.neodymium.ai.core;
 
@@ -42,7 +37,7 @@ import com.xceptance.neodymium.ai.playbook.PlaybookStep;
  * Prompts are loaded from the classpath at 'ai-prompts/' to allow 
  * external projects to easily override them.
  *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public final class AiAgentPrompts
 {
@@ -74,77 +69,92 @@ public final class AiAgentPrompts
     /**
      * System prompt for standard exploration.
      */
-    public static final String SYSTEM_EXPLORATION_PROMPT = loadPrompt("system-exploration-prompt.txt");
+    public static final String SYSTEM_EXPLORATION_PROMPT = loadPrompt("system-exploration-prompt.md");
 
     /**
      * Template for standard exploration steps.
      */
-    public static final String EXPLORATION_PROMPT_TEMPLATE = loadPrompt("exploration-prompt-template.txt");
+    public static final String EXPLORATION_PROMPT_TEMPLATE = loadPrompt("exploration-prompt-template.md");
 
     /**
      * Template for v2 exploration steps.
      */
-    public static final String V2_EXPLORATION_PROMPT_TEMPLATE = loadPrompt("v2-exploration-prompt-template.txt");
+    public static final String V2_EXPLORATION_PROMPT_TEMPLATE = loadPrompt("v2-exploration-prompt-template.md");
 
     /**
      * System prompt for v2 exploration.
      */
-    public static final String V2_SYSTEM_EXPLORATION_PROMPT = loadPrompt("v2-system-exploration-prompt.txt");
+    public static final String V2_SYSTEM_EXPLORATION_PROMPT = loadPrompt("v2-system-exploration-prompt.md");
 
     /**
      * System prompt for v2 extraction.
      */
-    public static final String V2_EXTRACTION_PROMPT = loadPrompt("v2-extraction-prompt.txt");
+    public static final String V2_EXTRACTION_PROMPT = loadPrompt("v2-extraction-prompt.md");
 
     /**
      * System prompt for v2 extraction retry.
      */
-    public static final String V2_EXTRACTION_RETRY_PROMPT = loadPrompt("v2-extraction-retry-prompt.txt");
+    public static final String V2_EXTRACTION_RETRY_PROMPT = loadPrompt("v2-extraction-retry-prompt.md");
 
     /**
      * Base system prompt.
      */
-    public static final String SYSTEM_PROMPT = loadPrompt("system-prompt.txt");
+    public static final String SYSTEM_PROMPT = loadPrompt("system-prompt.md");
 
     /**
      * Standard user prompt template.
      */
-    public static final String USER_PROMPT_TEMPLATE = loadPrompt("user-prompt-template.txt");
+    public static final String USER_PROMPT_TEMPLATE = loadPrompt("user-prompt-template.md");
 
     /**
      * Prompt template for when an action fails and needs a retry.
      */
-    public static final String RETRY_PROMPT_TEMPLATE = loadPrompt("retry-prompt-template.txt");
+    public static final String RETRY_PROMPT_TEMPLATE = loadPrompt("retry-prompt-template.md");
 
     /**
      * Prompt template for when no actions were generated and a retry is needed.
      */
-    public static final String NO_ACTIONS_RETRY_PROMPT_TEMPLATE = loadPrompt("no-actions-retry-prompt-template.txt");
+    public static final String NO_ACTIONS_RETRY_PROMPT_TEMPLATE = loadPrompt("no-actions-retry-prompt-template.md");
 
     /**
      * System prompt for playbook healing.
      */
-    public static final String SYSTEM_HEALING_PROMPT = loadPrompt("system-healing-prompt.txt");
+    public static final String SYSTEM_HEALING_PROMPT = loadPrompt("system-healing-prompt.md");
 
     /**
      * System prompt for PESAP (Pre-Execution Static Analysis Phase) classification.
      */
-    public static final String PESAP_SYSTEM_PROMPT = loadPrompt("pesap-system-prompt.txt");
+    public static final String PESAP_SYSTEM_PROMPT = loadPrompt("pesap-system-prompt.md");
 
     /**
      * System prompt for PESAP (Pre-Execution Static Analysis Phase) classification phase only.
      */
-    public static final String PESAP_CLASSIFY_PROMPT = loadPrompt("pesap-classify-prompt.txt");
+    public static final String PESAP_CLASSIFY_PROMPT = loadPrompt("pesap-classify-prompt.md");
 
     /**
      * System prompt for PESAP (Pre-Execution Static Analysis Phase) semantic linter phase only.
      */
-    public static final String PESAP_LINTER_PROMPT = loadPrompt("pesap-linter-prompt.txt");
+    public static final String PESAP_LINTER_PROMPT = loadPrompt("pesap-linter-prompt.md");
+
+    /**
+     * Gets the system linter prompt, dynamically appending custom rules if present.
+     *
+     * @param customRules the custom rules to append (can be null/empty)
+     * @return the combined prompt
+     */
+    public static String getPesapLinterPrompt(final String customRules)
+    {
+        if (customRules == null || customRules.trim().isEmpty())
+        {
+            return PESAP_LINTER_PROMPT;
+        }
+        return PESAP_LINTER_PROMPT + "\n\n### Custom Semantic Linting Rules\n\nAdditional custom linting rules defined for this project/environment:\n\n" + customRules.trim();
+    }
 
     /**
      * Prompt template for playbook healing.
      */
-    public static final String HEALING_PROMPT_TEMPLATE = loadPrompt("healing-prompt-template.txt");
+    public static final String HEALING_PROMPT_TEMPLATE = loadPrompt("healing-prompt-template.md");
 
     /**
      * Builds the exploration prompt.

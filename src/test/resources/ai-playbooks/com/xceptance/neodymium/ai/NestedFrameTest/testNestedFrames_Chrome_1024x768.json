@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Type \u0027Hello\u0027 into the input field in the first frame. Then click the Deep Button in the second frame. Finally verify that the result text \u0027Button was clicked!\u0027 is shown.",
-      "reasoning": "The previous attempt failed because the input field was not found. I have re-evaluated the DOM and confirmed the input field with id \u0027input1\u0027 is in frame \u0027436D5810FB244303DEAD2A31943C79BB:main.0\u0027 and the \u0027Deep Button\u0027 with id \u0027deep-btn\u0027 is in frame \u0027436D5810FB244303DEAD2A31943C79BB:main.0.0\u0027. I will use these specific frame IDs and element IDs for targeting. For the final verification, I will assert the text \u0027Button was clicked!\u0027 on the body, as the specific element for this text is not yet present in the DOM.",
+      "reasoning": "The plan is to first type \u0027Hello\u0027 into the input field identified by \u0027input1\u0027 in the first frame. Then, click the \u0027Deep Button\u0027 identified by \u0027deep-btn\u0027 in the second frame. Finally, assert that the text \u0027Button was clicked!\u0027 is present on the page body.",
       "actions": [
         {
           "type": "TYPE",
@@ -12,7 +12,7 @@
             "Hello"
           ],
           "description": "Type \u0027Hello\u0027 into the input field in the first frame.",
-          "elementDetails": "input field with id \u0027input1\u0027",
+          "elementDetails": "input1",
           "elementContext": {
             "id": "input1",
             "placeholder": "Type here in frame 1",
@@ -20,13 +20,14 @@
             "type": "text"
           },
           "replay": "",
-          "frameId": "436D5810FB244303DEAD2A31943C79BB:main.0"
+          "frameId": "E26A20BFA515479C093498007C57308C:main.0",
+          "adjust": false
         },
         {
           "type": "CLICK",
           "target": "#deep-btn",
           "description": "Click the Deep Button in the second frame.",
-          "elementDetails": "Button with id \u0027deep-btn\u0027 and text \u0027Deep Button\u0027",
+          "elementDetails": "Deep Button",
           "elementContext": {
             "text": "Deep Button",
             "id": "deep-btn",
@@ -34,7 +35,8 @@
             "type": "submit"
           },
           "replay": "",
-          "frameId": "436D5810FB244303DEAD2A31943C79BB:main.0.0"
+          "frameId": "E26A20BFA5154779C093498007C57308C:main.0.0",
+          "adjust": false
         },
         {
           "type": "ASSERT",
@@ -43,11 +45,14 @@
             "Button was clicked!"
           ],
           "description": "Verify that the result text \u0027Button was clicked!\u0027 is shown.",
-          "elementDetails": "Page body",
+          "elementDetails": "body",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
     }
   ]
 }

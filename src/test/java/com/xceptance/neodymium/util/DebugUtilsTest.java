@@ -31,17 +31,36 @@ public class DebugUtilsTest {
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "1000");
 
         Selenide.open("https://blog.xceptance.com/");
+        $(".site-title").shouldBe(visible);
         DebugUtils.injectJavaScript();
         assertJsSuccessfullyInjected();
 
-        final List<WebElement> list = $("body").findElements(By.cssSelector("#masthead"));
+        final List<WebElement> list = Neodymium.getDriver().findElements(By.cssSelector(".site-title"));
+        System.out.println("=== DIAGNOSTIC START ===");
+        System.out.println("Element list size: " + list.size());
+        if (!list.isEmpty())
+        {
+            final WebElement el = list.get(0);
+            System.out.println("TagName: " + el.getTagName());
+            System.out.println("Displayed (Java): " + el.isDisplayed());
+            System.out.println("Location: " + el.getLocation());
+            System.out.println("Size: " + el.getSize());
+            System.out.println("JS getComputedStyle visibility: " + Selenide.executeJavaScript("return window.getComputedStyle(arguments[0]).visibility;", el));
+            System.out.println("JS getComputedStyle display: " + Selenide.executeJavaScript("return window.getComputedStyle(arguments[0]).display;", el));
+            System.out.println("JS getBoundingClientRect: " + Selenide.executeJavaScript("var r = arguments[0].getBoundingClientRect(); return r.width + 'x' + r.height;", el));
+            System.out.println("JS window.NEODYMIUM.isDisplayed: " + Selenide.executeJavaScript("return window.NEODYMIUM ? window.NEODYMIUM.isDisplayed(arguments[0]) : 'undefined';", el));
+            System.out.println("JS window.NEODYMIUM.consumesSpace: " + Selenide.executeJavaScript("return window.NEODYMIUM ? window.NEODYMIUM.consumesSpace(arguments[0]) : 'undefined';", el));
+            System.out.println("JS window.NEODYMIUM.getOverflowState: " + Selenide.executeJavaScript("return window.NEODYMIUM ? window.NEODYMIUM.getOverflowState(arguments[0]) : 'undefined';", el));
+            System.out.println("JS window.NEODYMIUM.isVisible: " + Selenide.executeJavaScript("return window.NEODYMIUM ? window.NEODYMIUM.isVisible(arguments[0]) : 'undefined';", el));
+        }
+        System.out.println("=== DIAGNOSTIC END ===");
         DebugUtils.highlightElements(list, Neodymium.getDriver());
         $(".neodymium-highlight-box").shouldBe(visible);
 
         DebugUtils.resetAllHighlight();
         $(".neodymium-highlight-box").shouldNot(exist);
 
-        final List<WebElement> list2 = $("body").findElements(By.cssSelector("#content article"));
+        final List<WebElement> list2 = Neodymium.getDriver().findElements(By.cssSelector(".site-title"));
         DebugUtils.highlightElements(list2, Neodymium.getDriver());
         $$(".neodymium-highlight-box").shouldHave(sizeGreaterThan(0));
 
@@ -50,15 +69,17 @@ public class DebugUtilsTest {
     }
 
     @Test
-    public void testHighlightingWithoutImplicitWaitTime() throws Exception {
+    public void testHighlightingWithoutImplicitWaitTime() throws Exception
+    {
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "true");
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "1000");
 
         Selenide.open("https://blog.xceptance.com/");
+        $(".site-title").shouldBe(visible);
         DebugUtils.injectJavaScript();
         assertJsSuccessfullyInjected();
 
-        final List<WebElement> list = $("body").findElements(By.cssSelector("#masthead"));
+        final List<WebElement> list = Neodymium.getDriver().findElements(By.cssSelector(".site-title"));
         DebugUtils.highlightElements(list, Neodymium.getDriver());
         $(".neodymium-highlight-box").shouldBe(visible);
 
@@ -137,6 +158,23 @@ public class DebugUtilsTest {
         $(".neodymium-highlight-box").shouldBe(visible);
 
         DebugUtils.resetAllHighlight();
+        $(".neodymium-highlight-box").shouldNot(exist);
+    }
+
+    @Test
+    public void testHighlightingWithBlinkCount() throws Exception
+    {
+        Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "true");
+        Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "150");
+        Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.blink.count", "2");
+
+        Selenide.open("https://blog.xceptance.com/");
+        $(".site-title").shouldBe(visible);
+        DebugUtils.injectJavaScript();
+        assertJsSuccessfullyInjected();
+
+        final List<WebElement> list = Neodymium.getDriver().findElements(By.cssSelector(".site-title"));
+        DebugUtils.highlightAllElements(list, Neodymium.getDriver());
         $(".neodymium-highlight-box").shouldNot(exist);
     }
 

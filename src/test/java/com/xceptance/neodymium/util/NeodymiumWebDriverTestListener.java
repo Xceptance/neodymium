@@ -16,15 +16,19 @@ public class NeodymiumWebDriverTestListener extends NeodymiumWebDriverListener
     public NeodymiumWebDriverTestListener()
     {
         boolean allFound = true;
-        Method[] parentMethods = NeodymiumWebDriverListener.class.getDeclaredMethods();
-        Method[] childMethods = NeodymiumWebDriverTestListener.class.getDeclaredMethods();
+        final java.util.List<Method> parentMethods = java.util.Arrays.stream(NeodymiumWebDriverListener.class.getDeclaredMethods())
+            .filter(m -> !m.isSynthetic() && !java.lang.reflect.Modifier.isPrivate(m.getModifiers()))
+            .toList();
+        final java.util.List<Method> childMethods = java.util.Arrays.stream(NeodymiumWebDriverTestListener.class.getDeclaredMethods())
+            .filter(m -> !m.isSynthetic() && !java.lang.reflect.Modifier.isPrivate(m.getModifiers()))
+            .toList();
 
-        for (int i = 0; i < parentMethods.length; i++)
+        for (Method parentMethod : parentMethods)
         {
             boolean foundMethod = false;
-            for (int j = 0; j < childMethods.length; j++)
+            for (Method childMethod : childMethods)
             {
-                if (parentMethods[i].getName().equals(childMethods[j].getName()))
+                if (parentMethod.getName().equals(childMethod.getName()))
                 {
                     foundMethod = true;
                     break;
@@ -32,7 +36,7 @@ public class NeodymiumWebDriverTestListener extends NeodymiumWebDriverListener
             }
             allFound &= foundMethod;
         }
-        Assert.assertEquals("Test classes do not contain the same number of listeners", parentMethods.length, childMethods.length);
+        Assert.assertEquals("Test classes do not contain the same number of listeners", parentMethods.size(), childMethods.size());
         Assert.assertTrue("Test classes do not contain the same listeners", allFound);
     }
 

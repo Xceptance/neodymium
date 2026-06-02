@@ -2,23 +2,26 @@
   "id": "com.xceptance.neodymium.ai.ActionEdgeCasesTest :: testStaleElements",
   "steps": [
     {
-      "promptLine": "Click the 'Click to Refresh State' button.",
-      "reasoning": "Click the button. If it is replaced in DOM causing stale exception, the framework re-resolves the element and succeeds.",
+      "promptLine": "Click the \u0027Click to Refresh State\u0027 button.",
+      "reasoning": "The instruction is to click the \u0027Click to Refresh State\u0027 button. The AXTREE shows a button with `data-neo-ref\u003d\u0027xc_3rom64\u0027` and `name\u003d\u0027Click to Refresh State\u0027`, which is a direct match. I will use the `data-neo-ref` as the target for the CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "#btn-refresh",
-          "description": "Click Refresh State",
-          "elementDetails": "Refresh State button with id 'btn-refresh'",
+          "target": "[data-neo-ref\u003d\u0027xc_3rom64\u0027]",
+          "description": "Click the \u0027Click to Refresh State\u0027 button.",
+          "elementDetails": "Click to Refresh State",
           "elementContext": {
             "text": "Click to Refresh State",
             "id": "btn-refresh",
             "tagName": "button",
-            "type": "button"
+            "type": "submit"
           },
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     }
   ]
 }

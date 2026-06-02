@@ -70,10 +70,10 @@ public class Neodymium
     private WebElement lastUsedElement;
 
     // our global configuration
-    private final NeodymiumConfiguration configuration;
+    private NeodymiumConfiguration configuration;
 
     // our AI configuration
-    private final AiConfiguration aiConfiguration;
+    private AiConfiguration aiConfiguration;
 
     // localization
     private final NeodymiumLocalization localization;
@@ -940,4 +940,21 @@ public class Neodymium
             throw new AssertionError(msg);
         }
     }
+
+    /**
+     * Re-creates the thread-local AI configuration instance from the latest system properties and env.
+     */
+    public static void reloadAiConfiguration()
+    {
+        getContext().aiConfiguration = ConfigFactory.create(AiConfiguration.class, System.getProperties(), System.getenv());
+    }
+
+    /**
+     * Re-creates the thread-local main configuration instance from the latest system properties and env.
+     */
+    public static void reloadConfiguration()
+    {
+        getContext().configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
+    }
+
 }

@@ -1,0 +1,98 @@
+{
+  "id": "com.xceptance.neodymium.ai.AllFeaturesYamlTest :: testAllFeaturesViaYaml :: Data set 2 / 2 :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Open https://localhost:42745/AuraGlanceTest/shop/index.html",
+      "reasoning": "The instruction is to open a URL, so a NAVIGATE action is used with the provided URL.",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "https://localhost:42745/AuraGlanceTest/shop/index.html"
+          ],
+          "description": "Open the specified URL",
+          "elementDetails": "https://localhost:42745/AuraGlanceTest/shop/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
+      "reasoning": "Found the element with id \u0027aura-trigger\u0027 as specified in the hint and instruction, and created a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "frameId": "A61AF8A0D0B3693D9CC4FF3C3D032CB2:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Click the \u0027Show Promo Banner\u0027 toggle to hide it. (hint: label[for\u003d\u0027toggle-banner\u0027])",
+      "reasoning": "The instruction asks to click the \u0027Show Promo Banner\u0027 toggle. I found a checkbox element with the name \u0027Show Promo Banner Toggles optional marketing header.\u0027 and data-neo-ref \u0027xc_31bg3t\u0027 which is currently checked. Clicking this element will toggle its state, effectively hiding the banner.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_31bg3t\u0027]",
+          "description": "Click the \u0027Show Promo Banner\u0027 toggle to hide it.",
+          "elementDetails": "Show Promo Banner Toggles optional marketing header.",
+          "elementContext": {
+            "id": "toggle-banner",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click \u0027Close Banner\u0027",
+      "reasoning": "The instruction is to click \u0027Close Banner\u0027. Based on the previous step of toggling the promo banner, the \u0027×\u0027 button (data-neo-ref\u003d\u0027xc_8am3xz\u0027) is the most likely candidate for closing the banner.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_8am3xz\u0027]",
+          "description": "Click \u0027Close Banner\u0027",
+          "elementDetails": "× button",
+          "elementContext": {
+            "classes": "drawer-close",
+            "text": "×",
+            "id": "aura-close",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Observe page visual consistency (glance)",
+      "reasoning": "The page appears visually consistent. The header navigation, main banner, and product cards all maintain a uniform style, layout, and alignment. No visual inconsistencies or defects were observed in the screenshot.",
+      "actions": [],
+      "screenshotHash": "8041000100017d012a817f015f817f01000108019a4398c338c798c33085718e",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}

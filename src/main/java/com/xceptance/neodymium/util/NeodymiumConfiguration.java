@@ -27,6 +27,10 @@ public interface NeodymiumConfiguration extends Mutable, Accessible
     @DefaultValue("100")
     public long debuggingHighlightDuration();
 
+    @Key("neodymium.debugUtils.highlight.blink.count")
+    @DefaultValue("3")
+    public int debuggingHighlightBlinkCount();
+
     // standard timeout for selenide interaction
     @Key("neodymium.selenide.timeout")
     @DefaultValue("3000")

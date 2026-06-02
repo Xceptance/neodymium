@@ -39,7 +39,7 @@ import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 /**
  * Tests for propagating and overriding neodymium.ai.pesap properties in YAML playbook files.
  * 
- * // AI-generated: Antigravity (Gemini 3.5 Flash (High))
+ * @author AI-generated: Gemini 2.5 Flash
  */
 public class YamlFilePesapOverrideTest
 {

@@ -1,0 +1,50 @@
+{
+  "id": "com.xceptance.neodymium.ai.CrossFrameExtractionTest :: testCrossFrameAuraAstExtraction :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Click the \u0027Trigger Subpage Event\u0027 button inside the iframe. (hint: #dashboard-btn)",
+      "reasoning": "The instruction asks to click a button inside an iframe. I located the button with the text \u0027Trigger Subpage Event\u0027 and id \u0027iframe-action-btn\u0027 within the specified iframe frameId \u0027E14D80979EC3284C7F1897A42F1574F6:main.0\u0027 and created a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#iframe-action-btn",
+          "description": "Click the \u0027Trigger Subpage Event\u0027 button inside the iframe.",
+          "elementDetails": "Trigger Subpage Event",
+          "elementContext": {
+            "classes": "iframe-btn",
+            "text": "Trigger Subpage Event",
+            "id": "iframe-action-btn",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "frameId": "E14D80979EC3284C7F1897A42F1574F6:main.0",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Verify that the frame state indicator text \u0027Internal Frame State Updated Successfully!\u0027 is visible inside the iframe.",
+      "reasoning": "Found the \u0027status-indicator\u0027 element inside the iframe with the specified text and created an ASSERT action.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#status-indicator",
+          "value": [
+            "Internal Frame State Updated Successfully!"
+          ],
+          "description": "Verify that the frame state indicator text \u0027Internal Frame State Updated Successfully!\u0027 is visible inside the iframe.",
+          "elementDetails": "status-indicator",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "E14D80979EC3284C7F1897A42F1574F6:main.0",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

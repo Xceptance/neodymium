@@ -1,25 +1,20 @@
 /*
- * MIT License
+ * GNU Affero General Public License (AGPLv3)
  *
  * Copyright (c) 2026 Xceptance
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.xceptance.neodymium.ai.core;
 
@@ -42,7 +37,7 @@ import com.xceptance.neodymium.common.ScreenshotWriter;
  * and visible elements to keep token usage low while giving the LLM enough context. All DOM queries are batched into a
  * single JavaScript execution to minimize WebDriver round-trips for performance.
   *
- * // AI-generated: Gemini 2.0 Flash
+ * @author AI-generated: Gemini 2.5 Flash
 */
 public class PageAnalyzer
 {
@@ -111,8 +106,9 @@ public class PageAnalyzer
                 var cls   = (typeof el.className === 'string' ? el.className : '').trim().replace(/\\s+/g, ' ');
                 var ptag  = el.parentElement && el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '';
                 var type  = el.getAttribute('type') || '';
-                var name  = el.getAttribute('name') || el.getAttribute('alt') || '';
-                var raw   = [tag, id, cls, ptag, type, name].join('|');
+                var name  = el.getAttribute('name') || el.getAttribute('alt') || el.getAttribute('for') || el.getAttribute('aria-label') || '';
+                var text  = (el.innerText || '').trim().substring(0, 15).toLowerCase();
+                var raw   = [tag, id, cls, ptag, type, name, text].join('|');
                 return 'xc_' + djb2(raw);
             }
 
@@ -539,8 +535,42 @@ public class PageAnalyzer
     public String captureScreenshot(String title) throws IOException
     {
         LOG.debug("   📸 Capturing screenshot for: {}", title);
-        return ScreenshotWriter.doScreenshot(title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)),
-                                             ScreenshotWriter.getFormatedReportsPath(), false, false);
+        boolean hidden = false;
+        try
+        {
+            final Object hudExists = com.codeborne.selenide.Selenide.executeJavaScript(
+                "var hud = document.getElementById('neodymium-ai-hud-container'); " +
+                "if (hud && hud.style.display !== 'none') { hud.style.display = 'none'; return true; } " +
+                "return false;"
+            );
+            hidden = Boolean.TRUE.equals(hudExists);
+        }
+        catch (final Exception e)
+        {
+            // Ignore if browser is not open or JS fails
+        }
+
+        try
+        {
+            return ScreenshotWriter.doScreenshot(title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)),
+                                                 ScreenshotWriter.getFormatedReportsPath(), false, false);
+        }
+        finally
+        {
+            if (hidden)
+            {
+                try
+                {
+                    com.codeborne.selenide.Selenide.executeJavaScript(
+                        "var hud = document.getElementById('neodymium-ai-hud-container'); " +
+                        "if (hud) { hud.style.display = ''; }"
+                    );
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
     }
 
     /**
@@ -653,7 +683,7 @@ public class PageAnalyzer
         String frameId = windowHandle + ":" + framePath;
         try {
             final Map<String, Object> data = (Map<String, Object>) com.codeborne.selenide.Selenide
-                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, level.ordinal());
+                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent());
             // Render element sections
             final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");
             if (sections != null) {
@@ -1082,8 +1112,9 @@ public class PageAnalyzer
                                 var cls = (typeof this.className === 'string' ? this.className : '').trim().replace(/\\s+/g, ' ');
                                 var ptag = this.parentElement ? this.parentElement.tagName.toLowerCase() : '';
                                 var type = this.getAttribute('type') || '';
-                                var name = this.getAttribute('name') || this.getAttribute('alt') || '';
-                                var raw = [tag, id, cls, ptag, type, name].join('|');
+                                var name = this.getAttribute('name') || this.getAttribute('alt') || this.getAttribute('for') || this.getAttribute('aria-label') || '';
+                                var text = (this.innerText || '').trim().substring(0, 15).toLowerCase();
+                                var raw = [tag, id, cls, ptag, type, name, text].join('|');
                                 var base = 'xc_' + djb2(raw);
                                 
                                 var candidate = base;

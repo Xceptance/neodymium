@@ -1,0 +1,13 @@
+{
+  "id": "com.xceptance.neodymium.ai.StableVisualBaselineTest :: testStableVisualBaseline :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Observe page visual consistency (glance)",
+      "reasoning": "The page appears visually consistent. The layout is clean, elements are well-aligned, and styling is uniform across the header, navigation, main content block, and product cards. No visual inconsistencies or defects were observed.",
+      "actions": [],
+      "screenshotHash": "10010001804100017d016a817f013f817f81000108019a4398c310479ac3b886",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}

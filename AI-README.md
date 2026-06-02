@@ -102,11 +102,13 @@ Instead of traditional driver commands, you interact with the `AiBrowser`.
 import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 
-public class MyAiTest {
-    
+public final class MyAiTest
+{
     @NeodymiumTest
-    public void testLoginWithAi() {
-        try (AiBrowser ai = new AiBrowser(this)) {
+    public void testLoginWithAi()
+    {
+        try (final AiBrowser ai = new AiBrowser(this))
+        {
             ai.execute("""
                 Open https://example.com.
                 Click on the Login link.
@@ -144,10 +146,11 @@ data:
 **`MyDataDrivenAiTest.java`**
 ```java
 @DataFolder("my/test/data")
-public class MyDataDrivenAiTest {
-    
+public final class MyDataDrivenAiTest
+{
     @NeodymiumTest
-    public void executeAiSteps() throws Throwable {
+    public void executeAiSteps() throws Throwable
+    {
         // Automatically picks up the 'steps' key from the dataset
         // and resolves the ${variables} before sending to the AI.
         Neodymium.ai().execute();
@@ -398,6 +401,39 @@ You can fully configure or granularly disable the Pre-Execution Static Analysis 
 | `neodymium.ai.pesap.enabled` | `true` | **Master Switch**. Enables or disables the entire PESAP phase. If set to `false`, Neodymium skips the remote static query entirely and falls back directly to the local offline linter. |
 | `neodymium.ai.pesap.classify.enabled` | `true` | **Context Classification Sub-Switch**. Controls whether the static starting context level prediction query is run. If set to `false`, steps will start at the default minimum context level (`AXTREE`). |
 | `neodymium.ai.pesap.linter.enabled` | `true` | **Semantic Linter Sub-Switch**. Controls whether the LLM-powered static semantic step linting query is run. If set to `false`, remote semantic warnings are skipped. |
+| `neodymium.ai.pesap.custom.file` | *(empty)* | **Custom Linter Rules File**. Specifies a path to a custom Markdown (.md) or Text (.txt) rules file to extend the default PESAP semantic linter rules list dynamically. |
+
+##### 📝 Extending PESAP Linter with Custom Rules
+
+To enforce project-specific conventions, domain terminology, or custom anti-patterns, you can define custom static analysis rules that are dynamically injected into the linter system prompt.
+
+1. **Create a Custom Rules File** (e.g. `config/pesap-custom-rules.md`):
+   For optimal results and consistent AI warning outputs, structure your custom rules to mirror the concise style of the core engine:
+   ```markdown
+   ### Brand Terminology Constraints
+   Flag any violations of our brand glossary in the step's language:
+
+   1. **Invalid Button Labels:** Action references "Buy button" instead of the official label.
+      - *Warn:* "Invalid brand terminology. Always use 'Add to Bag' instead of 'Buy'."
+   2. **Clicking Text Fields:** Step uses the word "click" on a text input field.
+      - *Warn:* "Invalid action verb. Use 'type' or 'fill' for text inputs, not 'click'."
+   ```
+
+2. **Configure the Property**: Set the property in your `ai.properties` or `neodymium.properties`:
+   ```properties
+   neodymium.ai.pesap.custom.file = config/pesap-custom-rules.md
+   ```
+
+###### 🔄 Custom Rules Resolution Precedence:
+The rules resolver dynamically evaluates and loads the rules in this exact order:
+1. **Thread-Local Programmatic Override**: Programmatically set via `Neodymium.getData().put("neodymium.ai.pesap.custom.file", "config/my-dynamic-rules.md")`.
+2. **Explicit Configuration Path**: Value of the configuration property `neodymium.ai.pesap.custom.file`.
+   * Evaluated first as a Classpath resource (e.g. `ai-prompts/custom-rules.md`).
+   * Evaluated next as a Filesystem path (e.g. `config/custom-rules.md`).
+   * *Strict Validation:* If configured but the file does not exist in either location, an initialization exception is thrown.
+3. **Default Filesystem Fallbacks**: Checks for `config/pesap-custom-rules.md` (and then `config/pesap-custom-rules.txt`) on the filesystem.
+4. **Default Classpath Fallbacks**: Checks for `ai-prompts/pesap-custom-rules.md` (and then `ai-prompts/pesap-custom-rules.txt`) on the classpath.
+5. **Disabled State**: Proceeds with default standard core linter rules only.
 
 ##### Example Configuration (Disable PESAP completely):
 ```properties
@@ -509,7 +545,7 @@ Only the instruction text is included — no DOM snapshots, no action details, n
 
 ### How It Works
 
-The history is built by `AiAgentPrompts.buildStepHistory(Playbook)`, which iterates the playbook's completed steps (indices `0` to `cursor - 1`). Steps with null or blank prompt lines are gracefully skipped. The resulting block is injected into the `{historyBlock}` placeholder in the prompt templates (`user-prompt-template.txt`, `retry-prompt-template.txt`, `no-actions-retry-prompt-template.txt`).
+The history is built by `AiAgentPrompts.buildStepHistory(Playbook)`, which iterates the playbook's completed steps (indices `0` to `cursor - 1`). Steps with null or blank prompt lines are gracefully skipped. The resulting block is injected into the `{historyBlock}` placeholder in the prompt templates (`user-prompt-template.md`, `retry-prompt-template.md`, `no-actions-retry-prompt-template.md`).
 
 An `isRecoveryAttempt` flag in `AiAgent.getActionsFromLLM()` tracks whether the current iteration is a recovery scenario. On the first attempt, the flag is `false` and the history block is empty. It flips to `true` whenever an escalation, error retry, or no-actions retry occurs.
 ---
@@ -631,7 +667,8 @@ Requires the `@NeodymiumTestGenerator` annotation.
 
 ```java
 @NeodymiumTestGenerator
-public void generateCheckoutFlow() {
+public void generateCheckoutFlow()
+{
     Neodymium.ai().generatePrompt("Purchase a pair of red shoes as a guest user.");
 }
 ```
@@ -648,17 +685,17 @@ public void generateCheckoutFlow() {
 
 ## 🎯 Locator Hints & Zero-DOM Execution
 
-Sometimes you may want to explicitly guide the AI on which element to interact with, bypassing its own DOM analysis to speed up execution or resolve ambiguity. You can do this using **Inline Hints**.
+Sometimes you may want to explicitly guide the AI on which element to interact with, bypassing its own DOM analysis to speed up execution or resolve ambiguity. You can do this using **Inline Hints** or **Inline Selectors**.
 
-When you provide a hint directly within the instruction using the `(hint: ...)` syntax, Neodymium AI enters **Zero-DOM Execution mode (`ContextLevel.HINT`)**. The LLM is asked to translate your instruction into JSON using *only* the hint you provided. ZERO DOM elements are extracted or sent to the LLM. This makes hint-based steps unbelievably fast and costs practically zero input tokens!
+When you provide a locator directly within the instruction using either the standard `(hint: ...)` syntax or the developer-centric `(selector: ...)` alternative, Neodymium AI enters **Zero-DOM Execution mode (`ContextLevel.HINT`)**. The LLM is asked to translate your instruction into JSON using *only* the locator you provided. ZERO DOM elements are extracted or sent to the LLM. This makes locator-based steps unbelievably fast and costs practically zero input tokens!
 
-### Inline Hints
-You can provide a hint directly within the instruction using the `(hint: ...)` syntax.
+### Inline Hints & Selectors
+You can provide locators directly within the instruction using either the standard `(hint: ...)` syntax or the developer-centric `(selector: ...)` alternative:
 
 ```yaml
 steps: |
   Click the search button (hint: .btn-search).
-  Type '${searchTerm}' into the search field (hint: #header-search-text).
+  Type '${searchTerm}' into the search field (selector: #header-search-text).
 ```
 
 ### Using the Hints Dictionary for Placeholders
@@ -959,6 +996,36 @@ If a visual step has a successful visual hash match and contains an empty list o
 
 ---
 
+## 👁️ Aura Glance: Observational Visual Auditing (`(glance)`)
+
+Traditional visual regression tools can only verify that a page hasn't changed pixel-for-pixel from a baseline, but cannot reason about the *meaning* of visual states. Neodymium AI introduces **Aura Glance: Observational Visual Auditing**, which combines visual screenshot hashes with multimodal LLM visual inspections to identify design defects, layouts, and accessibility shifts on the fly.
+
+### The `(glance)` Tag vs. `(visual)` Tag
+
+To execute advanced visual auditing, Neodymium AI introduces two powerful natural language keywords/tags:
+
+* **`(glance)` — Observational Audit Goal**: Instructs the AI agent to act as a purely observational reviewer. Instead of trying to click, type, or interact with elements, the AI reviews the page visually (via screenshot) to assert layout alignment, contrast, visual design consistency, or dynamic anomalies. **Note:** Specifying `(glance)` implicitly triggers the `(visual)` viewport capture and dHash caching automatically under the hood, simplifying your instructions.
+* **`(visual)` — Viewport Capture Directive**: Directs the underlying automation driver to capture a full screenshot of the page viewport on the very first attempt and activate local **dHash caching** for offline playbacks in under 10ms.
+
+Because `(glance)` implicitly triggers `(visual)` capture, you can run high-speed offline visual assertions with a single clean instruction:
+
+1. **Verify Visual Consistency (Baseline)**:
+   ```java
+   Neodymium.ai().execute("Observe page visual consistency (glance)");
+   ```
+2. **Explicit Layout Overlap Detection**:
+   ```java
+   // Directs the LLM to inspect visual boxes and assert overlap bugs
+   Neodymium.ai().execute("Observe page visual consistency (glance). Assert that the 'Cancel' button does not overlap with the 'Security Password' field or adjacent form elements.");
+   ```
+3. **Accessibility Contrast Warnings**:
+   By adding the case-insensitive `(soft)` tag alongside `(glance)`, visual checks (like contrast shifts or styling inconsistencies) will log warnings in Allure reports and execution logs instead of throwing a blocking error:
+   ```java
+   Neodymium.ai().execute("Observe page visual consistency (soft) (glance)");
+   ```
+
+---
+
 ## ⏭️ Bypassing Replays & Forcing Recording Mode (skipReplay)
 
 By default, Neodymium AI will always attempt to load and replay a cached JSON Playbook from `src/test/resources/ai-playbooks` if one exists for the current test. This is the optimal execution path for CI/CD environments as it operates completely offline and saves LLM API costs.
@@ -1006,7 +1073,7 @@ You can also set the flag dynamically within your Java test code before initiali
 
 ```java
 @NeodymiumTest
-public void testDynamicFlow()
+public final void testDynamicFlow()
 {
     // Programmatically bypass the cached playbook for this run
     Neodymium.getData().put("skipReplay", "true");
@@ -1030,7 +1097,7 @@ Because the Java classloader prioritizes your project's `target/classes` over de
 If you want to alter the strict data binding instructions in V2 generation, you would create this file in your consuming project:
 
 ```text
-src/main/resources/ai-prompts/v2-system-exploration-prompt.txt
+src/main/resources/ai-prompts/v2-system-exploration-prompt.md
 ```
 
 *(You can copy the default file contents directly from the Neodymium source repository to serve as a starting template).*
@@ -1042,37 +1109,58 @@ Here is a breakdown of the available templates that can be overridden:
 #### 1. Test Generation (V2 Mode)
 These prompts control the V2 test generation pipeline, which emphasizes robust forward-exploration and a subsequent extraction phase to filter out mistakes.
 
-- **`v2-system-exploration-prompt.txt`**: The overarching system manual for the AI. Defines its persona, JSON formatting requirements, data parameterization rules, and instructions for recovering from UI errors.
-- **`v2-exploration-prompt-template.txt`**: The user-facing prompt injected at each step. It interpolates the current DOM state, high-level intent, previously attempted actions, and any known data bindings.
-- **`v2-extraction-prompt.txt`**: Instructions for the secondary LLM pass. It tells the AI how to analyze the messy chronological playbook and extract only the successful, linear steps.
-- **`v2-extraction-retry-prompt.txt`**: A small retry template used if the AI fails to output the extraction array in the correct JSON format.
+- **`v2-system-exploration-prompt.md`**: The overarching system manual for the AI. Defines its persona, JSON formatting requirements, data parameterization rules, and instructions for recovering from UI errors.
+- **`v2-exploration-prompt-template.md`**: The user-facing prompt injected at each step. It interpolates the current DOM state, high-level intent, previously attempted actions, and any known data bindings.
+- **`v2-extraction-prompt.md`**: Instructions for the secondary LLM pass. It tells the AI how to analyze the messy chronological playbook and extract only the successful, linear steps.
+- **`v2-extraction-retry-prompt.md`**: A small retry template used if the AI fails to output the extraction array in the correct JSON format.
 
 #### 2. Test Generation (Legacy / V1 Mode)
 These prompts govern the original test generation pipeline, which allows the AI to conceptually backtrack and delete steps mid-exploration using `dropLastNActions`.
 
-- **`system-exploration-prompt.txt`**: The system instructions for the V1 exploratory agent, including backtracking rules.
-- **`exploration-prompt-template.txt`**: The user-facing prompt template for the V1 generation loop.
+- **`system-exploration-prompt.md`**: The system instructions for the V1 exploratory agent, including backtracking rules.
+- **`exploration-prompt-template.md`**: The user-facing prompt template for the V1 generation loop.
 
 #### 3. Playbook Healing & Validation
 These prompts are utilized during the execution of a pre-recorded Playbook when a step fails (e.g., due to a changed locator or moved button).
 
-- **`system-healing-prompt.txt`**: Instructs the AI on how to act as a self-healing agent, asking it to determine if a failure is a genuine application bug or just a UI change that can be fixed.
-- **`healing-prompt-template.txt`**: The user-facing template that provides the broken instruction, original element context, the thrown exception, and the current DOM state to diagnose the issue.
+- **`system-healing-prompt.md`**: Instructs the AI on how to act as a self-healing agent, asking it to determine if a failure is a genuine application bug or just a UI change that can be fixed.
+- **`healing-prompt-template.md`**: The user-facing template that provides the broken instruction, original element context, the thrown exception, and the current DOM state to diagnose the issue.
 
 #### 4. Basic Agent Execution (Single-Shot)
 These prompts are used for direct, single-action commands when utilizing the `AiAgent` for simple instructions outside of a continuous exploration loop.
 
-- **`system-prompt.txt`**: The core system persona for basic test automation, describing available browser capabilities (`CLICK`, `TYPE`, `ASSERT`, etc.).
-- **`user-prompt-template.txt`**: The user-facing template combining the human instruction and current DOM state.
+- **`system-prompt.md`**: The core system persona for basic test automation, describing available browser capabilities (`CLICK`, `TYPE`, `ASSERT`, etc.).
+- **`user-prompt-template.md`**: The user-facing template combining the human instruction and current DOM state.
 
 #### 5. Retries & Error Handling
 Templates used to feed error context back into the LLM if an action fails or the model hallucinates an invalid response format.
 
-- **`retry-prompt-template.txt`**: Used when a chosen action fails (e.g., ElementNotInteractableException). It provides the exception and tells the AI to pick a new approach.
-- **`no-actions-retry-prompt-template.txt`**: Used when the AI successfully returns JSON but hallucinates an empty actions array. Instructs the AI that it must output at least one action.
+- **`retry-prompt-template.md`**: Used when a chosen action fails (e.g., ElementNotInteractableException). It provides the exception and tells the AI to pick a new approach.
+- **`no-actions-retry-prompt-template.md`**: Used when the AI successfully returns JSON but hallucinates an empty actions array. Instructs the AI that it must output at least one action.
 
 #### 6. Pre-Execution Static Analysis Phase (PESAP)
 Templates used during the Pre-Execution Static Analysis Phase (PESAP) before browser runtime execution, to predict starting context levels and detect semantic linter warnings.
 
-- **`pesap-classify-prompt.txt`**: The system instructions for statically predicting the starting context level based on the semantic intent of steps.
-- **`pesap-linter-prompt.txt`**: The system instructions for multilingual static semantic linting and instruction ambiguity checking.
+- **`pesap-system-prompt.md`**: The overarching system prompt used to configure the LLM environment during the static analysis phase.
+- **`pesap-classify-prompt.md`**: The system instructions for statically predicting the starting context level based on the semantic intent of steps.
+- **`pesap-linter-prompt.md`**: The system instructions for multilingual static semantic linting and instruction ambiguity checking.
+
+---
+
+## ⚖️ Licensing
+
+Neodymium is licensed under different licenses depending on which module or features you are utilizing:
+
+### 1. Neodymium Classic (Core Framework)
+The core, non-AI test automation framework (**Neodymium Classic**) remains fully open-source and licensed under the permissive **[MIT License](LICENSE#section-a-mit-license-neodymium-classic)**. You are free to use, modify, distribute, and commercially host Neodymium Classic without restriction.
+
+### 2. Neodymium Aura AI (AI Integration Module)
+The advanced AI-powered automation integration (**Neodymium Aura AI**) is dual-licensed to support both the open-source community and enterprise environments:
+
+- **Community Edition:** Free to use for development, testing, and internal applications under the terms of the **[GNU Affero General Public License (AGPLv3)](LICENSE#section-b-gnu-affero-general-public-license-neodymium-aura-ai)**. So, if you just test your own applications, you are free to do whatever you want. If you want to sell services for Neodymium Aura AI or bundle Neodymium Aura AI or just parts, the next line is yours.
+- **Commercial Edition:** If you wish to offer Neodymium Aura AI as a hosted service, bundle it in a commercial SaaS offering, or use it without the AGPLv3 copyleft/network-disclosure requirements, you must purchase a **Commercial License**.
+- **Commercial Support:** If you want to support others in using Neodymium Aura AI or you need changes, features, or any other help, you are encouraged to purchase commercial support. This will support this project, its continuous maintenance, and keep it thriving. There is no free fixing of Neodymium Aura AI unless you are another open source project. We will address problems at our own discretion.
+- Your fixes and pull requests are always welcomed under all licenses and agreements.
+
+For commercial inquiries, licensing options, or custom agreements, please contact us at **[support@xceptance.com](mailto:support@xceptance.com)**. If you have any questions about licensing, especially if your usage is affected, please reach out to us as well. We are also open to discussing custom license modifications or tailored agreements to fit your specific business or technical requirements.
+

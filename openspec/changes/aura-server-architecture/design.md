@@ -1,6 +1,6 @@
 ## Context
 
-Current test runners (such as Neodymium) write reporting metadata directly into Allure-compatible formats or inline HTML summaries. When dynamic processes like AI self-healing or transient retries occur, Allure's thread-local lifecycle is extremely difficult to interact with, forcing fragile reflection hacks on internal classes. 
+Current test runners (such as Neodymium) write reporting metadata directly into Allure-compatible formats or inline HTML summaries. When dynamic processes like AI self-healing or transient retries occur, Allure's thread-local lifecycle is extremely difficult to interact with, forcing fragile reflection hacks on internal classes. To avoid disrupting legacy suites, Neodymium keeps its Allure implementation completely intact for Neo Classic runs, but introduces Aura specifically to support Neo AI execution.
 
 To overcome this, **Aura** decouples **execution capture** (saving raw, version-controllable JSON/PNG directories to the local disk) from **indexing & display** (managed by a stateful local Java server). When the server starts up, it reads the external directory, builds an optimized relational database index, and delivers a premium interactive console. During active execution, the runner can redirect its output stream directly to the server for real-time console feedback.
 
@@ -22,10 +22,10 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
 
 ## Decisions
 
-### 1. Complete Ownership of Test Lifecycle (Zero-Allure Dependency)
-- **Decision**: Eliminate all `io.qameta.allure` annotations (`@Step`, `@Attachment`, etc.) and runtime libraries. Introduce native Neodymium metadata annotations (e.g. `@TestStep`, `@VisualAssertion`, `@ExpectedFailure`) and implement a native `AuraCaptureListener` hooking directly into JUnit 5/Selenide execution.
-- **Alternative**: Keep using Allure listeners and translate their step formats into Aura files, or use reflection to capture lifecycle hooks.
-- **Rationale**: Relying on Allure binds the framework to heavy external dependencies, rigid execution models (unable to cleanly represent dynamic AI paths, self-healing retries, or perceptual hashes), and static single-thread context limitations. By owning the lifecycle capture, we achieve absolute design flexibility, maximum runtime execution speed, and zero external reporting bloat.
+### 1. Dedicated Aura Lifecycle for Neo AI (Allure Coexistence)
+- **Decision**: Keep Allure fully functional for Neo Classic suites. For Neo AI, introduce native Neodymium metadata annotations (e.g., `@TestStep`, `@VisualAssertion`, `@ExpectedFailure`) and implement a native `AuraCaptureListener` that captures lifecycle hooks specifically during Neo AI executions.
+- **Alternative**: Completely replace Allure for all test suites.
+- **Rationale**: Completely replacing Allure would force immediate migration of legacy Neo Classic test suites, introducing high friction. By preserving the Allure framework for Neo Classic and dedicating Aura to Neo AI, we gain the full benefits of dynamic step tracing, visual hashes, and self-healing capture for AI-driven tests while maintaining 100% backward compatibility and zero disruption for traditional test suites.
 
 - **Decision**: All results are stored in `target/aura-results/run_<timestamp>_<branch>_<commit>/` using a documented, generic JSON/PNG layout:
   - `run-info.json`: Execution summary, branch/commit SHA, browser environment, and total metrics.
@@ -39,12 +39,13 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
 - **Rationale**: Keeping the intermediate data representation fully open and generic provides maximum **source flexibility** and avoids closing the ecosystem. Any external tool, framework, or developer can **write directly in our defined way** (e.g., standard files on disk) without running the server at all. Aura Server will ingest and display them flawlessly, making Aura a universal test intelligence platform rather than a proprietary silo.
 
 ### 3. Spring Boot + H2 Speed Index Layer
-- **Decision**: Built on **Spring Boot 3.x**, **JDK 21 Virtual Threads**, and **H2/SQLite**. On boot, an `AuraFileIngester` scans the results directory, compares file signatures, and bulk-inserts/updates runs in a lightweight database.
+- **Decision**: Built on **Spring Boot 1.5.x (Spring 4.x)**, **Java 8 standard thread pools**, and **H2/SQLite**. On boot, an `AuraFileIngester` scans the results directory, compares file signatures, and bulk-inserts/updates runs in a lightweight database.
 - **Rationale**: Keeps UI operations (searching, trend graphing, filtering by flakiness) extremely fast. Rebuilding the database takes seconds if files are deleted or modified.
 
 ### 4. Open Centralized Writer API & Live-Stream Event Receiver
 - **Decision**: Aura Server hosts a public, generic HTTP/WebSocket ingestion and event-stream receiver (`/api/v1/ingest` and `/api/v1/stream`). 
   - **Dynamic Ingestion (Someone Else Sends, We Write)**: If an external test runner, CI worker, or custom script runs in a separate environment (where it cannot write directly to the server's local file system), it can POST its run metadata, step JSONs, and screenshot base64 payloads to this API. **Aura Server will act as the centralized writer**, serializing these incoming payloads directly into the standard flat-file directory layout on the host disk as the primary source of truth, while simultaneously updating the in-memory/H2 index.
+  - **Ingestion Compatibility Bridge**: The dynamic ingestion API and ingester pipeline natively support parsing and indexing the structured JSON report produced by the lightweight `quick-test-report` capability (introduced in the `human-readable-test-report` change). This ensures instant Aura integration and backwards-compatibility for existing Neodymium suites running under standard JUnit 4/5 before refactoring to native Aura annotations.
   - **Live Progress**: An `AuraLiveStreamAppender` streams live execution updates during active runs to update the interactive HTMX dashboard in real-time.
 - **Rationale**: This guarantees absolute deployment flexibility. Ecosystem clients have a choice: they can write standard Aura files directly to disk themselves, or they can send the raw data to the server's endpoint and let the server handle disk serialization for them. This keeps the ecosystem 100% open, standard, and accessible from any environment.
 
@@ -81,8 +82,10 @@ To overcome this, **Aura** decouples **execution capture** (saving raw, version-
 
 ## Risks / Trade-offs
 
-- **Risk**: Upgrading existing test suites to remove Allure annotations might require user rework.
-- **Mitigation**: Introduce standard deprecation cycles, providing a clean compile-time migration path or simple script converters to map `@Step` to `@TestStep` seamlessly.
+- **Risk**: Overlap or conflict between Allure and Aura listeners during execution.
+- **Mitigation**: Ensure that `AuraCaptureListener` is only active and registered during Neo AI test runs, while standard Neo Classic runs only activate the Allure listener.
+- **Risk**: Maintenance overhead of supporting two reporting pipelines.
+- **Mitigation**: Neo Classic's Allure integration is highly mature and stable, requiring minimal active maintenance, while Aura is developed specifically as a high-fidelity engine for new AI features.
 - **Risk**: Disk space bloat due to hundreds of runs capturing high-resolution PNGs.
 - **Mitigation**: Introduce a background scavenger policy in Aura Server to automatically compress, downscale, or purge screenshots older than `X` days, while retaining historical execution JSON metadata for long-term trend analysis.
 

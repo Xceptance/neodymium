@@ -1,34 +1,37 @@
 /*
- * MIT License
+ * GNU Affero General Public License (AGPLv3)
  *
  * Copyright (c) 2026 Xceptance
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.xceptance.neodymium.ai.generator;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
+import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WrapsDriver;
+import org.openqa.selenium.interactions.Interactive;
 
 import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
@@ -44,7 +47,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Provides helper methods for executing background threads with shared Neodymium and WebDriver
  * context, creating mock LLM clients, and building custom test AiBrowser instances.
  *
- * // AI-generated: Antigravity (Gemini 2.5 Pro)
+ * @author AI-generated: Gemini 2.5 Pro
  */
 public final class InteractiveHudTestUtils
 {
@@ -65,7 +68,18 @@ public final class InteractiveHudTestUtils
      */
     public static Thread runInteractiveInBg(final Runnable task, final Function<Throwable, Void> onErrorCallback)
     {
-        final WebDriver driver = WebDriverRunner.getWebDriver();
+        final WebDriver rawDriver = WebDriverRunner.getWebDriver();
+        final WebDriver proxiedDriver;
+        if (Proxy.isProxyClass(rawDriver.getClass()))
+        {
+            proxiedDriver = rawDriver;
+        }
+        else
+        {
+            proxiedDriver = createThreadSafeProxy(rawDriver);
+            WebDriverRunner.setWebDriver(proxiedDriver);
+        }
+
         final Object mainContext;
         try
         {
@@ -81,7 +95,7 @@ public final class InteractiveHudTestUtils
             try
             {
                 setNeodymiumContext(mainContext);
-                WebDriverRunner.setWebDriver(driver);
+                WebDriverRunner.setWebDriver(proxiedDriver);
                 task.run();
             }
             catch (final Throwable e)
@@ -91,6 +105,64 @@ public final class InteractiveHudTestUtils
         });
         bgThread.start();
         return bgThread;
+    }
+
+    /**
+     * Creates a thread-safe synchronized dynamic proxy for the given WebDriver instance.
+     * Every method call on the proxy is serialized on the raw driver instance to prevent
+     * concurrent ChromeDriver session corruption.
+     *
+     * @param target the target raw WebDriver instance
+     * @return the proxied thread-safe WebDriver instance
+     */
+    private static WebDriver createThreadSafeProxy(final WebDriver target)
+    {
+        final Set<Class<?>> interfaceSet = new LinkedHashSet<>();
+        interfaceSet.add(WebDriver.class);
+
+        // Add all interfaces from target's class hierarchy
+        Class<?> current = target.getClass();
+        while (current != null)
+        {
+            for (final Class<?> iface : current.getInterfaces())
+            {
+                interfaceSet.add(iface);
+            }
+            current = current.getSuperclass();
+        }
+
+        // Add standard Selenium capabilities, screenshots, and interaction interfaces
+        interfaceSet.add(JavascriptExecutor.class);
+        interfaceSet.add(TakesScreenshot.class);
+        interfaceSet.add(Interactive.class);
+        interfaceSet.add(WrapsDriver.class);
+
+        return (WebDriver) Proxy.newProxyInstance(
+            WebDriver.class.getClassLoader(),
+            interfaceSet.toArray(new Class<?>[0]),
+            new InvocationHandler()
+            {
+                @Override
+                public Object invoke(final Object proxy, final Method method, final Object[] args) throws Throwable
+                {
+                    if ("getWrappedDriver".equals(method.getName()))
+                    {
+                        return target;
+                    }
+                    synchronized (target)
+                    {
+                        try
+                        {
+                            return method.invoke(target, args);
+                        }
+                        catch (final java.lang.reflect.InvocationTargetException e)
+                        {
+                            throw e.getCause();
+                        }
+                    }
+                }
+            }
+        );
     }
 
     /**

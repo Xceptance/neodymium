@@ -1,18 +1,18 @@
 # Tasks
 
 ## Component: Aura Server Setup
-- [ ] Initialize Spring Boot 3.x / Java 21 subproject `/aura-server`
+- [ ] Initialize Spring Boot 1.5.x (Spring 4.x) / Java 21 subproject `/aura-server`
 - [ ] Configure zero-dependency H2/SQLite embedded database
 - [ ] Implement JPA entity mappings for `Runs`, `TestCases`, `Steps`, and `VisualBaselines`
 
-## Component: Neodymium Native Lifecycle Capture (Allure Elimination)
-- [ ] Remove `io.qameta.allure` Maven dependencies from `pom.xml`
-- [ ] Implement native Neodymium annotations (e.g. `@TestStep`, `@VisualAssertion`, `@ExpectedFailure`)
-- [ ] Build a native `AuraCaptureListener` that hooks directly into JUnit 5 and Selenide logging
-- [ ] Implement step context serialization to cleanly support dynamic steps, self-healing retries, and visual hashes
-- [ ] Implement DOM snapshot capture (extracting outerHTML via JavaScript) at the end of each step
-- [ ] Implement CDP network request interceptor matching requests/responses and slicing them into step trace buffers
-- [ ] Implement CDP console log collector capturing browser console errors, warnings, and messages per step
+## Component: Neodymium Native Lifecycle Capture (Neo AI Extension & Allure Coexistence)
+- [ ] Ensure `io.qameta.allure` Maven dependencies remain intact in `pom.xml` for Neo Classic compatibility
+- [ ] Implement native Neodymium annotations (e.g., `@TestStep`, `@VisualAssertion`, `@ExpectedFailure`) for Neo AI test runs, coexisting side-by-side with Allure annotations
+- [ ] Build a native `AuraCaptureListener` that hooks directly into JUnit 5 and Selenide logging specifically during Neo AI executions (without interfering with Neo Classic runs)
+- [ ] Implement step context serialization in Aura capture to cleanly support dynamic steps, self-healing retries, and visual hashes
+- [ ] Implement DOM snapshot capture (extracting outerHTML via JavaScript) specifically for Neo AI execution steps
+- [ ] Implement CDP network request interceptor matching requests/responses and slicing them into Neo AI step trace buffers
+- [ ] Implement CDP console log collector capturing browser console errors, warnings, and messages specifically for Neo AI execution steps
 
 ## Component: File System Reader & Ingester (Direct Disk Writing)
 - [ ] Define standardized JSON schemas for `run-info.json` and `<testCase>.json`

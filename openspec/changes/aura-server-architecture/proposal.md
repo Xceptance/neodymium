@@ -7,13 +7,13 @@ Traditional test reporting frameworks, such as Allure, are highly static, monoli
 4. **Offline Distribution Barriers**: Allure requires a local web server (CORS restrictions) to view compiled reports, making sharing difficult.
 5. **Dependency Bloat & Rigid Lifecycles**: Relying on Allure binds Neodymium to heavy external dependencies (`allure-java-commons`, etc.) and a brittle thread-local listener model that forces fragile reflection hacks to support dynamic features like self-healing and transient retries.
 
-By completely replacing Allure with our own native capture framework and introducing **Aura Server** (a stateful local Java application running on `localhost:8080`), we take absolute ownership of our test lifecycle. Neodymium captures events natively using built-in hooks, serializes them to highly optimized, open JSON/PNG directories on disk, and streams them in real-time to Aura Server. This eliminates Allure completely, making Neodymium leaner, faster, and 100% flexible. To maintain a fully open ecosystem, the server supports both direct local file writing by external runners and a generic HTTP ingestion API where any remote execution tool can send us data and Aura Server writes it to the local disk structure.
+By introducing **Aura Server** (a stateful local Java application running on `localhost:8080`) specifically for AI-driven tests, we take absolute ownership of the test lifecycle for Neo AI. Since Aura is used for Neo AI first only, we don't need to replace the Allure base framework; we keep Neo Classic completely as it is and only extend Neo AI with Aura first. Neodymium captures events natively for Neo AI runs using built-in hooks, serializes them to highly optimized, open JSON/PNG directories on disk, and streams them in real-time to Aura Server. This coexists perfectly with Allure, making Neo AI highly flexible and lightweight without disrupting standard Neo Classic test runs. To maintain a fully open ecosystem, the server supports both direct local file writing by external runners and a generic HTTP ingestion API where any remote execution tool can send us data and Aura Server writes it to the local disk structure.
 
 ## What Changes
 
-1. **Allure Elimination**: Completely remove Allure libraries and annotations from Neodymium. Replace them with native Neodymium annotations (e.g. `@TestStep`, `@VisualAssertion`, `@ExpectedFailure`).
-2. **Aura Server (New App)**: Create a lightweight Spring Boot 3.x/Java 21 standalone application. On startup, it scans a configured external results directory to parse and index test run history into a local H2/SQLite database.
-3. **Native Capture Listener**: Build a lightweight, native execution listener in Neodymium that captures step lifecycles, intercepts failures, records screenshots, and serializes the state to disk without external logging frameworks.
+1. **Allure Coexistence & Neo Classic Preservation**: Keep Allure libraries and annotations fully active in Neodymium for Neo Classic suites. For Neo AI, introduce native Neodymium annotations (e.g., `@TestStep`, `@VisualAssertion`, `@ExpectedFailure`) that coexist side-by-side with Allure annotations.
+2. **Aura Server (New App)**: Create a lightweight Spring Boot 1.5.x (Spring 4.x)/Java 8 standalone application. On startup, it scans a configured external results directory to parse and index test run history into a local H2/SQLite database.
+3. **Neo AI Native Capture Listener**: Build a lightweight, native execution listener in Neodymium that captures step lifecycles, intercepts failures, records screenshots, and serializes the state to disk for Neo AI execution, coexisting alongside the legacy Allure listener.
 4. **Dynamic Ingestion & Open Ingestion API**: Support both direct flat-file disk-writing (for ultimate offline execution) and a standard HTTP ingestion receiver where remote/external test suites (e.g. Cypress, Playwright) can send us data, and Aura Server automatically handles writing it to the open filesystem structure.
 5. **Interactive Control Panel**: A premium, responsive, glassmorphic Thymeleaf dashboard for run statistics, interactive visual regression comparison (swipe sliders with manual baseline approval), and LangChain4j failure diagnostics.
 
@@ -31,7 +31,7 @@ By completely replacing Allure with our own native capture framework and introdu
 
 ### Modified Capabilities
 
-- `reporting`: Complete deprecation and removal of Allure reporting XML/JSON outputs, replacing them with standardized Aura external file bundles (`target/aura-results/`) and the ability to trigger a static offline report compile step or query automated quality gates.
+- `reporting`: Neo Classic continues using Allure reporting XML/JSON outputs without changes. Neo AI outputs standardized Aura external file bundles (`target/aura-results/`) and supports streaming to Aura Server, enabling high-fidelity diagnostic tracing, visual regression, and conversational AI analysis specifically for AI-driven test runs. **Transition Step**: The ingestion pipeline natively supports the structured JSON layout produced by the lightweight `quick-test-report` capability (introduced in the `human-readable-test-report` change), providing instant backward compatibility and a seamless bridge for runs.
 - `test-management`: Connect automated test suite runs statefully with the manual test cases backlog.
 
 ## Feedback Integration & Priorities
@@ -53,8 +53,8 @@ To address feedback across QA, architecture, DevOps, and business stakeholders, 
 
 ## Impact
 
-- **Dependency Clean Up**: Delete all `io.qameta.allure` Maven dependencies from Neodymium's `pom.xml`.
-- **New Subproject**: `aura-server/` (Spring Boot project, Thymeleaf/HTMX UI, H2 database, LangChain4j integration).
+- **Dependency Coexistence**: Retain `io.qameta.allure` Maven dependencies in Neodymium's `pom.xml` for Neo Classic compatibility, while adding dependencies required for Aura.
+- **New Subproject**: `aura-server/` (Spring Boot 1.5.x (Spring 4.x) / Java 8 project, Thymeleaf/HTMX UI, H2 database, LangChain4j integration).
 - **Test Automation Integration**: Implement `@TestStep` and the native `AuraCaptureListener` in Neodymium to write standardized JSON results and stream live updates if the Aura Server is online.
 - **Unified Ingestion, Export, & Quality Framework**: Provide documented JSON schemas and endpoint contracts for third-party environments to send or write test data in a standardized manner, along with a static offline compilation engine and automated Quality Gates for CI/CD gates.
 

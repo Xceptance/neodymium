@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura React-SPA & HTMX Sandbox</title>
+    <link rel="stylesheet" href="../shared/style.css">
+    <link rel="stylesheet" href="../shared/controls.css">
+    <style>
+        /* Pulse Animation for React Suspense Skeletons */
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 0.3; }
+        }
+
+        .skeleton-block {
+            background: hsla(220, 20%, 25%, 0.4);
+            border-radius: var(--radius-sm);
+            animation: pulse 1.5s infinite ease-in-out;
+            margin-bottom: 0.75rem;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: 1px solid var(--bg-card-border);
+            color: var(--text-secondary);
+            padding: 0.6rem 1.2rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: var(--transition-smooth);
+        }
+
+        .tab-btn.active, .tab-btn:hover {
+            background: hsla(220, 20%, 20%, 0.6);
+            border-color: var(--accent-cyan);
+            color: var(--text-primary);
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+        }
+
+        /* Spinner for AJAX loading states */
+        .spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid var(--accent-purple);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Optional Promotional Banner -->
+    <div id="promo-banner-container" style="display: flex;">
+        <div class="promo-banner" style="width: 100%;">
+            <span>🚀 Special Trial: Unlimited Aura AI visual audits unlocked!</span>
+            <button class="promo-close" id="promo-close-btn" onclick="document.getElementById('promo-banner-container').style.display='none'">Close Banner</button>
+        </div>
+    </div>
+
+    <!-- Navigation Header -->
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="../dashboard/index.html" class="brand">
+                <span class="brand-icon"></span>
+                <span>Aura Suite Hub</span>
+            </a>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="../dashboard/index.html">Dashboard</a></li>
+                    <li><a href="../shop/index.html">Shop Catalog</a></li>
+                    <li><a href="../shop/forms.html">Forms Interaction</a></li>
+                    <li><a href="../a11y/index.html">Accessibility Checks</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="aura-container">
+        
+        <section class="aura-hero" style="padding: 2rem 3.5rem;">
+            <h1>React-SPA & HTMX Async Playground</h1>
+            <p style="margin-top: 0.5rem; color: var(--text-secondary);">
+                This SPA mimics dynamic rendering systems. It displays Suspense Suspended Loading states on mount, and simulates asynchronous AJAX/HTMX partial DOM updates.
+            </p>
+        </section>
+
+        <!-- HTMX Navigation Tabs -->
+        <div style="display: flex; gap: 1rem; margin-bottom: 2rem;" id="spa-tabs">
+            <button class="tab-btn active" onclick="loadTab('overview')">Overview Dashboard</button>
+            <button class="tab-btn" onclick="loadTab('feeds')">Live Feeds (AJAX)</button>
+            <button class="tab-btn" onclick="loadTab('settings')">Settings Panel</button>
+        </div>
+
+        <!-- Dynamic Content Container -->
+        <div id="spa-content-area">
+            
+            <!-- React-like initial mount Suspense Skeletons -->
+            <div id="suspense-loader" class="aura-grid-3">
+                <div class="aura-card" style="height: 200px;">
+                    <div class="skeleton-block" style="width: 60%; height: 24px; margin-bottom: 1.5rem;"></div>
+                    <div class="skeleton-block" style="width: 100%; height: 80px;"></div>
+                </div>
+                <div class="aura-card" style="height: 200px;">
+                    <div class="skeleton-block" style="width: 40%; height: 24px; margin-bottom: 1.5rem;"></div>
+                    <div class="skeleton-block" style="width: 100%; height: 80px;"></div>
+                </div>
+                <div class="aura-card" style="height: 200px;">
+                    <div class="skeleton-block" style="width: 70%; height: 24px; margin-bottom: 1.5rem;"></div>
+                    <div class="skeleton-block" style="width: 100%; height: 80px;"></div>
+                </div>
+            </div>
+
+            <!-- Dashboard Content (hidden during suspense) -->
+            <div id="dashboard-content" style="display: none;" class="aura-grid-3">
+                <div class="aura-card">
+                    <h3 style="color: var(--accent-cyan); font-weight: 600;">Active Sessions</h3>
+                    <div style="font-size: 2.2rem; font-weight: 700; margin: 1rem 0;" id="active-sessions-count">1,842</div>
+                    <p style="color: var(--text-muted); font-size: 0.85rem;" class="clipped-container">
+                        Calculated reactively by visual tracking triggers. Session durations average 4.2 minutes.
+                    </p>
+                </div>
+                <div class="aura-card">
+                    <h3 style="color: var(--accent-purple); font-weight: 600;">AI Engine State</h3>
+                    <div style="font-size: 2.2rem; font-weight: 700; margin: 1rem 0;" id="ai-engine-status">ONLINE</div>
+                    <p style="color: var(--text-muted); font-size: 0.85rem;" class="clipped-container">
+                        The Gemni visual auditor model is connected and active. Average latency is 87ms.
+                    </p>
+                </div>
+                <div class="aura-card">
+                    <h3 style="color: var(--status-success); font-weight: 600;">Responsive Coverage</h3>
+                    <div style="font-size: 2.2rem; font-weight: 700; margin: 1rem 0;" id="coverage-percentage">100%</div>
+                    <p style="color: var(--text-muted); font-size: 0.85rem;" class="clipped-container">
+                        No responsive layout overlap anomalies detected in last 24 compilation builds.
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Global Controls Drawer Script injection -->
+    <script src="../shared/controls.js"></script>
+
+    <!-- SPA JS Logic -->
+    <script>
+        // 1. Simulate initial React Suspense Loader mount resolution
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('suspense-loader').style.display = 'none';
+                document.getElementById('dashboard-content').style.display = 'grid';
+            }, 1500); // 1.5 seconds suspense delay
+        });
+
+        // 2. Simulate AJAX/HTMX dynamic sub-navigation modules swaps
+        function loadTab(tabName) {
+            // Update Active tab styling
+            const tabs = document.querySelectorAll('#spa-tabs button');
+            tabs.forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            const contentArea = document.getElementById('spa-content-area');
+            
+            // Show loading state first (AJAX spinner)
+            contentArea.innerHTML = `
+                <div class="aura-card" style="text-align: center; padding: 3rem;">
+                    <div class="spinner"></div>
+                    <p style="color: var(--text-secondary);">Loading reactive components...</p>
+                </div>
+            `;
+
+            // Dynamic HTML loading mock after 500ms delay
+            setTimeout(() => {
+                if (tabName === 'overview') {
+                    contentArea.innerHTML = `
+                        <div class="aura-grid-3">
+                            <div class="aura-card">
+                                <h3 style="color: var(--accent-cyan); font-weight: 600;">Active Sessions</h3>
+                                <div style="font-size: 2.2rem; font-weight: 700; margin: 1rem 0;">1,842</div>
+                                <p style="color: var(--text-muted); font-size: 0.85rem;">Average session duration remains stable.</p>
+                            </div>
+                            <div class="aura-card">
+                                <h3 style="color: var(--accent-purple); font-weight: 600;">AI Engine State</h3>
+                                <div style="font-size: 2.2rem; font-weight: 700; margin: 1rem 0;">ONLINE</div>
+                                <p style="color: var(--text-muted); font-size: 0.85rem;">Gemini model visual auditor connects cleanly.</p>
+                            </div>
+                            <div class="aura-card">
+                                <h3 style="color: var(--status-success); font-weight: 600;">Responsive Coverage</h3>
+                                <div style="font-size: 2.2rem; font-weight: 700; margin: 1rem 0;">100%</div>
+                                <p style="color: var(--text-muted); font-size: 0.85rem;">Visual layout matches baseline parameters.</p>
+                            </div>
+                        </div>
+                    `;
+                } else if (tabName === 'feeds') {
+                    contentArea.innerHTML = `
+                        <div class="aura-card">
+                            <h3 style="margin-bottom: 1.5rem; color: var(--accent-purple);">Dynamic Live Alerts Log</h3>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Category</th>
+                                        <th>Details</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>19:05:12</td>
+                                        <td>Aura Glance</td>
+                                        <td>Visual baseline matching complete. offline bypass succeeded.</td>
+                                        <td style="color: var(--status-success); font-weight: 600;">RESOLVED</td>
+                                    </tr>
+                                    <tr>
+                                        <td>19:05:44</td>
+                                        <td>HTMX Engine</td>
+                                        <td>Asynchronous partial HTML page swap executed successfully.</td>
+                                        <td style="color: var(--status-success); font-weight: 600;">RESOLVED</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else if (tabName === 'settings') {
+                    contentArea.innerHTML = `
+                        <div class="aura-card" style="max-width: 600px; margin: 0 auto;">
+                            <h3 style="margin-bottom: 1.5rem; color: var(--accent-cyan);">Aura Sandbox Preferences</h3>
+                            <div class="form-group">
+                                <label class="form-label" for="pref-latency">Simulated Network Latency (ms)</label>
+                                <input type="number" id="pref-latency" class="form-control" value="500">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="pref-retries">WebDriver Action Max Retries</label>
+                                <input type="number" id="pref-retries" class="form-control" value="3">
+                            </div>
+                            <button class="btn-primary" onclick="alert('Settings saved dynamically!')" id="btn-save-pref">Apply Preferences</button>
+                        </div>
+                    `;
+                }
+            }, 500); // 500ms AJAX delay
+        }
+    </script>
+
+</body>
+</html>
