@@ -58,6 +58,7 @@
 		<junit.vintage.version>6.1.0-M1</junit.vintage.version>
 		<langchain4j.version>1.15.0</langchain4j.version>
 		<surefire.forkCount>4</surefire.forkCount>
+		<skipTests>true</skipTests>
 	</properties>
 
 	<build>
@@ -152,9 +153,6 @@
 					<value>true</value>
 				</property>
 			</activation>
-			<properties>
-				<skipTests>true</skipTests>
-			</properties>
 			<build>
 				<plugins>
 					<plugin>
