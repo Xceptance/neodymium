@@ -82,7 +82,18 @@ Alternatively, you can call the convenience helper `MockLlmClient.configureForOf
 
 ### The `AiMockResponse` Fluent Builder
 An `AiMockResponse` represents a single mock response behavior from the LLM. You can configure:
-* **The JSON Payload**: The mock action structure the LLM would have returned.
+* **The JSON Payload**: The mock action structure the LLM would have returned. Neodymium's parsing protocol uses abbreviated JSON keys to minimize prompt token overhead:
+  * **Main response keys**:
+    * `s` (success): `boolean` indicating if the step resolved successfully.
+    * `r` (reasoning): `String` capturing the LLM's thought process.
+    * `a` (actions): `Array` of proposed browser action objects.
+    * `d` (done): `boolean` indicating if all instructions are complete.
+    * `st` (status override): `String` status code (e.g. `"ESCALATE"`).
+    * `tc` (target context): `String` context level (e.g. `"VISUAL"`).
+  * **Action object keys (inside the `a` array)**:
+    * `t` (type): `String` action type (e.g. `"CLICK"`, `"TYPE"`, `"SELECT"`).
+    * `tg` (target): `String` target element descriptor (e.g. CSS selector).
+    * `v` (value): `String` input parameter value (e.g. text to type).
 * **Latency Timing**: A simulated network delay (`withDelay`).
 * **HTTP Errors**: Simulated server error status codes (e.g. HTTP 503) or exceptions to test self-healing retry rules.
 * **Tokens**: Custom token counts for testing budget limits.
@@ -93,10 +104,10 @@ AiMockResponse.builder()
     .responseText(
         """
         {
-          "s": true,
-          "r": "Success",
-          "a": [{"t": "CLICK", "tg": "#submit-btn"}],
-          "d": true
+          "s": true,                                    // s  = success (boolean)
+          "r": "Success",                               // r  = reasoning/thought process (String)
+          "a": [{"t": "CLICK", "tg": "#submit-btn"}],    // a  = actions array, t = type, tg = target
+          "d": true                                     // d  = done (boolean)
         }
         """)
     .build();
