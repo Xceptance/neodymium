@@ -90,7 +90,15 @@ An `AiMockResponse` represents a single mock response behavior from the LLM. You
 ```java
 // Simulates a successful click action response
 AiMockResponse.builder()
-    .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#submit-btn\"}], \"d\": true}")
+    .responseText(
+        """
+        {
+          "s": true,
+          "r": "Success",
+          "a": [{"t": "CLICK", "tg": "#submit-btn"}],
+          "d": true
+        }
+        """)
     .build();
 
 // Simulates a 503 Service Unavailable HTTP error
@@ -143,7 +151,15 @@ public final class AiExecutionResultDemoTest
                 .delayMs(100L)
                 .build());
         llmClient.addResponse(AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#btn\"}], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Success",
+                      "a": [{"t": "CLICK", "tg": "#btn"}],
+                      "d": true
+                    }
+                    """)
                 .tokens(150L, 45L)
                 .build());
 
@@ -199,10 +215,27 @@ public final class AiEscalationTest
 
         final MockLlmClient llmClient = new MockLlmClient();
         llmClient.addResponse(AiMockResponse.builder()
-                .responseText("{\"st\": \"ESCALATE\", \"r\": \"Elements overlap in layout\", \"tc\": \"VISUAL\", \"a\": [], \"d\": false}")
+                .responseText(
+                    """
+                    {
+                      "st": "ESCALATE",
+                      "r": "Elements overlap in layout",
+                      "tc": "VISUAL",
+                      "a": [],
+                      "d": false
+                    }
+                    """)
                 .build());
         llmClient.addResponse(AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#menu\"}], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Success",
+                      "a": [{"t": "CLICK", "tg": "#menu"}],
+                      "d": true
+                    }
+                    """)
                 .build());
 
         final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer();
@@ -256,10 +289,26 @@ public final class AiActionSequenceTest
 
         final MockLlmClient llmClient = new MockLlmClient();
         llmClient.addResponse(AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#input-field\"}], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Success",
+                      "a": [{"t": "CLICK", "tg": "#input-field"}],
+                      "d": true
+                    }
+                    """)
                 .build());
         llmClient.addResponse(AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [{\"t\": \"TYPE\", \"tg\": \"#input-field\", \"v\": \"Demo\"}], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Success",
+                      "a": [{"t": "TYPE", "tg": "#input-field", "v": "Demo"}],
+                      "d": true
+                    }
+                    """)
                 .build());
 
         final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer();
@@ -312,7 +361,15 @@ public final class AiTestDataVariableTest
 
         final MockLlmClient llmClient = new MockLlmClient();
         llmClient.addResponse(AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"Success\", \"a\": [], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Success",
+                      "a": [],
+                      "d": true
+                    }
+                    """)
                 .build());
 
         final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer();
