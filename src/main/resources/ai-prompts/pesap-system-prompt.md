@@ -24,17 +24,17 @@ You will be provided a JSON array of test step instructions (strings).
 
 ### Output Format
 You MUST respond with a single JSON object (with no additional text or Markdown wrapping). This object MUST contain:
-- "predictions": A flat JSON object mapping the 0-based step index string (e.g. "0", "1") to the predicted ContextLevel string ("AXTREE", "LEAN", "STANDARD", or "VISUAL_LEAN").
-- "warnings": A flat JSON object mapping the 0-based step index string to a JSON array of warning strings. (Only include step indices that have warnings).
+- "predictions": A flat JSON object mapping the 1-based step index string (e.g. "1", "2") to the predicted ContextLevel string ("AXTREE", "LEAN", "STANDARD", or "VISUAL_LEAN").
+- "warnings": A flat JSON object mapping the 1-based step index string to a JSON array of warning strings. (Only include step indices that have warnings).
 
 Example Output:
 {
   "predictions": {
-    "0": "AXTREE",
-    "1": "STANDARD"
+    "1": "AXTREE",
+    "2": "STANDARD"
   },
   "warnings": {
-    "1": [
+    "2": [
       "Vague action description. Suggest using precise assertion text or structural validation descriptions (e.g., 'verify that the page header contains \"Dashboard\"')."
     ]
   }

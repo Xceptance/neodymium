@@ -1409,7 +1409,7 @@ public class AiAgent {
             for (int i = 0; i < stepsList.size(); i++)
             {
                 final String resolved = AiBrowser.resolveTestDataToPrompt(stepsList.get(i));
-                sb.append(i).append(": ").append(stripAllTags(resolved)).append("\n");
+                sb.append(i + 1).append(": ").append(stripAllTags(resolved)).append("\n");
             }
             final String userPrompt = sb.toString();
 
@@ -1445,7 +1445,7 @@ public class AiAgent {
                             {
                                 try
                                 {
-                                    final int stepIndex = Integer.parseInt(entry.getKey());
+                                    final int stepIndex = Integer.parseInt(entry.getKey()) - 1;
                                     if (stepIndex >= 0 && stepIndex < stepsList.size())
                                     {
                                         final String levelStr = entry.getValue().getAsString();
@@ -1518,7 +1518,7 @@ public class AiAgent {
                             {
                                 try
                                 {
-                                    final int stepIndex = Integer.parseInt(entry.getKey());
+                                    final int stepIndex = Integer.parseInt(entry.getKey()) - 1;
                                     if (stepIndex >= 0 && stepIndex < stepsList.size())
                                     {
                                         final JsonElement val = entry.getValue();
@@ -1591,7 +1591,7 @@ public class AiAgent {
         {
             try
             {
-                final int stepIndex = Integer.parseInt(matcher.group(1));
+                final int stepIndex = Integer.parseInt(matcher.group(1)) - 1;
                 if (stepIndex >= 0 && stepIndex < stepsList.size())
                 {
                     final String levelStr = matcher.group(2);

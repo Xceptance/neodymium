@@ -415,11 +415,11 @@ public final class AiExplicitTagsTest
             {
                 if (systemPrompt.equals(AiAgentPrompts.PESAP_CLASSIFY_PROMPT))
                 {
-                    return "{\"predictions\": {\"0\": \"LEAN\"}}";
+                    return "{\"predictions\": {\"1\": \"LEAN\"}}";
                 }
                 if (systemPrompt.equals(AiAgentPrompts.PESAP_LINTER_PROMPT))
                 {
-                    return "{\"warnings\": {\"0\": [\"Lacks element targeting\"]}}";
+                    return "{\"warnings\": {\"1\": [\"Lacks element targeting\"]}}";
                 }
                 return "{}";
             }
@@ -506,7 +506,7 @@ public final class AiExplicitTagsTest
             public String chat(final String systemPrompt, final String userPrompt)
             {
                 // Truncated JSON response
-                return "{\"predictions\": {\"0\": \"LEAN\", \"1\": \"STANDARD\", \"2\": \"AXT";
+                return "{\"predictions\": {\"1\": \"LEAN\", \"2\": \"STANDARD\", \"3\": \"AXT";
             }
         };
 
@@ -561,12 +561,12 @@ public final class AiExplicitTagsTest
                     if (systemPrompt.equals(AiAgentPrompts.PESAP_CLASSIFY_PROMPT))
                     {
                         classifyCallCount.incrementAndGet();
-                        return "{\"predictions\": {\"0\": \"LEAN\"}}";
+                        return "{\"predictions\": {\"1\": \"LEAN\"}}";
                     }
                     if (systemPrompt.equals(AiAgentPrompts.PESAP_LINTER_PROMPT))
                     {
                         linterCallCount.incrementAndGet();
-                        return "{\"warnings\": {\"0\": [\"Lacks element targeting\"]}}";
+                        return "{\"warnings\": {\"1\": [\"Lacks element targeting\"]}}";
                     }
                     return "{}";
                 }
@@ -629,12 +629,12 @@ public final class AiExplicitTagsTest
                     if (systemPrompt.equals(AiAgentPrompts.PESAP_CLASSIFY_PROMPT))
                     {
                         classifyCallCount.incrementAndGet();
-                        return "{\"predictions\": {\"0\": \"LEAN\"}}";
+                        return "{\"predictions\": {\"1\": \"LEAN\"}}";
                     }
                     if (systemPrompt.equals(AiAgentPrompts.PESAP_LINTER_PROMPT))
                     {
                         linterCallCount.incrementAndGet();
-                        return "{\"warnings\": {\"0\": [\"Lacks element targeting\"]}}";
+                        return "{\"warnings\": {\"1\": [\"Lacks element targeting\"]}}";
                     }
                     return "{}";
                 }
@@ -765,7 +765,7 @@ public final class AiExplicitTagsTest
 
         runPesapMethod.invoke(agent, steps, lines, "test.yaml");
 
-        final String expectedPrompt = "## Test Steps\n0: Click button\n1: Verify text\n";
+        final String expectedPrompt = "## Test Steps\n1: Click button\n2: Verify text\n";
         assertEquals(expectedPrompt, capturedUserPrompt.get());
     }
 
