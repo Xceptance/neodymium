@@ -1,0 +1,74 @@
+{
+  "id": "com.xceptance.neodymium.ai.AssertActionTest :: testAssertHappyPath",
+  "steps": [
+    {
+      "promptLine": "Assert that the page title is \u0027Assert Action Test\u0027.",
+      "reasoning": "The instruction is to assert the page title. The current page title matches the expected value \u0027Assert Action Test\u0027. An ASSERT action with target \u0027title\u0027 and the expected value is used.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "title",
+          "value": [
+            "Assert Action Test"
+          ],
+          "description": "Assert that the page title is \u0027Assert Action Test\u0027.",
+          "elementDetails": "Page Title",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Verify that the welcome message is \u0027Welcome to our web store!\u0027.",
+      "reasoning": "",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#welcome-message",
+          "value": [
+            "Welcome to our web store!"
+          ],
+          "description": "Verify that the welcome message is \u0027Welcome to our web store!\u0027",
+          "elementDetails": "welcome-message",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "220B6EACAA5C77FAE29B7D6D68860184:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Assert that the \u0027Clickable Button\u0027 button is visible.",
+      "reasoning": "Found the \u0027Clickable Button\u0027 button by its ID and asserted its visibility.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#visible-btn",
+          "value": [
+            "visible"
+          ],
+          "description": "Assert that the \u0027Clickable Button\u0027 button is visible.",
+          "elementDetails": "Clickable Button",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "220B6EACAA5C77FAE29B7D6D68860184:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Verify that the \u0027Secret Button\u0027 button is hidden.",
+      "reasoning": "The instruction is to verify that the \u0027Secret Button\u0027 is hidden. Upon inspecting the provided DOM, there is no element with the text \u0027Secret Button\u0027. Therefore, the button is indeed hidden (not present in the DOM), and the verification passes.",
+      "actions": [],
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}

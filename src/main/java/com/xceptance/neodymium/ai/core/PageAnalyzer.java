@@ -535,8 +535,42 @@ public class PageAnalyzer
     public String captureScreenshot(String title) throws IOException
     {
         LOG.debug("   📸 Capturing screenshot for: {}", title);
-        return ScreenshotWriter.doScreenshot(title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)),
-                                             ScreenshotWriter.getFormatedReportsPath(), false, false);
+        boolean hidden = false;
+        try
+        {
+            final Object hudExists = com.codeborne.selenide.Selenide.executeJavaScript(
+                "var hud = document.getElementById('neodymium-ai-hud-container'); " +
+                "if (hud && hud.style.display !== 'none') { hud.style.display = 'none'; return true; } " +
+                "return false;"
+            );
+            hidden = Boolean.TRUE.equals(hudExists);
+        }
+        catch (final Exception e)
+        {
+            // Ignore if browser is not open or JS fails
+        }
+
+        try
+        {
+            return ScreenshotWriter.doScreenshot(title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)),
+                                                 ScreenshotWriter.getFormatedReportsPath(), false, false);
+        }
+        finally
+        {
+            if (hidden)
+            {
+                try
+                {
+                    com.codeborne.selenide.Selenide.executeJavaScript(
+                        "var hud = document.getElementById('neodymium-ai-hud-container'); " +
+                        "if (hud) { hud.style.display = ''; }"
+                    );
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
     }
 
     /**
@@ -649,7 +683,7 @@ public class PageAnalyzer
         String frameId = windowHandle + ":" + framePath;
         try {
             final Map<String, Object> data = (Map<String, Object>) com.codeborne.selenide.Selenide
-                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, level.ordinal());
+                                                                                                  .executeJavaScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent());
             // Render element sections
             final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");
             if (sections != null) {

@@ -3,28 +3,28 @@
   "steps": [
     {
       "promptLine": "Verify that the active sessions count \u00271,842\u0027 is visible on the page.",
-      "reasoning": "The instruction is to verify the visibility of the text \u00271,842\u0027. Since the DOM does not provide a specific data-neo-ref or id for the number \u00271,842\u0027 itself, I am asserting its presence within the \u0027body\u0027 of the page, which is a reliable way to check for visible text content.",
+      "reasoning": "Found the element with id \u0027active-sessions-count\u0027 containing the text \u00271,842\u0027 and created an ASSERT action.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "body",
+          "target": "#active-sessions-count",
           "value": [
             "1,842"
           ],
           "description": "Verify that the active sessions count \u00271,842\u0027 is visible on the page.",
-          "elementDetails": "Page body",
+          "elementDetails": "active-sessions-count",
           "elementContext": {},
           "replay": "",
+          "frameId": "BCC0BDB4378F337D48BFA154DAC532B8:main",
           "adjust": false
         }
       ],
-      "screenshotHash": "10010001800100017d0114a17d017f8100013001300108016883080308010803",
       "expectedFailure": false,
-      "healedContextLevel": "VISUAL"
+      "healedContextLevel": "STANDARD"
     },
     {
       "promptLine": "Click \u0027Live Feeds (AJAX)\u0027.",
-      "reasoning": "",
+      "reasoning": "Found a button with the name \u0027Live Feeds (AJAX)\u0027 and data-neo-ref \u0027xc_34cten\u0027 in the AXTREE and created a CLICK action for it.",
       "actions": [
         {
           "type": "CLICK",
@@ -46,24 +46,24 @@
     },
     {
       "promptLine": "Verify that the live feeds data table displays the HTMX log \u0027Asynchronous partial HTML page swap executed successfully.\u0027.",
-      "reasoning": "The instruction is to verify the presence of specific text on the page. Since the text is visible in the screenshot and the DOM context doesn\u0027t provide a more specific element for this dynamically loaded content, I will assert against the \u0027body\u0027 element to confirm the text is present on the page.",
+      "reasoning": "The instruction is to verify the presence of specific text. I found an element with data-neo-ref \u0027xc_blgboo\u0027 that contains the exact text \u0027Asynchronous partial HTML page swap executed successfully.\u0027 and used it as the target for an ASSERT action.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "body",
+          "target": "[data-neo-ref\u003d\u0027xc_blgboo\u0027]",
           "value": [
             "Asynchronous partial HTML page swap executed successfully."
           ],
           "description": "Verify that the live feeds data table displays the HTMX log \u0027Asynchronous partial HTML page swap executed successfully.\u0027.",
-          "elementDetails": "page body",
+          "elementDetails": "Asynchronous partial HTML page swap executed successfully.",
           "elementContext": {},
           "replay": "",
+          "frameId": "BCC0BDB4378F337D48BFA154DAC532B8:main",
           "adjust": false
         }
       ],
-      "screenshotHash": "800100017f0152817f017f010001040104010001500100010001100300010003",
       "expectedFailure": false,
-      "healedContextLevel": "VISUAL"
+      "healedContextLevel": "STANDARD"
     }
   ]
 }

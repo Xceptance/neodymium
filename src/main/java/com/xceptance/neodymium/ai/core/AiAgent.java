@@ -98,17 +98,13 @@ public class AiAgent {
 
     private final ActionParser actionParser;
 
-    private final int maxRetries;
 
-    private final boolean screenshotBeforeAction;
-
-    private final AiConfiguration config;
 
     private AiDiscussionLogger executionLog;
 
     private String sutContext;
 
-    private boolean autoSkip = false;
+    private boolean autoSkip;
 
     private boolean hudPromptChanged = false;
     private boolean hudSaveExit = false;
@@ -156,14 +152,13 @@ public class AiAgent {
      * @param config         the AI configuration
      */
     public AiAgent(final LlmClient llmClient, final PageAnalyzer pageAnalyzer,
-            final ActionExecutor actionExecutor, final AiConfiguration config) {
+            final ActionExecutor actionExecutor, final AiConfiguration config)
+    {
         this.llmClient = llmClient;
         this.pageAnalyzer = pageAnalyzer;
         this.actionExecutor = actionExecutor;
         this.actionParser = new ActionParser();
-        this.maxRetries = config.agentMaxRetries();
-        this.screenshotBeforeAction = config.agentScreenshotBeforeAction();
-        this.config = config;
+        this.autoSkip = config.aiInteractiveAutoSkip();
     }
 
     /**
@@ -189,6 +184,11 @@ public class AiAgent {
      * @param instructions natural language test instructions
      */
     public void execute(final String instructions) {
+        // Dynamically reload the thread-local AI configuration to pick up any dynamic system property changes
+        Neodymium.reloadAiConfiguration();
+
+        // Re-read dynamically cached autoSkip field from the newly reloaded configuration
+        this.autoSkip = Neodymium.aiConfiguration().aiInteractiveAutoSkip();
 
         if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey())) {
             Assertions.fail(
@@ -276,7 +276,7 @@ public class AiAgent {
             }
 
             this.pesapPredictions.clear();
-            boolean pesapEnabledVal = config.pesapEnabled();
+            boolean pesapEnabledVal = Neodymium.aiConfiguration().pesapEnabled();
             if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.enabled"))
             {
                 pesapEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.enabled", pesapEnabledVal);
@@ -307,7 +307,7 @@ public class AiAgent {
                 }
             }
 
-            final boolean isInteractive = config.aiInteractive();
+            final boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
             final List<String> performedInstructions = new ArrayList<>();
             boolean abortedDueToExpectedFailure = false;
             String abortedBugId = null;
@@ -531,10 +531,10 @@ public class AiAgent {
                 }
             }
 
-            if (config.attachFullDiscussionToReport()) {
+            if (Neodymium.aiConfiguration().attachFullDiscussionToReport()) {
                 Allure.addAttachment("AI Discussion", "text/html", executionLog.generateHtml(), ".html");
             }
-            if (config.attachTokenUsageToReport()) {
+            if (Neodymium.aiConfiguration().attachTokenUsageToReport()) {
                 final AiStats stats = llmClient.getAiStats();
                 Allure.addAttachment("AI Execution Statistics", "text/plain", stats.toSummaryString(), ".txt");
             }
@@ -574,7 +574,7 @@ public class AiAgent {
         int playbookReplayAttempts = 0;
         boolean hasApprovedCurrentStep = false;
         final Playbook playbook = Neodymium.getAiPlaybook();
-        final boolean isInteractive = config.aiInteractive();
+        final boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
 
         while (true)
         {
@@ -1102,16 +1102,25 @@ public class AiAgent {
      * @throws HudActionException thrown to control the flow of the main execution
      *                            loop
      */
-    private void waitForHudAction(final boolean allowAutoSkip) throws HudActionException {
-        if (allowAutoSkip && this.autoSkip) {
+    private void waitForHudAction(final boolean allowAutoSkip) throws HudActionException
+    {
+        if (allowAutoSkip && this.autoSkip)
+        {
             final Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
-            if (s != null) {
+            if (s != null)
+            {
                 this.autoSkip = s;
             }
-            if (this.autoSkip) {
+            if (this.autoSkip)
+            {
                 Neodymium.getOrCreateInteractiveHud().resetHudAction();
                 return;
             }
+        }
+
+        if (com.codeborne.selenide.Configuration.headless && !Boolean.getBoolean("neodymium.ai.interactive.allowHeadlessHUD"))
+        {
+            throw new RuntimeException("HUD prompted for manual user interaction (allowAutoSkip=" + allowAutoSkip + ", autoSkip=" + this.autoSkip + ") but the test is running in HEADLESS mode. Aborting execution to prevent hanging.");
         }
 
         LOG.info("Waiting for user action in HUD...");
@@ -1318,7 +1327,7 @@ public class AiAgent {
 
         // 3. Prepare Phase and LLM Check
         boolean requiresLlm = actions.isEmpty() && !visualMatchSucceeded;
-        boolean requiresScreenshot = screenshotBeforeAction;
+        boolean requiresScreenshot = Neodymium.aiConfiguration().agentScreenshotBeforeAction();
 
         if (!actions.isEmpty()) {
             for (final Action a : actions) {
@@ -1365,14 +1374,14 @@ public class AiAgent {
             return;
         }
 
-        boolean classifyEnabledVal = config.pesapClassifyEnabled();
+        boolean classifyEnabledVal = Neodymium.aiConfiguration().pesapClassifyEnabled();
         if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.classify.enabled"))
         {
             classifyEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.classify.enabled", classifyEnabledVal);
         }
         final boolean classifyEnabled = classifyEnabledVal;
 
-        boolean linterEnabledVal = config.pesapLinterEnabled();
+        boolean linterEnabledVal = Neodymium.aiConfiguration().pesapLinterEnabled();
         if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.linter.enabled"))
         {
             linterEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.linter.enabled", linterEnabledVal);
@@ -1482,7 +1491,7 @@ public class AiAgent {
             // 2. Semantic Linting Phase
             if (linterEnabled)
             {
-                final String customRules = CustomRulesLoader.loadCustomRules(config.pesapCustomFile());
+                final String customRules = CustomRulesLoader.loadCustomRules(Neodymium.aiConfiguration().pesapCustomFile());
                 final String linterPrompt = AiAgentPrompts.getPesapLinterPrompt(customRules);
 
                 LOG.debug("💬 [PESAP Linter] Sending prompt:\n\n=== SYSTEM PROMPT ===\n{}\n\n=== USER PROMPT ===\n{}", 
@@ -1655,7 +1664,7 @@ public class AiAgent {
                 // ignore and fall back
             }
         }
-        return maxRetries;
+        return Neodymium.aiConfiguration().agentMaxRetries();
     }
 
     private List<Action> getActionsFromLLM(final int stepIndex, final String instruction, final PlaybookStep playbookStep,

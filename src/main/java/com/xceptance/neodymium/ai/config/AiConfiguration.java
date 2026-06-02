@@ -135,6 +135,10 @@ public interface AiConfiguration extends Mutable
     @DefaultValue("false")
     public boolean aiInteractive();
 
+    @Key("neodymium.ai.interactive.autoSkip")
+    @DefaultValue("false")
+    public boolean aiInteractiveAutoSkip();
+
     @Key("neodymium.ai.plugins")
     @DefaultValue("")
     public List<String> aiPlugins();

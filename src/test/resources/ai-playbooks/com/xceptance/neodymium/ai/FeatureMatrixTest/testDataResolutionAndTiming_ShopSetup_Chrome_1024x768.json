@@ -7,7 +7,7 @@
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_u90fde\u0027]",
+          "target": "xc_u90fde",
           "value": [
             "Alice Cooper"
           ],
@@ -29,11 +29,11 @@
     },
     {
       "promptLine": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Found the \u0027Email Address\u0027 textbox using its data-neo-ref attribute and generated a TYPE action.",
+      "reasoning": "Found the \u0027Email Address\u0027 textbox by its accessibility name and data-neo-ref, then generated a TYPE action to input the specified email.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_f0d4sd\u0027]",
+          "target": "xc_f0d4sd",
           "value": [
             "alice@test.com"
           ],
@@ -78,11 +78,24 @@
     },
     {
       "promptLine": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
-      "reasoning": "The success indicator \u0027Account Registered!\u0027 is clearly visible in the provided screenshot, confirming the instruction visually.",
-      "actions": [],
-      "screenshotHash": "6c09020101010101016301010101010101010109010131097101010701018003",
+      "reasoning": "Found the element with id \u0027reg-status-success\u0027 containing the text \u0027Account Registered!\u0027 and created an ASSERT action to verify its visibility and content.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#reg-status-success",
+          "value": [
+            "Account Registered!"
+          ],
+          "description": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
+          "elementDetails": "Account Registered!",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "027E22AF16898F8C6BDB4E2213B80556:main",
+          "adjust": false
+        }
+      ],
       "expectedFailure": false,
-      "healedContextLevel": "VISUAL"
+      "healedContextLevel": "STANDARD"
     }
   ]
 }

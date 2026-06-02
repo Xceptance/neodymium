@@ -889,8 +889,16 @@
                 return '<li style="margin-bottom:3px; padding:2px; background:#444; cursor:pointer;" onclick="if(confirm(\'Rewind execution back to this step?\')) window.neoSubmitAction({ action: \'REWIND\', index: ' + index + ' });" title="Click to rewind">[' + index + '] ' + a + '</li>';
             }).join('');
         }
-    } else {
-        if (historyContainer) historyContainer.style.display = 'none';
+    }
+
+    // Hide HUD container permanently if auto-skip is enabled
+    var hudContainer = document.getElementById('neodymium-ai-hud-container');
+    if (hudContainer) {
+        if (autoSkip) {
+            hudContainer.style.display = 'none';
+        } else {
+            hudContainer.style.display = '';
+        }
     }
 
 })(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11], arguments[12], arguments[13], arguments[14]);

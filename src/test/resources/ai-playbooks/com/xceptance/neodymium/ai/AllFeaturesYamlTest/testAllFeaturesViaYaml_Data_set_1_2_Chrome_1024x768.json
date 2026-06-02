@@ -2,16 +2,16 @@
   "id": "com.xceptance.neodymium.ai.AllFeaturesYamlTest :: testAllFeaturesViaYaml :: Data set 1 / 2 :: Browser Chrome_1024x768",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43645/AuraGlanceTest/shop/index.html",
+      "promptLine": "Open http://localhost:41363/AuraGlanceTest/shop/index.html",
       "reasoning": "The instruction is to navigate to a URL, so a NAVIGATE action is used with the provided URL.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
-            "http://localhost:43645/AuraGlanceTest/shop/index.html"
+            "http://localhost:41363/AuraGlanceTest/shop/index.html"
           ],
-          "description": "Open http://localhost:43645/AuraGlanceTest/shop/index.html",
-          "elementDetails": "http://localhost:43645/AuraGlanceTest/shop/index.html",
+          "description": "Open http://localhost:41363/AuraGlanceTest/shop/index.html",
+          "elementDetails": "http://localhost:41363/AuraGlanceTest/shop/index.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -22,20 +22,20 @@
     },
     {
       "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
-      "reasoning": "Found the element with id \u0027aura-trigger\u0027 as specified in the hint and instruction, and created a CLICK action for it.",
+      "reasoning": "Clicked the element with id \u0027aura-trigger\u0027 as specified in the instruction and hint.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#aura-trigger",
-          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button",
-          "elementDetails": "Aura Defect Controls trigger button",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls",
           "elementContext": {
             "classes": "aura-controls-trigger",
             "id": "aura-trigger",
             "tagName": "div"
           },
           "replay": "",
-          "frameId": "D887B1112A1A6C1C7F38E6CBA967C03B:main",
+          "frameId": "2A100034FE5887DF8DB0C2C864CCF407:main",
           "adjust": false
         }
       ],
@@ -44,13 +44,13 @@
     },
     {
       "promptLine": "Click the \u0027Show Promo Banner\u0027 toggle to hide it. (hint: label[for\u003d\u0027toggle-banner\u0027])",
-      "reasoning": "Identified the \u0027Show Promo Banner\u0027 checkbox by its data-neo-ref attribute and generated a CLICK action.",
+      "reasoning": "The instruction asks to click the \u0027Show Promo Banner\u0027 toggle. I found a checkbox with the name \u0027Show Promo Banner Toggles optional marketing header.\u0027 and data-neo-ref \u0027xc_31bg3t\u0027. Since it\u0027s currently checked, clicking it will hide the banner as requested.",
       "actions": [
         {
           "type": "CLICK",
           "target": "[data-neo-ref\u003d\u0027xc_31bg3t\u0027]",
           "description": "Click the \u0027Show Promo Banner\u0027 toggle to hide it.",
-          "elementDetails": "Show Promo Banner checkbox",
+          "elementDetails": "Show Promo Banner",
           "elementContext": {
             "id": "toggle-banner",
             "tagName": "input",
@@ -65,13 +65,13 @@
     },
     {
       "promptLine": "Click \u0027Close Banner\u0027",
-      "reasoning": "The instruction is to click \u0027Close Banner\u0027. I identified a button with id \u0027aura-close\u0027 and text \u0027×\u0027 which is a common icon for closing elements like banners. This is the most appropriate element to click.",
+      "reasoning": "The instruction is to click \u0027Close Banner\u0027. Although there isn\u0027t an element with the exact text \u0027Close Banner\u0027, there is a button with the name \u0027×\u0027 (data-neo-ref\u003d\u0027xc_8am3xz\u0027). This is a common icon for closing banners, so I am assuming this is the intended element.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "#aura-close",
+          "target": "[data-neo-ref\u003d\u0027xc_8am3xz\u0027]",
           "description": "Click \u0027Close Banner\u0027",
-          "elementDetails": "aura-close button",
+          "elementDetails": "button with name ×",
           "elementContext": {
             "classes": "drawer-close",
             "text": "×",
@@ -80,16 +80,15 @@
             "type": "submit"
           },
           "replay": "",
-          "frameId": "D887B1112A1A6C1C7F38E6CBA967C03B:main",
           "adjust": false
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "LEAN"
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Observe page visual consistency (glance)",
-      "reasoning": "The page exhibits good visual consistency. The header navigation, main content block, and product cards all maintain a uniform design, color scheme, and layout. No visual inconsistencies or misalignments are apparent in the screenshot.",
+      "reasoning": "The page appears visually consistent. The header, main content, and product display sections are well-aligned, use a consistent color scheme, and the product images are uniformly presented. No visual inconsistencies were observed.",
       "actions": [],
       "screenshotHash": "8041000100017d012a817f015f817f01000108019a4398c338c798c33085718e",
       "expectedFailure": false,

@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
 
@@ -28,6 +29,7 @@ import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
  * 
  * @author AI-generated: Gemini 2.5 Flash
  */
+@Disabled("Manual utility server - do not run in automated test suites")
 public final class RunServerTest
 {
     @Test

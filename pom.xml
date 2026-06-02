@@ -57,6 +57,7 @@
 		<junit.jupiter.version>6.1.0-M1</junit.jupiter.version>
 		<junit.vintage.version>6.1.0-M1</junit.vintage.version>
 		<langchain4j.version>1.15.0</langchain4j.version>
+		<surefire.forkCount>4</surefire.forkCount>
 	</properties>
 
 	<build>
@@ -78,7 +79,7 @@
 					<systemPropertyVariables>
 						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
 					</systemPropertyVariables>
-					<forkCount>4</forkCount>
+					<forkCount>${surefire.forkCount}</forkCount>
 					<reuseForks>false</reuseForks>
 					<includes>
 						<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>

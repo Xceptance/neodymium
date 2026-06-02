@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Click the \u0027Trigger Subpage Event\u0027 button inside the iframe. (hint: #dashboard-btn)",
-      "reasoning": "The instruction asks to click a button inside an iframe. I found a button with the text \u0027Trigger Subpage Event\u0027 and id \u0027iframe-action-btn\u0027 within the specified iframe (frameId \u002741B9ADA99F4931DB8210A0194EF2DE44:main.0\u0027). The provided hint \u0027#dashboard-btn\u0027 did not match any element, so I used the actual id from the DOM.",
+      "reasoning": "The instruction asks to click a button inside an iframe. I located the button with the text \u0027Trigger Subpage Event\u0027 and id \u0027iframe-action-btn\u0027 within the specified iframe frameId \u0027E14D80979EC3284C7F1897A42F1574F6:main.0\u0027 and created a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
@@ -18,7 +18,7 @@
             "type": "submit"
           },
           "replay": "",
-          "frameId": "41B9ADA99F4931DB8210A0194EF2DE44:main.0",
+          "frameId": "E14D80979EC3284C7F1897A42F1574F6:main.0",
           "adjust": false
         }
       ],
@@ -27,11 +27,24 @@
     },
     {
       "promptLine": "Verify that the frame state indicator text \u0027Internal Frame State Updated Successfully!\u0027 is visible inside the iframe.",
-      "reasoning": "The instruction is to visually verify the presence of the text \u0027Internal Frame State Updated Successfully!\u0027 inside the iframe. Upon inspecting the provided screenshot, the text \u0027Internal Frame State Updated Successfully!\u0027 is clearly visible within the iframe, accompanied by a green checkmark. Therefore, the visual verification is successful.",
-      "actions": [],
-      "screenshotHash": "1929592d18430b41080101010101010101830183018301870183010301018083",
+      "reasoning": "Found the \u0027status-indicator\u0027 element inside the iframe with the specified text and created an ASSERT action.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#status-indicator",
+          "value": [
+            "Internal Frame State Updated Successfully!"
+          ],
+          "description": "Verify that the frame state indicator text \u0027Internal Frame State Updated Successfully!\u0027 is visible inside the iframe.",
+          "elementDetails": "status-indicator",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "E14D80979EC3284C7F1897A42F1574F6:main.0",
+          "adjust": false
+        }
+      ],
       "expectedFailure": false,
-      "healedContextLevel": "VISUAL"
+      "healedContextLevel": "STANDARD"
     }
   ]
 }

@@ -100,6 +100,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "true");
         Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive.autoSkip", "false");
         Neodymium.aiConfiguration().setProperty("neodymium.ai.agent.maxRetries", "0");
+        System.setProperty("neodymium.ai.interactive.allowHeadlessHUD", "true");
 
         // Increase Selenide timeout and enable headless mode for robust execution in headless Chrome
         originalTimeout = Configuration.timeout;
@@ -153,6 +154,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
         // Restore agent max retries default configuration
         Neodymium.aiConfiguration().setProperty("neodymium.ai.agent.maxRetries", "3");
+        System.clearProperty("neodymium.ai.interactive.allowHeadlessHUD");
     }
 
     private void runInteractiveInBg(final Runnable r)

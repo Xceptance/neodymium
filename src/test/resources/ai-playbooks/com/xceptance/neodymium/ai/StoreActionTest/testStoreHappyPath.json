@@ -1,0 +1,93 @@
+{
+  "id": "com.xceptance.neodymium.ai.StoreActionTest :: testStoreHappyPath",
+  "steps": [
+    {
+      "promptLine": "Capture the order ID value and save it as variable \u0027myOrderId\u0027.",
+      "reasoning": "The order ID is found in the element with id \u0027order-id\u0027. A STORE action is used to capture its value into the variable \u0027myOrderId\u0027.",
+      "actions": [
+        {
+          "type": "STORE",
+          "target": "#order-id",
+          "value": [
+            "myOrderId"
+          ],
+          "description": "Capture the order ID value",
+          "elementDetails": "order-id",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "6D3FDADCD718CBFE91EABE16F545EEB2:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Capture the price amount. Save it as variable \u0027myPrice\u0027 and store with adjustment.",
+      "reasoning": "Identified the price amount element by its ID \u0027price-amount\u0027 and created a STORE action to capture its text into the variable \u0027myPrice\u0027 with adjustment enabled.",
+      "actions": [
+        {
+          "type": "STORE",
+          "target": "#price-amount",
+          "value": [
+            "myPrice"
+          ],
+          "description": "Capture the price amount and store it as \u0027myPrice\u0027 with adjustment.",
+          "elementDetails": "14,96 €",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "6D3FDADCD718CBFE91EABE16F545EEB2:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Type the value of variable \u0027${myOrderId}\u0027 into the verify input field.",
+      "reasoning": "The instruction asks to type a variable\u0027s value into a specific input field. I identified the \u0027Verify Order ID:\u0027 textbox using its data-neo-ref attribute and created a TYPE action with the variable as its value.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "[data-neo-ref\u003d\u0027xc_kvumr8\u0027]",
+          "value": [
+            "ORD-987654"
+          ],
+          "description": "Type the value of variable \u0027${myOrderId}\u0027 into the verify input field.",
+          "elementDetails": "Verify Order ID: textbox",
+          "elementContext": {
+            "id": "input-target",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click on the \u0027Verify\u0027 button.",
+      "reasoning": "The instruction is to click the \u0027Verify\u0027 button. I found a button with the name \u0027Verify\u0027 and data-neo-ref \u0027xc_mgyrhu\u0027 in the AXTREE, which is a direct match.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_mgyrhu\u0027]",
+          "description": "Click on the \u0027Verify\u0027 button",
+          "elementDetails": "Verify",
+          "elementContext": {
+            "text": "Verify",
+            "id": "btn-verify",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}
