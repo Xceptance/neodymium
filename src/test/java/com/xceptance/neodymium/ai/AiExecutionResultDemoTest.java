@@ -165,7 +165,15 @@ public final class AiExecutionResultDemoTest
         };
 
         final AiMockResponse mockResponse = AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"Entering text\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#login\"}], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Entering text",
+                      "a": [{"t": "CLICK", "tg": "#login"}],
+                      "d": true
+                    }
+                    """)
                 .delayMs(10L)
                 .tokens(100L, 50L, 20L)
                 .build();
@@ -247,14 +255,30 @@ public final class AiExecutionResultDemoTest
 
         // 1. Initial LLM Response: CLICK button
         final AiMockResponse mockRes1 = AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"Initial click\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#btn\"}], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Initial click",
+                      "a": [{"t": "CLICK", "tg": "#btn"}],
+                      "d": true
+                    }
+                    """)
                 .delayMs(5L)
                 .tokens(80L, 40L, 0L)
                 .build();
         
         // 2. Second LLM Response (after healing/escalation): CLICK link instead
         final AiMockResponse mockRes2 = AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"Retry clicking link\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#link\"}], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Retry clicking link",
+                      "a": [{"t": "CLICK", "tg": "#link"}],
+                      "d": true
+                    }
+                    """)
                 .delayMs(5L)
                 .tokens(100L, 50L, 10L)
                 .build();
@@ -310,14 +334,31 @@ public final class AiExecutionResultDemoTest
 
         // Response 1: LLM directs context escalation to VISUAL
         final AiMockResponse mockRes1 = AiMockResponse.builder()
-                .responseText("{\"st\": \"ESCALATE\", \"r\": \"Need screenshot for verification\", \"tc\": \"VISUAL\", \"a\": [], \"d\": false}")
+                .responseText(
+                    """
+                    {
+                      "st": "ESCALATE",
+                      "r": "Need screenshot for verification",
+                      "tc": "VISUAL",
+                      "a": [],
+                      "d": false
+                    }
+                    """)
                 .delayMs(10L)
                 .tokens(60L, 30L, 0L)
                 .build();
 
         // Response 2: Success
         final AiMockResponse mockRes2 = AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"Verified visually\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#logo\"}], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Verified visually",
+                      "a": [{"t": "CLICK", "tg": "#logo"}],
+                      "d": true
+                    }
+                    """)
                 .delayMs(10L)
                 .tokens(120L, 40L, 20L)
                 .build();
@@ -420,21 +461,45 @@ public final class AiExecutionResultDemoTest
 
         // Mock response for "before"
         llmClient.addResponse(AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"SetupSut\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#setup\"}], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "SetupSut",
+                      "a": [{"t": "CLICK", "tg": "#setup"}],
+                      "d": true
+                    }
+                    """)
                 .delayMs(1L)
                 .tokens(10L, 5L, 0L)
                 .build());
 
         // Mock response for "steps"
         llmClient.addResponse(AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"RunSut\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#run\"}], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "RunSut",
+                      "a": [{"t": "CLICK", "tg": "#run"}],
+                      "d": true
+                    }
+                    """)
                 .delayMs(1L)
                 .tokens(20L, 10L, 0L)
                 .build());
 
         // Mock response for "after"
         llmClient.addResponse(AiMockResponse.builder()
-                .responseText("{\"s\": true, \"r\": \"TeardownSut\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#teardown\"}], \"d\": true}")
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "TeardownSut",
+                      "a": [{"t": "CLICK", "tg": "#teardown"}],
+                      "d": true
+                    }
+                    """)
                 .delayMs(1L)
                 .tokens(30L, 15L, 0L)
                 .build());
