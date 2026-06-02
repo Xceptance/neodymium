@@ -22,6 +22,8 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.ai.core.AiBrowser;
+import com.xceptance.neodymium.ai.core.AiExecutionResult;
+import com.xceptance.neodymium.ai.core.AiTestRunResult;
 import com.xceptance.neodymium.ai.generator.InteractiveHud;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookManager;
@@ -400,6 +402,18 @@ public class Neodymium
     public static void setAiBrowser(AiBrowser aiBrowser)
     {
         getContext().aiBrowser = aiBrowser;
+    }
+
+    public static AiExecutionResult getLastAiExecutionResult()
+    {
+        final AiBrowser ai = ai();
+        return ai == null ? null : ai.getLastExecutionResult();
+    }
+
+    public static AiTestRunResult getLastAiTestRunResult()
+    {
+        final AiBrowser ai = ai();
+        return ai == null ? null : ai.getLastTestRunResult();
     }
 
     /**
