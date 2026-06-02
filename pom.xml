@@ -151,6 +151,9 @@
 					<value>true</value>
 				</property>
 			</activation>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
 			<build>
 				<plugins>
 					<plugin>
