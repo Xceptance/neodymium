@@ -48,7 +48,11 @@ import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Rich offline integration tests validating the creation, populating, and caching
- * of the new AiExecutionResult and AiTestRunResult metrics and details.
+ * of the new {@link AiExecutionResult} and {@link AiTestRunResult} metrics and details.
+ * <p>
+ * This class demonstrates virtualized browserless testing by mocking the LLM API,
+ * DOM extraction, and browser action execution layers. It verifies self-healing retry logic,
+ * visual escalations, token delta auditing, template placeholder resolution, and lifecycle hook wrapping.
  *
  * // AI-generated: Gemini 3.5 Flash
  */
@@ -56,6 +60,11 @@ public final class AiExecutionResultDemoTest
 {
     private Map<String, String> originalSystemProperties;
 
+    /**
+     * Prepares the thread-local state and configuration system properties before each test.
+     * Backs up existing AI system configuration properties to restore them afterward,
+     * configures the mock LLM credentials, disables live PESAP calls, and cleanses the active test data.
+     */
     @BeforeEach
     public final void setup()
     {
@@ -97,6 +106,12 @@ public final class AiExecutionResultDemoTest
         }
     }
 
+    /**
+     * Verifies that the variable resolution system parses template placeholders 
+     * (e.g. {@code ${username}}) from the active TestData map, handles nested placeholders, 
+     * and compiles the precise details of every variable resolution (key, value, source, 
+     * localization status) into a lookup collector.
+     */
     @Test
     public final void testTemplateResolutionAndLookups()
     {
@@ -128,6 +143,13 @@ public final class AiExecutionResultDemoTest
         Assertions.assertEquals("TestData Map", fullNestedLookup.getSource());
     }
 
+    /**
+     * Validates browserless mock execution under standard success conditions.
+     * Uses a mock LLM client to return a mock JSON response containing click actions
+     * and specified token counts. Asserts that the final result aggregates these tokens,
+     * captures the step-level details (raw vs expanded instructions), tracks the executed actions, 
+     * records the HTTP response code (200), and registers lookup statistics.
+     */
     @Test
     public final void testOfflineMockSequenceAndTokenDeltas()
     {
@@ -193,6 +215,13 @@ public final class AiExecutionResultDemoTest
         }
     }
 
+    /**
+     * Verifies that if an action execution fails on the browser page context,
+     * the AI agent self-heals by escalating the detail level of the context prompt
+     * (from AXTREE to LEAN) and retrying. Asserts that the escalation details
+     * (fromLevel, toLevel, exception details) are captured in the execution result
+     * and that the retry count is logged as 1.
+     */
     @Test
     public final void testSelfHealingAndContextEscalation()
     {
@@ -259,6 +288,12 @@ public final class AiExecutionResultDemoTest
         }
     }
 
+    /**
+     * Verifies that when the LLM returns an explicit context escalation direction
+     * (e.g., status "ESCALATE" because of visual overlap issues), the agent shifts to the 
+     * requested context (e.g., VISUAL) and retries the instruction. Asserts that the 
+     * escalation details record this as LLM-requested along with the mock reasoning text.
+     */
     @Test
     public final void testLlmRequestedContextEscalation()
     {
@@ -308,6 +343,11 @@ public final class AiExecutionResultDemoTest
         }
     }
 
+    /**
+     * Verifies that when the LLM service returns HTTP communication failures (e.g., 429 Too Many Requests),
+     * the framework propagates the exception, preserves the HTTP status code, and captures the details
+     * in the execution result. Asserts that the step's overall outcome is marked as failed.
+     */
     @Test
     public final void testHttpExceptionPreservation()
     {
@@ -358,6 +398,12 @@ public final class AiExecutionResultDemoTest
         }
     }
 
+    /**
+     * Verifies the composition of before, steps, and after lifecycle execution stages
+     * inside a data-driven test run. Enqueues mock responses for all three phases and
+     * asserts that {@link AiTestRunResult} contains individual non-null results and
+     * maps the cumulative token usage across all lifecycle stages.
+     */
     @Test
     public final void testCompositeRunResult() throws Throwable
     {
