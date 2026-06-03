@@ -563,4 +563,68 @@ public final class AiExecutionResultDemoTest extends BaseAiOfflineTest
         Assertions.assertEquals("user@neodymium.com", lookup.getResolvedValue());
         Assertions.assertEquals("TestData Map", lookup.getSource()); // Asserts it resolved from standard test data scope
     }
+
+    /**
+     * Verifies the end-to-end Pre-Execution Static Analysis Phase (PESAP) flow
+     * when PESAP is enabled. It enqueues a mock classification response predicting
+     * LEAN for the step, followed by the mock action execution response.
+     * Asserts that the context level is correctly predicted, the step's details
+     * reflect the prediction, and the execution succeeds.
+     */
+    @Test
+    public final void testEndToEndPesapFlow()
+    {
+        // 1. Explicitly enable PESAP for this test run
+        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
+        Neodymium.getData().put("neodymium.ai.pesap.linter.enabled", "false");
+
+        // 2. Queue the PESAP classification mock response (LlmMode.PESAP query)
+        this.llmClient.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "predictions": {
+                        "0": "LEAN"
+                      }
+                    }
+                    """)
+                .tokens(50L, 25L, 0L)
+                .build());
+
+        // 3. Queue the AGENT execution mock response (LlmMode.AGENT query)
+        this.llmClient.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Success",
+                      "a": [{"t": "CLICK", "tg": "#btn"}],
+                      "d": true
+                    }
+                    """)
+                .tokens(100L, 50L, 0L)
+                .build());
+
+        // 4. Run the execution
+        final AiExecutionResult result = this.mockBrowser.execute("Click standard button");
+
+        // 5. Assertions
+        Assertions.assertNotNull(result);
+        Assertions.assertTrue(result.isSuccess());
+        
+        // PESAP token tracking assertions
+        Assertions.assertEquals(50L, result.getPesapInputTokens());
+        Assertions.assertEquals(25L, result.getPesapOutputTokens());
+        Assertions.assertEquals(75L, result.getPesapTotalTokens());
+
+        // Agent execution token tracking assertions
+        Assertions.assertEquals(100L, result.getInputTokens());
+        Assertions.assertEquals(50L, result.getOutputTokens());
+
+        // Steps and predicted ContextLevel assertions
+        Assertions.assertEquals(1, result.getSteps().size());
+        final StepDetails step = result.getSteps().get(0);
+        Assertions.assertEquals("Click standard button", step.getRawInstruction());
+        Assertions.assertEquals(ContextLevel.LEAN, step.getPesapPredictedContextLevel());
+    }
 }
