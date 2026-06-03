@@ -25,7 +25,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.List;
 
@@ -60,6 +62,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
     private volatile Throwable bgThrowable = null;
     private long originalTimeout;
     private boolean originalHeadless;
+    private File tempSourceFile;
 
     @BeforeAll
     public static void enableInteractiveMode()
@@ -94,7 +97,18 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.setAiPlaybook(null);
         Neodymium.setInteractiveHud(null);
         Neodymium.getData().clear();
-        Neodymium.setTestdataSourceFile("dummy-test.yml");
+        final File masterFile = new File("src/test/resources/dummy-test.yml");
+        try
+        {
+            this.tempSourceFile = File.createTempFile("temp-dummy-test-", ".yml", new File("target"));
+            Files.copy(masterFile.toPath(), this.tempSourceFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
+        catch (final IOException e)
+        {
+            throw new RuntimeException("Failed to copy master dummy-test.yml", e);
+        }
+
+        Neodymium.getData().put("neodymium.sourceFile", this.tempSourceFile.getAbsolutePath());
 
         // Force config properties to prevent caching issues across test classes
         Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "true");
@@ -150,6 +164,11 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         catch (final Exception e)
         {
             // Ignore
+        }
+
+        if (this.tempSourceFile != null && this.tempSourceFile.exists())
+        {
+            this.tempSourceFile.delete();
         }
 
         // Restore agent max retries default configuration
