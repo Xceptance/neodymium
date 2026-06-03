@@ -211,7 +211,8 @@ public class JavaMethodAction implements AiActionPlugin
         }
 
         final String methodName = target;
-        final Object[] param = action.getValues().toArray();
+        final List<String> values = action.getValues();
+        final Object[] param = values != null ? values.toArray() : new Object[0];
 
         LOG.debug("JAVA_METHOD: method='{}', param='{}'", methodName, param);
 
