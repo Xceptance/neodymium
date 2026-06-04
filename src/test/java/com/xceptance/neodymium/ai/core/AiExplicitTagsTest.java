@@ -27,7 +27,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -190,7 +192,8 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class
+            List.class, String.class, List.class, Integer.class, String.class,
+            StepDetails.class, AiExecutionResult.class
         );
         executeStepMethod.setAccessible(true);
 
@@ -198,7 +201,8 @@ public final class AiExplicitTagsTest
             agent,
             0, "Click element", false, null,
             false, 500L,
-            new ArrayList<String>(), prompt, new ArrayList<String>(), null, null
+            new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
+            new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
         );
 
         assertEquals(1, recordedTimeouts.size());
@@ -241,7 +245,8 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class
+            List.class, String.class, List.class, Integer.class, String.class,
+            StepDetails.class, AiExecutionResult.class
         );
         executeStepMethod.setAccessible(true);
 
@@ -251,7 +256,8 @@ public final class AiExplicitTagsTest
                 agent,
                 0, "Click element", false, null,
                 false, 2000L,
-                new ArrayList<String>(), prompt, new ArrayList<String>(), null, null
+                new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
+                new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
             );
         }
         catch (final Exception e)
@@ -295,7 +301,8 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class
+            List.class, String.class, List.class, Integer.class, String.class,
+            StepDetails.class, AiExecutionResult.class
         );
         executeStepMethod.setAccessible(true);
 
@@ -304,7 +311,8 @@ public final class AiExplicitTagsTest
             agent,
             0, "Click element", false, null,
             true, null,
-            new ArrayList<String>(), prompt, new ArrayList<String>(), null, null
+            new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
+            new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
         );
 
         // Verify the step was handled as optional and saved to playbook step
@@ -340,7 +348,8 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class
+            List.class, String.class, List.class, Integer.class, String.class,
+            StepDetails.class, AiExecutionResult.class
         );
         executeStepMethod.setAccessible(true);
 
@@ -349,7 +358,8 @@ public final class AiExplicitTagsTest
             agent,
             0, "Verify text", false, null,
             true, null,
-            new ArrayList<String>(), prompt, new ArrayList<String>(), null, null
+            new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
+            new StepDetails("Verify text"), new AiExecutionResult(new HashMap<>())
         );
 
         assertEquals("Verify text", pbStep.getPromptLine(), "Expected prompt line to be 'Verify text', but got: '" + pbStep.getPromptLine() + "'");
@@ -384,7 +394,8 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class
+            List.class, String.class, List.class, Integer.class, String.class,
+            StepDetails.class, AiExecutionResult.class
         );
         executeStepMethod.setAccessible(true);
 
@@ -393,7 +404,8 @@ public final class AiExplicitTagsTest
             agent,
             0, "Click element", false, null,
             true, null,
-            new ArrayList<String>(), prompt, new ArrayList<String>(), null, null
+            new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
+            new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
         );
 
         assertEquals("Click element", pbStep.getPromptLine(), "Expected prompt line to be 'Click element', but got: '" + pbStep.getPromptLine() + "'");
@@ -430,7 +442,7 @@ public final class AiExplicitTagsTest
 
         final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
             "runPesap",
-            List.class, List.class, String.class
+            List.class, List.class, String.class, AiExecutionResult.class
         );
         runPesapMethod.setAccessible(true);
 
@@ -438,7 +450,7 @@ public final class AiExplicitTagsTest
         final List<Integer> lines = List.of(10);
 
         // This should run successfully and set predictions.get(0) to ContextLevel.LEAN
-        runPesapMethod.invoke(agent, steps, lines, "test.yaml");
+        runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
 
         final Field pesapPredictionsField = AiAgent.class.getDeclaredField("pesapPredictions");
         pesapPredictionsField.setAccessible(true);
@@ -472,7 +484,7 @@ public final class AiExplicitTagsTest
 
         final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
             "runPesap",
-            List.class, List.class, String.class
+            List.class, List.class, String.class, AiExecutionResult.class
         );
         runPesapMethod.setAccessible(true);
 
@@ -480,7 +492,7 @@ public final class AiExplicitTagsTest
         final List<Integer> lines = List.of(10);
 
         // This should not crash, it should just log the error and proceed (bypassing PESAP predictions)
-        runPesapMethod.invoke(agent, steps, lines, "test.yaml");
+        runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
 
         final Field pesapPredictionsField = AiAgent.class.getDeclaredField("pesapPredictions");
         pesapPredictionsField.setAccessible(true);
@@ -515,7 +527,7 @@ public final class AiExplicitTagsTest
 
         final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
             "runPesap",
-            List.class, List.class, String.class
+            List.class, List.class, String.class, AiExecutionResult.class
         );
         runPesapMethod.setAccessible(true);
 
@@ -523,7 +535,7 @@ public final class AiExplicitTagsTest
         final List<Integer> lines = List.of(10, 11, 12);
 
         // This should recover the first two predictions using regex fallback
-        runPesapMethod.invoke(agent, steps, lines, "test.yaml");
+        runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
 
         final Field pesapPredictionsField = AiAgent.class.getDeclaredField("pesapPredictions");
         pesapPredictionsField.setAccessible(true);
@@ -577,14 +589,14 @@ public final class AiExplicitTagsTest
 
             final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
                 "runPesap",
-                List.class, List.class, String.class
+                List.class, List.class, String.class, AiExecutionResult.class
             );
             runPesapMethod.setAccessible(true);
 
             final List<String> steps = List.of("Click button");
             final List<Integer> lines = List.of(10);
 
-            runPesapMethod.invoke(agent, steps, lines, "test.yaml");
+            runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
 
             final Field pesapPredictionsField = AiAgent.class.getDeclaredField("pesapPredictions");
             pesapPredictionsField.setAccessible(true);
@@ -645,14 +657,14 @@ public final class AiExplicitTagsTest
 
             final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
                 "runPesap",
-                List.class, List.class, String.class
+                List.class, List.class, String.class, AiExecutionResult.class
             );
             runPesapMethod.setAccessible(true);
 
             final List<String> steps = List.of("Click button");
             final List<Integer> lines = List.of(10);
 
-            runPesapMethod.invoke(agent, steps, lines, "test.yaml");
+            runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
 
             final Field pesapPredictionsField = AiAgent.class.getDeclaredField("pesapPredictions");
             pesapPredictionsField.setAccessible(true);
@@ -712,14 +724,14 @@ public final class AiExplicitTagsTest
 
             final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
                 "runPesap",
-                List.class, List.class, String.class
+                List.class, List.class, String.class, AiExecutionResult.class
             );
             runPesapMethod.setAccessible(true);
 
             final List<String> steps = List.of("Click button");
             final List<Integer> lines = List.of(10);
 
-            runPesapMethod.invoke(agent, steps, lines, "test.yaml");
+            runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
 
             assertEquals(0, classifyCallCount.get());
             assertEquals(0, linterCallCount.get());
@@ -756,14 +768,14 @@ public final class AiExplicitTagsTest
 
         final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
             "runPesap",
-            List.class, List.class, String.class
+            List.class, List.class, String.class, AiExecutionResult.class
         );
         runPesapMethod.setAccessible(true);
 
         final List<String> steps = List.of("Click button", "Verify text");
         final List<Integer> lines = List.of(10, 11);
 
-        runPesapMethod.invoke(agent, steps, lines, "test.yaml");
+        runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
 
         final String expectedPrompt = "## Test Steps\n0: Click button\n1: Verify text\n";
         assertEquals(expectedPrompt, capturedUserPrompt.get());
