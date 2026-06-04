@@ -350,6 +350,10 @@ public final class AiActionSequenceTest
 ### Recipe 4: Asserting Template Variable Lookups
 Assert that instructions containing dynamic placeholders resolve variables from the correct, authorized scope sources.
 
+> [!NOTE]
+> **Resolution Precedence & Case Sensitivity:**
+> Template variables/placeholders (e.g., `${username}`) are resolved **case-insensitively**. However, if there are multiple keys in the `TestData` map differing only by case (e.g. both `username` and `userName` are defined), Neodymium prioritizes the **exact case-sensitive match** first, falling back to a case-insensitive match only if no exact match is found.
+
 ```java
 // AI-generated: Gemini 2.5 Flash
 // GNU AGPLv3 License

@@ -370,13 +370,21 @@ public class AiBrowser implements AutoCloseable {
         String value = null;
         String source = "Not Found";
 
-        // 1. Try to find the exact value (ignoring case)
-        final java.util.Optional<Map.Entry<String, String>> entryOpt = testData.entrySet().stream()
-                .filter(entry -> entry.getKey().equalsIgnoreCase(placeholderKey))
-                .findFirst();
-        if (entryOpt.isPresent()) {
-            value = entryOpt.get().getValue();
+        // 1. Try to find the exact value (case-sensitive)
+        if (testData.containsKey(placeholderKey)) {
+            value = testData.get(placeholderKey);
             source = "TestData Map";
+        }
+
+        // 1b. Try to find the value case-insensitively if not found exactly
+        if (value == null) {
+            final java.util.Optional<Map.Entry<String, String>> entryOpt = testData.entrySet().stream()
+                    .filter(entry -> entry.getKey().equalsIgnoreCase(placeholderKey))
+                    .findFirst();
+            if (entryOpt.isPresent()) {
+                value = entryOpt.get().getValue();
+                source = "TestData Map";
+            }
         }
 
         // 2. Try nested resolution via JSONPath if applicable
