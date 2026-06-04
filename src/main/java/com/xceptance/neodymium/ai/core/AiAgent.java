@@ -406,7 +406,7 @@ public class AiAgent {
                         {
                             // If the user chooses to rewind, edit, or add during the final prompt,
                             // we update the loop index 'i' and continue from the new position
-                            i = processHudActionException(e, i, stepsList, performedInstructions, stepLines);
+                            i = processHudActionException(e, i, stepsList, performedInstructions, stepLines, result);
                             if (i < -1)
                             {
                                 break;
@@ -541,7 +541,7 @@ public class AiAgent {
                 }
                 catch (final HudActionException e)
                 {
-                    i = processHudActionException(e, i, stepsList, performedInstructions, stepLines);
+                    i = processHudActionException(e, i, stepsList, performedInstructions, stepLines, result);
                     if (i < -1)
                     {
                         break;
@@ -2323,7 +2323,7 @@ public class AiAgent {
      */
     private int processHudActionException(final HudActionException e, final int i,
             final List<String> stepsList, final List<String> performedInstructions,
-            final List<Integer> stepLines)
+            final List<Integer> stepLines, final AiExecutionResult result)
     {
         if (HudActionType.REWIND == e.actionType)
         {
@@ -2352,6 +2352,10 @@ public class AiAgent {
             if (i >= 0 && i <= stepLines.size())
             {
                 stepLines.add(i, null);
+            }
+            if (result != null && result.getSteps().size() >= i)
+            {
+                result.getSteps().add(i, new StepDetails(newInstr));
             }
 
             final Playbook playbook = Neodymium.getAiPlaybook();
@@ -2385,6 +2389,10 @@ public class AiAgent {
             {
                 stepLines.set(i, null);
             }
+            if (result != null && result.getSteps().size() > i)
+            {
+                result.getSteps().set(i, new StepDetails(editInstr));
+            }
 
             final Playbook playbook = Neodymium.getAiPlaybook();
             if (playbook != null && playbook.getSteps().size() > i)
@@ -2416,6 +2424,10 @@ public class AiAgent {
             if (i >= 0 && i < stepLines.size())
             {
                 stepLines.remove(i);
+            }
+            if (result != null && result.getSteps().size() > i)
+            {
+                result.getSteps().remove(i);
             }
             return i - 1;
         }
