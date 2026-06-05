@@ -65,7 +65,7 @@ public interface AiConfiguration extends Mutable
     public boolean pesapClassifyEnabled();
 
     @Key("neodymium.ai.pesap.linter.enabled")
-    @DefaultValue("true")
+    @DefaultValue("false")
     public boolean pesapLinterEnabled();
 
     /**
