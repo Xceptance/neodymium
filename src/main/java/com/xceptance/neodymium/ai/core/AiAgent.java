@@ -196,7 +196,7 @@ public class AiAgent {
         // Re-read dynamically cached autoSkip field from the newly reloaded configuration
         this.autoSkip = Neodymium.aiConfiguration().aiInteractiveAutoSkip();
 
-        if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey())) {
+        if (!Boolean.getBoolean("neodymium.ai.offline") && StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey())) {
             Assertions.fail(
                     "AI API key not configured. Set in your ai.properties, neodymium.properties or as an evironment variable.");
         }
@@ -776,6 +776,10 @@ public class AiAgent {
 
                 if (expectedFailure)
                 {
+                    if (isInteractive)
+                    {
+                        promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                    }
                     handleExpectedFailure(playbook.getCurrentStep(), instruction, unresolvedInstruction, bugId, e, playbook);
                     return;
                 }
@@ -903,6 +907,10 @@ public class AiAgent {
                 final PlaybookStep step = playbook.getCurrentStep();
                 if (expectedFailure)
                 {
+                    if (isInteractive)
+                    {
+                        promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                    }
                     handleExpectedFailure(step, instruction, unresolvedInstruction, bugId, e, playbook);
                     return;
                 }
@@ -1002,6 +1010,10 @@ public class AiAgent {
                 final PlaybookStep step = playbook.getCurrentStep();
                 if (expectedFailure)
                 {
+                    if (isInteractive)
+                    {
+                        promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                    }
                     handleExpectedFailure(step, instruction, unresolvedInstruction, bugId, e, playbook);
                     return;
                 }
@@ -1326,6 +1338,11 @@ public class AiAgent {
 
         // 1. Are we replaying a playbook?
         if (playbook.isRecording() == false || (step.getPromptLine() != null && step.getPromptLine().equals(instruction) && !step.getActions().isEmpty() && !step.failed())) {
+            if (playbook.isRecording() == false && step.isExpectedFailure() && Boolean.getBoolean("neodymium.ai.offline"))
+            {
+                final String errorMsg = step.getExpectedErrorMessage() != null ? step.getExpectedErrorMessage() : "Recorded expected failure";
+                throw new ActionExecutionException(errorMsg, null);
+            }
             // Only if we are not trying to heal a step
             if (step.failed() == false) {
                 // Check if the prompt is still the same, or if we are at the end of the
@@ -1442,6 +1459,11 @@ public class AiAgent {
     private void runPesap(final List<String> stepsList, final List<Integer> stepLines, final String sourceFileVal, final AiExecutionResult result)
     {
         if (stepsList.isEmpty())
+        {
+            return;
+        }
+
+        if (Boolean.getBoolean("neodymium.ai.offline"))
         {
             return;
         }
@@ -1760,6 +1782,11 @@ public class AiAgent {
             final String bugId, final List<Action> accumulatedActions,
             final StepDetails stepDetails, final AiExecutionResult result)
     {
+        if (Boolean.getBoolean("neodymium.ai.offline"))
+        {
+            throw new ActionExecutionException("Cannot query LLM client to self-heal in offline mode.", null);
+        }
+
         // If we are inside a playbook replay and failed, we have an initial error
         // already.
         String lastError;
@@ -2174,6 +2201,26 @@ public class AiAgent {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Thread was interrupted, halting agent execution.", e);
         }
+    }
+
+    private void promptUserOnExpectedFailure(final String instruction, final String unresolvedInstruction,
+            final List<String> futureInstructions, final List<String> performedInstructions, final Throwable t)
+            throws HudActionException
+    {
+        if (this.autoSkip)
+        {
+            return;
+        }
+        final List<String> plannedStrs = new ArrayList<>();
+        plannedStrs.add("⚠️ " + instruction);
+        if (futureInstructions != null)
+        {
+            plannedStrs.addAll(futureInstructions);
+        }
+        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                "Expected failure/defect detected: " + t.getMessage(), false);
+        waitForHudAction(false);
     }
 
     /**
