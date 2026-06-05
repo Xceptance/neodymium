@@ -649,25 +649,49 @@ public class PageAnalyzer
             }
         }
 
-        org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
-        String currentWindow = driver.getWindowHandle();
+        final org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
+        final String currentWindow = driver.getWindowHandle();
         
-        try {
-            java.util.Set<String> windowHandles = driver.getWindowHandles();
-            for (String windowHandle : windowHandles) {
+        boolean showFrameId = true;
+        try
+        {
+            final java.util.Set<String> windowHandles = driver.getWindowHandles();
+            if (windowHandles.size() == 1 && com.codeborne.selenide.Selenide.$$("iframe, frame").isEmpty())
+            {
+                showFrameId = false;
+            }
+        }
+        catch (final Exception e)
+        {
+            // fallback
+        }
+
+        try
+        {
+            final java.util.Set<String> windowHandles = driver.getWindowHandles();
+            for (final String windowHandle : windowHandles)
+            {
                 driver.switchTo().window(windowHandle);
                 dom.append("=== Window: ").append(windowHandle).append(" ===\n");
                 dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
                 dom.append("Title: ").append(driver.getTitle()).append("\n\n");
-                captureFrameTree(dom, level, windowHandle, "main");
+                captureFrameTree(dom, level, windowHandle, "main", showFrameId);
             }
-        } catch (Exception e) {
+        }
+        catch (final Exception e)
+        {
             LOG.warn("Error capturing full frame tree: {}", e.getMessage());
-        } finally {
-            try {
+        }
+        finally
+        {
+            try
+            {
                 driver.switchTo().window(currentWindow);
                 driver.switchTo().defaultContent();
-            } catch (Exception e) {}
+            }
+            catch (final Exception e)
+            {
+            }
         }
 
         final String result = dom.toString();
@@ -679,20 +703,36 @@ public class PageAnalyzer
     }
 
     @SuppressWarnings("unchecked")
-    private void captureFrameTree(StringBuilder dom, ContextLevel level, String windowHandle, String framePath) {
-        String frameId = windowHandle + ":" + framePath;
-        try {
+    private void captureFrameTree(final StringBuilder dom, final ContextLevel level, final String windowHandle, final String framePath, final boolean showFrameId)
+    {
+        final String frameId = windowHandle + ":" + framePath;
+        try
+        {
             final Map<String, Object> data = (Map<String, Object>) com.codeborne.selenide.Selenide
                                                                                                   .executeJavaScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent());
             // Render element sections
             final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");
-            if (sections != null) {
-                for (final Map<String, Object> section : sections) {
+            if (sections != null)
+            {
+                for (final Map<String, Object> section : sections)
+                {
                     final List<Map<String, Object>> elements = (List<Map<String, Object>>) section.get("elements");
-                    if (elements != null && !elements.isEmpty()) {
-                        dom.append(section.get("heading")).append(" (Frame: ").append(frameId).append(")\n");
-                        for (final Map<String, Object> el : elements) {
-                            el.put("frameId", frameId);
+                    if (elements != null && !elements.isEmpty())
+                    {
+                        if (showFrameId)
+                        {
+                            dom.append(section.get("heading")).append(" (Frame: ").append(frameId).append(")\n");
+                        }
+                        else
+                        {
+                            dom.append(section.get("heading")).append("\n");
+                        }
+                        for (final Map<String, Object> el : elements)
+                        {
+                            if (showFrameId)
+                            {
+                                el.put("frameId", frameId);
+                            }
                             dom.append("  ");
                             formatElement(dom, el);
                         }
@@ -702,18 +742,47 @@ public class PageAnalyzer
 
             // Render forms
             final List<Map<String, Object>> forms = (List<Map<String, Object>>) data.get("forms");
-            if (forms != null && !forms.isEmpty()) {
-                dom.append("\n=== Forms === (Frame: ").append(frameId).append(")\n");
-                for (final Map<String, Object> form : forms) {
-                    dom.append(String.format("  [form] id='%s' action='%s' data-neo-ref='%s' frameId='%s'\n",
-                                             form.get("id"), form.get("action"), form.get("automationId"), frameId));
+            if (forms != null && !forms.isEmpty())
+            {
+                if (showFrameId)
+                {
+                    dom.append("\n=== Forms === (Frame: ").append(frameId).append(")\n");
+                }
+                else
+                {
+                    dom.append("\n=== Forms ===\n");
+                }
+                for (final Map<String, Object> form : forms)
+                {
+                    if (showFrameId)
+                    {
+                        dom.append(String.format("  [form] id='%s' action='%s' data-neo-ref='%s' frameId='%s'\n",
+                                                 form.get("id"), form.get("action"), form.get("automationId"), frameId));
+                    }
+                    else
+                    {
+                        dom.append(String.format("  [form] id='%s' action='%s' data-neo-ref='%s'\n",
+                                                 form.get("id"), form.get("action"), form.get("automationId")));
+                    }
                     final List<Map<String, Object>> fields = (List<Map<String, Object>>) form.get("fields");
-                    if (fields != null) {
-                        for (final Map<String, Object> field : fields) {
-                            dom.append(String.format(
-                                                 "    [form-field] type='%s' name='%s' id='%s' data-neo-ref='%s' frameId='%s'",
-                                                 field.get("type"), field.get("name"), field.get("id"), field.get("automationId"), frameId));
-                            if (field.containsKey("options")) {
+                    if (fields != null)
+                    {
+                        for (final Map<String, Object> field : fields)
+                        {
+                            if (showFrameId)
+                            {
+                                dom.append(String.format(
+                                                     "    [form-field] type='%s' name='%s' id='%s' data-neo-ref='%s' frameId='%s'",
+                                                     field.get("type"), field.get("name"), field.get("id"), field.get("automationId"), frameId));
+                            }
+                            else
+                            {
+                                dom.append(String.format(
+                                                     "    [form-field] type='%s' name='%s' id='%s' data-neo-ref='%s'",
+                                                     field.get("type"), field.get("name"), field.get("id"), field.get("automationId")));
+                            }
+                            if (field.containsKey("options"))
+                            {
                                 dom.append(String.format(" options='[%s]'", field.get("options")));
                             }
                             dom.append("\n");
@@ -723,25 +792,33 @@ public class PageAnalyzer
             }
             
             // Now recursively process iframes in this frame
-            com.codeborne.selenide.ElementsCollection frames = com.codeborne.selenide.Selenide.$$("iframe, frame");
-            for (int i = 0; i < frames.size(); i++) {
-                try {
+            final com.codeborne.selenide.ElementsCollection frames = com.codeborne.selenide.Selenide.$$("iframe, frame");
+            for (int i = 0; i < frames.size(); i++)
+            {
+                try
+                {
                     com.codeborne.selenide.Selenide.switchTo().frame(frames.get(i));
-                    captureFrameTree(dom, level, windowHandle, framePath + "." + i);
+                    captureFrameTree(dom, level, windowHandle, framePath + "." + i, showFrameId);
                     com.codeborne.selenide.Selenide.switchTo().parentFrame();
-                } catch (Exception e) {
+                }
+                catch (final Exception e)
+                {
                     LOG.debug("Could not switch to frame {}: {}", i, e.getMessage());
                     com.codeborne.selenide.Selenide.switchTo().defaultContent();
                     // Recover path
-                    if (!"main".equals(framePath)) {
-                        String[] indices = framePath.substring(5).split("\\."); // remove "main."
-                        for (String indexStr : indices) {
+                    if (!"main".equals(framePath))
+                    {
+                        final String[] indices = framePath.substring(5).split("\\."); // remove "main."
+                        for (final String indexStr : indices)
+                        {
                             com.codeborne.selenide.Selenide.switchTo().frame(Integer.parseInt(indexStr));
                         }
                     }
                 }
             }
-        } catch (Exception e) {
+        }
+        catch (final Exception e)
+        {
             LOG.warn("Failed to capture DOM for frame {}: {}", frameId, e.getMessage());
         }
     }
