@@ -1,0 +1,64 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.TimingAndResilienceTest :: testTableSorting :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html"
+          ],
+          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the \u0027Price\u0027 header column link to sort.",
+      "reasoning": "The instruction asks to click the \u0027Price\u0027 header column link. I found a link with the name \u0027Price ▾\u0027 and data-neo-ref \u0027xc_lkfgoz\u0027 which is the most appropriate element to click.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_lkfgoz\u0027]",
+          "description": "Click the \u0027Price\u0027 header column link to sort.",
+          "elementDetails": "Price ▾",
+          "elementContext": {
+            "text": "Price ▾",
+            "id": "sort-price",
+            "href": "https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html#",
+            "tagName": "a"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the price in the first table row displays $4.99.",
+      "reasoning": "The instruction is to verify the price in the first table row. I found an element with data-neo-ref \u0027xc_3i41wj\u0027 that contains the text \u0027$4.99\u0027, which matches the instruction.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "[data-neo-ref\u003d\u0027xc_3i41wj\u0027]",
+          "value": [
+            "$4.99"
+          ],
+          "description": "Verify that the price in the first table row displays $4.99.",
+          "elementDetails": "$4.99",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

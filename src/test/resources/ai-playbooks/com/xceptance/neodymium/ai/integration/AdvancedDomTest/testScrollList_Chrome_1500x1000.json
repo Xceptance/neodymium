@@ -1,0 +1,65 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.AdvancedDomTest :: testScrollList :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/scroll-list.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "https://localhost:39389/AuraGlanceTest/shop/sandbox/scroll-list.html"
+          ],
+          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/scroll-list.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Scroll down the container list viewport.",
+      "reasoning": "The instruction is to scroll down the \u0027container list viewport\u0027. Based on the DOM, the element with id \u0027scroll-container\u0027 is identified as the scrollable container. The SCROLL action is used with \u0027bottom\u0027 as the value to scroll to the end of this container.",
+      "actions": [
+        {
+          "type": "SCROLL",
+          "target": "#scroll-container",
+          "value": [
+            "bottom"
+          ],
+          "description": "Scroll down the container list viewport to the bottom",
+          "elementDetails": "scroll-container",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Click the \u0027Unlock Achievement\u0027 button.",
+      "reasoning": "Found the \u0027Unlock Achievement\u0027 button by its data-neo-ref attribute and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_prlt7p\u0027]",
+          "description": "Click the \u0027Unlock Achievement\u0027 button",
+          "elementDetails": "Unlock Achievement",
+          "elementContext": {
+            "classes": "aura-btn",
+            "text": "Unlock Achievement",
+            "id": "hidden-target-btn",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}
