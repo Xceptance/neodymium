@@ -97,7 +97,7 @@ public interface AiConfiguration extends Mutable
 
 
     @Key("neodymium.ai.temperature")
-    @DefaultValue("0.1")
+    @DefaultValue("0.0")
     public double aiTemperature();
 
     @Key("neodymium.ai.generate")
