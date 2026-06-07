@@ -1,0 +1,68 @@
+{
+  "id": "com.xceptance.neodymium.ai.sandbox.AuraSandboxScenariosTest :: testFloatingLabels :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/floating-labels.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "https://localhost:39389/AuraGlanceTest/shop/sandbox/floating-labels.html"
+          ],
+          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/floating-labels.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the red button to simulate autofill.",
+      "reasoning": "The instruction asks to click the \u0027red button to simulate autofill\u0027. I found a button with the text \u0027Simulate Browser Autofill\u0027 and clicked it.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_pe4wp9\u0027]",
+          "description": "Click the button to simulate autofill",
+          "elementDetails": "Simulate Browser Autofill",
+          "elementContext": {
+            "classes": "aura-btn",
+            "text": "Simulate Browser Autofill",
+            "id": "btn-autofill",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the green button to fix the label overlap.",
+      "reasoning": "Identified the \u0027Fix Label Overlap\u0027 button by its name and data-neo-ref attribute and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_aqq9al\u0027]",
+          "description": "Click the button to fix label overlap",
+          "elementDetails": "Fix Label Overlap",
+          "elementContext": {
+            "classes": "aura-btn",
+            "text": "Fix Label Overlap",
+            "id": "btn-fix",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

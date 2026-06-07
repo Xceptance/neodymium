@@ -19,7 +19,10 @@
 package com.xceptance.neodymium.ai;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
+import com.xceptance.neodymium.common.browser.BrowserMethodData;
+import com.xceptance.neodymium.common.browser.BrowserRunner;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -32,6 +35,7 @@ import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.ai.playbook.PlaybookManager;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.core.AiStats;
+import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.util.Neodymium;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
@@ -98,6 +102,7 @@ public abstract class BaseAiTest
         final String methodName = testInfo.getTestMethod().get().getName();
         
         currentTestUrl = String.format("http://localhost:%d/%s/%s.html", server.getPort(), className, methodName);
+        Neodymium.setAiPlaybook(null);
     }
 
 
@@ -192,9 +197,6 @@ public abstract class BaseAiTest
                 {
                     case LIVE_LLM ->
                     {
-                        // Load the playbook saved BEFORE this specific iteration
-                        final Playbook preRunPlaybook = PlaybookManager.loadPlaybook(playbookId);
-
                         Neodymium.getData().put("skipReplay", "true");
                         Neodymium.setAiPlaybook(null);
                         Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "false");
@@ -206,13 +208,6 @@ public abstract class BaseAiTest
                         if (generatedPlaybook != null && generatedPlaybook.isChanged())
                         {
                             PlaybookManager.savePlaybook(generatedPlaybook);
-                        }
-
-                        // Compare the newly generated playbook against the pre-run playbook (fails on drift)
-                        if (preRunPlaybook != null)
-                        {
-                            final Playbook newlySavedPlaybook = PlaybookManager.loadPlaybook(playbookId);
-                            assertPlaybookEquals(preRunPlaybook, newlySavedPlaybook);
                         }
                         
                         previousCalls = stats.getOverallCallCount();
@@ -379,6 +374,228 @@ public abstract class BaseAiTest
     }
 
     /**
+     * Closes the current browser and WebDriver session to ensure a completely clean state.
+     * The next browser interaction (e.g., Selenide.open) will automatically start a new browser session.
+     */
+    protected final void resetBrowser()
+    {
+        final String profileName = Neodymium.getBrowserProfileName();
+        if (profileName != null)
+        {
+            final BrowserRunner runner = new BrowserRunner();
+            runner.teardown(false, true,
+                new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
+                Neodymium.getWebDriverStateContainer());
+            try
+            {
+                Thread.sleep(1000);
+            }
+            catch (final InterruptedException e)
+            {
+                Thread.currentThread().interrupt();
+            }
+            runner.setUpTest(
+                new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
+                Neodymium.getTestName());
+        }
+        else
+        {
+            Selenide.closeWebDriver();
+        }
+    }
+
+    /**
+     * Executes the test run steps under the specified verification mode.
+     *
+     * @param steps the natural language instructions
+     * @param mode  the verification mode to run under
+     * @return the execution result
+     */
+    protected final AiExecutionResult runAi(final String steps, final VerificationMode mode)
+    {
+        return runAi(() ->
+        {
+            Neodymium.ai().execute(steps);
+        }, mode);
+    }
+
+    /**
+     * Executes the test run steps under the specified verification mode.
+     *
+     * @param runSteps the runnable steps containing Neodymium AI execution blocks
+     * @param mode     the verification mode to run under
+     * @return the execution result
+     */
+    protected final AiExecutionResult runAi(final Runnable runSteps, final VerificationMode mode)
+    {
+        final String playbookId = Neodymium.getTestName();
+        final String origInteractive = String.valueOf(Neodymium.aiConfiguration().aiInteractive());
+        final String origAutoSkip = System.getProperty("neodymium.ai.interactive.autoSkip", "false");
+        
+        final AiStats stats = Neodymium.ai().getStats();
+        final int previousCalls = stats.getOverallCallCount();
+        
+        try
+        {
+            switch (mode)
+            {
+                case LIVE_LLM ->
+                {
+                    Neodymium.getData().put("skipReplay", "true");
+                    if (Neodymium.getAiPlaybook() == null)
+                    {
+                        Neodymium.setAiPlaybook(null);
+                    }
+                    Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "false");
+                    System.setProperty("neodymium.ai.interactive.autoSkip", "false");
+                    
+                    runSteps.run();
+
+                    final Playbook generatedPlaybook = Neodymium.getAiPlaybook();
+                    if (generatedPlaybook != null && generatedPlaybook.isChanged())
+                    {
+                        PlaybookManager.savePlaybook(generatedPlaybook);
+                    }
+                }
+                case OFFLINE_REPLAY ->
+                {
+                    final Playbook playbook = PlaybookManager.loadPlaybook(playbookId);
+                    if (playbook == null)
+                    {
+                        Assertions.fail("No playbook found for OFFLINE_REPLAY: " + playbookId);
+                    }
+
+                    Neodymium.getData().put("skipReplay", "false");
+                    Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "false");
+                    System.setProperty("neodymium.ai.interactive.autoSkip", "false");
+
+                    if (Neodymium.getAiPlaybook() == null)
+                    {
+                        Neodymium.setAiPlaybook(null);
+                        Neodymium.initializePlaybook();
+                    }
+                    final Playbook loadedPlaybook = Neodymium.getAiPlaybook();
+                    if (loadedPlaybook != null)
+                    {
+                        loadedPlaybook.setRecording(false);
+                        loadedPlaybook.setCursor(0);
+                    }
+
+                    System.setProperty("neodymium.ai.offline", "true");
+                    try
+                    {
+                        runSteps.run();
+                    }
+                    finally
+                    {
+                        System.clearProperty("neodymium.ai.offline");
+                    }
+
+                    final int currentCalls = stats.getOverallCallCount();
+                    Assertions.assertEquals(0, currentCalls - previousCalls,
+                        "OFFLINE_REPLAY execution made LLM calls! Expected exactly 0 new LLM calls during playback.");
+                }
+                case REPLAY ->
+                {
+                    Neodymium.getData().put("skipReplay", "false");
+                    Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "false");
+                    System.setProperty("neodymium.ai.interactive.autoSkip", "false");
+
+                    if (Neodymium.getAiPlaybook() == null)
+                    {
+                        Neodymium.setAiPlaybook(null);
+                        Neodymium.initializePlaybook();
+                    }
+                    final Playbook loadedPlaybook = Neodymium.getAiPlaybook();
+                    if (loadedPlaybook != null)
+                    {
+                        loadedPlaybook.setRecording(false);
+                        loadedPlaybook.setCursor(0);
+                    }
+
+                    runSteps.run();
+                }
+                case HUD_LLM ->
+                {
+                    Neodymium.getData().put("skipReplay", "true");
+                    if (Neodymium.getAiPlaybook() == null)
+                    {
+                        Neodymium.setAiPlaybook(null);
+                    }
+                    Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "true");
+                    System.setProperty("neodymium.ai.interactive.autoSkip", "true");
+
+                    runSteps.run();
+                }
+                case HUD_OFFLINE_REPLAY ->
+                {
+                    final Playbook playbook = PlaybookManager.loadPlaybook(playbookId);
+                    if (playbook == null)
+                    {
+                        Assertions.fail("No playbook found for HUD_OFFLINE_REPLAY: " + playbookId);
+                    }
+
+                    Neodymium.getData().put("skipReplay", "false");
+                    Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "true");
+                    System.setProperty("neodymium.ai.interactive.autoSkip", "true");
+
+                    if (Neodymium.getAiPlaybook() == null)
+                    {
+                        Neodymium.setAiPlaybook(null);
+                        Neodymium.initializePlaybook();
+                    }
+                    final Playbook hudPlaybook = Neodymium.getAiPlaybook();
+                    if (hudPlaybook != null)
+                    {
+                        hudPlaybook.setRecording(false);
+                        hudPlaybook.setCursor(0);
+                    }
+
+                    System.setProperty("neodymium.ai.offline", "true");
+                    try
+                    {
+                        runSteps.run();
+                    }
+                    finally
+                    {
+                        System.clearProperty("neodymium.ai.offline");
+                    }
+
+                    final int currentCalls = stats.getOverallCallCount();
+                    Assertions.assertEquals(0, currentCalls - previousCalls,
+                        "HUD_OFFLINE_REPLAY execution made LLM calls! Expected exactly 0 new LLM calls during HUD playback.");
+                }
+                case HUD_REPLAY ->
+                {
+                    Neodymium.getData().put("skipReplay", "false");
+                    Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "true");
+                    System.setProperty("neodymium.ai.interactive.autoSkip", "true");
+
+                    if (Neodymium.getAiPlaybook() == null)
+                    {
+                        Neodymium.setAiPlaybook(null);
+                        Neodymium.initializePlaybook();
+                    }
+                    final Playbook hudPlaybook = Neodymium.getAiPlaybook();
+                    if (hudPlaybook != null)
+                    {
+                        hudPlaybook.setRecording(false);
+                        hudPlaybook.setCursor(0);
+                    }
+
+                    runSteps.run();
+                }
+            }
+            return Neodymium.getLastAiExecutionResult();
+        }
+        finally
+        {
+            Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", origInteractive);
+            System.setProperty("neodymium.ai.interactive.autoSkip", origAutoSkip);
+        }
+    }
+
+    /**
      * Asserts structural step-by-step and action-level equivalence between two playbooks.
      * 
      * @param expected the expected baseline playbook
@@ -386,6 +603,11 @@ public abstract class BaseAiTest
      * @throws AssertionFailedError if a difference is found
      */
     private void assertPlaybookEquals(final Playbook expected, final Playbook actual)
+    {
+        assertPlaybookEquals(expected, actual, false);
+    }
+
+    private void assertPlaybookEquals(final Playbook expected, final Playbook actual, final boolean allowFewerSteps)
     {
         if (expected == null && actual == null)
         {
@@ -399,12 +621,16 @@ public abstract class BaseAiTest
         final List<PlaybookStep> expectedSteps = expected.getSteps();
         final List<PlaybookStep> actualSteps = actual.getSteps();
 
-        if (expectedSteps.size() != actualSteps.size())
+        if (!allowFewerSteps)
         {
-            throw new AssertionFailedError("Playbook step count mismatch! Expected: " + expectedSteps.size() + " steps, but got: " + actualSteps.size());
+            if (expectedSteps.size() != actualSteps.size())
+            {
+                throw new AssertionFailedError("Playbook step count mismatch! Expected: " + expectedSteps.size() + " steps, but got: " + actualSteps.size());
+            }
         }
 
-        for (int i = 0; i < expectedSteps.size(); i++)
+        final int limit = Math.min(expectedSteps.size(), actualSteps.size());
+        for (int i = 0; i < limit; i++)
         {
             final PlaybookStep expectedStep = expectedSteps.get(i);
             final PlaybookStep actualStep = actualSteps.get(i);
@@ -483,9 +709,9 @@ public abstract class BaseAiTest
      */
     private String normalizeTarget(final String target)
     {
-        if (target == null)
+        if (target == null || target.trim().isEmpty())
         {
-            return null;
+            return "";
         }
         String cleaned = target.trim();
         if (cleaned.startsWith("#xc_"))

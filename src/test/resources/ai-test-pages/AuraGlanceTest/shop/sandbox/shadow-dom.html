@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Shadow DOM Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Shadow DOM Piercing Challenge</h1>
+                <p class="aura-desc">
+                    The login form below is encapsulated inside an open Shadow DOM of a custom Web Component.
+                    Standard DOM scrapers without shadow piercing capabilities will see this as a blank host tag.
+                </p>
+
+                <div style="display: flex; justify-content: center; margin: 2rem 0;">
+                    <!-- Custom Web Component Host -->
+                    <shadow-login-form id="login-form-host"></shadow-login-form>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="shadow-status" style="font-weight: bold; color: #00ffcc;">Waiting for login...</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Define Web Component with Shadow DOM
+        class ShadowLoginForm extends HTMLElement {
+            constructor() {
+                super();
+                const shadow = this.attachShadow({ mode: 'open' });
+
+                // Simple styling for shadow DOM content
+                const style = document.createElement('style');
+                style.textContent = `
+                    .form-container {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 1rem;
+                        padding: 1.5rem;
+                        background: rgba(255, 255, 255, 0.05);
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        border-radius: 8px;
+                        width: 300px;
+                    }
+                    input {
+                        padding: 10px;
+                        background: rgba(0, 0, 0, 0.3);
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                        border-radius: 4px;
+                        color: white;
+                        font-size: 14px;
+                    }
+                    button {
+                        padding: 10px;
+                        background: #00ffcc;
+                        border: none;
+                        border-radius: 4px;
+                        color: #111;
+                        font-weight: bold;
+                        cursor: pointer;
+                        font-size: 14px;
+                    }
+                    button:hover {
+                        background: #00d4aa;
+                    }
+                `;
+
+                const container = document.createElement('div');
+                container.className = 'form-container';
+
+                const username = document.createElement('input');
+                username.type = 'text';
+                username.placeholder = 'Username';
+                username.id = 'shadow-username';
+
+                const password = document.createElement('input');
+                password.type = 'password';
+                password.placeholder = 'Password';
+                password.id = 'shadow-password';
+
+                const button = document.createElement('button');
+                button.textContent = 'Login';
+                button.id = 'shadow-submit';
+
+                button.addEventListener('click', () => {
+                    // Dispatch custom event to notify parent host page
+                    this.dispatchEvent(new CustomEvent('login-attempt', {
+                        detail: {
+                            user: username.value,
+                            pass: password.value
+                        }
+                    }));
+                });
+
+                container.appendChild(username);
+                container.appendChild(password);
+                container.appendChild(button);
+
+                shadow.appendChild(style);
+                shadow.appendChild(container);
+            }
+        }
+
+        customElements.define('shadow-login-form', ShadowLoginForm);
+
+        // Listen for login event
+        document.getElementById('login-form-host').addEventListener('login-attempt', function(e) {
+            const status = document.getElementById('shadow-status');
+            if (e.detail.user === 'admin' && e.detail.pass === 'secret') {
+                status.innerText = `Login successful for: ${e.detail.user}`;
+                status.style.color = '#00ffcc';
+            } else {
+                status.innerText = `Login failed for: ${e.detail.user || 'empty'}`;
+                status.style.color = '#ff3366';
+            }
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

@@ -48,8 +48,13 @@ public class NavigateAction implements AiActionPlugin {
         java.util.regex.Matcher urlMatcher = java.util.regex.Pattern.compile(urlPatternStr).matcher(instruction.strip());
 
         // let's check if our prompt needs this or if we have it inside our config
-        if (authMatcher.find() || (urlMatcher.find() && Neodymium.configuration().basicAuthUsername() != null)) {
-            if (authMatcher.find() ) {
+        final boolean authFound = authMatcher.find();
+        final boolean urlFound = urlMatcher.find();
+
+        if (authFound || (urlFound && Neodymium.configuration().basicAuthUsername() != null))
+        {
+            if (authFound)
+            {
                 final String url = authMatcher.group(1);
                 final String username = authMatcher.group("username");
                 final String password = authMatcher.group("password");
@@ -74,7 +79,7 @@ public class NavigateAction implements AiActionPlugin {
             }
         }
 
-        if (urlMatcher.find())
+        if (urlFound)
         {
             final String url = urlMatcher.group(1);
             LOG.debug("▶️ [EXEC] Direct navigation to: {}", url);

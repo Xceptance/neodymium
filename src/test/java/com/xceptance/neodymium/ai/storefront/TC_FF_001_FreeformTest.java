@@ -17,7 +17,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 // AI-generated: Gemini 3.5 Flash
-package com.xceptance.neodymium.ai;
+package com.xceptance.neodymium.ai.storefront;
+import com.xceptance.neodymium.ai.VerificationMode;
+import com.xceptance.neodymium.ai.BaseAiTest;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;

@@ -1,0 +1,95 @@
+{
+  "id": "com.xceptance.neodymium.ai.sandbox.AuraSandboxScenariosTest :: testMockOAuthRedirect :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop/sandbox/mock-oauth-login.html?redirect_uri\u003dhttps://localhost:39389/AuraGlanceTest/shop/sandbox/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop/sandbox/mock-oauth-login.html?redirect_uri\u003dhttps://localhost:39389/AuraGlanceTest/shop/sandbox/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop/sandbox/mock-oauth-login.html?redirect_uri\u003dhttps://localhost:39389/AuraGlanceTest/shop/sandbox/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Type \u0027user@neodymium.com\u0027 into the email input.",
+      "reasoning": "Identified the email input field by its \u0027data-neo-ref\u0027 attribute and generated a TYPE action to enter the specified email address.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "[data-neo-ref\u003d\u0027xc_8ddz5q\u0027]",
+          "value": [
+            "user@neodymium.com"
+          ],
+          "description": "Type \u0027user@neodymium.com\u0027 into the email input field.",
+          "elementDetails": "Email Address",
+          "elementContext": {
+            "id": "oauth-email",
+            "placeholder": "Email Address",
+            "tagName": "input",
+            "type": "email"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Type \u0027password123\u0027 into the password input.",
+      "reasoning": "Identified the password input field by its \u0027data-neo-ref\u0027 attribute and generated a TYPE action to enter the specified password.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "[data-neo-ref\u003d\u0027xc_sigcs4\u0027]",
+          "value": [
+            "password123"
+          ],
+          "description": "Type \u0027password123\u0027 into the password input field.",
+          "elementDetails": "Password textbox",
+          "elementContext": {
+            "id": "oauth-password",
+            "placeholder": "Password",
+            "tagName": "input",
+            "type": "password"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the \u0027Authorize \u0026 Sign In\u0027 button.",
+      "reasoning": "Found the \u0027Authorize \u0026 Sign In\u0027 button by its data-neo-ref attribute and created a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_jjqt9c\u0027]",
+          "description": "Click the \u0027Authorize \u0026 Sign In\u0027 button",
+          "elementDetails": "Authorize \u0026 Sign In",
+          "elementContext": {
+            "classes": "aura-btn",
+            "text": "Authorize \u0026 Sign In",
+            "id": "oauth-signin",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

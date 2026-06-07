@@ -16,7 +16,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.xceptance.neodymium.ai;
+package com.xceptance.neodymium.ai.core;
+import com.xceptance.neodymium.ai.BaseAiTest;
 
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;

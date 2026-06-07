@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Table Sorting Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Table Price Sorting Challenge</h1>
+                <p class="aura-desc">
+                    Click the "Price" column header to sort the products. 
+                    A simulated network loading spinner will appear for 400ms before the table items are updated in sorted order.
+                </p>
+
+                <div style="margin: 2rem 0; position: relative;">
+                    <!-- Loading overlay spinner -->
+                    <div id="table-spinner" style="display: none; position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 10; align-items:center; justify-content:center; border-radius: 8px;">
+                        <div style="border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid #00ffcc; border-radius: 50%; width: 40px; height: 40px; animation: spin 0.8s linear infinite;"></div>
+                    </div>
+
+                    <table style="width: 100%; border-collapse: collapse; background: rgba(255,255,255,0.02); border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">
+                        <thead>
+                            <tr style="background: rgba(255,255,255,0.05); text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                <th style="padding: 15px;">Product Name</th>
+                                <th style="padding: 15px;"><a href="#" id="sort-price" style="color: #00ffcc; text-decoration: underline;">Price ▾</a></th>
+                            </tr>
+                        </thead>
+                        <tbody id="product-rows">
+                            <!-- Items initially unsorted -->
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <td style="padding: 15px;">Aura Canvas Poster</td>
+                                <td style="padding: 15px; font-weight: bold;">$29.99</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <td style="padding: 15px;">Aura Premium Sticker</td>
+                                <td style="padding: 15px; font-weight: bold;">$4.99</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <td style="padding: 15px;">Aura Matte Frame</td>
+                                <td style="padding: 15px; font-weight: bold;">$14.99</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="sort-status" style="font-weight: bold; color: #aaaaaa;">Default listing order</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+
+    <script>
+        const sortLink = document.getElementById('sort-price');
+        const spinner = document.getElementById('table-spinner');
+        const rowsContainer = document.getElementById('product-rows');
+        const status = document.getElementById('sort-status');
+
+        let asc = true;
+
+        sortLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Show loading spinner
+            spinner.style.display = 'flex';
+            status.innerText = 'Sorting items in background...';
+            status.style.color = '#ffcc00';
+
+            // Simulate AJAX sort network response (400ms delay)
+            setTimeout(function() {
+                spinner.style.display = 'none';
+
+                const items = [
+                    { name: 'Aura Premium Sticker', price: 4.99 },
+                    { name: 'Aura Matte Frame', price: 14.99 },
+                    { name: 'Aura Canvas Poster', price: 29.99 }
+                ];
+
+                if (!asc) {
+                    items.reverse();
+                }
+
+                rowsContainer.innerHTML = items.map(item => `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 15px;">${item.name}</td>
+                        <td style="padding: 15px; font-weight: bold;">$${item.price.toFixed(2)}</td>
+                    </tr>
+                `).join('');
+
+                status.innerText = asc ? 'Sorted by price: Low to High' : 'Sorted by price: High to Low';
+                status.style.color = '#00ffcc';
+
+                asc = !asc;
+            }, 400);
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

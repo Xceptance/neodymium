@@ -16,7 +16,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.xceptance.neodymium.ai;
+package com.xceptance.neodymium.ai.core;
+import com.xceptance.neodymium.ai.BaseAiOfflineTest;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Mock OAuth Identity Provider</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+</head>
+<body class="aura-theme-dark" style="display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #0c0c14;">
+    <div class="aura-card" style="width: 380px; padding: 2rem; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(255,255,255,0.02);">
+        <div style="text-align: center; margin-bottom: 2rem;">
+            <div style="font-size: 24px; font-weight: bold; color: #ffcc00;">Mock<span>Auth</span> Secure Sign-In</div>
+            <div style="font-size: 12px; color: #aaa; margin-top: 5px;">An external mock authentication service</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <input type="email" id="oauth-email" placeholder="Email Address" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: white; font-size: 14px; box-sizing: border-box;">
+            <input type="password" id="oauth-password" placeholder="Password" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: white; font-size: 14px; box-sizing: border-box;">
+            
+            <button id="oauth-signin" class="aura-btn" style="width: 100%; padding: 12px; font-weight: bold; cursor: pointer;">
+                Authorize & Sign In
+            </button>
+        </div>
+
+        <div id="oauth-status" style="margin-top: 1.5rem; text-align: center; font-size: 12px; color: #ff3366;"></div>
+    </div>
+
+    <script>
+        const btn = document.getElementById('oauth-signin');
+        const email = document.getElementById('oauth-email');
+        const password = document.getElementById('oauth-password');
+        const status = document.getElementById('oauth-status');
+
+        // Extract redirect_uri from current URL query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectUri = urlParams.get('redirect_uri') || '../index.html';
+
+        btn.addEventListener('click', function() {
+            if (email.value && password.value) {
+                status.innerText = 'Authorizing...';
+                status.style.color = '#00ffcc';
+
+                // Redirect back to SUT with a fake authentication token parameter immediately
+                const separator = redirectUri.includes('?') ? '&' : '?';
+                window.location.href = `${redirectUri}${separator}code=auth_token_mock_9921&user=${encodeURIComponent(email.value)}`;
+            } else {
+                status.innerText = 'Error: Fill both credentials';
+                status.style.color = '#ff3366';
+            }
+        });
+    </script>
+</body>
+</html>

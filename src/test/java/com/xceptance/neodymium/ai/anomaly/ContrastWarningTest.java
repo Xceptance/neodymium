@@ -16,7 +16,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.xceptance.neodymium.ai;
+package com.xceptance.neodymium.ai.anomaly;
+import com.xceptance.neodymium.ai.AiTestVerification;
+import com.xceptance.neodymium.ai.VerificationMode;
+import com.xceptance.neodymium.ai.BaseAiTest;
 
 import static com.codeborne.selenide.Selenide.open;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -39,6 +42,12 @@ import com.xceptance.neodymium.ai.core.AiStats;
  * @author AI-generated: Gemini 2.5 Flash
  */
 @Browser("Chrome_1024x768")
+@AiTestVerification({
+    VerificationMode.LIVE_LLM,
+    VerificationMode.OFFLINE_REPLAY,
+    VerificationMode.HUD_OFFLINE_REPLAY,
+    VerificationMode.HUD_LLM
+})
 public final class ContrastWarningTest extends BaseAiTest
 {
     private LogCaptureAppender logAppender;
@@ -64,7 +73,7 @@ public final class ContrastWarningTest extends BaseAiTest
         final int port = server.getPort();
         final String a11yUrl = String.format("http://localhost:%d/AuraGlanceTest/a11y/index.html", port);
 
-        assertTwoPhaseExecution(() ->
+        assertAiExecution(() ->
         {
             open(a11yUrl);
 

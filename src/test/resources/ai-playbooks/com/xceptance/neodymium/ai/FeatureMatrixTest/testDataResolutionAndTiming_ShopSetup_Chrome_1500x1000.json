@@ -2,16 +2,16 @@
   "id": "com.xceptance.neodymium.ai.FeatureMatrixTest :: testDataResolutionAndTiming :: ShopSetup :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
-      "reasoning": "Identified the \u0027Full Name\u0027 textbox by its data-neo-ref attribute and generated a TYPE action to input the specified text.",
+      "promptLine": "Type '${userFullName}' into the 'Full Name' field.",
+      "reasoning": "Typed '${userFullName}' into the 'Full Name' field using its data-neo-ref.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_u90fde\u0027]",
+          "target": "xc_u90fde",
           "value": [
-            "Alice Cooper"
+            "${userFullName}"
           ],
-          "description": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
+          "description": "Type '${userFullName}' into the 'Full Name' field.",
           "elementDetails": "Full Name textbox",
           "elementContext": {
             "classes": "form-control",
@@ -28,16 +28,16 @@
       "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Found the \u0027Email Address\u0027 textbox by its accessibility name and data-neo-ref, then generated a TYPE action to input the specified email.",
+      "promptLine": "Type '${userEmail}' into the 'Email Address' field.",
+      "reasoning": "Typed '${userEmail}' into the 'Email Address' field using its data-neo-ref.",
       "actions": [
         {
           "type": "TYPE",
           "target": "xc_f0d4sd",
           "value": [
-            "alice@test.com"
+            "${userEmail}"
           ],
-          "description": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
+          "description": "Type '${userEmail}' into the 'Email Address' field.",
           "elementDetails": "Email Address",
           "elementContext": {
             "classes": "form-control",
@@ -54,13 +54,13 @@
       "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Click the \u0027Create Account\u0027 button.",
-      "reasoning": "Found the \u0027Create Account\u0027 button using its data-neo-ref attribute and created a CLICK action.",
+      "promptLine": "Click the 'Create Account' button.",
+      "reasoning": "Found the 'Create Account' button by its data-neo-ref attribute and created a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "[data-neo-ref\u003d\u0027xc_t6pll2\u0027]",
-          "description": "Click the \u0027Create Account\u0027 button",
+          "target": "xc_t6pll2",
+          "description": "Click the 'Create Account' button.",
           "elementDetails": "Create Account",
           "elementContext": {
             "classes": "btn-primary",
@@ -77,20 +77,20 @@
       "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
-      "reasoning": "Found the element with id \u0027reg-status-success\u0027 containing the text \u0027Account Registered!\u0027 and created an ASSERT action to verify its visibility and content.",
+      "promptLine": "Verify that the success indicator 'Account Registered!' is visible.",
+      "reasoning": "Found the 'Account Registered!' text within an element with id 'reg-status-success' and created an ASSERT action to verify its visibility.",
       "actions": [
         {
           "type": "ASSERT",
           "target": "#reg-status-success",
           "value": [
-            "Account Registered!"
+            "visible"
           ],
-          "description": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
+          "description": "Verify that the success indicator 'Account Registered!' is visible.",
           "elementDetails": "Account Registered!",
           "elementContext": {},
           "replay": "",
-          "frameId": "FC75BBBEE0357F147C410A2B9873509C:main",
+          "frameId": "F0B801F9AEAD0BBD2F8D9D7B932A68CC:main",
           "adjust": false
         }
       ],

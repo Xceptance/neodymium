@@ -2,17 +2,17 @@
   "id": "com.xceptance.neodymium.ai.YamlDataDrivenTest :: testYamlStepsAndDataResolution :: Data set 2 / 2 :: Browser Chrome_1024x768",
   "steps": [
     {
-      "promptLine": "Open http://localhost:41547/AuraGlanceTest/shop/forms.html",
+      "promptLine": "Open ${formsUrl}",
       "reasoning": "The instruction is to open a specific URL, so a NAVIGATE action is appropriate.",
       "actions": [
         {
           "type": "NAVIGATE",
           "target": "",
           "value": [
-            "http://localhost:41547/AuraGlanceTest/shop/forms.html"
+            "${formsUrl}"
           ],
-          "description": "Open http://localhost:41547/AuraGlanceTest/shop/forms.html",
-          "elementDetails": "http://localhost:41547/AuraGlanceTest/shop/forms.html",
+          "description": "Open ${formsUrl}",
+          "elementDetails": "${formsUrl}",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -22,16 +22,16 @@
       "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Type \u0027Bob Tester\u0027 into the \u0027Full Name\u0027 field.",
-      "reasoning": "Typed \u0027Bob Tester\u0027 into the \u0027Full Name\u0027 textbox identified by data-neo-ref \u0027xc_u90fde\u0027.",
+      "promptLine": "Type '${userFullName}' into the 'Full Name' field.",
+      "reasoning": "Typed '${userFullName}' into the 'Full Name' textbox identified by data-neo-ref 'xc_u90fde'.",
       "actions": [
         {
           "type": "TYPE",
           "target": "xc_u90fde",
           "value": [
-            "Bob Tester"
+            "${userFullName}"
           ],
-          "description": "Type \u0027Bob Tester\u0027 into the \u0027Full Name\u0027 field.",
+          "description": "Type '${userFullName}' into the 'Full Name' field.",
           "elementDetails": "Full Name",
           "elementContext": {
             "classes": "form-control",
@@ -48,16 +48,16 @@
       "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Type \u0027bob@example.com\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Found the \u0027Email Address\u0027 textbox by its accessibility name and data-neo-ref and created a TYPE action.",
+      "promptLine": "Type '${userEmail}' into the 'Email Address' field.",
+      "reasoning": "Found the 'Email Address' textbox by its accessibility name and data-neo-ref and created a TYPE action.",
       "actions": [
         {
           "type": "TYPE",
           "target": "xc_f0d4sd",
           "value": [
-            "bob@example.com"
+            "${userEmail}"
           ],
-          "description": "Type \u0027bob@example.com\u0027 into the \u0027Email Address\u0027 field.",
+          "description": "Type '${userEmail}' into the 'Email Address' field.",
           "elementDetails": "Email Address",
           "elementContext": {
             "classes": "form-control",
@@ -74,13 +74,13 @@
       "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Click the \u0027Create Account\u0027 button.",
-      "reasoning": "Found the \u0027Create Account\u0027 button using its data-neo-ref and created a CLICK action.",
+      "promptLine": "Click the 'Create Account' button.",
+      "reasoning": "Clicked the 'Create Account' button using its data-neo-ref attribute.",
       "actions": [
         {
           "type": "CLICK",
           "target": "xc_t6pll2",
-          "description": "Click the \u0027Create Account\u0027 button",
+          "description": "Click the 'Create Account' button",
           "elementDetails": "Create Account",
           "elementContext": {
             "classes": "btn-primary",
@@ -97,8 +97,8 @@
       "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
-      "reasoning": "Found the element with id \u0027reg-status-success\u0027 containing the text \u0027Account Registered!\u0027 and created an ASSERT action to verify its visibility and content.",
+      "promptLine": "Verify that the success indicator 'Account Registered!' is visible.",
+      "reasoning": "Found the element with id 'reg-status-success' containing the text 'Account Registered!' and created an ASSERT action.",
       "actions": [
         {
           "type": "ASSERT",
@@ -106,11 +106,11 @@
           "value": [
             "Account Registered!"
           ],
-          "description": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
+          "description": "Verify that the success indicator 'Account Registered!' is visible.",
           "elementDetails": "Account Registered!",
           "elementContext": {},
           "replay": "",
-          "frameId": "FEA8972E7FA33E1F03958FEAD1EE0961:main",
+          "frameId": "2667335434428E38C12BEF858EE7A623:main",
           "adjust": false
         }
       ],

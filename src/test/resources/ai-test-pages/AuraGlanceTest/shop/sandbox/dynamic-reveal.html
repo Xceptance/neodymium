@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dynamic Reveal Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Dynamic Reveal Timing Challenge</h1>
+                <p class="aura-desc">
+                    Click the link below. Clicking it starts an asynchronous transition and appends the coupon input field 
+                    and Apply button to the DOM after a 200ms delay. 
+                    This tests whether the AI runner correctly handles timing races when typing into dynamically generated elements.
+                </p>
+
+                <div style="display: flex; flex-direction: column; align-items: center; margin: 3rem 0; gap: 1.5rem;">
+                    <!-- Trigger link -->
+                    <a href="#" id="promo-toggle" style="color: #00ffcc; text-decoration: underline; font-weight: bold; font-size: 16px;">Have a promo code?</a>
+
+                    <!-- Dynamic container -->
+                    <div id="promo-container" style="display: flex; gap: 0.5rem; transition: opacity 0.3s ease; opacity: 0; min-height: 50px;">
+                        <!-- Content is injected dynamically via JS -->
+                    </div>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="promo-status" style="font-weight: bold; color: #ffcc00;">No code applied</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const toggle = document.getElementById('promo-toggle');
+        const container = document.getElementById('promo-container');
+        const status = document.getElementById('promo-status');
+
+        toggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Simulate dynamic rendering/AJAX delay of 200ms before appending DOM
+            setTimeout(function() {
+                container.style.opacity = '1';
+                container.innerHTML = `
+                    <input type="text" id="coupon-field" placeholder="Enter coupon" style="padding: 10px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: white;">
+                    <button id="coupon-btn" class="aura-btn" style="padding: 10px 20px;">Apply</button>
+                `;
+
+                // Add listener to the newly injected button
+                document.getElementById('coupon-btn').addEventListener('click', function() {
+                    const code = document.getElementById('coupon-field').value;
+                    if (code === 'DISCOUNT') {
+                        status.innerText = 'Coupon DISCOUNT applied successfully!';
+                        status.style.color = '#00ffcc';
+                    } else {
+                        status.innerText = `Invalid coupon code: ${code || 'empty'}`;
+                        status.style.color = '#ff3366';
+                    }
+                });
+            }, 200);
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

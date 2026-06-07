@@ -104,6 +104,8 @@
                 <li><a href="#" class="active">Hub Home</a></li>
                 <li><a href="shop/index.html">Shop Home</a></li>
                 <li><a href="shop/forms.html">Forms Demo</a></li>
+                <li><a href="shop/escalation.html">Escalation Challenge</a></li>
+                <li><a href="shop/visual-escalation.html">Visual Escalation</a></li>
                 <li><a href="dashboard/index.html">Dashboard</a></li>
                 <li><a href="a11y/index.html">A11y Arena</a></li>
                 <li><a href="spa/index.html">React SPA</a></li>
@@ -151,7 +153,7 @@
             </div>
         </div>
 
-        <div class="aura-grid-2">
+        <div class="aura-grid-3">
             <!-- Card 4: Accessibility -->
             <div class="aura-card">
                 <div class="card-header-flex">
@@ -171,6 +173,30 @@
                 <p style="color: var(--text-secondary); font-size: 0.9rem;">Simulates modern Single Page Applications (SPAs) with initial loading suspense skeletons, async AJAX lists, and HTMX dynamic HTML swaps. Perfect for wait-assertion audits.</p>
                 <a href="spa/index.html" class="app-link">Launch React SPA &rarr;</a>
             </div>
+
+            <!-- Card 6: Escalation Challenge -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Escalation Challenge</h3>
+                    <span class="badge badge-success">AXTree to Lean</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Interact with custom interactive elements (divs, spans, hidden inputs) that are omitted from AXTree, forcing context escalation from AXTREE to LEAN.</p>
+                <a href="shop/escalation.html" class="app-link">Launch Escalation Demo &rarr;</a>
+            </div>
+        </div>
+
+        <div class="aura-grid-3" style="grid-template-columns: repeat(3, 1fr);">
+            <div style="grid-column: span 1;"></div>
+            <!-- Card 7: Visual Escalation -->
+            <div class="aura-card" style="grid-column: span 1;">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Visual Escalation</h3>
+                    <span class="badge badge-purple">Multimodal Visual</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Verify text and click elements drawn purely graphically on canvas or via CSS pseudo-elements, forcing escalation from STANDARD to VISUAL.</p>
+                <a href="shop/visual-escalation.html" class="app-link">Launch Visual Escalation &rarr;</a>
+            </div>
+            <div style="grid-column: span 1;"></div>
         </div>
 
         <div class="aura-card" style="margin-top: 2.5rem; background: radial-gradient(circle at center, hsla(260, 85%, 65%, 0.05), transparent 80%);">
