@@ -19,13 +19,16 @@
 package com.xceptance.neodymium.ai.core;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chromium.HasCdp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -706,14 +709,17 @@ public class PageAnalyzer
 
         try
         {
-            final java.util.Set<String> windowHandles = driver.getWindowHandles();
-            for (final String windowHandle : windowHandles)
+            final Set<String> windowHandles = driver.getWindowHandles();
+            final List<String> windowList = new ArrayList<>(windowHandles);
+            for (int i = 0; i < windowList.size(); i++)
             {
+                final String windowHandle = windowList.get(i);
+                final String logicalWindowName = "win_" + i;
                 driver.switchTo().window(windowHandle);
-                dom.append("=== Window: ").append(windowHandle).append(" ===\n");
+                dom.append("=== Window: ").append(logicalWindowName).append(" ===\n");
                 dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
                 dom.append("Title: ").append(driver.getTitle()).append("\n\n");
-                captureFrameTree(dom, level, windowHandle, "main", showFrameId);
+                captureFrameTree(dom, level, logicalWindowName, "main", showFrameId);
             }
         }
         catch (final Exception e)
@@ -835,21 +841,52 @@ public class PageAnalyzer
             {
                 try
                 {
+                    // Generate a stable selector for this frame in the parent context
+                    final String selector = com.codeborne.selenide.Selenide.executeJavaScript(
+                        "var el = arguments[0];" +
+                        "if (el.id) { return '#' + CSS.escape(el.id); }" +
+                        "if (el.name) { return el.tagName.toLowerCase() + '[name=\\'' + el.name + '\\']'; }" +
+                        "var tag = el.tagName.toLowerCase();" +
+                        "var parent = el.parentNode;" +
+                        "if (parent) {" +
+                        "  var siblings = Array.from(parent.children).filter(function(s) { return s.tagName === el.tagName; });" +
+                        "  if (siblings.length > 1) {" +
+                        "    return tag + ':nth-of-type(' + (siblings.indexOf(el) + 1) + ')';" +
+                        "  }" +
+                        "}" +
+                        "return tag;",
+                        frames.get(i)
+                    );
                     com.codeborne.selenide.Selenide.switchTo().frame(frames.get(i));
-                    captureFrameTree(dom, level, windowHandle, framePath + "." + i, showFrameId);
+                    captureFrameTree(dom, level, windowHandle, framePath + " >>> " + selector, showFrameId);
                     com.codeborne.selenide.Selenide.switchTo().parentFrame();
                 }
                 catch (final Exception e)
                 {
-                    LOG.debug("Could not switch to frame {}: {}", i, e.getMessage());
+                    LOG.debug("Could not switch to frame: {}", e.getMessage());
                     com.codeborne.selenide.Selenide.switchTo().defaultContent();
                     // Recover path
                     if (!"main".equals(framePath))
                     {
-                        final String[] indices = framePath.substring(5).split("\\."); // remove "main."
-                        for (final String indexStr : indices)
+                        if (framePath.contains(" >>> "))
                         {
-                            com.codeborne.selenide.Selenide.switchTo().frame(Integer.parseInt(indexStr));
+                            final String[] selectors = framePath.split(" >>> ");
+                            for (final String sel : selectors)
+                            {
+                                if (!sel.equals("main") && !sel.isBlank())
+                                {
+                                    final WebElement iframeElement = com.codeborne.selenide.Selenide.$(sel);
+                                    com.codeborne.selenide.Selenide.switchTo().frame(iframeElement);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            final String[] indices = framePath.substring(5).split("\\."); // remove "main."
+                            for (final String indexStr : indices)
+                            {
+                                com.codeborne.selenide.Selenide.switchTo().frame(Integer.parseInt(indexStr));
+                            }
                         }
                     }
                 }
