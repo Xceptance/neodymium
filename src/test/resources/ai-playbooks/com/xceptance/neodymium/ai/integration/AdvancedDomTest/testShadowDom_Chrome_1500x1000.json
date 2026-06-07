@@ -1,0 +1,94 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.AdvancedDomTest :: testShadowDom :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html"
+          ],
+          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Type \u0027admin\u0027 into the username input inside the shadow root.",
+      "reasoning": "Identified the username input by its data-neo-ref and name from the AXTREE and generated a TYPE action.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "xc_eg716g",
+          "value": [
+            "admin"
+          ],
+          "description": "Type \u0027admin\u0027 into the username input.",
+          "elementDetails": "Username",
+          "elementContext": {
+            "id": "shadow-username",
+            "placeholder": "Username",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Type \u0027secret\u0027 into the password input inside the shadow root.",
+      "reasoning": "Identified the password input by its data-neo-ref and name, then created a TYPE action to enter \u0027secret\u0027.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "[data-neo-ref\u003d\u0027xc_p1up95\u0027]",
+          "value": [
+            "secret"
+          ],
+          "description": "Type \u0027secret\u0027 into the password input",
+          "elementDetails": "Password",
+          "elementContext": {
+            "id": "shadow-password",
+            "placeholder": "Password",
+            "tagName": "input",
+            "type": "password"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the login button inside the shadow root.",
+      "reasoning": "The \u0027Login\u0027 button was identified by its data-neo-ref attribute and will be clicked.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_eo1ifg\u0027]",
+          "description": "Click the login button",
+          "elementDetails": "Login",
+          "elementContext": {
+            "text": "Login",
+            "id": "shadow-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}
