@@ -12,9 +12,11 @@
           ],
           "description": "Navigate to https://www.xceptance.com/en/",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     },
     {
       "promptLine": "open https://www.xceptance.com/de/",
@@ -27,9 +29,11 @@
           ],
           "description": "Navigate to https://www.xceptance.com/de/",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     },
     {
       "promptLine": "navigate back",
@@ -38,9 +42,11 @@
         {
           "type": "BACK",
           "description": "Go back",
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     }
   ]
 }

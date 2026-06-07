@@ -12,9 +12,11 @@
           ],
           "description": "Navigate to https://xceptance.com",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     }
   ]
 }

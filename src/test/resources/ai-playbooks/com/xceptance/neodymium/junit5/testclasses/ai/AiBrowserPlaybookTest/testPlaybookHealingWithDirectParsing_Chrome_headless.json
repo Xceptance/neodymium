@@ -13,9 +13,11 @@
           ],
           "description": "Call executeDummy1 with param ",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     }
   ]
 }
