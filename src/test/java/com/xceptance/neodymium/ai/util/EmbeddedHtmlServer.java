@@ -23,6 +23,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.security.KeyStore;
+import java.util.concurrent.Executors;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 
@@ -56,22 +57,24 @@ public final class EmbeddedHtmlServer
      */
     public EmbeddedHtmlServer() throws IOException
     {
-        // 1. Create standard HTTP server on a random free port
-        this.server = HttpServer.create(new InetSocketAddress(0), 0);
+        // 1. Create standard HTTP server on port 43377 (overridable via system property)
+        final int httpPort = Integer.getInteger("neodymium.ai.http.port", 43377);
+        this.server = HttpServer.create(new InetSocketAddress(httpPort), 0);
         this.port = this.server.getAddress().getPort();
         
         final ResourceHandler resourceHandler = new ResourceHandler();
         this.server.createContext("/", resourceHandler);
-        this.server.setExecutor(null); // creates a default executor
+        this.server.setExecutor(Executors.newCachedThreadPool());
 
-        // 2. Create secure HTTPS server on another random free port
-        this.httpsServer = HttpsServer.create(new InetSocketAddress(0), 0);
+        // 2. Create secure HTTPS server on port 39389 (overridable via system property)
+        final int httpsPort = Integer.getInteger("neodymium.ai.https.port", 39389);
+        this.httpsServer = HttpsServer.create(new InetSocketAddress(httpsPort), 0);
         this.httpsPort = this.httpsServer.getAddress().getPort();
 
         try
         {
             final KeyStore ks = KeyStore.getInstance("PKCS12");
-            try (final InputStream ksf = Thread.currentThread().getContextClassLoader().getResourceAsStream("keystore.p12"))
+            try (final InputStream ksf = EmbeddedHtmlServer.class.getClassLoader().getResourceAsStream("keystore.p12"))
             {
                 if (ksf == null)
                 {
@@ -88,7 +91,7 @@ public final class EmbeddedHtmlServer
 
             this.httpsServer.setHttpsConfigurator(new HttpsConfigurator(sslContext));
             this.httpsServer.createContext("/", resourceHandler);
-            this.httpsServer.setExecutor(null);
+            this.httpsServer.setExecutor(Executors.newCachedThreadPool());
         }
         catch (final Exception e)
         {
@@ -159,7 +162,7 @@ public final class EmbeddedHtmlServer
             
             final String resourcePath = "ai-test-pages/" + path;
             
-            try (final InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourcePath))
+            try (final InputStream is = EmbeddedHtmlServer.class.getClassLoader().getResourceAsStream(resourcePath))
             {
                 if (is == null)
                 {
