@@ -21,8 +21,10 @@ package com.xceptance.neodymium.ai;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Assertions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 import com.codeborne.selenide.Condition;
@@ -175,6 +177,42 @@ public class TC_FF_001_FreeformTest extends BaseAiTest
 
         // Extract and verify LLM reasoning semantically
         LlmAssert.assertViaLlmSemanticMatch(s.getReasoning(), "explain that a brown bear or bear image is visible on the right side of the page");
+
+        // no actions, LLM identified things on its own
+        final var a = s.getActions();
+        assertEquals(0, a.size());
+    }
+
+    /**
+     * Verifiy that things are off
+     */
+    @NeodymiumTest
+    public final void test_VisualVerification_Negative()
+    {
+        final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () ->
+        {
+            runAi("""
+                    Open ${posters.storefront.url}
+                    A lion dancing (visual) on the moon is shown
+                """, VerificationMode.LIVE_LLM);
+        });
+
+        assertTrue(thrown.getMessage().contains("Verification failed: Visual verification failed:"));
+
+        final AiExecutionResult r1 = Neodymium.getLastAiExecutionResult();
+        Assertions.assertNotNull(r1);
+
+        final var s = r1.getSteps().get(1);
+        assertEquals(1, s.getLlmCalls().size());
+        assertEquals(ContextLevel.VISUAL_LEAN, s.getLlmCalls().get(0).getContextLevel());
+
+        assertFalse(s.getLlmCalls().get(0).isSuccess());
+        assertTrue(s.getLlmCalls().get(0).isDone());
+
+        // Extract and verify LLM reasoning semantically
+        LlmAssert.assertViaLlmSemanticMatch(
+            s.getReasoning(), 
+            "There is not lion dancing on the moon.");
 
         // no actions, LLM identified things on its own
         final var a = s.getActions();

@@ -226,4 +226,43 @@ public final class AiContextEscalationTest extends BaseAiOfflineTest
         Assertions.assertTrue(result.getEscalations().get(0).isLlmRequested());
         Assertions.assertTrue(result.getEscalations().get(0).getReason().contains("Elements overlap"));
     }
+
+    /**
+     * Verifies that if the LLM returns a definitive verification failure (success=false, done=true),
+     * the AI agent throws an AssertionError (specifically AiAgent.DefinitiveAssertionError)
+     * and does NOT escalate context or retry.
+     */
+    @Test
+    public final void testNoEscalationOnDefinitiveVerificationFailure()
+    {
+        final AiMockResponse mockRes = AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "s": false,
+                      "d": true,
+                      "a": [],
+                      "e": "Visual verification failed: Expected image not present",
+                      "r": "Verified that image is missing."
+                    }
+                    """)
+                .delayMs(5L)
+                .tokens(50L, 25L, 0L)
+                .build();
+
+        this.llmClient.addResponse(mockRes);
+
+        final java.lang.AssertionError thrown = Assertions.assertThrows(java.lang.AssertionError.class, () ->
+        {
+            this.mockBrowser.execute("Verify visual element (visual)");
+        });
+
+        Assertions.assertTrue(thrown.getMessage().contains("Verification failed: Visual verification failed: Expected image not present"));
+        
+        // Assert that no context escalation occurred and only 1 LLM call was made
+        final AiExecutionResult result = this.mockBrowser.getLastExecutionResult();
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(0, result.getEscalationCount());
+        Assertions.assertEquals(1, result.getLlmCalls().size());
+    }
 }
