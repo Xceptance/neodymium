@@ -18,6 +18,8 @@
  */
 package com.xceptance.neodymium.ai.core;
 
+import com.xceptance.neodymium.ai.action.ActionParser;
+
 /**
  * Details of a single LLM call made during AI execution.
  *
@@ -148,5 +150,38 @@ public final class LlmCallDetails
     public final LlmMode getCallMode()
     {
         return this.callMode;
+    }
+
+    /**
+     * Checks whether the LLM indicated the step execution was successful.
+     *
+     * @return true if successful, false otherwise
+     */
+    public final boolean isSuccess()
+    {
+        final ActionParser parser = new ActionParser();
+        return parser.isSuccess(this.rawTextResponse);
+    }
+
+    /**
+     * Checks whether the LLM indicated the task is complete.
+     *
+     * @return true if complete, false otherwise
+     */
+    public final boolean isDone()
+    {
+        final ActionParser parser = new ActionParser();
+        return parser.isDone(this.rawTextResponse);
+    }
+
+    /**
+     * Extracts the reasoning string from the LLM's raw text response.
+     *
+     * @return the reasoning explanation, or an empty string if absent or parsing fails
+     */
+    public final String getReasoning()
+    {
+        final ActionParser parser = new ActionParser();
+        return parser.getReasoning(this.rawTextResponse);
     }
 }

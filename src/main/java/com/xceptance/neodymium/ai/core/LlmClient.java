@@ -124,19 +124,37 @@ public class LlmClient
             return model;
         }
 
-        final String apiKey = config.aiApiKey();
-        final String modelName = config.aiModel();
+        final String apiKey = (mode == LlmMode.ASSERT && StringUtils.isNotBlank(config.aiAssertionApiKey()))
+                ? config.aiAssertionApiKey() : config.aiApiKey();
+        final String modelName = (mode == LlmMode.ASSERT && StringUtils.isNotBlank(config.aiAssertionModel()))
+                ? config.aiAssertionModel() : config.aiModel();
 
-        if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey()))
+        if (StringUtils.isBlank(apiKey))
         {
             Assertions.fail(
-                    "AI API key not configured. Set in your ai.properties, neodymium.properties or as an evironment variable.");
+                    "AI API key not configured. Set in your ai.properties, neodymium.properties or as an environment variable.");
         }
 
         LOG.debug("   🤖 Initializing Gemini model: {}", modelName);
 
-        final double temperature = mode == LlmMode.GENERATOR ? config.aiGenerateTemperature() : config.aiTemperature();
+        final double temperature;
+        if (mode == LlmMode.GENERATOR)
+        {
+            temperature = config.aiGenerateTemperature();
+        }
+        else if (mode == LlmMode.ASSERT)
+        {
+            final Double assertTemp = config.aiAssertionTemperature();
+            temperature = assertTemp != null ? assertTemp : 0.0;
+        }
+        else
+        {
+            temperature = config.aiTemperature();
+        }
         LOG.debug("   🌡️ Using temperature: {} (mode={})", temperature, mode);
+
+        final int timeoutSeconds = (mode == LlmMode.ASSERT && config.aiAssertionTimeoutSeconds() != null)
+                ? config.aiAssertionTimeoutSeconds() : config.geminiTimeoutSeconds();
 
         model = GoogleAiGeminiChatModel.builder()
                 .apiKey(apiKey)
@@ -144,7 +162,7 @@ public class LlmClient
                 .temperature(temperature)
                 .maxOutputTokens(4096)
                 .responseFormat(ResponseFormat.JSON)
-                .timeout(Duration.ofSeconds(config.geminiTimeoutSeconds()))
+                .timeout(Duration.ofSeconds(timeoutSeconds))
                 .build();
         return model;
     }
