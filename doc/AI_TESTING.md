@@ -425,6 +425,11 @@ For tests that *must* run inside a real browser to scan visual anomalies, contra
 The testing pages reside under:
 `src/test/resources/ai-test-pages/AuraGlanceTest/`
 * **Sub-Apps**: Contains distinct page templates (SaaS `dashboard/`, E-Commerce `shop/`, Accessibility `a11y/`).
+* **Escalation Challenge Pages**:
+  - `shop/escalation.html`: Simulates context level escalation from **AXTREE to LEAN** (clicking a custom span link or custom div button, and typing into an input field inside an `aria-hidden` container) and **LEAN to STANDARD** (verifying plain text paragraph content containing the token `AURA-9921-SECURE`).
+  - `shop/visual-escalation.html`: Simulates context level escalation from **STANDARD to VISUAL** (verifying text drawn inside a `<canvas>` element or injected via CSS `::after` content rule).
+* **Unified Scenario Playground (`shop/sandbox/`)**:
+  - Contains standalone sandbox pages testing: SVG-only icon buttons (`svg-icons.html`), coordinate clicks (`canvas-click.html`), Shadow DOM (`shadow-dom.html`), click interception overlays (`click-intercept.html`), input timing reveal (`dynamic-reveal.html`), sequential hover chains (`hover-chain.html`), AJAX table sorting (`table-sorting.html`), scroll list overflow (`scroll-list.html`), floating labels visual overlap (`floating-labels.html`), cross-origin iframes (`cross-origin-iframe.html`), and mock OAuth redirects (`mock-oauth-login.html`). Verified in JUnit 5 integration tests by extending `BaseAiTest`.
 * **Aura Chaos Panel**: Click the bottom-right gear trigger icon to dynamically inject layout shifts, contrast bugs, and overlaps directly into the live browser DOM.
 
 ### 2. Embedded HTML Server

@@ -22,6 +22,7 @@ import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$x;
 
 import java.time.Duration;
+import com.xceptance.neodymium.util.Neodymium;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -189,9 +190,15 @@ public class ActionExecutor {
         this.test = test;
     }
 
-    public void setVariable(String key, String value) {
-        if (key != null && value != null) {
+    public void setVariable(final String key, final String value)
+    {
+        if (key != null && value != null)
+        {
             executionVariables.put(key, value);
+            if (Neodymium.getData() != null)
+            {
+                Neodymium.getData().put(key, value);
+            }
         }
     }
 
@@ -246,22 +253,32 @@ public class ActionExecutor {
 
         AiActionPlugin plugin = ActionRegistry.getPlugin(action.getType());
 
-        if (plugin != null) {
-            try {
-                plugin.execute(action, test, this);
+        try
+        {
+            if (plugin != null) {
+                try {
+                    plugin.execute(action, test, this);
 
-                if (action.getElementContext() != null && !action.getElementContext().isEmpty()) {
-                    LOG.debug("   ✅ Interacted with element: {}", action.getElementContext());
-                }
-            } finally {
-                if (plugin != null) {
+                    if (action.getElementContext() != null && !action.getElementContext().isEmpty()) {
+                        LOG.debug("   ✅ Interacted with element: {}", action.getElementContext());
+                    }
+                } finally {
                     plugin.cleanup(action, this);
                 }
+            } else {
+                LOG.warn("Unsupported action type: {}", action.getType());
             }
-        } else {
-            LOG.warn("Unsupported action type: {}", action.getType());
         }
-
+        finally
+        {
+            try
+            {
+                com.codeborne.selenide.WebDriverRunner.getWebDriver().switchTo().defaultContent();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
     }
 
     /**

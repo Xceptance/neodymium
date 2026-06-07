@@ -16,7 +16,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.xceptance.neodymium.ai;
+package com.xceptance.neodymium.ai.core;
+import com.xceptance.neodymium.ai.AiTestVerification;
+import com.xceptance.neodymium.ai.VerificationMode;
+import com.xceptance.neodymium.ai.BaseAiTest;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
@@ -35,6 +38,12 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1024x768")
 @DataFolder("com/xceptance/neodymium/ai/YamlDataDrivenTest")
+@AiTestVerification({
+    VerificationMode.LIVE_LLM,
+    VerificationMode.OFFLINE_REPLAY,
+    VerificationMode.HUD_OFFLINE_REPLAY,
+    VerificationMode.HUD_LLM
+})
 public final class YamlDataDrivenTest extends BaseAiTest
 {
     private String formsUrl;
@@ -61,6 +70,6 @@ public final class YamlDataDrivenTest extends BaseAiTest
     @NeodymiumTest
     public void testYamlStepsAndDataResolution()
     {
-        assertTwoPhaseExecution();
+        assertAiExecution();
     }
 }

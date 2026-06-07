@@ -16,7 +16,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.xceptance.neodymium.ai;
+package com.xceptance.neodymium.ai.storefront;
+import com.xceptance.neodymium.ai.AiTestVerification;
+import com.xceptance.neodymium.ai.VerificationMode;
+import com.xceptance.neodymium.ai.BaseAiTest;
 
 import static com.codeborne.selenide.Selenide.open;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -47,6 +50,12 @@ import com.xceptance.neodymium.ai.playbook.Playbook;
  */
 @Browser("Chrome_1024x768")
 @Browser("Chrome_1500x1000")
+@AiTestVerification({
+    VerificationMode.LIVE_LLM,
+    VerificationMode.OFFLINE_REPLAY,
+    VerificationMode.HUD_OFFLINE_REPLAY,
+    VerificationMode.HUD_LLM
+})
 public final class FeatureMatrixTest extends BaseAiTest
 {
     private String httpShopUrl;
@@ -104,7 +113,7 @@ public final class FeatureMatrixTest extends BaseAiTest
     {
         final long startTime = System.currentTimeMillis();
 
-        assertTwoPhaseExecution(() ->
+        assertAiExecution(() ->
         {
             // Open secure HTTPS forms sub-application (Chrome ignores cert warning via args)
             open(httpsFormsUrl);
@@ -139,7 +148,7 @@ public final class FeatureMatrixTest extends BaseAiTest
     @DataSet(id = "ShopSetup")
     public void testImageChecksWithAI()
     {
-        assertTwoPhaseExecution(() ->
+        assertAiExecution(() ->
         {
             open(httpShopUrl);
 

@@ -30,6 +30,8 @@ import org.openqa.selenium.chromium.HasCdp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.common.ScreenshotWriter;
 
 /**
@@ -429,7 +431,7 @@ public class PageAnalyzer
                 .concat(captureElements('select', 'select'))
                 .concat(captureElements('option', 'option'))
                 .concat(captureElements('textarea', 'textarea'))
-                .concat(captureClickableElements('div, span, tr, td, th, li, label, dialog, svg, img', 'clickable'));
+                .concat(captureClickableElements('div, span, tr, td, th, li, label, dialog, svg, img, canvas', 'clickable'));
 
             // Helper to retrieve the most meaningful text label representation of an element
             var getDisplayLabel = function(elObj) {
@@ -525,6 +527,24 @@ public class PageAnalyzer
     {
     }
 
+    private boolean hasActiveWebDriver()
+    {
+        if (!WebDriverRunner.hasWebDriverStarted())
+        {
+            return false;
+        }
+        try
+        {
+            WebDriverRunner.getWebDriver();
+            return true;
+        }
+        catch (final Exception e)
+        {
+            LOG.debug("Active WebDriver check failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
     /**
      * Captures a Base64-encoded screenshot of the current page.
      *
@@ -532,13 +552,17 @@ public class PageAnalyzer
      * @throws IOException
      */
 
-    public String captureScreenshot(String title) throws IOException
+    public String captureScreenshot(final String title) throws IOException
     {
+        if (!hasActiveWebDriver())
+        {
+            return null;
+        }
         LOG.debug("   📸 Capturing screenshot for: {}", title);
         boolean hidden = false;
         try
         {
-            final Object hudExists = com.codeborne.selenide.Selenide.executeJavaScript(
+            final Object hudExists = Selenide.executeJavaScript(
                 "var hud = document.getElementById('neodymium-ai-hud-container'); " +
                 "if (hud && hud.style.display !== 'none') { hud.style.display = 'none'; return true; } " +
                 "return false;"
@@ -561,7 +585,7 @@ public class PageAnalyzer
             {
                 try
                 {
-                    com.codeborne.selenide.Selenide.executeJavaScript(
+                    Selenide.executeJavaScript(
                         "var hud = document.getElementById('neodymium-ai-hud-container'); " +
                         "if (hud) { hud.style.display = ''; }"
                     );
@@ -610,7 +634,21 @@ public class PageAnalyzer
     @SuppressWarnings("unchecked")
     public String captureSimplifiedDom(final ContextLevel level)
     {
-        final String url = com.codeborne.selenide.WebDriverRunner.url();
+        if (!hasActiveWebDriver())
+        {
+            return "Page URL: <empty page>\nPage Title: \n\n";
+        }
+        final String url;
+        final String title;
+        try
+        {
+            url = WebDriverRunner.url();
+            title = Selenide.title();
+        }
+        catch (final Exception e)
+        {
+            return "Page URL: <empty page>\nPage Title: \n\n";
+        }
         final boolean isEmptyPage = "data:,".equals(url) || "about:blank".equals(url);
 
         if (!isEmptyPage)
@@ -620,7 +658,7 @@ public class PageAnalyzer
 
         final StringBuilder dom = new StringBuilder();
         dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
-        dom.append("Page Title: ").append(com.codeborne.selenide.Selenide.title()).append("\n\n");
+        dom.append("Page Title: ").append(Selenide.title()).append("\n\n");
 
         if (isEmptyPage)
         {

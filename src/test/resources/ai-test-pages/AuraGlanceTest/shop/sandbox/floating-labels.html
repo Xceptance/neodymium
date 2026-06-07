@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Floating Labels Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+    <style>
+        /* Floating label styles */
+        .form-group {
+            position: relative;
+            margin-bottom: 1.5rem;
+            width: 300px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 15px 10px 5px 10px;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 4px;
+            color: #fff;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .form-group label {
+            position: absolute;
+            top: 12px;
+            left: 10px;
+            color: #aaa;
+            transition: all 0.2s ease;
+            pointer-events: none;
+            font-size: 16px;
+        }
+        /* Active floating states */
+        .form-group input:focus ~ label,
+        .form-group.float-active label {
+            top: 3px;
+            left: 10px;
+            font-size: 11px;
+            color: #00ffcc;
+        }
+    </style>
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Floating Label Overlap Challenge</h1>
+                <p class="aura-desc">
+                    Click the "Simulate Browser Autofill" button to enter input text without triggering CSS focus transitions. 
+                    This creates a visual overlap bug where the label text and input value are layered directly on top of each other.
+                </p>
+
+                <div style="display: flex; flex-direction: column; align-items: center; margin: 3rem 0; gap: 1.5rem;">
+                    <div id="username-group" class="form-group">
+                        <input type="text" id="username-input" placeholder=" ">
+                        <label for="username-input">Username</label>
+                    </div>
+
+                    <div style="display: flex; gap: 1rem;">
+                        <button id="btn-autofill" class="aura-btn" style="background: rgba(255,51,102,0.2); border: 1px solid #ff3366; color: #ff3366;">
+                            Simulate Browser Autofill
+                        </button>
+                        <button id="btn-fix" class="aura-btn" style="background: rgba(0,255,204,0.2); border: 1px solid #00ffcc; color: #00ffcc;">
+                            Fix Label Overlap
+                        </button>
+                    </div>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="label-status" style="font-weight: bold; color: #aaaaaa;">Form is empty</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const input = document.getElementById('username-input');
+        const group = document.getElementById('username-group');
+        const btnAutofill = document.getElementById('btn-autofill');
+        const btnFix = document.getElementById('btn-fix');
+        const status = document.getElementById('label-status');
+
+        // Autofill triggers value change but keeps placeholder focus inactive, causing visual overlap
+        btnAutofill.addEventListener('click', function() {
+            input.value = 'John Doe';
+            group.classList.remove('float-active');
+            status.innerText = 'Autofill triggered: Visual Overlap Active!';
+            status.style.color = '#ff3366';
+        });
+
+        // Fixing the layout shift by activating float class manually
+        btnFix.addEventListener('click', function() {
+            if (input.value) {
+                group.classList.add('float-active');
+                status.innerText = 'Floating label transition fixed!';
+                status.style.color = '#00ffcc';
+            } else {
+                status.innerText = 'Cannot fix layout: Input field is empty.';
+                status.style.color = '#ffcc00';
+            }
+        });
+
+        // Standard typing behaves correctly
+        input.addEventListener('input', function() {
+            if (input.value.length > 0) {
+                group.classList.add('float-active');
+                status.innerText = 'User typing...';
+                status.style.color = '#33ccff';
+            } else {
+                group.classList.remove('float-active');
+                status.innerText = 'Form is empty';
+                status.style.color = '#aaaaaa';
+            }
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

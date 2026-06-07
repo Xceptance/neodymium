@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<!--
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+<!-- AI-generated: Gemini 3.5 Flash -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Visual Escalation Challenge</title>
+    <link rel="stylesheet" href="../shared/style.css">
+    <link rel="stylesheet" href="../shared/controls.css">
+    <style>
+        #pseudo-container {
+            cursor: pointer;
+            position: relative;
+            padding: 1.5rem;
+            background: hsla(220, 20%, 5%, 0.4);
+            border: 1px solid var(--bg-card-border);
+            border-radius: var(--radius-sm);
+            margin-top: 1.5rem;
+            transition: var(--transition-smooth);
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #pseudo-container:hover {
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 10px var(--accent-purple-glow);
+        }
+        #pseudo-container::after {
+            content: "PSEUDO-ELEMENT-SECRET";
+            color: var(--accent-purple);
+            font-size: 1.25rem;
+            font-weight: 700;
+            font-family: 'Outfit', sans-serif;
+            letter-spacing: 0.05em;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation Header -->
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="../index.html" class="brand">
+                <span class="brand-icon"></span>
+                <span>Aura Suite Hub</span>
+            </a>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="../index.html">Hub Home</a></li>
+                    <li><a href="index.html">Shop Catalog</a></li>
+                    <li><a href="forms.html">Forms Demo</a></li>
+                    <li><a href="escalation.html">Escalation Challenge</a></li>
+                    <li><a href="visual-escalation.html" class="active">Visual Escalation</a></li>
+                    <li><a href="../a11y/index.html">Accessibility Checks</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="aura-container">
+        
+        <section class="aura-hero" style="padding: 2rem 3.5rem;">
+            <h1>Visual Context Escalation Challenges</h1>
+            <p style="margin-top: 0.5rem; color: var(--text-secondary);">
+                Verify and interact with elements that are drawn purely graphically. Because their content does not exist in standard DOM text nodes, the agent must escalate to the VISUAL context level to see them in a screenshot.
+            </p>
+        </section>
+
+        <section class="aura-grid-3">
+            
+            <!-- Canvas Verification Card -->
+            <div class="aura-card" id="canvas-challenge">
+                <h3 style="margin-bottom: 1.5rem; color: var(--accent-cyan);">Canvas-Rendered Target</h3>
+                <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                    This token is painted inside an HTML5 Canvas element. It cannot be found in the DOM text, forcing escalation to VISUAL.
+                </p>
+                <div style="background: hsla(220, 20%, 5%, 0.4); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--bg-card-border); display: flex; justify-content: center; align-items: center;">
+                    <canvas id="canvas-target" width="280" height="75" style="background: transparent; cursor: pointer; border-radius: var(--radius-sm);"></canvas>
+                </div>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 1.5rem;">
+                    Clicking the canvas element maps coordinates back to the canvas selector.
+                </p>
+            </div>
+
+            <!-- CSS Pseudo-element Verification Card -->
+            <div class="aura-card" id="pseudo-challenge">
+                <h3 style="margin-bottom: 1.5rem; color: var(--accent-purple);">CSS Pseudo-Element Target</h3>
+                <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                    This text content is injected purely via CSS stylesheet ::after rule. It does not exist in the DOM node printout.
+                </p>
+                
+                <div id="pseudo-container"></div>
+                
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 1.5rem;">
+                    Clicking the container fires a standard click event.
+                </p>
+            </div>
+
+            <!-- Interaction Status Card -->
+            <div class="aura-card" style="display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                <h3 style="margin-bottom: 1.5rem;">Verification Status</h3>
+                <div style="background: hsla(220, 20%, 5%, 0.6); padding: 2rem; border-radius: var(--radius-md); border: 1px solid var(--bg-card-border); width: 100%; max-width: 350px;">
+                    <span id="escalation-status" style="color: var(--accent-cyan); font-weight: 700; font-size: 1.25rem;">Status: Pending</span>
+                </div>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 1.5rem;">
+                    Interacting with the visual targets on the left will update this status in real-time.
+                </p>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Global Controls Drawer Script injection -->
+    <script src="../shared/controls.js"></script>
+
+    <!-- Page JavaScript logic -->
+    <script>
+        // Render text in canvas
+        window.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('canvas-target');
+            const ctx = canvas.getContext('2d');
+            
+            // Draw background glow/frame
+            ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+            
+            // Draw text
+            ctx.fillStyle = '#06b6d4'; // Accent cyan
+            ctx.font = 'bold 16px Outfit, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('VISUAL-ONLY-TOKEN', canvas.width / 2, canvas.height / 2);
+            
+            // Canvas Click Listener
+            canvas.addEventListener('click', () => {
+                document.getElementById('escalation-status').innerText = "Status: Canvas Clicked";
+            });
+
+            // Pseudo Click Listener
+            document.getElementById('pseudo-container').addEventListener('click', () => {
+                document.getElementById('escalation-status').innerText = "Status: Pseudo-Element Clicked";
+            });
+        });
+    </script>
+
+</body>
+</html>

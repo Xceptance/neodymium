@@ -348,6 +348,50 @@ To eliminate this overhead, Neodymium AI introduces **Smart Escalation Jumps**. 
 
 ---
 
+### 🔬 Interactive Escalation Challenges (Aura Test Sandbox)
+
+To rigorously test, debug, and verify context escalation transitions locally without external dependencies, the **Aura Test Suite Hub** includes dedicated storefront sandbox pages specifically designed to trigger and force these transitions:
+
+1. **`AXTREE` ➔ `LEAN` Escalation (`shop/escalation.html`):**
+   * **The Challenge:** Tests interaction with elements that are omitted from browser-native Accessibility Trees but are fully interactive.
+   * **Target Elements:**
+     - A custom link constructed via `<span>` (no semantic link role).
+     - A custom pill button constructed via `<div>` (no accessibility button role).
+     - An input text field nested within an `aria-hidden="true"` parent container.
+   * **Behavior:** On the first attempt in `AXTREE` context, the agent fails to find/see these elements because they are ignored in the accessibility tree. It escalates to `LEAN`, which parses the standard simplified DOM (including elements with pointer cursors and input fields), and successfully completes the interactions on retry.
+
+2. **`LEAN` ➔ `STANDARD` Escalation (`shop/escalation.html`):**
+   * **The Challenge:** Tests text content verification of elements with zero semantic interactive roles (like paragraphs, list items, or generic span text nodes).
+   * **Target Element:** A plain text `<p>` paragraph displaying a secret verification token (`AURA-9921-SECURE`).
+   * **Behavior:** The agent starts at `AXTREE` or `LEAN` level. Since `LEAN` mode only extracts interactive elements, form controls, and headers, the plain paragraph is excluded. The LLM returns `{"status": "ESCALATE", "targetContext": "STANDARD"}`. Upon escalating to `STANDARD`, the plain text content is appended to the DOM outline, allowing the LLM to successfully verify the token.
+
+3. **`STANDARD` ➔ `VISUAL` Escalation (`shop/visual-escalation.html`):**
+   * **The Challenge:** Tests verification of elements rendered purely graphically or via styling rules that do not expose text nodes in the DOM tree.
+   * **Target Elements:**
+     - A `<canvas id="canvas-target">` drawing a secret token (`VISUAL-ONLY-TOKEN`) via 2D context pixels.
+     - An empty container `div` (`#pseudo-container`) displaying text (`PSEUDO-ELEMENT-SECRET`) purely via the CSS `:after` selector content property.
+   * **Behavior:** Since neither canvas-drawn text nor CSS pseudo-element content exists in DOM text nodes, standard DOM extraction (`STANDARD`) is insufficient. The agent is forced to escalate to `VISUAL` context, capturing and sending a page screenshot. The LLM reviews the screenshot, identifies the text visually, maps it to the element, and resolves the action successfully.
+
+---
+
+### 🔬 Unified Sandbox Scenario Challenges (`shop/sandbox/`)
+
+To test, debug, and verify complex edge cases in visual parsing, action timing, and cross-boundary browser behaviors, the **Aura Test Suite Hub** includes a set of focused, standalone pages served under `shop/sandbox/`:
+
+1. **`svg-icons.html` (SVG Icon Buttons):** Tests visual recognition of buttons containing raw SVG elements with no text, accessible labels, or titles. The agent must trigger the `VISUAL_LEAN` context level to identify the correct icon visually.
+2. **`canvas-click.html` (Canvas Coordinate Clicks):** Tests coordinate-based clicks inside a `<canvas>` element containing targets drawn in pixels (Red and Blue squares).
+3. **`shadow-dom.html` (Shadow DOM Piercing):** Tests recursive shadow root traversal to locate inputs and execute form credentials inside an encapsulated Web Component.
+4. **`click-intercept.html` (Click Interception overlays):** Tests the agent's self-healing recovery flow when encountering `ElementClickInterceptedException` due to transparent overlays blocking buttons.
+5. **`dynamic-reveal.html` (Dynamic Reveal Timing):** Tests input creation delay (200ms) after clicking to reveal inputs, checking that the runner waits and doesn't fail on action batching.
+6. **`hover-chain.html` (Hover Dropdown Chains):** Tests chaining sequential parent hover actions prior to clicking nested children styled with CSS hover rules.
+7. **`table-sorting.html` (AJAX Sorting Settling):** Tests waiting for DOM settling (400ms spinner delay) after clicking table header sorting buttons before running assertions.
+8. **`scroll-list.html` (Scroll Overflow List):** Tests scroll-into-view viewport scrolling on elements hidden at the bottom of overflowing list containers.
+9. **`floating-labels.html` (Floating Label Overlaps):** Tests visual text overlap bug detection (e.g., labels and input text layering directly on top of each other due to programmatic autofill) using the Visual Auditor (`(glance)`).
+10. **`cross-origin-iframe.html` (Cross-Origin iFrames):** Tests switching WebDriver window context into an iframe hosted on a different HTTP port (origin) under parent HTTPS.
+11. **`mock-oauth-login.html` (Mock OAuth Redirects):** Tests cross-domain redirect authentication flows, code extraction from query parameters, and redirect window handles.
+
+---
+
 ### 🔮 Pre-Execution Static Analysis Phase (PESAP)
 
 To minimize the number of sequential escalation loops on the very first execution of a test (where no playbook cache exists yet), Neodymium AI implements a highly efficient **Pre-Execution Static Analysis Phase (PESAP)**.

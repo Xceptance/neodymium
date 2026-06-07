@@ -1,0 +1,51 @@
+{
+  "id": "com.xceptance.neodymium.ai.anomaly.ClippedAnomalyTest :: testClippedLabelVisualAnomaly :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
+      "reasoning": "The instruction was to click on the \u0027Aura Defect Controls\u0027 trigger button. The DOM shows a clickable element with id \u0027aura-trigger\u0027 and title \u0027Aura Defect Controls\u0027, which matches the instruction and hint. A CLICK action targeting this element has been generated.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Click the \u0027Inject Clipped Text\u0027 toggle. (hint: label[for\u003d\u0027toggle-clipped\u0027])",
+      "reasoning": "Clicked the checkbox element with the name \u0027Inject Clipped Text\u0027 as identified by its data-neo-ref attribute.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_wykl6c\u0027]",
+          "description": "Click the \u0027Inject Clipped Text\u0027 toggle.",
+          "elementDetails": "Inject Clipped Text Clamps cards height with overflow hidden.",
+          "elementContext": {
+            "id": "toggle-clipped",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "actions": [],
+      "expectedFailure": false
+    }
+  ]
+}
