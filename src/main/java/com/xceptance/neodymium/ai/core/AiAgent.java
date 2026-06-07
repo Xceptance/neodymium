@@ -798,6 +798,13 @@ public class AiAgent {
             } catch (final HudActionException e) {
                 throw e; // Rethrow to be caught by the outer loop
             } catch (final AssertionError e) {
+                if (e instanceof DefinitiveAssertionError) {
+                    final PlaybookStep step = playbook.getCurrentStep();
+                    if (step != null) {
+                        step.setFailure(new ActionExecutionException(e.getMessage(), e));
+                    }
+                    throw e;
+                }
                 if (optionalStep) {
                     LOG.warn(
                             "    ⚠️ Optional/Soft step assertion failed: {}. Bypassing failure due to optional/soft tag.",
@@ -1260,6 +1267,7 @@ public class AiAgent {
                                         "Replaying actions from playbook (visual match succeeded, Hamming distance: "
                                                 + distance + ").");
                                 llmClient.getAiStats().recordReplay();
+                                stepDetails.setReplayed(true);
                                 actions.addAll(step.getActions());
                                 visualMatchSucceeded = true;
                             } else {
@@ -1281,6 +1289,7 @@ public class AiAgent {
 
                         executionLog.logInfo("Replaying actions from playbook.");
                         llmClient.getAiStats().recordReplay();
+                        stepDetails.setReplayed(true);
                         actions.addAll(step.getActions());
                     }
                 }
@@ -1288,8 +1297,9 @@ public class AiAgent {
         }
 
         // 2. Try to identify the action intent upfront.
-        if (actions.isEmpty() && !visualMatchSucceeded) {
-            actions = identifyActions(instruction, step);
+        if (actions.isEmpty() && !visualMatchSucceeded)
+        {
+            actions = identifyActions(instruction, step, stepDetails);
         }
 
         // 3. Prepare Phase and LLM Check
@@ -1817,7 +1827,14 @@ public class AiAgent {
                             : "Verification failed: " + error;
                     LOG.error("    ❌ {}", message);
                     executionLog.logError(message);
-                    throw new ActionExecutionException(message, null);
+                    if (actionParser.isDone(llmResponse))
+                    {
+                        throw new DefinitiveAssertionError(message);
+                    }
+                    else
+                    {
+                        throw new ActionExecutionException(message, null);
+                    }
                 }
 
                 // 5. Parse actions
@@ -1953,16 +1970,23 @@ public class AiAgent {
         }
     }
 
-    private List<Action> identifyActions(final String instruction, final PlaybookStep playbookStep) {
-        for (AiActionPlugin plugin : ActionRegistry.getAllPlugins()) {
+    private List<Action> identifyActions(final String instruction, final PlaybookStep playbookStep, final StepDetails stepDetails)
+    {
+        for (final AiActionPlugin plugin : ActionRegistry.getAllPlugins())
+        {
             final List<Action> actions = plugin.parseDirectInstruction(instruction);
-            if (actions != null && !actions.isEmpty()) {
+            if (actions != null && !actions.isEmpty())
+            {
                 playbookStep.setActions(actions);
                 playbookStep.setPromptLine(instruction);
                 playbookStep.setReasoning("directly parsed");
                 playbookStep.setScreenshotHash(null);
                 playbookStep.setFailure(null);
                 llmClient.getAiStats().recordDirectParse();
+                if (stepDetails != null)
+                {
+                    stepDetails.setDirectParse(true);
+                }
                 return actions;
             }
         }
@@ -2037,6 +2061,21 @@ public class AiAgent {
          */
         public AiAgentException(final String message, final Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    /**
+     * Exception thrown when the AI agent definitively verifies that a condition has failed
+     * (i.e. success = false and done = true returned by the LLM).
+     * This represents a final verification failure and prevents context level escalation or retries.
+     */
+    public static class DefinitiveAssertionError extends AssertionError
+    {
+        private static final long serialVersionUID = 1L;
+
+        public DefinitiveAssertionError(final String message)
+        {
+            super(message);
         }
     }
 
