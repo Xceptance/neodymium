@@ -112,6 +112,30 @@ public class LlmClient
     }
 
     /**
+     * Masks the given API key for safe logging, keeping only the first 4 and the last 4 characters,
+     * and filling the middle characters with '*' to preserve the original key length.
+     * If the key length is 8 or fewer, the entire key is masked.
+     *
+     * @param key the API key to mask
+     * @return the masked API key
+     */
+    static String maskKey(final String key)
+    {
+        if (StringUtils.isBlank(key))
+        {
+            return "";
+        }
+
+        final int len = key.length();
+        if (len > 8)
+        {
+            return key.substring(0, 4) + "*".repeat(len - 8) + key.substring(len - 4);
+        }
+
+        return "*".repeat(len);
+    }
+
+    /**
      * Lazy-initializes and returns the LangChain4j ChatModel.
      * Selects configuration properties dynamically based on the execution mode (Agent vs Generator).
      *
@@ -135,7 +159,7 @@ public class LlmClient
                     "AI API key not configured. Set in your ai.properties, neodymium.properties or as an environment variable.");
         }
 
-        LOG.debug("   🤖 Initializing Gemini model: {}", modelName);
+        LOG.debug("   🤖 Initializing Gemini model: {} using API key: {}", modelName, maskKey(apiKey));
 
         final double temperature;
         if (mode == LlmMode.GENERATOR)
