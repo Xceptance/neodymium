@@ -12,9 +12,11 @@
           ],
           "description": "Navigate to https://xceptance.com",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     },
     {
       "promptLine": "open https://www.xceptance.com/de/",
@@ -27,9 +29,11 @@
           ],
           "description": "Navigate to https://www.xceptance.com/de/",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     }
   ]
 }

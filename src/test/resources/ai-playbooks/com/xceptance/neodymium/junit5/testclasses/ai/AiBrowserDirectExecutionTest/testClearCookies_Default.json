@@ -12,9 +12,11 @@
           ],
           "description": "Navigate to https://xceptance.com",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     },
     {
       "promptLine": "clear cookies",
@@ -23,9 +25,11 @@
         {
           "type": "CLEAR_COOKIES",
           "description": "Clear cookies",
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     }
   ]
 }
