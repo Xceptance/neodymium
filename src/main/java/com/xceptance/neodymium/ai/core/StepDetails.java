@@ -39,6 +39,8 @@ public final class StepDetails
     private String failureReason;
     private ContextLevel pesapPredictedContextLevel;
     private final List<String> pesapWarnings;
+    private boolean replayed;
+    private boolean directParse;
 
     public StepDetails(final String rawInstruction)
     {
@@ -112,5 +114,59 @@ public final class StepDetails
     public final void addPesapWarning(final String warning)
     {
         this.pesapWarnings.add(warning);
+    }
+
+    /**
+     * Checks if this step was replayed from a playbook.
+     *
+     * @return true if replayed, false otherwise
+     */
+    public final boolean isReplayed()
+    {
+        return this.replayed;
+    }
+
+    /**
+     * Sets whether this step was replayed from a playbook.
+     *
+     * @param replayed the replay status
+     */
+    public final void setReplayed(final boolean replayed)
+    {
+        this.replayed = replayed;
+    }
+
+    /**
+     * Checks if this step was resolved via direct parsing (no-LLM match).
+     *
+     * @return true if directly parsed, false otherwise
+     */
+    public final boolean isDirectParse()
+    {
+        return this.directParse;
+    }
+
+    /**
+     * Sets whether this step was resolved via direct parsing.
+     *
+     * @param directParse the direct parse status
+     */
+    public final void setDirectParse(final boolean directParse)
+    {
+        this.directParse = directParse;
+    }
+
+    /**
+     * Extracts and returns the reasoning from the first LLM call of this step, if present.
+     *
+     * @return the reasoning explanation, or an empty string if no LLM calls were made or no reasoning is present
+     */
+    public final String getReasoning()
+    {
+        if (this.llmCalls.isEmpty())
+        {
+            return "";
+        }
+        return this.llmCalls.get(0).getReasoning();
     }
 }
