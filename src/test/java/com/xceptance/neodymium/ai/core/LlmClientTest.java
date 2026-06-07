@@ -59,12 +59,12 @@ class LlmClientTest
         assertEquals("1234**7890", masked10);
         assertEquals(key10.length(), masked10.length());
 
-        // Real-world length key (53 characters)
-        final String realKey = "AQ.Ab8RN6Ly_IePfbXqCDanBYj1ZYyOxfR-oXg4sjEqQEkQTHA0NQ";
+        // Real-world length key (42 characters)
+        final String realKey = "fake-key-1234567890-abcdef-1234567890-abcd";
         final String maskedReal = LlmClient.maskKey(realKey);
         assertEquals(realKey.length(), maskedReal.length());
-        assertEquals("AQ.A", maskedReal.substring(0, 4));
-        assertEquals("A0NQ", maskedReal.substring(realKey.length() - 4));
+        assertEquals("fake", maskedReal.substring(0, 4));
+        assertEquals("abcd", maskedReal.substring(realKey.length() - 4));
         assertEquals("*".repeat(realKey.length() - 8), maskedReal.substring(4, realKey.length() - 4));
     }
 }
