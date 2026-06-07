@@ -23,13 +23,17 @@ import static com.codeborne.selenide.Selenide.$x;
 
 import java.time.Duration;
 import com.xceptance.neodymium.util.Neodymium;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.jspecify.annotations.Nullable;
 import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +45,7 @@ import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
+import com.codeborne.selenide.WebDriverRunner;
 import com.codeborne.selenide.WebElementCondition;
 
 import io.qameta.allure.Step;
@@ -54,7 +59,7 @@ import io.qameta.allure.Step;
  */
 public class ActionExecutor {
     private static final Logger LOG = LoggerFactory.getLogger(ActionExecutor.class);
-    private final java.util.Set<String> actionLogs = new java.util.HashSet<>();
+    private final Set<String> actionLogs = new HashSet<>();
 
     private final Duration getElementTimeout()
     {
@@ -273,7 +278,7 @@ public class ActionExecutor {
         {
             try
             {
-                com.codeborne.selenide.WebDriverRunner.getWebDriver().switchTo().defaultContent();
+                WebDriverRunner.getWebDriver().switchTo().defaultContent();
             }
             catch (final Exception ignored)
             {
@@ -750,16 +755,25 @@ public class ActionExecutor {
         String windowHandle = parts[0];
         final String framePath = parts[1];
         
-        final org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
+        final WebDriver driver = WebDriverRunner.getWebDriver();
         try
         {
-            final java.util.Set<String> activeHandles = driver.getWindowHandles();
-            if (!activeHandles.contains(windowHandle))
+            final Set<String> activeHandles = driver.getWindowHandles();
+            if (windowHandle.startsWith("win_"))
+            {
+                final int index = Integer.parseInt(windowHandle.substring(4));
+                final List<String> activeList = new ArrayList<>(activeHandles);
+                if (index >= 0 && index < activeList.size())
+                {
+                    windowHandle = activeList.get(index);
+                }
+            }
+            else if (!activeHandles.contains(windowHandle))
             {
                 if (!windowHandleMapping.containsKey(windowHandle))
                 {
                     final int nextIndex = windowHandleMapping.size();
-                    final java.util.List<String> activeList = new java.util.ArrayList<>(activeHandles);
+                    final List<String> activeList = new ArrayList<>(activeHandles);
                     if (nextIndex < activeList.size())
                     {
                         windowHandleMapping.put(windowHandle, activeList.get(nextIndex));
@@ -776,13 +790,28 @@ public class ActionExecutor {
             
             if (!"main".equals(framePath))
             {
-                final String[] indices = framePath.split("\\.");
-                for (final String indexStr : indices)
+                if (framePath.contains(" >>> "))
                 {
-                    if (!indexStr.equals("main") && !indexStr.isBlank())
+                    final String[] selectors = framePath.split(" >>> ");
+                    for (final String selector : selectors)
                     {
-                        final int index = Integer.parseInt(indexStr);
-                        driver.switchTo().frame(index);
+                        if (!selector.equals("main") && !selector.isBlank())
+                        {
+                            final WebElement iframeElement = driver.findElement(By.cssSelector(selector));
+                            driver.switchTo().frame(iframeElement);
+                        }
+                    }
+                }
+                else
+                {
+                    final String[] indices = framePath.split("\\.");
+                    for (final String indexStr : indices)
+                    {
+                        if (!indexStr.equals("main") && !indexStr.isBlank())
+                        {
+                            final int index = Integer.parseInt(indexStr);
+                            driver.switchTo().frame(index);
+                        }
                     }
                 }
             }
