@@ -1,0 +1,104 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.SearchAndSubmitTest :: testSearchAndSubmitEnglish :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Type \u0027bear\u0027 into the search box and submit the search",
+      "reasoning": "Typed \u0027bear\u0027 into the search box identified by its data-neo-ref and then clicked the search button, also identified by its data-neo-ref.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "[data-neo-ref\u003d\u0027xc_7cjiuo\u0027]",
+          "value": [
+            "bear"
+          ],
+          "description": "Type \u0027bear\u0027 into the search box",
+          "elementDetails": "Search posters...",
+          "elementContext": {
+            "classes": "search-input",
+            "name": "searchText",
+            "id": "search-box",
+            "placeholder": "Search posters...",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        },
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_r9bvv1\u0027]",
+          "description": "Click the search button",
+          "elementDetails": "Search",
+          "elementContext": {
+            "classes": "btn-search",
+            "text": "Search",
+            "id": "search-button",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the search results title contains \u0027bear\u0027",
+      "reasoning": "The instruction was to verify that the search results title contains \u0027bear\u0027. I found a heading element with the text \u0027Search Results for \u0027bear\u0027\u0027 and used it as the target for the ASSERT action.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "[data-neo-ref\u003d\u0027xc_ph80bd\u0027]",
+          "value": [
+            "bear"
+          ],
+          "description": "Verify that the search results title contains \u0027bear\u0027",
+          "elementDetails": "Search Results for \u0027bear\u0027",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the page displays \u00273 results found.\u0027",
+      "reasoning": "The instruction is to verify the text \u00273 results found.\u0027. I found an element with id \u0027search-subtitle\u0027 and data-neo-ref \u0027xc_5y4ln6\u0027 that contains this exact text. An ASSERT action is used to verify its content.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#search-subtitle",
+          "value": [
+            "3 results found."
+          ],
+          "description": "Verify that the page displays \u00273 results found.\u0027.",
+          "elementDetails": "3 results found.",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

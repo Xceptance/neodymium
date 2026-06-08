@@ -10,7 +10,7 @@
    - ASSERT: verify, validate, assert state/value/visibility.
    - CHECK: check/uncheck a checkbox or radio button.
    - SCROLL: scroll a page or element.
-   - KEY_PRESS: press keys (e.g., Enter, Tab). For "search and submit", TYPE the query then KEY_PRESS ENTER.
+   - KEY_PRESS: press keyboard keys (e.g., Enter, Tab).
    - NAVIGATE: go to an explicit URL.
    - BACK: go back, navigate back.
    - FORWARD: go forward, navigate forward.
