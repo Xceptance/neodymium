@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- AI-generated: Gemini 3.5 Flash -->
+    <!--
+      License: Apache License 2.0
+      Copyright 2026 Xceptance Software Technologies
+    -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VÉRLA - Apparel Collection</title>
+    <style>
+        /* CSS Reset & Variable Design System */
+        :root {
+            --color-bg-primary: #FFFFFF;
+            --color-bg-secondary: #FAF9F6;
+            --color-text-primary: #1A1A1A;
+            --color-text-secondary: #666666;
+            --color-border: #E6E2DA;
+            --color-accent: #C87A53;
+            --color-accent-light: #F4ECE7;
+            --color-success: #5F8766;
+            --font-family-serif: "Georgia", "Times New Roman", serif;
+            --font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --transition-speed: 0.3s;
+            --max-width: 1280px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--color-bg-primary);
+            color: var(--color-text-primary);
+            font-family: var(--font-family-sans);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+            transition: color var(--transition-speed);
+        }
+
+        button {
+            font-family: inherit;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-speed);
+        }
+
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
+        /* Layout Container */
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Announcement Bar */
+        .announcement-bar {
+            background-color: var(--color-bg-secondary);
+            border-bottom: 1px solid var(--color-border);
+            text-align: center;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 8px 16px;
+            font-weight: 500;
+        }
+
+        /* Header Navigation */
+        .header {
+            background-color: var(--color-bg-primary);
+            border-bottom: 1px solid var(--color-border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            height: 80px;
+        }
+
+        .nav-list {
+            display: flex;
+            list-style: none;
+            gap: 24px;
+        }
+
+        .nav-item {
+            position: relative;
+        }
+
+        .nav-link {
+            font-size: 13px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 28px 0;
+            display: inline-block;
+        }
+
+        .nav-link:hover, .nav-link:focus {
+            color: var(--color-accent);
+        }
+
+        /* Dropdown Menu */
+        .nav-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-speed) ease;
+            transform: translateY(10px);
+            list-style: none;
+            padding: 16px 0;
+            z-index: 110;
+        }
+
+        .nav-item:hover .nav-dropdown,
+        .nav-item:focus-within .nav-dropdown {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-link {
+            padding: 8px 24px;
+            display: block;
+            font-size: 13px;
+            color: var(--color-text-secondary);
+        }
+
+        .dropdown-link:hover, .dropdown-link:focus {
+            background-color: var(--color-bg-secondary);
+            color: var(--color-accent);
+            padding-left: 28px;
+        }
+
+        /* Brand Logo */
+        .logo {
+            font-family: var(--font-family-serif);
+            font-size: 28px;
+            font-weight: 400;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            text-align: center;
+        }
+
+        /* Right Utilities */
+        .utilities {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .utility-btn {
+            color: var(--color-text-primary);
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .utility-btn:hover, .utility-btn:focus {
+            color: var(--color-accent);
+        }
+
+        .cart-badge {
+            background-color: var(--color-accent);
+            color: white;
+            font-size: 10px;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 4px;
+            font-weight: bold;
+        }
+
+        /* Country Selector Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-speed);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            width: 90%;
+            max-width: 450px;
+            padding: 32px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            position: relative;
+            transform: scale(0.95);
+            transition: transform var(--transition-speed);
+        }
+
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+
+        .modal-close-btn {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            font-size: 24px;
+            color: var(--color-text-secondary);
+            line-height: 1;
+        }
+
+        .modal-title {
+            font-family: var(--font-family-serif);
+            font-size: 22px;
+            font-weight: 400;
+            margin-bottom: 16px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--color-border);
+            font-family: inherit;
+            font-size: 14px;
+            margin-bottom: 20px;
+            outline: none;
+            transition: border-color var(--transition-speed);
+        }
+
+        .search-input:focus {
+            border-color: var(--color-accent);
+        }
+
+        .country-list {
+            list-style: none;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--color-border);
+        }
+
+        .country-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color var(--transition-speed);
+            border-bottom: 1px solid var(--color-bg-secondary);
+        }
+
+        .country-item:last-child {
+            border-bottom: none;
+        }
+
+        .country-item:hover, .country-item.selected {
+            background-color: var(--color-bg-secondary);
+            color: var(--color-accent);
+            font-weight: 500;
+        }
+
+        /* PLP Layout Structure */
+        .plp-header-section {
+            padding: 60px 0 32px;
+            text-align: center;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .plp-title {
+            font-family: var(--font-family-serif);
+            font-size: 36px;
+            font-weight: 400;
+            margin-bottom: 12px;
+        }
+
+        .plp-count {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+        }
+
+        .plp-body-grid {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: 40px;
+            padding: 48px 0 80px;
+        }
+
+        /* Sidebar Filters */
+        .filter-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .filter-group {
+            border-bottom: 1px solid var(--color-border);
+            padding-bottom: 24px;
+        }
+
+        .filter-group-title {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--color-text-primary);
+        }
+
+        .filter-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .filter-item {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            cursor: pointer;
+        }
+
+        .filter-checkbox {
+            margin-right: 10px;
+            width: 16px;
+            height: 16px;
+            border: 1px solid var(--color-border);
+            outline: none;
+            cursor: pointer;
+        }
+
+        .filter-checkbox:checked {
+            accent-color: var(--color-accent);
+        }
+
+        /* Sort Dropdown */
+        .sort-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 24px;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sort-label {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+        }
+
+        .sort-select {
+            padding: 8px 16px;
+            border: 1px solid var(--color-border);
+            font-family: inherit;
+            font-size: 13px;
+            background-color: var(--color-bg-primary);
+            outline: none;
+            cursor: pointer;
+        }
+
+        /* Product Listing Catalog */
+        .product-catalog {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .catalog-overlay-spinner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px 24px;
+        }
+
+        .product-card {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: var(--color-bg-primary);
+        }
+
+        .product-card.hidden {
+            display: none !important;
+        }
+
+        .product-media {
+            position: relative;
+            background-color: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            height: 360px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .product-media svg {
+            width: 70%;
+            height: 70%;
+            transition: transform var(--transition-speed) ease;
+        }
+
+        .product-card:hover .product-media svg {
+            transform: scale(1.05);
+        }
+
+        .product-badge {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background-color: var(--color-accent);
+            color: white;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 4px 10px;
+            font-weight: 600;
+            border-radius: 2px;
+            z-index: 5;
+        }
+
+        .product-badge.sold-out {
+            background-color: var(--color-text-secondary);
+        }
+
+        .product-quick-add {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: rgba(26, 26, 26, 0.95);
+            color: white;
+            text-align: center;
+            padding: 14px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            transform: translateY(100%);
+            transition: transform var(--transition-speed);
+        }
+
+        .product-media:hover .product-quick-add,
+        .product-media:focus-within .product-quick-add {
+            transform: translateY(0);
+        }
+
+        .product-quick-add.added {
+            background-color: var(--color-success) !important;
+            color: white !important;
+            transform: translateY(0) !important;
+        }
+
+        .product-quick-add.loading {
+            background-color: var(--color-text-secondary) !important;
+            transform: translateY(0) !important;
+            cursor: not-allowed;
+        }
+
+        .product-details {
+            padding: 16px 0 0;
+        }
+
+        .product-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .product-price {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+        }
+
+        .product-price .original {
+            text-decoration: line-through;
+            margin-right: 6px;
+            font-size: 13px;
+        }
+
+        .product-price .sale {
+            color: var(--color-accent);
+            font-weight: 600;
+        }
+
+        /* Empty state */
+        .catalog-empty {
+            grid-column: span 3;
+            text-align: center;
+            padding: 80px 0;
+            color: var(--color-text-secondary);
+            font-size: 14px;
+            display: none;
+        }
+
+        /* Pagination & Trigger styles */
+        .pagination-container {
+            grid-column: span 3;
+            text-align: center;
+            padding: 40px 0 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .load-more-btn {
+            background-color: var(--color-text-primary);
+            color: white;
+            padding: 14px 28px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            border: 1px solid var(--color-text-primary);
+            display: none;
+        }
+
+        .load-more-btn:hover, .load-more-btn:focus {
+            background-color: transparent;
+            color: var(--color-text-primary);
+        }
+
+        .scroll-trigger {
+            height: 10px;
+            width: 100%;
+            grid-column: span 3;
+            background: transparent;
+        }
+
+        /* Spinner styles */
+        .loading-spinner {
+            width: 30px;
+            height: 30px;
+            border: 2px solid var(--color-border);
+            border-top: 2px solid var(--color-accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 20px auto;
+            grid-column: span 3;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Newsletter Subscription */
+        .section-newsletter {
+            background-color: var(--color-bg-secondary);
+            border-top: 1px solid var(--color-border);
+            border-bottom: 1px solid var(--color-border);
+            padding: 80px 0;
+            text-align: center;
+        }
+
+        .newsletter-content {
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        .newsletter-title {
+            font-family: var(--font-family-serif);
+            font-size: 28px;
+            font-weight: 400;
+            margin-bottom: 12px;
+        }
+
+        .newsletter-desc {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .newsletter-form {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .newsletter-input-wrapper {
+            position: relative;
+            flex-grow: 1;
+        }
+
+        .newsletter-email {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid var(--color-border);
+            font-family: inherit;
+            font-size: 13px;
+            outline: none;
+            transition: border-color var(--transition-speed);
+        }
+
+        .newsletter-email:focus {
+            border-color: var(--color-accent);
+        }
+
+        .newsletter-submit-btn {
+            background-color: var(--color-text-primary);
+            color: white;
+            padding: 14px 28px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            border: 1px solid var(--color-text-primary);
+        }
+
+        .newsletter-submit-btn:hover, .newsletter-submit-btn:focus {
+            background-color: transparent;
+            color: var(--color-text-primary);
+        }
+
+        .newsletter-success-msg {
+            color: var(--color-success);
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 8px;
+            display: none;
+        }
+
+        /* Footer Layout */
+        .footer {
+            padding: 64px 0 40px;
+            font-size: 13px;
+            color: var(--color-text-secondary);
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 40px;
+            margin-bottom: 60px;
+        }
+
+        .footer-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: 20px;
+        }
+
+        .footer-links {
+            list-style: none;
+        }
+
+        .footer-link-item {
+            margin-bottom: 10px;
+        }
+
+        .footer-link-item a:hover {
+            color: var(--color-accent);
+        }
+
+        .footer-bottom {
+            border-top: 1px solid var(--color-border);
+            padding-top: 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        /* Cookie Consent Banner */
+        .cookie-banner {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            max-width: 420px;
+            background-color: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            padding: 24px;
+            z-index: 150;
+            transform: translateY(150%);
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .cookie-banner.active {
+            transform: translateY(0);
+        }
+
+        .cookie-text {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .cookie-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .cookie-btn {
+            flex: 1;
+            padding: 10px 16px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            text-align: center;
+            border: 1px solid var(--color-border);
+        }
+
+        .cookie-btn-accept {
+            background-color: var(--color-text-primary);
+            color: white;
+            border-color: var(--color-text-primary);
+        }
+
+        .cookie-btn-accept:hover, .cookie-btn-accept:focus {
+            background-color: transparent;
+            color: var(--color-text-primary);
+        }
+
+        .cookie-btn-decline:hover, .cookie-btn-decline:focus {
+            background-color: var(--color-bg-secondary);
+            border-color: var(--color-text-primary);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Announcement Bar -->
+    <div class="announcement-bar" id="promo-announcement-bar">
+        Free shipping on orders over $150 | Easy 30-day returns
+    </div>
+
+    <!-- Header Navigation -->
+    <header class="header" id="site-header">
+        <div class="container header-grid">
+            <nav class="navigation" aria-label="Main Navigation">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="plp-perfect.html?category=tops" class="nav-link" id="nav-link-tops" aria-haspopup="true" aria-expanded="false">Tops</a>
+                        <ul class="nav-dropdown" aria-label="Tops Submenu">
+                            <li><a href="plp-perfect.html?category=tops&subcategory=linen" class="dropdown-link">Linen Shirts</a></li>
+                            <li><a href="plp-perfect.html?category=tops&subcategory=knit" class="dropdown-link">Knit Tees</a></li>
+                            <li><a href="plp-perfect.html?category=tops&subcategory=silk" class="dropdown-link">Silk Blouses</a></li>
+                            <li><a href="plp-perfect.html?category=tops&subcategory=sweaters" class="dropdown-link">Sweaters</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a href="plp-perfect.html?category=bottoms" class="nav-link" id="nav-link-bottoms" aria-haspopup="true" aria-expanded="false">Bottoms</a>
+                        <ul class="nav-dropdown" aria-label="Bottoms Submenu">
+                            <li><a href="plp-perfect.html?category=bottoms&subcategory=pants" class="dropdown-link">Loungewear Pants</a></li>
+                            <li><a href="plp-perfect.html?category=bottoms&subcategory=shorts" class="dropdown-link">Linen Shorts</a></li>
+                            <li><a href="plp-perfect.html?category=bottoms&subcategory=skirts" class="dropdown-link">Tailored Skirts</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a href="plp-perfect.html?category=dresses" class="nav-link" id="nav-link-dresses">Dresses</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="plp-perfect.html?category=sleepwear" class="nav-link" id="nav-link-sleepwear">Sleepwear</a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="logo">
+                <a href="homepage-perfect.html" id="brand-logo-link">VÉRLA</a>
+            </div>
+
+            <div class="utilities">
+                <button class="utility-btn" id="country-selector-btn" aria-haspopup="dialog" aria-expanded="false">
+                    Region: <span id="current-region-label">US ($)</span>
+                </button>
+                <button class="utility-btn" id="cart-btn" aria-label="View Shopping Cart">
+                    Cart <span class="cart-badge" id="cart-count-badge">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main id="main-content">
+        <!-- PLP Header -->
+        <div class="plp-header-section">
+            <h1 class="plp-title" id="plp-page-title">Apparel Collection</h1>
+            <p class="plp-count" id="plp-item-count-label">Showing 6 items</p>
+        </div>
+
+        <!-- PLP Body -->
+        <div class="container plp-body-grid">
+            <!-- Sidebar Filters -->
+            <aside class="filter-sidebar" id="filter-sidebar-section">
+                <!-- Category Filter -->
+                <div class="filter-group" id="filter-group-category">
+                    <h3 class="filter-group-title">Category</h3>
+                    <ul class="filter-list">
+                        <li>
+                            <label class="filter-item">
+                                <input type="checkbox" class="filter-checkbox category-filter-input" value="tops" id="filter-cat-tops">
+                                Tops
+                            </label>
+                        </li>
+                        <li>
+                            <label class="filter-item">
+                                <input type="checkbox" class="filter-checkbox category-filter-input" value="bottoms" id="filter-cat-bottoms">
+                                Bottoms
+                            </label>
+                        </li>
+                        <li>
+                            <label class="filter-item">
+                                <input type="checkbox" class="filter-checkbox category-filter-input" value="dresses" id="filter-cat-dresses">
+                                Dresses
+                            </label>
+                        </li>
+                        <li>
+                            <label class="filter-item">
+                                <input type="checkbox" class="filter-checkbox category-filter-input" value="sleepwear" id="filter-cat-sleepwear">
+                                Sleepwear
+                            </label>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Color Filter -->
+                <div class="filter-group" id="filter-group-color">
+                    <h3 class="filter-group-title">Color</h3>
+                    <ul class="filter-list">
+                        <li>
+                            <label class="filter-item">
+                                <input type="checkbox" class="filter-checkbox color-filter-input" value="sand" id="filter-color-sand">
+                                Sand
+                            </label>
+                        </li>
+                        <li>
+                            <label class="filter-item">
+                                <input type="checkbox" class="filter-checkbox color-filter-input" value="ivory" id="filter-color-ivory">
+                                Ivory
+                            </label>
+                        </li>
+                        <li>
+                            <label class="filter-item">
+                                <input type="checkbox" class="filter-checkbox color-filter-input" value="charcoal" id="filter-color-charcoal">
+                                Charcoal
+                            </label>
+                        </li>
+                        <li>
+                            <label class="filter-item">
+                                <input type="checkbox" class="filter-checkbox color-filter-input" value="olive" id="filter-color-olive">
+                                Olive
+                            </label>
+                        </li>
+                    </ul>
+                </div>
+            </aside>
+
+            <!-- Product Grid & Sorting -->
+            <section class="product-catalog" id="product-catalog-section" aria-label="Product Catalog">
+                <div class="catalog-overlay-spinner" id="catalog-overlay-spinner" style="display: none;" aria-label="Updating collection" role="status">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="sort-container">
+                    <label for="sort-select-input" class="sort-label">Sort by:</label>
+                    <select class="sort-select" id="sort-select-input">
+                        <option value="featured">Featured</option>
+                        <option value="price-asc">Price: Low to High</option>
+                        <option value="price-desc">Price: High to Low</option>
+                    </select>
+                </div>
+
+                <div class="product-grid" id="product-grid-container">
+                    <!-- Product 1 -->
+                    <article class="product-card" data-id="p1" data-category="tops" data-color="sand" data-price="89" id="product-article-1">
+                        <div class="product-media">
+                            <span class="product-badge" id="product-badge-1">New Arrival</span>
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,35 L70,35 L75,75 L25,75 Z" fill="#E6E2DA" stroke="#A8A297" stroke-width="1.5" /><path d="M40,35 L50,45 L60,35" fill="none" stroke="#A8A297" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p1" aria-label="Quick add Classic Linen Shirt to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p1">Classic Linen Shirt</h2>
+                            <div class="product-price" id="product-price-p1">$89.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 2 -->
+                    <article class="product-card" data-id="p2" data-category="dresses" data-color="ivory" data-price="120" id="product-article-2">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M35,30 Q50,25 65,30 L60,80 L40,80 Z" fill="#ECDED1" stroke="#BAA694" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p2" aria-label="Quick add Ribbed Knit Dress to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p2">Ribbed Knit Dress</h2>
+                            <div class="product-price" id="product-price-p2">$120.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 3 -->
+                    <article class="product-card" data-id="p3" data-category="bottoms" data-color="charcoal" data-price="95" id="product-article-3">
+                        <div class="product-media">
+                            <span class="product-badge" id="product-badge-3">Sale</span>
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 L70,30 L65,80 L52,80 L50,50 L48,80 L35,80 Z" fill="#E3DFD5" stroke="#9E998E" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p3" aria-label="Quick add Classic Loungewear Trouser to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p3">Classic Loungewear Trouser</h2>
+                            <div class="product-price" id="product-price-p3"><span class="original">$110.00</span><span class="sale">$95.00</span></div>
+                        </div>
+                    </article>
+
+                    <!-- Product 4 -->
+                    <article class="product-card" data-id="p4" data-category="tops" data-color="sand" data-price="195" id="product-article-4">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M28,25 L72,25 L68,80 L32,80 Z" fill="#D2C9B6" stroke="#908775" stroke-width="1.5" /><path d="M42,25 L50,45 L58,25" fill="none" stroke="#908775" stroke-width="1.5" /><line x1="50" y1="45" x2="50" y2="80" stroke="#908775" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p4" aria-label="Quick add Structured Trench Coat to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p4">Structured Trench Coat</h2>
+                            <div class="product-price" id="product-price-p4">$195.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 5 -->
+                    <article class="product-card" data-id="p5" data-category="dresses" data-color="ivory" data-price="145" id="product-article-5">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M38,25 L62,25 L58,85 L42,85 Z" fill="#ECDED1" stroke="#BAA694" stroke-width="1.2" /></svg>
+                            <button class="product-quick-add" id="quick-add-p5" aria-label="Quick add Silk Slip Dress to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p5">Silk Slip Dress</h2>
+                            <div class="product-price" id="product-price-p5">$145.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 6 -->
+                    <article class="product-card" data-id="p6" data-category="tops" data-color="olive" data-price="45" id="product-article-6">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M32,32 L68,32 L70,68 L30,68 Z" fill="#E2E7DF" stroke="#8E998B" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p6" aria-label="Quick add Organic Cotton Tee to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p6">Organic Cotton Tee</h2>
+                            <div class="product-price" id="product-price-p6">$45.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 7 -->
+                    <article class="product-card" data-id="p7" data-category="tops" data-color="charcoal" data-price="110" id="product-article-7">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M25,30 L75,30 L70,70 L30,70 Z" fill="#D3D3D3" stroke="#8A8A8A" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p7" aria-label="Quick add Hooded Sweatshirt to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p7">Heavyweight Hooded Sweatshirt</h2>
+                            <div class="product-price" id="product-price-p7">$110.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 8 -->
+                    <article class="product-card" data-id="p8" data-category="bottoms" data-color="sand" data-price="78" id="product-article-8">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M35,35 L65,35 L75,75 L25,75 Z" fill="#E6DCD1" stroke="#A78E77" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p8" aria-label="Quick add Linen Wrap Skirt to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p8">Linen Wrap Skirt</h2>
+                            <div class="product-price" id="product-price-p8">$78.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 9 -->
+                    <article class="product-card" data-id="p9" data-category="tops" data-color="ivory" data-price="135" id="product-article-9">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 Q50,25 70,30 L65,75 L35,75 Z" fill="#FBFBF9" stroke="#CCCCCC" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p9" aria-label="Quick add Knit Cardigan to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p9">Ribbed Knit Cardigan</h2>
+                            <div class="product-price" id="product-price-p9">$135.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 10 -->
+                    <article class="product-card" data-id="p10" data-category="tops" data-color="sand" data-price="175" id="product-article-10">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M28,28 L72,28 L68,75 L32,75 Z" fill="#E6D5C3" stroke="#A79482" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p10" aria-label="Quick add Linen Blazer to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p10">Tailored Linen Blazer</h2>
+                            <div class="product-price" id="product-price-p10">$175.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 11 -->
+                    <article class="product-card" data-id="p11" data-category="bottoms" data-color="olive" data-price="115" id="product-article-11">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 L70,30 L65,80 L52,80 L50,50 L48,80 L35,80 Z" fill="#DFE3DD" stroke="#8E998B" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p11" aria-label="Quick add Pleated Trouser to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p11">Pleated Trouser</h2>
+                            <div class="product-price" id="product-price-p11">$115.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 12 -->
+                    <article class="product-card" data-id="p12" data-category="tops" data-color="ivory" data-price="55" id="product-article-12">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M35,35 L65,35 L62,75 L38,75 Z" fill="#FDFDFB" stroke="#DDDDDD" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p12" aria-label="Quick add Fine Knit Camisole to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p12">Fine Knit Camisole</h2>
+                            <div class="product-price" id="product-price-p12">$55.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 13 -->
+                    <article class="product-card" data-id="p13" data-category="dresses" data-color="charcoal" data-price="130" id="product-article-13">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M34,25 Q50,22 66,25 L60,82 L40,82 Z" fill="#C5C5C5" stroke="#7A7A7A" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p13" aria-label="Quick add Shift Dress to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p13">Minimalist Shift Dress</h2>
+                            <div class="product-price" id="product-price-p13">$130.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 14 -->
+                    <article class="product-card" data-id="p14" data-category="tops" data-color="olive" data-price="95" id="product-article-14">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M28,35 L72,35 L75,75 L25,75 Z" fill="#DCE2D9" stroke="#899A81" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p14" aria-label="Quick add Oversized Linen Shirt to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p14">Oversized Linen Shirt</h2>
+                            <div class="product-price" id="product-price-p14">$95.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 15 -->
+                    <article class="product-card" data-id="p15" data-category="sleepwear" data-color="ivory" data-price="180" id="product-article-15">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M32,32 L68,32 L65,70 L35,70 Z" fill="#FCFCFA" stroke="#E5E5E5" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p15" aria-label="Quick add Silk Sleep Set to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p15">Silk Sleep Set</h2>
+                            <div class="product-price" id="product-price-p15">$180.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 16 -->
+                    <article class="product-card" data-id="p16" data-category="sleepwear" data-color="sand" data-price="65" id="product-article-16">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 L70,30 L65,80 L50,50 L35,80 Z" fill="#ECDED1" stroke="#BAA694" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p16" aria-label="Quick add Pajama Pant to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p16">Cotton Pajama Pant</h2>
+                            <div class="product-price" id="product-price-p16">$65.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 17 -->
+                    <article class="product-card" data-id="p17" data-category="tops" data-color="sand" data-price="220" id="product-article-17">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 Q50,25 70,30 L66,75 L34,75 Z" fill="#EADBCB" stroke="#BCA38A" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p17" aria-label="Quick add Cashmere Jumper to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p17">Cashmere Knit Jumper</h2>
+                            <div class="product-price" id="product-price-p17">$220.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 18 -->
+                    <article class="product-card" data-id="p18" data-category="tops" data-color="olive" data-price="150" id="product-article-18">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M28,28 L72,28 L68,75 L32,75 Z" fill="#D3DAD0" stroke="#879583" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p18" aria-label="Quick add Utility Jacket to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p18">Relaxed Utility Jacket</h2>
+                            <div class="product-price" id="product-price-p18">$150.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 19 -->
+                    <article class="product-card" data-id="p19" data-category="bottoms" data-color="ivory" data-price="85" id="product-article-19">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 L70,30 L65,80 L50,50 L35,80 Z" fill="#FCFCFA" stroke="#E0E0E0" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p19" aria-label="Quick add Lounge Pant to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p19">Wide Leg Lounge Pant</h2>
+                            <div class="product-price" id="product-price-p19">$85.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 20 -->
+                    <article class="product-card" data-id="p20" data-category="sleepwear" data-color="sand" data-price="70" id="product-article-20">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,32 L70,32 L68,70 L32,70 Z" fill="#ECDED1" stroke="#BAA694" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p20" aria-label="Quick add Pajama Shirt to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p20">Poplin Pajama Shirt</h2>
+                            <div class="product-price" id="product-price-p20">$70.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 21 -->
+                    <article class="product-card" data-id="p21" data-category="dresses" data-color="olive" data-price="98" id="product-article-21">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M34,25 Q50,22 66,25 L62,80 L38,80 Z" fill="#E2E7DF" stroke="#8E998B" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p21" aria-label="Quick add T-Shirt Dress to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p21">Linen T-Shirt Dress</h2>
+                            <div class="product-price" id="product-price-p21">$98.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 22 -->
+                    <article class="product-card" data-id="p22" data-category="bottoms" data-color="charcoal" data-price="50" id="product-article-22">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,35 L70,35 L68,65 L32,65 Z" fill="#D3D3D3" stroke="#8A8A8A" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p22" aria-label="Quick add Knit Shorts to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p22">Ribbed Knit Shorts</h2>
+                            <div class="product-price" id="product-price-p22">$50.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 23 -->
+                    <article class="product-card" data-id="p23" data-category="sleepwear" data-color="charcoal" data-price="48" id="product-article-23">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M28,30 L72,30 L70,72 L30,72 Z" fill="#C5C5C5" stroke="#7A7A7A" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p23" aria-label="Quick add Sleep Tee to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p23">Oversized Sleep Tee</h2>
+                            <div class="product-price" id="product-price-p23">$48.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Product 24 -->
+                    <article class="product-card" data-id="p24" data-category="tops" data-color="charcoal" data-price="280" id="product-article-24">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="100" height="100" fill="#FAF9F6" /><path d="M26,25 L74,25 L70,82 L30,82 Z" fill="#B9B9B9" stroke="#727272" stroke-width="1.5" /></svg>
+                            <button class="product-quick-add" id="quick-add-p24" aria-label="Quick add Wool Overcoat to cart">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h2 class="product-title" id="product-title-p24">Wool Blend Overcoat</h2>
+                            <div class="product-price" id="product-price-p24">$280.00</div>
+                        </div>
+                    </article>
+
+                    <!-- Empty State Message -->
+                    <div class="catalog-empty" id="plp-empty-state-message">
+                        No products match the selected filters.
+                    </div>
+                    
+                    <!-- Pagination container -->
+                    <div class="pagination-container" id="pagination-container-section">
+                        <button class="load-more-btn" id="load-more-btn" aria-label="Show remaining products">Show More</button>
+                        <div class="loading-spinner" id="loading-spinner" style="display: none;" aria-label="Loading products" role="status"></div>
+                    </div>
+
+                    <!-- Intersection Observer Trigger -->
+                    <div class="scroll-trigger" id="scroll-trigger-node"></div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Newsletter Section -->
+        <section class="section-newsletter" id="newsletter-subscription-section">
+            <div class="container newsletter-content">
+                <h2 class="newsletter-title" id="newsletter-section-heading">Join our Community</h2>
+                <p class="newsletter-desc" id="newsletter-section-desc">Receive 10% off your first purchase and stay updated on collections.</p>
+                <form class="newsletter-form" id="newsletter-email-form" novalidate>
+                    <div class="newsletter-input-wrapper">
+                        <label for="newsletter-email-input" class="visually-hidden">Email address</label>
+                        <input type="email" class="newsletter-email" id="newsletter-email-input" placeholder="Your email address" required>
+                    </div>
+                    <button type="submit" class="newsletter-submit-btn" id="newsletter-submit-btn">Subscribe</button>
+                </form>
+                <div class="newsletter-success-msg" id="newsletter-success-message" role="alert">
+                    Thank you! Check your inbox for your 10% discount token.
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer" id="site-footer">
+        <div class="container footer-grid">
+            <div>
+                <h4 class="footer-title">Shop</h4>
+                <ul class="footer-links">
+                    <li class="footer-link-item"><a href="plp-perfect.html?category=tops" id="footer-link-tops">Tops</a></li>
+                    <li class="footer-link-item"><a href="plp-perfect.html?category=bottoms" id="footer-link-bottoms">Bottoms</a></li>
+                    <li class="footer-link-item"><a href="plp-perfect.html?category=dresses" id="footer-link-dresses">Dresses</a></li>
+                    <li class="footer-link-item"><a href="plp-perfect.html?category=new" id="footer-link-new">New Arrivals</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="footer-title">Help</h4>
+                <ul class="footer-links">
+                    <li class="footer-link-item"><a href="#" id="footer-link-shipping">Shipping & Returns</a></li>
+                    <li class="footer-link-item"><a href="#" id="footer-link-orders">Track Orders</a></li>
+                    <li class="footer-link-item"><a href="#" id="footer-link-faq">FAQ</a></li>
+                    <li class="footer-link-item"><a href="#" id="footer-link-contact">Contact Us</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="footer-title">Brand</h4>
+                <ul class="footer-links">
+                    <li class="footer-link-item"><a href="#" id="footer-link-about">About VÉRLA</a></li>
+                    <li class="footer-link-item"><a href="#" id="footer-link-stores">Our Stores</a></li>
+                    <li class="footer-link-item"><a href="#" id="footer-link-careers">Careers</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="footer-title">Verify Token</h4>
+                <p style="font-size:12px; line-height: 1.6; color:var(--color-text-secondary);" id="footer-validation-token-text">
+                    Verification Code: <strong style="color:var(--color-text-primary);" id="validation-token-value">VERLA-8829-VALID</strong>
+                </p>
+            </div>
+        </div>
+        <div class="container footer-bottom">
+            <p id="copyright-text">&copy; 2026 VÉRLA. All rights reserved.</p>
+            <p id="footer-legal-links"><a href="#" style="margin-right:16px;">Privacy Policy</a> <a href="#">Terms of Service</a></p>
+        </div>
+    </footer>
+
+    <!-- Country Selector Modal Overlay -->
+    <div class="modal-overlay" id="country-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="country-modal-title">
+        <div class="modal" id="country-modal-box">
+            <button class="modal-close-btn" id="country-modal-close" aria-label="Close dialog">&times;</button>
+            <h3 class="modal-title" id="country-modal-title">Select Region</h3>
+            <input type="text" class="search-input" id="country-search-input" placeholder="Search country..." aria-label="Search countries">
+            <ul class="country-list" id="country-selection-list" role="listbox" aria-label="Country selection list">
+                <li class="country-item selected" data-code="US ($)" role="option" aria-selected="true">United States ($)</li>
+                <li class="country-item" data-code="CA ($)" role="option" aria-selected="false">Canada ($)</li>
+                <li class="country-item" data-code="GB (£)" role="option" aria-selected="false">United Kingdom (£)</li>
+                <li class="country-item" data-code="DE (€)" role="option" aria-selected="false">Germany (€)</li>
+                <li class="country-item" data-code="FR (€)" role="option" aria-selected="false">France (€)</li>
+                <li class="country-item" data-code="AU ($)" role="option" aria-selected="false">Australia ($)</li>
+                <li class="country-item" data-code="JP (¥)" role="option" aria-selected="false">Japan (¥)</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Cookie Consent Banner -->
+    <div class="cookie-banner" id="cookie-consent-banner" role="complementary" aria-label="Cookie Consent Banner">
+        <p class="cookie-text" id="cookie-banner-text">We use cookies to optimize site design, personalize content, and analyze our traffic. By clicking Accept, you agree to our cookie policy.</p>
+        <div class="cookie-actions">
+            <button class="cookie-btn cookie-btn-accept" id="cookie-accept-all-btn">Accept All</button>
+            <button class="cookie-btn cookie-btn-decline" id="cookie-decline-btn">Preferences</button>
+        </div>
+    </div>
+
+    <!-- Self-Contained JavaScript for Filters, Sorting, and Header -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- 1. Dynamic Filtering, Sorting, & Scroll Pagination Logic ---
+            const products = Array.from(document.querySelectorAll('.product-card'));
+            const productGrid = document.getElementById('product-grid-container');
+            const emptyState = document.getElementById('plp-empty-state-message');
+            const itemCountLabel = document.getElementById('plp-item-count-label');
+            const sortSelect = document.getElementById('sort-select-input');
+            const categoryCheckboxes = document.querySelectorAll('.category-filter-input');
+            const colorCheckboxes = document.querySelectorAll('.color-filter-input');
+            const loadMoreBtn = document.getElementById('load-more-btn');
+            const scrollTrigger = document.getElementById('scroll-trigger-node');
+
+            const batchSize = 6;
+            let filteredList = [];
+            let displayedCount = batchSize;
+            let autoLoadsRemaining = 2;
+            let observer = null;
+            let isLoading = false;
+
+            function applyFiltersAndSort() {
+                const activeCategories = Array.from(categoryCheckboxes)
+                    .filter(cb => cb.checked)
+                    .map(cb => cb.value);
+                const activeColors = Array.from(colorCheckboxes)
+                    .filter(cb => cb.checked)
+                    .map(cb => cb.value);
+
+                // Filter
+                filteredList = products.filter(card => {
+                    const categoryMatch = activeCategories.length === 0 || activeCategories.includes(card.getAttribute('data-category'));
+                    const colorMatch = activeColors.length === 0 || activeColors.includes(card.getAttribute('data-color'));
+                    return categoryMatch && colorMatch;
+                });
+
+                // Sort
+                const sortValue = sortSelect.value;
+                if (sortValue === 'price-asc') {
+                    filteredList.sort((a, b) => parseFloat(a.getAttribute('data-price')) - parseFloat(b.getAttribute('data-price')));
+                } else if (sortValue === 'price-desc') {
+                    filteredList.sort((a, b) => parseFloat(b.getAttribute('data-price')) - parseFloat(a.getAttribute('data-price')));
+                } else {
+                    filteredList.sort((a, b) => a.getAttribute('data-id').localeCompare(b.getAttribute('data-id')));
+                }
+
+                // Reset pagination parameters on filter update
+                displayedCount = batchSize;
+                autoLoadsRemaining = 2;
+                isLoading = false;
+                document.getElementById('loading-spinner').style.display = 'none';
+                loadMoreBtn.style.display = 'none';
+
+                renderVisibleProducts();
+                initScrollObserver();
+            }
+
+            function renderVisibleProducts() {
+                products.forEach(p => p.classList.add('hidden'));
+
+                if (filteredList.length === 0) {
+                    emptyState.style.display = 'block';
+                    itemCountLabel.textContent = 'Showing 0 items';
+                    scrollTrigger.style.display = 'none';
+                    loadMoreBtn.style.display = 'none';
+                    document.getElementById('loading-spinner').style.display = 'none';
+                } else {
+                    emptyState.style.display = 'none';
+                    const visibleLimit = Math.min(displayedCount, filteredList.length);
+                    itemCountLabel.textContent = `Showing ${visibleLimit} of ${filteredList.length} items`;
+                    
+                    for (let i = 0; i < visibleLimit; i++) {
+                        const card = filteredList[i];
+                        card.classList.remove('hidden');
+                        productGrid.insertBefore(card, emptyState);
+                    }
+
+                    if (isLoading) {
+                        scrollTrigger.style.display = 'none';
+                        loadMoreBtn.style.display = 'none';
+                        document.getElementById('loading-spinner').style.display = 'block';
+                    } else if (visibleLimit < filteredList.length) {
+                        document.getElementById('loading-spinner').style.display = 'none';
+                        if (autoLoadsRemaining > 0) {
+                            scrollTrigger.style.display = 'block';
+                            loadMoreBtn.style.display = 'none';
+                        } else {
+                            scrollTrigger.style.display = 'none';
+                            loadMoreBtn.style.display = 'inline-block';
+                        }
+                    } else {
+                        scrollTrigger.style.display = 'none';
+                        loadMoreBtn.style.display = 'none';
+                        document.getElementById('loading-spinner').style.display = 'none';
+                    }
+                }
+            }
+
+            function triggerAutoLoad() {
+                if (autoLoadsRemaining > 0 && !isLoading) {
+                    isLoading = true;
+                    renderVisibleProducts();
+                    const delay = Math.floor(Math.random() * 901) + 300;
+                    setTimeout(() => {
+                        autoLoadsRemaining--;
+                        displayedCount += batchSize;
+                        isLoading = false;
+                        renderVisibleProducts();
+                    }, delay);
+                }
+            }
+
+            function initScrollObserver() {
+                if (observer) {
+                    observer.disconnect();
+                }
+
+                observer = new IntersectionObserver((entries) => {
+                    const overlaySpinner = document.getElementById('catalog-overlay-spinner');
+                    if (entries[0].isIntersecting && autoLoadsRemaining > 0 && !isLoading && overlaySpinner.style.display === 'none') {
+                        triggerAutoLoad();
+                    }
+                }, { rootMargin: '100px' });
+
+                observer.observe(scrollTrigger);
+            }
+
+            // Click Handlers
+            loadMoreBtn.addEventListener('click', () => {
+                if (!isLoading) {
+                    isLoading = true;
+                    renderVisibleProducts();
+                    const delay = Math.floor(Math.random() * 901) + 300;
+                    setTimeout(() => {
+                        displayedCount = filteredList.length; // load remaining products
+                        isLoading = false;
+                        renderVisibleProducts();
+                    }, delay);
+                }
+            });
+
+            let filterTimeout = null;
+
+            function onFilterChange() {
+                const overlaySpinner = document.getElementById('catalog-overlay-spinner');
+                overlaySpinner.style.display = 'flex';
+
+                if (filterTimeout) {
+                    clearTimeout(filterTimeout);
+                }
+
+                const delay = Math.floor(Math.random() * 901) + 300;
+                filterTimeout = setTimeout(() => {
+                    applyFiltersAndSort();
+                    overlaySpinner.style.display = 'none';
+                }, delay);
+            }
+
+            // Bind Events
+            categoryCheckboxes.forEach(cb => cb.addEventListener('change', onFilterChange));
+            colorCheckboxes.forEach(cb => cb.addEventListener('change', onFilterChange));
+            sortSelect.addEventListener('change', onFilterChange);
+
+            // Read URL Params (Optional routing feature)
+            const urlParams = new URLSearchParams(window.location.search);
+            const categoryParam = urlParams.get('category');
+            if (categoryParam) {
+                const targetCheckbox = document.getElementById(`filter-cat-${categoryParam}`);
+                if (targetCheckbox) {
+                    targetCheckbox.checked = true;
+                }
+            }
+
+            // Init call
+            applyFiltersAndSort();
+
+            // --- 2. Cart Add Counter Logic ---
+            const cartBadge = document.getElementById('cart-count-badge');
+            const quickAddButtons = document.querySelectorAll('.product-quick-add');
+            let cartCount = 0;
+
+            productGrid.addEventListener('click', (e) => {
+                const button = e.target;
+                if (button && button.classList.contains('product-quick-add')) {
+                    if (button.disabled || button.classList.contains('added')) return;
+
+                    const originalText = button.textContent;
+                    button.disabled = true;
+                    button.textContent = 'Adding...';
+                    button.classList.add('loading');
+
+                    fetch('../index.html')
+                        .then(() => {
+                            const delay = Math.floor(Math.random() * 901) + 300;
+                            setTimeout(() => {
+                                cartCount++;
+                                cartBadge.textContent = cartCount;
+
+                                button.classList.remove('loading');
+                                button.classList.add('added');
+                                button.textContent = 'Added!';
+
+                                setTimeout(() => {
+                                    button.classList.remove('added');
+                                    button.textContent = originalText;
+                                    button.disabled = false;
+                                }, 1000);
+                            }, delay);
+                        })
+                        .catch(() => {
+                            button.classList.remove('loading');
+                            button.disabled = false;
+                            button.textContent = originalText;
+                        });
+                }
+            });
+
+            // --- 3. Country Selector Logic ---
+            const countrySelectorBtn = document.getElementById('country-selector-btn');
+            const countryModalOverlay = document.getElementById('country-modal-overlay');
+            const countryModalClose = document.getElementById('country-modal-close');
+            const searchInput = document.getElementById('country-search-input');
+            const countryItems = document.querySelectorAll('.country-item');
+            const currentRegionLabel = document.getElementById('current-region-label');
+
+            countrySelectorBtn.addEventListener('click', () => {
+                countryModalOverlay.classList.add('active');
+                countrySelectorBtn.setAttribute('aria-expanded', 'true');
+                searchInput.focus();
+            });
+
+            function closeModal() {
+                countryModalOverlay.classList.remove('active');
+                countrySelectorBtn.setAttribute('aria-expanded', 'false');
+            }
+
+            countryModalClose.addEventListener('click', closeModal);
+            countryModalOverlay.addEventListener('click', (e) => {
+                if (e.target === countryModalOverlay) closeModal();
+            });
+
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                countryItems.forEach(item => {
+                    const text = item.textContent.toLowerCase();
+                    item.style.display = text.includes(term) ? 'block' : 'none';
+                });
+            });
+
+            countryItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    countryItems.forEach(el => {
+                        el.classList.remove('selected');
+                        el.setAttribute('aria-selected', 'false');
+                    });
+                    item.classList.add('selected');
+                    item.setAttribute('aria-selected', 'true');
+                    
+                    const code = item.getAttribute('data-code');
+                    currentRegionLabel.textContent = code;
+                    closeModal();
+                });
+            });
+
+            // --- 4. Newsletter Form Logic ---
+            const newsletterForm = document.getElementById('newsletter-email-form');
+            const emailInput = document.getElementById('newsletter-email-input');
+            const successMessage = document.getElementById('newsletter-success-message');
+
+            newsletterForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (emailInput.checkValidity()) {
+                    successMessage.style.display = 'block';
+                    newsletterForm.style.display = 'none';
+                }
+            });
+
+            // --- 5. Cookie Consent Logic ---
+            const cookieBanner = document.getElementById('cookie-consent-banner');
+            const acceptBtn = document.getElementById('cookie-accept-all-btn');
+            const declineBtn = document.getElementById('cookie-decline-btn');
+
+            if (!localStorage.getItem('cookies-accepted-perfect')) {
+                setTimeout(() => {
+                    cookieBanner.classList.add('active');
+                }, 1000);
+            }
+
+            function dismissCookieBanner() {
+                cookieBanner.classList.remove('active');
+                localStorage.setItem('cookies-accepted-perfect', 'true');
+            }
+
+            acceptBtn.addEventListener('click', dismissCookieBanner);
+            declineBtn.addEventListener('click', dismissCookieBanner);
+        });
+    </script>
+</body>
+</html>

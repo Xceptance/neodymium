@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- AI-generated: Gemini 3.5 Flash -->
+    <!--
+      License: Apache License 2.0
+      Copyright 2026 Xceptance Software Technologies
+    -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VÉRLA - Apparel Collection</title>
+    <style>
+        /* CSS Reset & Variables - Renders Visually Identical */
+        :root {
+            --color-bg-primary: #FFFFFF;
+            --color-bg-secondary: #FAF9F6;
+            --color-text-primary: #1A1A1A;
+            --color-text-secondary: #666666;
+            --color-border: #E6E2DA;
+            --color-accent: #C87A53;
+            --color-accent-light: #F4ECE7;
+            --color-success: #5F8766;
+            --font-family-serif: "Georgia", "Times New Roman", serif;
+            --font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --transition-speed: 0.3s;
+            --max-width: 1280px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--color-bg-primary);
+            color: var(--color-text-primary);
+            font-family: var(--font-family-sans);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container, .c-772x9 {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Hover Dropdown under bad selectors */
+        .div-nest-3 {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-speed) ease;
+            transform: translateY(10px);
+            list-style: none;
+            padding: 16px 0;
+            z-index: 110;
+        }
+
+        .div-nest-2:hover .div-nest-3 {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        /* PLP Layout Structure */
+        .plp-header-section {
+            padding: 60px 0 32px;
+            text-align: center;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .plp-body-grid {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: 40px;
+            padding: 48px 0 80px;
+        }
+
+        /* Sidebar Filters */
+        .filter-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .filter-group {
+            border-bottom: 1px solid var(--color-border);
+            padding-bottom: 24px;
+        }
+
+        .filter-group-title {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--color-text-primary);
+        }
+
+        .filter-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Custom Div Checkbox Style */
+        .bad-checkbox {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #767676;
+            margin-right: 10px;
+            display: inline-block;
+            cursor: pointer;
+            background-color: white;
+            vertical-align: middle;
+            position: relative;
+        }
+
+        .bad-checkbox.checked::after {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 5px;
+            width: 4px;
+            height: 8px;
+            border: solid var(--color-accent);
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+
+        /* Sort Dropdown */
+        .sort-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 24px;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sort-select {
+            padding: 8px 16px;
+            border: 1px solid var(--color-border);
+            font-family: inherit;
+            font-size: 13px;
+            background-color: var(--color-bg-primary);
+            outline: none;
+            cursor: pointer;
+        }
+
+        /* Product Listing Catalog */
+        .product-catalog {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .catalog-overlay-spinner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px 24px;
+        }
+
+        .product-media {
+            position: relative;
+            background-color: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            height: 360px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .product-media svg, .div-nest-2 svg {
+            width: 70%;
+            height: 70%;
+            transition: transform var(--transition-speed) ease;
+        }
+
+        .item-box:hover .div-nest-2 svg {
+            transform: scale(1.05);
+        }
+
+        .product-badge {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background-color: var(--color-accent);
+            color: white;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 4px 10px;
+            font-weight: 600;
+            border-radius: 2px;
+            z-index: 5;
+        }
+
+        /* Empty state */
+        .catalog-empty {
+            grid-column: span 3;
+            text-align: center;
+            padding: 80px 0;
+            color: var(--color-text-secondary);
+            font-size: 14px;
+            display: none;
+        }
+
+        /* Pagination & Trigger styles */
+        .pagination-container {
+            grid-column: span 3;
+            text-align: center;
+            padding: 40px 0 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Visually Identical custom div button */
+        .load-more-btn-bad {
+            background-color: var(--color-text-primary);
+            color: white;
+            padding: 14px 28px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            border: 1px solid var(--color-text-primary);
+            display: none;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .load-more-btn-bad:hover {
+            background-color: transparent;
+            color: var(--color-text-primary);
+        }
+
+        /* Spinner styles */
+        .loading-spinner {
+            width: 30px;
+            height: 30px;
+            border: 2px solid var(--color-border);
+            border-top: 2px solid var(--color-accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .btn-quick-add-bad.added {
+            background-color: var(--color-success) !important;
+            color: white !important;
+            transform: translateY(0) !important;
+        }
+        .btn-quick-add-bad.adding {
+            background-color: var(--color-text-secondary) !important;
+            transform: translateY(0) !important;
+            cursor: not-allowed;
+        }
+        .item-box.hidden_bad {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Announcement Bar -->
+    <div style="background-color: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border); text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 16px; font-weight: 500;">
+        Free shipping on orders over $150 | Easy 30-day returns
+    </div>
+
+    <!-- Header Navigation (Highly nested divs with duplicate and obfuscated classes) -->
+    <div style="background-color: var(--color-bg-primary); border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: 100;">
+        <div class="c-772x9" style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 80px;">
+            
+            <div style="display: flex; gap: 24px;">
+                <div class="div-nest-2" style="position: relative;">
+                    <div class="x-nav-clickable" style="font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; padding: 28px 0; cursor: pointer; color: inherit; transition: color 0.3s;" onclick="location.href='plp-bad.html?category=tops'">Tops</div>
+                    <div class="div-nest-3">
+                        <div style="padding: 8px 24px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary);" onclick="location.href='plp-bad.html?category=tops&subcategory=linen'">Linen Shirts</div>
+                        <div style="padding: 8px 24px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary);" onclick="location.href='plp-bad.html?category=tops&subcategory=knit'">Knit Tees</div>
+                        <div style="padding: 8px 24px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary);" onclick="location.href='plp-bad.html?category=tops&subcategory=silk'">Silk Blouses</div>
+                        <div style="padding: 8px 24px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary);" onclick="location.href='plp-bad.html?category=tops&subcategory=sweaters'">Sweaters</div>
+                    </div>
+                </div>
+                <div class="div-nest-2" style="position: relative;">
+                    <div class="x-nav-clickable" style="font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; padding: 28px 0; cursor: pointer; color: inherit; transition: color 0.3s;" onclick="location.href='plp-bad.html?category=bottoms'">Bottoms</div>
+                    <div class="div-nest-3">
+                        <div style="padding: 8px 24px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary);" onclick="location.href='plp-bad.html?category=bottoms&subcategory=pants'">Loungewear Pants</div>
+                        <div style="padding: 8px 24px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary);" onclick="location.href='plp-bad.html?category=bottoms&subcategory=shorts'">Linen Shorts</div>
+                        <div style="padding: 8px 24px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary);" onclick="location.href='plp-bad.html?category=bottoms&subcategory=skirts'">Tailored Skirts</div>
+                    </div>
+                </div>
+                <div class="div-nest-2">
+                    <div class="x-nav-clickable" style="font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; padding: 28px 0; cursor: pointer; color: inherit; transition: color 0.3s;" onclick="location.href='plp-bad.html?category=dresses'">Dresses</div>
+                </div>
+                <div class="div-nest-2">
+                    <div class="x-nav-clickable" style="font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; padding: 28px 0; cursor: pointer; color: inherit; transition: color 0.3s;" onclick="location.href='plp-bad.html?category=sleepwear'">Sleepwear</div>
+                </div>
+            </div>
+
+            <!-- Brand Logo -->
+            <div style="font-family: var(--font-family-serif); font-size: 28px; font-weight: 400; letter-spacing: 0.2em; text-transform: uppercase; text-align: center; cursor: pointer;" onclick="location.href='homepage-bad.html'">
+                VÉRLA
+            </div>
+
+            <!-- Utilities -->
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 20px;">
+                <div style="color: var(--color-text-primary); padding: 8px; display: flex; align-items: center; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer;" id="u_select" onclick="open_m()">
+                    Region: <span id="r_lbl_bad">US ($)</span>
+                </div>
+                <div style="color: var(--color-text-primary); padding: 8px; display: flex; align-items: center; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer;" id="u_cart">
+                    Cart <div style="background-color: var(--color-accent); color: white; font-size: 10px; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; margin-left: 4px; font-weight: bold;" id="cart_num">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area PLP -->
+    <div class="main-body">
+        <div class="plp-header-section">
+            <div style="font-family: var(--font-family-serif); font-size: 36px; font-weight: 400; margin-bottom: 12px;">Apparel Collection</div>
+            <div style="font-size: 13px; color: var(--color-text-secondary);" id="count_lbl">Showing 6 items</div>
+        </div>
+
+        <div class="container plp-body-grid">
+            <!-- Sidebar Filters -->
+            <div class="filter-sidebar">
+                
+                <!-- Category Filter Group -->
+                <div class="filter-group">
+                    <div class="filter-group-title">Category</div>
+                    <div class="filter-list">
+                        <div style="display: flex; align-items: center; font-size: 13px; color: var(--color-text-secondary); cursor: pointer;" onclick="tg_cb(this, 'tops')">
+                            <div class="bad-checkbox check-cat" data-val="tops"></div>
+                            Tops
+                        </div>
+                        <div style="display: flex; align-items: center; font-size: 13px; color: var(--color-text-secondary); cursor: pointer;" onclick="tg_cb(this, 'bottoms')">
+                            <div class="bad-checkbox check-cat" data-val="bottoms"></div>
+                            Bottoms
+                        </div>
+                        <div style="display: flex; align-items: center; font-size: 13px; color: var(--color-text-secondary); cursor: pointer;" onclick="tg_cb(this, 'dresses')">
+                            <div class="bad-checkbox check-cat" data-val="dresses"></div>
+                            Dresses
+                        </div>
+                        <div style="display: flex; align-items: center; font-size: 13px; color: var(--color-text-secondary); cursor: pointer;" onclick="tg_cb(this, 'sleepwear')">
+                            <div class="bad-checkbox check-cat" data-val="sleepwear"></div>
+                            Sleepwear
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Color Filter Group -->
+                <div class="filter-group">
+                    <div class="filter-group-title">Color</div>
+                    <div class="filter-list">
+                        <div style="display: flex; align-items: center; font-size: 13px; color: var(--color-text-secondary); cursor: pointer;" onclick="tg_cb(this, 'sand')">
+                            <div class="bad-checkbox check-color" data-val="sand"></div>
+                            Sand
+                        </div>
+                        <div style="display: flex; align-items: center; font-size: 13px; color: var(--color-text-secondary); cursor: pointer;" onclick="tg_cb(this, 'ivory')">
+                            <div class="bad-checkbox check-color" data-val="ivory"></div>
+                            Ivory
+                        </div>
+                        <div style="display: flex; align-items: center; font-size: 13px; color: var(--color-text-secondary); cursor: pointer;" onclick="tg_cb(this, 'charcoal')">
+                            <div class="bad-checkbox check-color" data-val="charcoal"></div>
+                            Charcoal
+                        </div>
+                        <div style="display: flex; align-items: center; font-size: 13px; color: var(--color-text-secondary); cursor: pointer;" onclick="tg_cb(this, 'olive')">
+                            <div class="bad-checkbox check-color" data-val="olive"></div>
+                            Olive
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Product Catalog Grid -->
+            <div class="product-catalog" style="position: relative;">
+                <div class="catalog-overlay-spinner" id="sp_overlay_bad" style="display: none;">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="sort-container">
+                    <span style="font-size: 13px; color: var(--color-text-secondary);">Sort by:</span>
+                    <select class="sort-select" onchange="runFilters(event)">
+                        <option value="featured">Featured</option>
+                        <option value="price-asc">Price: Low to High</option>
+                        <option value="price-desc">Price: High to Low</option>
+                    </select>
+                </div>
+
+                <div class="product-grid" id="grid_box">
+                    
+                    <!-- Product 1 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p1" data-cat="tops" data-color="sand" data-price="89" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <span class="product-badge">New Arrival</span>
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,35 L70,35 L75,75 L25,75 Z" fill="#E6E2DA" stroke="#A8A297" stroke-width="1.5" /><path d="M40,35 L50,45 L60,35" fill="none" stroke="#A8A297" stroke-width="1.5" /></svg>
+                            <style>.div-nest-2:hover .btn-quick-add-bad { transform: translateY(0) !important; }</style>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Classic Linen Shirt</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$89.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 2 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p2" data-cat="dresses" data-color="ivory" data-price="120" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M35,30 Q50,25 65,30 L60,80 L40,80 Z" fill="#ECDED1" stroke="#BAA694" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Ribbed Knit Dress</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$120.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 3 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p3" data-cat="bottoms" data-color="charcoal" data-price="95" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <span class="product-badge">Sale</span>
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 L70,30 L65,80 L52,80 L50,50 L48,80 L35,80 Z" fill="#E3DFD5" stroke="#9E998E" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Classic Loungewear Trouser</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">
+                                <span style="text-decoration: line-through; margin-right: 6px; font-size: 13px;">$110.00</span>
+                                <span style="color: var(--color-accent); font-weight: 600;">$95.00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Product 4 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p4" data-cat="tops" data-color="sand" data-price="195" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M28,25 L72,25 L68,80 L32,80 Z" fill="#D2C9B6" stroke="#908775" stroke-width="1.5" /><path d="M42,25 L50,45 L58,25" fill="none" stroke="#908775" stroke-width="1.5" /><line x1="50" y1="45" x2="50" y2="80" stroke="#908775" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Structured Trench Coat</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$195.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 5 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p5" data-cat="dresses" data-color="ivory" data-price="145" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M38,25 L62,25 L58,85 L42,85 Z" fill="#ECDED1" stroke="#BAA694" stroke-width="1.2" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Silk Slip Dress</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$145.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 6 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p6" data-cat="tops" data-color="olive" data-price="45" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M32,32 L68,32 L70,68 L30,68 Z" fill="#E2E7DF" stroke="#8E998B" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Organic Cotton Tee</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$45.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 7 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p7" data-cat="tops" data-color="charcoal" data-price="110" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M25,30 L75,30 L70,70 L30,70 Z" fill="#D3D3D3" stroke="#8A8A8A" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Heavyweight Hooded Sweatshirt</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$110.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 8 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p8" data-cat="bottoms" data-color="sand" data-price="78" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M35,35 L65,35 L75,75 L25,75 Z" fill="#E6DCD1" stroke="#A78E77" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Linen Wrap Skirt</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$78.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 9 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p9" data-cat="tops" data-color="ivory" data-price="135" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 Q50,25 70,30 L65,75 L35,75 Z" fill="#FBFBF9" stroke="#CCCCCC" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Ribbed Knit Cardigan</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$135.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 10 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p10" data-cat="tops" data-color="sand" data-price="175" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M28,28 L72,28 L68,75 L32,75 Z" fill="#E6D5C3" stroke="#A79482" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Tailored Linen Blazer</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$175.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 11 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p11" data-cat="bottoms" data-color="olive" data-price="115" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 L70,30 L65,80 L52,80 L50,50 L48,80 L35,80 Z" fill="#DFE3DD" stroke="#8E998B" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Pleated Trouser</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$115.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 12 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p12" data-cat="tops" data-color="ivory" data-price="55" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M35,35 L65,35 L62,75 L38,75 Z" fill="#FDFDFB" stroke="#DDDDDD" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Fine Knit Camisole</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$55.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 13 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p13" data-cat="dresses" data-color="charcoal" data-price="130" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M34,25 Q50,22 66,25 L60,82 L40,82 Z" fill="#C5C5C5" stroke="#7A7A7A" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Minimalist Shift Dress</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$130.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 14 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p14" data-cat="tops" data-color="olive" data-price="95" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M28,35 L72,35 L75,75 L25,75 Z" fill="#DCE2D9" stroke="#899A81" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Oversized Linen Shirt</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$95.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 15 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p15" data-cat="sleepwear" data-color="ivory" data-price="180" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M32,32 L68,32 L65,70 L35,70 Z" fill="#FCFCFA" stroke="#E5E5E5" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Silk Sleep Set</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$180.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 16 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p16" data-cat="sleepwear" data-color="sand" data-price="65" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 L70,30 L65,80 L50,50 L35,80 Z" fill="#ECDED1" stroke="#BAA694" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Cotton Pajama Pant</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$65.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 17 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p17" data-cat="tops" data-color="sand" data-price="220" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 Q50,25 70,30 L66,75 L34,75 Z" fill="#EADBCB" stroke="#BCA38A" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Cashmere Knit Jumper</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$220.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 18 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p18" data-cat="tops" data-color="olive" data-price="150" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M28,28 L72,28 L68,75 L32,75 Z" fill="#D3DAD0" stroke="#879583" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Relaxed Utility Jacket</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$150.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 19 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p19" data-cat="bottoms" data-color="ivory" data-price="85" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,30 L70,30 L65,80 L50,50 L35,80 Z" fill="#FCFCFA" stroke="#E0E0E0" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Wide Leg Lounge Pant</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$85.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 20 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p20" data-cat="sleepwear" data-color="sand" data-price="70" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,32 L70,32 L68,70 L32,70 Z" fill="#ECDED1" stroke="#BAA694" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Poplin Pajama Shirt</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$70.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 21 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p21" data-cat="dresses" data-color="olive" data-price="98" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M34,25 Q50,22 66,25 L62,80 L38,80 Z" fill="#E2E7DF" stroke="#8E998B" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Linen T-Shirt Dress</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$98.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 22 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p22" data-cat="bottoms" data-color="charcoal" data-price="50" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M30,35 L70,35 L68,65 L32,65 Z" fill="#D3D3D3" stroke="#8A8A8A" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Ribbed Knit Shorts</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$50.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 23 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p23" data-cat="sleepwear" data-color="charcoal" data-price="48" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M28,30 L72,30 L70,72 L30,72 Z" fill="#C5C5C5" stroke="#7A7A7A" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Oversized Sleep Tee</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$48.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 24 -->
+                    <div style="display: flex; flex-direction: column; position: relative; background-color: var(--color-bg-primary);" class="item-box" data-id="p24" data-cat="tops" data-color="charcoal" data-price="280" id="prod-info">
+                        <div class="div-nest-2" style="position: relative; background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); height: 360px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#FAF9F6" /><path d="M26,25 L74,25 L70,82 L30,82 Z" fill="#B9B9B9" stroke="#727272" stroke-width="1.5" /></svg>
+                            <div class="btn-quick-add-bad" style="position: absolute; bottom: 0; left: 0; right: 0; background-color: rgba(26, 26, 26, 0.95); color: white; text-align: center; padding: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; transform: translateY(100%); transition: transform 0.3s; cursor: pointer;" onclick="c_add(this)">Quick Add</div>
+                        </div>
+                        <div style="padding: 16px 0 0;">
+                            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Wool Blend Overcoat</div>
+                            <div style="font-size: 14px; color: var(--color-text-secondary);">$280.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Empty state -->
+                    <div class="catalog-empty" id="empty_msg">
+                        No products match the selected filters.
+                    </div>
+
+                    <!-- Pagination Container with bad custom load trigger -->
+                    <div class="pagination-container">
+                        <div class="load-more-btn-bad" id="btn_load_bad" onclick="ld_m()">Show More</div>
+                        <div class="loading-spinner" id="spinner_bad" style="display: none;"></div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Newsletter Subscription -->
+        <div style="background-color: var(--color-bg-secondary); border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); padding: 80px 0; text-align: center;">
+            <div class="container" style="max-width: 480px; margin: 0 auto;">
+                <div style="font-family: var(--font-family-serif); font-size: 28px; font-weight: 400; margin-bottom: 12px;">Join our Community</div>
+                <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 24px;">Receive 10% off your first purchase and stay updated on collections.</div>
+                <div style="display: flex; gap: 12px; margin-bottom: 16px;" id="n_box">
+                    <div style="position: relative; flex-grow: 1;">
+                        <input type="text" style="width: 100%; padding: 14px 16px; border: 1px solid var(--color-border); font-family: inherit; font-size: 13px; outline: none; transition: border-color 0.3s;" id="mail_val" placeholder="Your email address">
+                    </div>
+                    <div style="background-color: var(--color-text-primary); color: white; padding: 14px 28px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; border: 1px solid var(--color-text-primary); cursor: pointer;" onclick="sb_m()">Subscribe</div>
+                </div>
+                <div style="color: var(--color-success); font-size: 13px; font-weight: 500; margin-top: 8px; display: none;" id="ok_lbl">
+                    Thank you! Check your inbox for your 10% discount token.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding: 64px 0 40px; font-size: 13px; color: var(--color-text-secondary);">
+        <div class="container" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px; margin-bottom: 60px;">
+            <div>
+                <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; color: var(--color-text-primary); margin-bottom: 20px;">Shop</div>
+                <div style="list-style: none;">
+                    <div style="margin-bottom: 10px; cursor: pointer;" onclick="location.href='plp-bad.html?category=tops'">Tops</div>
+                    <div style="margin-bottom: 10px; cursor: pointer;" onclick="location.href='plp-bad.html?category=bottoms'">Bottoms</div>
+                    <div style="margin-bottom: 10px; cursor: pointer;" onclick="location.href='plp-bad.html?category=dresses'">Dresses</div>
+                    <div style="margin-bottom: 10px; cursor: pointer;" onclick="location.href='plp-bad.html?category=new'">New Arrivals</div>
+                </div>
+            </div>
+            <div>
+                <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; color: var(--color-text-primary); margin-bottom: 20px;">Help</div>
+                <div style="list-style: none;">
+                    <div style="margin-bottom: 10px; cursor: pointer;">Shipping & Returns</div>
+                    <div style="margin-bottom: 10px; cursor: pointer;">Track Orders</div>
+                    <div style="margin-bottom: 10px; cursor: pointer;">FAQ</div>
+                    <div style="margin-bottom: 10px; cursor: pointer;">Contact Us</div>
+                </div>
+            </div>
+            <div>
+                <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; color: var(--color-text-primary); margin-bottom: 20px;">Brand</div>
+                <div style="list-style: none;">
+                    <div style="margin-bottom: 10px; cursor: pointer;">About VÉRLA</div>
+                    <div style="margin-bottom: 10px; cursor: pointer;">Our Stores</div>
+                    <div style="margin-bottom: 10px; cursor: pointer;">Careers</div>
+                </div>
+            </div>
+            <div>
+                <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; color: var(--color-text-primary); margin-bottom: 20px;">Verify Token</div>
+                <div style="font-size:12px; line-height: 1.6; color:var(--color-text-secondary);">
+                    Verification Code: <span style="color:var(--color-text-primary); font-weight: bold;">VERLA-8829-VALID</span>
+                </div>
+            </div>
+        </div>
+        <div class="container" style="border-top: 1px solid var(--color-border); padding-top: 32px; display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+            <div>&copy; 2026 VÉRLA. All rights reserved.</div>
+            <div><span style="margin-right:16px; cursor: pointer;">Privacy Policy</span> <span style="cursor: pointer;">Terms of Service</span></div>
+        </div>
+    </div>
+
+    <!-- Country Selector Modal Overlay -->
+    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.4); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s;" id="pop_m_bad">
+        <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); width: 90%; max-width: 450px; padding: 32px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); position: relative;" id="pop_box">
+            <div style="position: absolute; top: 24px; right: 24px; font-size: 24px; color: var(--color-text-secondary); line-height: 1; cursor: pointer;" onclick="close_m()">&times;</div>
+            <div style="font-family: var(--font-family-serif); font-size: 22px; font-weight: 400; margin-bottom: 16px;">Select Region</div>
+            <input type="text" style="width: 100%; padding: 12px 16px; border: 1px solid var(--color-border); font-family: inherit; font-size: 14px; margin-bottom: 20px; outline: none;" id="pop_srch" oninput="f_lst(event)" placeholder="Search country...">
+            <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--color-border);" id="pop_ul_bad">
+                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-liselected selected" onclick="sl_r(this, 'US ($)')">United States ($)</div>
+                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'CA ($)')">Canada ($)</div>
+                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'GB (£)')">United Kingdom (£)</div>
+                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'DE (€)')">Germany (€)</div>
+                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'FR (€)')">France (€)</div>
+                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'AU ($)')">Australia ($)</div>
+                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'JP (¥)')">Japan (¥)</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cookie Consent Banner -->
+    <div style="position: fixed; bottom: 24px; left: 24px; max-width: 420px; background-color: var(--color-bg-primary); border: 1px solid var(--color-border); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); padding: 24px; z-index: 150; transform: translateY(150%); transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);" id="ck_b_bad">
+        <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 16px;">We use cookies to optimize site design, personalize content, and analyze our traffic. By clicking Accept, you agree to our cookie policy.</div>
+        <div style="display: flex; gap: 12px;">
+            <div style="flex: 1; padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; text-align: center; border: 1px solid var(--color-text-primary); background-color: var(--color-text-primary); color: white; cursor: pointer;" onclick="ck_ok()">Accept All</div>
+            <div style="flex: 1; padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; text-align: center; border: 1px solid var(--color-border); cursor: pointer;" onclick="ck_ok()">Preferences</div>
+        </div>
+    </div>
+
+    <!-- JavaScript (Horrible quality: Globals, obfuscated names, no structures, custom checkboxes state toggling) -->
+    <script>
+        // Pagination state (obfuscated variables)
+        var bSz = 6;
+        var dCnt = bSz;
+        var aLd = 2;
+        var fLst = [];
+        var isL = false;
+
+        // Obfuscated filter update delay
+        var fT = null;
+        function f_chg() {
+            var sp = document.getElementById('sp_overlay_bad');
+            sp.style.display = 'flex';
+            if (fT) clearTimeout(fT);
+            var d = Math.floor(Math.random()*901)+300;
+            fT = setTimeout(function() {
+                r_flt();
+                sp.style.display = 'none';
+            }, d);
+        }
+
+        // Checkbox state toggling
+        function tg_cb(parentDiv, filterValue) {
+            var box = parentDiv.querySelector('.bad-checkbox');
+            box.classList.toggle('checked');
+            f_chg();
+        }
+
+        // Run filters
+        function r_flt() {
+            var items = Array.from(document.querySelectorAll('.item-box'));
+            var grid = document.getElementById('grid_box');
+            var empty = document.getElementById('empty_msg');
+            var label = document.getElementById('count_lbl');
+            var sortSel = document.querySelector('.sort-select');
+            var ldBtn = document.getElementById('btn_load_bad');
+
+            // Collect active categories
+            var activeCats = [];
+            document.querySelectorAll('.check-cat').forEach(function(box) {
+                if (box.classList.contains('checked')) {
+                    activeCats.push(box.getAttribute('data-val'));
+                }
+            });
+
+            // Collect active colors
+            var activeColors = [];
+            document.querySelectorAll('.check-color').forEach(function(box) {
+                if (box.classList.contains('checked')) {
+                    activeColors.push(box.getAttribute('data-val'));
+                }
+            });
+
+            // Filter
+            fLst = items.filter(function(card) {
+                var catOk = activeCats.length === 0 || activeCats.indexOf(card.getAttribute('data-cat')) > -1;
+                var colOk = activeColors.length === 0 || activeColors.indexOf(card.getAttribute('data-color')) > -1;
+                return catOk && colOk;
+            });
+
+            // Sort
+            var sortVal = sortSel.value;
+            if (sortVal === 'price-asc') {
+                fLst.sort(function(a, b) {
+                    return parseFloat(a.getAttribute('data-price')) - parseFloat(b.getAttribute('data-price'));
+                });
+            } else if (sortVal === 'price-desc') {
+                fLst.sort(function(a, b) {
+                    return parseFloat(b.getAttribute('data-price')) - parseFloat(a.getAttribute('data-price'));
+                });
+            } else {
+                fLst.sort(function(a, b) {
+                    return a.getAttribute('data-id').localeCompare(b.getAttribute('data-id'));
+                });
+            }
+
+            // Reset pagination state
+            dCnt = bSz;
+            aLd = 2;
+            isL = false;
+            document.getElementById('spinner_bad').style.display = 'none';
+            ldBtn.style.display = 'none';
+
+            r_pds();
+        }
+
+        function r_pds() {
+            var items = Array.from(document.querySelectorAll('.item-box'));
+            var grid = document.getElementById('grid_box');
+            var empty = document.getElementById('empty_msg');
+            var label = document.getElementById('count_lbl');
+            var ldBtn = document.getElementById('btn_load_bad');
+            var spin = document.getElementById('spinner_bad');
+
+            items.forEach(function(el) {
+                el.classList.add('hidden_bad');
+            });
+
+            if (fLst.length === 0) {
+                empty.style.display = 'block';
+                label.textContent = 'Showing 0 items';
+                ldBtn.style.display = 'none';
+                spin.style.display = 'none';
+            } else {
+                empty.style.display = 'none';
+                var limit = Math.min(dCnt, fLst.length);
+                label.textContent = 'Showing ' + limit + ' of ' + fLst.length + ' items';
+                
+                for (var i = 0; i < limit; i++) {
+                    var card = fLst[i];
+                    card.classList.remove('hidden_bad');
+                    grid.insertBefore(card, empty);
+                }
+
+                if (isL) {
+                    ldBtn.style.display = 'none';
+                    spin.style.display = 'block';
+                } else if (limit < fLst.length) {
+                    if (aLd === 0) {
+                        ldBtn.style.display = 'inline-block';
+                        spin.style.display = 'none';
+                    } else {
+                        ldBtn.style.display = 'none';
+                        spin.style.display = 'none';
+                    }
+                } else {
+                    ldBtn.style.display = 'none';
+                    spin.style.display = 'none';
+                }
+            }
+        }
+
+        // Obfuscated global scroll listener
+        window.onscroll = function() {
+            var sp = document.getElementById('sp_overlay_bad');
+            if (aLd > 0 && fLst.length > dCnt && !isL && sp.style.display !== 'flex' && sp.style.display !== 'block') {
+                var th = 100;
+                var docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+                if ((window.innerHeight + window.scrollY) >= (docH - th)) {
+                    isL = true;
+                    r_pds();
+                    var dly = Math.floor(Math.random()*901)+300;
+                    setTimeout(function() {
+                        aLd--;
+                        dCnt += bSz;
+                        isL = false;
+                        r_pds();
+                    }, dly);
+                }
+            }
+        };
+
+        // Load More button click
+        function ld_m() {
+            if (!isL) {
+                isL = true;
+                r_pds();
+                var dly = Math.floor(Math.random()*901)+300;
+                setTimeout(function() {
+                    dCnt = fLst.length;
+                    isL = false;
+                    r_pds();
+                }, dly);
+            }
+        }
+
+        // Trigger filter run on select change
+        function runFilters(e) {
+            f_chg();
+        }
+
+        // Add to Cart
+        var c_num = 0;
+        function c_add(el) {
+            if (!el || el.getAttribute('data-disabled') === 'true' || el.classList.contains('adding') || el.classList.contains('added')) return;
+
+            var originalText = el.textContent || 'Quick Add';
+            el.setAttribute('data-disabled', 'true');
+            el.textContent = 'Adding...';
+            el.classList.add('adding');
+
+            fetch('../index.html')
+                .then(function() {
+                    var delay = Math.floor(Math.random() * 901) + 300;
+                    setTimeout(function() {
+                        c_num++;
+                        document.getElementById('cart_num').textContent = c_num;
+
+                        el.classList.remove('adding');
+                        el.classList.add('added');
+                        el.textContent = 'Added!';
+
+                        setTimeout(function() {
+                            el.classList.remove('added');
+                            el.textContent = originalText;
+                            el.removeAttribute('data-disabled');
+                        }, 1000);
+                    }, delay);
+                })
+                .catch(function() {
+                    el.classList.remove('adding');
+                    el.removeAttribute('data-disabled');
+                    el.textContent = originalText;
+                });
+        }
+
+        // Country Selector
+        function open_m() {
+            var m = document.getElementById('pop_m_bad');
+            m.style.opacity = '1';
+            m.style.visibility = 'visible';
+            document.getElementById('pop_srch').focus();
+        }
+
+        // Close Country Selector
+        function close_m() {
+            var m = document.getElementById('pop_m_bad');
+            m.style.opacity = '0';
+            m.style.visibility = 'hidden';
+        }
+
+        function f_lst(e) {
+            var term = e.target.value.toLowerCase();
+            var list = document.querySelectorAll('#pop_ul_bad > div');
+            list.forEach(function(item) {
+                var text = item.textContent.toLowerCase();
+                if (text.includes(term)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        function sl_r(elem, code) {
+            var list = document.querySelectorAll('#pop_ul_bad > div');
+            list.forEach(function(item) {
+                item.style.fontWeight = 'normal';
+                item.style.color = 'inherit';
+            });
+            elem.style.fontWeight = '500';
+            elem.style.color = 'var(--color-accent)';
+            document.getElementById('r_lbl_bad').textContent = code;
+            close_m();
+        }
+
+        // Newsletter
+        function sb_m() {
+            var val = document.getElementById('mail_val').value;
+            if (val) {
+                document.getElementById('ok_lbl').style.display = 'block';
+                document.getElementById('n_box').style.display = 'none';
+            }
+        }
+
+        // Cookies
+        function ck_ok() {
+            document.getElementById('ck_b_bad').style.transform = 'translateY(150%)';
+            localStorage.setItem('cookies-accepted-bad', 'true');
+        }
+
+        window.onload = function() {
+            var urlParams = new URLSearchParams(window.location.search);
+            var categoryParam = urlParams.get('category');
+            
+            var items = Array.from(document.querySelectorAll('.item-box'));
+            fLst = items;
+
+            if (categoryParam) {
+                var boxes = document.querySelectorAll('.check-cat');
+                boxes.forEach(function(box) {
+                    if (box.getAttribute('data-val') === categoryParam) {
+                        box.classList.add('checked');
+                    }
+                });
+                r_flt();
+            } else {
+                r_flt();
+            }
+
+            if (!localStorage.getItem('cookies-accepted-bad')) {
+                setTimeout(function() {
+                    document.getElementById('ck_b_bad').style.transform = 'translateY(0)';
+                }, 1000);
+            }
+        };
+    </script>
+</body>
+</html>

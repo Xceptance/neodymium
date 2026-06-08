@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- AI-generated: Gemini 3.5 Flash -->
+    <!--
+      License: Apache License 2.0
+      Copyright 2026 Xceptance Software Technologies
+    -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VÉRLA - Modern Premium Apparel</title>
+    <style>
+        /* CSS Reset & Variable Design System - Visually Identical */
+        :root {
+            --color-bg-primary: #FFFFFF;
+            --color-bg-secondary: #FAF9F6;
+            --color-text-primary: #1A1A1A;
+            --color-text-secondary: #666666;
+            --color-border: #E6E2DA;
+            --color-accent: #C87A53;
+            --color-accent-light: #F4ECE7;
+            --color-success: #5F8766;
+            --font-family-serif: "Georgia", "Times New Roman", serif;
+            --font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --transition-speed: 0.3s;
+            --max-width: 1280px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--color-bg-primary);
+            color: var(--color-text-primary);
+            font-family: var(--font-family-sans);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+            transition: color var(--transition-speed);
+        }
+
+        button {
+            font-family: inherit;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-speed);
+        }
+
+        /* Layout Container */
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Announcement Bar */
+        .announcement-bar {
+            background-color: var(--color-bg-secondary);
+            border-bottom: 1px solid var(--color-border);
+            text-align: center;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 8px 16px;
+            font-weight: 500;
+        }
+
+        /* Header Navigation */
+        .header {
+            background-color: var(--color-bg-primary);
+            border-bottom: 1px solid var(--color-border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            height: 80px;
+        }
+
+        .nav-list {
+            display: flex;
+            list-style: none;
+            gap: 24px;
+        }
+
+        .nav-item {
+            position: relative;
+        }
+
+        .nav-link {
+            font-size: 13px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 28px 0;
+            display: inline-block;
+        }
+
+        .nav-link:hover {
+            color: var(--color-accent);
+        }
+
+        /* Dropdown Menu */
+        .nav-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-speed) ease;
+            transform: translateY(10px);
+            list-style: none;
+            padding: 16px 0;
+            z-index: 110;
+        }
+
+        .nav-item:hover .nav-dropdown {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-link {
+            padding: 8px 24px;
+            display: block;
+            font-size: 13px;
+            color: var(--color-text-secondary);
+        }
+
+        .dropdown-link:hover {
+            background-color: var(--color-bg-secondary);
+            color: var(--color-accent);
+            padding-left: 28px;
+        }
+
+        /* Brand Logo */
+        .logo {
+            font-family: var(--font-family-serif);
+            font-size: 28px;
+            font-weight: 400;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            text-align: center;
+        }
+
+        /* Right Utilities */
+        .utilities {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .utility-btn {
+            color: var(--color-text-primary);
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .utility-btn:hover {
+            color: var(--color-accent);
+        }
+
+        .cart-badge {
+            background-color: var(--color-accent);
+            color: white;
+            font-size: 10px;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 4px;
+            font-weight: bold;
+        }
+
+        /* Country Selector Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-speed);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            width: 90%;
+            max-width: 450px;
+            padding: 32px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            position: relative;
+            transform: scale(0.95);
+            transition: transform var(--transition-speed);
+        }
+
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+
+        .modal-close-btn {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            font-size: 24px;
+            color: var(--color-text-secondary);
+            line-height: 1;
+        }
+
+        .modal-title {
+            font-family: var(--font-family-serif);
+            font-size: 22px;
+            font-weight: 400;
+            margin-bottom: 16px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--color-border);
+            font-family: inherit;
+            font-size: 14px;
+            margin-bottom: 20px;
+            outline: none;
+            transition: border-color var(--transition-speed);
+        }
+
+        .search-input:focus {
+            border-color: var(--color-accent);
+        }
+
+        .country-list {
+            list-style: none;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--color-border);
+        }
+
+        .country-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color var(--transition-speed);
+            border-bottom: 1px solid var(--color-bg-secondary);
+        }
+
+        .country-item:last-child {
+            border-bottom: none;
+        }
+
+        .country-item:hover, .country-item.selected {
+            background-color: var(--color-bg-secondary);
+            color: var(--color-accent);
+            font-weight: 500;
+        }
+
+        /* Hero Carousel */
+        .hero-carousel {
+            position: relative;
+            height: 600px;
+            background-color: var(--color-bg-secondary);
+            overflow: hidden;
+        }
+
+        .carousel-slides {
+            height: 100%;
+            position: relative;
+        }
+
+        .carousel-slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.8s ease, visibility 0.8s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .carousel-slide.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .slide-content-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            align-items: center;
+            height: 100%;
+            width: 100%;
+        }
+
+        .slide-text {
+            padding: 0 80px;
+        }
+
+        .slide-subtitle {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--color-text-secondary);
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .slide-title {
+            font-family: var(--font-family-serif);
+            font-size: 48px;
+            font-weight: 400;
+            line-height: 1.2;
+            margin-bottom: 24px;
+        }
+
+        .slide-btn {
+            background-color: var(--color-text-primary);
+            color: white;
+            padding: 14px 28px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 600;
+            display: inline-block;
+            border: 1px solid var(--color-text-primary);
+        }
+
+        .slide-btn:hover {
+            background-color: transparent;
+            color: var(--color-text-primary);
+        }
+
+        .slide-image-container {
+            height: 100%;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--color-bg-secondary), var(--color-border));
+        }
+
+        /* SVG Illustrative Placeholders */
+        .slide-svg {
+            max-width: 80%;
+            max-height: 80%;
+        }
+
+        /* Carousel Navigation Buttons */
+        .carousel-nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            z-index: 10;
+        }
+
+        .carousel-nav-btn:hover {
+            background-color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            color: var(--color-accent);
+        }
+
+        #carousel-btn-prev {
+            left: 24px;
+        }
+
+        #carousel-btn-next {
+            right: 24px;
+        }
+
+        .carousel-dots {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .carousel-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--color-border);
+            padding: 0;
+        }
+
+        .carousel-dot.active {
+            background-color: var(--color-accent);
+            transform: scale(1.25);
+        }
+
+        /* Product Grid Section */
+        .section-products {
+            padding: 80px 0;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .section-title {
+            font-family: var(--font-family-serif);
+            font-size: 32px;
+            font-weight: 400;
+            margin-bottom: 12px;
+        }
+
+        .section-desc {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+        }
+
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 32px 24px;
+        }
+
+        .product-card {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: var(--color-bg-primary);
+        }
+
+        .product-media {
+            position: relative;
+            background-color: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            height: 380px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .product-media svg {
+            width: 70%;
+            height: 70%;
+            transition: transform var(--transition-speed) ease;
+        }
+
+        .product-card:hover .product-media svg {
+            transform: scale(1.05);
+        }
+
+        .product-badge {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background-color: var(--color-accent);
+            color: white;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 4px 10px;
+            font-weight: 600;
+            border-radius: 2px;
+            z-index: 5;
+        }
+
+        .product-badge.sold-out {
+            background-color: var(--color-text-secondary);
+        }
+
+        .product-quick-add {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: rgba(26, 26, 26, 0.95);
+            color: white;
+            text-align: center;
+            padding: 14px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            transform: translateY(100%);
+            transition: transform var(--transition-speed);
+        }
+
+        .product-media:hover .product-quick-add {
+            transform: translateY(0);
+        }
+
+        .product-details {
+            padding: 16px 0 0;
+        }
+
+        .product-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .product-price {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+        }
+
+        .product-price .original {
+            text-decoration: line-through;
+            margin-right: 6px;
+            font-size: 13px;
+        }
+
+        .product-price .sale {
+            color: var(--color-accent);
+            font-weight: 600;
+        }
+
+        /* Newsletter Subscription */
+        .section-newsletter {
+            background-color: var(--color-bg-secondary);
+            border-top: 1px solid var(--color-border);
+            border-bottom: 1px solid var(--color-border);
+            padding: 80px 0;
+            text-align: center;
+        }
+
+        .newsletter-content {
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        .newsletter-title {
+            font-family: var(--font-family-serif);
+            font-size: 28px;
+            font-weight: 400;
+            margin-bottom: 12px;
+        }
+
+        .newsletter-desc {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .newsletter-form {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .newsletter-input-wrapper {
+            position: relative;
+            flex-grow: 1;
+        }
+
+        .newsletter-email {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid var(--color-border);
+            font-family: inherit;
+            font-size: 13px;
+            outline: none;
+            transition: border-color var(--transition-speed);
+        }
+
+        .newsletter-email:focus {
+            border-color: var(--color-accent);
+        }
+
+        .newsletter-submit-btn {
+            background-color: var(--color-text-primary);
+            color: white;
+            padding: 14px 28px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            border: 1px solid var(--color-text-primary);
+        }
+
+        .newsletter-submit-btn:hover {
+            background-color: transparent;
+            color: var(--color-text-primary);
+        }
+
+        .newsletter-success-msg {
+            color: var(--color-success);
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 8px;
+            display: none;
+        }
+
+        /* Footer Layout */
+        .footer {
+            padding: 64px 0 40px;
+            font-size: 13px;
+            color: var(--color-text-secondary);
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 40px;
+            margin-bottom: 60px;
+        }
+
+        .footer-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: 20px;
+        }
+
+        .footer-links {
+            list-style: none;
+        }
+
+        .footer-link-item {
+            margin-bottom: 10px;
+        }
+
+        .footer-link-item a:hover {
+            color: var(--color-accent);
+        }
+
+        .footer-bottom {
+            border-top: 1px solid var(--color-border);
+            padding-top: 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        /* Cookie Consent Banner */
+        .cookie-banner {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            max-width: 420px;
+            background-color: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            padding: 24px;
+            z-index: 150;
+            transform: translateY(150%);
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .cookie-banner.active {
+            transform: translateY(0);
+        }
+
+        .cookie-text {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .cookie-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .cookie-btn {
+            flex: 1;
+            padding: 10px 16px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            text-align: center;
+            border: 1px solid var(--color-border);
+        }
+
+        .cookie-btn-accept {
+            background-color: var(--color-text-primary);
+            color: white;
+            border-color: var(--color-text-primary);
+        }
+
+        .cookie-btn-accept:hover {
+            background-color: transparent;
+            color: var(--color-text-primary);
+        }
+
+        .cookie-btn-decline:hover {
+            background-color: var(--color-bg-secondary);
+            border-color: var(--color-text-primary);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Announcement Bar -->
+    <div class="announcement-bar">
+        Free shipping on orders over $150 | Easy 30-day returns
+    </div>
+
+    <!-- Header Navigation (Non-semantic divs) -->
+    <div class="header">
+        <div class="container header-grid">
+            <div class="navigation-menu">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="plp-normal.html?category=tops" class="nav-link" id="tops-link">Tops</a>
+                        <ul class="nav-dropdown">
+                            <li><a href="plp-normal.html?category=tops&subcategory=linen" class="dropdown-link">Linen Shirts</a></li>
+                            <li><a href="plp-normal.html?category=tops&subcategory=knit" class="dropdown-link">Knit Tees</a></li>
+                            <li><a href="plp-normal.html?category=tops&subcategory=silk" class="dropdown-link">Silk Blouses</a></li>
+                            <li><a href="plp-normal.html?category=tops&subcategory=sweaters" class="dropdown-link">Sweaters</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a href="plp-normal.html?category=bottoms" class="nav-link" id="bottoms-link">Bottoms</a>
+                        <ul class="nav-dropdown">
+                            <li><a href="plp-normal.html?category=bottoms&subcategory=pants" class="dropdown-link">Loungewear Pants</a></li>
+                            <li><a href="plp-normal.html?category=bottoms&subcategory=shorts" class="dropdown-link">Linen Shorts</a></li>
+                            <li><a href="plp-normal.html?category=bottoms&subcategory=skirts" class="dropdown-link">Tailored Skirts</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a href="plp-normal.html?category=dresses" class="nav-link" id="dresses-link">Dresses</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="plp-normal.html?category=sleepwear" class="nav-link" id="sleepwear-link">Sleepwear</a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Brand Logo -->
+            <div class="logo">
+                <a href="homepage-normal.html">VÉRLA</a>
+            </div>
+
+            <!-- Utilities Navigation (No ARIA, basic IDs) -->
+            <div class="utilities">
+                <button class="utility-btn" id="region_btn" onclick="openCountrySelector()">
+                    Region: <span id="region_lbl">US ($)</span>
+                </button>
+                <button class="utility-btn" id="btn_cart">
+                    Cart <span class="cart-badge" id="badge_cart">0</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content (Non-semantic divs) -->
+    <div class="main-body">
+        <!-- Hero Carousel Slideshow -->
+        <div class="hero-carousel" id="carousel_box">
+            <div class="carousel-slides">
+                <!-- Slide 1 -->
+                <div class="carousel-slide active" id="slide1">
+                    <div class="slide-content-grid">
+                        <div class="slide-text">
+                            <p class="slide-subtitle">Summer Collection</p>
+                            <h2 class="slide-title">The Linen<br>Perspective</h2>
+                            <a href="plp-normal.html?category=linen" class="slide-btn">Explore Collection</a>
+                        </div>
+                        <div class="slide-image-container">
+                            <svg class="slide-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" style="stop-color:#F2EFE9;stop-opacity:1" />
+                                        <stop offset="100%" style="stop-color:#D8D3C9;stop-opacity:1" />
+                                    </linearGradient>
+                                </defs>
+                                <rect width="200" height="200" rx="12" fill="url(#grad1)" />
+                                <path d="M70,80 L130,80 L140,150 L60,150 Z" fill="#EAE6DF" stroke="#8E8578" stroke-width="2" />
+                                <path d="M100,50 C100,45 105,40 110,40 C115,40 120,45 120,50 C120,55 100,65 100,70" fill="none" stroke="#6C6559" stroke-width="2" />
+                                <line x1="85" y1="70" x2="115" y2="70" stroke="#6C6559" stroke-width="3" />
+                                <circle cx="100" cy="100" r="3" fill="#8E8578" />
+                                <circle cx="100" cy="115" r="3" fill="#8E8578" />
+                                <circle cx="100" cy="130" r="3" fill="#8E8578" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Slide 2 -->
+                <div class="carousel-slide" id="slide2">
+                    <div class="slide-content-grid">
+                        <div class="slide-text">
+                            <p class="slide-subtitle">Premium Comfort</p>
+                            <h2 class="slide-title">Textured Knitwear<br>& Comfort</h2>
+                            <a href="plp-normal.html?category=knits" class="slide-btn">Shop Knitwear</a>
+                        </div>
+                        <div class="slide-image-container">
+                            <svg class="slide-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" style="stop-color:#EFE6DD;stop-opacity:1" />
+                                        <stop offset="100%" style="stop-color:#CBB5A0;stop-opacity:1" />
+                                    </linearGradient>
+                                </defs>
+                                <rect width="200" height="200" rx="12" fill="url(#grad2)" />
+                                <path d="M50,70 L150,70 L150,140 L50,140 Z" fill="#E6DCD1" stroke="#A78E77" stroke-width="2" />
+                                <path d="M60,90 C80,90 80,110 100,110 C120,110 120,90 140,90" fill="none" stroke="#A78E77" stroke-width="2" />
+                                <path d="M60,110 C80,110 80,130 100,130 C120,130 120,110 140,110" fill="none" stroke="#A78E77" stroke-width="2" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Slide 3 -->
+                <div class="carousel-slide" id="slide3">
+                    <div class="slide-content-grid">
+                        <div class="slide-text">
+                            <p class="slide-subtitle">Minimalist Basics</p>
+                            <h2 class="slide-title">Effortless<br>Silhouettes</h2>
+                            <a href="plp-normal.html?category=dresses" class="slide-btn">Browse Looks</a>
+                        </div>
+                        <div class="slide-image-container">
+                            <svg class="slide-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <linearGradient id="grad3" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" style="stop-color:#EAEAEA;stop-opacity:1" />
+                                        <stop offset="100%" style="stop-color:#BCBCBC;stop-opacity:1" />
+                                    </linearGradient>
+                                </defs>
+                                <rect width="200" height="200" rx="12" fill="url(#grad3)" />
+                                <path d="M90,70 Q100,60 110,70 L130,150 L70,150 Z" fill="#DFDFDF" stroke="#8E8E8E" stroke-width="2" />
+                                <path d="M95,50 C95,45 100,40 105,40 C110,40 115,45 115,50 C115,55 95,65 95,70" fill="none" stroke="#6C6C6C" stroke-width="2" />
+                                <line x1="85" y1="70" x2="115" y2="70" stroke="#6C6C6C" stroke-width="2" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Buttons with inline onclick calls -->
+            <button class="carousel-nav-btn" id="carousel-btn-prev" onclick="prevSlide()">&larr;</button>
+            <button class="carousel-nav-btn" id="carousel-btn-next" onclick="nextSlide()">&rarr;</button>
+
+            <!-- Navigation Dots -->
+            <div class="carousel-dots">
+                <button class="carousel-dot active" onclick="gotoSlide(0)"></button>
+                <button class="carousel-dot" onclick="gotoSlide(1)"></button>
+                <button class="carousel-dot" onclick="gotoSlide(2)"></button>
+            </div>
+        </div>
+
+        <!-- Product Grid Section -->
+        <div class="section-products">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">Curated Essentials</h2>
+                    <p class="section-desc">Responsibly sourced and designed for comfort.</p>
+                </div>
+
+                <div class="product-grid">
+                    <!-- Product 1 -->
+                    <div class="product-card" id="item1">
+                        <div class="product-media">
+                            <span class="product-badge">New Arrival</span>
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="100" height="100" fill="#FAF9F6" />
+                                <path d="M30,35 L70,35 L75,75 L25,75 Z" fill="#E6E2DA" stroke="#A8A297" stroke-width="1.5" />
+                                <path d="M40,35 L50,45 L60,35" fill="none" stroke="#A8A297" stroke-width="1.5" />
+                            </svg>
+                            <button class="product-quick-add" onclick="addToCart()">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h3 class="product-title">Classic Linen Shirt</h3>
+                            <div class="product-price">$89.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 2 -->
+                    <div class="product-card" id="item2">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="100" height="100" fill="#FAF9F6" />
+                                <path d="M35,30 Q50,25 65,30 L60,80 L40,80 Z" fill="#ECDED1" stroke="#BAA694" stroke-width="1.5" />
+                            </svg>
+                            <button class="product-quick-add" onclick="addToCart()">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h3 class="product-title">Ribbed Knit Dress</h3>
+                            <div class="product-price">$120.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Product 3 -->
+                    <div class="product-card" id="item3">
+                        <div class="product-media">
+                            <span class="product-badge sold-out">Sold Out</span>
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="100" height="100" fill="#FAF9F6" />
+                                <path d="M30,30 L70,30 L65,80 L52,80 L50,50 L48,80 L35,80 Z" fill="#E3DFD5" stroke="#9E998E" stroke-width="1.5" />
+                            </svg>
+                            <button class="product-quick-add" style="opacity:0.5; cursor:not-allowed;" disabled>Sold Out</button>
+                        </div>
+                        <div class="product-details">
+                            <h3 class="product-title">Classic Loungewear Trouser</h3>
+                            <div class="product-price">
+                                <span class="original">$110.00</span>
+                                <span class="sale">$95.00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Product 4 -->
+                    <div class="product-card" id="item4">
+                        <div class="product-media">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <rect width="100" height="100" fill="#FAF9F6" />
+                                <path d="M28,25 L72,25 L68,80 L32,80 Z" fill="#D2C9B6" stroke="#908775" stroke-width="1.5" />
+                                <path d="M42,25 L50,45 L58,25" fill="none" stroke="#908775" stroke-width="1.5" />
+                                <line x1="50" y1="45" x2="50" y2="80" stroke="#908775" stroke-width="1.5" />
+                            </svg>
+                            <button class="product-quick-add" onclick="addToCart()">Quick Add</button>
+                        </div>
+                        <div class="product-details">
+                            <h3 class="product-title">Structured Trench Coat</h3>
+                            <div class="product-price">$195.00</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Newsletter Section -->
+        <div class="section-newsletter">
+            <div class="container newsletter-content">
+                <h2 class="newsletter-title">Join our Community</h2>
+                <p class="newsletter-desc">Receive 10% off your first purchase and stay updated on collections.</p>
+                <form class="newsletter-form" id="newsletter_form" onsubmit="submitMail(event)">
+                    <div class="newsletter-input-wrapper">
+                        <!-- No label, just input with placeholder -->
+                        <input type="email" class="newsletter-email" id="inp_email" placeholder="Your email address" required>
+                    </div>
+                    <button type="submit" class="newsletter-submit-btn" id="btn-sub">Subscribe</button>
+                </form>
+                <div class="newsletter-success-msg" id="msg_ok">
+                    Thank you! Check your inbox for your 10% discount token.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Section -->
+    <div class="footer">
+        <div class="container footer-grid">
+            <div>
+                <h4 class="footer-title">Shop</h4>
+                <ul class="footer-links">
+                    <li class="footer-link-item"><a href="plp-normal.html?category=tops">Tops</a></li>
+                    <li class="footer-link-item"><a href="plp-normal.html?category=bottoms">Bottoms</a></li>
+                    <li class="footer-link-item"><a href="plp-normal.html?category=dresses">Dresses</a></li>
+                    <li class="footer-link-item"><a href="plp-normal.html?category=new">New Arrivals</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="footer-title">Help</h4>
+                <ul class="footer-links">
+                    <li class="footer-link-item"><a href="#">Shipping & Returns</a></li>
+                    <li class="footer-link-item"><a href="#">Track Orders</a></li>
+                    <li class="footer-link-item"><a href="#">FAQ</a></li>
+                    <li class="footer-link-item"><a href="#">Contact Us</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="footer-title">Brand</h4>
+                <ul class="footer-links">
+                    <li class="footer-link-item"><a href="#">About VÉRLA</a></li>
+                    <li class="footer-link-item"><a href="#">Our Stores</a></li>
+                    <li class="footer-link-item"><a href="#">Careers</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="footer-title">Verify Token</h4>
+                <p style="font-size:12px; line-height: 1.6; color:var(--color-text-secondary);">
+                    Verification Code: <strong style="color:var(--color-text-primary);">VERLA-8829-VALID</strong>
+                </p>
+            </div>
+        </div>
+        <div class="container footer-bottom">
+            <p>&copy; 2026 VÉRLA. All rights reserved.</p>
+            <p><a href="#" style="margin-right:16px;">Privacy Policy</a> <a href="#">Terms of Service</a></p>
+        </div>
+    </div>
+
+    <!-- Country Selector Modal Overlay -->
+    <div class="modal-overlay" id="country_modal">
+        <div class="modal">
+            <button class="modal-close-btn" onclick="closeCountrySelector()">&times;</button>
+            <h3 class="modal-title">Select Region</h3>
+            <!-- No label -->
+            <input type="text" class="search-input" id="srch_inp" placeholder="Search country..." oninput="filterCountries(event)">
+            <ul class="country-list" id="country_ul">
+                <li class="country-item selected" onclick="selectRegion(this, 'US ($)')">United States ($)</li>
+                <li class="country-item" onclick="selectRegion(this, 'CA ($)')">Canada ($)</li>
+                <li class="country-item" onclick="selectRegion(this, 'GB (£)')">United Kingdom (£)</li>
+                <li class="country-item" onclick="selectRegion(this, 'DE (€)')">Germany (€)</li>
+                <li class="country-item" onclick="selectRegion(this, 'FR (€)')">France (€)</li>
+                <li class="country-item" onclick="selectRegion(this, 'AU ($)')">Australia ($)</li>
+                <li class="country-item" onclick="selectRegion(this, 'JP (¥)')">Japan (¥)</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Cookie Consent Banner -->
+    <div class="cookie-banner" id="cookie_box">
+        <p class="cookie-text">We use cookies to optimize site design, personalize content, and analyze our traffic. By clicking Accept, you agree to our cookie policy.</p>
+        <div class="cookie-actions">
+            <button class="cookie-btn cookie-btn-accept" onclick="acceptCookies()">Accept All</button>
+            <button class="cookie-btn cookie-btn-decline" onclick="acceptCookies()">Preferences</button>
+        </div>
+    </div>
+
+    <!-- JavaScript (Normal Quality with Global Scope Inline Handlers) -->
+    <script>
+        // Slideshow state
+        var activeIdx = 0;
+        var autoplayTimer;
+
+        function showIdx(index) {
+            var slides = document.querySelectorAll('#carousel_box .carousel-slide');
+            var dots = document.querySelectorAll('#carousel_box .carousel-dot');
+            
+            slides[activeIdx].classList.remove('active');
+            dots[activeIdx].classList.remove('active');
+
+            activeIdx = (index + slides.length) % slides.length;
+
+            slides[activeIdx].classList.add('active');
+            dots[activeIdx].classList.add('active');
+        }
+
+        function nextSlide() {
+            showIdx(activeIdx + 1);
+        }
+
+        function prevSlide() {
+            showIdx(activeIdx - 1);
+        }
+
+        function gotoSlide(idx) {
+            showIdx(idx);
+            resetAutoplay();
+        }
+
+        function startAutoplay() {
+            autoplayTimer = setInterval(nextSlide, 5000);
+        }
+
+        function resetAutoplay() {
+            clearInterval(autoplayTimer);
+            startAutoplay();
+        }
+
+        // Add to Cart
+        var count = 0;
+        function addToCart() {
+            count++;
+            document.getElementById('badge_cart').textContent = count;
+        }
+
+        // Country Selector
+        function openCountrySelector() {
+            document.getElementById('country_modal').classList.add('active');
+            document.getElementById('srch_inp').focus();
+        }
+
+        function closeCountrySelector() {
+            document.getElementById('country_modal').classList.remove('active');
+        }
+
+        function filterCountries(e) {
+            var term = e.target.value.toLowerCase();
+            var items = document.querySelectorAll('#country_ul .country-item');
+            items.forEach(function(item) {
+                var text = item.textContent.toLowerCase();
+                if (text.indexOf(term) > -1) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        function selectRegion(elem, code) {
+            var items = document.querySelectorAll('#country_ul .country-item');
+            items.forEach(function(item) {
+                item.classList.remove('selected');
+            });
+            elem.classList.add('selected');
+            document.getElementById('region_lbl').textContent = code;
+            closeCountrySelector();
+        }
+
+        // Newsletter
+        function submitMail(e) {
+            e.preventDefault();
+            var email = document.getElementById('inp_email');
+            if (email.value) {
+                document.getElementById('msg_ok').style.display = 'block';
+                document.getElementById('newsletter_form').style.display = 'none';
+            }
+        }
+
+        // Cookies
+        function acceptCookies() {
+            document.getElementById('cookie_box').classList.remove('active');
+            localStorage.setItem('cookies-accepted-normal', 'true');
+        }
+
+        window.onload = function() {
+            startAutoplay();
+            if (!localStorage.getItem('cookies-accepted-normal')) {
+                setTimeout(function() {
+                    document.getElementById('cookie_box').classList.add('active');
+                }, 1000);
+            }
+        };
+    </script>
+</body>
+</html>
