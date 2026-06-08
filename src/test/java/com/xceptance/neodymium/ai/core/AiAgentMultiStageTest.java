@@ -94,7 +94,7 @@ public final class AiAgentMultiStageTest
             "    {\n" +
             "      \"t\": \"CLICK\",\n" +
             "      \"tg\": \"#dropdown\",\n" +
-            "      \"d\": \"Click the dropdown\"\n" +
+            "      \"desc\": \"Click the dropdown\"\n" +
             "    }\n" +
             "  ]\n" +
             "}");
@@ -106,7 +106,7 @@ public final class AiAgentMultiStageTest
             "    {\n" +
             "      \"t\": \"CLICK\",\n" +
             "      \"tg\": \"#option-item\",\n" +
-            "      \"d\": \"Click the option item\"\n" +
+            "      \"desc\": \"Click the option item\"\n" +
             "    }\n" +
             "  ]\n" +
             "}");

@@ -547,7 +547,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         {
             if (prompt.contains("Click button 2"))
             {
-                return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"d\":\"Click button 2\"}]}";
+                return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"desc\":\"Click button 2\"}]}";
             }
             return "{}";
         });
@@ -648,7 +648,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         {
             if (prompt.contains("Click button 2"))
             {
-                return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"d\":\"Click button 2\"}]}";
+                return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"desc\":\"Click button 2\"}]}";
             }
             return "{}";
         });
@@ -737,7 +737,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         {
             if (prompt.contains("Click button 1"))
             {
-                return "{\"r\":\"Click button 1\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn1\",\"d\":\"Click button 1\"}]}";
+                return "{\"r\":\"Click button 1\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn1\",\"desc\":\"Click button 1\"}]}";
             }
             return "{}";
         });
@@ -1551,7 +1551,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
             {
                 if (prompt.contains("Click button 2"))
                 {
-                    return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"d\":\"Click button 2\"}]}";
+                    return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"desc\":\"Click button 2\"}]}";
                 }
                 return "{}";
             });
@@ -1753,7 +1753,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         {
             if (prompt.contains("Click button 2"))
             {
-                return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"d\":\"Click button 2\"}]}";
+                return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"desc\":\"Click button 2\"}]}";
             }
             return "{}";
         });

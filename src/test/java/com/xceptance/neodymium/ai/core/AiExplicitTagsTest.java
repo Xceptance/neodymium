@@ -84,13 +84,13 @@ public final class AiExplicitTagsTest
             @Override
             public String chat(final String systemPrompt, final String userPrompt)
             {
-                return "{\"r\": \"simulated reasoning\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#dummy-btn\", \"d\": \"Click dummy button\"}], \"d\": true}";
+                return "{\"r\": \"simulated reasoning\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#dummy-btn\", \"desc\": \"Click dummy button\"}], \"d\": true}";
             }
 
             @Override
             public String chatWithScreenshot(final String systemPrompt, final String userPrompt, final String screenshot)
             {
-                return "{\"r\": \"simulated reasoning\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#dummy-btn\", \"d\": \"Click dummy button\"}], \"d\": true}";
+                return "{\"r\": \"simulated reasoning\", \"a\": [{\"t\": \"CLICK\", \"tg\": \"#dummy-btn\", \"desc\": \"Click dummy button\"}], \"d\": true}";
             }
         };
 

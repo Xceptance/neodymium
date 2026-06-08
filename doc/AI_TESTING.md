@@ -99,7 +99,7 @@ An `AiMockResponse` represents a single mock response behavior from the LLM. You
     * `t` (type): `String` action type (e.g. `"CLICK"`, `"TYPE"`, `"SELECT"`).
     * `tg` (target): `String` target element descriptor (e.g. CSS selector).
     * `v` (value): `String` input parameter value (e.g. text to type).
-    * `desc` (description): `String` human-readable instruction description mapped to the test script (fallback key `"d"` is also supported for backwards compatibility).
+    * `desc` (description): `String` human-readable instruction description mapped to the test script.
     * `ed` (element details): `String` description of target element (recommended especially if target is dynamic/referenced).
 * **Latency Timing**: A simulated network delay (`withDelay`).
 * **HTTP Errors**: Simulated server error status codes (e.g. HTTP 503) or exceptions to test self-healing retry rules.
