@@ -1698,7 +1698,6 @@ public class AiAgent {
                 }
 
                 // 4. Send to LLM with context-level-aware system prompt
-                LOG.trace("🗣️ --- User Prompt ---\n{}", userPrompt);
                 executionLog.logPrompt(userPrompt);
 
                 final String systemPrompt = AiAgentPrompts.getSystemPrompt(contextLevel);

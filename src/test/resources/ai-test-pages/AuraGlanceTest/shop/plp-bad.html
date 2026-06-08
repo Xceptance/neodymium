@@ -287,7 +287,76 @@
         .item-box.hidden_bad {
             display: none !important;
         }
-    </style>
+    
+        /* Dynamic Loader and Cart additions */
+        @keyframes spin-loader {
+            to { transform: rotate(360deg); }
+        }
+        #global-page-loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.75);
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        #global-page-loader .loader-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--color-border);
+            border-top-color: var(--color-accent);
+            border-radius: 50%;
+            animation: spin-loader 0.8s linear infinite;
+        }
+        .cart-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            width: 320px;
+            z-index: 1000;
+            padding: 20px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity var(--transition-speed), transform var(--transition-speed);
+        }
+
+        /* Custom Div Checkbox Style */
+        .bad-checkbox {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #767676;
+            margin-right: 10px;
+            display: inline-block;
+            cursor: pointer;
+            background-color: white;
+            vertical-align: middle;
+            position: relative;
+        }
+        .bad-checkbox.checked::after {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 5px;
+            width: 4px;
+            height: 8px;
+            border: solid var(--color-accent);
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+        .bad-checkbox.disabled {
+            background-color: #f0f0f0;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+</style>
 </head>
 <body>
 
@@ -336,8 +405,24 @@
                 <div style="color: var(--color-text-primary); padding: 8px; display: flex; align-items: center; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer;" id="u_select" onclick="open_m()">
                     Region: <span id="r_lbl_bad">US ($)</span>
                 </div>
-                <div style="color: var(--color-text-primary); padding: 8px; display: flex; align-items: center; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer;" id="u_cart">
-                    Cart <div style="background-color: var(--color-accent); color: white; font-size: 10px; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; margin-left: 4px; font-weight: bold;" id="cart_num">0</div>
+                <div style="position: relative; display: inline-block;" id="cart-dropdown-wrapper">
+                    <div style="color: var(--color-text-primary); padding: 8px; display: flex; align-items: center; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer;" id="u_cart">
+                        Cart <div style="background-color: var(--color-accent); color: white; font-size: 10px; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; margin-left: 4px; font-weight: bold;" id="cart_num">0</div>
+                    </div>
+                    <!-- Cart Dropdown -->
+                    <div class="cart-dropdown" id="cart-dropdown-panel">
+                        <h4 style="font-family: var(--font-family-serif); font-size: 16px; margin-bottom: 12px; border-bottom: 1px solid var(--color-border); padding-bottom: 8px;">Shopping Cart</h4>
+                        <div id="cart-dropdown-items" style="max-height: 200px; overflow-y: auto; margin-bottom: 12px;">
+                            <p style="font-size: 13px; color: var(--color-text-secondary); text-align: center; padding: 20px 0;" id="cart-empty-message">Your cart is empty.</p>
+                        </div>
+                        <div id="cart-dropdown-footer" style="display: none; border-top: 1px solid var(--color-border); padding-top: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
+                                <span>Subtotal:</span>
+                                <span id="cart-dropdown-subtotal">$0.00</span>
+                            </div>
+                            <button class="cookie-btn cookie-btn-accept" style="width: 100%; justify-content: center; padding: 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Checkout</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -788,319 +873,606 @@
     </div>
 
     <!-- Country Selector Modal Overlay -->
-    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.4); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s;" id="pop_m_bad">
-        <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); width: 90%; max-width: 450px; padding: 32px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); position: relative;" id="pop_box">
-            <div style="position: absolute; top: 24px; right: 24px; font-size: 24px; color: var(--color-text-secondary); line-height: 1; cursor: pointer;" onclick="close_m()">&times;</div>
-            <div style="font-family: var(--font-family-serif); font-size: 22px; font-weight: 400; margin-bottom: 16px;">Select Region</div>
-            <input type="text" style="width: 100%; padding: 12px 16px; border: 1px solid var(--color-border); font-family: inherit; font-size: 14px; margin-bottom: 20px; outline: none;" id="pop_srch" oninput="f_lst(event)" placeholder="Search country...">
-            <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--color-border);" id="pop_ul_bad">
-                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-liselected selected" onclick="sl_r(this, 'US ($)')">United States ($)</div>
-                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'CA ($)')">Canada ($)</div>
-                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'GB (£)')">United Kingdom (£)</div>
-                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'DE (€)')">Germany (€)</div>
-                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'FR (€)')">France (€)</div>
-                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'AU ($)')">Australia ($)</div>
-                <div style="padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--color-bg-secondary);" class="pop-li" onclick="sl_r(this, 'JP (¥)')">Japan (¥)</div>
+    <div class="modal-overlay" id="pop_m_bad" role="dialog" aria-modal="true" aria-labelledby="country-modal-title">
+        <div class="modal" id="country-modal-box">
+            <button class="modal-close-btn" id="country-modal-close" aria-label="Close dialog">&times;</button>
+            <h3 class="modal-title" id="country-modal-title">Select Region</h3>
+            <input type="text" class="search-input" id="pop_srch" placeholder="Search country..." aria-label="Search countries">
+            
+            <div class="country-list-wrapper" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--color-border); margin-top: 8px;">
+                <div class="continent-group" data-continent="Europe">
+                    <div class="continent-header" style="font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-secondary); background: var(--color-bg-secondary); padding: 8px 16px; border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: 1;">Europe</div>
+                    <ul class="country-list" style="list-style: none; border: none; max-height: none; overflow-y: visible;">
+                        <li class="country-item" data-code="AT (€)">Austria (€)</li>
+                        <li class="country-item" data-code="BE (€)">Belgium (€)</li>
+                        <li class="country-item" data-code="DK (DKK)">Denmark (DKK)</li>
+                        <li class="country-item" data-code="FI (€)">Finland (€)</li>
+                        <li class="country-item" data-code="FR (€)">France (€)</li>
+                        <li class="country-item" data-code="DE (€)">Germany (€)</li>
+                        <li class="country-item" data-code="IE (€)">Ireland (€)</li>
+                        <li class="country-item" data-code="IT (€)">Italy (€)</li>
+                        <li class="country-item" data-code="NL (€)">Netherlands (€)</li>
+                        <li class="country-item" data-code="NO (NOK)">Norway (NOK)</li>
+                        <li class="country-item" data-code="PL (PLN)">Poland (PLN)</li>
+                        <li class="country-item" data-code="PT (€)">Portugal (€)</li>
+                        <li class="country-item" data-code="ES (€)">Spain (€)</li>
+                        <li class="country-item" data-code="SE (SEK)">Sweden (SEK)</li>
+                        <li class="country-item" data-code="CH (CHF)">Switzerland (CHF)</li>
+                        <li class="country-item" data-code="GB (£)">United Kingdom (£)</li>
+                    </ul>
+                </div>
+                <div class="continent-group" data-continent="Americas">
+                    <div class="continent-header" style="font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-secondary); background: var(--color-bg-secondary); padding: 8px 16px; border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: 1;">Americas</div>
+                    <ul class="country-list" style="list-style: none; border: none; max-height: none; overflow-y: visible;">
+                        <li class="country-item" data-code="AR ($)">Argentina ($)</li>
+                        <li class="country-item" data-code="BR (R$)">Brazil (R$)</li>
+                        <li class="country-item" data-code="CA ($)">Canada ($)</li>
+                        <li class="country-item" data-code="CL ($)">Chile ($)</li>
+                        <li class="country-item" data-code="CO ($)">Colombia ($)</li>
+                        <li class="country-item" data-code="MX (MXN)">Mexico (MXN)</li>
+                        <li class="country-item" data-code="PE (PEN)">Peru (PEN)</li>
+                        <li class="country-item selected" data-code="US ($)">United States ($)</li>
+                    </ul>
+                </div>
+                <div class="continent-group" data-continent="Asia/Oceania">
+                    <div class="continent-header" style="font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-secondary); background: var(--color-bg-secondary); padding: 8px 16px; border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: 1;">Asia / Oceania</div>
+                    <ul class="country-list" style="list-style: none; border: none; max-height: none; overflow-y: visible;">
+                        <li class="country-item" data-code="AU ($)">Australia ($)</li>
+                        <li class="country-item" data-code="CN (¥)">China (¥)</li>
+                        <li class="country-item" data-code="HK ($)">Hong Kong ($)</li>
+                        <li class="country-item" data-code="IN (₹)">India (₹)</li>
+                        <li class="country-item" data-code="JP (¥)">Japan (¥)</li>
+                        <li class="country-item" data-code="KR (₩)">South Korea (₩)</li>
+                        <li class="country-item" data-code="NZ ($)">New Zealand ($)</li>
+                        <li class="country-item" data-code="SG ($)">Singapore ($)</li>
+                        <li class="country-item" data-code="TW (NT$)">Taiwan (NT$)</li>
+                        <li class="country-item" data-code="TH (฿)">Thailand (฿)</li>
+                        <li class="country-item" data-code="VN (₫)">Vietnam (₫)</li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Cookie Consent Banner -->
-    <div style="position: fixed; bottom: 24px; left: 24px; max-width: 420px; background-color: var(--color-bg-primary); border: 1px solid var(--color-border); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); padding: 24px; z-index: 150; transform: translateY(150%); transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);" id="ck_b_bad">
-        <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 16px;">We use cookies to optimize site design, personalize content, and analyze our traffic. By clicking Accept, you agree to our cookie policy.</div>
-        <div style="display: flex; gap: 12px;">
-            <div style="flex: 1; padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; text-align: center; border: 1px solid var(--color-text-primary); background-color: var(--color-text-primary); color: white; cursor: pointer;" onclick="ck_ok()">Accept All</div>
-            <div style="flex: 1; padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; text-align: center; border: 1px solid var(--color-border); cursor: pointer;" onclick="ck_ok()">Preferences</div>
+    <div class="cookie-banner" id="cookie-consent-banner" role="complementary" aria-label="Cookie Consent Banner">
+        <p class="cookie-text" id="cookie-banner-text">We use cookies to optimize site design, personalize content, and analyze our traffic. By clicking Accept, you agree to our cookie policy.</p>
+        <div class="cookie-actions">
+            <button class="cookie-btn cookie-btn-accept" id="cookie-accept-all-btn">Accept All</button>
+            <button class="cookie-btn cookie-btn-decline" id="cookie-decline-btn">Preferences</button>
         </div>
     </div>
 
-    <!-- JavaScript (Horrible quality: Globals, obfuscated names, no structures, custom checkboxes state toggling) -->
+    <!-- Cookie Preferences Modal Overlay -->
+    <div class="modal-overlay" id="cookie-preferences-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cookie-preferences-title">
+        <div class="modal" id="cookie-preferences-modal-box">
+            <button class="modal-close-btn" id="cookie-preferences-close" aria-label="Close dialog">&times;</button>
+            <h3 class="modal-title" id="cookie-preferences-title">Cookie Preferences</h3>
+            <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 20px; line-height: 1.5;">
+                Customize your cookie settings below. Essential cookies are required for the basic functionality of the website.
+            </p>
+            <div style="margin-bottom: 16px; display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px; cursor: pointer;" onclick="var c = this.querySelector('.bad-checkbox'); if (!c.classList.contains('disabled')) c.classList.toggle('checked');">
+                <div class="bad-checkbox checked disabled" id="cookie-essential" style="margin-top: 4px;"></div>
+                <div>
+                    <div style="font-weight: 600; font-size: 14px; color: var(--color-text-primary);">Essential Cookies</div>
+                    <p style="font-size: 12px; color: var(--color-text-secondary);">Required for system navigation, shopping cart, and region selection.</p>
+                </div>
+            </div>
+            <div style="margin-bottom: 16px; display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px; cursor: pointer;" onclick="var c = this.querySelector('.bad-checkbox'); c.classList.toggle('checked');">
+                <div class="bad-checkbox" id="cookie-analytics" style="margin-top: 4px;"></div>
+                <div>
+                    <div style="font-weight: 600; font-size: 14px; color: var(--color-text-primary);">Analytics Cookies</div>
+                    <p style="font-size: 12px; color: var(--color-text-secondary);">Allows us to monitor site usage, traffic sources, and performance metrics.</p>
+                </div>
+            </div>
+            <div style="margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px; cursor: pointer;" onclick="var c = this.querySelector('.bad-checkbox'); c.classList.toggle('checked');">
+                <div class="bad-checkbox" id="cookie-marketing" style="margin-top: 4px;"></div>
+                <div>
+                    <div style="font-weight: 600; font-size: 14px; color: var(--color-text-primary);">Marketing Cookies</div>
+                    <p style="font-size: 12px; color: var(--color-text-secondary);">Used to personalize advertisements and content based on your interests.</p>
+                </div>
+            </div>
+            <button class="cookie-btn cookie-btn-accept" id="cookie-save-preferences-btn" style="width: 100%; justify-content: center; padding: 12px;">Save Preferences</button>
+        </div>
+    </div>
+
+    <!-- Global Page Loader Overlay -->
+    <div id="global-page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <!-- Self-Contained JavaScript for Interactions -->
     <script>
-        // Pagination state (obfuscated variables)
-        var bSz = 6;
-        var dCnt = bSz;
-        var aLd = 2;
-        var fLst = [];
-        var isL = false;
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- 1. Slideshow Carousel Logic ---
+            const slides = document.querySelectorAll('#homepage-hero-carousel .carousel-slide, #carousel_box .carousel-slide, #sl_container .sl-shw-div');
+            const dots = document.querySelectorAll('#homepage-hero-carousel .carousel-dot, #carousel_box .carousel-dot, #sl_container .c_dot_b');
+            const prevBtn = document.getElementById('carousel-btn-prev') || document.getElementById('btn_prev');
+            const nextBtn = document.getElementById('carousel-btn-next') || document.getElementById('btn_next');
+            let currentSlide = 0;
+            let slideInterval;
 
-        // Obfuscated filter update delay
-        var fT = null;
-        function f_chg() {
-            var sp = document.getElementById('sp_overlay_bad');
-            sp.style.display = 'flex';
-            if (fT) clearTimeout(fT);
-            var d = Math.floor(Math.random()*901)+300;
-            fT = setTimeout(function() {
-                r_flt();
-                sp.style.display = 'none';
-            }, d);
-        }
-
-        // Checkbox state toggling
-        function tg_cb(parentDiv, filterValue) {
-            var box = parentDiv.querySelector('.bad-checkbox');
-            box.classList.toggle('checked');
-            f_chg();
-        }
-
-        // Run filters
-        function r_flt() {
-            var items = Array.from(document.querySelectorAll('.item-box'));
-            var grid = document.getElementById('grid_box');
-            var empty = document.getElementById('empty_msg');
-            var label = document.getElementById('count_lbl');
-            var sortSel = document.querySelector('.sort-select');
-            var ldBtn = document.getElementById('btn_load_bad');
-
-            // Collect active categories
-            var activeCats = [];
-            document.querySelectorAll('.check-cat').forEach(function(box) {
-                if (box.classList.contains('checked')) {
-                    activeCats.push(box.getAttribute('data-val'));
+            function showSlide(index) {
+                if (!slides.length) return;
+                slides[currentSlide].classList.remove('active');
+                slides[currentSlide].setAttribute('aria-hidden', 'true');
+                if (dots[currentSlide]) {
+                    dots[currentSlide].classList.remove('active');
+                    dots[currentSlide].style.backgroundColor = 'var(--color-border)';
                 }
-            });
 
-            // Collect active colors
-            var activeColors = [];
-            document.querySelectorAll('.check-color').forEach(function(box) {
-                if (box.classList.contains('checked')) {
-                    activeColors.push(box.getAttribute('data-val'));
+                currentSlide = (index + slides.length) % slides.length;
+
+                slides[currentSlide].classList.add('active');
+                slides[currentSlide].setAttribute('aria-hidden', 'false');
+                if (dots[currentSlide]) {
+                    dots[currentSlide].classList.add('active');
+                    dots[currentSlide].style.backgroundColor = 'var(--color-accent)';
                 }
-            });
+            }
 
-            // Filter
-            fLst = items.filter(function(card) {
-                var catOk = activeCats.length === 0 || activeCats.indexOf(card.getAttribute('data-cat')) > -1;
-                var colOk = activeColors.length === 0 || activeColors.indexOf(card.getAttribute('data-color')) > -1;
-                return catOk && colOk;
-            });
+            function nextSlide() {
+                showSlide(currentSlide + 1);
+            }
 
-            // Sort
-            var sortVal = sortSel.value;
-            if (sortVal === 'price-asc') {
-                fLst.sort(function(a, b) {
-                    return parseFloat(a.getAttribute('data-price')) - parseFloat(b.getAttribute('data-price'));
-                });
-            } else if (sortVal === 'price-desc') {
-                fLst.sort(function(a, b) {
-                    return parseFloat(b.getAttribute('data-price')) - parseFloat(a.getAttribute('data-price'));
-                });
-            } else {
-                fLst.sort(function(a, b) {
-                    return a.getAttribute('data-id').localeCompare(b.getAttribute('data-id'));
+            function prevSlide() {
+                showSlide(currentSlide - 1);
+            }
+
+            function startAutoplay() {
+                if (slides.length) slideInterval = setInterval(nextSlide, 5000);
+            }
+
+            function resetAutoplay() {
+                clearInterval(slideInterval);
+                startAutoplay();
+            }
+
+            if (prevBtn) {
+                prevBtn.addEventListener('click', () => {
+                    prevSlide();
+                    resetAutoplay();
                 });
             }
 
-            // Reset pagination state
-            dCnt = bSz;
-            aLd = 2;
-            isL = false;
-            document.getElementById('spinner_bad').style.display = 'none';
-            ldBtn.style.display = 'none';
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => {
+                    nextSlide();
+                    resetAutoplay();
+                });
+            }
 
-            r_pds();
-        }
-
-        function r_pds() {
-            var items = Array.from(document.querySelectorAll('.item-box'));
-            var grid = document.getElementById('grid_box');
-            var empty = document.getElementById('empty_msg');
-            var label = document.getElementById('count_lbl');
-            var ldBtn = document.getElementById('btn_load_bad');
-            var spin = document.getElementById('spinner_bad');
-
-            items.forEach(function(el) {
-                el.classList.add('hidden_bad');
+            dots.forEach(dot => {
+                dot.addEventListener('click', (e) => {
+                    const slideIndex = parseInt(e.target.getAttribute('data-slide') || e.target.getAttribute('onclick')?.replace(/[^0-9]/g, '') || 0);
+                    showSlide(slideIndex);
+                    resetAutoplay();
+                });
             });
 
-            if (fLst.length === 0) {
-                empty.style.display = 'block';
-                label.textContent = 'Showing 0 items';
-                ldBtn.style.display = 'none';
-                spin.style.display = 'none';
-            } else {
-                empty.style.display = 'none';
-                var limit = Math.min(dCnt, fLst.length);
-                label.textContent = 'Showing ' + limit + ' of ' + fLst.length + ' items';
-                
-                for (var i = 0; i < limit; i++) {
-                    var card = fLst[i];
-                    card.classList.remove('hidden_bad');
-                    grid.insertBefore(card, empty);
-                }
+            startAutoplay();
 
-                if (isL) {
-                    ldBtn.style.display = 'none';
-                    spin.style.display = 'block';
-                } else if (limit < fLst.length) {
-                    if (aLd === 0) {
-                        ldBtn.style.display = 'inline-block';
-                        spin.style.display = 'none';
+            // Expose carousel functions globally for inline onclick handlers across different pages
+            window.prevSlide = () => { prevSlide(); resetAutoplay(); };
+            window.nextSlide = () => { nextSlide(); resetAutoplay(); };
+            window.gotoSlide = (idx) => { showSlide(idx); resetAutoplay(); };
+            window.sh_prv = () => { prevSlide(); resetAutoplay(); };
+            window.sh_nxt = () => { nextSlide(); resetAutoplay(); };
+            window.sh_go = (idx) => { showSlide(idx); resetAutoplay(); };
+
+            // --- 2. Dynamic Cart & Dropdown Logic ---
+            const cartBadge = document.getElementById('cart_num');
+            const quickAddButtons = document.querySelectorAll('.product-quick-add, .product-quick-add-bad, .btn-quick-add-bad');
+            const cartWrapper = document.getElementById('cart-dropdown-wrapper');
+            const cartBtn = document.getElementById('cart-btn') || document.getElementById('btn_cart') || document.getElementById('u_cart');
+            const cartDropdown = document.getElementById('cart-dropdown-panel');
+            const cartItemsContainer = document.getElementById('cart-dropdown-items');
+            const cartSubtotalLabel = document.getElementById('cart-dropdown-subtotal');
+            const cartFooter = document.getElementById('cart-dropdown-footer');
+            let isCartSticky = false;
+            let cartHoverTimeout;
+            let cart = JSON.parse(sessionStorage.getItem('verla-cart') || '[]');
+
+            function showCartDropdown() {
+                clearTimeout(cartHoverTimeout);
+                if (cartDropdown) {
+                    cartDropdown.style.display = 'block';
+                    cartDropdown.offsetHeight; // force reflow
+                    cartDropdown.style.opacity = '1';
+                    cartDropdown.style.transform = 'translateY(0)';
+                }
+            }
+
+            function hideCartDropdown() {
+                if (isCartSticky) return;
+                if (cartDropdown) {
+                    cartDropdown.style.opacity = '0';
+                    cartDropdown.style.transform = 'translateY(10px)';
+                    cartHoverTimeout = setTimeout(() => {
+                        cartDropdown.style.display = 'none';
+                    }, 300);
+                }
+            }
+
+            if (cartWrapper) {
+                cartWrapper.addEventListener('mouseenter', showCartDropdown);
+                cartWrapper.addEventListener('mouseleave', hideCartDropdown);
+            }
+
+            if (cartBtn) {
+                cartBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    isCartSticky = !isCartSticky;
+                    if (isCartSticky) {
+                        showCartDropdown();
                     } else {
-                        ldBtn.style.display = 'none';
-                        spin.style.display = 'none';
+                        hideCartDropdown();
                     }
-                } else {
-                    ldBtn.style.display = 'none';
-                    spin.style.display = 'none';
-                }
-            }
-        }
-
-        // Obfuscated global scroll listener
-        window.onscroll = function() {
-            var sp = document.getElementById('sp_overlay_bad');
-            if (aLd > 0 && fLst.length > dCnt && !isL && sp.style.display !== 'flex' && sp.style.display !== 'block') {
-                var th = 100;
-                var docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-                if ((window.innerHeight + window.scrollY) >= (docH - th)) {
-                    isL = true;
-                    r_pds();
-                    var dly = Math.floor(Math.random()*901)+300;
-                    setTimeout(function() {
-                        aLd--;
-                        dCnt += bSz;
-                        isL = false;
-                        r_pds();
-                    }, dly);
-                }
-            }
-        };
-
-        // Load More button click
-        function ld_m() {
-            if (!isL) {
-                isL = true;
-                r_pds();
-                var dly = Math.floor(Math.random()*901)+300;
-                setTimeout(function() {
-                    dCnt = fLst.length;
-                    isL = false;
-                    r_pds();
-                }, dly);
-            }
-        }
-
-        // Trigger filter run on select change
-        function runFilters(e) {
-            f_chg();
-        }
-
-        // Add to Cart
-        var c_num = 0;
-        function c_add(el) {
-            if (!el || el.getAttribute('data-disabled') === 'true' || el.classList.contains('adding') || el.classList.contains('added')) return;
-
-            var originalText = el.textContent || 'Quick Add';
-            el.setAttribute('data-disabled', 'true');
-            el.textContent = 'Adding...';
-            el.classList.add('adding');
-
-            fetch('../index.html')
-                .then(function() {
-                    var delay = Math.floor(Math.random() * 901) + 300;
-                    setTimeout(function() {
-                        c_num++;
-                        document.getElementById('cart_num').textContent = c_num;
-
-                        el.classList.remove('adding');
-                        el.classList.add('added');
-                        el.textContent = 'Added!';
-
-                        setTimeout(function() {
-                            el.classList.remove('added');
-                            el.textContent = originalText;
-                            el.removeAttribute('data-disabled');
-                        }, 1000);
-                    }, delay);
-                })
-                .catch(function() {
-                    el.classList.remove('adding');
-                    el.removeAttribute('data-disabled');
-                    el.textContent = originalText;
                 });
-        }
+            }
 
-        // Country Selector
-        function open_m() {
-            var m = document.getElementById('pop_m_bad');
-            m.style.opacity = '1';
-            m.style.visibility = 'visible';
-            document.getElementById('pop_srch').focus();
-        }
-
-        // Close Country Selector
-        function close_m() {
-            var m = document.getElementById('pop_m_bad');
-            m.style.opacity = '0';
-            m.style.visibility = 'hidden';
-        }
-
-        function f_lst(e) {
-            var term = e.target.value.toLowerCase();
-            var list = document.querySelectorAll('#pop_ul_bad > div');
-            list.forEach(function(item) {
-                var text = item.textContent.toLowerCase();
-                if (text.includes(term)) {
-                    item.style.display = 'block';
-                } else {
-                    item.style.display = 'none';
+            document.addEventListener('click', (e) => {
+                if (cartWrapper && !cartWrapper.contains(e.target)) {
+                    isCartSticky = false;
+                    hideCartDropdown();
                 }
             });
-        }
 
-        function sl_r(elem, code) {
-            var list = document.querySelectorAll('#pop_ul_bad > div');
-            list.forEach(function(item) {
-                item.style.fontWeight = 'normal';
-                item.style.color = 'inherit';
-            });
-            elem.style.fontWeight = '500';
-            elem.style.color = 'var(--color-accent)';
-            document.getElementById('r_lbl_bad').textContent = code;
-            close_m();
-        }
+            function updateCartUI() {
+                if (!cartBadge) return;
+                const totalCount = cart.reduce((sum, item) => sum + item.qty, 0);
+                cartBadge.textContent = totalCount;
 
-        // Newsletter
-        function sb_m() {
-            var val = document.getElementById('mail_val').value;
-            if (val) {
-                document.getElementById('ok_lbl').style.display = 'block';
-                document.getElementById('n_box').style.display = 'none';
+                if (cart.length === 0) {
+                    cartItemsContainer.innerHTML = '<p style="font-size: 13px; color: var(--color-text-secondary); text-align: center; padding: 20px 0;" id="cart-empty-message">Your cart is empty.</p>';
+                    if (cartFooter) cartFooter.style.display = 'none';
+                } else {
+                    cartItemsContainer.innerHTML = '';
+                    if (cartFooter) cartFooter.style.display = 'block';
+                    let subtotal = 0;
+
+                    cart.forEach((item, index) => {
+                        subtotal += item.price * item.qty;
+                        const itemEl = document.createElement('div');
+                        itemEl.style.display = 'flex';
+                        itemEl.style.alignItems = 'center';
+                        itemEl.style.gap = '12px';
+                        itemEl.style.marginBottom = '12px';
+                        itemEl.innerHTML = `
+                            <div style="width: 40px; height: 40px; background: var(--color-bg-secondary); display: flex; align-items: center; justify-content: center; border: 1px solid var(--color-border); flex-shrink: 0;">
+                                ${item.svg}
+                            </div>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-primary);">${item.title}</div>
+                                <div style="font-size: 11px; color: var(--color-text-secondary);">${item.qty} &times; $${item.price.toFixed(2)}</div>
+                            </div>
+                            <button class="remove-cart-item" data-index="${index}" style="font-size: 11px; color: var(--color-accent); font-weight: 500;">Remove</button>
+                        `;
+                        cartItemsContainer.appendChild(itemEl);
+                    });
+
+                    if (cartSubtotalLabel) cartSubtotalLabel.textContent = `$${subtotal.toFixed(2)}`;
+
+                    cartItemsContainer.querySelectorAll('.remove-cart-item').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const idx = parseInt(btn.getAttribute('data-index'));
+                            cart.splice(idx, 1);
+                            sessionStorage.setItem('verla-cart', JSON.stringify(cart));
+                            updateCartUI();
+                        });
+                    });
+                }
             }
-        }
 
-        // Cookies
-        function ck_ok() {
-            document.getElementById('ck_b_bad').style.transform = 'translateY(150%)';
-            localStorage.setItem('cookies-accepted-bad', 'true');
-        }
+            // Setup Quick Add listeners
+            document.addEventListener('click', (e) => {
+                const btn = e.target.closest('.product-quick-add, .product-quick-add-bad, .btn-quick-add-bad');
+                if (!btn || btn.disabled || btn.classList.contains('adding')) return;
 
-        window.onload = function() {
-            var urlParams = new URLSearchParams(window.location.search);
-            var categoryParam = urlParams.get('category');
+                // Don't add sold out items
+                if (btn.textContent.trim().toLowerCase().includes('sold out')) return;
+
+                e.stopPropagation();
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = 'Adding...';
+                btn.classList.add('adding');
+
+                fetch('../index.html')
+                    .then(() => {
+                        const delay = Math.floor(Math.random() * 901) + 300;
+                        setTimeout(() => {
+                            const card = btn.closest('.product-card, .item-box, .product-card-bad');
+                            if (card) {
+                                const titleEl = card.querySelector('.product-title, .item-title, .product-title-bad, h3, h4');
+                                const title = titleEl ? titleEl.textContent.trim() : 'Apparel Item';
+                                
+                                const priceEl = card.querySelector('.product-price, .item-price, .product-price-bad');
+                                let priceText = '0.00';
+                                if (priceEl) {
+                                    const saleEl = priceEl.querySelector('.sale');
+                                    priceText = saleEl ? saleEl.textContent : priceEl.textContent;
+                                }
+                                const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0.00;
+                                
+                                const svgEl = card.querySelector('svg');
+                                const svgMarkup = svgEl ? svgEl.outerHTML : '';
+
+                                const existing = cart.find(item => item.title === title);
+                                if (existing) {
+                                    existing.qty++;
+                                } else {
+                                    cart.push({ title, price, svg: svgMarkup, qty: 1 });
+                                }
+                                sessionStorage.setItem('verla-cart', JSON.stringify(cart));
+                                updateCartUI();
+                            }
+
+                            btn.classList.remove('adding');
+                            btn.classList.add('added');
+                            btn.textContent = 'Added!';
+
+                            showCartDropdown();
+                            setTimeout(() => {
+                                hideCartDropdown();
+                            }, 1500);
+
+                            setTimeout(() => {
+                                btn.classList.remove('added');
+                                btn.textContent = originalText;
+                                btn.disabled = false;
+                            }, 1000);
+                        }, delay);
+                    })
+                    .catch(() => {
+                        btn.classList.remove('adding');
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                    });
+            });
+
+            updateCartUI();
+            window.c_add = () => {};
+
+            // --- 3. Country Selector Logic ---
+            const countrySelectorBtn = document.getElementById('country-selector-btn') || document.getElementById('region_btn') || document.getElementById('u_select');
+            const countryModalOverlay = document.getElementById('pop_m_bad');
+            const countryModalClose = document.getElementById('country-modal-close') || countryModalOverlay?.querySelector('.modal-close-btn') || countryModalOverlay?.querySelector('div[onclick="close_m()"]');
+            const searchInput = document.getElementById('pop_srch');
+            const countryItems = countryModalOverlay?.querySelectorAll('.country-item, .pop-li, .pop-liselected') || [];
+            const currentRegionLabel = document.getElementById('r_lbl_bad');
+
+            if (countrySelectorBtn) {
+                countrySelectorBtn.addEventListener('click', () => {
+                    if (countryModalOverlay) {
+                        countryModalOverlay.classList.add('active');
+                        countryModalOverlay.style.opacity = '1';
+                        countryModalOverlay.style.visibility = 'visible';
+                        if (countrySelectorBtn.setAttribute) countrySelectorBtn.setAttribute('aria-expanded', 'true');
+                        if (searchInput) searchInput.focus();
+                    }
+                });
+            }
+
+            function closeCountryModal() {
+                if (countryModalOverlay) {
+                    countryModalOverlay.classList.remove('active');
+                    countryModalOverlay.style.opacity = '0';
+                    countryModalOverlay.style.visibility = 'hidden';
+                    if (countrySelectorBtn && countrySelectorBtn.setAttribute) countrySelectorBtn.setAttribute('aria-expanded', 'false');
+                }
+            }
+
+            if (countryModalClose) {
+                countryModalClose.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    closeCountryModal();
+                });
+            }
+            if (countryModalOverlay) {
+                countryModalOverlay.addEventListener('click', (e) => {
+                    if (e.target === countryModalOverlay) closeCountryModal();
+                });
+            }
+
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const term = e.target.value.toLowerCase();
+                    const groups = countryModalOverlay.querySelectorAll('.continent-group');
+                    if (groups.length) {
+                        groups.forEach(group => {
+                            let visibleCount = 0;
+                            const items = group.querySelectorAll('.country-item, .pop-li, .pop-liselected');
+                            items.forEach(item => {
+                                const text = item.textContent.toLowerCase();
+                                if (text.includes(term)) {
+                                    item.style.display = 'block';
+                                    visibleCount++;
+                                } else {
+                                    item.style.display = 'none';
+                                }
+                            });
+                            if (visibleCount > 0) {
+                                group.style.display = 'block';
+                            } else {
+                                group.style.display = 'none';
+                            }
+                        });
+                    } else {
+                        // Simple filter if no continent groups
+                        countryItems.forEach(item => {
+                            const text = item.textContent.toLowerCase();
+                            if (text.includes(term)) {
+                                item.style.display = 'block';
+                            } else {
+                                item.style.display = 'none';
+                            }
+                        });
+                    }
+                });
+            }
+
+            countryItems.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    countryItems.forEach(el => {
+                        el.classList.remove('selected');
+                        el.classList.remove('pop-liselected');
+                        if (el.setAttribute) el.setAttribute('aria-selected', 'false');
+                    });
+                    item.classList.add('selected');
+                    if (item.classList.contains('pop-li')) item.classList.add('pop-liselected');
+                    if (item.setAttribute) item.setAttribute('aria-selected', 'true');
+                    
+                    const code = item.getAttribute('data-code');
+                    if (currentRegionLabel) currentRegionLabel.textContent = code;
+                    closeCountryModal();
+                });
+            });
+            window.open_m = () => {
+                if (countryModalOverlay) {
+                    countryModalOverlay.classList.add('active');
+                    countryModalOverlay.style.opacity = '1';
+                    countryModalOverlay.style.visibility = 'visible';
+                    if (searchInput) searchInput.focus();
+                }
+            };
+            window.close_m = () => {
+                closeCountryModal();
+            };
+
+            // --- 4. Newsletter Form Logic ---
+            const newsletterForm = document.getElementById('newsletter-email-form') || document.getElementById('newsletter_form');
+            const emailInput = document.getElementById('newsletter-email-input') || document.getElementById('email_input');
+            const successMessage = document.getElementById('newsletter-success-message') || document.getElementById('success_msg');
+
+            if (newsletterForm && emailInput && successMessage) {
+                newsletterForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    if (emailInput.checkValidity()) {
+                        successMessage.style.display = 'block';
+                        newsletterForm.style.display = 'none';
+                    }
+                });
+            }
+            window.sb_m = () => {
+                const valEl = document.getElementById('mail_val') || document.getElementById('email_input') || document.getElementById('newsletter-email-input');
+                const okEl = document.getElementById('ok_lbl') || document.getElementById('success_msg') || document.getElementById('newsletter-success-message');
+                const boxEl = document.getElementById('n_box') || document.getElementById('newsletter_form') || document.getElementById('newsletter-email-form');
+                if (valEl && valEl.value) {
+                    if (okEl) okEl.style.display = 'block';
+                    if (boxEl) boxEl.style.display = 'none';
+                }
+            };
+
+            // --- 5. Cookie Consent & Preferences Logic ---
+            const cookieBanner = document.getElementById('cookie-consent-banner') || document.getElementById('cookie_banner') || document.getElementById('ck_b_bad');
+            const acceptBtn = document.getElementById('cookie-accept-all-btn') || cookieBanner?.querySelector('.cookie-btn-accept') || cookieBanner?.querySelector('div[onclick="ck_ok()"]');
+            const declineBtn = document.getElementById('cookie-decline-btn') || cookieBanner?.querySelector('.cookie-btn-decline') || cookieBanner?.querySelector('div[onclick="ck_prefs()"]') || cookieBanner?.querySelectorAll('div')[1];
             
-            var items = Array.from(document.querySelectorAll('.item-box'));
-            fLst = items;
+            const cookiePrefsModal = document.getElementById('cookie-preferences-modal-overlay');
+            const cookiePrefsClose = document.getElementById('cookie-preferences-close');
+            const cookieSavePrefsBtn = document.getElementById('cookie-save-preferences-btn');
+            const cookieAnalyticsCb = document.getElementById('cookie-analytics');
+            const cookieMarketingCb = document.getElementById('cookie-marketing');
 
-            if (categoryParam) {
-                var boxes = document.querySelectorAll('.check-cat');
-                boxes.forEach(function(box) {
-                    if (box.getAttribute('data-val') === categoryParam) {
-                        box.classList.add('checked');
-                    }
-                });
-                r_flt();
-            } else {
-                r_flt();
-            }
-
-            if (!localStorage.getItem('cookies-accepted-bad')) {
-                setTimeout(function() {
-                    document.getElementById('ck_b_bad').style.transform = 'translateY(0)';
+            const consentKey = 'cookies-accepted-' + "bad";
+            if (cookieBanner && !localStorage.getItem(consentKey)) {
+                setTimeout(() => {
+                    cookieBanner.classList.add('active');
+                    cookieBanner.style.transform = 'translateY(0)';
                 }, 1000);
             }
-        };
+
+            function dismissCookieBanner() {
+                if (cookieBanner) {
+                    cookieBanner.classList.remove('active');
+                    cookieBanner.style.transform = 'translateY(150%)';
+                }
+                localStorage.setItem(consentKey, 'true');
+            }
+
+            if (acceptBtn) {
+                acceptBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    dismissCookieBanner();
+                    localStorage.setItem('cookies-pref-analytics', 'true');
+                    localStorage.setItem('cookies-pref-marketing', 'true');
+                });
+            }
+
+            if (declineBtn) {
+                declineBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (cookiePrefsModal) {
+                        const anaBox = document.getElementById('cookie-analytics');
+                        const marBox = document.getElementById('cookie-marketing');
+                        if (localStorage.getItem('cookies-pref-analytics') === 'true') anaBox.classList.add('checked'); else anaBox.classList.remove('checked');
+                        if (localStorage.getItem('cookies-pref-marketing') === 'true') marBox.classList.add('checked'); else marBox.classList.remove('checked');
+                        cookiePrefsModal.classList.add('active');
+                    }
+                });
+            }
+
+            function closePrefsModal() {
+                if (cookiePrefsModal) cookiePrefsModal.classList.remove('active');
+            }
+
+            if (cookiePrefsClose) cookiePrefsClose.addEventListener('click', closePrefsModal);
+            if (cookiePrefsModal) {
+                cookiePrefsModal.addEventListener('click', (e) => {
+                    if (e.target === cookiePrefsModal) closePrefsModal();
+                });
+            }
+
+            if (cookieSavePrefsBtn) {
+                cookieSavePrefsBtn.addEventListener('click', () => {
+                    let isAnalytics = false;
+                    let isMarketing = false;
+                    isAnalytics = document.getElementById('cookie-analytics').classList.contains('checked');
+                    isMarketing = document.getElementById('cookie-marketing').classList.contains('checked');
+                    localStorage.setItem('cookies-pref-analytics', isAnalytics.toString());
+                    localStorage.setItem('cookies-pref-marketing', isMarketing.toString());
+                    closePrefsModal();
+                    dismissCookieBanner();
+                });
+            }
+            window.ck_ok = () => {
+                dismissCookieBanner();
+                localStorage.setItem('cookies-pref-analytics', 'true');
+                localStorage.setItem('cookies-pref-marketing', 'true');
+            };
+            window.ck_prefs = () => {
+                if (cookiePrefsModal) {
+                                            const anaBox = document.getElementById('cookie-analytics');
+                        const marBox = document.getElementById('cookie-marketing');
+                        if (localStorage.getItem('cookies-pref-analytics') === 'true') anaBox.classList.add('checked'); else anaBox.classList.remove('checked');
+                        if (localStorage.getItem('cookies-pref-marketing') === 'true') marBox.classList.add('checked'); else marBox.classList.remove('checked');
+
+                    cookiePrefsModal.classList.add('active');
+                }
+            };
+
+            // --- 6. Global Delayed Navigation Interceptor ---
+            document.addEventListener('click', (e) => {
+                const anchor = e.target.closest('a') || e.target.closest('.x-nav-clickable') || (e.target.getAttribute('onclick')?.includes('location.href') ? e.target : null);
+                if (anchor) {
+                    let url = anchor.getAttribute('href') || anchor.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+                    if (url && !url.includes('#') && !anchor.getAttribute('target') && !url.startsWith('javascript:')) {
+                        // Make sure to resolve the relative URL
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const loader = document.getElementById('global-page-loader');
+                        if (loader) loader.style.display = 'flex';
+                        const delay = Math.floor(Math.random() * (1200 - 300 + 1)) + 300;
+                        setTimeout(() => {
+                            window.location.href = url;
+                        }, delay);
+                    }
+                }
+            });
+        });
     </script>
 </body>
 </html>

@@ -1,0 +1,105 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.TabTesting :: test_TabAnElementToAnElement :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the search box",
+      "reasoning": "Clicked the search box identified by its data-neo-ref attribute and accessible name.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_7cjiuo\u0027]",
+          "description": "Click the search box",
+          "elementDetails": "Search posters... (textbox)",
+          "elementContext": {
+            "classes": "search-input",
+            "name": "searchText",
+            "id": "search-box",
+            "placeholder": "Search posters...",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the search box has focus",
+      "reasoning": "The instruction is to verify that the search box has focus. I found the search box element using its data-neo-ref attribute and created an ASSERT action to check for focus.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "[data-neo-ref\u003d\u0027xc_7cjiuo\u0027]",
+          "value": [
+            "focused"
+          ],
+          "description": "Verify that the search box has focus",
+          "elementDetails": "Search posters...",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Press the TAB key",
+      "reasoning": "The user requested to press the TAB key, so a KEY_PRESS action with \u0027TAB\u0027 as the value is appropriate.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "TAB"
+          ],
+          "description": "Press the TAB key",
+          "elementDetails": "TAB key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the search button has focus",
+      "reasoning": "Verified that the search button with data-neo-ref \u0027xc_r9bvv1\u0027 has focus.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "xc_r9bvv1",
+          "value": [
+            "focused"
+          ],
+          "description": "Verify that the search button has focus",
+          "elementDetails": "Search button",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

@@ -201,6 +201,11 @@ public class LlmClient
     public String chat(final String systemPrompt, final String userPrompt)
     {
         LOG.debug("   💬 Sending text-only prompt ({} chars)", userPrompt.length());
+        if (LOG.isTraceEnabled())
+        {
+            LOG.trace("🧠 --- System Prompt ---\n{}", systemPrompt);
+            LOG.trace("🗣️ --- User Prompt ---\n{}", userPrompt);
+        }
         final UserMessage userMessage = UserMessage.from(userPrompt);
 
         return chat(systemPrompt, userMessage);
@@ -239,6 +244,11 @@ public class LlmClient
             final String base64Screenshot)
     {
         LOG.debug("   💬 Sending multimodal prompt ({} chars + screenshot)", userPrompt.length());
+        if (LOG.isTraceEnabled())
+        {
+            LOG.trace("🧠 --- System Prompt ---\n{}", systemPrompt);
+            LOG.trace("🗣️ --- User Prompt ---\n{}", userPrompt);
+        }
         // Build a multimodal user message with text + image
         final UserMessage userMessage = UserMessage.from(
                 TextContent.from(userPrompt),

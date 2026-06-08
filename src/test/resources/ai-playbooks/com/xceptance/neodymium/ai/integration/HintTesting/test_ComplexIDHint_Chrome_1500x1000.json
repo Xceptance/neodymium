@@ -1,0 +1,133 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.HintTesting :: test_ComplexIDHint :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the search box ( hint: #search-box )",
+      "reasoning": "The instruction asks to click the search box. I identified the search box element using its \u0027data-neo-ref\u0027 attribute from the provided AXTree.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_7cjiuo\u0027]",
+          "description": "Click the search box",
+          "elementDetails": "Search posters... textbox",
+          "elementContext": {
+            "classes": "search-input",
+            "name": "searchText",
+            "id": "search-box",
+            "placeholder": "Search posters...",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the search button ( hint : #search-button )",
+      "reasoning": "The instruction asks to click the search button. Although a CSS ID hint was provided, the AXTree shows a button with \u0027name\u003d\"Search\"\u0027 and a \u0027data-neo-ref\u0027 attribute. I\u0027ve chosen to use the \u0027data-neo-ref\u0027 as the target for the click action, as it directly corresponds to the identified search button.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_r9bvv1\u0027]",
+          "description": "Click the search button",
+          "elementDetails": "Search button",
+          "elementContext": {
+            "classes": "btn-search",
+            "text": "Search",
+            "id": "search-button",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the search box (Hint: #search-box)",
+      "reasoning": "",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#search-box",
+          "description": "Click the search box",
+          "elementDetails": "search box",
+          "elementContext": {
+            "classes": "search-input",
+            "name": "searchText",
+            "id": "search-box",
+            "placeholder": "Search posters...",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Click the search button (HINT: #search-button)",
+      "reasoning": "",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#search-button",
+          "description": "Click the search button",
+          "elementDetails": "search button",
+          "elementContext": {
+            "classes": "btn-search",
+            "text": "Search",
+            "id": "search-button",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    }
+  ]
+}

@@ -53,3 +53,5 @@ tmp/
 # Neodymium Aura Reports History
 /allure-reports-history/
 
+# Antigravity CLI
+.antigravitycli/
