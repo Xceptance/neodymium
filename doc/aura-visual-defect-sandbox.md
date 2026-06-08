@@ -36,6 +36,12 @@ src/test/resources/
 │       │   └── iframe-content.html # Nested sub-document inside the iframe
 │       ├── shop/                   # Sub-App 2: E-Commerce Storefront
 │       │   ├── index.html          # Product listings, image scales, and flex grids
+│       │   ├── homepage-perfect.html # Apparel Shop (Perfect HTML/CSS code quality)
+│       │   ├── homepage-normal.html  # Apparel Shop (Average HTML/CSS code quality)
+│       │   ├── homepage-bad.html     # Apparel Shop (Worst HTML/CSS code quality)
+│       │   ├── plp-perfect.html      # Category Listing (Perfect HTML/CSS code quality)
+│       │   ├── plp-normal.html       # Category Listing (Average HTML/CSS code quality)
+│       │   ├── plp-bad.html          # Category Listing (Worst HTML/CSS code quality)
 │       │   ├── forms.html          # Registrations, validation error, price calculators
 │       │   ├── escalation.html     # AXTREE to LEAN context level escalation interactive challenge
 │       │   ├── visual-escalation.html # STANDARD to VISUAL context level escalation interactive challenge
@@ -237,3 +243,28 @@ This directory contains standalone pages designed to test isolated edge cases in
 11. **Mock OAuth Login (`mock-oauth-login.html`):**
     * *Challenge:* An external auth provider login form that redirects back with token parameters.
     * *Aura AI Verification:* Tests cross-domain redirect flows, browser window redirection handles, and query token extraction.
+
+---
+
+## 9. Multi-Quality Apparel Store Sandbox (`shop/homepage-*.html` & `shop/plp-*.html`)
+
+To benchmark and stress-test the robustness of test automation locators (IDs, CSS Selectors, and XPath) alongside visual regression auditors, the sandbox provides three visually identical variations of an Apparel Store Homepage and Product Listing Page (PLP) built with varying underlying HTML/CSS code quality:
+
+### A. Perfect Quality (`homepage-perfect.html` & `plp-perfect.html`)
+- **Characteristics:** Built following W3C standards and AAA accessibility best practices.
+- **Locators:** Contains distinct, descriptive, and stable `id` and `class` attributes on all interactive elements (e.g. `id="nav-link-tops"`, `id="newsletter-email-input"`).
+- **Accessibility:** Semantic HTML elements (`<header>`, `<nav>`, `<aside>`, `<main>`, `<section>`), explicit `<label>` bindings, and rich `aria-*` roles.
+- **Auditing Value:** Validates the ideal baseline case for locator-based selector engines.
+
+### B. Normal Quality (`homepage-normal.html` & `plp-normal.html`)
+- **Characteristics:** Represents average commercial web development.
+- **Locators:** Uses generic or slightly inconsistent naming structures (e.g. `id="inp_email"`, `class="cb-cat"`, `id="region_btn"`).
+- **Accessibility:** Omits `aria-*` accessibility metadata. Inputs rely entirely on placeholder text rather than linked `<label>` tags. Semantic layout is replaced by generic `div`/`span` structures.
+- **Auditing Value:** Serves as a standard, real-world baseline.
+
+### C. Bad Quality (`homepage-bad.html` & `plp-bad.html`)
+- **Characteristics:** Simulates legacy, obfuscated, or poorly generated websites.
+- **Locators:** Uses duplicate IDs across elements (e.g. multiple `id="prod-info"`), random/obfuscated class names (e.g. `class="div-nest-3"`, `class="c-772x9"`), or completely lacks locators, forcing extremely long and brittle relative XPath references.
+- **Accessibility:** Complete absence of semantic tags, alt text, labels, and roles. Form fields are styled divs, and checkboxes are toggled via styled click elements.
+- **Auditing Value:** Validates the resilience of self-healing locators, visual locator mapping, and AI-driven selector healing algorithms under worst-case DOM conditions.
+
