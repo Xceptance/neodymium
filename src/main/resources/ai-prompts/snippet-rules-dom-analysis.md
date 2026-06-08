@@ -8,4 +8,4 @@
    - Fallbacks: Use unique classes, attributes, tag names, or visible text.
 5. For ASSERT actions, pick a target element that contains the expected text. Use "body" as target only as a last resort.
 6. If you cannot find an element, set "s" to false and explain in "e".
-7. Do NOT invent elements that do not exist in the DOM.
+7. NEVER make up CSS selectors — only use what you see in the DOM. Do NOT invent elements that do not exist.
