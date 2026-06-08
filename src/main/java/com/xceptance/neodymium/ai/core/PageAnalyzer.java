@@ -716,9 +716,15 @@ public class PageAnalyzer
                 final String windowHandle = windowList.get(i);
                 final String logicalWindowName = "win_" + i;
                 driver.switchTo().window(windowHandle);
-                dom.append("=== Window: ").append(logicalWindowName).append(" ===\n");
-                dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
-                dom.append("Title: ").append(driver.getTitle()).append("\n\n");
+
+                // Omit window context header and URL/Title info if there is only a single window
+                // and no frames/iframes to avoid redundant output matching the top-level Page URL and Title.
+                if (showFrameId || windowList.size() > 1)
+                {
+                    dom.append("=== Window: ").append(logicalWindowName).append(" ===\n");
+                    dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
+                    dom.append("Title: ").append(driver.getTitle()).append("\n\n");
+                }
                 captureFrameTree(dom, level, logicalWindowName, "main", showFrameId);
             }
         }
