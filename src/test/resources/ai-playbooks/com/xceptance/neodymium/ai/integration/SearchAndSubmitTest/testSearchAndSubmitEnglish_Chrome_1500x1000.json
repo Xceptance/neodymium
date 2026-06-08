@@ -20,11 +20,11 @@
     },
     {
       "promptLine": "Type \u0027bear\u0027 into the search box and submit the search",
-      "reasoning": "Typed \u0027bear\u0027 into the search box identified by its data-neo-ref and then clicked the search button, also identified by its data-neo-ref.",
+      "reasoning": "Typed \u0027bear\u0027 into the search textbox and clicked the search button based on the provided AXTREE.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_7cjiuo\u0027]",
+          "target": "xc_7cjiuo",
           "value": [
             "bear"
           ],
@@ -43,7 +43,7 @@
         },
         {
           "type": "CLICK",
-          "target": "[data-neo-ref\u003d\u0027xc_r9bvv1\u0027]",
+          "target": "xc_r9bvv1",
           "description": "Click the search button",
           "elementDetails": "Search",
           "elementContext": {
@@ -62,7 +62,7 @@
     },
     {
       "promptLine": "Verify that the search results title contains \u0027bear\u0027",
-      "reasoning": "The instruction was to verify that the search results title contains \u0027bear\u0027. I found a heading element with the text \u0027Search Results for \u0027bear\u0027\u0027 and used it as the target for the ASSERT action.",
+      "reasoning": "Verified that the heading \u0027Search Results for \u0027bear\u0027\u0027 contains the text \u0027bear\u0027.",
       "actions": [
         {
           "type": "ASSERT",
@@ -82,7 +82,7 @@
     },
     {
       "promptLine": "Verify that the page displays \u00273 results found.\u0027",
-      "reasoning": "The instruction is to verify the text \u00273 results found.\u0027. I found an element with id \u0027search-subtitle\u0027 and data-neo-ref \u0027xc_5y4ln6\u0027 that contains this exact text. An ASSERT action is used to verify its content.",
+      "reasoning": "Verified that the element with id \u0027search-subtitle\u0027 contains the text \u00273 results found.\u0027.",
       "actions": [
         {
           "type": "ASSERT",
