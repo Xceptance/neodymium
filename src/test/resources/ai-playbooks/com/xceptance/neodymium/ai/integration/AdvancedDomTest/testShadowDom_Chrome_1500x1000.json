@@ -20,16 +20,16 @@
     },
     {
       "promptLine": "Type \u0027admin\u0027 into the username input inside the shadow root.",
-      "reasoning": "Identified the username input by its data-neo-ref and name from the AXTREE and generated a TYPE action.",
+      "reasoning": "Identified the username textbox by its data-neo-ref and generated a TYPE action to input \u0027admin\u0027.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_eg716g",
+          "target": "[data-neo-ref\u003d\u0027xc_eg716g\u0027]",
           "value": [
             "admin"
           ],
           "description": "Type \u0027admin\u0027 into the username input.",
-          "elementDetails": "Username",
+          "elementDetails": "Username textbox",
           "elementContext": {
             "id": "shadow-username",
             "placeholder": "Username",
@@ -45,7 +45,7 @@
     },
     {
       "promptLine": "Type \u0027secret\u0027 into the password input inside the shadow root.",
-      "reasoning": "Identified the password input by its data-neo-ref and name, then created a TYPE action to enter \u0027secret\u0027.",
+      "reasoning": "Identified the password input by its data-neo-ref and name from the AXTREE and generated a TYPE action.",
       "actions": [
         {
           "type": "TYPE",
@@ -53,8 +53,8 @@
           "value": [
             "secret"
           ],
-          "description": "Type \u0027secret\u0027 into the password input",
-          "elementDetails": "Password",
+          "description": "Type \u0027secret\u0027 into the password input.",
+          "elementDetails": "Password textbox",
           "elementContext": {
             "id": "shadow-password",
             "placeholder": "Password",
@@ -70,7 +70,7 @@
     },
     {
       "promptLine": "Click the login button inside the shadow root.",
-      "reasoning": "The \u0027Login\u0027 button was identified by its data-neo-ref attribute and will be clicked.",
+      "reasoning": "The \u0027Login\u0027 button was found in the AXTREE with data-neo-ref \u0027xc_eo1ifg\u0027 and will be clicked.",
       "actions": [
         {
           "type": "CLICK",
