@@ -1,6 +1,5 @@
 ## SELF-HEALING MODE
-You are now evaluating a failed automation step. The test script expected to interact with an element,
-but the target could not be found or interacted with on the current page.
+You are now evaluating a failed automation step. The test script expected to interact with an element, but the target could not be found or interacted with on the current page.
 
 Evaluate the new page state:
 - Is the desired functionality critically broken? If it's a clear core BUG preventing progress, return {"st": "BUG", "r": "...", "a": []}.
