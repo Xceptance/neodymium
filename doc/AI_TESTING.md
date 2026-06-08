@@ -99,6 +99,8 @@ An `AiMockResponse` represents a single mock response behavior from the LLM. You
     * `t` (type): `String` action type (e.g. `"CLICK"`, `"TYPE"`, `"SELECT"`).
     * `tg` (target): `String` target element descriptor (e.g. CSS selector).
     * `v` (value): `String` input parameter value (e.g. text to type).
+    * `desc` (description): `String` human-readable instruction description mapped to the test script (fallback key `"d"` is also supported for backwards compatibility).
+    * `ed` (element details): `String` description of target element (recommended especially if target is dynamic/referenced).
 * **Latency Timing**: A simulated network delay (`withDelay`).
 * **HTTP Errors**: Simulated server error status codes (e.g. HTTP 503) or exceptions to test self-healing retry rules.
 * **Tokens**: Custom token counts for testing budget limits.
@@ -111,7 +113,7 @@ AiMockResponse.builder()
         {
           "s": true,                                    // s  = success (boolean)
           "r": "Success",                               // r  = reasoning/thought process (String)
-          "a": [{"t": "CLICK", "tg": "#submit-btn"}],    // a  = actions array, t = type, tg = target
+          "a": [{"t": "CLICK", "tg": "#submit-btn", "desc": "Click submit button"}],    // a  = actions array, t = type, tg = target, desc = description
           "d": true                                     // d  = done (boolean)
         }
         """)

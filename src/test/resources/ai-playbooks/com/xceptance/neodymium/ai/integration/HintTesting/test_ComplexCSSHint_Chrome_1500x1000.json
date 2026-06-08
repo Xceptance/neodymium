@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the storefront active link (hint: ul.nav-links li:nth-child(1) a[href\u003d\u0027index.html\u0027])",
-      "reasoning": "Clicked the storefront active link as instructed.",
+      "reasoning": "",
       "actions": [
         {
           "type": "CLICK",

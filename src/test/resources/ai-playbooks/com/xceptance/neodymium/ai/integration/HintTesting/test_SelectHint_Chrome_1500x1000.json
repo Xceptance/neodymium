@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Select \"Price: Low to High\" from sorting dropdown (hint: #sort-select-input)",
-      "reasoning": "Selected \u0027Price: Low to High\u0027 from the sorting dropdown.",
+      "reasoning": "",
       "actions": [
         {
           "type": "SELECT",
@@ -28,7 +28,7 @@
           "value": [
             "Price: Low to High"
           ],
-          "description": "Select \u0027Price: Low to High\u0027 from the sorting dropdown.",
+          "description": "Select \u0027Price: Low to High\u0027 from sorting dropdown",
           "elementDetails": "sorting dropdown",
           "elementContext": {
             "classes": "sort-select",

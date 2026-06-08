@@ -407,9 +407,11 @@ public class ActionParser {
                 valueList = null;
             }
 
-            final String description = obj.has("d") && !obj.get("d").isJsonNull()
-                                                                                                 ? obj.get("d").getAsString()
-                                                                                                 : "";
+            final String description = obj.has("desc") && !obj.get("desc").isJsonNull()
+                                                                                                 ? obj.get("desc").getAsString()
+                                                                                                 : (obj.has("d") && !obj.get("d").isJsonNull()
+                                                                                                     ? obj.get("d").getAsString()
+                                                                                                     : "");
             final String elementDetails = obj.has("ed") && !obj.get("ed").isJsonNull()
                                                                                                        ? obj.get("ed").getAsString()
                                                                                                        : null;

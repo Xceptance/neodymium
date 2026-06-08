@@ -10,7 +10,7 @@ CRITICAL ARRAY FORMATTING: If your response requires multiple actions, you MUST 
       "tg": "locator string (prefer id or data-neo-ref)",
       "fr": "(optional) the frameId attribute of the element, if present in the DOM representation",
       "v": "only if action requires it (omit this key entirely if not needed)",
-      "d": "what this does",
+      "desc": "what this does",
       "ed": "(mandatory) text, name, id OR a short description of the targeted element (especially important if data-neo-ref is used)",
       "c": [ "... nested actions for BRANCH type (optional) ..." ],
       "th": [ "... nested actions for BRANCH type (optional) ..." ],

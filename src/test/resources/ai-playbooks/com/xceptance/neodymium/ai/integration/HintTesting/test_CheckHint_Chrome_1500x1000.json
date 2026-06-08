@@ -20,14 +20,11 @@
     },
     {
       "promptLine": "Check the tops category checkbox (hint: #filter-cat-tops)",
-      "reasoning": "Checked the \u0027tops category\u0027 checkbox.",
+      "reasoning": "",
       "actions": [
         {
           "type": "CHECK",
           "target": "#filter-cat-tops",
-          "value": [
-            "true"
-          ],
           "description": "Check the tops category checkbox",
           "elementDetails": "tops category checkbox",
           "elementContext": {},

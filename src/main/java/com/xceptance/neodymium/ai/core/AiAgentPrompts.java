@@ -611,7 +611,7 @@ public final class AiAgentPrompts
                       "t": "ACTION_TYPE",
                       "tg": "locator string from hint",
                       "v": "value if required",
-                      "d": "brief action description",
+                      "desc": "brief action description",
                       "ed": "short description of target element"
                     }
                   ],
@@ -623,7 +623,7 @@ public final class AiAgentPrompts
 
             sb.append("## Rules\n")
               .append("1. Set \"d\" to true when all instructions for this step have been addressed.\n")
-              .append("2. Keep descriptions (\"d\") concise but descriptive.\n")
+              .append("2. Keep descriptions (\"desc\") concise but descriptive.\n")
               .append("3. When the instruction says \"click\" or \"press\" an element (except dropdowns/keys), use CLICK.\n")
               .append("4. When the instruction says \"type\" or \"enter\", use TYPE (which auto-clears first).\n")
               .append("5. When the instruction says \"clear\", use CLEAR.\n")
