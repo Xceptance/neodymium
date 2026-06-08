@@ -1157,9 +1157,7 @@ public class AiPromptGenerator {
         }
         String description = actionJson.has("desc") && !actionJson.get("desc").isJsonNull()
                 ? actionJson.get("desc").getAsString()
-                : (actionJson.has("d") && !actionJson.get("d").isJsonNull()
-                        ? actionJson.get("d").getAsString()
-                        : "Generated action");
+                : "Generated action";
         if (description != null && description.contains("${random("))
         {
             description = resolveDynamicRandoms(description);
