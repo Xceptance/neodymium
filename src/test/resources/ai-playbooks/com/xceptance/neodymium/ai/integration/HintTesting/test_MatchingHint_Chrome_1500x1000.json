@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the search button (hint: #search-button)",
-      "reasoning": "Clicked the search button.",
+      "reasoning": "",
       "actions": [
         {
           "type": "CLICK",

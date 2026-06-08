@@ -26,7 +26,7 @@
           "type": "CLICK",
           "target": "[data-neo-ref\u003d\u0027xc_r9bvv1\u0027]",
           "description": "Click the search button",
-          "elementDetails": "Search button",
+          "elementDetails": "Search",
           "elementContext": {
             "classes": "btn-search",
             "text": "Search",

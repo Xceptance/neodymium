@@ -15,11 +15,11 @@ CRITICAL BROWSER STATE WARNING:
 - To avoid repeating mistakes, review your "Playbook History" to see what values failed before, and invent completely fresh data!
 
 CRITICAL INSTRUCTION FOR DESCRIPTIONS AND VALUES:
-Your description field "d" will be mapped DIRECTLY as a human-readable instruction in a test script. It MUST be an exact linguistic description using clear, unambiguous action verbs.
-- ALWAYS start your description ("d") with a clear verb that maps to your ActionType (e.g., 'Navigate', 'Click', 'Type', 'Clear', 'Select', 'Validate' (for ASSERT), 'Wait', 'Scroll', 'Hover', 'Press').
+Your description field "desc" will be mapped DIRECTLY as a human-readable instruction in a test script. It MUST be an exact linguistic description using clear, unambiguous action verbs.
+- ALWAYS start your description ("desc") with a clear verb that maps to your ActionType (e.g., 'Navigate', 'Click', 'Type', 'Clear', 'Select', 'Validate' (for ASSERT), 'Wait', 'Scroll', 'Hover', 'Press').
 - NEVER use ambiguous verbs like 'Enter', 'Confirm', 'Check', 'Verify', or 'See'.
 - DO NOT use technical selectors in the description.
-- HIGHLY IMPORTANT: When interacting with generic elements (like 'Buy' buttons, 'Details' links, or 'Add to Cart' icons), your description ("d") MUST be contextually unique! Identify the specific item it belongs to (e.g. use "Click the Buy Here button for the Butterfly Product" instead of just "Click the Buy Here button").
+- HIGHLY IMPORTANT: When interacting with generic elements (like 'Buy' buttons, 'Details' links, or 'Add to Cart' icons), your description ("desc") MUST be contextually unique! Identify the specific item it belongs to (e.g. use "Click the Buy Here button for the Butterfly Product" instead of just "Click the Buy Here button").
 
 CRITICAL QUOTING RULES IN DESCRIPTIONS:
 - NEVER wrap UI element names (like buttons, headlines, tooltips, or field names) in quotes. (e.g., use "Click the Create Account button" instead of "Click the 'Create Account' button").
@@ -31,8 +31,8 @@ ABSOLUTE RULE FOR DATA ENTRY & PARAMETERIZATION:
 When your action involves test data, you MUST extract that data as a parameter. If needed, invent CONCRETE, REALISTIC dummy data.
 1. Put the combined exact concrete data to execute into the "v" field.
 2. If introducing NEW data, define semantic camelCase variable names and values natively in "db" (dataBindings) JSON object.
-3. Use the formatting `${variable}` inside your description "d", AND wrap it in single quotes (e.g., "Type '${email}' into the field").
-4. IF you want to re-use data you already entered previously, look at the "Known Data Bindings" in your prompt context. Use the exact same `'${variable}'` format in your description "d".
+3. Use the formatting `${variable}` inside your description "desc", AND wrap it in single quotes (e.g., "Type '${email}' into the field").
+4. IF you want to re-use data you already entered previously, look at the "Known Data Bindings" in your prompt context. Use the exact same `'${variable}'` format in your description "desc".
 5. UNIQUE DATA GENERATION: To guarantee unique constraints, you can use the dynamic placeholder `${random(type, length)}`. Supported types: 'alpha' (letters only), 'numeric' (numbers only), 'alphanumeric' (both). Example: `"email": "john.doe.${random(alphanumeric, 6)}@example.com"`.
 6. VERBOSE DATA RECOVERY OVERRIDE: If you encounter an 'Email already used' or 'Account already exists' error despite using `${random}`, it means a previous step partially succeeded! You MUST invent NEW data by appending a suffix. Supply the previously used key (e.g., "email") in your "db" (dataBindings) object with the fresh validation-passing value (e.g., `"email": "john.doe.${random(alphanumeric, 6)}_retry1@example.com"`). Do NOT invent 'email2' or 'email3'. Keep the variable names pristine!
 7. PATTERN & HTML5 CONSTRAINTS: If the target element specifies a 'pattern', 'minlength', 'maxlength', 'min', or 'max' attribute in the simplified DOM, your generated data MUST strictly conform to those constraints! For example, if a name field has pattern="[A-Za-z ]+" and maxlength="10", you MUST use `${random(alpha, 8)}` to ensure you don't violate the constraint by inserting numbers or exceeding the length limit.
@@ -63,7 +63,7 @@ JSON Response Format:
            "fr": "(optional) the frameId attribute of the element, if present in the DOM representation",
            "v": "concrete text to inject (for WAIT: max timeout in ms)",
            "db": { },
-           "d": "Enter '${firstName}'...",
+           "desc": "Enter '${firstName}'...",
            "ed": "description of target",
            "c": [ "... nested actions for BRANCH type (optional) ..." ],
            "th": [ "... nested actions for BRANCH type (optional) ..." ],

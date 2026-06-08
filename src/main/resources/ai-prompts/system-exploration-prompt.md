@@ -17,8 +17,8 @@ LOGICAL BACKTRACKING (Handling Mistakes & Duplicates):
 - Just provide the recovery actions (e.g., Type a new email, Click submit).
 
 CRITICAL INSTRUCTION FOR DESCRIPTIONS AND VALUES:
-Your description field "d" will be mapped DIRECTLY as a human-readable instruction in a test script. It MUST be an exact linguistic description using clear, unambiguous action verbs.
-- ALWAYS start your description ("d") with a clear verb that maps to your ActionType (e.g., 'Navigate', 'Click', 'Type', 'Clear', 'Select', 'Validate' (for ASSERT), 'Wait', 'Scroll', 'Hover', 'Press').
+Your description field "desc" will be mapped DIRECTLY as a human-readable instruction in a test script. It MUST be an exact linguistic description using clear, unambiguous action verbs.
+- ALWAYS start your description ("desc") with a clear verb that maps to your ActionType (e.g., 'Navigate', 'Click', 'Type', 'Clear', 'Select', 'Validate' (for ASSERT), 'Wait', 'Scroll', 'Hover', 'Press').
 - NEVER use ambiguous verbs like 'Enter', 'Confirm', 'Check', 'Verify', or 'See' (e.g., 'Confirm' could mean clicking a button or asserting text; 'Enter' could mean typing or submitting).
 - DO NOT use technical selectors in the description.
 
@@ -32,7 +32,7 @@ ABSOLUTE RULE FOR DATA ENTRY & PARAMETERIZATION:
 When your action involves test data (like typing into a form, selecting an option, OR clicking/asserting specific product names, categories, or dates), you MUST extract that data as a parameter. If needed, invent CONCRETE, REALISTIC dummy data (e.g., '4111111111111', 'test@example.com', 'Jane') and parameterize everything worthy of being test data (user data, product data, credit card data, etc.).
 1. Put the combined exact concrete data to execute into the "v" field.
 2. If introducing NEW data, define semantic camelCase variable names and values natively in "db" (dataBindings) JSON object. Do this NOT JUST for form inputs, but actively for everything worthy of a test data like product names, product categories, and dates.
-3. Use the formatting `${variable}` inside your description "d", AND wrap it in single quotes (e.g., "Type '${email}' into the field"). DO NOT put the raw data string in the description.
+3. Use the formatting `${variable}` inside your description "desc", AND wrap it in single quotes (e.g., "Type '${email}' into the field"). DO NOT put the raw data string in the description.
 4. IF you want to re-use data you already entered previously, look at the "Known Data Bindings" in your prompt context. Use the exact same `'${variable}'` format in your description, DO NOT redefine it in "db".
 5. UNIQUE DATA GENERATION: To guarantee unique constraints (like email addresses or usernames), append the built-in variable `${random}` to your fake data. For example: `"email": "john.doe.${random}@example.com"`. This prevents the system from getting stuck in loops due to already registered accounts!
 6. DO NOT re-assign a new value to an already Known Data Binding key. If you need a new value, pick a new semantic name.
@@ -64,7 +64,7 @@ JSON Response Format:
            "fr": "(optional) the frameId attribute of the element, if present in the DOM representation",
            "v": "concrete text to inject (for WAIT: max timeout in ms)",
            "db": { },
-           "d": "Enter '${firstName}'...",
+           "desc": "Enter '${firstName}'...",
            "ed": "description of target",
            "c": [ "... nested actions for BRANCH type (optional) ..." ],
            "th": [ "... nested actions for BRANCH type (optional) ..." ],

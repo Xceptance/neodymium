@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Type \"bear\" into the search box (hint: #search-box)",
-      "reasoning": "Typed \"bear\" into the search box.",
+      "reasoning": "",
       "actions": [
         {
           "type": "TYPE",

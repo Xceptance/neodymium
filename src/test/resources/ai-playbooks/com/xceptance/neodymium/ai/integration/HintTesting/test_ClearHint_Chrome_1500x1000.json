@@ -47,7 +47,7 @@
     },
     {
       "promptLine": "Clear the search input (hint: #search-box)",
-      "reasoning": "Cleared the search input as instructed.",
+      "reasoning": "Cleared the search input.",
       "actions": [
         {
           "type": "CLEAR",
