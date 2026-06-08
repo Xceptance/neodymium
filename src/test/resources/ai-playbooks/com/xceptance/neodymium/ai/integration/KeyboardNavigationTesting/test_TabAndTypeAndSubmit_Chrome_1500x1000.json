@@ -1,0 +1,169 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.KeyboardNavigationTesting :: test_TabAndTypeAndSubmit :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Press the TAB key 3 times",
+      "reasoning": "The instruction is to press the TAB key 3 times, so I\u0027ve generated three KEY_PRESS actions for \u0027TAB\u0027.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "TAB"
+          ],
+          "description": "Press the TAB key",
+          "elementDetails": "TAB key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        },
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "TAB"
+          ],
+          "description": "Press the TAB key",
+          "elementDetails": "TAB key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        },
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "TAB"
+          ],
+          "description": "Press the TAB key",
+          "elementDetails": "TAB key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the search box has focus",
+      "reasoning": "The instruction is to verify that the search box has focus. I found the search box element using its data-neo-ref attribute and created an ASSERT action to check for focus.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "[data-neo-ref\u003d\u0027xc_7cjiuo\u0027]",
+          "value": [
+            "focused"
+          ],
+          "description": "Verify that the search box has focus",
+          "elementDetails": "Search posters...",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Type \"bear\"",
+      "reasoning": "Identified the search textbox by its data-neo-ref attribute and generated a TYPE action to input \u0027bear\u0027.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "xc_7cjiuo",
+          "value": [
+            "bear"
+          ],
+          "description": "Type \"bear\" into the search input field.",
+          "elementDetails": "Search posters...",
+          "elementContext": {
+            "classes": "search-input",
+            "name": "searchText",
+            "id": "search-box",
+            "placeholder": "Search posters...",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Press ENTER",
+      "reasoning": "The user wants to press the ENTER key, so a KEY_PRESS action with \u0027ENTER\u0027 as the value is appropriate.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "ENTER"
+          ],
+          "description": "Press ENTER key",
+          "elementDetails": "ENTER key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the search results title contains \"bear\"",
+      "reasoning": "The instruction is to verify that the search results title contains \u0027bear\u0027. I found a heading element with the text \u0027Search Results for \u0027bear\u0027\u0027 which matches the criteria.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "[data-neo-ref\u003d\u0027xc_ph80bd\u0027]",
+          "value": [
+            "bear"
+          ],
+          "description": "Verify that the search results title contains \"bear\"",
+          "elementDetails": "Search Results for \u0027bear\u0027",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the page displays \"3 results found.\"",
+      "reasoning": "Found the text \u00273 results found.\u0027 within the element with id \u0027search-subtitle\u0027 and created an ASSERT action.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#search-subtitle",
+          "value": [
+            "3 results found."
+          ],
+          "description": "Verify that the page displays \u00273 results found.\u0027.",
+          "elementDetails": "3 results found.",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

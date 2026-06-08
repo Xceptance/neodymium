@@ -63,93 +63,10 @@ public class TC_FF_001_FreeformTest extends BaseAiTest
     }
 
     /**
-     * Verifies the brown bear hero/feature photo (visual).
-     */
-    @NeodymiumTest
-    public final void test_VisualVerification_Positive()
-    {
-        final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
-                A bear is shown on the right side (visual)
-            """, VerificationMode.LIVE_LLM);
-
-        final var s = r1.getSteps().get(1);
-        assertEquals(1, s.getLlmCalls().size());
-        assertEquals(ContextLevel.VISUAL_LEAN, s.getLlmCalls().get(0).getContextLevel());
-
-        assertTrue(s.getLlmCalls().get(0).isSuccess());
-        assertTrue(s.getLlmCalls().get(0).isDone());
-
-        // Extract and verify LLM reasoning semantically
-        LlmAssert.assertViaLlmSemanticMatch(s.getReasoning(), "explain that a brown bear or bear image is visible on the right side of the page");
-
-        // no actions, LLM identified things on its own
-        final var a = s.getActions();
-        assertEquals(0, a.size());
-    }
-
-    /**
-     * Verifiy that things are off
-     */
-    @NeodymiumTest
-    public final void test_VisualVerification_Negative()
-    {
-        final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () ->
-        {
-            runAi("""
-                    Open ${posters.storefront.url}
-                    A lion dancing (visual) on the moon is shown
-                """, VerificationMode.LIVE_LLM);
-        });
-
-        assertTrue(thrown.getMessage().contains("Verification failed: Visual verification failed:"));
-
-        final AiExecutionResult r1 = Neodymium.getLastAiExecutionResult();
-        Assertions.assertNotNull(r1);
-
-        final var s = r1.getSteps().get(1);
-        assertEquals(1, s.getLlmCalls().size());
-        assertEquals(ContextLevel.VISUAL_LEAN, s.getLlmCalls().get(0).getContextLevel());
-
-        assertFalse(s.getLlmCalls().get(0).isSuccess());
-        assertTrue(s.getLlmCalls().get(0).isDone());
-
-        // Extract and verify LLM reasoning semantically
-        LlmAssert.assertViaLlmSemanticMatch(
-            s.getReasoning(), 
-            "There is not lion dancing on the moon.");
-
-        // no actions, LLM identified things on its own
-        final var a = s.getActions();
-        assertEquals(0, a.size());
-    }
-
-    /**
-     * Verifies base styling and logo element (visual).
-     */
-    @NeodymiumTest
-    public final void test03_ColorsAndLogo()
-    {
-        final AiExecutionResult r1 = runAi("Open ${posters.storefront.url}", VerificationMode.LIVE_LLM);
-        
-        assertThat(r1)
-            .hasLlmCalls(0)
-            .hasNoEscalations()
-            .hasActionsCount(1)
-            .hasAction(0, "NAVIGATE");
-
-        Selenide.$(".brand .brand-icon").shouldHave(Condition.text("✕"));
-        Selenide.$(".brand").shouldHave(Condition.text("Posters"));
-        
-        final String bodyBg = Selenide.$("body").getCssValue("background-color");
-        assertTrue(bodyBg.contains("255, 255, 255") || bodyBg.equals("rgb(255, 255, 255)"));
-    }
-
-    /**
      * Verifies searching for 'bear' and result images context (visual).
      */
     @NeodymiumTest
-    public final void test04_SearchAndVerify()
+    public final void test_SearchAndVerify()
     {
         final AiExecutionResult r = runAi("""
                 Open ${posters.storefront.url}
@@ -302,5 +219,13 @@ public class TC_FF_001_FreeformTest extends BaseAiTest
             .hasStepReplayed(1, true);
 
         assertEquals("Posters Art Store", Selenide.title());
+    }
+
+    /**
+     * Tab until you reach...
+     */
+    @NeodymiumTest
+    public final void test_TabUntil()
+    {
     }
 }

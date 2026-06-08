@@ -25,6 +25,7 @@ import com.xceptance.neodymium.common.browser.BrowserMethodData;
 import com.xceptance.neodymium.common.browser.BrowserRunner;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
@@ -103,6 +104,26 @@ public abstract class BaseAiTest
         
         currentTestUrl = String.format("http://localhost:%d/%s/%s.html", server.getPort(), className, methodName);
         Neodymium.setAiPlaybook(null);
+    }
+
+    /**
+     * Cleans up any active browser/WebDriver session left open at the end of the test.
+     * This ensures orphaned browsers from resetBrowser() calls are properly closed.
+     */
+    @AfterEach
+    public final void cleanUpActiveBrowser()
+    {
+        if (Neodymium.getWebDriverStateContainer() != null)
+        {
+            final String profileName = Neodymium.getBrowserProfileName();
+            if (profileName != null)
+            {
+                final BrowserRunner runner = new BrowserRunner();
+                runner.teardown(false, true,
+                    new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
+                    Neodymium.getWebDriverStateContainer());
+            }
+        }
     }
 
 
