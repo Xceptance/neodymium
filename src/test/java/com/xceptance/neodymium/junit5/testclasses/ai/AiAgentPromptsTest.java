@@ -111,4 +111,40 @@ public final class AiAgentPromptsTest
         Assertions.assertTrue(prompt.contains("Important Guidelines for Element Selection"));
         Assertions.assertTrue(prompt.contains("## Rules for Visual Analysis"));
     }
+
+    /**
+     * Checks that the system prompts generated for each ContextLevel do not exceed
+     * the maximum length we expect. Keep the prompts lean.
+     */
+    @Test
+    public final void testSystemPromptMaxLength()
+    {
+        final int maxHintLength = 1800;
+        final int maxAxTreeLength = 11500;
+        final int maxLeanLength = 11500;
+        final int maxStandardLength = 11500;
+        final int maxVisualLeanLength = 13000;
+        final int maxVisualLength = 13000;
+
+        final String hintPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.HINT);
+        final String axTreePrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.AXTREE);
+        final String leanPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.LEAN);
+        final String standardPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.STANDARD);
+        final String visualLeanPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.VISUAL_LEAN);
+        final String visualPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.VISUAL);
+
+        System.out.println("HINT prompt length: " + hintPrompt.length());
+        System.out.println("AXTREE prompt length: " + axTreePrompt.length());
+        System.out.println("LEAN prompt length: " + leanPrompt.length());
+        System.out.println("STANDARD prompt length: " + standardPrompt.length());
+        System.out.println("VISUAL_LEAN prompt length: " + visualLeanPrompt.length());
+        System.out.println("VISUAL prompt length: " + visualPrompt.length());
+
+        Assertions.assertTrue(hintPrompt.length() < maxHintLength, "HINT prompt exceeds limit: " + hintPrompt.length());
+        Assertions.assertTrue(axTreePrompt.length() < maxAxTreeLength, "AXTREE prompt exceeds limit: " + axTreePrompt.length());
+        Assertions.assertTrue(leanPrompt.length() < maxLeanLength, "LEAN prompt exceeds limit: " + leanPrompt.length());
+        Assertions.assertTrue(standardPrompt.length() < maxStandardLength, "STANDARD prompt exceeds limit: " + standardPrompt.length());
+        Assertions.assertTrue(visualLeanPrompt.length() < maxVisualLeanLength, "VISUAL_LEAN prompt exceeds limit: " + visualLeanPrompt.length());
+        Assertions.assertTrue(visualPrompt.length() < maxVisualLength, "VISUAL prompt exceeds limit: " + visualPrompt.length());
+    }
 }
