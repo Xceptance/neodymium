@@ -89,6 +89,9 @@ public final class FeatureMatrixTest extends BaseAiTest
 
         // Start capturing logs in parallel
         logAppender = LogCaptureAppender.startCapture();
+
+        // Explicitly enable PESAP for FeatureMatrixTest as it tests multi-port, timing, and dHash features
+        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
     }
 
     /**

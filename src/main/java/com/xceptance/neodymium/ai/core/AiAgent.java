@@ -799,6 +799,13 @@ public class AiAgent {
                 throw e; // Rethrow to be caught by the outer loop
             } catch (final AssertionError e) {
                 if (e instanceof DefinitiveAssertionError) {
+                    if (expectedFailure) {
+                        if (isInteractive) {
+                            promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                        }
+                        handleExpectedFailure(playbook.getCurrentStep(), instruction, unresolvedInstruction, bugId, e, playbook);
+                        return;
+                    }
                     final PlaybookStep step = playbook.getCurrentStep();
                     if (step != null) {
                         step.setFailure(new ActionExecutionException(e.getMessage(), e));
@@ -1225,8 +1232,10 @@ public class AiAgent {
         if (playbook.isRecording() == false || (step.getPromptLine() != null && step.getPromptLine().equals(instruction)
                 && !step.getActions().isEmpty() && !step.failed()))
         {
-            if (playbook.isRecording() == false && step.isExpectedFailure() && Boolean.getBoolean("neodymium.ai.offline"))
+            if (playbook.isRecording() == false && step.isExpectedFailure())
             {
+                llmClient.getAiStats().recordReplay();
+                stepDetails.setReplayed(true);
                 final String errorMsg = step.getExpectedErrorMessage() != null ? step.getExpectedErrorMessage() : "Recorded expected failure";
                 throw new ActionExecutionException(errorMsg, null);
             }

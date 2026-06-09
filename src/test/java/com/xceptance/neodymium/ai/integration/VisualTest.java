@@ -55,9 +55,6 @@ public class VisualTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        // we don't need that, we start with AXTREE as default
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
-
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", this.url);
     }

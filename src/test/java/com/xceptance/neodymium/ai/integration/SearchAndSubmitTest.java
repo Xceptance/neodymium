@@ -53,8 +53,6 @@ public final class SearchAndSubmitTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
-
         this.storefrontUrl = String.format(
             "http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html",
             server.getPort());

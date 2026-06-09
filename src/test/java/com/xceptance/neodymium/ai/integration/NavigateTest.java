@@ -55,9 +55,6 @@ public class NavigateTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        // we don't need that, we start with AXTREE as default
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
-
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", this.url);
     }
@@ -139,7 +136,7 @@ public class NavigateTest extends BaseAiTest
     }
 
     /**
-     * Test an open we don't know aka havbe to ask the LLM
+     * Test an open we don't know aka have to ask the LLM
      *
      * @throws Throwable if execution fails
      */
@@ -159,4 +156,27 @@ public class NavigateTest extends BaseAiTest
         assertEquals("Posters Art Store", Selenide.title());
     }
 
+    /**
+     * We do not deal with incorrect spelling or other languages easily, so we ask the LLM
+     * instead.
+     */
+    @NeodymiumTest
+    public final void test_Open_ParserDoesNotWorkWithGerman()
+    {
+
+        // Step 1: Open SUT homepage, no LLM, no parser match due to Gehe zu
+        final AiExecutionResult r1 = runAi("Gehe zu ${posters.storefront.url}", VerificationMode.LIVE_LLM);
+        
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasContextLevel(ContextLevel.AXTREE)
+            .hasNoEscalations()
+            .hasActionsCount(1)
+            .hasAction(0, "NAVIGATE");
+
+        // we are now in posters
+        assertEquals("Posters Art Store", Selenide.title());
+    }
+
 }
+

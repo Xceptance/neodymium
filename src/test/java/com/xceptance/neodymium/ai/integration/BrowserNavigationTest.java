@@ -53,7 +53,6 @@ public class BrowserNavigationTest extends BaseAiTest
     @BeforeEach
     public final void setupSandboxUrls()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
         this.httpPort = server.getPort();
         this.baseHttpsUrl = String.format("https://localhost:%d/AuraGlanceTest/shop/sandbox", server.getHttpsPort());
         this.baseHttpUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox", this.httpPort);
