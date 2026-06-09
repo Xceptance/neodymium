@@ -29,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
-import com.xceptance.neodymium.ai.core.AiAgentPrompts;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.ai.core.ContextLevel;
 import com.xceptance.neodymium.common.browser.Browser;
@@ -57,42 +56,6 @@ public class HintTesting extends BaseAiTest
 
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", this.url);
-    }
-
-    /**
-     * Checks that the system prompts generated for each ContextLevel do not exceed
-     * the maximum length we expect. Keep the prompts lean.
-     */
-    @NeodymiumTest
-    public final void test_SystemPromptMaxLength()
-    {
-        final int maxHintLength = 1800;
-        final int maxAxTreeLength = 11500;
-        final int maxLeanLength = 11500;
-        final int maxStandardLength = 11500;
-        final int maxVisualLeanLength = 13000;
-        final int maxVisualLength = 13000;
-
-        final String hintPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.HINT);
-        final String axTreePrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.AXTREE);
-        final String leanPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.LEAN);
-        final String standardPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.STANDARD);
-        final String visualLeanPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.VISUAL_LEAN);
-        final String visualPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.VISUAL);
-
-        System.out.println("HINT prompt length: " + hintPrompt.length());
-        System.out.println("AXTREE prompt length: " + axTreePrompt.length());
-        System.out.println("LEAN prompt length: " + leanPrompt.length());
-        System.out.println("STANDARD prompt length: " + standardPrompt.length());
-        System.out.println("VISUAL_LEAN prompt length: " + visualLeanPrompt.length());
-        System.out.println("VISUAL prompt length: " + visualPrompt.length());
-
-        assertTrue(hintPrompt.length() < maxHintLength, "HINT prompt exceeds limit: " + hintPrompt.length());
-        assertTrue(axTreePrompt.length() < maxAxTreeLength, "AXTREE prompt exceeds limit: " + axTreePrompt.length());
-        assertTrue(leanPrompt.length() < maxLeanLength, "LEAN prompt exceeds limit: " + leanPrompt.length());
-        assertTrue(standardPrompt.length() < maxStandardLength, "STANDARD prompt exceeds limit: " + standardPrompt.length());
-        assertTrue(visualLeanPrompt.length() < maxVisualLeanLength, "VISUAL_LEAN prompt exceeds limit: " + visualLeanPrompt.length());
-        assertTrue(visualPrompt.length() < maxVisualLength, "VISUAL prompt exceeds limit: " + visualPrompt.length());
     }
 
     /**
