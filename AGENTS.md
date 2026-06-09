@@ -8,7 +8,6 @@
 ## Coding Standards
 - **TDD:** Write unit/integration tests before implementing new functionality. Ensure full coverage.
 - **Style:** Allman code style (new line braces), document non-obvious logic and all public API, JDK 21 features.
-- **Attribution:** Mark exclusively AI-created files with the model name in class comments (e.g. `// AI-generated: <Model Name in use>`). Dynamically detect and expose the actual model name in use (e.g., `Gemini 2.5 Flash` or `Gemini 2.5 Pro`).
 - **Headers:** Add GNU AGPLv3 license header to all AI-related source files, but MIT license header for the rest.
 - **Strict Java:** Aggressive `final` modifiers (variables, args, methods, fields). NO inline FQCNs; use explicit top imports. Unused imports and variables are strictly prohibited.
 
