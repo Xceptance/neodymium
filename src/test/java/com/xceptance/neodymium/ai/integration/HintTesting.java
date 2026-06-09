@@ -208,10 +208,11 @@ public class HintTesting extends BaseAiTest
     @NeodymiumTest
     public final void test_MissingHintValue()
     {
-        final AiExecutionResult r1 = runAi("""
+        final String steps = """
                 Open ${posters.storefront.url}
                 Click the search button (hint: )
-                """, VerificationMode.LIVE_LLM);
+                """;
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         // Starts at HINT context level, fails due to empty context and missing hint selector,
         // escalates to AXTREE level, makes 2nd LLM call and succeeds.
@@ -236,6 +237,20 @@ public class HintTesting extends BaseAiTest
         assertFalse(firstCall.getHtmlDomContext().contains("=== Interactive Elements ==="));
 
         assertEquals(ContextLevel.AXTREE, secondCall.getContextLevel());
+
+        this.resetBrowser();
+
+        // let's replay
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        // Starts at HINT context level, fails due to empty context and missing hint selector,
+        // escalates to AXTREE level, makes 2nd LLM call and succeeds.
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasEscalations(0)
+            .hasActionsCount(2);
+
+        
     }
 
     /**

@@ -50,7 +50,6 @@ public class TimingAndResilienceTest extends BaseAiTest
     @BeforeEach
     public final void setupSandboxUrls()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
         final int httpPort = server.getPort();
         this.baseHttpsUrl = String.format("https://localhost:%d/AuraGlanceTest/shop/sandbox", server.getHttpsPort());
         final String baseHttpUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox", httpPort);

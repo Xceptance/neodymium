@@ -62,6 +62,7 @@ public final class AllFeaturesYamlTest extends BaseAiTest
         
         Neodymium.getData().put("port", String.valueOf(port));
         Neodymium.getData().put("httpsPort", String.valueOf(httpsPort));
+        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
     }
 
     /**

@@ -104,6 +104,7 @@ public abstract class BaseAiTest
         
         currentTestUrl = String.format("http://localhost:%d/%s/%s.html", server.getPort(), className, methodName);
         Neodymium.setAiPlaybook(null);
+        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
     }
 
     /**
