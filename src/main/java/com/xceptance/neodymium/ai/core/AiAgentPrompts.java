@@ -622,17 +622,10 @@ public final class AiAgentPrompts
             sb.append(minResponseFormat).append("\n\n");
 
             sb.append("## Rules\n")
-              .append("1. Set \"d\" to true when all instructions for this step have been addressed.\n")
-              .append("2. Keep descriptions (\"desc\") concise but descriptive.\n")
-              .append("3. When the instruction says \"click\" or \"press\" an element (except dropdowns/keys), use CLICK.\n")
-              .append("4. When the instruction says \"type\" or \"enter\", use TYPE (which auto-clears first).\n")
-              .append("5. When the instruction says \"clear\", use CLEAR.\n")
-              .append("6. When selecting a dropdown option, use SELECT.\n")
-              .append("7. When the instruction says \"hover\" or \"move mouse to\", use HOVER.\n")
-              .append("8. When the instruction says \"verify\", \"check\" (meaning assert), or \"assert\", use ASSERT.\n")
-              .append("9. When checking/unchecking a checkbox or radio button, use CHECK.\n")
-              .append("10. When the instruction says \"scroll\", use SCROLL.\n")
-              .append("11. To press keyboard keys (e.g., \"Enter\", \"Tab\"), use KEY_PRESS.\n\n");
+              .append("1. Set \"d\" to true when all instructions for this step are complete.\n")
+              .append("2. Keep descriptions (\"desc\") concise.\n")
+              .append("3. Map instructions to actions: CLICK (click/press), TYPE (type/enter), CLEAR (clear), SELECT (dropdown), HOVER (hover), ASSERT (verify/check), CHECK (checkbox/radio), SCROLL (scroll), KEY_PRESS (press keys e.g., Enter, Tab).\n")
+              .append("4. LOCATOR HINTS: If an inline hint is provided (e.g., \"(hint: selector)\"), you MUST extract the selector value and set it as the \"tg\" field of the action (including for KEY_PRESS).\n\n");
         }
         else
         {
