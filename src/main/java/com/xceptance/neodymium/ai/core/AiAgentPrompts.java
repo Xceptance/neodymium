@@ -624,8 +624,9 @@ public final class AiAgentPrompts
             sb.append("## Rules\n")
               .append("1. Set \"d\" to true when all instructions for this step are complete.\n")
               .append("2. Keep descriptions (\"desc\") concise.\n")
-              .append("3. Map instructions to actions: CLICK (click/press), TYPE (type/enter), CLEAR (clear), SELECT (dropdown), HOVER (hover), ASSERT (verify/check), CHECK (checkbox/radio), SCROLL (scroll), KEY_PRESS (press keys e.g., Enter, Tab).\n")
-              .append("4. LOCATOR HINTS: If an inline hint is provided (e.g., \"(hint: selector)\"), you MUST extract the selector value and set it as the \"tg\" field of the action (including for KEY_PRESS).\n\n");
+              .append("3. Map instructions to actions: CLICK (click/press), TYPE (type/enter), CLEAR (clear), SELECT (dropdown), HOVER (hover), ASSERT (verify/check), CHECK (checkbox/radio), SCROLL (scroll), KEY_PRESS (press keys or single letters e.g., Enter, Tab, a, b).\n")
+              .append("4. LOCATOR HINTS: If an inline hint is provided (e.g., \"(hint: selector)\"), you MUST extract the selector value and set it as the \"tg\" field of the action (including for KEY_PRESS).\n")
+              .append("5. For single character keyboard inputs (e.g. 'a', 'b', 'c'), use KEY_PRESS instead of CLICK or TYPE when instructing to press/type a single letter key.\n\n");
         }
         else
         {

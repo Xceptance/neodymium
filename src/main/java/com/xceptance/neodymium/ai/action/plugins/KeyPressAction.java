@@ -142,20 +142,25 @@ public class KeyPressAction implements AiActionPlugin
      */
     public static CharSequence mapKey(final String keyName)
     {
+        if (keyName != null && keyName.length() == 1)
+        {
+            return keyName;
+        }
+
         return switch (keyName.toUpperCase())
         {
             case "ENTER", "RETURN" -> Keys.ENTER;
             case "TAB" -> Keys.TAB;
             // Shift+Tab keyboard modifier combination chord
-            case "SHIFT_TAB", "SHIFT+TAB", "SHIFT-TAB", "REVERSE_TAB" -> Keys.chord(Keys.SHIFT, Keys.TAB);
+            case "SHIFT_TAB", "SHIFTTAB", "SHIFT+TAB", "SHIFT-TAB", "REVERSE_TAB" -> Keys.chord(Keys.SHIFT, Keys.TAB);
             case "ESCAPE", "ESC" -> Keys.ESCAPE;
             case "BACKSPACE" -> Keys.BACK_SPACE;
             case "DELETE" -> Keys.DELETE;
             case "SPACE" -> Keys.SPACE;
-            case "ARROW_UP", "UP" -> Keys.ARROW_UP;
-            case "ARROW_DOWN", "DOWN" -> Keys.ARROW_DOWN;
-            case "ARROW_LEFT", "LEFT" -> Keys.ARROW_LEFT;
-            case "ARROW_RIGHT", "RIGHT" -> Keys.ARROW_RIGHT;
+            case "ARROW_UP", "ARROWUP", "UP" -> Keys.ARROW_UP;
+            case "ARROW_DOWN", "ARROWDOWN", "DOWN" -> Keys.ARROW_DOWN;
+            case "ARROW_LEFT", "ARROWLEFT", "LEFT" -> Keys.ARROW_LEFT;
+            case "ARROW_RIGHT", "ARROWRIGHT", "RIGHT" -> Keys.ARROW_RIGHT;
             default -> throw new ActionExecutionException("Unknown key: " + keyName);
         };
     }
