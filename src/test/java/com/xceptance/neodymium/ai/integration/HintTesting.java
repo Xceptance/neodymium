@@ -688,4 +688,49 @@ public class HintTesting extends BaseAiTest
         assertThat(r2).hasAction(1, "TYPE", "#search-box", "bear");
         assertThat(r2).hasAction(2, "KEY_PRESS", "#search-box", "Enter");
     }
+
+    /**
+     * Key press action hint with no target in instruction text.
+     */
+    @NeodymiumTest
+    public final void test_KeyPressHintNoTargetInText()
+    {
+        final String steps = """
+                Open ${posters.storefront.url}
+                Type "bear" into the search box (hint: #search-box)
+                Press the ENTER key (hint: #search-box)
+                """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasActionsCount(3);
+
+        assertThat(r1).hasAction(0, "NAVIGATE");
+        assertThat(r1).hasAction(1, "TYPE", "#search-box", "bear");
+        assertThat(r1).hasAction(2, "KEY_PRESS", "#search-box", "Enter");
+
+        final var stepDetails = r1.getSteps().get(2);
+        assertFalse(stepDetails.isDirectParse());
+        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
+
+        // back to start for replay
+        this.resetBrowser();
+
+        // check LLM free replay
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(3);
+
+        assertThat(r2).hasAction(0, "NAVIGATE");
+        assertThat(r2).hasAction(1, "TYPE", "#search-box", "bear");
+        assertThat(r2).hasAction(2, "KEY_PRESS", "#search-box", "Enter");
+    }
 }
