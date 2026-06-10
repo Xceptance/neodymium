@@ -62,18 +62,41 @@ public class JavaMethodAction implements AiActionPlugin
     {
         if (instruction.toLowerCase().contains("java"))
         {
-            final String patternStr = Neodymium.configuration().getProperty(
-                    "neodymium.ai.agent.pattern.javaMethod",
-                    "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(([^)]*)\\)");
-            final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(patternStr)
-                    .matcher(instruction.strip());
-            if (matcher.find())
+            final String stripped = instruction.strip();
+            final int firstParen = stripped.indexOf('(');
+            final int lastParen = stripped.lastIndexOf(')');
+            if (firstParen != -1 && lastParen != -1 && lastParen > firstParen)
             {
-                final String method = matcher.group(1);
-                final String param = matcher.group(2);
-                LOG.debug("▶️ [EXEC] Direct call Java Method {} with param {}", method, param);
-                return List.of(new Action("JAVA_METHOD", method, List.of(param),
-                        "Call " + method + " with param " + param));
+                final String beforeParen = stripped.substring(0, firstParen).strip();
+                final int lastSpace = beforeParen.lastIndexOf(' ');
+                final int lastColon = beforeParen.lastIndexOf(':');
+                final int startIdx = Math.max(lastSpace, lastColon) + 1;
+                final String method = beforeParen.substring(startIdx).strip();
+                
+                if (method.matches("[a-zA-Z_][a-zA-Z0-9_]*"))
+                {
+                    final String rawParam = stripped.substring(firstParen + 1, lastParen);
+                    final String param;
+                    if (rawParam != null)
+                    {
+                        final String trimmed = rawParam.strip();
+                        if ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) || (trimmed.startsWith("'") && trimmed.endsWith("'")))
+                        {
+                            param = trimmed.substring(1, trimmed.length() - 1).strip();
+                        }
+                        else
+                        {
+                            param = trimmed;
+                        }
+                    }
+                    else
+                    {
+                        param = null;
+                    }
+                    LOG.debug("▶️ [EXEC] Direct call Java Method {} with param {}", method, param);
+                    return List.of(new Action("JAVA_METHOD", method, List.of(param),
+                            "Call " + method + " with param " + param));
+                }
             }
         }
         return null;

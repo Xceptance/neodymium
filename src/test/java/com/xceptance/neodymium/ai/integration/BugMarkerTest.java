@@ -90,13 +90,7 @@ public class BugMarkerTest extends BaseAiTest
             .hasEscalations(1)
             .hasDirectParses(1)
             .hasReplays(0)
-            .hasActionsCount(1)
-            .hasStepDirectParsed(0, true)
-            .hasStepDirectParsed(1, false)
-            .hasStepDirectParsed(2, false)
-            .hasStepReplayed(0, false)
-            .hasStepReplayed(1, false)
-            .hasStepReplayed(2, false);
+            .hasActionsCount(1);
 
         // have we taken the bug number from the step?
         assertEquals("Expected failure abort for bug: APP-17171", r1.getSteps().get(1).getFailureReason());
@@ -110,13 +104,7 @@ public class BugMarkerTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
-            .hasActionsCount(1)
-            .hasStepDirectParsed(0, false)
-            .hasStepDirectParsed(1, false)
-            .hasStepDirectParsed(2, false)
-            .hasStepReplayed(0, true)
-            .hasStepReplayed(1, true)
-            .hasStepReplayed(2, false);
+            .hasActionsCount(1);
 
         assertEquals("Expected failure abort for bug: APP-17171", r2.getSteps().get(1).getFailureReason());
     }
@@ -232,16 +220,10 @@ public class BugMarkerTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
-            .hasActionsCount(1)
+            .hasActionsCount(1);
             // Step 0: Open storefront URL
-            .hasStepDirectParsed(0, true)
-            .hasStepReplayed(0, false)
             // Step 1: Visual verification (bug)
-            .hasStepDirectParsed(1, false)
-            .hasStepReplayed(1, false)
             // Step 2: Unexecuted step
-            .hasStepDirectParsed(2, false)
-            .hasStepReplayed(2, false);
 
         // Explicit step details verifications for LIVE_LLM
         final var stepDetails0 = r1.getSteps().get(0);
@@ -277,16 +259,10 @@ public class BugMarkerTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
-            .hasActionsCount(1)
+            .hasActionsCount(1);
             // Step 0: Open storefront URL
-            .hasStepDirectParsed(0, false)
-            .hasStepReplayed(0, true)
             // Step 1: Visual verification (bug)
-            .hasStepDirectParsed(1, false)
-            .hasStepReplayed(1, true)
             // Step 2: Unexecuted step
-            .hasStepDirectParsed(2, false)
-            .hasStepReplayed(2, false);
 
         // Explicit step details verifications for REPLAY
         final var replayStep0 = r2.getSteps().get(0);

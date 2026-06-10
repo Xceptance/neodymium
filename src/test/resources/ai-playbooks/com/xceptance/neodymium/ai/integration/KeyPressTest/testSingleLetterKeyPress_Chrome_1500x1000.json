@@ -2,15 +2,15 @@
   "id": "com.xceptance.neodymium.ai.integration.KeyPressTest :: testSingleLetterKeyPress :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43388/TypeActionTest/keyPressExtended.html",
+      "promptLine": "Open http://localhost:43377/TypeActionTest/keyPressExtended.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
-            "http://localhost:43388/TypeActionTest/keyPressExtended.html"
+            "http://localhost:43377/TypeActionTest/keyPressExtended.html"
           ],
-          "description": "Navigate to http://localhost:43388/TypeActionTest/keyPressExtended.html",
+          "description": "Navigate to http://localhost:43377/TypeActionTest/keyPressExtended.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -42,15 +42,15 @@
     },
     {
       "promptLine": "Press key \u0027a\u0027",
-      "reasoning": "The instruction is to press the key \u0027a\u0027, which directly maps to a KEY_PRESS action with \u0027a\u0027 as the value.",
+      "reasoning": "The instruction is to press the key \u0027a\u0027. The KEY_PRESS action is used with \u0027a\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
           "value": [
             "a"
           ],
-          "description": "Presses the \u0027a\u0027 key",
-          "elementDetails": "Press \u0027a\u0027 key",
+          "description": "Press key \u0027a\u0027",
+          "elementDetails": "Keyboard key \u0027a\u0027",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -61,7 +61,7 @@
     },
     {
       "promptLine": "Type key \u0027b\u0027",
-      "reasoning": "The instruction is to type a key, not into a specific input field. The KEY_PRESS action is appropriate for this, with \u0027b\u0027 as the value.",
+      "reasoning": "The instruction is to type a key, so a KEY_PRESS action is used with \u0027b\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -80,16 +80,22 @@
     },
     {
       "promptLine": "Press \u0027c\u0027",
-      "reasoning": "The user wants to press the \u0027c\u0027 key, so a KEY_PRESS action with value \u0027c\u0027 is appropriate.",
+      "reasoning": "The instruction is to press \u0027c\u0027, which translates to typing \u0027c\u0027 into the available text input field.",
       "actions": [
         {
-          "type": "KEY_PRESS",
+          "type": "TYPE",
+          "target": "xc_5a3hm3",
           "value": [
             "c"
           ],
-          "description": "Press the \u0027c\u0027 key",
-          "elementDetails": "c",
-          "elementContext": {},
+          "description": "Type \u0027c\u0027 into the text field",
+          "elementDetails": "Type single letters here",
+          "elementContext": {
+            "id": "char-input",
+            "placeholder": "Type single letters here",
+            "tagName": "input",
+            "type": "text"
+          },
           "replay": "",
           "adjust": false
         }
