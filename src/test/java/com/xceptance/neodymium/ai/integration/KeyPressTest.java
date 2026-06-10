@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
+// AI-generated: Gemini 2.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -45,6 +45,7 @@ import com.xceptance.neodymium.util.Neodymium;
 public class KeyPressTest extends BaseAiTest
 {
     private String url;
+    private String extendedUrl;
 
     /**
      * Set up storefront url parameter before each test execution.
@@ -54,6 +55,9 @@ public class KeyPressTest extends BaseAiTest
     {
         this.url = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
         Neodymium.getData().put("keyPress.test.url", this.url);
+
+        this.extendedUrl = String.format("http://localhost:%d/TypeActionTest/keyPressExtended.html", server.getPort());
+        Neodymium.getData().put("keyPress.extended.url", this.extendedUrl);
     }
 
     /**
@@ -155,5 +159,83 @@ public class KeyPressTest extends BaseAiTest
         assertTrue(replayStep5.getLlmCalls().isEmpty());
 
         assertEquals("Submitted: Robert - KeyPress works!", Selenide.$("#result").text());
+    }
+
+    /**
+     * Test navigation with arrow keys.
+     */
+    @NeodymiumTest
+    public final void testArrowNavigation()
+    {
+        final String steps = """
+                Open ${keyPress.extended.url}
+                Click the navigation container (hint: #nav-container)
+                Press ArrowDown
+                Press ArrowDown
+                Press ArrowUp
+                """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(4)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(5);
+
+        assertEquals("Active: Item 2", Selenide.$("#active-item-label").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(5)
+            .hasActionsCount(5);
+
+        assertEquals("Active: Item 2", Selenide.$("#active-item-label").text());
+    }
+
+    /**
+     * Test pressing single letters individually.
+     */
+    @NeodymiumTest
+    public final void testSingleLetterKeyPress()
+    {
+        final String steps = """
+                Open ${keyPress.extended.url}
+                Click the single character input field (hint: #char-input)
+                Press key 'a'
+                Type key 'b'
+                Press 'c'
+                """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(4)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(5);
+
+        assertEquals("abc", Selenide.$("#char-result").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(5)
+            .hasActionsCount(5);
+
+        assertEquals("abc", Selenide.$("#char-result").text());
     }
 }

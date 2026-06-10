@@ -2,15 +2,15 @@
   "id": "com.xceptance.neodymium.ai.integration.KeyPressTest :: testKeyPress :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
+      "promptLine": "Open http://localhost:43388/TypeActionTest/testTypeHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
-            "http://localhost:43377/TypeActionTest/testTypeHappyPath.html"
+            "http://localhost:43388/TypeActionTest/testTypeHappyPath.html"
           ],
-          "description": "Navigate to http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
+          "description": "Navigate to http://localhost:43388/TypeActionTest/testTypeHappyPath.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Type \u0027Bob\u0027 into the \u0027First Name:\u0027 field (hint: #first-name)",
-      "reasoning": "",
+      "reasoning": "Typed \u0027Bob\u0027 into the \u0027First Name:\u0027 field.",
       "actions": [
         {
           "type": "TYPE",
@@ -45,7 +45,7 @@
     },
     {
       "promptLine": "Press the TAB key on the active element",
-      "reasoning": "The instruction is to press the TAB key, which is handled by the KEY_PRESS action.",
+      "reasoning": "The instruction is to press the TAB key, which is directly mapped to a KEY_PRESS action with \u0027TAB\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -64,11 +64,11 @@
     },
     {
       "promptLine": "Type \u0027KeyPress works!\u0027 into the comment box",
-      "reasoning": "Identified the comment box by its accessibility name and data-neo-ref attribute and generated a TYPE action to input the specified text.",
+      "reasoning": "Identified the comment box by its \u0027Comments:\u0027 name and data-neo-ref attribute, then generated a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_z2satb",
+          "target": "[data-neo-ref\u003d\u0027xc_z2satb\u0027]",
           "value": [
             "KeyPress works!"
           ],
@@ -89,11 +89,11 @@
     },
     {
       "promptLine": "Type \u0027Robert\u0027 into the \u0027First Name:\u0027 field",
-      "reasoning": "Typed \u0027Robert\u0027 into the \u0027First Name:\u0027 field as requested.",
+      "reasoning": "Typed \u0027Robert\u0027 into the \u0027First Name:\u0027 textbox identified by its accessibility name.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_g7bs6\u0027]",
+          "target": "xc_g7bs6",
           "value": [
             "Robert"
           ],
