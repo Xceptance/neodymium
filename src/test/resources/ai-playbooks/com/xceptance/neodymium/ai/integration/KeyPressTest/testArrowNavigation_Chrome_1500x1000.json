@@ -2,15 +2,15 @@
   "id": "com.xceptance.neodymium.ai.integration.KeyPressTest :: testArrowNavigation :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43388/TypeActionTest/keyPressExtended.html",
+      "promptLine": "Open http://localhost:43377/TypeActionTest/keyPressExtended.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
-            "http://localhost:43388/TypeActionTest/keyPressExtended.html"
+            "http://localhost:43377/TypeActionTest/keyPressExtended.html"
           ],
-          "description": "Navigate to http://localhost:43388/TypeActionTest/keyPressExtended.html",
+          "description": "Navigate to http://localhost:43377/TypeActionTest/keyPressExtended.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -41,7 +41,7 @@
     },
     {
       "promptLine": "Press ArrowDown",
-      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key, which directly translates to a KEY_PRESS action.",
+      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key, which directly maps to a KEY_PRESS action with \u0027ArrowDown\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -49,7 +49,7 @@
             "ArrowDown"
           ],
           "description": "Press the ArrowDown key",
-          "elementDetails": "ArrowDown",
+          "elementDetails": "document",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -60,7 +60,7 @@
     },
     {
       "promptLine": "Press ArrowDown",
-      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key, which directly translates to a KEY_PRESS action.",
+      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key, which directly maps to a KEY_PRESS action with \u0027ArrowDown\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -68,7 +68,7 @@
             "ArrowDown"
           ],
           "description": "Press the ArrowDown key",
-          "elementDetails": "ArrowDown",
+          "elementDetails": "ArrowDown key",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -86,7 +86,7 @@
           "value": [
             "ArrowUp"
           ],
-          "description": "Presses the ArrowUp key",
+          "description": "Press the ArrowUp key",
           "elementDetails": "ArrowUp key",
           "elementContext": {},
           "replay": "",

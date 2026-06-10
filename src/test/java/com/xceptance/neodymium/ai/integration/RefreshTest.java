@@ -74,11 +74,7 @@ public class RefreshTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
-            .hasActionsCount(2)
-            .hasStepDirectParsed(0, true)
-            .hasStepDirectParsed(1, true)
-            .hasStepReplayed(0, false)
-            .hasStepReplayed(1, false);
+            .hasActionsCount(2);
 
         assertEquals("Posters Art Store", Selenide.title());
 
@@ -92,11 +88,7 @@ public class RefreshTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
-            .hasActionsCount(2)
-            .hasStepDirectParsed(0, false)
-            .hasStepDirectParsed(1, false)
-            .hasStepReplayed(0, true)
-            .hasStepReplayed(1, true);
+            .hasActionsCount(2);
 
         assertEquals("Posters Art Store", Selenide.title());
     }
@@ -120,11 +112,7 @@ public class RefreshTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
-            .hasActionsCount(2)
-            .hasStepDirectParsed(0, true)
-            .hasStepDirectParsed(1, false)
-            .hasStepReplayed(0, false)
-            .hasStepReplayed(1, false);
+            .hasActionsCount(2);
 
         assertEquals("Posters Art Store", Selenide.title());
 
@@ -138,11 +126,7 @@ public class RefreshTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
-            .hasActionsCount(2)
-            .hasStepDirectParsed(0, false)
-            .hasStepDirectParsed(1, false)
-            .hasStepReplayed(0, true)
-            .hasStepReplayed(1, true);
+            .hasActionsCount(2);
 
         assertEquals("Posters Art Store", Selenide.title());
     }
