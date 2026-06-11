@@ -21,7 +21,6 @@ package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
-import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
@@ -128,7 +127,7 @@ public class HintTesting extends BaseAiTest
         this.resetBrowser();
         final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
 
-        assertThat(rWithPesap).hasPesapCalls(1);
+        assertThat(rWithPesap).hasNoPesapCalls();
         assertThat(rWithoutPesap).hasNoPesapCalls();
 
         assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
@@ -150,6 +149,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(2);
 
@@ -181,6 +181,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(2);
 
@@ -211,6 +212,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(2);
 
@@ -244,6 +246,7 @@ public class HintTesting extends BaseAiTest
         // escalates to AXTREE level, makes 2nd LLM call and succeeds.
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasEscalations(1)
             .hasActionsCount(2);
 
@@ -273,6 +276,7 @@ public class HintTesting extends BaseAiTest
         // escalates to AXTREE level, makes 2nd LLM call and succeeds.
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasEscalations(0)
             .hasActionsCount(2);
 
@@ -297,6 +301,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(3);
 
@@ -321,6 +326,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(3);
 
@@ -362,6 +368,7 @@ public class HintTesting extends BaseAiTest
         // LLM generates correct action (#search-button), and execution succeeds.
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasEscalations(1)
             .hasActionsCount(2);
 
@@ -399,6 +406,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasActionsCount(2);
@@ -416,6 +424,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasActionsCount(2);
@@ -440,6 +449,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasActionsCount(3);
@@ -458,6 +468,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasActionsCount(3);
@@ -483,6 +494,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasActionsCount(2);
@@ -500,6 +512,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasActionsCount(2);
@@ -524,6 +537,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasActionsCount(2);
@@ -541,6 +555,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasActionsCount(2);
@@ -565,6 +580,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasActionsCount(2);
@@ -582,6 +598,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasActionsCount(2);
@@ -606,6 +623,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasActionsCount(2);
@@ -623,6 +641,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasActionsCount(2);
@@ -647,6 +666,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasActionsCount(2);
@@ -664,6 +684,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasActionsCount(2);
@@ -688,6 +709,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasActionsCount(3);
@@ -706,6 +728,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasActionsCount(3);
@@ -731,6 +754,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasActionsCount(3);
@@ -751,6 +775,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasActionsCount(3);

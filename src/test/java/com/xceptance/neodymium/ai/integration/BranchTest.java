@@ -71,6 +71,7 @@ public class BranchTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -95,6 +96,7 @@ public class BranchTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)

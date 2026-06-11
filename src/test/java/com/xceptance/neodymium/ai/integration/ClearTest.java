@@ -74,6 +74,7 @@ public class ClearTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(3)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -108,6 +109,7 @@ public class ClearTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(4)

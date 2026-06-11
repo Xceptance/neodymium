@@ -70,6 +70,8 @@ public class VisualTest extends BaseAiTest
                 A bear is shown on the right side (visual)
             """, VerificationMode.LIVE_LLM);
 
+        assertThat(r1).hasNoPesapCalls();
+
         final var s = r1.getSteps().get(1);
         assertEquals(1, s.getLlmCalls().size());
         assertEquals(ContextLevel.VISUAL_LEAN, s.getLlmCalls().get(0).getContextLevel());
@@ -96,6 +98,8 @@ public class VisualTest extends BaseAiTest
                 Open ${posters.storefront.url}
                 There is no fox visible (visual) and there is no red button either
             """, VerificationMode.LIVE_LLM);
+
+        assertThat(r1).hasNoPesapCalls();
 
         final var s = r1.getSteps().get(1);
         assertEquals(1, s.getLlmCalls().size());
@@ -132,6 +136,8 @@ public class VisualTest extends BaseAiTest
         final AiExecutionResult r1 = Neodymium.getLastAiExecutionResult();
         Assertions.assertNotNull(r1);
 
+        assertThat(r1).hasNoPesapCalls();
+
         final var s = r1.getSteps().get(1);
         assertEquals(1, s.getLlmCalls().size());
         assertEquals(ContextLevel.VISUAL_LEAN, s.getLlmCalls().get(0).getContextLevel());
@@ -164,6 +170,7 @@ public class VisualTest extends BaseAiTest
 
         assertThat(r)
             .hasLlmCalls(3)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasActionsCount(4);
 

@@ -99,6 +99,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
@@ -120,6 +121,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
@@ -141,6 +143,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -160,6 +163,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
@@ -207,6 +211,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
@@ -218,6 +223,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
@@ -248,6 +254,7 @@ public class JavaMethodTest extends BaseAiTest
 
             assertThat(r1)
                 .hasLlmCalls(0)
+                .hasNoPesapCalls()
                 .hasNoEscalations()
                 .hasDirectParses(2)
                 .hasReplays(0)
@@ -259,6 +266,7 @@ public class JavaMethodTest extends BaseAiTest
 
             assertThat(r2)
                 .hasLlmCalls(0)
+                .hasNoPesapCalls()
                 .hasNoEscalations()
                 .hasDirectParses(0)
                 .hasReplays(2)
@@ -297,6 +305,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(6)
             .hasReplays(0)
@@ -308,6 +317,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(6)
@@ -362,6 +372,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
@@ -373,6 +384,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
@@ -395,6 +407,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasPesapCalls(2)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -406,6 +419,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(3)
@@ -427,6 +441,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)

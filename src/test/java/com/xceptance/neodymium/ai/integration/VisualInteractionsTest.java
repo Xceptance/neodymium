@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
@@ -73,6 +74,7 @@ public class VisualInteractionsTest extends BaseAiTest
                 """, pageUrl), VerificationMode.LIVE_LLM);
 
         assertTrue(result.isSuccess());
+        assertThat(result).hasNoPesapCalls();
         Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
     }
 
@@ -90,12 +92,14 @@ public class VisualInteractionsTest extends BaseAiTest
 
         final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
         assertTrue(rWithPesap.isSuccess());
+        assertThat(rWithPesap).hasNoPesapCalls();
         Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
 
         this.resetBrowser();
 
         final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
         assertTrue(rWithoutPesap.isSuccess());
+        assertThat(rWithoutPesap).hasNoPesapCalls();
         Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
     }
 
@@ -112,6 +116,7 @@ public class VisualInteractionsTest extends BaseAiTest
                 """, pageUrl), VerificationMode.LIVE_LLM);
 
         assertTrue(result.isSuccess());
+        assertThat(result).hasNoPesapCalls();
         Selenide.$("#canvas-status").shouldHave(Condition.text("Red Canvas Clicked"));
     }
 
@@ -129,6 +134,7 @@ public class VisualInteractionsTest extends BaseAiTest
                 """, pageUrl), VerificationMode.LIVE_LLM);
 
         assertTrue(result.isSuccess());
+        assertThat(result).hasNoPesapCalls();
         Selenide.$("#label-status").shouldHave(Condition.text("Floating label transition fixed!"));
     }
 }

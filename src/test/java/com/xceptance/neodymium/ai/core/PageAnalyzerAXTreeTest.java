@@ -133,6 +133,14 @@ class PageAnalyzerAXTreeTest
                         div.put("name", Map.of("value", "some container"));
                         nodes.add(div);
 
+                        // Node 5: Checkbox (with flat string role and name)
+                        final Map<String, Object> checkbox = new HashMap<>();
+                        checkbox.put("ignored", false);
+                        checkbox.put("backendDOMNodeId", 1005);
+                        checkbox.put("role", "checkbox");
+                        checkbox.put("name", "Flat String Checkbox");
+                        nodes.add(checkbox);
+
                         return Map.of("nodes", nodes);
                     }
                     else if ("DOM.resolveNode".equals(command))
@@ -162,6 +170,7 @@ class PageAnalyzerAXTreeTest
         assertTrue(result.contains("<button data-neo-ref=\"xc_ax_ref_1001\" name=\"Click Me\"/>"));
         assertTrue(result.contains("<link data-neo-ref=\"xc_ax_ref_1002\" name=\"Go to Google\" value=\"https://google.com\"/>"));
         assertTrue(result.contains("<textbox data-neo-ref=\"xc_ax_ref_1003\" name=\"Username\" required=\"true\" placeholder=\"Enter Username\"/>"));
+        assertTrue(result.contains("<checkbox data-neo-ref=\"xc_ax_ref_1005\" name=\"Flat String Checkbox\"/>"));
         
         // Assert that Node 4 with generic/ignored role is correctly filtered out
         assertTrue(!result.contains("generic") && !result.contains("some container"));

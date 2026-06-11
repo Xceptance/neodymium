@@ -40,6 +40,10 @@ public final class StepDetails
     private ContextLevel pesapPredictedContextLevel;
     private final List<String> pesapWarnings;
     private String pesapDirection;
+    private String pesapStepType;
+    private String pesapExpectedTargetTagName;
+    private boolean pesapPageNavigation;
+    private boolean pesapRequiresJavaMethods;
     private boolean replayed;
     private boolean directParse;
 
@@ -175,6 +179,86 @@ public final class StepDetails
     public final void setDirectParse(final boolean directParse)
     {
         this.directParse = directParse;
+    }
+
+    /**
+     * Gets the predicted PESAP step type.
+     *
+     * @return the step type
+     */
+    public final String getPesapStepType()
+    {
+        return this.pesapStepType;
+    }
+
+    /**
+     * Sets the predicted PESAP step type.
+     *
+     * @param pesapStepType the step type
+     */
+    public final void setPesapStepType(final String pesapStepType)
+    {
+        this.pesapStepType = pesapStepType;
+    }
+
+    /**
+     * Gets the predicted PESAP expected target tag name.
+     *
+     * @return the target tag name
+     */
+    public final String getPesapExpectedTargetTagName()
+    {
+        return this.pesapExpectedTargetTagName;
+    }
+
+    /**
+     * Sets the predicted PESAP expected target tag name.
+     *
+     * @param pesapExpectedTargetTagName the target tag name
+     */
+    public final void setPesapExpectedTargetTagName(final String pesapExpectedTargetTagName)
+    {
+        this.pesapExpectedTargetTagName = pesapExpectedTargetTagName;
+    }
+
+    /**
+     * Checks if PESAP predicted that this step would cause page navigation.
+     *
+     * @return true if page navigation is predicted, false otherwise
+     */
+    public final boolean isPesapPageNavigation()
+    {
+        return this.pesapPageNavigation;
+    }
+
+    /**
+     * Sets whether PESAP predicted that this step would cause page navigation.
+     *
+     * @param pesapPageNavigation the page navigation prediction
+     */
+    public final void setPesapPageNavigation(final boolean pesapPageNavigation)
+    {
+        this.pesapPageNavigation = pesapPageNavigation;
+    }
+
+    /**
+     * Checks if PESAP predicted that this step requires custom Java methods.
+     *
+     * @return true if custom Java methods are predicted, false otherwise
+     */
+    public final boolean isPesapRequiresJavaMethods()
+    {
+        return this.pesapRequiresJavaMethods;
+    }
+
+    /**
+     * Sets whether PESAP predicted that this step requires custom Java methods.
+     *
+     * @param pesapRequiresJavaMethods the custom Java methods prediction
+     */
+    public final void setPesapRequiresJavaMethods(final boolean pesapRequiresJavaMethods)
+    {
+        this.pesapRequiresJavaMethods = pesapRequiresJavaMethods;
     }
 
     /**

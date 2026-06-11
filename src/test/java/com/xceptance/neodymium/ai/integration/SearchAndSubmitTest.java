@@ -79,6 +79,7 @@ public final class SearchAndSubmitTest extends BaseAiTest
         // 4 LLM calls: TYPE+submit, ASSERT(title), ASSERT(count @ AXTREE escalate), ASSERT(count @ STANDARD)
         assertThat(r1)
             .hasLlmCalls(4)
+            .hasPesapCalls(3)
             .hasEscalations(1)
             .hasDirectParses(1)
             .hasActionsCount(5);
@@ -100,6 +101,7 @@ public final class SearchAndSubmitTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
     }
@@ -113,7 +115,7 @@ public final class SearchAndSubmitTest extends BaseAiTest
     public final void testSearchAndSubmitGerman()
     {
         final AiExecutionResult r1 = runAi("""
-                Öffne ${posters.storefront.url}
+                Beginne mit der URL ${posters.storefront.url}
                 Gib 'bear' in das Suchfeld ein und sende die Suche ab
                 Überprüfe, dass der Titel der Suchergebnisse 'bear' enthält
                 Überprüfe, dass auf der Seite '3 results found.' angezeigt wird
@@ -123,6 +125,7 @@ public final class SearchAndSubmitTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(4)
+            .hasPesapCalls(3)
             .hasEscalations(1)
             .hasDirectParses(1)
             .hasActionsCount(5);
@@ -143,6 +146,7 @@ public final class SearchAndSubmitTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
     }

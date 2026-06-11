@@ -72,6 +72,7 @@ public class NavigateTest extends BaseAiTest
         
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasDirectParses(1)
             .hasNoEscalations()
             .hasActionsCount(1)
@@ -87,6 +88,7 @@ public class NavigateTest extends BaseAiTest
         
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasDirectParses(0)
             .hasNoEscalations()
             .hasActionsCount(1)
@@ -109,6 +111,7 @@ public class NavigateTest extends BaseAiTest
         
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -124,6 +127,7 @@ public class NavigateTest extends BaseAiTest
         
         assertThat(r2)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(0)
@@ -147,6 +151,7 @@ public class NavigateTest extends BaseAiTest
         
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasActionsCount(1)
             .hasDirectParses(0)
@@ -169,6 +174,7 @@ public class NavigateTest extends BaseAiTest
         
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasContextLevel(ContextLevel.AXTREE)
             .hasNoEscalations()
             .hasActionsCount(1)
