@@ -40,7 +40,8 @@ public class TestdataData extends Data
         }
         packageTestData = TestDataUtils.getPackageTestData(testClass);
 
-        List<TestdataContainer> iterations = new LinkedList<>();
+        final boolean fromDataFolder = testClass.isAnnotationPresent(DataFolder.class) || testClass.isAnnotationPresent(DataFolders.class);
+        final List<TestdataContainer> iterations = new LinkedList<>();
         if (!dataSets.isEmpty() || !packageTestData.isEmpty())
         {
             if (!dataSets.isEmpty())
@@ -48,13 +49,17 @@ public class TestdataData extends Data
                 // data sets found
                 for (int i = 0; i < dataSets.size(); i++)
                 {
-                    iterations.add(new TestdataContainer(dataSets.get(i), packageTestData, i, dataSets.size()));
+                    final TestdataContainer container = new TestdataContainer(dataSets.get(i), packageTestData, i, dataSets.size());
+                    container.setFromDataFolder(fromDataFolder);
+                    iterations.add(container);
                 }
             }
             else
             {
                 // only package data, no data sets
-                iterations.add(new TestdataContainer(new HashMap<>(), packageTestData, -1, -1));
+                final TestdataContainer container = new TestdataContainer(new HashMap<>(), packageTestData, -1, -1);
+                container.setFromDataFolder(fromDataFolder);
+                iterations.add(container);
             }
         }
         else
