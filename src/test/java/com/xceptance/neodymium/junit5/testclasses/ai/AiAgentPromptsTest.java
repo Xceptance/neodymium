@@ -147,4 +147,19 @@ public final class AiAgentPromptsTest
         Assertions.assertTrue(visualLeanPrompt.length() < maxVisualLeanLength, "VISUAL_LEAN prompt exceeds limit: " + visualLeanPrompt.length());
         Assertions.assertTrue(visualPrompt.length() < maxVisualLength, "VISUAL prompt exceeds limit: " + visualPrompt.length());
     }
+
+    /**
+     * Verifies that clearCache() works correctly.
+     */
+    @Test
+    public final void testClearCache()
+    {
+        final String firstPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.HINT);
+        Assertions.assertNotNull(firstPrompt);
+
+        AiAgentPrompts.clearCache();
+
+        final String secondPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.HINT);
+        Assertions.assertEquals(firstPrompt, secondPrompt);
+    }
 }

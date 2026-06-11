@@ -680,7 +680,7 @@ public class AiPromptGenerator {
 
                         if (isInteractive) {
                             java.util.Map<String, String> hudBindings = new java.util.HashMap<>(knownBindings);
-                            String systemPromptBase = AiAgentPrompts.SYSTEM_HEALING_PROMPT;
+                            String systemPromptBase = AiAgentPrompts.getSystemHealingPrompt();
                             systemPromptBase = AiAgentPrompts.injectPluginMetadata(systemPromptBase);
                             List<String> plannedStrs = new ArrayList<>();
                             for (int aIdx = pIdx; aIdx < proposedActions.size(); aIdx++) {
@@ -794,7 +794,7 @@ public class AiPromptGenerator {
                                     "No markdown, just raw JSON.";
 
                             try {
-                                String systemPromptBase = AiAgentPrompts.SYSTEM_PROMPT;
+                                String systemPromptBase = AiAgentPrompts.getSystemPromptBase();
                                 systemPromptBase = AiAgentPrompts.injectPluginMetadata(systemPromptBase);
                                 String fallbackResponse = llmClient.chat(systemPromptBase, fallbackPrompt);
                                 String cleanJson = fallbackResponse.trim();
@@ -949,9 +949,9 @@ public class AiPromptGenerator {
                         .append(" [Reasoning: ").append(step.getReasoning()).append("]\n");
             }
 
-            String sysPrompt = AiAgentPrompts.V2_EXTRACTION_PROMPT;
+            String sysPrompt = AiAgentPrompts.getV2ExtractionPrompt();
             if (errorMessage != null) {
-                sysPrompt += "\n\n" + AiAgentPrompts.V2_EXTRACTION_RETRY_PROMPT.replace("{error}", errorMessage);
+                sysPrompt += "\n\n" + AiAgentPrompts.getV2ExtractionRetryPrompt().replace("{error}", errorMessage);
             }
 
             executionLog.logPrompt(sysPrompt + "\\n\\n" + sb.toString());

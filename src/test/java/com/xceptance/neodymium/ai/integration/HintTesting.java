@@ -21,6 +21,7 @@ package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
@@ -73,6 +74,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasActionsCount(2);
@@ -100,6 +102,7 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0) // replays don't have parses at all
             .hasActionsCount(2);
@@ -108,6 +111,29 @@ public class HintTesting extends BaseAiTest
         assertThat(r2).hasAction(1, "CLICK");
         
         assertEquals("#search-button", r2.getActions().get(1).getTarget());
+    }
+
+    /**
+     * Compares hint execution with and without PESAP enabled, asserting equivalent actions.
+     */
+    @NeodymiumTest
+    public final void test_MatchingHint_PesapComparison()
+    {
+        final String steps = """
+                Open ${posters.storefront.url}
+                Click the search button (hint: #search-button)
+                """;
+
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        this.resetBrowser();
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+
+        assertThat(rWithPesap).hasPesapCalls(1);
+        assertThat(rWithoutPesap).hasNoPesapCalls();
+
+        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
+        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
+        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
     }
 
     /**

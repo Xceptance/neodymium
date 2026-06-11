@@ -130,4 +130,27 @@ public class RefreshTest extends BaseAiTest
 
         assertEquals("Posters Art Store", Selenide.title());
     }
+
+    /**
+     * Compares refresh execution with and without PESAP enabled, asserting equivalent results.
+     */
+    @NeodymiumTest
+    public final void test_RefreshWithoutDirectResolution_PesapComparison()
+    {
+        final String steps = """
+                Open ${posters.storefront.url}
+                Refresh the page
+            """;
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        assertEquals("Posters Art Store", Selenide.title());
+
+        this.resetBrowser();
+
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+        assertEquals("Posters Art Store", Selenide.title());
+
+        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
+        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
+        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
+    }
 }

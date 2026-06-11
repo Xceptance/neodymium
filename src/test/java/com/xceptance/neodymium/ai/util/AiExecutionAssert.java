@@ -225,4 +225,26 @@ public final class AiExecutionAssert
                 "Step at index " + stepIndex + " direct parse status mismatch");
         return this;
     }
+
+    /**
+     * Asserts the number of PESAP calls made during the execution.
+     *
+     * @param expected the expected number of PESAP calls
+     * @return this assertion helper
+     */
+    public final AiExecutionAssert hasPesapCalls(final int expected)
+    {
+        assertEquals(expected, result.getPesapCallCount(), "PESAP call count mismatch");
+        return this;
+    }
+
+    /**
+     * Asserts that no PESAP calls occurred during the execution.
+     *
+     * @return this assertion helper
+     */
+    public final AiExecutionAssert hasNoPesapCalls()
+    {
+        return hasPesapCalls(0);
+    }
 }

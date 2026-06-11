@@ -29,6 +29,7 @@ import com.xceptance.neodymium.ai.core.ContextLevel;
 import com.xceptance.neodymium.ai.testing.LlmAssert;
 
 import org.junit.jupiter.api.BeforeEach;
+import java.util.List;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -107,6 +108,32 @@ public class BugMarkerTest extends BaseAiTest
             .hasActionsCount(1);
 
         assertEquals("Expected failure abort for bug: APP-17171", r2.getSteps().get(1).getFailureReason());
+    }
+
+    /**
+     * Compares bug marker execution with and without PESAP enabled, asserting equivalent results.
+     */
+    @NeodymiumTest
+    public final void failButMarkedAsBug_StaySilent_PesapComparison() throws Throwable
+    {
+        final String steps = """
+                # Homepage
+                Open ${posters.storefront.url}
+                # Verify something that is not true aka a defect and we know that
+                # Sure this is not a true bug, just made up for this test.
+                Verify that the minicart shows two items (bug: APP-17171).
+                # This is not executed!!!
+                Verify that the top header shows a warning about a demo application.
+                """;
+
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        this.resetBrowser();
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+
+        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
+        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
+        assertEquals(rWithPesap.getActions().get(0).getTarget(), rWithoutPesap.getActions().get(0).getTarget());
+        assertEquals(rWithPesap.getSteps().get(1).getFailureReason(), rWithoutPesap.getSteps().get(1).getFailureReason());
     }
 
     /**

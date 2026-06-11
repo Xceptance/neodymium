@@ -134,4 +134,31 @@ public class TypeTest extends BaseAiTest
 
         assertEquals("Submitted: Bob - Hello AI", Selenide.$("#result").text());
     }
+
+    /**
+     * Compares type execution with and without PESAP enabled, asserting equivalent results.
+     */
+    @NeodymiumTest
+    public final void testType_PesapComparison()
+    {
+        final String steps = """
+                Open ${type.test.url}
+                Type 'Bob' into the 'First Name:' field (hint: #first-name)
+                Type 'Hello AI' into the 'Comments:' textarea (hint: #comments)
+                Click the 'Submit Details' button (hint: #btn-submit)
+            """;
+
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        assertEquals("Submitted: Bob - Hello AI", Selenide.$("#result").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+        assertEquals("Submitted: Bob - Hello AI", Selenide.$("#result").text());
+
+        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
+        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
+        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
+        assertEquals(rWithPesap.getActions().get(3).getType(), rWithoutPesap.getActions().get(3).getType());
+    }
 }

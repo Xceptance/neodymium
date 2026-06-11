@@ -123,4 +123,30 @@ public class ScrollTest extends BaseAiTest
 
         assertEquals("Scrolled and clicked bottom button!", Selenide.$("#result").text());
     }
+
+    /**
+     * Compares scroll execution with and without PESAP enabled, asserting equivalent results.
+     */
+    @NeodymiumTest
+    public final void testScroll_PesapComparison()
+    {
+        final String steps = """
+                Open ${scroll.test.url}
+                Scroll to the bottom button (hint: #btn-bottom)
+                Click the bottom button (hint: #btn-bottom)
+            """;
+
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        assertEquals("Scrolled and clicked bottom button!", Selenide.$("#result").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+        assertEquals("Scrolled and clicked bottom button!", Selenide.$("#result").text());
+
+        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
+        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
+        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
+        assertEquals(rWithPesap.getActions().get(2).getType(), rWithoutPesap.getActions().get(2).getType());
+    }
 }

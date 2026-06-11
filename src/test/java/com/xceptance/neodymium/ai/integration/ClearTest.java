@@ -135,4 +135,31 @@ public class ClearTest extends BaseAiTest
 
         assertEquals("Submitted: -", Selenide.$("#result").text());
     }
+
+    /**
+     * Compares clear execution with and without PESAP enabled, asserting equivalent results.
+     */
+    @NeodymiumTest
+    public final void testClear_PesapComparison()
+    {
+        final String steps = """
+                Open ${clear.test.url}
+                Type 'Alice' into the 'First Name:' field (hint: #first-name)
+                Clear the 'First Name:' field (hint: #first-name)
+                Click the 'Submit Details' button (hint: #btn-submit)
+            """;
+
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        assertEquals("Submitted: -", Selenide.$("#result").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+        assertEquals("Submitted: -", Selenide.$("#result").text());
+
+        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
+        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
+        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
+        assertEquals(rWithPesap.getActions().get(2).getType(), rWithoutPesap.getActions().get(2).getType());
+    }
 }

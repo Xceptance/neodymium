@@ -195,6 +195,17 @@ public class ActionExecutor {
         this.test = test;
     }
 
+    /**
+     * Returns the active test instance. Used by JIT PESAP to reflectively scan
+     * the test class for custom validation methods.
+     *
+     * @return the test instance, or {@code null} if not set
+     */
+    public final Object getTestInstance()
+    {
+        return this.test;
+    }
+
     public void setVariable(final String key, final String value)
     {
         if (key != null && value != null)

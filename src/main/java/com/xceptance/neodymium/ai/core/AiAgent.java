@@ -22,10 +22,12 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,6 +44,7 @@ import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException
 import com.xceptance.neodymium.ai.action.ActionParser;
 import com.xceptance.neodymium.ai.action.ActionRegistry;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.ai.action.plugins.JavaMethodAction;
 import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.ai.generator.InteractiveHud;
 import com.xceptance.neodymium.ai.playbook.Playbook;
@@ -126,7 +129,32 @@ public class AiAgent {
             OPTIONAL_TAG_PATTERN,
             TIMEOUT_TAG_PATTERN);
 
-    private final List<ContextLevel> pesapPredictions = new ArrayList<>();
+    /**
+     * Cache for JIT pre-step PESAP results, keyed by step index.
+     * Results are cached per step so retries/escalations don't re-run the JIT call.
+     */
+    private final Map<Integer, PreStepPesapResult> pesapCache = new HashMap<>();
+
+    /**
+     * Holds the result of a JIT pre-step PESAP analysis for a single step.
+     */
+    private record PreStepPesapResult(
+        ContextLevel contextLevel,
+        Set<String> javaMethods,
+        String direction
+    ) {}
+
+    /**
+     * Execution-scoped flag: whether JIT per-step PESAP is active for the current execution.
+     * Set once in {@code execute()} and read by {@code getActionsFromLLM()}.
+     */
+    private boolean pesapEnabled = false;
+
+    /**
+     * Execution-scoped reference to the current steps list.
+     * Set once in {@code execute()} and read by {@code runPreStepPesap()}.
+     */
+    private List<String> currentStepsList = null;
 
     // AI-generated: Gemini 2.5 Flash
     public static String stripAllTags(final String step) {
@@ -222,6 +250,7 @@ public class AiAgent {
         final int startEscalation = statsSnapshot.getTotalEscalationCount();
         final int startReplay = statsSnapshot.getReplayCount();
         final int startDirectParse = statsSnapshot.getDirectParseCount();
+        final int startPesapCalls = statsSnapshot.getPesapCallCount();
 
         final long startTimeMs = System.currentTimeMillis();
 
@@ -264,6 +293,7 @@ public class AiAgent {
             }
             Neodymium.initializePlaybook();
             final Playbook playbook = Neodymium.getAiPlaybook();
+<<<<<<< HEAD
             boolean needsPesap = false;
             if (playbook != null) {
                 if (playbook.isRecording()) {
@@ -273,19 +303,44 @@ public class AiAgent {
                     needsPesap = false;
                 }
             } else {
+=======
+
+            // Determine if JIT per-step PESAP should run (only during recording, not replay)
+            final boolean needsPesap;
+            if (playbook != null)
+            {
+                needsPesap = playbook.isRecording();
+            }
+            else
+            {
+>>>>>>> ec7b7d5f (refactor(ai): introduce JIT pre-step PESAP and modular prompts)
                 needsPesap = true;
             }
 
-            this.pesapPredictions.clear();
+            this.pesapCache.clear();
             boolean pesapEnabledVal = Neodymium.aiConfiguration().pesapEnabled();
             if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.enabled")) {
                 pesapEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.enabled", pesapEnabledVal);
             }
+<<<<<<< HEAD
             final boolean pesapEnabled = pesapEnabledVal;
             if (pesapEnabled && needsPesap) {
                 runPesap(stepsList, stepLines, sourceFileVal, result);
             } else {
                 // Run local offline semantic linter as fallback
+=======
+            this.pesapEnabled = pesapEnabledVal && needsPesap;
+            this.currentStepsList = stepsList;
+
+            // Run local offline semantic linter independently (when enabled)
+            boolean linterEnabledVal = Neodymium.aiConfiguration().pesapLinterEnabled();
+            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.linter.enabled"))
+            {
+                linterEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.linter.enabled", linterEnabledVal);
+            }
+            if (linterEnabledVal)
+            {
+>>>>>>> ec7b7d5f (refactor(ai): introduce JIT pre-step PESAP and modular prompts)
                 final List<String> lintWarnings = StepLinter.lint(stepsList, stepLines, sourceFileVal);
                 if (!lintWarnings.isEmpty()) {
                     if (sourceFileVal != null) {
@@ -513,6 +568,7 @@ public class AiAgent {
             result.setEscalationCount(stats.getTotalEscalationCount() - startEscalation);
             result.setReplayCount(stats.getReplayCount() - startReplay);
             result.setDirectParseCount(stats.getDirectParseCount() - startDirectParse);
+            result.setPesapCallCount(stats.getPesapCallCount() - startPesapCalls);
 
             final Playbook playbook = Neodymium.getAiPlaybook();
             if (playbook != null) {
@@ -1354,243 +1410,138 @@ public class AiAgent {
         return actions;
     }
 
-    // AI-generated: Gemini 3.5 Flash
-    private void runPesap(final List<String> stepsList, final List<Integer> stepLines, final String sourceFileVal,
-            final AiExecutionResult result) {
-        if (stepsList.isEmpty()) {
-            return;
-        }
-
-        if (Boolean.getBoolean("neodymium.ai.offline"))
+    /**
+     * Runs a JIT pre-step PESAP call for the given step index.
+     * Uses a 1-previous / current / 2-next flow context window.
+     * Results are cached per step index so retries don't re-trigger the call.
+     *
+     * @param stepIndex   the 0-based step index
+     * @param testClass   the active test class for method scanning, or {@code null}
+     * @param stepDetails the step details to populate with PESAP results
+     * @return the parsed result, or {@code null} if the call failed
+     */
+    private PreStepPesapResult runPreStepPesap(final int stepIndex, final Class<?> testClass,
+            final StepDetails stepDetails)
+    {
+        // Return cached result if already computed for this step
+        final PreStepPesapResult cached = pesapCache.get(stepIndex);
+        if (cached != null)
         {
-            return;
+            return cached;
         }
 
-        boolean classifyEnabledVal = Neodymium.aiConfiguration().pesapClassifyEnabled();
-        if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.classify.enabled")) {
-            classifyEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.classify.enabled",
-                    classifyEnabledVal);
-        }
-        final boolean classifyEnabled = classifyEnabledVal;
-
-        boolean linterEnabledVal = Neodymium.aiConfiguration().pesapLinterEnabled();
-        if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.linter.enabled")) {
-            linterEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.linter.enabled", linterEnabledVal);
-        }
-        final boolean linterEnabled = linterEnabledVal;
-
-        if (!classifyEnabled && !linterEnabled) {
-            return;
+        if (Boolean.getBoolean("neodymium.ai.offline") || this.currentStepsList == null)
+        {
+            return null;
         }
 
-        if (sourceFileVal != null) {
-            LOG.info("🤖 Starting Pre-Execution Static Analysis Phase (PESAP) for {}...",
-                    new File(sourceFileVal).getName());
-        } else {
-            LOG.info("🤖 Starting Pre-Execution Static Analysis Phase (PESAP)...");
-        }
-
-        try {
-            final StringBuilder sb = new StringBuilder();
-            sb.append("## Test Steps\n");
-            for (int i = 0; i < stepsList.size(); i++) {
-                final String resolved = AiBrowser.resolveTestDataToPrompt(stepsList.get(i));
-                sb.append(i + 1).append(": ").append(stripAllTags(resolved)).append("\n");
+        try
+        {
+            // Build 1-previous / current / 2-next flow context
+            final StringBuilder flowContext = new StringBuilder();
+            if (stepIndex > 0)
+            {
+                final String prev = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex - 1));
+                flowContext.append("[PREVIOUS] Step ").append(stepIndex).append(": ").append(stripAllTags(prev)).append("\n");
             }
-            final String userPrompt = sb.toString();
-
-            pesapPredictions.clear();
-            for (int i = 0; i < stepsList.size(); i++) {
-                pesapPredictions.add(null);
+            final String current = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex));
+            flowContext.append("[CURRENT]  Step ").append(stepIndex + 1).append(": ").append(stripAllTags(current)).append("\n");
+            if (stepIndex + 1 < this.currentStepsList.size())
+            {
+                final String next1 = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex + 1));
+                flowContext.append("[NEXT]     Step ").append(stepIndex + 2).append(": ").append(stripAllTags(next1)).append("\n");
+            }
+            if (stepIndex + 2 < this.currentStepsList.size())
+            {
+                final String next2 = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex + 2));
+                flowContext.append("[NEXT]     Step ").append(stepIndex + 3).append(": ").append(stripAllTags(next2)).append("\n");
             }
 
-            // 1. Context Level Classification Phase
-            if (classifyEnabled) {
-                LOG.debug(
-                        "💬 [PESAP Classification] Sending prompt:\n\n=== SYSTEM PROMPT ===\n{}\n\n=== USER PROMPT ===\n{}",
-                        AiAgentPrompts.PESAP_CLASSIFY_PROMPT, userPrompt);
-
-                final long startTime = System.currentTimeMillis();
-                final String response = llmClient.chat(LlmMode.PESAP, AiAgentPrompts.PESAP_CLASSIFY_PROMPT, userPrompt);
-                final long duration = System.currentTimeMillis() - startTime;
-
-                LOG.debug("📊 [PESAP Classification] Call took {} ms", duration);
-                LOG.debug("💬 [PESAP Classification] Response:\n{}", response);
-
-                try {
-                    final JsonObject responseObj = JsonParser.parseString(response).getAsJsonObject();
-                    if (responseObj != null) {
-                        final JsonElement predictionsElement = responseObj.get("predictions");
-                        if (predictionsElement != null && predictionsElement.isJsonObject()) {
-                            final JsonObject predictionsObj = predictionsElement.getAsJsonObject();
-                            for (final Entry<String, JsonElement> entry : predictionsObj.entrySet()) {
-                                try {
-                                    final int stepIndex = Integer.parseInt(entry.getKey()) - 1;
-                                    if (stepIndex >= 0 && stepIndex < stepsList.size()) {
-                                        final String levelStr = entry.getValue().getAsString();
-                                        if (levelStr != null) {
-                                            try {
-                                                final ContextLevel level = ContextLevel
-                                                        .valueOf(levelStr.toUpperCase().trim());
-                                                pesapPredictions.set(stepIndex, level);
-
-                                                if (stepIndex < result.getSteps().size()) {
-                                                    result.getSteps().get(stepIndex)
-                                                            .setPesapPredictedContextLevel(level);
-                                                }
-
-                                                final Integer lineNum = (stepLines != null
-                                                        && stepIndex < stepLines.size()) ? stepLines.get(stepIndex)
-                                                                : null;
-                                                if (lineNum != null) {
-                                                    LOG.debug(
-                                                            "   🔮 Step {} (line {}) -> PESAP Predicted ContextLevel: {}",
-                                                            stepIndex + 1, lineNum, level);
-                                                } else {
-                                                    LOG.debug("   🔮 Step {} -> PESAP Predicted ContextLevel: {}",
-                                                            stepIndex + 1, level);
-                                                }
-                                            } catch (final Exception e) {
-                                                LOG.warn("   ⚠️ Invalid context level predicted by PESAP: {}",
-                                                        levelStr);
-                                            }
-                                        }
-                                    }
-                                } catch (final NumberFormatException e) {
-                                    LOG.warn("   ⚠️ Invalid step index in PESAP predictions: {}", entry.getKey());
-                                }
-                            }
-                        }
-                    }
-                } catch (final Exception e) {
-                    LOG.warn(
-                            "⚠️ PESAP classification JSON parsing failed (possibly due to LLM response truncation). Attempting regex recovery for partial predictions...");
-                    performRegexRecovery(response, stepsList, stepLines, result);
+            // Build available methods list
+            final StringBuilder methodsList = new StringBuilder();
+            final JavaMethodAction jma = findJavaMethodPlugin();
+            if (jma != null)
+            {
+                final Map<String, String> allMethods = jma.getAllAvailableMethods(testClass);
+                for (final Map.Entry<String, String> entry : allMethods.entrySet())
+                {
+                    methodsList.append("- ").append(entry.getValue()).append("\n");
                 }
             }
 
-            // 2. Semantic Linting Phase
-            if (linterEnabled) {
-                final String customRules = CustomRulesLoader
-                        .loadCustomRules(Neodymium.aiConfiguration().pesapCustomFile());
-                final String linterPrompt = AiAgentPrompts.getPesapLinterPrompt(customRules);
+            // Build the JIT PESAP prompt
+            final String systemPrompt = AiAgentPrompts.getPesapPreStepPrompt(methodsList.toString());
+            final String userPrompt = flowContext.toString();
 
-                LOG.debug("💬 [PESAP Linter] Sending prompt:\n\n=== SYSTEM PROMPT ===\n{}\n\n=== USER PROMPT ===\n{}",
-                        linterPrompt, userPrompt);
+            LOG.debug("💬 [Pre-Step PESAP] Step {} — sending prompt:\n\n=== SYSTEM ===\n{}\n\n=== USER ===\n{}",
+                    stepIndex + 1, systemPrompt, userPrompt);
 
-                final long startTime = System.currentTimeMillis();
-                final String response = llmClient.chat(LlmMode.PESAP, linterPrompt, userPrompt);
-                final long duration = System.currentTimeMillis() - startTime;
+            final long startTime = System.currentTimeMillis();
+            final String response = llmClient.chat(LlmMode.PESAP, systemPrompt, userPrompt);
+            final long duration = System.currentTimeMillis() - startTime;
 
-                LOG.debug("📊 [PESAP Linter] Call took {} ms", duration);
-                LOG.debug("💬 [PESAP Linter] Response:\n{}", response);
+            LOG.debug("📊 [Pre-Step PESAP] Step {} — call took {} ms", stepIndex + 1, duration);
+            LOG.debug("💬 [Pre-Step PESAP] Response:\n{}", response);
 
-                try {
-                    final JsonObject responseObj = JsonParser.parseString(response).getAsJsonObject();
-                    if (responseObj != null) {
-                        final JsonElement warningsElement = responseObj.get("warnings");
-                        if (warningsElement != null && warningsElement.isJsonObject()) {
-                            final List<String> linterWarnings = new ArrayList<>();
-                            final JsonObject warningsObj = warningsElement.getAsJsonObject();
-                            for (final Entry<String, JsonElement> entry : warningsObj.entrySet()) {
-                                try {
-                                    final int stepIndex = Integer.parseInt(entry.getKey()) - 1;
-                                    if (stepIndex >= 0 && stepIndex < stepsList.size()) {
-                                        final JsonElement val = entry.getValue();
-                                        if (val != null && val.isJsonArray()) {
-                                            final String step = stepsList.get(stepIndex);
-                                            final int stepNumber = stepIndex + 1;
-                                            final Integer currentLineNumber = (stepLines != null
-                                                    && stepIndex < stepLines.size()) ? stepLines.get(stepIndex) : null;
+            // Parse JSON response
+            final JsonObject responseObj = JsonParser.parseString(response).getAsJsonObject();
+            final String levelStr = responseObj.has("contextLevel")
+                    ? responseObj.get("contextLevel").getAsString() : null;
+            final ContextLevel level = levelStr != null
+                    ? ContextLevel.valueOf(levelStr.toUpperCase().trim())
+                    : getInitialContextLevel(current);
 
-                                            final String stepLabel;
-                                            if (currentLineNumber != null) {
-                                                stepLabel = "Step " + stepNumber + " (line " + currentLineNumber + ")";
-                                            } else {
-                                                stepLabel = "Step " + stepNumber;
-                                            }
-
-                                            for (final JsonElement warningElem : val.getAsJsonArray()) {
-                                                final String warningStr = warningElem.getAsString();
-                                                linterWarnings.add(
-                                                        String.format("%s: \"%s\" - %s", stepLabel, step, warningStr));
-                                                if (stepIndex < result.getSteps().size()) {
-                                                    result.getSteps().get(stepIndex).addPesapWarning(warningStr);
-                                                }
-                                            }
-                                        }
-                                    }
-                                } catch (final NumberFormatException e) {
-                                    LOG.warn("   ⚠️ Invalid step index in PESAP warnings: {}", entry.getKey());
-                                }
-                            }
-
-                            if (!linterWarnings.isEmpty()) {
-                                if (sourceFileVal != null) {
-                                    LOG.warn("⚠️ AI Instructions Semantic Linter Warnings in {}:",
-                                            new File(sourceFileVal).getName());
-                                } else {
-                                    LOG.warn("⚠️ AI Instructions Semantic Linter Warnings");
-                                }
-                                for (final String warning : linterWarnings) {
-                                    LOG.warn("    - {}", warning);
-                                }
-                            }
-                        }
+            final Set<String> methods = new HashSet<>();
+            if (responseObj.has("javaMethods") && responseObj.get("javaMethods").isJsonArray())
+            {
+                for (final JsonElement elem : responseObj.getAsJsonArray("javaMethods"))
+                {
+                    final String methodName = elem.getAsString();
+                    if (methodName != null && !methodName.isBlank())
+                    {
+                        methods.add(methodName.trim());
                     }
-                } catch (final Exception e) {
-                    LOG.warn("⚠️ PESAP linter JSON parsing failed (possibly due to LLM response truncation).");
                 }
             }
-        } catch (final Exception e) {
-            LOG.error("❌ PESAP execution failed", e);
+
+            final String direction = responseObj.has("direction")
+                    ? responseObj.get("direction").getAsString() : null;
+
+            final PreStepPesapResult result = new PreStepPesapResult(level, methods, direction);
+            pesapCache.put(stepIndex, result);
+
+            // Populate StepDetails
+            stepDetails.setPesapPredictedContextLevel(level);
+            if (direction != null)
+            {
+                stepDetails.setPesapDirection(direction);
+            }
+
+            return result;
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("⚠️ Pre-Step PESAP failed for step {} — falling back to defaults: {}", stepIndex + 1, e.getMessage());
+            return null;
         }
     }
 
-    // AI-generated: Gemini 3.5 Flash
-    private void performRegexRecovery(final String response, final List<String> stepsList,
-            final List<Integer> stepLines, final AiExecutionResult result) {
-        final Pattern regexPattern = Pattern
-                .compile("\"(\\d+)\"\\s*:\\s*\"(?i)(AXTREE|LEAN|STANDARD|VISUAL_LEAN|VISUAL)\"");
-        final Matcher matcher = regexPattern.matcher(response);
-        int recoveredCount = 0;
-        while (matcher.find()) {
-            try {
-                final int stepIndex = Integer.parseInt(matcher.group(1)) - 1;
-                if (stepIndex >= 0 && stepIndex < stepsList.size()) {
-                    final String levelStr = matcher.group(2);
-                    final ContextLevel level = ContextLevel.valueOf(levelStr.toUpperCase().trim());
-                    pesapPredictions.set(stepIndex, level);
-
-                    if (stepIndex < result.getSteps().size()) {
-                        result.getSteps().get(stepIndex).setPesapPredictedContextLevel(level);
-                    }
-
-                    recoveredCount++;
-
-                    final Integer lineNum = (stepLines != null && stepIndex < stepLines.size())
-                            ? stepLines.get(stepIndex)
-                            : null;
-                    if (lineNum != null) {
-                        LOG.debug("   🔮 [Recovered] Step {} (line {}) -> PESAP Predicted ContextLevel: {}",
-                                stepIndex + 1, lineNum, level);
-                    } else {
-                        LOG.debug("   🔮 [Recovered] Step {} -> PESAP Predicted ContextLevel: {}", stepIndex + 1,
-                                level);
-                    }
-                }
-            } catch (final Exception ex) {
-                // Ignore any invalid matches during recovery
+    /**
+     * Finds the registered {@link JavaMethodAction} plugin, if present.
+     *
+     * @return the plugin instance, or {@code null} if not registered
+     */
+    private JavaMethodAction findJavaMethodPlugin()
+    {
+        for (final AiActionPlugin plugin : ActionRegistry.getAllPlugins())
+        {
+            if (plugin instanceof JavaMethodAction)
+            {
+                return (JavaMethodAction) plugin;
             }
         }
-
-        if (recoveredCount > 0) {
-            LOG.info("   ✅ Successfully recovered {} PESAP step predictions via regex scanner.", recoveredCount);
-        } else {
-            LOG.warn("   ❌ Failed to recover any predictions via regex scanner. Raw response was:\n{}", response);
-        }
+        return null;
     }
-
     /**
      * Determines the initial context level for a given instruction.
      * Case-insensitively checks for "(visual)" to start at VISUAL context level,
@@ -1647,15 +1598,37 @@ public class AiAgent {
         boolean lastWasNoActions = false;
         boolean isRecoveryAttempt = lastError != null;
 
+        // Resolve test class for method targeting
+        final Object testInstance = actionExecutor.getTestInstance();
+        final Class<?> testClass = testInstance != null ? testInstance.getClass() : null;
+
+        // JIT Pre-Step PESAP: run once on initial attempt only, cache result
+        PreStepPesapResult pesapResult = null;
+        Set<String> targetedMethods = null;
+        boolean includeJavaMethod = true;
+
         ContextLevel contextLevel = playbookStep.getHealedContextLevel();
-        if (contextLevel == null) {
-            if (stepIndex >= 0 && stepIndex < pesapPredictions.size() && pesapPredictions.get(stepIndex) != null) {
-                contextLevel = pesapPredictions.get(stepIndex);
-                LOG.info("    🔮 Using PESAP predicted starting ContextLevel: {}", contextLevel);
-            } else {
+
+        if (contextLevel == null)
+        {
+            if (this.pesapEnabled && !isRecoveryAttempt)
+            {
+                pesapResult = runPreStepPesap(stepIndex, testClass, stepDetails);
+                if (pesapResult != null)
+                {
+                    contextLevel = pesapResult.contextLevel();
+                    targetedMethods = pesapResult.javaMethods();
+                    includeJavaMethod = targetedMethods != null && !targetedMethods.isEmpty();
+                    LOG.info("    🔮 JIT PESAP predicted ContextLevel: {}, methods: {}", contextLevel, targetedMethods);
+                }
+            }
+
+            if (contextLevel == null)
+            {
                 contextLevel = getInitialContextLevel(instruction);
             }
         }
+
         while (true) {
             final String attemptLabel = lastWasNoActions ? "Retry (No Actions) " + noActionsCount
                     : (lastError != null ? "Retry (Error) " + errorCount : "Initial Attempt");
@@ -1706,10 +1679,13 @@ public class AiAgent {
                     userPrompt = AiAgentPrompts.buildUserPrompt(instruction, sutContext, domContext, historyBlock);
                 }
 
-                // 4. Send to LLM with context-level-aware system prompt
+                // 4. Send to LLM with context-level-aware system prompt (with targeted methods)
                 executionLog.logPrompt(userPrompt);
 
-                final String systemPrompt = AiAgentPrompts.getSystemPrompt(contextLevel);
+                // On recovery/escalation: override to include all methods (first PESAP was insufficient)
+                final boolean useJavaMethod = isRecoveryAttempt ? true : includeJavaMethod;
+                final Set<String> useMethods = isRecoveryAttempt ? null : targetedMethods;
+                final String systemPrompt = AiAgentPrompts.getSystemPrompt(contextLevel, useJavaMethod, testClass, useMethods);
 
                 LOG.debug("   💬 Sending prompt to LLM... [context: {}]", contextLevel);
                 llmClient.getAiStats().recordContextLevel(contextLevel);
