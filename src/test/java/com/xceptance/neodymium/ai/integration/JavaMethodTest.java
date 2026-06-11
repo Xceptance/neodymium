@@ -167,6 +167,32 @@ public class JavaMethodTest extends BaseAiTest
     }
 
     /**
+     * Compares Java method indirect discovery execution with and without PESAP enabled, asserting equivalent results.
+     */
+    @NeodymiumTest
+    public final void testJavaMethodIndirectDiscovery_PesapComparison()
+    {
+        final String steps = """
+                Open ${javaMethod.test.url}
+                Verify using the java method assertPriceGreaterThanZero that '14.96 €' is greater than zero
+            """;
+
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        final StepDetails stepWithPesap = rWithPesap.getSteps().get(1);
+        assertFalse(stepWithPesap.isDirectParse());
+
+        this.resetBrowser();
+
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+        final StepDetails stepWithoutPesap = rWithoutPesap.getSteps().get(1);
+        assertFalse(stepWithoutPesap.isDirectParse());
+
+        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
+        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
+        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
+    }
+
+    /**
      * Test calling a public instance method defined directly in the active test class.
      */
     @NeodymiumTest

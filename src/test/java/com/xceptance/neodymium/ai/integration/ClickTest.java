@@ -112,4 +112,28 @@ public class ClickTest extends BaseAiTest
 
         assertEquals("Order Submitted!", Selenide.$("#result").text());
     }
+
+    /**
+     * Compares click execution with and without PESAP enabled, asserting equivalent results.
+     */
+    @NeodymiumTest
+    public final void testClick_PesapComparison()
+    {
+        final String steps = """
+                Open ${click.test.url}
+                Click the 'Submit Order' button (hint: #btn-submit)
+            """;
+
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        assertEquals("Order Submitted!", Selenide.$("#result").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+        assertEquals("Order Submitted!", Selenide.$("#result").text());
+
+        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
+        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
+        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
+    }
 }

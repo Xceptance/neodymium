@@ -123,4 +123,30 @@ public class HoverTest extends BaseAiTest
 
         assertEquals("Dropdown Item Clicked!", Selenide.$("#result").text());
     }
+
+    /**
+     * Compares hover execution with and without PESAP enabled, asserting equivalent results.
+     */
+    @NeodymiumTest
+    public final void testHover_PesapComparison()
+    {
+        final String steps = """
+                Open ${hover.test.url}
+                Hover over the button 'Hover Me'
+                Click the 'Sub Item 1' link
+            """;
+
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        assertEquals("Dropdown Item Clicked!", Selenide.$("#result").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+        assertEquals("Dropdown Item Clicked!", Selenide.$("#result").text());
+
+        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
+        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
+        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
+        assertEquals(rWithPesap.getActions().get(2).getType(), rWithoutPesap.getActions().get(2).getType());
+    }
 }

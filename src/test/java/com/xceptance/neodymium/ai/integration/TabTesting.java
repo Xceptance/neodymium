@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
@@ -96,6 +97,35 @@ public class TabTesting extends BaseAiTest
             .hasLlmCalls(0)
             .hasNoEscalations()
             .hasActionsCount(5);
+    }
+
+    /**
+     * Compares tab navigation with and without PESAP enabled, asserting equivalent actions.
+     */
+    @NeodymiumTest
+    public final void test_TabToAnElement_PesapComparison()
+    {
+        final String steps = """
+                Open ${posters.storefront.url}
+                Press the TAB key
+                Press the TAB key
+                Press the TAB key
+                Verify that the search box has focus
+                """;
+
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        final String targetWithPesap = rWithPesap.getActions().get(4).getTarget();
+        assertTrue(targetWithPesap.contains("search-box") || targetWithPesap.contains("xc_"));
+
+        this.resetBrowser();
+
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+        final String targetWithoutPesap = rWithoutPesap.getActions().get(4).getTarget();
+        assertTrue(targetWithoutPesap.contains("search-box") || targetWithoutPesap.contains("xc_"));
+
+        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
+        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
+        assertEquals(rWithPesap.getActions().get(4).getType(), rWithoutPesap.getActions().get(4).getType());
     }
 
     /**

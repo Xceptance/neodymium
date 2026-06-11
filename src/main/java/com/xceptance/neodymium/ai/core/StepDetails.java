@@ -39,6 +39,7 @@ public final class StepDetails
     private String failureReason;
     private ContextLevel pesapPredictedContextLevel;
     private final List<String> pesapWarnings;
+    private String pesapDirection;
     private boolean replayed;
     private boolean directParse;
 
@@ -114,6 +115,26 @@ public final class StepDetails
     public final void addPesapWarning(final String warning)
     {
         this.pesapWarnings.add(warning);
+    }
+
+    /**
+     * Returns the JIT PESAP direction guidance for this step.
+     *
+     * @return the direction hint, or {@code null} if not set
+     */
+    public final String getPesapDirection()
+    {
+        return this.pesapDirection;
+    }
+
+    /**
+     * Sets the JIT PESAP direction guidance for this step.
+     *
+     * @param pesapDirection the direction hint
+     */
+    public final void setPesapDirection(final String pesapDirection)
+    {
+        this.pesapDirection = pesapDirection;
     }
 
     /**

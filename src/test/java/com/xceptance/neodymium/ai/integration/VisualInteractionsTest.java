@@ -77,6 +77,29 @@ public class VisualInteractionsTest extends BaseAiTest
     }
 
     /**
+     * Compares visual recognition with and without PESAP enabled, asserting equivalent success.
+     */
+    @NeodymiumTest
+    public final void testSvgIconButtons_PesapComparison()
+    {
+        final String pageUrl = this.baseHttpsUrl + "/svg-icons.html";
+        final String steps = String.format("""
+                Open %s
+                Click the trash icon button (visual).
+                """, pageUrl);
+
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        assertTrue(rWithPesap.isSuccess());
+        Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
+
+        this.resetBrowser();
+
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+        assertTrue(rWithoutPesap.isSuccess());
+        Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
+    }
+
+    /**
      * Tests clicking on specific pixel coordinate offsets inside a single canvas.
      */
     @NeodymiumTest

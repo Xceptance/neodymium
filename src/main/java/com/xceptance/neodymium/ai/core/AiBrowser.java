@@ -323,7 +323,7 @@ public class AiBrowser implements AutoCloseable {
     @Override
     public void close() {
         // Log cumulative token usage before shutdown
-        if (aiStats.getCallCount() > 0) {
+        if (aiStats.getOverallCallCount() > 0) {
             aiStats.logSummary();
         }
     }

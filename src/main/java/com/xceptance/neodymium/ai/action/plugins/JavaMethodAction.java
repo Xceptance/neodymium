@@ -21,7 +21,10 @@ package com.xceptance.neodymium.ai.action.plugins;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -214,6 +217,153 @@ public class JavaMethodAction implements AiActionPlugin
             case "verifyCalculation" -> "Verifies that the mathematical equation is correct within an allowed tolerance of 0.02 (e.g. '0,90 € = (14,96 € + 0,00 €) * 6,00%').";
             default -> "";
         };
+    }
+
+    /**
+     * Compiles a combined map of all available Java methods (from utility classes and optionally
+     * the test class) with their signatures and descriptions. Used by JIT PESAP to present
+     * the full method catalog for analysis.
+     *
+     * @param testClass the active test class to scan for instance methods, or {@code null} to skip
+     * @return a map of method name to formatted signature+description string
+     */
+    public final Map<String, String> getAllAvailableMethods(final Class<?> testClass)
+    {
+        final Map<String, String> methods = new LinkedHashMap<>();
+
+        // Scan utility classes for public static methods
+        final List<String> utilityClassNames = Neodymium.aiConfiguration().aiJavaMethodUtilityClasses();
+        if (utilityClassNames != null)
+        {
+            for (final String className : utilityClassNames)
+            {
+                final String trimmed = className.trim();
+                if (trimmed.isEmpty())
+                {
+                    continue;
+                }
+
+                try
+                {
+                    final Class<?> clazz = Class.forName(trimmed);
+                    collectMethods(clazz, true, methods);
+                }
+                catch (final Exception e)
+                {
+                    // Ignore classpath load issues during prompt construction
+                }
+            }
+        }
+
+        // Scan test class for public instance methods (not inherited from Object)
+        if (testClass != null)
+        {
+            collectMethods(testClass, false, methods);
+        }
+
+        return methods;
+    }
+
+    /**
+     * Collects eligible methods from a class into the provided map.
+     * For utility classes, only {@code public static} methods are collected.
+     * For test classes, only {@code public} non-static methods declared on the class itself
+     * (not inherited from {@code Object}) are collected.
+     *
+     * @param clazz       the class to scan
+     * @param staticOnly  if {@code true}, only collect static methods
+     * @param methods     the map to populate with method name → description
+     */
+    private void collectMethods(final Class<?> clazz, final boolean staticOnly,
+            final Map<String, String> methods)
+    {
+        final Method[] declaredMethods = staticOnly ? clazz.getMethods() : clazz.getDeclaredMethods();
+        for (final Method method : declaredMethods)
+        {
+            final int modifiers = method.getModifiers();
+            if (!Modifier.isPublic(modifiers))
+            {
+                continue;
+            }
+            if (staticOnly && !Modifier.isStatic(modifiers))
+            {
+                continue;
+            }
+            if (!staticOnly && Modifier.isStatic(modifiers))
+            {
+                continue;
+            }
+
+            // Skip Object inherited methods for test classes
+            if (!staticOnly && method.getDeclaringClass() == Object.class)
+            {
+                continue;
+            }
+
+            final Class<?>[] params = method.getParameterTypes();
+            if (params.length == 0 || (params.length == 1 && params[0] == String.class))
+            {
+                final String paramStr = params.length == 0 ? "" : "String";
+                final String desc = getMethodExplanation(method.getName());
+                final String formatted = method.getName() + "(" + paramStr + ")"
+                        + (desc.isEmpty() ? "" : ": " + desc);
+                methods.putIfAbsent(method.getName(), formatted);
+            }
+        }
+    }
+
+    /**
+     * Constructs prompt instructions listing only the targeted methods predicted by JIT PESAP.
+     * If {@code targetedMethods} is {@code null} or empty, falls back to listing all methods
+     * (legacy behavior).
+     *
+     * @param testClass       the active test class to scan for instance methods, or {@code null}
+     * @param targetedMethods the set of method names to include, or {@code null}/empty for all
+     * @return the formatted prompt instructions string
+     */
+    public final String getPromptInstructions(final Class<?> testClass, final Set<String> targetedMethods)
+    {
+        final StringBuilder instructions = new StringBuilder();
+        instructions.append("JAVA_METHOD: Invoke a Java method on the current test instance class via reflection. ")
+                .append("target = the simple method name (no class name or dots). ")
+                .append("value = the single String argument passed to the method.");
+
+        final Map<String, String> allMethods = getAllAvailableMethods(testClass);
+
+        if (allMethods.isEmpty())
+        {
+            return instructions.toString();
+        }
+
+        // Filter to targeted methods if provided
+        final Map<String, String> methodsToList;
+        if (targetedMethods != null && !targetedMethods.isEmpty())
+        {
+            methodsToList = new LinkedHashMap<>();
+            for (final String name : targetedMethods)
+            {
+                final String desc = allMethods.get(name);
+                if (desc != null)
+                {
+                    methodsToList.put(name, desc);
+                }
+            }
+        }
+        else
+        {
+            methodsToList = allMethods;
+        }
+
+        if (!methodsToList.isEmpty())
+        {
+            instructions.append("\n  Available methods for this step:");
+            for (final Map.Entry<String, String> entry : methodsToList.entrySet())
+            {
+                instructions.append("\n    - ").append(entry.getValue());
+            }
+        }
+
+        return instructions.toString();
     }
 
     @Override

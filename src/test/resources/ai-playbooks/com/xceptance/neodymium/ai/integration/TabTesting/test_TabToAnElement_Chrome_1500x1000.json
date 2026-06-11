@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Press the TAB key",
-      "reasoning": "The instruction is to press the TAB key, which is directly mapped to the KEY_PRESS action with \u0027TAB\u0027 as the value.",
+      "reasoning": "The instruction is to press the TAB key, which directly translates to a KEY_PRESS action with \u0027TAB\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -58,7 +58,7 @@
     },
     {
       "promptLine": "Press the TAB key",
-      "reasoning": "The instruction is to press the TAB key, which is directly mapped to the KEY_PRESS action with \u0027TAB\u0027 as the value.",
+      "reasoning": "The instruction is to press the TAB key, which directly translates to a KEY_PRESS action with \u0027TAB\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",

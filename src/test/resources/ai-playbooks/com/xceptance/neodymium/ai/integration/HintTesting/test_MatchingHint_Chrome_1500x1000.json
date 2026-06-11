@@ -20,12 +20,12 @@
     },
     {
       "promptLine": "Click the search button (hint: #search-button)",
-      "reasoning": "Clicked the search button as instructed.",
+      "reasoning": "Clicked the search button.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#search-button",
-          "description": "Click search button",
+          "description": "Click the search button",
           "elementDetails": "search button",
           "elementContext": {
             "classes": "btn-search",

@@ -178,5 +178,23 @@ public class NavigateTest extends BaseAiTest
         assertEquals("Posters Art Store", Selenide.title());
     }
 
-}
+    /**
+     * Compares navigation execution in German with and without PESAP enabled, asserting equivalent results.
+     */
+    @NeodymiumTest
+    public final void test_GermanOpen_PesapComparison()
+    {
+        final String steps = "Gehe zu ${posters.storefront.url}";
 
+        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        assertEquals("Posters Art Store", Selenide.title());
+
+        this.resetBrowser();
+
+        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+        assertEquals("Posters Art Store", Selenide.title());
+
+        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
+        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
+    }
+}
