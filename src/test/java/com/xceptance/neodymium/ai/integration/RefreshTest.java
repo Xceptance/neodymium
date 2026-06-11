@@ -71,6 +71,7 @@ public class RefreshTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
@@ -85,6 +86,7 @@ public class RefreshTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
@@ -109,6 +111,7 @@ public class RefreshTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -123,6 +126,7 @@ public class RefreshTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
@@ -148,6 +152,9 @@ public class RefreshTest extends BaseAiTest
 
         final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
         assertEquals("Posters Art Store", Selenide.title());
+
+        assertThat(rWithPesap).hasPesapCalls(1);
+        assertThat(rWithoutPesap).hasNoPesapCalls();
 
         assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
         assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());

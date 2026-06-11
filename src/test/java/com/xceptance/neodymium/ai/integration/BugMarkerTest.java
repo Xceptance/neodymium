@@ -88,6 +88,7 @@ public class BugMarkerTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasEscalations(1)
             .hasDirectParses(1)
             .hasReplays(0)
@@ -102,6 +103,7 @@ public class BugMarkerTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
@@ -129,6 +131,9 @@ public class BugMarkerTest extends BaseAiTest
         final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
         this.resetBrowser();
         final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+
+        assertThat(rWithPesap).hasPesapCalls(1);
+        assertThat(rWithoutPesap).hasNoPesapCalls();
 
         assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
         assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
@@ -244,6 +249,7 @@ public class BugMarkerTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -283,6 +289,7 @@ public class BugMarkerTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)

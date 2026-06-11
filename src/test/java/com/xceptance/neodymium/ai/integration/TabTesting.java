@@ -71,6 +71,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(4)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
 
@@ -95,6 +96,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
     }
@@ -144,6 +146,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(4)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
 
@@ -170,6 +173,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
     }
@@ -188,6 +192,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
 
@@ -217,6 +222,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(4)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(8);
 
@@ -246,6 +252,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(8);
     }

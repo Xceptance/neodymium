@@ -74,6 +74,7 @@ public class KeyboardNavigationTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(7)
+            .hasNoPesapCalls()
             .hasEscalations(1)
             .hasActionsCount(9);
 
@@ -104,6 +105,7 @@ public class KeyboardNavigationTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(9);
     }

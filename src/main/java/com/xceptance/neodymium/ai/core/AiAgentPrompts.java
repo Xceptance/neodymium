@@ -201,19 +201,15 @@ public final class AiAgentPrompts
     }
 
     /**
-     * Loads the JIT pre-step PESAP prompt template and injects the available methods list.
+     * Loads the JIT pre-step PESAP prompt template.
      * The returned prompt is ready to be sent as a system prompt with the flow context
      * injected as the user prompt.
      *
-     * @param availableMethods formatted list of available Java methods, or empty string if none
      * @return the fully prepared pre-step PESAP system prompt
      */
-    public static String getPesapPreStepPrompt(final String availableMethods)
+    public static String getPesapPreStepPrompt()
     {
-        final String template = getPrompt("pesap-pre-step-prompt.md");
-        final String methods = (availableMethods == null || availableMethods.trim().isEmpty())
-                ? "None" : availableMethods;
-        return template.replace("{availableMethods}", methods);
+        return getPrompt("pesap-pre-step-prompt.md");
     }
 
     /**

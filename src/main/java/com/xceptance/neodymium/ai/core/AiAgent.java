@@ -22,10 +22,8 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -58,10 +56,7 @@ import com.xceptance.neodymium.ai.util.CustomRulesLoader;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import io.qameta.allure.Allure;
 
@@ -130,17 +125,14 @@ public class AiAgent {
             TIMEOUT_TAG_PATTERN);
 
     /**
-     * Cache for JIT pre-step PESAP results, keyed by step index.
-     * Results are cached per step so retries/escalations don't re-run the JIT call.
-     */
-    private final Map<Integer, PreStepPesapResult> pesapCache = new HashMap<>();
-
-    /**
      * Holds the result of a JIT pre-step PESAP analysis for a single step.
      */
     private record PreStepPesapResult(
         ContextLevel contextLevel,
-        Set<String> javaMethods,
+        String stepType,
+        String expectedTargetTagName,
+        boolean pageNavigation,
+        boolean requiresJavaMethods,
         String direction
     ) {}
 
@@ -293,17 +285,13 @@ public class AiAgent {
             }
             Neodymium.initializePlaybook();
             final Playbook playbook = Neodymium.getAiPlaybook();
-<<<<<<< HEAD
-            boolean needsPesap = false;
-            if (playbook != null) {
-                if (playbook.isRecording()) {
-                    needsPesap = true;
-                } else {
-                    // In replay mode, do not perform PESAP; fall back to defaults and escalations
-                    needsPesap = false;
+            if (playbook != null && playbook.getSteps() != null)
+            {
+                for (final PlaybookStep step : playbook.getSteps())
+                {
+                    step.setFailure(null);
                 }
-            } else {
-=======
+            }
 
             // Determine if JIT per-step PESAP should run (only during recording, not replay)
             final boolean needsPesap;
@@ -313,22 +301,15 @@ public class AiAgent {
             }
             else
             {
->>>>>>> ec7b7d5f (refactor(ai): introduce JIT pre-step PESAP and modular prompts)
                 needsPesap = true;
             }
 
-            this.pesapCache.clear();
             boolean pesapEnabledVal = Neodymium.aiConfiguration().pesapEnabled();
-            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.enabled")) {
+            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.enabled"))
+            {
                 pesapEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.enabled", pesapEnabledVal);
             }
-<<<<<<< HEAD
-            final boolean pesapEnabled = pesapEnabledVal;
-            if (pesapEnabled && needsPesap) {
-                runPesap(stepsList, stepLines, sourceFileVal, result);
-            } else {
-                // Run local offline semantic linter as fallback
-=======
+
             this.pesapEnabled = pesapEnabledVal && needsPesap;
             this.currentStepsList = stepsList;
 
@@ -340,7 +321,6 @@ public class AiAgent {
             }
             if (linterEnabledVal)
             {
->>>>>>> ec7b7d5f (refactor(ai): introduce JIT pre-step PESAP and modular prompts)
                 final List<String> lintWarnings = StepLinter.lint(stepsList, stepLines, sourceFileVal);
                 if (!lintWarnings.isEmpty()) {
                     if (sourceFileVal != null) {
@@ -1423,13 +1403,6 @@ public class AiAgent {
     private PreStepPesapResult runPreStepPesap(final int stepIndex, final Class<?> testClass,
             final StepDetails stepDetails)
     {
-        // Return cached result if already computed for this step
-        final PreStepPesapResult cached = pesapCache.get(stepIndex);
-        if (cached != null)
-        {
-            return cached;
-        }
-
         if (Boolean.getBoolean("neodymium.ai.offline") || this.currentStepsList == null)
         {
             return null;
@@ -1457,24 +1430,11 @@ public class AiAgent {
                 flowContext.append("[NEXT]     Step ").append(stepIndex + 3).append(": ").append(stripAllTags(next2)).append("\n");
             }
 
-            // Build available methods list
-            final StringBuilder methodsList = new StringBuilder();
-            final JavaMethodAction jma = findJavaMethodPlugin();
-            if (jma != null)
-            {
-                final Map<String, String> allMethods = jma.getAllAvailableMethods(testClass);
-                for (final Map.Entry<String, String> entry : allMethods.entrySet())
-                {
-                    methodsList.append("- ").append(entry.getValue()).append("\n");
-                }
-            }
-
             // Build the JIT PESAP prompt
-            final String systemPrompt = AiAgentPrompts.getPesapPreStepPrompt(methodsList.toString());
-            final String userPrompt = flowContext.toString();
+            final String systemPrompt = AiAgentPrompts.getPesapPreStepPrompt();
+            final String userPrompt = "## Flow Context\n" + flowContext.toString();
 
-            LOG.debug("💬 [Pre-Step PESAP] Step {} — sending prompt:\n\n=== SYSTEM ===\n{}\n\n=== USER ===\n{}",
-                    stepIndex + 1, systemPrompt, userPrompt);
+            LOG.debug("💬 [Pre-Step PESAP] Step {} — running analysis", stepIndex + 1);
 
             final long startTime = System.currentTimeMillis();
             final String response = llmClient.chat(LlmMode.PESAP, systemPrompt, userPrompt);
@@ -1491,27 +1451,37 @@ public class AiAgent {
                     ? ContextLevel.valueOf(levelStr.toUpperCase().trim())
                     : getInitialContextLevel(current);
 
-            final Set<String> methods = new HashSet<>();
-            if (responseObj.has("javaMethods") && responseObj.get("javaMethods").isJsonArray())
-            {
-                for (final JsonElement elem : responseObj.getAsJsonArray("javaMethods"))
-                {
-                    final String methodName = elem.getAsString();
-                    if (methodName != null && !methodName.isBlank())
-                    {
-                        methods.add(methodName.trim());
-                    }
-                }
-            }
+            final String stepType = responseObj.has("stepType")
+                    ? responseObj.get("stepType").getAsString() : null;
+
+            final String expectedTargetTagName = responseObj.has("expectedTargetTagName")
+                    ? responseObj.get("expectedTargetTagName").getAsString() : null;
+
+            final boolean pageNavigation = responseObj.has("pageNavigation")
+                    && responseObj.get("pageNavigation").getAsBoolean();
+
+            final boolean requiresJavaMethods = responseObj.has("requiresJavaMethods")
+                    && responseObj.get("requiresJavaMethods").getAsBoolean();
 
             final String direction = responseObj.has("direction")
                     ? responseObj.get("direction").getAsString() : null;
 
-            final PreStepPesapResult result = new PreStepPesapResult(level, methods, direction);
-            pesapCache.put(stepIndex, result);
+            final PreStepPesapResult result = new PreStepPesapResult(
+                level, stepType, expectedTargetTagName, pageNavigation, requiresJavaMethods, direction
+            );
 
             // Populate StepDetails
             stepDetails.setPesapPredictedContextLevel(level);
+            if (stepType != null)
+            {
+                stepDetails.setPesapStepType(stepType);
+            }
+            if (expectedTargetTagName != null)
+            {
+                stepDetails.setPesapExpectedTargetTagName(expectedTargetTagName);
+            }
+            stepDetails.setPesapPageNavigation(pageNavigation);
+            stepDetails.setPesapRequiresJavaMethods(requiresJavaMethods);
             if (direction != null)
             {
                 stepDetails.setPesapDirection(direction);
@@ -1611,21 +1581,29 @@ public class AiAgent {
 
         if (contextLevel == null)
         {
-            if (this.pesapEnabled && !isRecoveryAttempt)
+            final ContextLevel baseLevel = getInitialContextLevel(instruction);
+            boolean classifyEnabledVal = Neodymium.aiConfiguration().pesapClassifyEnabled();
+            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.classify.enabled"))
+            {
+                classifyEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.classify.enabled", classifyEnabledVal);
+            }
+            final boolean classifyEnabled = classifyEnabledVal;
+
+            if (this.pesapEnabled && classifyEnabled && !isRecoveryAttempt && baseLevel == ContextLevel.AXTREE)
             {
                 pesapResult = runPreStepPesap(stepIndex, testClass, stepDetails);
                 if (pesapResult != null)
                 {
                     contextLevel = pesapResult.contextLevel();
-                    targetedMethods = pesapResult.javaMethods();
-                    includeJavaMethod = targetedMethods != null && !targetedMethods.isEmpty();
-                    LOG.info("    🔮 JIT PESAP predicted ContextLevel: {}, methods: {}", contextLevel, targetedMethods);
+                    includeJavaMethod = pesapResult.requiresJavaMethods();
+                    targetedMethods = null;
+                    LOG.info("    🔮 JIT PESAP predicted ContextLevel: {}, requiresJavaMethods: {}", contextLevel, includeJavaMethod);
                 }
             }
 
             if (contextLevel == null)
             {
-                contextLevel = getInitialContextLevel(instruction);
+                contextLevel = baseLevel;
             }
         }
 

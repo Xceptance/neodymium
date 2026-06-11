@@ -170,10 +170,7 @@ public final class PlaybookStep
      */
     public void setFailure(final ActionExecutionException e)
     {
-        if (e != null)
-        {
-            this.lastFailure = e.getMessage();
-        }
+        this.lastFailure = (e != null) ? e.getMessage() : null;
     }
     
     /**

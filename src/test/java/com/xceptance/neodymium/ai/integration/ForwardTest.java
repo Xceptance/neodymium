@@ -76,6 +76,7 @@ public class ForwardTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(4)
             .hasReplays(0)
@@ -110,6 +111,7 @@ public class ForwardTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(4)
@@ -155,6 +157,7 @@ public class ForwardTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasPesapCalls(2)
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
@@ -189,6 +192,7 @@ public class ForwardTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(4)

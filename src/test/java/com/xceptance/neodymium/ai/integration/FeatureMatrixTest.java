@@ -23,6 +23,8 @@ import com.xceptance.neodymium.ai.BaseAiTest;
 
 import static com.codeborne.selenide.Selenide.open;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
+import com.xceptance.neodymium.ai.core.AiExecutionResult;
 
 import java.util.List;
 
@@ -116,7 +118,7 @@ public final class FeatureMatrixTest extends BaseAiTest
     {
         final long startTime = System.currentTimeMillis();
 
-        assertAiExecution(() ->
+        final Runnable steps = () ->
         {
             // Open secure HTTPS forms sub-application (Chrome ignores cert warning via args)
             open(httpsFormsUrl);
@@ -126,7 +128,18 @@ public final class FeatureMatrixTest extends BaseAiTest
             Neodymium.ai().execute("Type '${userEmail}' into the 'Email Address' field.");
             Neodymium.ai().execute("Click the 'Create Account' button.");
             Neodymium.ai().execute("Verify that the success indicator 'Account Registered!' is visible.");
-        });
+        };
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        assertThat(r1)
+            .hasPesapCalls(4)
+            .hasNoEscalations();
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertThat(r2)
+            .hasNoPesapCalls();
 
         // Measure execution latency
         final long elapsed = System.currentTimeMillis() - startTime;
@@ -151,13 +164,24 @@ public final class FeatureMatrixTest extends BaseAiTest
     @DataSet(id = "ShopSetup")
     public void testImageChecksWithAI()
     {
-        assertAiExecution(() ->
+        final Runnable steps = () ->
         {
             open(httpShopUrl);
 
             // Direct the visual linter to audit raw artwork characteristics
             Neodymium.ai().execute("Assert that the 'Aura Neon Gradient Poster' card displays an image showcasing deep ultraviolet and cyan shades.");
-        });
+        };
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        assertThat(r1)
+            .hasPesapCalls(1)
+            .hasNoEscalations();
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertThat(r2)
+            .hasNoPesapCalls();
     }
 
     /**
@@ -173,6 +197,8 @@ public final class FeatureMatrixTest extends BaseAiTest
 
         // Stage 1: Live visual check (generates local dHash baseline cache)
         Neodymium.ai().execute("Observe page visual consistency (glance)");
+        final AiExecutionResult r1 = Neodymium.getLastAiExecutionResult();
+        assertThat(r1).hasPesapCalls(1);
 
         final Playbook playbook = Neodymium.getAiPlaybook();
         if (playbook != null)
@@ -185,6 +211,8 @@ public final class FeatureMatrixTest extends BaseAiTest
 
         // Stage 2: Replay the identical step (succeeds instantly offline via cache)
         Neodymium.ai().execute("Observe page visual consistency (glance)");
+        final AiExecutionResult r2 = Neodymium.getLastAiExecutionResult();
+        assertThat(r2).hasNoPesapCalls();
 
         final long durationUs = (System.nanoTime() - replayStart) / 1000;
         assertTrue(durationUs < 1000000, "Offline cached replay check exceeded time boundary: " + durationUs + " us");

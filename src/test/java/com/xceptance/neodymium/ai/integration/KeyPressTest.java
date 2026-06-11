@@ -79,6 +79,7 @@ public class KeyPressTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(5)
+            .hasPesapCalls(3)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -123,6 +124,7 @@ public class KeyPressTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(6)
@@ -179,6 +181,7 @@ public class KeyPressTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(4)
+            .hasPesapCalls(3)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -192,6 +195,7 @@ public class KeyPressTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(5)
@@ -218,6 +222,7 @@ public class KeyPressTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(4)
+            .hasPesapCalls(3)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -231,6 +236,7 @@ public class KeyPressTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(5)
