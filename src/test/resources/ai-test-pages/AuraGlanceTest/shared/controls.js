@@ -1,4 +1,16 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Determine if the current SUT page needs the controls drawer
+    const urlParams = new URLSearchParams(window.location.search);
+    const forceControls = urlParams.get('controls') === 'true' || urlParams.get('anomaly') === 'true';
+    const path = window.location.pathname;
+    
+    // Explicit pages/paths that require anomaly control capabilities
+    const isAnomalyPage = path.includes('/a11y/') || path.includes('/dashboard/') || path.includes('/shop/forms.html');
+
+    if (!isAnomalyPage && !forceControls) {
+        return;
+    }
+
     // 1. Build and Inject floating control panel HTML dynamically
     const drawerHtml = `
     <!-- Trigger Button -->

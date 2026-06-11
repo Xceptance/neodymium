@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Canvas Coordinate Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Canvas Interactive Hotspots</h1>
+                <p class="aura-desc">
+                    These two canvas elements draw "RED" and "BLUE" purely as pixel content.
+                    Since there are no DOM text nodes representing these labels, the agent must inspect the screenshot
+                    visually to select and click the correct canvas.
+                </p>
+
+                <div style="display: flex; justify-content: center; gap: 2rem; margin: 3rem 0;">
+                    <!-- Red Canvas -->
+                    <canvas id="red-canvas" width="150" height="100" style="border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; background: #1a1a2e; cursor: pointer;"></canvas>
+
+                    <!-- Blue Canvas -->
+                    <canvas id="blue-canvas" width="150" height="100" style="border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; background: #1a1a2e; cursor: pointer;"></canvas>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="canvas-status" style="font-weight: bold; color: #00ffcc;">No click registered yet</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const redCanvas = document.getElementById('red-canvas');
+        const blueCanvas = document.getElementById('blue-canvas');
+        const status = document.getElementById('canvas-status');
+
+        // Draw RED text
+        const redCtx = redCanvas.getContext('2d');
+        redCtx.fillStyle = '#ff3366';
+        redCtx.font = 'bold 20px Arial';
+        redCtx.textAlign = 'center';
+        redCtx.textBaseline = 'middle';
+        redCtx.fillText('RED', 75, 50);
+
+        // Draw BLUE text
+        const blueCtx = blueCanvas.getContext('2d');
+        blueCtx.fillStyle = '#33ccff';
+        blueCtx.font = 'bold 20px Arial';
+        blueCtx.textAlign = 'center';
+        blueCtx.textBaseline = 'middle';
+        blueCtx.fillText('BLUE', 75, 50);
+
+        // Click listeners
+        redCanvas.addEventListener('click', function() {
+            status.innerText = 'Red Canvas Clicked';
+            status.style.color = '#ff3366';
+        });
+
+        blueCanvas.addEventListener('click', function() {
+            status.innerText = 'Blue Canvas Clicked';
+            status.style.color = '#33ccff';
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

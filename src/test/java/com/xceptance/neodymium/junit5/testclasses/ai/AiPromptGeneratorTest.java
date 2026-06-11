@@ -101,10 +101,10 @@ public class AiPromptGeneratorTest
                 protected String executeExplorationLlmCall(com.xceptance.neodymium.ai.core.LlmClient llmClient, String prompt) {
                     callCount++;
                     if (callCount == 1) {
-                        return "{\"a\": [{\"t\": \"CLICK\", \"tg\": \"#btn\", \"d\": \"Click button\"}]}";
+                        return "{\"a\": [{\"t\": \"CLICK\", \"tg\": \"#btn\", \"desc\": \"Click button\"}]}";
                     } else if (callCount == 2) {
                         // AI reports failure of previous action
-                        return "{\"dl\": 1, \"a\": [{\"t\": \"NAVIGATE\", \"v\": \"http://example.com\", \"d\": \"try again\"}]}";
+                        return "{\"dl\": 1, \"a\": [{\"t\": \"NAVIGATE\", \"v\": \"http://example.com\", \"desc\": \"try again\"}]}";
                     } else {
                         return "{\"oia\": true}";
                     }
@@ -153,11 +153,11 @@ public class AiPromptGeneratorTest
                 protected String executeExplorationLlmCall(com.xceptance.neodymium.ai.core.LlmClient llmClient, String prompt) {
                     callCount++;
                     if (callCount == 1) {
-                        return "{\"a\": [{\"t\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"tg\": \"#email\", \"d\": \"Validate there is an input field for the email address\"}]}";
+                        return "{\"a\": [{\"t\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"tg\": \"#email\", \"desc\": \"Validate there is an input field for the email address\"}]}";
                     } else if (callCount == 2) {
-                        return "{\"a\": [{\"t\": \"TYPE\", \"tg\": \"#email\", \"v\": \"John Doe\", \"db\": {\"firstName\": \"John\", \"lastName\": \"Doe\"}, \"d\": \"Enter '${firstName} ${lastName}' into the user field\"}]}";
+                        return "{\"a\": [{\"t\": \"TYPE\", \"tg\": \"#email\", \"v\": \"John Doe\", \"db\": {\"firstName\": \"John\", \"lastName\": \"Doe\"}, \"desc\": \"Enter '${firstName} ${lastName}' into the user field\"}]}";
                     } else if (callCount == 3) {
-                        return "{\"a\": [{\"t\": \"CLICK\", \"tg\": \"#login\", \"d\": \"Click the login button\"}]}";
+                        return "{\"a\": [{\"t\": \"CLICK\", \"tg\": \"#login\", \"desc\": \"Click the login button\"}]}";
                     } else {
                         return "{\"oia\": true}";
                     }
@@ -215,12 +215,12 @@ public class AiPromptGeneratorTest
                 protected String executeExplorationLlmCall(com.xceptance.neodymium.ai.core.LlmClient llmClient, String prompt) {
                     callCount++;
                     if (callCount == 1) {
-                        return "{\"a\": [{\"t\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"tg\": \"#msg\", \"d\": \"Validate msg\"}]}";
+                        return "{\"a\": [{\"t\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"tg\": \"#msg\", \"desc\": \"Validate msg\"}]}";
                     } else if (callCount == 2) {
                         // AI returns the EXACT SAME assert, should be skipped
-                        return "{\"a\": [{\"t\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"tg\": \"#msg\", \"d\": \"Validate msg\"}]}";
+                        return "{\"a\": [{\"t\": \"" + com.xceptance.neodymium.ai.action.plugins.AssertAction.ACTION_NAME + "\", \"tg\": \"#msg\", \"desc\": \"Validate msg\"}]}";
                     } else if (callCount == 3) {
-                        return "{\"a\": [{\"t\": \"CLICK\", \"tg\": \"#btn\", \"d\": \"Click button\"}]}";
+                        return "{\"a\": [{\"t\": \"CLICK\", \"tg\": \"#btn\", \"desc\": \"Click button\"}]}";
                     } else {
                         return "{\"oia\": true}";
                     }

@@ -1,0 +1,31 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.BugMarkerTest :: assertionFailVisualBug :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Verify that the screen is mostly black and white (visual).",
+      "reasoning": "Expected failure recorded for bug: unspecified",
+      "actions": [],
+      "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
+      "expectedFailure": true,
+      "expectedErrorType": "com.xceptance.neodymium.ai.core.AiAgent$DefinitiveAssertionError",
+      "expectedErrorMessage": "Verification failed: Visual verification failed: The screen is not mostly black and white. It contains various colors such as blue buttons and links, a red \u0027X\u0027, a colorful palette icon, a blue globe icon, and a brown bear in a green forest."
+    }
+  ]
+}

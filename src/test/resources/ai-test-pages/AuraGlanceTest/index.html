@@ -102,8 +102,11 @@
             </a>
             <ul class="nav-links">
                 <li><a href="#" class="active">Hub Home</a></li>
-                <li><a href="shop/index.html">Shop Home</a></li>
+                <li><a href="shop/index.html">Poster Store</a></li>
+                <li><a href="shop/homepage-perfect.html">Apparel Store</a></li>
                 <li><a href="shop/forms.html">Forms Demo</a></li>
+                <li><a href="shop/escalation.html">Escalation Challenge</a></li>
+                <li><a href="shop/visual-escalation.html">Visual Escalation</a></li>
                 <li><a href="dashboard/index.html">Dashboard</a></li>
                 <li><a href="a11y/index.html">A11y Arena</a></li>
                 <li><a href="spa/index.html">React SPA</a></li>
@@ -151,7 +154,7 @@
             </div>
         </div>
 
-        <div class="aura-grid-2">
+        <div class="aura-grid-3">
             <!-- Card 4: Accessibility -->
             <div class="aura-card">
                 <div class="card-header-flex">
@@ -170,6 +173,86 @@
                 </div>
                 <p style="color: var(--text-secondary); font-size: 0.9rem;">Simulates modern Single Page Applications (SPAs) with initial loading suspense skeletons, async AJAX lists, and HTMX dynamic HTML swaps. Perfect for wait-assertion audits.</p>
                 <a href="spa/index.html" class="app-link">Launch React SPA &rarr;</a>
+            </div>
+
+            <!-- Card 6: Escalation Challenge -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Escalation Challenge</h3>
+                    <span class="badge badge-success">AXTree to Lean</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Interact with custom interactive elements (divs, spans, hidden inputs) that are omitted from AXTree, forcing context escalation from AXTREE to LEAN.</p>
+                <a href="shop/escalation.html" class="app-link">Launch Escalation Demo &rarr;</a>
+            </div>
+        </div>
+
+        <h2 style="margin-top: 3.5rem; margin-bottom: 1rem; font-size: 1.75rem; font-weight: 700;">Multi-Quality Apparel Store Playground</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 2rem; max-width: 800px; font-size: 0.95rem;">
+            A set of visually identical storefront pages built with varying levels of HTML and CSS quality (Perfect, Normal, and Bad). These are designed to validate the robustness of automation tools, locator paths (IDs, CSS, XPath), and visual/textual checks under different structural scenarios.
+        </p>
+
+        <div class="aura-grid-3" style="margin-bottom: 2.5rem;">
+            <!-- Perfect Quality -->
+            <div class="aura-card" style="border-color: hsla(145, 80%, 45%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Perfect Quality</h3>
+                    <span class="badge badge-success">Clean & Semantic</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Fully semantic HTML5 structure, clear and unique IDs/classes, complete ARIA descriptions, and modular clean JavaScript.</p>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <a href="shop/homepage-perfect.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Homepage &rarr;</a>
+                    <a href="shop/plp-perfect.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Product Listing &rarr;</a>
+                </div>
+            </div>
+
+            <!-- Normal Quality -->
+            <div class="aura-card" style="border-color: hsla(38, 95%, 55%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Normal Quality</h3>
+                    <span class="badge badge-cyan">Standard Quality</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Mixed semantic markup with wrapper divs, generic/inconsistent naming structures, basic form placeholders, and inline handlers.</p>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <a href="shop/homepage-normal.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Homepage &rarr;</a>
+                    <a href="shop/plp-normal.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Product Listing &rarr;</a>
+                </div>
+            </div>
+
+            <!-- Bad Quality -->
+            <div class="aura-card" style="border-color: hsla(355, 85%, 55%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Bad Quality</h3>
+                    <span class="badge badge-purple" style="background: rgba(239, 68, 68, 0.15); color: hsl(355, 85%, 55%); border: 1px solid rgba(239, 68, 68, 0.25);">Horrible Code</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Nested non-semantic divs, duplicate element IDs, inline layout styling, lack of labels, and obfuscated global inline scripting.</p>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <a href="shop/homepage-bad.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Homepage &rarr;</a>
+                    <a href="shop/plp-bad.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Product Listing &rarr;</a>
+                </div>
+            </div>
+        </div>
+
+        <h2 style="margin-bottom: 1.5rem; font-size: 1.75rem; font-weight: 700;">Context Escalation Challenges</h2>
+
+        <div class="aura-grid-2">
+            <!-- Card 6: Escalation Challenge -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Textual Escalation</h3>
+                    <span class="badge badge-success">AXTree to Lean to Standard</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Interact with custom interactive elements (divs, spans, hidden inputs) that are omitted from AXTree, forcing context escalation from AXTREE to LEAN and STANDARD.</p>
+                <a href="shop/escalation.html" class="app-link">Launch Escalation Demo &rarr;</a>
+            </div>
+
+            <!-- Card 7: Visual Escalation -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Visual Escalation</h3>
+                    <span class="badge badge-purple">Multimodal Visual</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Verify text and click elements drawn purely graphically on canvas or via CSS pseudo-elements, forcing escalation from STANDARD to VISUAL.</p>
+                <a href="shop/visual-escalation.html" class="app-link">Launch Visual Escalation &rarr;</a>
             </div>
         </div>
 

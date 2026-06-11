@@ -45,3 +45,6 @@ neodymium.code-workspace
 
 # Neodymium AI temporary scratch folder
 tmp/
+
+# Antigravity CLI
+.antigravitycli/

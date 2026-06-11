@@ -37,7 +37,6 @@ import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.core.AiAgent;
 import com.xceptance.neodymium.ai.core.AiBrowser;
-import com.xceptance.neodymium.ai.core.AiStats;
 import com.xceptance.neodymium.ai.core.LlmClient;
 import com.xceptance.neodymium.ai.core.PageAnalyzer;
 import com.xceptance.neodymium.util.Neodymium;
@@ -194,20 +193,6 @@ public final class InteractiveHudTestUtils
     }
 
     /**
-     * Creates a custom AiBrowser instance injected with a mock LLM agent that handles prompts with the given chat handler.
-     *
-     * @param testInstance the test class instance running the test
-     * @param chatHandler the function handling the mock LLM prompts
-     * @return the configured AiBrowser instance
-     * @throws Exception if injection fails
-     */
-    public static AiBrowser createTestAiBrowser(final Object testInstance, final Function<String, String> chatHandler) throws Exception
-    {
-        final LlmClient mockLlmClient = new MockLlmClient(chatHandler);
-        return createTestAiBrowser(testInstance, mockLlmClient);
-    }
-
-    /**
      * Creates a custom AiBrowser instance injected with the given custom mock LLM client.
      *
      * @param testInstance the test class instance running the test
@@ -228,36 +213,5 @@ public final class InteractiveHudTestUtils
         agentField.setAccessible(true);
         agentField.set(browser, customAgent);
         return browser;
-    }
-
-    /**
-     * Mock LlmClient implementation that delegates chat requests to a custom handler function.
-     */
-    public static final class MockLlmClient extends LlmClient
-    {
-        private final Function<String, String> chatHandler;
-
-        /**
-         * Constructs a MockLlmClient with the specified chat handler.
-         *
-         * @param chatHandler the function handling LLM chat prompts
-         */
-        public MockLlmClient(final Function<String, String> chatHandler)
-        {
-            super(Neodymium.aiConfiguration(), new AiStats());
-            this.chatHandler = chatHandler;
-        }
-
-        @Override
-        public String chat(final String systemPrompt, final String userPrompt)
-        {
-            return chatHandler.apply(userPrompt);
-        }
-
-        @Override
-        public String chatWithScreenshot(final String systemPrompt, final String userPrompt, final String screenshot)
-        {
-            return chatHandler.apply(userPrompt);
-        }
     }
 }

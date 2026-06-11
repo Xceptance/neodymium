@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai.core;
 
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -59,10 +60,13 @@ public class AiBrowser implements AutoCloseable {
 
     private Object test;
 
+    private AiExecutionResult lastExecutionResult;
+    private AiTestRunResult lastTestRunResult;
+
     /**
      * Creates a new AiBrowser with default configuration.
      */
-    public AiBrowser(Object test) {
+    public AiBrowser(final Object test) {
         this(Neodymium.aiConfiguration(), test);
     }
 
@@ -73,15 +77,50 @@ public class AiBrowser implements AutoCloseable {
      *               the configuration to use
      */
     public AiBrowser(final AiConfiguration config, final Object test) {
+        this(config, test, new LlmClient(config, new AiStats()), new PageAnalyzer(), new ActionExecutor(test));
+    }
+
+    /**
+     * Creates a new AiBrowser with custom configuration and injected dependencies.
+     *
+     * @param config          the configuration to use
+     * @param test            the test class instance
+     * @param llmClient       the LLM client instance
+     * @param pageAnalyzer    the page analyzer instance
+     * @param actionExecutor  the action executor instance
+     */
+    public AiBrowser(final AiConfiguration config, final Object test,
+            final LlmClient llmClient, final PageAnalyzer pageAnalyzer,
+            final ActionExecutor actionExecutor) {
         this.test = test;
         this.config = config;
-        this.aiStats = new AiStats();
-        this.agent = createAgent(config);
+        this.aiStats = llmClient.getAiStats();
+        this.agent = new AiAgent(llmClient, pageAnalyzer, actionExecutor, config);
 
         LOG.debug("╔════════════════════════════════════════════════════════════════════════════════════");
         LOG.debug("║ 🎬 STARTING TEST CASE: {}", Neodymium.getTestName());
         LOG.debug("║ 🤖 AI Model:           {}", config.aiModel());
         LOG.debug("╚════════════════════════════════════════════════════════════════════════════════════");
+    }
+
+    public final AiExecutionResult getLastExecutionResult()
+    {
+        return this.lastExecutionResult;
+    }
+
+    public final void setLastExecutionResult(final AiExecutionResult result)
+    {
+        this.lastExecutionResult = result;
+    }
+
+    public final AiTestRunResult getLastTestRunResult()
+    {
+        return this.lastTestRunResult;
+    }
+
+    public final void setLastTestRunResult(final AiTestRunResult result)
+    {
+        this.lastTestRunResult = result;
     }
 
     /**
@@ -102,7 +141,7 @@ public class AiBrowser implements AutoCloseable {
      * @param instructions the before instructions
      * @return the current AiBrowser instance
      */
-    public AiBrowser before(String instructions) {
+    public AiBrowser before(final String instructions) {
         Neodymium.getData().put("before", instructions);
         return this;
     }
@@ -113,7 +152,7 @@ public class AiBrowser implements AutoCloseable {
      * @param instructions the after instructions
      * @return the current AiBrowser instance
      */
-    public AiBrowser after(String instructions) {
+    public AiBrowser after(final String instructions) {
         Neodymium.getData().put("after", instructions);
         return this;
     }
@@ -124,7 +163,7 @@ public class AiBrowser implements AutoCloseable {
      * @param context the system context instructions
      * @return the current AiBrowser instance
      */
-    public AiBrowser systemContext(String context) {
+    public AiBrowser systemContext(final String context) {
         Neodymium.getData().put("context", context);
         return this;
     }
@@ -135,8 +174,9 @@ public class AiBrowser implements AutoCloseable {
      * which analyzes the page and performs the corresponding browser actions.
      *
      * @param naturalLanguageInstructions test steps written in plain English
+     * @return the execution result details
      */
-    public void execute(final String naturalLanguageInstructions) {
+    public final AiExecutionResult execute(final String naturalLanguageInstructions) {
         if (config.aiInteractive()) {
             try {
                 com.xceptance.neodymium.ai.generator.InteractiveHud hud = Neodymium.getOrCreateInteractiveHud();
@@ -147,11 +187,20 @@ public class AiBrowser implements AutoCloseable {
             }
         }
 
+        final AiExecutionResult result = new AiExecutionResult(Neodymium.getData());
+        this.lastExecutionResult = result;
+
         if (Neodymium.getData() != null && Neodymium.getData().exists("context")) {
-            agent.setSutContext(resolveTestDataToPrompt(Neodymium.getData().asString("context")));
+            agent.setSutContext(resolveTestDataToPrompt(Neodymium.getData().asString("context"), result.getLookups()));
         }
 
-        agent.execute(naturalLanguageInstructions);
+        try {
+            agent.execute(naturalLanguageInstructions, result);
+        } catch (final Throwable t) {
+            throw t;
+        }
+
+        return result;
     }
 
     /**
@@ -159,9 +208,10 @@ public class AiBrowser implements AutoCloseable {
      * active test dataset. Expects a `steps`
      * variable to be defined within the currently injected dataset (e.g. via YAML).
      * 
+     * @return the composite execution result for this test run
      * @throws Throwable
      */
-    public void execute() throws Throwable
+    public final AiTestRunResult execute() throws Throwable
     {
         if (!Neodymium.getData().exists("steps"))
         {
@@ -183,14 +233,16 @@ public class AiBrowser implements AutoCloseable {
             agent.setSutContext(resolveTestDataToPrompt(Neodymium.getData().asString("context")));
         }
 
+        final AiTestRunResult runResult = new AiTestRunResult();
+        this.lastTestRunResult = runResult;
         Throwable testError = null;
 
         try {
             if (Neodymium.getData().exists("before")) {
-                executeList(Neodymium.getData().asString("before"));
+                runResult.setBeforeResult(executeAndGetResult(Neodymium.getData().asString("before")));
             }
 
-            execute(Neodymium.getData().asString("steps"));
+            runResult.setStepsResult(execute(Neodymium.getData().asString("steps")));
 
         } catch (final Throwable t)
         {
@@ -198,13 +250,8 @@ public class AiBrowser implements AutoCloseable {
             throw t;
         } finally {
             if (Neodymium.getData().exists("after")) {
-                Throwable lastAfterError = null;
-                // If it is a list, executeList will handle the individual elements
-                // Wait, if an element fails in after, we want the OTHER after elements to still
-                // run.
-                // So executeList must catch and accumulate errors for 'after'.
                 try {
-                    executeListAfterMode(Neodymium.getData().asString("after"));
+                    executeListAfterMode(Neodymium.getData().asString("after"), runResult);
                 } catch (Throwable afterError) {
                     if (testError != null) {
                         testError.addSuppressed(afterError);
@@ -214,9 +261,11 @@ public class AiBrowser implements AutoCloseable {
                 }
             }
         }
+
+        return runResult;
     }
 
-    private void executeList(String jsonOrString) {
+    private AiExecutionResult executeAndGetResult(final String jsonOrString) {
         java.util.List<String> list = null;
         try {
             list = new com.google.gson.Gson().fromJson(jsonOrString,
@@ -227,15 +276,17 @@ public class AiBrowser implements AutoCloseable {
         }
 
         if (list != null) {
-            for (String item : list) {
-                execute(item);
+            AiExecutionResult lastRes = null;
+            for (final String item : list) {
+                lastRes = execute(item);
             }
+            return lastRes;
         } else {
-            execute(jsonOrString);
+            return execute(jsonOrString);
         }
     }
 
-    private void executeListAfterMode(String jsonOrString) throws Throwable {
+    private void executeListAfterMode(final String jsonOrString, final AiTestRunResult runResult) throws Throwable {
         java.util.List<String> list = null;
         try {
             list = new com.google.gson.Gson().fromJson(jsonOrString,
@@ -247,9 +298,9 @@ public class AiBrowser implements AutoCloseable {
 
         if (list != null) {
             Throwable accumulatedError = null;
-            for (String item : list) {
+            for (final String item : list) {
                 try {
-                    execute(item);
+                    runResult.addAfterResult(execute(item));
                 } catch (Throwable t) {
                     if (accumulatedError == null) {
                         accumulatedError = t;
@@ -262,8 +313,7 @@ public class AiBrowser implements AutoCloseable {
                 throw accumulatedError;
             }
         } else {
-            // treat as a single string
-            execute(jsonOrString);
+            runResult.addAfterResult(execute(jsonOrString));
         }
     }
 
@@ -278,34 +328,31 @@ public class AiBrowser implements AutoCloseable {
         }
     }
 
-    private AiAgent createAgent(final AiConfiguration config) {
-        final LlmClient llmClient = new LlmClient(config, aiStats);
-        final PageAnalyzer pageAnalyzer = new PageAnalyzer();
-        final ActionExecutor actionExecutor = new ActionExecutor(test);
-        return new AiAgent(llmClient, pageAnalyzer, actionExecutor, config);
-    }
-
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\$\\{([^}]+)\\}", Pattern.CASE_INSENSITIVE);
 
-    public static String resolveTestDataToPrompt(String promptTemplate) {
+    public static String resolveTestDataToPrompt(final String promptTemplate) {
+        return resolveTestDataToPrompt(promptTemplate, null);
+    }
+
+    public static String resolveTestDataToPrompt(final String promptTemplate, final List<LookupDetails> lookupsCollector) {
         if (promptTemplate == null || promptTemplate.isEmpty()) {
             return promptTemplate;
         }
 
-        Matcher matcher = VARIABLE_PATTERN.matcher(promptTemplate);
-        StringBuilder sb = new StringBuilder();
+        final Matcher matcher = VARIABLE_PATTERN.matcher(promptTemplate);
+        final StringBuilder sb = new StringBuilder();
         int lastEnd = 0;
 
         while (matcher.find()) {
             sb.append(promptTemplate, lastEnd, matcher.start());
-            String placeholderKey = matcher.group(1);
+            final String placeholderKey = matcher.group(1);
 
-            String value = extractValue(placeholderKey, 0);
+            final String value = extractValue(placeholderKey, 0, lookupsCollector);
             if (value == null) {
-                value = matcher.group(0);
+                sb.append(matcher.group(0));
+            } else {
+                sb.append(value);
             }
-
-            sb.append(value);
             lastEnd = matcher.end();
         }
         sb.append(promptTemplate.substring(lastEnd));
@@ -313,39 +360,47 @@ public class AiBrowser implements AutoCloseable {
         return sb.toString();
     }
 
-    private static String extractValue(String placeholderKey, int depth) {
+    private static String extractValue(final String placeholderKey, final int depth, final List<LookupDetails> lookupsCollector) {
         // emergency stop
         if (depth > 10) {
             return null;
         }
 
-        TestData testData = Neodymium.getData();
+        final TestData testData = Neodymium.getData();
         String value = null;
+        String source = "Not Found";
 
-        // 1. Try to find the exact value (ignoring case)
-        value = testData.entrySet().stream()
-                .filter(entry -> entry.getKey().equalsIgnoreCase(placeholderKey))
-                .map(Map.Entry::getValue)
-                .findFirst()
-                .orElse(null);
+        // 1. Try to find the exact value (case-sensitive)
+        if (testData.containsKey(placeholderKey)) {
+            value = testData.get(placeholderKey);
+            source = "TestData Map";
+        }
+
+        // 1b. Try to find the value case-insensitively if not found exactly
+        if (value == null) {
+            final java.util.Optional<Map.Entry<String, String>> entryOpt = testData.entrySet().stream()
+                    .filter(entry -> entry.getKey().equalsIgnoreCase(placeholderKey))
+                    .findFirst();
+            if (entryOpt.isPresent()) {
+                value = entryOpt.get().getValue();
+                source = "TestData Map";
+            }
+        }
 
         // 2. Try nested resolution via JSONPath if applicable
         if (value == null && (placeholderKey.contains(".") || placeholderKey.contains("["))) {
             try {
-                // Convert custom bracket notation like product[name] to jsonPath standard
-                // product['name']
                 String jsonPathQuery = placeholderKey.replaceAll("\\[([a-zA-Z0-9_\\-]+)\\]", "['$1']");
-
-                // Add strict jsonPath prefix if needed
                 if (!jsonPathQuery.startsWith("$")) {
                     jsonPathQuery = "$." + jsonPathQuery;
                 }
 
-                Object resolvedValue = testData.get(jsonPathQuery, Object.class);
+                final Object resolvedValue = testData.get(jsonPathQuery, Object.class);
                 if (resolvedValue != null) {
                     value = resolvedValue.toString();
+                    source = "JSONPath Query";
                 }
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 // Ignore and fall back to next resolution step
             }
         }
@@ -353,36 +408,54 @@ public class AiBrowser implements AutoCloseable {
         // 3. Try to get from neodymium configuration
         if (value == null) {
             if (Neodymium.configuration() instanceof org.aeonbits.owner.Accessible) {
-                String configValue = ((org.aeonbits.owner.Accessible) Neodymium.configuration())
+                final String configValue = ((org.aeonbits.owner.Accessible) Neodymium.configuration())
                         .getProperty(placeholderKey);
                 if (configValue != null) {
                     value = configValue;
+                    source = "Neodymium Configuration";
                 }
             }
         }
 
         // Recursively resolve nested placeholders within the found value
         if (value != null && value.contains("${")) {
-            Matcher nestedMatcher = VARIABLE_PATTERN.matcher(value);
-            StringBuilder sb = new StringBuilder();
+            final Matcher nestedMatcher = VARIABLE_PATTERN.matcher(value);
+            final StringBuilder sb = new StringBuilder();
             int lastEnd = 0;
             while (nestedMatcher.find()) {
                 sb.append(value, lastEnd, nestedMatcher.start());
-                String nestedKey = nestedMatcher.group(1);
-                String nestedValue = extractValue(nestedKey, depth + 1);
+                final String nestedKey = nestedMatcher.group(1);
+                final String nestedValue = extractValue(nestedKey, depth + 1, lookupsCollector);
 
                 if (nestedValue == null) {
-                    nestedValue = nestedMatcher.group(0);
+                    sb.append(nestedMatcher.group(0));
+                } else {
+                    sb.append(nestedValue);
                 }
-
-                sb.append(nestedValue);
                 lastEnd = nestedMatcher.end();
             }
             sb.append(value.substring(lastEnd));
             value = sb.toString();
         }
 
-        return Neodymium.tryLocalizedText(value);
+        // Translate / Localize
+        boolean localized = false;
+        if (value != null) {
+            final String localizedValue = Neodymium.tryLocalizedText(value);
+            if (localizedValue != null && !localizedValue.equals(value)) {
+                value = localizedValue;
+                localized = true;
+                if ("Not Found".equals(source) || "TestData Map".equals(source) || "JSONPath Query".equals(source) || "Neodymium Configuration".equals(source)) {
+                    source = "Localization File";
+                }
+            }
+        }
+
+        if (lookupsCollector != null) {
+            lookupsCollector.add(new LookupDetails(placeholderKey, value, localized, source));
+        }
+
+        return value;
     }
 
     /**

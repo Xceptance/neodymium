@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<!--
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+<!-- AI-generated: Gemini 3.5 Flash -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Escalation Challenge</title>
+    <link rel="stylesheet" href="../shared/style.css">
+    <link rel="stylesheet" href="../shared/controls.css">
+</head>
+<body>
+
+    <!-- Navigation Header -->
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="../index.html" class="brand">
+                <span class="brand-icon"></span>
+                <span>Aura Suite Hub</span>
+            </a>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="../index.html">Hub Home</a></li>
+                    <li><a href="index.html">Shop Catalog</a></li>
+                    <li><a href="forms.html">Forms Demo</a></li>
+                    <li><a href="escalation.html" class="active">Escalation Challenge</a></li>
+                    <li><a href="visual-escalation.html">Visual Escalation</a></li>
+                    <li><a href="../a11y/index.html">Accessibility Checks</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="aura-container">
+        
+        <section class="aura-hero" style="padding: 2rem 3.5rem;">
+            <h1>Context Escalation Challenges</h1>
+            <p style="margin-top: 0.5rem; color: var(--text-secondary);">
+                Interact with elements and verify contents that require context level escalations (AXTREE to LEAN, and LEAN to STANDARD) to challenge the self-healing and observer models.
+            </p>
+        </section>
+
+        <section class="aura-grid-3">
+            
+            <!-- Escalation Targets Card -->
+            <div class="aura-card" id="escalation-challenge">
+                <h3 style="margin-bottom: 1.5rem; color: var(--accent-cyan);">AXTree-Hidden Targets</h3>
+                <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                    Omitted from browser AXTree but present in LEAN. Forces escalation from AXTREE to LEAN.
+                </p>
+                
+                <!-- 1. Click Link Challenge (Clickable Span with no accessible role) -->
+                <div class="form-group" style="margin-bottom: 2rem;">
+                    <label class="form-label">Link Interaction Challenge:</label>
+                    <span id="custom-link" style="cursor: pointer; text-decoration: underline; color: var(--accent-cyan); font-weight: 500;" onclick="handleInteraction('Link Clicked')">Click Link Challenge</span>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">Span styled with pointer cursor and click handler.</p>
+                </div>
+
+                <!-- 2. Click Button Challenge (Clickable Div with no accessible role) -->
+                <div class="form-group" style="margin-bottom: 2rem;">
+                    <label class="form-label">Button Interaction Challenge:</label>
+                    <div id="custom-button" style="cursor: pointer; display: inline-block; padding: 0.5rem 1rem; background: var(--bg-card-border); border: 1px solid var(--accent-purple); border-radius: var(--radius-sm); transition: var(--transition-smooth);" onclick="handleInteraction('Button Clicked')">Click Button Challenge</div>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">Div styled with hover transformations, pointer cursor, and click handler.</p>
+                </div>
+
+                <!-- 3. Fill Form Challenge (Input wrapped inside an aria-hidden container) -->
+                <div class="form-group" style="margin-bottom: 2rem;">
+                    <label class="form-label" for="custom-input">Form Input Challenge:</label>
+                    <div aria-hidden="true">
+                        <input type="text" id="custom-input" class="form-control" placeholder="Type secret code here" oninput="handleInteraction(this.value)">
+                    </div>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">Input element nested under a div container marked with aria-hidden="true".</p>
+                </div>
+            </div>
+
+            <!-- STANDARD Escalation Card (Omitted from both AXTree and LEAN) -->
+            <div class="aura-card" id="standard-challenge">
+                <h3 style="margin-bottom: 1.5rem; color: var(--accent-purple);">Standard Text Verification</h3>
+                <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                    This plain text block is omitted from both AXTree and LEAN. Forces escalation from LEAN to STANDARD.
+                </p>
+                <div style="background: hsla(220, 20%, 5%, 0.4); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--bg-card-border); margin-top: 2rem;">
+                    <p id="secret-text" style="color: var(--text-primary); font-size: 1rem; font-weight: 500; line-height: 1.6;">
+                        Verification Token: <br><span style="color: var(--accent-cyan); font-family: monospace; font-size: 1.1rem; letter-spacing: 0.05em;">AURA-9921-SECURE</span>
+                    </p>
+                </div>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 1.5rem;">
+                    A standard paragraph tag is not interactive and has no semantic role. The agent must request STANDARD context to verify its visibility.
+                </p>
+            </div>
+
+            <!-- Interaction Status Card -->
+            <div class="aura-card" style="display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                <h3 style="margin-bottom: 1.5rem;">Verification Status</h3>
+                <div style="background: hsla(220, 20%, 5%, 0.6); padding: 2rem; border-radius: var(--radius-md); border: 1px solid var(--bg-card-border); width: 100%; max-width: 350px;">
+                    <span id="escalation-status" style="color: var(--accent-cyan); font-weight: 700; font-size: 1.25rem;">Status: Pending</span>
+                </div>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 1.5rem;">
+                    Interacting with the elements on the left will update this status in real-time.
+                </p>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Global Controls Drawer Script injection -->
+    <script src="../shared/controls.js"></script>
+
+    <!-- Page JavaScript logic -->
+    <script>
+        function handleInteraction(value) {
+            const statusEl = document.getElementById('escalation-status');
+            if (value && value.trim().length > 0) {
+                statusEl.innerText = "Status: " + value;
+            } else {
+                statusEl.innerText = "Status: Pending";
+            }
+        }
+    </script>
+
+</body>
+</html>

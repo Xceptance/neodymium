@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Scroll List Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Scroll-Overflow List Challenge</h1>
+                <p class="aura-desc">
+                    The target button is located at the absolute bottom of the scroll container below. 
+                    It is completely offscreen and out-of-viewport until the container is scrolled down.
+                </p>
+
+                <div style="display: flex; justify-content: center; margin: 2rem 0;">
+                    <!-- Scrollable Container -->
+                    <div id="scroll-container" style="width: 350px; height: 180px; overflow-y: scroll; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px;">
+                        <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">1. Item Alpha</div>
+                        <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">2. Item Beta</div>
+                        <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">3. Item Gamma</div>
+                        <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">4. Item Delta</div>
+                        <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">5. Item Epsilon</div>
+                        <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">6. Item Zeta</div>
+                        <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">7. Item Eta</div>
+                        <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">8. Item Theta</div>
+                        <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">9. Item Iota</div>
+                        <div style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">10. Item Kappa</div>
+                        
+                        <!-- Target Button at the bottom -->
+                        <div style="padding: 20px 10px; text-align: center;">
+                            <button id="hidden-target-btn" class="aura-btn" style="padding: 10px 20px; background: #ffcc00; color: #111;">
+                                Unlock Achievement
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="scroll-status" style="font-weight: bold; color: #ff3366;">Locked</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const btn = document.getElementById('hidden-target-btn');
+        const status = document.getElementById('scroll-status');
+
+        btn.addEventListener('click', function() {
+            status.innerText = 'Achievement Unlocked!';
+            status.style.color = '#00ffcc';
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

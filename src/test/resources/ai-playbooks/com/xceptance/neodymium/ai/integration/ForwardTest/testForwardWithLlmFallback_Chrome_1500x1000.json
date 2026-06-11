@@ -1,0 +1,71 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.ForwardTest :: testForwardWithLlmFallback :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43388/AssertActionTest/testAssertHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43388/AssertActionTest/testAssertHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43388/AssertActionTest/testAssertHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Open http://localhost:43388/TypeActionTest/testTypeHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43388/TypeActionTest/testTypeHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43388/TypeActionTest/testTypeHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Go to the previous page",
+      "reasoning": "The instruction \u0027Go to the previous page\u0027 directly maps to the \u0027BACK\u0027 action type.",
+      "actions": [
+        {
+          "type": "BACK",
+          "description": "Go to the previous page",
+          "elementDetails": "Previous page",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Navigate to the next page",
+      "reasoning": "The instruction \u0027Navigate to the next page\u0027 directly maps to the FORWARD action.",
+      "actions": [
+        {
+          "type": "FORWARD",
+          "description": "Navigate to the next page",
+          "elementDetails": "Next page",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    }
+  ]
+}

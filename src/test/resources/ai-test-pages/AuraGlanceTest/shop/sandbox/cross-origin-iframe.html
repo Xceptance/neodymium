@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cross-Origin iFrame Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Cross-Origin iFrame Form</h1>
+                <p class="aura-desc">
+                    The payment credit card form below is loaded within a cross-origin iframe served from the alternative HTTP port.
+                    This tests the AI's ability to switch contexts into cross-origin frames.
+                </p>
+
+                <div style="display: flex; flex-direction: column; align-items: center; margin: 2rem 0; gap: 1rem;">
+                    <!-- Dynamically loaded iframe -->
+                    <iframe id="payment-iframe" width="400" height="220" style="border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px; background: rgba(0,0,0,0.1);" src=""></iframe>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Parent Status: <span id="parent-status" style="font-weight: bold; color: #aaaaaa;">Waiting for payment validation...</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Parse the target HTTP port from the query string to load a true cross-origin iframe
+        const urlParams = new URLSearchParams(window.location.search);
+        const iframePort = urlParams.get('iframePort');
+        
+        const iframe = document.getElementById('payment-iframe');
+        
+        if (iframePort) {
+            iframe.src = `http://localhost:${iframePort}/AuraGlanceTest/shop/sandbox/mock-payment-iframe.html`;
+        } else {
+            document.getElementById('parent-status').innerText = 'Error: iframePort query parameter missing.';
+            document.getElementById('parent-status').style.color = '#ff3366';
+        }
+
+        // Listen for message from the iframe
+        window.addEventListener('message', function(event) {
+            // In production, verify event.origin
+            const status = document.getElementById('parent-status');
+            if (event.data && event.data.type === 'payment-submitted') {
+                status.innerText = `Payment validated! Holder: ${event.data.holder}`;
+                status.style.color = '#00ffcc';
+            }
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>
