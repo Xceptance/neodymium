@@ -49,7 +49,7 @@
             "ArrowDown"
           ],
           "description": "Press the ArrowDown key",
-          "elementDetails": "document",
+          "elementDetails": "ArrowDown key",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -86,8 +86,8 @@
           "value": [
             "ArrowUp"
           ],
-          "description": "Press the ArrowUp key",
-          "elementDetails": "ArrowUp key",
+          "description": "Presses the ArrowUp key",
+          "elementDetails": "ArrowUp",
           "elementContext": {},
           "replay": "",
           "adjust": false

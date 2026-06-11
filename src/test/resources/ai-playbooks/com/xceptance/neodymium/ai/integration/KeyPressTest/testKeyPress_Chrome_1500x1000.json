@@ -28,7 +28,7 @@
           "value": [
             "Bob"
           ],
-          "description": "Type \u0027Bob\u0027",
+          "description": "Type \u0027Bob\u0027 into the \u0027First Name:\u0027 field",
           "elementDetails": "First Name: field",
           "elementContext": {
             "id": "first-name",
@@ -45,7 +45,7 @@
     },
     {
       "promptLine": "Press the TAB key on the active element",
-      "reasoning": "The instruction is to press the TAB key, which is handled by the KEY_PRESS action.",
+      "reasoning": "The instruction is to press the TAB key, which maps directly to the KEY_PRESS action with \u0027TAB\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -64,11 +64,11 @@
     },
     {
       "promptLine": "Type \u0027KeyPress works!\u0027 into the comment box",
-      "reasoning": "Identified the \u0027Comments:\u0027 textbox by its data-neo-ref attribute and generated a TYPE action to input the specified text.",
+      "reasoning": "Identified the comment box by its accessibility name and data-neo-ref attribute, then generated a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_z2satb\u0027]",
+          "target": "xc_z2satb",
           "value": [
             "KeyPress works!"
           ],

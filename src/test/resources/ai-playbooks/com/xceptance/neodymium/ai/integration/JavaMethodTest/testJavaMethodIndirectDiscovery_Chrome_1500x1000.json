@@ -1,0 +1,42 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.JavaMethodTest :: testJavaMethodIndirectDiscovery :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AssertActionTest/testAssertHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Verify using the java method assertPriceGreaterThanZero that \u002714.96 €\u0027 is greater than zero",
+      "reasoning": "The instruction requires invoking a Java method to assert a price value. The JAVA_METHOD action is used with the method name \u0027assertPriceGreaterThanZero\u0027 and the provided price \u002714.96 €\u0027 as the value.",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertPriceGreaterThanZero",
+          "value": [
+            "14.96 €"
+          ],
+          "description": "Verify that \u002714.96 €\u0027 is greater than zero using the assertPriceGreaterThanZero Java method.",
+          "elementDetails": "assertPriceGreaterThanZero",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

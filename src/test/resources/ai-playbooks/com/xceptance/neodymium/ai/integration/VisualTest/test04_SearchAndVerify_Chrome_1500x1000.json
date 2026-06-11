@@ -1,0 +1,94 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.VisualTest :: test04_SearchAndVerify :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Type \u0027bear\u0027 into the search box.",
+      "reasoning": "Typed \u0027bear\u0027 into the search box identified by its data-neo-ref attribute and name \u0027Search posters...\u0027.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "xc_7cjiuo",
+          "value": [
+            "bear"
+          ],
+          "description": "Type \u0027bear\u0027 into the search box.",
+          "elementDetails": "Search posters...",
+          "elementContext": {
+            "classes": "search-input",
+            "name": "searchText",
+            "id": "search-box",
+            "placeholder": "Search posters...",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the blue button next to the input box (visual).",
+      "reasoning": "Identified the input box with id \u0027search-box\u0027 and the adjacent blue button with id \u0027search-button\u0027 and text \u0027Search\u0027 from the DOM and screenshot. The instruction asks to click this button.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#search-button",
+          "description": "Click the blue \u0027Search\u0027 button next to the input box.",
+          "elementDetails": "Search button",
+          "elementContext": {
+            "classes": "btn-search",
+            "text": "Search",
+            "id": "search-button",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "screenshotHash": "000a0000006000080008880a880ccc0c88080008000000000000000000000000",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    },
+    {
+      "promptLine": "Store the color of the animal shown on the second result image in the variable \u0027animalColor\u0027 (visual).",
+      "reasoning": "The instruction asks to store the color of the animal on the second result image. Visually inspecting the screenshot, the second result image shows \u0027Green Gummy Bears\u0027, which are green. Therefore, \u0027green\u0027 is stored in the \u0027animalColor\u0027 variable.",
+      "actions": [
+        {
+          "type": "STORE",
+          "value": [
+            "animalColor",
+            "green"
+          ],
+          "description": "Store the color of the animal shown on the second result image in the variable \u0027animalColor\u0027.",
+          "elementDetails": "animalColor",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "screenshotHash": "000200000080000000000000c7d4971ea79aa710d71600000000840000000000",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}
