@@ -1,5 +1,5 @@
 {
-  "id": "com.xceptance.neodymium.ai.integration.HintTesting :: test_KeyPressHintNoTargetInText :: Browser Chrome_1500x1000",
+  "id": "com.xceptance.neodymium.ai.integration.HintTesting :: test_TypeHint :: Browser Chrome_1500x1000",
   "steps": [
     {
       "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
@@ -19,8 +19,8 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Type \"bear\" into the search box (hint: #search-box)",
-      "reasoning": "Typed \"bear\" into the search box.",
+      "promptLine": "Type \"bear\" into search input (hint: #search-box)",
+      "reasoning": "Typed \"bear\" into the search input.",
       "actions": [
         {
           "type": "TYPE",
@@ -28,8 +28,8 @@
           "value": [
             "bear"
           ],
-          "description": "Type \"bear\" into the search box",
-          "elementDetails": "search box",
+          "description": "Type \"bear\" into search input",
+          "elementDetails": "search input",
           "elementContext": {
             "classes": "search-input",
             "name": "searchText",
@@ -38,26 +38,6 @@
             "tagName": "input",
             "type": "text"
           },
-          "replay": "",
-          "adjust": false
-        }
-      ],
-      "expectedFailure": false,
-      "healedContextLevel": "HINT"
-    },
-    {
-      "promptLine": "Press the ENTER key (hint: #search-box)",
-      "reasoning": "Pressed the ENTER key on the search box.",
-      "actions": [
-        {
-          "type": "KEY_PRESS",
-          "target": "#search-box",
-          "value": [
-            "Enter"
-          ],
-          "description": "Press the ENTER key",
-          "elementDetails": "search box",
-          "elementContext": {},
           "replay": "",
           "adjust": false
         }

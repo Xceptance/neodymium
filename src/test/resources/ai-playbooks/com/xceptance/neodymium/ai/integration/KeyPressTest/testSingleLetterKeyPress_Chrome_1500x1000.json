@@ -42,7 +42,7 @@
     },
     {
       "promptLine": "Press key \u0027a\u0027",
-      "reasoning": "The instruction is to press the key \u0027a\u0027. The KEY_PRESS action is used with \u0027a\u0027 as the value.",
+      "reasoning": "The instruction is to press the key \u0027a\u0027, which directly maps to a KEY_PRESS action with \u0027a\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -61,7 +61,7 @@
     },
     {
       "promptLine": "Type key \u0027b\u0027",
-      "reasoning": "The instruction is to type a key, so a KEY_PRESS action is used with \u0027b\u0027 as the value.",
+      "reasoning": "The instruction is to type a key, so a KEY_PRESS action with the value \u0027b\u0027 is appropriate.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -69,7 +69,7 @@
             "b"
           ],
           "description": "Type key \u0027b\u0027",
-          "elementDetails": "Keyboard key \u0027b\u0027",
+          "elementDetails": "key \u0027b\u0027",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -80,22 +80,16 @@
     },
     {
       "promptLine": "Press \u0027c\u0027",
-      "reasoning": "The instruction is to press \u0027c\u0027, which translates to typing \u0027c\u0027 into the available text input field.",
+      "reasoning": "The instruction is to press the \u0027c\u0027 key, which directly maps to a KEY_PRESS action with \u0027c\u0027 as the value.",
       "actions": [
         {
-          "type": "TYPE",
-          "target": "xc_5a3hm3",
+          "type": "KEY_PRESS",
           "value": [
             "c"
           ],
-          "description": "Type \u0027c\u0027 into the text field",
-          "elementDetails": "Type single letters here",
-          "elementContext": {
-            "id": "char-input",
-            "placeholder": "Type single letters here",
-            "tagName": "input",
-            "type": "text"
-          },
+          "description": "Presses the \u0027c\u0027 key",
+          "elementDetails": "Keyboard key \u0027c\u0027",
+          "elementContext": {},
           "replay": "",
           "adjust": false
         }

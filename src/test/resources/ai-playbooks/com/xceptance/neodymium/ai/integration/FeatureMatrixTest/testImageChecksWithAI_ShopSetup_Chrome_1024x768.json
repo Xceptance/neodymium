@@ -1,0 +1,13 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.FeatureMatrixTest :: testImageChecksWithAI :: ShopSetup :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Assert that the \u0027Aura Neon Gradient Poster\u0027 card displays an image showcasing deep ultraviolet and cyan shades.",
+      "reasoning": "The screenshot clearly shows the \u0027Aura Neon Gradient Poster\u0027 card with an image that features a prominent gradient of deep ultraviolet (purple) and bright cyan (blue) shades, matching the description in the instruction.",
+      "actions": [],
+      "screenshotHash": "5c0000008400000000007d810c817e015f817f01000008019a4398c318c71ac3",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}
