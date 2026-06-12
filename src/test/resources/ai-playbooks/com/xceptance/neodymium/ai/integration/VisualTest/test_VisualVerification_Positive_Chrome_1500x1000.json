@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "A bear is shown on the right side (visual)",
-      "reasoning": "The screenshot clearly shows a \u0027Featured Poster\u0027 section on the right side of the page, which contains an image of a brown bear and the text \u0027Majestic Brown Bear\u0027 below it. This confirms that a bear is shown on the right side.",
+      "reasoning": "The screenshot clearly shows a \u0027Featured Poster\u0027 section on the right side of the page, which contains an image of a brown bear, confirming the instruction.",
       "actions": [],
       "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
       "expectedFailure": false,

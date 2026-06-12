@@ -196,23 +196,23 @@ public final class AiAssertionsTest
     }
 
     /**
-     * Verifies assertNumberEqual.
+     * Verifies assertNumbersEqual.
      */
     @Test
-    public void testAssertNumberEqualSuccess()
+    public void testAssertNumbersEqualSuccess()
     {
-        AiAssertions.assertNumberEqual("14,96, 14.96");
-        AiAssertions.assertNumberEqual("[\"10.00\", \"10.00\"]");
+        AiAssertions.assertNumbersEqual("14,96, 14.96");
+        AiAssertions.assertNumbersEqual("[\"10.00\", \"10.00\"]");
     }
 
     /**
-     * Verifies assertNumberEqual failures.
+     * Verifies assertNumbersEqual failures.
      */
     @Test
-    public void testAssertNumberEqualFailure()
+    public void testAssertNumbersEqualFailure()
     {
         Assertions.assertThrows(AssertionError.class, () -> {
-            AiAssertions.assertNumberEqual("14.96, 15.00");
+            AiAssertions.assertNumbersEqual("14.96, 15.00");
         });
     }
 
@@ -282,145 +282,145 @@ public final class AiAssertionsTest
     }
 
     /**
-     * Verifies verifyCalculation with correct mathematics across different formats, spaces, and locales.
+     * Asserts assertCalculation with correct mathematics across different formats, spaces, and locales.
      */
     @Test
-    public void testVerifyCalculationSuccess()
+    public void testAssertCalculationSuccess()
     {
         // German locale style equation with currency and percentage
-        AiAssertions.verifyCalculation("0,90 € = (14,96 € + 0,00 €) * 6,00%");
+        AiAssertions.assertCalculation("0,90 € = (14,96 € + 0,00 €) * 6,00%");
 
         // US locale style equation with currency
-        AiAssertions.verifyCalculation("15.00 USD = 10.00 USD + 5.00 USD");
+        AiAssertions.assertCalculation("15.00 USD = 10.00 USD + 5.00 USD");
 
         // Plain numbers with percentage
-        AiAssertions.verifyCalculation("0.90 = (14.96 + 0) * 6%");
+        AiAssertions.assertCalculation("0.90 = (14.96 + 0) * 6%");
 
         // Order of operations and parentheses
-        AiAssertions.verifyCalculation("2 + 3 * 4 = 14");
-        AiAssertions.verifyCalculation("(2 + 3) * 4 = 20");
+        AiAssertions.assertCalculation("2 + 3 * 4 = 14");
+        AiAssertions.assertCalculation("(2 + 3) * 4 = 20");
 
         // Basic arithmetic division and negative results
-        AiAssertions.verifyCalculation("100 = 200 / 2");
-        AiAssertions.verifyCalculation("-1.50 = 1.50 * -1");
+        AiAssertions.assertCalculation("100 = 200 / 2");
+        AiAssertions.assertCalculation("-1.50 = 1.50 * -1");
 
         // Zero value test
-        AiAssertions.verifyCalculation("0.00 = 0");
+        AiAssertions.assertCalculation("0.00 = 0");
 
         // Tolerance/rounding test (difference within 0.02)
         // (14.96 + 0.0) * 0.06 = 0.8976, which is within 0.02 of 0.90
-        AiAssertions.verifyCalculation("0.90 = 0.8976");
-        AiAssertions.verifyCalculation("0.90 = 0.8801"); // diff is 0.0199 <= 0.02
-        AiAssertions.verifyCalculation("0.90 = 0.9199"); // diff is 0.0199 <= 0.02
+        AiAssertions.assertCalculation("0.90 = 0.8976");
+        AiAssertions.assertCalculation("0.90 = 0.8801"); // diff is 0.0199 <= 0.02
+        AiAssertions.assertCalculation("0.90 = 0.9199"); // diff is 0.0199 <= 0.02
     }
 
     /**
-     * Verifies verifyCalculation fails when the mathematical equation is incorrect.
+     * Verifies assertCalculation fails when the mathematical equation is incorrect.
      */
     @Test
-    public void testVerifyCalculationMathFailure()
+    public void testAssertCalculationMathFailure()
     {
         Assertions.assertThrows(AssertionError.class, () -> {
-            AiAssertions.verifyCalculation("1.00 = 1.05");
+            AiAssertions.assertCalculation("1.00 = 1.05");
         });
     }
 
     /**
-     * Verifies verifyCalculation fails when difference is slightly larger than 0.02.
+     * Verifies assertCalculation fails when difference is slightly larger than 0.02.
      */
     @Test
-    public void testVerifyCalculationMathToleranceFailure()
+    public void testAssertCalculationMathToleranceFailure()
     {
         Assertions.assertThrows(AssertionError.class, () -> {
-            AiAssertions.verifyCalculation("0.90 = 0.8749"); // diff is 0.03 > 0.02 after rounding to 0.87
+            AiAssertions.assertCalculation("0.90 = 0.8749"); // diff is 0.03 > 0.02 after rounding to 0.87
         });
     }
 
     /**
-     * Verifies verifyCalculation fails when a malicious expression or code is injected (alphabetic characters rejected).
+     * Verifies assertCalculation fails when a malicious expression or code is injected (alphabetic characters rejected).
      */
     @Test
-    public void testVerifyCalculationSecuritySystemExit()
+    public void testAssertCalculationSecuritySystemExit()
     {
         Assertions.assertThrows(SecurityException.class, () -> {
-            AiAssertions.verifyCalculation("System.exit(0) = 0");
+            AiAssertions.assertCalculation("System.exit(0) = 0");
         });
     }
 
     /**
-     * Verifies verifyCalculation fails when a malicious expression or code is injected (semicolon/commands rejected).
+     * Verifies assertCalculation fails when a malicious expression or code is injected (semicolon/commands rejected).
      */
     @Test
-    public void testVerifyCalculationSecurityCommand()
+    public void testAssertCalculationSecurityCommand()
     {
         Assertions.assertThrows(SecurityException.class, () -> {
-            AiAssertions.verifyCalculation("1 + 1 = 2; Runtime.getRuntime().exec(\"echo\")");
+            AiAssertions.assertCalculation("1 + 1 = 2; Runtime.getRuntime().exec(\"echo\")");
         });
     }
 
     /**
-     * Verifies verifyCalculation fails when comments are added.
+     * Verifies assertCalculation fails when comments are added.
      */
     @Test
-    public void testVerifyCalculationSecurityComments()
+    public void testAssertCalculationSecurityComments()
     {
         Assertions.assertThrows(SecurityException.class, () -> {
-            AiAssertions.verifyCalculation("1 + 1 = 2 // test");
+            AiAssertions.assertCalculation("1 + 1 = 2 // test");
         });
     }
 
     /**
-     * Verifies verifyCalculation fails when calling valid Java Math libraries programmatically (since alphabet is blocked).
+     * Verifies assertCalculation fails when calling valid Java Math libraries programmatically (since alphabet is blocked).
      */
     @Test
-    public void testVerifyCalculationSecurityJavaMath()
+    public void testAssertCalculationSecurityJavaMath()
     {
         Assertions.assertThrows(SecurityException.class, () -> {
-            AiAssertions.verifyCalculation("1 = Math.min(1, 2)");
+            AiAssertions.assertCalculation("1 = Math.min(1, 2)");
         });
     }
 
     /**
-     * Verifies verifyCalculation fails on an empty equation.
+     * Verifies assertCalculation fails on an empty equation.
      */
     @Test
-    public void testVerifyCalculationEmptyFailure()
+    public void testAssertCalculationEmptyFailure()
     {
         Assertions.assertThrows(AssertionError.class, () -> {
-            AiAssertions.verifyCalculation("");
+            AiAssertions.assertCalculation("");
         });
     }
 
     /**
-     * Verifies verifyCalculation fails when there is no equals sign.
+     * Verifies assertCalculation fails when there is no equals sign.
      */
     @Test
-    public void testVerifyCalculationNoEqualsFailure()
+    public void testAssertCalculationNoEqualsFailure()
     {
         Assertions.assertThrows(AssertionError.class, () -> {
-            AiAssertions.verifyCalculation("1 + 1");
+            AiAssertions.assertCalculation("1 + 1");
         });
     }
 
     /**
-     * Verifies verifyCalculation fails when there are multiple equals signs.
+     * Verifies assertCalculation fails when there are multiple equals signs.
      */
     @Test
-    public void testVerifyCalculationMultipleEqualsFailure()
+    public void testAssertCalculationMultipleEqualsFailure()
     {
         Assertions.assertThrows(AssertionError.class, () -> {
-            AiAssertions.verifyCalculation("1 = 1 = 1");
+            AiAssertions.assertCalculation("1 = 1 = 1");
         });
     }
 
     /**
-     * Verifies verifyCalculation fails when operands cannot be parsed.
+     * Verifies assertCalculation fails when operands cannot be parsed.
      */
     @Test
-    public void testVerifyCalculationMalformedOperandsFailure()
+    public void testAssertCalculationMalformedOperandsFailure()
     {
         Assertions.assertThrows(AssertionError.class, () -> {
-            AiAssertions.verifyCalculation("abc = def");
+            AiAssertions.assertCalculation("abc = def");
         });
     }
 
@@ -443,28 +443,28 @@ public final class AiAssertionsTest
     }
 
     /**
-     * Verifies verifyCalculation with precision-aware rounding on JPY and integer-only formatting.
+     * Verifies assertCalculation with precision-aware rounding on JPY and integer-only formatting.
      */
     @Test
-    public void testVerifyCalculationIntegerPrecision()
+    public void testAssertCalculationIntegerPrecision()
     {
         // JPY equations that mathematically produce decimal tax, but are rounded to integer on UI
-        AiAssertions.verifyCalculation("￥1 = (￥17 + ￥7) * 6.00 / 100");
-        AiAssertions.verifyCalculation("¥1 = (¥17 + ¥7) * 6.00 / 100");
-        AiAssertions.verifyCalculation("1 JPY = (17 JPY + 7 JPY) * 6.00 / 100");
+        AiAssertions.assertCalculation("￥1 = (￥17 + ￥7) * 6.00 / 100");
+        AiAssertions.assertCalculation("¥1 = (¥17 + ¥7) * 6.00 / 100");
+        AiAssertions.assertCalculation("1 JPY = (17 JPY + 7 JPY) * 6.00 / 100");
 
         // Normal integer matching
-        AiAssertions.verifyCalculation("3 = 10 * 30 / 100");
+        AiAssertions.assertCalculation("3 = 10 * 30 / 100");
     }
 
     /**
-     * Verifies verifyCalculation failures on JPY equations when the math is fundamentally incorrect.
+     * Verifies assertCalculation failures on JPY equations when the math is fundamentally incorrect.
      */
     @Test
-    public void testVerifyCalculationIntegerPrecisionFailure()
+    public void testAssertCalculationIntegerPrecisionFailure()
     {
         Assertions.assertThrows(AssertionError.class, () -> {
-            AiAssertions.verifyCalculation("￥5 = (￥17 + ￥7) * 6.00 / 100");
+            AiAssertions.assertCalculation("￥5 = (￥17 + ￥7) * 6.00 / 100");
         });
     }
 

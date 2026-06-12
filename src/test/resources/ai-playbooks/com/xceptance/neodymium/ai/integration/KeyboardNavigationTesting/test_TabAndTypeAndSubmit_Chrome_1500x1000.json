@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Press the TAB key 3 times",
-      "reasoning": "The user requested to press the TAB key 3 times, so three KEY_PRESS actions are generated.",
+      "reasoning": "Pressed the TAB key 3 times as instructed.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -61,7 +61,7 @@
     },
     {
       "promptLine": "Verify that the search box has focus",
-      "reasoning": "Verified that the search box element with data-neo-ref \u0027xc_7cjiuo\u0027 has keyboard focus.",
+      "reasoning": "Verified that the search box element with data-neo-ref \u0027xc_7cjiuo\u0027 has focus.",
       "actions": [
         {
           "type": "ASSERT",
@@ -89,7 +89,7 @@
           "value": [
             "bear"
           ],
-          "description": "Type \u0027bear\u0027 into the search posters textbox",
+          "description": "Type \"bear\" into the search box",
           "elementDetails": "Search posters...",
           "elementContext": {
             "classes": "search-input",
@@ -115,7 +115,7 @@
           "value": [
             "ENTER"
           ],
-          "description": "Press ENTER key",
+          "description": "Presses the ENTER key",
           "elementDetails": "ENTER key",
           "elementContext": {},
           "replay": "",

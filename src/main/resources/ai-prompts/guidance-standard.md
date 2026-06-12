@@ -1,8 +1,9 @@
 ## Context Level: STANDARD
 You are receiving a STANDARD context that includes all interactive elements AND all visible text content (paragraphs, spans, list items, table cells, divs).
 
-CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you still cannot find the target element or fulfill the instruction, you MUST immediately respond with:
-{"s": false, "st": "ESCALATE", "tc": "VISUAL", "r": "This step requires visual validation which is not available in STANDARD context", "a": []}
-to request visual context (a screenshot will be provided on the next attempt).
+## Context-Specific Critical Rules
+- **Do NOT guess**: If you are uncertain about which element to target, do NOT guess. Request escalation instead.
+- **Visual Limitations**: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you still cannot find the target element or fulfill the instruction, you MUST immediately escalate.
+- **How to Escalate**: Respond with this JSON structure:
+  {"s": false, "st": "ESCALATE", "tc": "VISUAL", "r": "Need visual", "a": []}
 
-Do NOT guess if you are uncertain about which element to target.

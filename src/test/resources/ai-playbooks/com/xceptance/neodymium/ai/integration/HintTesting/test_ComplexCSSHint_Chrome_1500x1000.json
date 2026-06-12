@@ -25,7 +25,7 @@
         {
           "type": "CLICK",
           "target": "ul.nav-links li:nth-child(1) a[href\u003d\u0027index.html\u0027]",
-          "description": "Click storefront active link",
+          "description": "Click the storefront active link",
           "elementDetails": "storefront active link",
           "elementContext": {
             "classes": "active",

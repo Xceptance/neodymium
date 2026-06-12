@@ -1768,29 +1768,64 @@ public class AiAgent {
                     historyBlock = sb.toString();
                 }
 
+                // Dynamic Java methods block (static system prompt optimization)
+                final boolean useJavaMethod = isRecoveryAttempt ? true : includeJavaMethod;
+                final Set<String> useMethods = isRecoveryAttempt ? null : targetedMethods;
+
+                final String javaMethodsBlock;
+                if (useJavaMethod && testClass != null)
+                {
+                    final com.xceptance.neodymium.ai.action.plugins.JavaMethodAction jma =
+                        (com.xceptance.neodymium.ai.action.plugins.JavaMethodAction) com.xceptance.neodymium.ai.action.ActionRegistry.getPlugin("JAVA_METHOD");
+                    if (jma != null)
+                    {
+                        final String methodsList = jma.getPromptInstructions(testClass, useMethods);
+                        if (methodsList != null && !methodsList.isBlank())
+                        {
+                            final int idx = methodsList.indexOf("\n  Available methods for this step:");
+                            final String listing = (idx >= 0) ? methodsList.substring(idx).trim() : methodsList.trim();
+                            javaMethodsBlock = "\n### Available Custom Java Methods\n" + listing + "\n";
+                        }
+                        else
+                        {
+                            javaMethodsBlock = "";
+                        }
+                    }
+                    else
+                    {
+                        javaMethodsBlock = "";
+                    }
+                }
+                else
+                {
+                    javaMethodsBlock = "";
+                }
+
                 // 3. Build prompt
                 final String userPrompt;
-                if (lastWasNoActions) {
+                if (lastWasNoActions)
+                {
                     LOG.info("    🔄 Retry attempt (no actions returned) {}/{} for instruction: {}", noActionsCount,
                             NO_ACTIONS_MAX_RETRIES, instruction);
                     userPrompt = AiAgentPrompts.buildNoActionsRetryPrompt(instruction, sutContext, domContext,
-                            historyBlock);
-                } else if (lastError != null) {
+                            historyBlock, javaMethodsBlock);
+                }
+                else if (lastError != null)
+                {
                     LOG.info("    🔄 Retry attempt (error) {}/{} — previous error: {}", errorCount, getMaxRetries(),
                             lastError);
                     userPrompt = AiAgentPrompts.buildRetryPrompt(instruction, sutContext, domContext, lastError,
-                            historyBlock);
-                } else {
-                    userPrompt = AiAgentPrompts.buildUserPrompt(instruction, sutContext, domContext, historyBlock);
+                            historyBlock, javaMethodsBlock);
+                }
+                else
+                {
+                    userPrompt = AiAgentPrompts.buildUserPrompt(instruction, sutContext, domContext, historyBlock, javaMethodsBlock);
                 }
 
-                // 4. Send to LLM with context-level-aware system prompt (with targeted methods)
+                // 4. Send to LLM with context-level-aware system prompt (100% static)
                 executionLog.logPrompt(userPrompt);
 
-                // On recovery/escalation: override to include all methods (first PESAP was insufficient)
-                final boolean useJavaMethod = isRecoveryAttempt ? true : includeJavaMethod;
-                final Set<String> useMethods = isRecoveryAttempt ? null : targetedMethods;
-                final String systemPrompt = AiAgentPrompts.getSystemPrompt(contextLevel, useJavaMethod, testClass, useMethods);
+                final String systemPrompt = AiAgentPrompts.getSystemPrompt(contextLevel);
 
                 LOG.debug("   💬 Sending prompt to LLM... [context: {}]", contextLevel);
                 llmClient.getAiStats().recordContextLevel(contextLevel);

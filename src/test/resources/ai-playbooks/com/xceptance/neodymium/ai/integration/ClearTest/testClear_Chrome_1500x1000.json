@@ -72,8 +72,8 @@
         {
           "type": "CLICK",
           "target": "#btn-submit",
-          "description": "Click the \u0027Submit Details\u0027 button",
-          "elementDetails": "\u0027Submit Details\u0027 button",
+          "description": "Click \u0027Submit Details\u0027 button",
+          "elementDetails": "Submit Details button",
           "elementContext": {
             "text": "Submit Details",
             "id": "btn-submit",

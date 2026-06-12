@@ -25,6 +25,9 @@
         {
           "type": "ASSERT",
           "target": "#plp-page-title",
+          "value": [
+            "visible"
+          ],
           "description": "Assert that the page title is visible",
           "elementDetails": "page title",
           "elementContext": {},

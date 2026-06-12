@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Type \u0027user@neodymium.com\u0027 into the email input.",
-      "reasoning": "Identified the email input by its \u0027name\u0027 attribute and \u0027data-neo-ref\u0027 and created a TYPE action to enter the specified email address.",
+      "reasoning": "Identified the email input field by its \u0027data-neo-ref\u0027 attribute and typed the specified email address.",
       "actions": [
         {
           "type": "TYPE",
@@ -28,7 +28,7 @@
           "value": [
             "user@neodymium.com"
           ],
-          "description": "Type \u0027user@neodymium.com\u0027 into the email input.",
+          "description": "Type \u0027user@neodymium.com\u0027 into the email input",
           "elementDetails": "Email Address",
           "elementContext": {
             "id": "oauth-email",
@@ -45,7 +45,7 @@
     },
     {
       "promptLine": "Type \u0027password123\u0027 into the password input.",
-      "reasoning": "Identified the password input by its \u0027data-neo-ref\u0027 attribute and generated a TYPE action to enter the specified password.",
+      "reasoning": "Typed \u0027password123\u0027 into the password input field identified by its name \u0027Password\u0027 and data-neo-ref attribute.",
       "actions": [
         {
           "type": "TYPE",
@@ -54,7 +54,7 @@
             "password123"
           ],
           "description": "Type \u0027password123\u0027 into the password input",
-          "elementDetails": "Password textbox",
+          "elementDetails": "Password",
           "elementContext": {
             "id": "oauth-password",
             "placeholder": "Password",
@@ -70,13 +70,13 @@
     },
     {
       "promptLine": "Click the \u0027Authorize \u0026 Sign In\u0027 button.",
-      "reasoning": "Clicked the \u0027Authorize \u0026 Sign In\u0027 button using its data-neo-ref attribute.",
+      "reasoning": "Clicked the \u0027Authorize \u0026 Sign In\u0027 button using its name attribute.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_jjqt9c",
-          "description": "Click the \u0027Authorize \u0026 Sign In\u0027 button.",
-          "elementDetails": "Authorize \u0026 Sign In button",
+          "target": "[name\u003d\u0027Authorize \u0026 Sign In\u0027]",
+          "description": "Click the \u0027Authorize \u0026 Sign In\u0027 button",
+          "elementDetails": "Authorize \u0026 Sign In",
           "elementContext": {
             "classes": "aura-btn",
             "text": "Authorize \u0026 Sign In",

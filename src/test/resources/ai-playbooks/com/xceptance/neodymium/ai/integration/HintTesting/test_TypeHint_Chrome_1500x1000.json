@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Type \"bear\" into search input (hint: #search-box)",
-      "reasoning": "Typed \"bear\" into the search input.",
+      "reasoning": "Typed \u0027bear\u0027 into the search input.",
       "actions": [
         {
           "type": "TYPE",
@@ -28,7 +28,7 @@
           "value": [
             "bear"
           ],
-          "description": "Type \"bear\" into search input",
+          "description": "Type \u0027bear\u0027 into search input",
           "elementDetails": "search input",
           "elementContext": {
             "classes": "search-input",

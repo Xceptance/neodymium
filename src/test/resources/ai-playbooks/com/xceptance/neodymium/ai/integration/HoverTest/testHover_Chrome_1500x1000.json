@@ -20,11 +20,11 @@
     },
     {
       "promptLine": "Hover over the button \u0027Hover Me\u0027",
-      "reasoning": "Hovered over the button \u0027Hover Me\u0027 using its data-neo-ref attribute.",
+      "reasoning": "Hovering over the button \u0027Hover Me\u0027 using its data-neo-ref attribute.",
       "actions": [
         {
           "type": "HOVER",
-          "target": "[data-neo-ref\u003d\u0027xc_jlp3e0\u0027]",
+          "target": "xc_jlp3e0",
           "description": "Hover over the button \u0027Hover Me\u0027",
           "elementDetails": "Hover Me",
           "elementContext": {
@@ -46,7 +46,7 @@
       "actions": [
         {
           "type": "CLICK",
-          "target": "[data-neo-ref\u003d\u0027xc_eairzn\u0027]",
+          "target": "xc_eairzn",
           "description": "Click the \u0027Sub Item 1\u0027 link",
           "elementDetails": "Sub Item 1",
           "elementContext": {

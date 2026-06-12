@@ -52,7 +52,7 @@ public class CheckAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "CHECK: Check if an element contains expected text or is in an expected state.";
+        return "CHECK: Check or uncheck a checkbox or radio button (requires tg).";
     }
 
     @Override

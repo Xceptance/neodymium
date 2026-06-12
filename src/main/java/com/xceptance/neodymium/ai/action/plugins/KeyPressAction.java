@@ -81,7 +81,7 @@ public class KeyPressAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "KEY_PRESS: press a keyboard key (e.g., ENTER, TAB, SHIFT_TAB) (requires value).";
+        return "KEY_PRESS: press a keyboard key (e.g., ENTER, TAB, SHIFT_TAB) (requires v).";
     }
 
     /**

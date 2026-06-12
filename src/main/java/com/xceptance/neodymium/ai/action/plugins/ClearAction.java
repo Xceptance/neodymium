@@ -46,7 +46,7 @@ public class ClearAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "CLEAR: clear an input field (requires target)."; }
+    public String getPromptInstructions() { return "CLEAR: clear an input field (requires tg)."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

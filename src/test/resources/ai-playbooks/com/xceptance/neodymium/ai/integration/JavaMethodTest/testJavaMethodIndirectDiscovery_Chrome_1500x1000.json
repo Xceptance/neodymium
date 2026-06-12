@@ -2,15 +2,15 @@
   "id": "com.xceptance.neodymium.ai.integration.JavaMethodTest :: testJavaMethodIndirectDiscovery :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "promptLine": "Open http://localhost:40457/AssertActionTest/testAssertHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
-            "http://localhost:43377/AssertActionTest/testAssertHappyPath.html"
+            "http://localhost:40457/AssertActionTest/testAssertHappyPath.html"
           ],
-          "description": "Navigate to http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+          "description": "Navigate to http://localhost:40457/AssertActionTest/testAssertHappyPath.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Verify using the java method assertPriceGreaterThanZero that \u002714.96 €\u0027 is greater than zero",
-      "reasoning": "The instruction requires invoking a Java method to assert a price value. The JAVA_METHOD action is used with the method name \u0027assertPriceGreaterThanZero\u0027 and the provided price \u002714.96 €\u0027 as the value.",
+      "reasoning": "The instruction explicitly requested to use the \u0027assertPriceGreaterThanZero\u0027 Java method with \u002714.96 €\u0027 as the argument. I have created a JAVA_METHOD action accordingly.",
       "actions": [
         {
           "type": "JAVA_METHOD",
@@ -28,7 +28,7 @@
           "value": [
             "14.96 €"
           ],
-          "description": "Verify that \u002714.96 €\u0027 is greater than zero using the assertPriceGreaterThanZero Java method.",
+          "description": "Verify that \u002714.96 €\u0027 is greater than zero using the java method assertPriceGreaterThanZero",
           "elementDetails": "assertPriceGreaterThanZero",
           "elementContext": {},
           "replay": "",
@@ -36,7 +36,7 @@
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "AXTREE"
+      "healedContextLevel": "STANDARD"
     }
   ]
 }

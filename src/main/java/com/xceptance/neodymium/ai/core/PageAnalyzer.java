@@ -486,6 +486,7 @@ public class PageAnalyzer
                         // Only capture context if it's descriptive (longer than the label itself) but compact (< 300 chars)
                         if (pText.length > lbl.length && pText.length < 300) {
                             parentText = pText;
+                            break;
                         }
                         // Prevent pulling in massive generic containers
                         if (pText.length >= 300) {

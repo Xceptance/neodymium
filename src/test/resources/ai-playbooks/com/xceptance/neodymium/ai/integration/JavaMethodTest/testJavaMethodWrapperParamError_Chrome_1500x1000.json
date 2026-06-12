@@ -1,0 +1,40 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.JavaMethodTest :: testJavaMethodWrapperParamError :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:40457/AssertActionTest/testAssertHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:40457/AssertActionTest/testAssertHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:40457/AssertActionTest/testAssertHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertWrapperParam(\"123\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertWrapperParam",
+          "value": [
+            "123"
+          ],
+          "description": "Call assertWrapperParam with param 123",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

@@ -2,15 +2,15 @@
   "id": "com.xceptance.neodymium.ai.integration.JavaMethodTest :: testJavaMethodLocalStaticMethodCombined :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "promptLine": "Open http://localhost:40457/AssertActionTest/testAssertHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
-            "http://localhost:43377/AssertActionTest/testAssertHappyPath.html"
+            "http://localhost:40457/AssertActionTest/testAssertHappyPath.html"
           ],
-          "description": "Navigate to http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+          "description": "Navigate to http://localhost:40457/AssertActionTest/testAssertHappyPath.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -19,16 +19,16 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Get the text of \u0027h1\u0027 and verify the welcome message length is 18 using the java method \u0027verifyWelcomeMessageLength\u0027",
-      "reasoning": "Captured the text from the heading element and then invoked the specified Java method to verify its length.",
+      "promptLine": "Get the text of \u0027h1\u0027 and verify its length is 18 using the java method \u0027verifyWelcomeMessageLength\u0027",
+      "reasoning": "Successfully extracted the text from the \u0027h1\u0027 element and then invoked the \u0027verifyWelcomeMessageLength\u0027 Java method with the extracted text to verify its length.",
       "actions": [
         {
           "type": "STORE",
-          "target": "[data-neo-ref\u003d\u0027xc_dliptk\u0027]",
+          "target": "h1",
           "value": [
-            "welcomeMessage"
+            "h1Text"
           ],
-          "description": "Get the text of \u0027h1\u0027",
+          "description": "Get the text of the h1 element",
           "elementDetails": "Assert Action Test",
           "elementContext": {},
           "replay": "",
@@ -40,15 +40,15 @@
           "value": [
             "Assert Action Test"
           ],
-          "description": "Verify the welcome message length is 18 using the java method \u0027verifyWelcomeMessageLength\u0027",
-          "elementDetails": "Verify welcome message length",
+          "description": "Verify the length of the stored h1 text using the Java method",
+          "elementDetails": "verifyWelcomeMessageLength",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "AXTREE"
+      "healedContextLevel": "STANDARD"
     }
   ]
 }

@@ -25,7 +25,7 @@
       "expectedFailure": true,
       "bugId": "APP-17171",
       "expectedErrorType": "com.xceptance.neodymium.ai.core.AiAgent$DefinitiveAssertionError",
-      "expectedErrorMessage": "Verification failed: The minicart currently shows \u00270 items\u0027, but \u00272 items\u0027 was expected."
+      "expectedErrorMessage": "Verification failed: The minicart currently shows \"0 items\" instead of \"two items\" as expected."
     }
   ]
 }

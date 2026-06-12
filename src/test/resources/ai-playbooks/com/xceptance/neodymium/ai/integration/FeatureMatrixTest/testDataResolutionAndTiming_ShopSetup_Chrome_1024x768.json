@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
-      "reasoning": "Typed \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 textbox identified by its data-neo-ref attribute.",
+      "reasoning": "Identified the \u0027Full Name\u0027 textbox by its accessibility name and data-neo-ref attribute, then generated a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
@@ -29,7 +29,7 @@
     },
     {
       "promptLine": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Typed \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 textbox identified by its data-neo-ref attribute.",
+      "reasoning": "Identified the \u0027Email Address\u0027 textbox by its name and data-neo-ref attribute and generated a TYPE action.",
       "actions": [
         {
           "type": "TYPE",
@@ -55,7 +55,7 @@
     },
     {
       "promptLine": "Click the \u0027Create Account\u0027 button.",
-      "reasoning": "Found the \u0027Create Account\u0027 button using its data-neo-ref attribute and generated a CLICK action.",
+      "reasoning": "Found the \u0027Create Account\u0027 button by its name and data-neo-ref attribute and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",

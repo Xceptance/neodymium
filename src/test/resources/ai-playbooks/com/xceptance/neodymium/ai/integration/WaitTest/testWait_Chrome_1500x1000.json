@@ -42,7 +42,7 @@
     },
     {
       "promptLine": "Wait for the success indicator to be visible (hint: #success)",
-      "reasoning": "Successfully created actions to wait for the success indicator to be visible.",
+      "reasoning": "",
       "actions": [
         {
           "type": "ASSERT",

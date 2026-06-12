@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the navigation container (hint: #nav-container)",
-      "reasoning": "Clicked the navigation container as instructed.",
+      "reasoning": "Clicked the navigation container.",
       "actions": [
         {
           "type": "CLICK",
@@ -87,7 +87,7 @@
             "ArrowUp"
           ],
           "description": "Presses the ArrowUp key",
-          "elementDetails": "ArrowUp",
+          "elementDetails": "ArrowUp key",
           "elementContext": {},
           "replay": "",
           "adjust": false

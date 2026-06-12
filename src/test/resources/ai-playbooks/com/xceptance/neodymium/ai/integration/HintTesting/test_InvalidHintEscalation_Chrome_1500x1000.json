@@ -20,11 +20,11 @@
     },
     {
       "promptLine": "Click the search button (hint: #non-existent-button)",
-      "reasoning": "The provided hint #non-existent-button did not match any element in the DOM. I identified and clicked the \u0027Search\u0027 button using its data-neo-ref attribute.",
+      "reasoning": "The provided hint `#non-existent-button` did not match any element in the DOM. I identified the search button by its accessible name \u0027Search\u0027 and `data-neo-ref` attribute.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_r9bvv1",
+          "target": "[data-neo-ref\u003d\u0027xc_r9bvv1\u0027]",
           "description": "Click the search button",
           "elementDetails": "Search",
           "elementContext": {

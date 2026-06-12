@@ -48,8 +48,8 @@
           "value": [
             "true"
           ],
-          "description": "Check the radio button \u0027Phone\u0027",
-          "elementDetails": "radio button \u0027Phone\u0027",
+          "description": "Check the \u0027Phone\u0027 radio button.",
+          "elementDetails": "radio button with id contact-phone",
           "elementContext": {},
           "replay": "",
           "adjust": false

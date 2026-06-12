@@ -25,7 +25,7 @@
         {
           "type": "CLICK",
           "target": "xc_8a5ii9",
-          "description": "Click the \u0027Have a promo code?\u0027 link",
+          "description": "Click the \u0027Have a promo code?\u0027 link.",
           "elementDetails": "Have a promo code?",
           "elementContext": {
             "text": "Have a promo code?",
@@ -46,7 +46,7 @@
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_nlpuwa",
+          "target": "[data-neo-ref\u003d\u0027xc_nlpuwa\u0027]",
           "value": [
             "DISCOUNT"
           ],
@@ -67,13 +67,13 @@
     },
     {
       "promptLine": "Click the Apply button next to it.",
-      "reasoning": "Clicked the \u0027Apply\u0027 button as instructed, using its data-neo-ref attribute.",
+      "reasoning": "Clicked the \u0027Apply\u0027 button as identified in the AXTREE.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_sz7lv5",
+          "target": "[data-neo-ref\u003d\u0027xc_sz7lv5\u0027]",
           "description": "Click the Apply button",
-          "elementDetails": "Apply",
+          "elementDetails": "Apply button",
           "elementContext": {
             "classes": "aura-btn",
             "text": "Apply",

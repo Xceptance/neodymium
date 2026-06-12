@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the red text box containing \u0027Blocking Overlay Active\u0027 to dismiss the overlay.",
-      "reasoning": "The instruction asks to click the \u0027Blocking Overlay Active\u0027 text box. I identified the element with id \u0027blocking-overlay\u0027 which contains this text and is clickable.",
+      "reasoning": "The instruction asks to click the \u0027red text box containing \u0027Blocking Overlay Active\u0027\u0027. I identified an interactive element with id \u0027blocking-overlay\u0027 and the text \u0027Blocking Overlay Active (Click here to dismiss)\u0027 which matches the instruction.",
       "actions": [
         {
           "type": "CLICK",
@@ -41,13 +41,13 @@
     },
     {
       "promptLine": "Click the \u0027Submit Transaction\u0027 button.",
-      "reasoning": "Found the \u0027Submit Transaction\u0027 button by its data-neo-ref attribute and created a CLICK action.",
+      "reasoning": "Found the \u0027Submit Transaction\u0027 button in the AXTree and generated a CLICK action targeting its data-neo-ref.",
       "actions": [
         {
           "type": "CLICK",
           "target": "xc_3poa6a",
           "description": "Click the \u0027Submit Transaction\u0027 button",
-          "elementDetails": "Submit Transaction",
+          "elementDetails": "Submit Transaction button",
           "elementContext": {
             "classes": "aura-btn",
             "text": "Submit Transaction",

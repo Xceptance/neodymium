@@ -42,7 +42,7 @@
     },
     {
       "promptLine": "Press key \u0027a\u0027",
-      "reasoning": "The instruction is to press the key \u0027a\u0027, which directly maps to a KEY_PRESS action with \u0027a\u0027 as the value.",
+      "reasoning": "The instruction is to press the key \u0027a\u0027. The KEY_PRESS action is used with \u0027a\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -61,7 +61,7 @@
     },
     {
       "promptLine": "Type key \u0027b\u0027",
-      "reasoning": "The instruction is to type a key, so a KEY_PRESS action with the value \u0027b\u0027 is appropriate.",
+      "reasoning": "The instruction is to type a key \u0027b\u0027, so a KEY_PRESS action with value \u0027b\u0027 is used.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -69,7 +69,7 @@
             "b"
           ],
           "description": "Type key \u0027b\u0027",
-          "elementDetails": "key \u0027b\u0027",
+          "elementDetails": "Keyboard key \u0027b\u0027",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -87,7 +87,7 @@
           "value": [
             "c"
           ],
-          "description": "Presses the \u0027c\u0027 key",
+          "description": "Press the \u0027c\u0027 key",
           "elementDetails": "Keyboard key \u0027c\u0027",
           "elementContext": {},
           "replay": "",

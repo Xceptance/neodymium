@@ -1,0 +1,57 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.BugMarkerTest :: failButMarkedAsBug_StaySilent_PesapComparison :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Verify that the minicart shows two items .",
+      "reasoning": "Expected failure recorded for bug: APP-17171",
+      "actions": [],
+      "expectedFailure": true,
+      "bugId": "APP-17171",
+      "expectedErrorType": "com.xceptance.neodymium.ai.core.AiAgent$DefinitiveAssertionError",
+      "expectedErrorMessage": "Verification failed: The minicart currently shows \u00270 items\u0027, but the expected value was \u0027two items\u0027."
+    },
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Verify that the minicart shows two items .",
+      "reasoning": "Expected failure recorded for bug: APP-17171",
+      "actions": [],
+      "expectedFailure": true,
+      "bugId": "APP-17171",
+      "expectedErrorType": "com.xceptance.neodymium.ai.core.AiAgent$DefinitiveAssertionError",
+      "expectedErrorMessage": "Verification failed: The minicart currently shows \"0 items\" instead of \"2 items\"."
+    }
+  ]
+}

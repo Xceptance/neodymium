@@ -373,99 +373,7 @@ public final class AiAgentPrompts
         return getSystemPrompt(ContextLevel.STANDARD);
     }
 
-    /**
-     * Retrieves the system prompt with targeted Java method injection.
-     * When JIT PESAP is active, only the predicted methods are included.
-     * When PESAP is off or during recovery, all methods are included.
-     *
-     * @param level           the current context level
-     * @param includeJavaMethod whether to include JAVA_METHOD plugin instructions
-     * @param testClass       the active test class for method scanning, or {@code null}
-     * @param targetedMethods the set of method names to include, or {@code null}/empty for all
-     * @return the fully prepared system prompt
-     */
-    public static String getSystemPrompt(final ContextLevel level, final boolean includeJavaMethod,
-            final Class<?> testClass, final Set<String> targetedMethods)
-    {
-        final String snippetRole = getPrompt("snippet-role.md");
-        final StringBuilder sb = new StringBuilder();
-        sb.append(snippetRole).append("\n\n");
 
-        if (level == ContextLevel.HINT)
-        {
-            sb.append("## Your Capabilities\n")
-              .append("You can perform these action types targeting the element: CLICK | TYPE | CLEAR | SELECT | HOVER | ASSERT | CHECK | SCROLL | KEY_PRESS\n\n");
-
-            final String minResponseFormat = """
-                ## Response Format
-                Return raw minified single-line JSON without markdown code blocks:
-                {
-                  "s": true/false,
-                  "a": [
-                    {
-                      "t": "ACTION_TYPE",
-                      "tg": "locator string from hint",
-                      "v": "value if required",
-                      "desc": "brief action description",
-                      "ed": "short description of target element"
-                    }
-                  ],
-                  "d": true/false,
-                  "e": "error message if s is false",
-                  "r": "brief explanation"
-                }""";
-            sb.append(minResponseFormat).append("\n\n");
-
-            sb.append("## Rules\n")
-              .append("1. Set \"d\" to true when all instructions for this step are complete.\n")
-              .append("2. Keep descriptions (\"desc\") concise.\n")
-              .append("3. Map instructions to actions: CLICK (click/press), TYPE (type/enter), CLEAR (clear), SELECT (dropdown), HOVER (hover), ASSERT (verify/check), CHECK (checkbox/radio), SCROLL (scroll), KEY_PRESS (press keys or single letters e.g., Enter, Tab, a, b).\n")
-              .append("4. LOCATOR HINTS: If an inline hint is provided (e.g., \"(hint: selector)\"), you MUST extract the selector value and set it as the \"tg\" field of the action (including for KEY_PRESS).\n")
-              .append("5. For single character keyboard inputs (e.g. 'a', 'b', 'c'), use KEY_PRESS instead of CLICK or TYPE when instructing to press/type a single letter key.\n\n");
-        }
-        else
-        {
-            final String snippetCapabilities = getPrompt("snippet-capabilities.md");
-            sb.append(injectPluginMetadata(snippetCapabilities, level, includeJavaMethod, testClass, targetedMethods)).append("\n\n");
-
-            final String snippetResponseFormat = getPrompt("snippet-response-format.md");
-            sb.append(snippetResponseFormat).append("\n\n");
-
-            final String systemPromptRules = getPrompt("system-prompt-rules.md");
-            sb.append(systemPromptRules).append("\n\n");
-        }
-
-        switch (level)
-        {
-            case HINT:
-            {
-                break;
-            }
-
-            case AXTREE:
-            case LEAN:
-            case STANDARD:
-            {
-                break;
-            }
-
-            case VISUAL_LEAN:
-            case VISUAL:
-            {
-                final String rulesVisual = getPrompt("rules-visual.md");
-                sb.append(rulesVisual).append("\n\n");
-                break;
-            }
-
-            default:
-            {
-                break;
-            }
-        }
-
-        sb.append(getContextLevelGuidance(level));
-        return sb.toString();
-    }
 
     /**
      * Retrieves the system prompt tailored to the given context level.
@@ -602,6 +510,22 @@ public final class AiAgentPrompts
     public static String buildUserPrompt(final String instruction, final String sutContext, final String domContext,
         final String historyBlock)
     {
+        return buildUserPrompt(instruction, sutContext, domContext, historyBlock, "");
+    }
+
+    /**
+     * Builds the user prompt with the instruction, DOM context, optional step history, and optional Java methods block.
+     *
+     * @param instruction      the task instruction
+     * @param sutContext       application specific instructions
+     * @param domContext       current DOM representation
+     * @param historyBlock     pre-formatted step history block, or empty string if none
+     * @param javaMethodsBlock pre-formatted custom Java methods block, or empty string if none
+     * @return the formatted user prompt
+     */
+    public static String buildUserPrompt(final String instruction, final String sutContext, final String domContext,
+        final String historyBlock, final String javaMethodsBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
@@ -610,6 +534,7 @@ public final class AiAgentPrompts
         return getUserPromptTemplate()
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{javaMethodsBlock}", javaMethodsBlock != null ? javaMethodsBlock : "")
             .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext);
     }
@@ -642,6 +567,23 @@ public final class AiAgentPrompts
     public static String buildRetryPrompt(final String instruction, final String sutContext, final String domContext,
         final String error, final String historyBlock)
     {
+        return buildRetryPrompt(instruction, sutContext, domContext, error, historyBlock, "");
+    }
+
+    /**
+     * Builds a retry prompt with error context, optional step history, and optional Java methods block.
+     *
+     * @param instruction      the task instruction
+     * @param sutContext       application specific instructions
+     * @param domContext       current DOM representation
+     * @param error            the error that caused the previous failure
+     * @param historyBlock     pre-formatted step history block, or empty string if none
+     * @param javaMethodsBlock pre-formatted custom Java methods block, or empty string if none
+     * @return the formatted retry prompt
+     */
+    public static String buildRetryPrompt(final String instruction, final String sutContext, final String domContext,
+        final String error, final String historyBlock, final String javaMethodsBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
@@ -650,6 +592,7 @@ public final class AiAgentPrompts
         return getRetryPromptTemplate()
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{javaMethodsBlock}", javaMethodsBlock != null ? javaMethodsBlock : "")
             .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext)
             .replace("{error}", error);
@@ -680,6 +623,22 @@ public final class AiAgentPrompts
     public static String buildNoActionsRetryPrompt(final String instruction, final String sutContext,
         final String domContext, final String historyBlock)
     {
+        return buildNoActionsRetryPrompt(instruction, sutContext, domContext, historyBlock, "");
+    }
+
+    /**
+     * Builds a retry prompt for when no actions were returned, with optional step history and optional Java methods block.
+     *
+     * @param instruction      the task instruction
+     * @param sutContext       application specific instructions
+     * @param domContext       current DOM representation
+     * @param historyBlock     pre-formatted step history block, or empty string if none
+     * @param javaMethodsBlock pre-formatted custom Java methods block, or empty string if none
+     * @return the formatted prompt
+     */
+    public static String buildNoActionsRetryPrompt(final String instruction, final String sutContext,
+        final String domContext, final String historyBlock, final String javaMethodsBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
@@ -688,6 +647,7 @@ public final class AiAgentPrompts
         return getNoActionsRetryPromptTemplate()
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{javaMethodsBlock}", javaMethodsBlock != null ? javaMethodsBlock : "")
             .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext);
     }

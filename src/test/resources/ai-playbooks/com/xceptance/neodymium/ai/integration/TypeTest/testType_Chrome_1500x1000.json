@@ -28,7 +28,7 @@
           "value": [
             "Bob"
           ],
-          "description": "Type \u0027Bob\u0027 into the \u0027First Name:\u0027 field",
+          "description": "Type \"Bob\" into the \"First Name:\" field",
           "elementDetails": "First Name: field",
           "elementContext": {
             "id": "first-name",
@@ -76,7 +76,7 @@
           "type": "CLICK",
           "target": "#btn-submit",
           "description": "Click \u0027Submit Details\u0027 button",
-          "elementDetails": "\u0027Submit Details\u0027 button",
+          "elementDetails": "Submit Details button",
           "elementContext": {
             "text": "Submit Details",
             "id": "btn-submit",

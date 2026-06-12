@@ -3,14 +3,14 @@
   "steps": [
     {
       "promptLine": "Gehe zu http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
-      "reasoning": "Navigating to the provided URL.",
+      "reasoning": "Navigating to the provided URL as instructed.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
           ],
-          "description": "Navigate to the specified URL.",
+          "description": "Navigate to the specified URL",
           "elementDetails": "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
           "elementContext": {},
           "replay": "",

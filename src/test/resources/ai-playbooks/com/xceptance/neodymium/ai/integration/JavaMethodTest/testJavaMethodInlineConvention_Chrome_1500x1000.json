@@ -1,0 +1,92 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.JavaMethodTest :: testJavaMethodInlineConvention :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:40457/AssertActionTest/testAssertHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:40457/AssertActionTest/testAssertHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:40457/AssertActionTest/testAssertHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Verify the price is correct (java: assertPriceGreaterThanZero(\"14.96 €\"))",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertPriceGreaterThanZero",
+          "value": [
+            "14.96 €"
+          ],
+          "description": "Call assertPriceGreaterThanZero with param 14.96 €",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Run a standalone parenthesized command (java: assertLocalMethod(\"expected_value\"))",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertLocalMethod",
+          "value": [
+            "expected_value"
+          ],
+          "description": "Call assertLocalMethod with param expected_value",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Call a parameterless method (java: assertParameterless())",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertParameterless",
+          "value": [
+            ""
+          ],
+          "description": "Call assertParameterless with param ",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Call a parameterless method without parens (java: assertParameterless)",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertParameterless",
+          "value": [],
+          "description": "Call assertParameterless with param null",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}
