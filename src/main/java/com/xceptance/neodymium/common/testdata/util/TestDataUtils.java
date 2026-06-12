@@ -293,9 +293,9 @@ public final class TestDataUtils
             || lowerCaseName.endsWith(".yml") || lowerCaseName.endsWith(".properties");
     }
 
-    private static void appendDataSetsAndCheckIDs(List<Map<String, String>> result, List<Map<String, String>> newDataSets, String sourceName, Map<String, String> testIdToFileName)
+    private static void appendDataSetsAndCheckIDs(final List<Map<String, String>> result, final List<Map<String, String>> newDataSets, final String sourceName, final Map<String, String> testIdToFileName)
     {
-        for (Map<String, String> dataSet : newDataSets)
+        for (final Map<String, String> dataSet : newDataSets)
         {
             String testId = dataSet.get("testId");
             if (StringUtils.isBlank(testId))
@@ -303,17 +303,24 @@ public final class TestDataUtils
                 testId = dataSet.get("TEST_ID");
             }
 
+            final String sourceFileFromDataSet = dataSet.get("neodymium.sourceFile");
+            final String actualSourceName = (StringUtils.isNotBlank(sourceFileFromDataSet) && !".".equals(sourceFileFromDataSet)) ? sourceFileFromDataSet : sourceName;
+
             if (StringUtils.isNotBlank(testId))
             {
                 if (testIdToFileName.containsKey(testId))
                 {
-                    throw new RuntimeException("Duplicate test dataset ID '" + testId + "' found in file '" + sourceName + "'. Already defined in '" + testIdToFileName.get(testId) + "'.");
+                    final String previousSourceName = testIdToFileName.get(testId);
+                    if (!previousSourceName.equals(actualSourceName))
+                    {
+                        throw new RuntimeException("Duplicate test dataset ID '" + testId + "' found in file '" + actualSourceName + "'. Already defined in '" + previousSourceName + "'.");
+                    }
                 }
-                testIdToFileName.put(testId, sourceName);
+                testIdToFileName.put(testId, actualSourceName);
             }
             
             // Add internal metadata for tracking the source file
-            dataSet.put("neodymium.sourceFile", sourceName);
+            dataSet.put("neodymium.sourceFile", actualSourceName);
 
             result.add(dataSet);
         }
@@ -345,7 +352,13 @@ public final class TestDataUtils
                 final File batchDataFile = new File(directory, fileName);
                 if (batchDataFile.isFile())
                 {
-                    return readDataSetsFromFile(batchDataFile);
+                    final List<Map<String, String>> datasets = readDataSetsFromFile(batchDataFile);
+                    final String baseName = FilenameUtils.getName(fileName);
+                    for (final Map<String, String> ds : datasets)
+                    {
+                        ds.put("neodymium.sourceFile", baseName);
+                    }
+                    return datasets;
                 }
             }
         }
@@ -370,13 +383,22 @@ public final class TestDataUtils
                     output.flush();
 
                     // read the data sets from the temporary file
-                    return readDataSetsFromFile(batchDataFile);
+                    final List<Map<String, String>> datasets = readDataSetsFromFile(batchDataFile);
+                    final String baseName = FilenameUtils.getName(fileName);
+                    for (final Map<String, String> ds : datasets)
+                    {
+                        ds.put("neodymium.sourceFile", baseName);
+                    }
+                    return datasets;
                 }
                 finally
                 {
                     // clean up
                     input.close();
-                    output.close();
+                    if (output != null)
+                    {
+                        output.close();
+                    }
                     FileUtils.deleteQuietly(batchDataFile);
                 }
             }

@@ -300,6 +300,14 @@ public class TestDataTests
         Assert.assertEquals(TestCompoundClass.Level.HIGH, testCompound.getLevel());
     }
 
+    @Test
+    @DataSet(id = "asString")
+    public void testSourceFile()
+    {
+        Assert.assertFalse(Neodymium.getData().exists("neodymium.sourceFile"));
+        Assert.assertEquals("TestDataTests.json", Neodymium.getTestdataSourceFile());
+    }
+
     private void expectIAE(Runnable function)
     {
         expectException(function, IllegalArgumentException.class);

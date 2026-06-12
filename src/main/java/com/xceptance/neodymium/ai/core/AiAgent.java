@@ -215,15 +215,7 @@ public class AiAgent {
             final List<String> stepsList = new ArrayList<>(Arrays.asList(splitInstructions(instructions)));
             LOG.debug("Split into {} step(s)", stepsList.size());
 
-            final String sourceFileVal;
-            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.sourceFile"))
-            {
-                sourceFileVal = Neodymium.getData().asString("neodymium.sourceFile");
-            }
-            else
-            {
-                sourceFileVal = null;
-            }
+            final String sourceFileVal = Neodymium.getTestdataSourceFile();
 
             List<Integer> stepLineNumbers = null;
             if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.stepLineNumbers"))

@@ -28,6 +28,8 @@ import org.junit.runner.Result;
 import org.junit.runner.notification.Failure;
 import org.junit.runners.model.FrameworkMethod;
 
+import com.xceptance.neodymium.common.browser.WebDriverCache;
+import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.Neodymium;
 
@@ -109,25 +111,32 @@ public abstract class NeodymiumTest {
 	 * @param properties a HashMap containing all the needed properties for this
 	 *                   test case
 	 */
-	protected void addPropertiesForTest(String fileName, Map<String, String> properties) {
+	protected void addPropertiesForTest(final String fileName, final Map<String, String> properties) {
 		// due to different states the configuration is in during initialization, we
 		// need to add it to the properties as
 		// well as the file
 
 		// during the general initialization we need the Neodymium.configuration()
-		for (String key : properties.keySet()) {
+		for (final String key : properties.keySet()) {
 			Neodymium.configuration().setProperty(key, properties.get(key));
 		}
 
 		// the Neodymium.configuration() will be overwritten at one stage of the init
 		// process, so we need to have the
 		// config values in temporary files as well
-		String fileLocation = "config/" + fileName;
-		File tempConfigFile = new File("./" + fileLocation);
+		final String fileLocation = "config/" + fileName;
+		final File tempConfigFile = new File("./" + fileLocation);
 		NeodymiumTest.writeMapToPropertiesFile(properties, tempConfigFile);
 		ConfigFactory.setProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:" + fileLocation);
 
 		tempFiles.add(tempConfigFile);
+
+		final boolean hasBrowserProfileProperty = properties.keySet().stream().anyMatch(key -> key.startsWith("browserprofile."));
+		if (hasBrowserProfileProperty)
+		{
+			MultibrowserConfiguration.clearAllInstances();
+			MultibrowserConfiguration.getInstance(tempConfigFile.getPath());
+		}
 	}
 
 	/**
@@ -337,7 +346,7 @@ public abstract class NeodymiumTest {
 		}
 	}
 
-	public Result run(Class<?> testClass) {
+	public Result run(final Class<?> testClass) {
 		Result result = JUnitCore.runClasses(testClass);
 		for (int i = 0; i < 3 && result != null && result.getFailures() != null && !result.getFailures().isEmpty()
 				&& result.getFailures().stream()

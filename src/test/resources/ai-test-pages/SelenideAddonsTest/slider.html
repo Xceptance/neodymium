@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1280">
+    <title>Drag and Drop Slider Test</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: sans-serif;
+            background: #f5f5f5;
+            /* Fixed 1280x768 layout keeps slider elements reliably in viewport center
+               so that large drag offsets (e.g. ±3200px, ±1200px) exceed the viewport
+               and trigger WebDriver's MoveTargetOutOfBoundsException as expected. */
+            width: 1280px;
+            height: 768px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 80px;
+        }
+
+        /* ── Horizontal slider ─────────────────────────────────────────── */
+        .balSlider {
+            position: relative;
+            width: 500px;
+            height: 10px;
+            background: #ccc;
+            border-radius: 5px;
+        }
+
+        .balSlider span[role="slider"] {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: #1976d2;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            cursor: grab;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* ── Vertical slider ───────────────────────────────────────────── */
+        #equalizer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .k-slider-vertical {
+            position: relative;
+            width: 10px;
+            height: 300px;
+            background: #ccc;
+            border-radius: 5px;
+        }
+
+        .k-draghandle {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: #388e3c;
+            border-radius: 50%;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            cursor: grab;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Horizontal slider — selector: .balSlider span[role=slider] -->
+    <div class="balSlider">
+        <span role="slider"
+              aria-valuenow="0"
+              aria-valuemin="-500"
+              aria-valuemax="500"
+              tabindex="0"></span>
+    </div>
+
+    <!-- Vertical slider — selector: #equalizer .k-slider-vertical:first-child span.k-draghandle -->
+    <div id="equalizer">
+        <div class="k-slider-vertical">
+            <span class="k-draghandle"
+                  role="slider"
+                  aria-valuenow="10"
+                  aria-valuemin="-500"
+                  aria-valuemax="500"
+                  tabindex="0"></span>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Initialises a simple drag slider on the given element.
+         *
+         * Value model (1 px = 1 unit):
+         *   Horizontal: right → positive, left → negative
+         *   Vertical:   up    → positive, down  → negative  (inverted Y axis)
+         *
+         * The implementation records the pointer position on mousedown and
+         * recomputes aria-valuenow = startValue + fullDelta on every mousemove
+         * so that one Actions.dragAndDropBy() call (= one mousemove event) always
+         * produces the correct absolute delta from the drag's start position.
+         *
+         * @param {HTMLElement} el       - The draggable slider handle element.
+         * @param {boolean}     vertical - true for an inverted-Y vertical slider.
+         */
+        function initSlider(el, vertical) {
+            let dragging   = false;
+            let startX     = 0;
+            let startY     = 0;
+            let startValue = 0;
+
+            el.addEventListener('mousedown', function (e) {
+                dragging   = true;
+                startX     = e.clientX;
+                startY     = e.clientY;
+                startValue = parseInt(el.getAttribute('aria-valuenow'), 10);
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', function (e) {
+                if (!dragging) return;
+
+                const delta    = vertical ? -(e.clientY - startY) : (e.clientX - startX);
+                const min      = parseInt(el.getAttribute('aria-valuemin'), 10);
+                const max      = parseInt(el.getAttribute('aria-valuemax'), 10);
+                const newValue = Math.max(min, Math.min(max, startValue + delta));
+
+                el.setAttribute('aria-valuenow', String(newValue));
+            });
+
+            document.addEventListener('mouseup', function () {
+                dragging = false;
+            });
+        }
+
+        // Horizontal slider — .balSlider span[role=slider]
+        initSlider(document.querySelector('.balSlider span[role="slider"]'), false);
+
+        // Vertical slider — #equalizer .k-slider-vertical:first-child span.k-draghandle
+        initSlider(document.querySelector('#equalizer .k-slider-vertical:first-child span.k-draghandle'), true);
+    </script>
+</body>
+</html>
