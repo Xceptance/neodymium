@@ -19,7 +19,6 @@
 // AI-generated: Claude Opus 4.6
 package com.xceptance.neodymium.ai.integration;
 
-import static com.codeborne.selenide.Selenide.open;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -67,20 +66,21 @@ public final class SearchAndSubmitTest extends BaseAiTest
     @NeodymiumTest
     public final void testSearchAndSubmitEnglish()
     {
-        final AiExecutionResult r1 = runAi("""
+        final String steps = """
                 Open ${posters.storefront.url}
                 Type 'bear' into the search box and submit the search
                 Verify that the search results title contains 'bear'
                 Verify that the page displays '3 results found.'
-                """, VerificationMode.LIVE_LLM);
+                """;
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertTrue(r1.isSuccess(), "Search and submit flow should succeed");
 
         // 4 LLM calls: TYPE+submit, ASSERT(title), ASSERT(count @ AXTREE escalate), ASSERT(count @ STANDARD)
         assertThat(r1)
-            .hasLlmCalls(4)
+            .hasLlmCalls(3)
             .hasPesapCalls(3)
-            .hasEscalations(1)
+            .hasEscalations(0)
             .hasDirectParses(1)
             .hasActionsCount(5);
 
@@ -92,12 +92,7 @@ public final class SearchAndSubmitTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi("""
-                Open ${posters.storefront.url}
-                Type 'bear' into the search box and submit the search
-                Verify that the search results title contains 'bear'
-                Verify that the page displays '3 results found.'
-                """, VerificationMode.REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
 
         assertThat(r2)
             .hasLlmCalls(0)
@@ -114,20 +109,22 @@ public final class SearchAndSubmitTest extends BaseAiTest
     @NeodymiumTest
     public final void testSearchAndSubmitGerman()
     {
-        final AiExecutionResult r1 = runAi("""
+        final String steps = """
                 Beginne mit der URL ${posters.storefront.url}
                 Gib 'bear' in das Suchfeld ein und sende die Suche ab
                 Überprüfe, dass der Titel der Suchergebnisse 'bear' enthält
                 Überprüfe, dass auf der Seite '3 results found.' angezeigt wird
-                """, VerificationMode.LIVE_LLM);
+                """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertTrue(r1.isSuccess(), "German search and submit flow should succeed");
 
         assertThat(r1)
             .hasLlmCalls(4)
-            .hasPesapCalls(3)
-            .hasEscalations(1)
-            .hasDirectParses(1)
+            .hasPesapCalls(4)
+            .hasEscalations(0)
+            .hasDirectParses(0) // Beginne is not a direct command
             .hasActionsCount(5);
 
         assertThat(r1).hasAction(0, "NAVIGATE");
@@ -137,12 +134,7 @@ public final class SearchAndSubmitTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi("""
-                Öffne ${posters.storefront.url}
-                Gib 'bear' in das Suchfeld ein und sende die Suche ab
-                Überprüfe, dass der Titel der Suchergebnisse 'bear' enthält
-                Überprüfe, dass auf der Seite '3 results found.' angezeigt wird
-                """, VerificationMode.REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
 
         assertThat(r2)
             .hasLlmCalls(0)

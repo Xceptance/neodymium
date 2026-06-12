@@ -308,5 +308,182 @@ class PageAnalyzerAXTreeTest
         assertTrue(result.contains("<button data-neo-ref=\"xc_ref_cart\" name=\"Cart Icon: 1\"/>"));
         assertTrue(result.contains("<button data-neo-ref=\"xc_ref_flag\" name=\"🇩🇪\"/>"));
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void captureSimplifiedDom_withCdpSupport_returnsNestedHierarchicalAXTreeInFlowOrder()
+    {
+        final Class<?>[] interfaces = new Class<?>[] { WebDriver.class, HasCdp.class };
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            PageAnalyzerAXTreeTest.class.getClassLoader(),
+            interfaces,
+            (proxy, method, args) -> {
+                final String methodName = method.getName();
+                if ("getCurrentUrl".equals(methodName))
+                {
+                    return "https://example.com/test-nested-axtree";
+                }
+                if ("getTitle".equals(methodName))
+                {
+                    return "Nested AXTree Test";
+                }
+                if ("executeCdpCommand".equals(methodName))
+                {
+                    final String command = (String) args[0];
+                    final Map<String, Object> params = (Map<String, Object>) args[1];
+
+                    if ("Accessibility.getFullAXTree".equals(command))
+                    {
+                        final List<Map<String, Object>> nodes = new ArrayList<>();
+
+                        // Node 1: Button
+                        final Map<String, Object> button = new HashMap<>();
+                        button.put("ignored", false);
+                        button.put("nodeId", "button-id");
+                        button.put("backendDOMNodeId", 3001);
+                        button.put("role", "button");
+                        button.put("name", "Search");
+                        nodes.add(button);
+
+                        // Node 2: Heading
+                        final Map<String, Object> heading = new HashMap<>();
+                        heading.put("ignored", false);
+                        heading.put("nodeId", "heading-id");
+                        heading.put("backendDOMNodeId", 3002);
+                        heading.put("role", "heading");
+                        heading.put("name", "Store Catalog");
+                        nodes.add(heading);
+
+                        // Node 3: Textbox
+                        final Map<String, Object> textbox = new HashMap<>();
+                        textbox.put("ignored", false);
+                        textbox.put("nodeId", "textbox-id");
+                        textbox.put("backendDOMNodeId", 3003);
+                        textbox.put("role", "textbox");
+                        textbox.put("name", "Search posters...");
+                        textbox.put("properties", List.of(Map.of("name", "required", "value", Map.of("value", "true"))));
+                        nodes.add(textbox);
+
+                        // Node 4: Form (Landmark container)
+                        final Map<String, Object> form = new HashMap<>();
+                        form.put("ignored", false);
+                        form.put("nodeId", "form-id");
+                        form.put("backendDOMNodeId", 3004);
+                        form.put("role", "form");
+                        form.put("childIds", List.of("textbox-id", "button-id"));
+                        nodes.add(form);
+
+                        // Node 5: Banner (Landmark container)
+                        final Map<String, Object> banner = new HashMap<>();
+                        banner.put("ignored", false);
+                        banner.put("nodeId", "banner-id");
+                        banner.put("backendDOMNodeId", 3005);
+                        banner.put("role", "banner");
+                        banner.put("childIds", List.of("heading-id"));
+                        nodes.add(banner);
+
+                        // Node 6: Root WebArea (ignored role, but root containing Banner and Form)
+                        final Map<String, Object> root = new HashMap<>();
+                        root.put("ignored", false);
+                        root.put("nodeId", "root-id");
+                        root.put("backendDOMNodeId", 3006);
+                        root.put("role", "WebArea");
+                        root.put("childIds", List.of("banner-id", "form-id"));
+                        nodes.add(root);
+
+                        return Map.of("nodes", nodes);
+                    }
+                    else if ("DOM.resolveNode".equals(command))
+                    {
+                        final Number backendNodeId = (Number) params.get("backendNodeId");
+                        return Map.of("object", Map.of("objectId", "obj-id-" + backendNodeId));
+                    }
+                    else if ("Runtime.callFunctionOn".equals(command))
+                    {
+                        final String objectId = (String) params.get("objectId");
+                        if (objectId.endsWith("3003"))
+                        {
+                            return Map.of("result", Map.of("value", Map.of(
+                                "refId", "xc_ref_textbox",
+                                "fallbackLabel", "Search posters...",
+                                "domId", "search-box",
+                                "domName", "searchText",
+                                "domPlaceholder", "Search posters..."
+                            )));
+                        }
+                        else if (objectId.endsWith("3001"))
+                        {
+                            return Map.of("result", Map.of("value", Map.of(
+                                "refId", "xc_ref_button",
+                                "fallbackLabel", "Search",
+                                "domId", "search-button",
+                                "domName", "",
+                                "domPlaceholder", ""
+                            )));
+                        }
+                        else if (objectId.endsWith("3002"))
+                        {
+                            return Map.of("result", Map.of("value", Map.of(
+                                "refId", "xc_ref_heading",
+                                "fallbackLabel", "Store Catalog",
+                                "domId", "foo",
+                                "domName", "",
+                                "domPlaceholder", ""
+                            )));
+                        }
+                        else if (objectId.endsWith("3004"))
+                        {
+                            return Map.of("result", Map.of("value", Map.of(
+                                "refId", "xc_ref_form",
+                                "fallbackLabel", "",
+                                "domId", "",
+                                "domName", "",
+                                "domPlaceholder", ""
+                            )));
+                        }
+                        else if (objectId.endsWith("3005"))
+                        {
+                            return Map.of("result", Map.of("value", Map.of(
+                                "refId", "xc_ref_banner",
+                                "fallbackLabel", "",
+                                "domId", "",
+                                "domName", "",
+                                "domPlaceholder", ""
+                            )));
+                        }
+                        else if (objectId.endsWith("3006"))
+                        {
+                            return Map.of("result", Map.of("value", Map.of(
+                                "refId", "xc_ref_root",
+                                "fallbackLabel", "",
+                                "domId", "",
+                                "domName", "",
+                                "domPlaceholder", ""
+                            )));
+                        }
+                    }
+                }
+                return null;
+            }
+        );
+
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final PageAnalyzer analyzer = new PageAnalyzer();
+        final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
+
+        assertNotNull(result);
+
+        final String expected = "=== Accessibility Tree (AXTree) ===\n" +
+            "<banner data-neo-ref=\"xc_ref_banner\">\n" +
+            "  <heading data-neo-ref=\"xc_ref_heading\" id=\"foo\" name=\"Store Catalog\"/>\n" +
+            "</banner>\n" +
+            "<form data-neo-ref=\"xc_ref_form\">\n" +
+            "  <textbox data-neo-ref=\"xc_ref_textbox\" id=\"search-box\" name=\"searchText\" aria-label=\"Search posters...\" required=\"true\" placeholder=\"Search posters...\"/>\n" +
+            "  <button data-neo-ref=\"xc_ref_button\" id=\"search-button\" name=\"Search\"/>\n" +
+            "</form>\n";
+
+        assertTrue(result.contains(expected), "AXTree serialization should be visual-flow ordered, nested with 2-spaces indentation, and populated with DOM attributes.\nActual result:\n" + result);
+    }
 }
 
