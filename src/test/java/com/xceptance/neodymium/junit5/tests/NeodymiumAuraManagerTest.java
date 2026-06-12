@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -52,6 +53,12 @@ public final class NeodymiumAuraManagerTest
     private int port;
     private HttpClient client;
     private final Gson gson = new Gson();
+
+    @BeforeAll
+    public static void beforeAll()
+    {
+        System.setProperty("neodymium.aura.test", "true");
+    }
 
     @BeforeEach
     public void setUp() throws IOException
@@ -299,4 +306,134 @@ public final class NeodymiumAuraManagerTest
             MultibrowserConfiguration.clearAllInstances();
         }
     }
+
+    @Test
+    public void testChatMissingPrompt() throws IOException, InterruptedException
+    {
+        final String requestBody = gson.toJson(Map.of("prompt", ""));
+        final HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/chat"))
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .header("Content-Type", "application/json")
+            .build();
+        final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        Assertions.assertEquals(400, response.statusCode());
+        Assertions.assertTrue(response.body().contains("prompt"));
+    }
+
+    @Test
+    public void testChatMissingApiKey() throws IOException, InterruptedException
+    {
+        final String originalKey = System.getProperty("neodymium.ai.apiKey");
+        System.setProperty("neodymium.ai.apiKey", "");
+        try
+        {
+            final String requestBody = gson.toJson(Map.of("prompt", "hello"));
+            final HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/chat"))
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .header("Content-Type", "application/json")
+                .build();
+            final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            
+            Assertions.assertEquals(400, response.statusCode());
+            Assertions.assertTrue(response.body().contains("API Key is missing or invalid"));
+        }
+        finally
+        {
+            if (originalKey != null)
+            {
+                System.setProperty("neodymium.ai.apiKey", originalKey);
+            }
+            else
+            {
+                System.clearProperty("neodymium.ai.apiKey");
+            }
+        }
+    }
+
+    @Test
+    public void testChatWithDummyApiKeyReturnsError() throws IOException, InterruptedException
+    {
+        final String originalKey = System.getProperty("neodymium.ai.apiKey");
+        System.setProperty("neodymium.ai.apiKey", "invalid_dummy_key");
+        try
+        {
+            final String requestBody = gson.toJson(Map.of("prompt", "hello"));
+            final HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/chat"))
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .header("Content-Type", "application/json")
+                .build();
+            final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            
+            Assertions.assertTrue(response.statusCode() == 200 || response.statusCode() == 500);
+            if (response.statusCode() == 500)
+            {
+                Assertions.assertTrue(response.body().contains("LLM Client Error") || response.body().contains("API key"));
+            }
+        }
+        finally
+        {
+            if (originalKey != null)
+            {
+                System.setProperty("neodymium.ai.apiKey", originalKey);
+            }
+            else
+            {
+                System.clearProperty("neodymium.ai.apiKey");
+            }
+        }
+    }
+
+    @Test
+    public void testDisconnectClient() throws Exception
+    {
+        final CompletableFuture<HttpResponse<InputStream>> sseFuture = client.sendAsync(
+            HttpRequest.newBuilder().uri(URI.create("http://127.0.0.1:" + port + "/api/status?clientId=test-client-123")).GET().build(),
+            HttpResponse.BodyHandlers.ofInputStream()
+        );
+
+        Thread.sleep(500);
+
+        final HttpRequest disconnectRequest = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/disconnect?clientId=test-client-123"))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+        final HttpResponse<String> disconnectResponse = client.send(disconnectRequest, HttpResponse.BodyHandlers.ofString());
+
+        Assertions.assertEquals(200, disconnectResponse.statusCode());
+        final Map<?, ?> result = gson.fromJson(disconnectResponse.body(), Map.class);
+        Assertions.assertEquals(true, result.get("success"));
+
+        Thread.sleep(500);
+    }
+
+    @Test
+    public void testRunQueueWithDatasets() throws IOException, InterruptedException
+    {
+        final Map<String, Object> datasetSelection = Map.of(
+            "file", "dummy-test.yml",
+            "id", "1"
+        );
+        final Map<String, Object> requestBodyMap = Map.of(
+            "datasets", List.of(datasetSelection),
+            "headless", true,
+            "interactive", false,
+            "allure", false
+        );
+        final String requestBody = gson.toJson(requestBodyMap);
+        final HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/run"))
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .header("Content-Type", "application/json")
+            .build();
+        final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        Assertions.assertEquals(200, response.statusCode());
+        final Map<?, ?> result = gson.fromJson(response.body(), Map.class);
+        Assertions.assertEquals(true, result.get("success"));
+    }
 }
+

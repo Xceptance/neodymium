@@ -219,6 +219,57 @@ public class LlmClient
     }
 
     /**
+     * Sends a list of chat messages to the LLM.
+     *
+     * @param messages the list of chat messages forming the conversation
+     * @return the LLM's text response
+     */
+    public String chat(final List<ChatMessage> messages)
+    {
+        LOG.debug("   💬 Sending chat message list ({} messages)", messages.size());
+        if (LOG.isTraceEnabled())
+        {
+            LOG.trace("=== LLM REQUEST MESSAGES START ===");
+            for (final ChatMessage msg : messages)
+            {
+                LOG.trace("Role: {}, Content:\n{}", msg.type(), msg);
+            }
+            LOG.trace("=== LLM REQUEST MESSAGES END ===");
+        }
+
+        final ChatResponse response = getChatModel().chat(messages);
+        recordTokenUsage(response);
+
+        final String text = response.aiMessage().text();
+        LOG.debug("   💬 LLM response ({} chars)", text.length());
+        if (LOG.isTraceEnabled())
+        {
+            LOG.trace("=== LLM RESPONSE START ===\n{}\n=== LLM RESPONSE END ===", text);
+        }
+        return text;
+    }
+
+    /**
+     * Sends a list of chat messages to the LLM with an explicit operational mode.
+     *
+     * @param callMode the operational mode to record the usage under
+     * @param messages the list of chat messages forming the conversation
+     * @return the LLM's text response
+     */
+    public String chat(final LlmMode callMode, final List<ChatMessage> messages)
+    {
+        currentCallMode.set(callMode);
+        try
+        {
+            return chat(messages);
+        }
+        finally
+        {
+            currentCallMode.remove();
+        }
+    }
+
+    /**
      * Sends a chat message to the LLM.
      *
      * @param systemPrompt
@@ -232,13 +283,7 @@ public class LlmClient
         final List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.from(systemPrompt));
         messages.add(userMessage);
-
-        final ChatResponse response = getChatModel().chat(messages);
-        recordTokenUsage(response);
-
-        final String text = response.aiMessage().text();
-        LOG.debug("   💬 LLM response ({} chars)", text.length());
-        return text;
+        return chat(messages);
     }
 
     /**

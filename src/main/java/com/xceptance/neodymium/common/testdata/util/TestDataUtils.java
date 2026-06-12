@@ -236,26 +236,32 @@ public final class TestDataUtils
 
         }
 
-        String targetTestId = Neodymium.configuration().getTestIdFilter();
+        final String targetTestId = Neodymium.configuration().getTestIdFilter();
 
         if (StringUtils.isNotBlank(targetTestId))
         {
-            Pattern idFilter = Pattern.compile(targetTestId);
-
-            // Filter parsed datasets. We must do this after file parsing because test IDs are defined inside the files.
-            resultDataSets = resultDataSets.stream().filter(dataSet -> {
+            final Pattern idFilter = Pattern.compile(targetTestId);
+            final List<Map<String, String>> filtered = new LinkedList<>();
+            for (int i = 0; i < resultDataSets.size(); i++)
+            {
+                final Map<String, String> dataSet = resultDataSets.get(i);
                 String currentTestId = dataSet.get("testId");
                 if (StringUtils.isBlank(currentTestId))
                 {
                     currentTestId = dataSet.get("TEST_ID");
                 }
 
-                if (currentTestId == null) {
-                    return false;
+                if (currentTestId == null)
+                {
+                    currentTestId = String.valueOf(i + 1);
                 }
-                
-                return idFilter.matcher(currentTestId).find();
-            }).collect(Collectors.toList());
+
+                if (idFilter.matcher(currentTestId).find())
+                {
+                    filtered.add(dataSet);
+                }
+            }
+            resultDataSets = filtered;
         }
 
         return resultDataSets;

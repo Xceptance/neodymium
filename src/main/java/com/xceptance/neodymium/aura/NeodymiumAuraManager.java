@@ -39,8 +39,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -53,6 +56,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.xceptance.neodymium.ai.core.LlmClient;
+import com.xceptance.neodymium.ai.core.AiStats;
+import com.xceptance.neodymium.util.Neodymium;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.data.message.AiMessage;
+import org.yaml.snakeyaml.Yaml;
+import java.io.FileInputStream;
+import java.lang.reflect.Method;
+import com.xceptance.neodymium.ai.action.ActionRegistry;
 
 /**
  * Neodymium Aura Manager: A lightweight standalone web server to browse,
@@ -66,7 +80,7 @@ public final class NeodymiumAuraManager
     private static final Pattern STATS_PATTERN = Pattern.compile("Tests run:\\s*(\\d+),\\s*Failures:\\s*(\\d+),\\s*Errors:\\s*(\\d+)");
     private static final Gson gson = new Gson();
     
-    private static final List<HttpExchange> sseClients = new CopyOnWriteArrayList<>();
+    private static final Map<String, HttpExchange> sseClientsMap = new ConcurrentHashMap<>();
     private static final AtomicReference<Process> activeProcess = new AtomicReference<>(null);
     private static final AtomicInteger globalTestsRun = new AtomicInteger(0);
     private static final AtomicInteger globalPassed = new AtomicInteger(0);
@@ -293,6 +307,14 @@ public final class NeodymiumAuraManager
                 {
                     handleStopProcess(exchange);
                 }
+                else if ("/api/chat".equals(path) && "POST".equalsIgnoreCase(method))
+                {
+                    handleChat(exchange);
+                }
+                else if ("/api/disconnect".equals(path) && "POST".equalsIgnoreCase(method))
+                {
+                    handleDisconnect(exchange);
+                }
                 else
                 {
                     sendError(exchange, 404, "Endpoint not found");
@@ -332,7 +354,17 @@ public final class NeodymiumAuraManager
             {
                 LOGGER.error("[Aura Server] Directory src/test/resources does not exist or is not a directory: {}", resourcesDir.getAbsolutePath());
             }
-            sendJsonResponse(exchange, 200, gson.toJson(yamlFiles));
+
+            final List<YamlFileDto> responseList = new ArrayList<>();
+            for (final String file : yamlFiles)
+            {
+                final File yamlFile = new File(resourcesDir, file);
+                final Map<String, Object> details = getFileDetails(yamlFile);
+                final List<DatasetDto> datasets = (List<DatasetDto>) details.get("datasets");
+                responseList.add(new YamlFileDto(file, datasets != null ? datasets : new ArrayList<>()));
+            }
+
+            sendJsonResponse(exchange, 200, gson.toJson(responseList));
         }
 
         private void scanDir(final File baseDir, final File currentDir, final List<String> yamlFiles)
@@ -508,10 +540,10 @@ public final class NeodymiumAuraManager
         {
             final String body = readBody(exchange);
             final RunRequest req = gson.fromJson(body, RunRequest.class);
-            if (req == null || req.files == null || req.files.isEmpty())
+            if (req == null || req.datasets == null || req.datasets.isEmpty())
             {
-                LOGGER.error("[Aura Server] Run queue request failed: Missing 'files' in body");
-                sendError(exchange, 400, "Missing 'files' in body");
+                LOGGER.error("[Aura Server] Run queue request failed: Missing 'datasets' in body");
+                sendError(exchange, 400, "Missing 'datasets' in body");
                 return;
             }
 
@@ -522,28 +554,60 @@ public final class NeodymiumAuraManager
                 return;
             }
 
-            LOGGER.info("[Aura Server] Spawning test run queue for {} file(s) (headless={}, interactive={})", req.files.size(), req.headless, req.interactive);
+            LOGGER.info("[Aura Server] Spawning test run queue for {} dataset(s) (headless={}, interactive={})", req.datasets.size(), req.headless, req.interactive);
             executeQueue(req);
             sendJsonResponse(exchange, 200, gson.toJson(Map.of("success", true)));
         }
 
         private void handleStatusStream(final HttpExchange exchange) throws IOException
         {
-            LOGGER.info("[Aura Server] SSE client connected: {}", exchange.getRemoteAddress());
+            final String query = exchange.getRequestURI().getQuery();
+            String clientId = null;
+            if (query != null)
+            {
+                for (final String param : query.split("&"))
+                {
+                    final String[] pair = param.split("=");
+                    if (pair.length > 1 && "clientId".equals(pair[0]))
+                    {
+                        clientId = pair[1];
+                        break;
+                    }
+                }
+            }
+            if (clientId == null || clientId.trim().isEmpty())
+            {
+                clientId = "fallback-" + UUID.randomUUID().toString();
+            }
+
+            LOGGER.info("[Aura Server] SSE client connected: {} (clientId: {})", exchange.getRemoteAddress(), clientId);
             exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=UTF-8");
             exchange.getResponseHeaders().set("Cache-Control", "no-cache");
             exchange.getResponseHeaders().set("Connection", "keep-alive");
             exchange.sendResponseHeaders(200, 0);
 
-            synchronized (sseClients)
+            synchronized (sseClientsMap)
             {
+                final HttpExchange oldExchange = sseClientsMap.remove(clientId);
+                if (oldExchange != null)
+                {
+                    try
+                    {
+                        oldExchange.close();
+                    }
+                    catch (final Exception e)
+                    {
+                        // ignore
+                    }
+                }
+
                 if (pendingShutdown != null)
                 {
                     pendingShutdown.cancel(false);
                     pendingShutdown = null;
                     LOGGER.info("[Aura Server] New client connected. Cancelled pending server shutdown.");
                 }
-                sseClients.add(exchange);
+                sseClientsMap.put(clientId, exchange);
             }
             
             // Broadcast initial status to this client
@@ -561,9 +625,9 @@ public final class NeodymiumAuraManager
             }
             catch (final IOException e)
             {
-                synchronized (sseClients)
+                synchronized (sseClientsMap)
                 {
-                    sseClients.remove(exchange);
+                    sseClientsMap.values().remove(exchange);
                 }
                 LOGGER.info("[Aura Server] SSE client disconnected before initiation: {}", exchange.getRemoteAddress());
                 exchange.close();
@@ -573,7 +637,7 @@ public final class NeodymiumAuraManager
 
             try
             {
-                while (sseClients.contains(exchange))
+                while (sseClientsMap.containsValue(exchange))
                 {
                     Thread.sleep(15000);
                     try
@@ -596,11 +660,15 @@ public final class NeodymiumAuraManager
             }
             finally
             {
-                synchronized (sseClients)
+                final String finalClientId = clientId;
+                synchronized (sseClientsMap)
                 {
-                    sseClients.remove(exchange);
+                    if (sseClientsMap.get(finalClientId) == exchange)
+                    {
+                        sseClientsMap.remove(finalClientId);
+                    }
                 }
-                LOGGER.info("[Aura Server] SSE client disconnected: {}", exchange.getRemoteAddress());
+                LOGGER.info("[Aura Server] SSE client disconnected: {} (clientId: {})", exchange.getRemoteAddress(), finalClientId);
                 try
                 {
                     exchange.close();
@@ -785,6 +853,77 @@ public final class NeodymiumAuraManager
             sendJsonResponse(exchange, 200, gson.toJson(Map.of("success", true)));
         }
 
+        private void handleDisconnect(final HttpExchange exchange) throws IOException
+        {
+            final String query = exchange.getRequestURI().getQuery();
+            String clientId = null;
+            if (query != null)
+            {
+                for (final String param : query.split("&"))
+                {
+                    final String[] pair = param.split("=");
+                    if (pair.length > 1 && "clientId".equals(pair[0]))
+                    {
+                        clientId = pair[1];
+                        break;
+                    }
+                }
+            }
+
+            LOGGER.info("[Aura Server] Disconnect request received for clientId: {}", clientId);
+
+            if (clientId != null && !clientId.trim().isEmpty())
+            {
+                final HttpExchange sseExchange = sseClientsMap.remove(clientId);
+                if (sseExchange != null)
+                {
+                    LOGGER.info("[Aura Server] Removed active SSE client: {}", clientId);
+                    try
+                    {
+                        sseExchange.close();
+                    }
+                    catch (final Exception e)
+                    {
+                        // ignore
+                    }
+                }
+            }
+
+            sendJsonResponse(exchange, 200, gson.toJson(Map.of("success", true)));
+            checkShutdownOnDisconnect();
+        }
+
+        private void handleChat(final HttpExchange exchange) throws IOException
+        {
+            final String body = readBody(exchange);
+            final ChatRequest req = gson.fromJson(body, ChatRequest.class);
+            if (req == null || req.prompt == null || req.prompt.trim().isEmpty())
+            {
+                LOGGER.error("[Aura Server] Chat request failed: Missing 'prompt' in body");
+                sendError(exchange, 400, "Missing 'prompt' in body");
+                return;
+            }
+
+            try
+            {
+                // Verify API key configuration
+                final String apiKey = Neodymium.aiConfiguration().aiApiKey();
+                if (apiKey == null || apiKey.trim().isEmpty())
+                {
+                    sendError(exchange, 400, "API Key is missing or invalid. Please configure 'neodymium.ai.apiKey' in properties or system environment.");
+                    return;
+                }
+
+                final ChatResponse response = runChatWorkflow(req);
+                sendJsonResponse(exchange, 200, gson.toJson(response));
+            }
+            catch (final AssertionError | Exception e)
+            {
+                LOGGER.error("[Aura Server] Chat execution failed", e);
+                sendError(exchange, 500, "LLM Client Error: " + e.getMessage() + ". Please verify that your Gemini API key is configured and valid.");
+            }
+        }
+
         private String getMimeType(final String filename)
         {
             final String lower = filename.toLowerCase();
@@ -905,18 +1044,40 @@ public final class NeodymiumAuraManager
                     LOGGER.info("[Aura Server] Created temporary test runner: {}", tempRunnerFile.getAbsolutePath());
                 }
 
-                LOGGER.info("[Aura Server] Starting execution of {} test(s) in queue.", req.files.size());
+                final Map<String, List<String>> datasetsByFile = new LinkedHashMap<>();
+                for (final DatasetSelection selection : req.datasets)
+                {
+                    datasetsByFile.computeIfAbsent(selection.file, k -> new ArrayList<>()).add(selection.id);
+                }
+
+                LOGGER.info("[Aura Server] Starting execution of {} dataset(s) in {} file(s) in queue.", req.datasets.size(), datasetsByFile.size());
                 globalTestsRun.set(0);
                 globalPassed.set(0);
                 globalFailed.set(0);
 
-                for (int i = 0; i < req.files.size(); i++)
+                final List<Map.Entry<String, List<String>>> entries = new ArrayList<>(datasetsByFile.entrySet());
+                for (int i = 0; i < entries.size(); i++)
                 {
-                    final String file = req.files.get(i);
+                    final Map.Entry<String, List<String>> entry = entries.get(i);
+                    final String file = entry.getKey();
+                    final List<String> ids = entry.getValue();
+
                     activeFile.set(file);
                     broadcastStatus(true);
 
-                    broadcastLog("\n[INFO] Spawning Maven Subprocess for YAML test: " + file + "...");
+                    final StringBuilder idFilterBuilder = new StringBuilder();
+                    idFilterBuilder.append("^(");
+                    for (int j = 0; j < ids.size(); j++)
+                    {
+                        if (j > 0)
+                        {
+                            idFilterBuilder.append("|");
+                        }
+                        idFilterBuilder.append(Pattern.quote(ids.get(j)));
+                    }
+                    idFilterBuilder.append(")$");
+
+                    broadcastLog("\n[INFO] Spawning Maven Subprocess for YAML test: " + file + " [Datasets: " + ids + "]...");
 
                     final List<String> command = new ArrayList<>();
                     final String os = System.getProperty("os.name").toLowerCase();
@@ -930,13 +1091,14 @@ public final class NeodymiumAuraManager
                     {
                         command.add("mvn");
                     }
-                    if (i == 0)
+                    if (i == 0 && !"true".equals(System.getProperty("neodymium.aura.test")))
                     {
                         command.add("clean");
                     }
                     command.add("test");
                     command.add("-Dtest=com.xceptance.neodymium.aura.AuraYamlRunnerTest");
                     command.add("-Dneodymium.testFileFilter=" + file.replace(".", "\\."));
+                    command.add("-Dneodymium.testIdFilter=" + idFilterBuilder.toString());
                     command.add("-Dbrowserprofile.Default.headless=" + req.headless);
                     command.add("-Dselenide.headless=" + req.headless);
                     command.add("-Dneodymium.ai.interactive=" + req.interactive);
@@ -1030,7 +1192,8 @@ public final class NeodymiumAuraManager
                 if (req.allure)
                 {
                     LOGGER.info("[Aura Server] Auto-generating Allure report as requested.");
-                    generateAllureReport(req.files);
+                    final List<String> uniqueFiles = new ArrayList<>(datasetsByFile.keySet());
+                    generateAllureReport(uniqueFiles);
                 }
 
                 LOGGER.info("[Aura Server] Queue execution completed. Total: {}, Passed: {}, Failed: {}", globalTestsRun.get(), globalPassed.get(), globalFailed.get());
@@ -1163,6 +1326,7 @@ public final class NeodymiumAuraManager
 
             LOGGER.info("[Aura Server] Allure report copied to history: {}", destDir.getName());
             broadcastLog("[INFO] Allure report copied to history: " + destDir.getName());
+            broadcastReportReady(destDir.getName());
         }
         catch (final IOException e)
         {
@@ -1218,6 +1382,14 @@ public final class NeodymiumAuraManager
         broadcast(gson.toJson(event));
     }
 
+    private static void broadcastReportReady(final String reportId)
+    {
+        final Map<String, Object> event = new HashMap<>();
+        event.put("type", "reportReady");
+        event.put("reportId", reportId);
+        broadcast(gson.toJson(event));
+    }
+
     private static void broadcastStatus(final boolean running)
     {
         final Map<String, Object> event = new HashMap<>();
@@ -1232,17 +1404,17 @@ public final class NeodymiumAuraManager
 
     private static void checkShutdownOnDisconnect()
     {
-        synchronized (sseClients)
+        synchronized (sseClientsMap)
         {
-            if (sseClients.isEmpty())
+            if (sseClientsMap.isEmpty())
             {
                 if (pendingShutdown == null || pendingShutdown.isDone())
                 {
                     LOGGER.info("[Aura Server] No clients connected. Scheduling server shutdown in 5 seconds...");
                     pendingShutdown = shutdownScheduler.schedule(() -> {
-                        synchronized (sseClients)
+                        synchronized (sseClientsMap)
                         {
-                            if (sseClients.isEmpty())
+                            if (sseClientsMap.isEmpty())
                             {
                                 LOGGER.info("[Aura Server] No clients connected for 5 seconds. Shutting down...");
                                 
@@ -1253,7 +1425,14 @@ public final class NeodymiumAuraManager
                                     p.destroy();
                                 }
                                 
-                                System.exit(0);
+                                if (System.getProperty("neodymium.aura.test") == null)
+                                {
+                                    System.exit(0);
+                                }
+                                else
+                                {
+                                    LOGGER.info("[Aura Server] Skipping System.exit(0) in test environment.");
+                                }
                             }
                         }
                     }, 5, TimeUnit.SECONDS);
@@ -1265,7 +1444,7 @@ public final class NeodymiumAuraManager
     private static void broadcast(final String eventJson)
     {
         final byte[] payload = ("data: " + eventJson + "\n\n").getBytes(StandardCharsets.UTF_8);
-        for (final HttpExchange exchange : sseClients)
+        for (final HttpExchange exchange : sseClientsMap.values())
         {
             try
             {
@@ -1277,9 +1456,9 @@ public final class NeodymiumAuraManager
             }
             catch (final IOException e)
             {
-                synchronized (sseClients)
+                synchronized (sseClientsMap)
                 {
-                    sseClients.remove(exchange);
+                    sseClientsMap.values().remove(exchange);
                 }
                 try
                 {
@@ -1291,6 +1470,531 @@ public final class NeodymiumAuraManager
                 }
                 checkShutdownOnDisconnect();
             }
+        }
+    }
+
+    public static Map<String, Object> getFileDetails(final File file)
+    {
+        final Map<String, Object> details = new HashMap<>();
+        details.put("path", file.getName());
+        try
+        {
+            final Yaml yaml = new Yaml();
+            final Object data;
+            try (final InputStream is = new FileInputStream(file))
+            {
+                data = yaml.load(is);
+            }
+            if (data instanceof Map)
+            {
+                final Map<String, Object> root = (Map<String, Object>) data;
+                
+                // Extract steps info
+                if (root.containsKey("steps"))
+                {
+                    final String stepsStr = String.valueOf(root.get("steps"));
+                    final String[] steps = stepsStr.split("\n");
+                    final List<String> cleanSteps = new ArrayList<>();
+                    for (final String step : steps)
+                    {
+                        if (!step.trim().isEmpty())
+                        {
+                            cleanSteps.add(step.trim());
+                        }
+                    }
+                    details.put("totalSteps", cleanSteps.size());
+                    final List<String> summary = cleanSteps.subList(0, Math.min(cleanSteps.size(), 3));
+                    details.put("stepsSummary", summary);
+                }
+                else
+                {
+                    details.put("totalSteps", 0);
+                    details.put("stepsSummary", new ArrayList<>());
+                }
+
+                // Extract data / test IDs / dataset keys
+                final List<DatasetDto> datasetsList = new ArrayList<>();
+                final List<String> datasetKeys = new ArrayList<>();
+                if (root.containsKey("data"))
+                {
+                    final Object dataObj = root.get("data");
+                    if (dataObj instanceof List)
+                    {
+                        final List<?> dataList = (List<?>) dataObj;
+                        for (int i = 0; i < dataList.size(); i++)
+                        {
+                            final Object item = dataList.get(i);
+                            if (item instanceof Map)
+                            {
+                                final Map<?, ?> itemMap = (Map<?, ?>) item;
+                                final Object tId = itemMap.get("testId") != null ? itemMap.get("testId") : itemMap.get("TEST_ID");
+                                if (tId != null && !String.valueOf(tId).trim().isEmpty())
+                                {
+                                    datasetsList.add(new DatasetDto(String.valueOf(tId), String.valueOf(tId), true));
+                                }
+                                else
+                                {
+                                    datasetsList.add(new DatasetDto(String.valueOf(i + 1), "Dataset " + (i + 1), false));
+                                }
+                                for (final Object key : itemMap.keySet())
+                                {
+                                    final String keyStr = String.valueOf(key);
+                                    if (!datasetKeys.contains(keyStr) && !keyStr.startsWith("neodymium."))
+                                    {
+                                        datasetKeys.add(keyStr);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    final Object tId = root.get("testId") != null ? root.get("testId") : root.get("TEST_ID");
+                    if (tId != null && !String.valueOf(tId).trim().isEmpty())
+                    {
+                        datasetsList.add(new DatasetDto(String.valueOf(tId), String.valueOf(tId), true));
+                    }
+                    else
+                    {
+                        datasetsList.add(new DatasetDto("1", "Dataset 1", false));
+                    }
+                    for (final Object key : root.keySet())
+                    {
+                        final String keyStr = String.valueOf(key);
+                        if (!"steps".equals(keyStr) && !"data".equals(keyStr) && !keyStr.startsWith("neodymium."))
+                        {
+                            datasetKeys.add(keyStr);
+                        }
+                    }
+                }
+                details.put("datasets", datasetsList);
+                final List<String> testIds = new ArrayList<>();
+                for (final DatasetDto d : datasetsList)
+                {
+                    testIds.add(d.label);
+                }
+                details.put("testIds", testIds);
+                details.put("datasetKeys", datasetKeys);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to parse YAML file details for: " + file.getAbsolutePath(), e);
+            details.put("error", e.getMessage());
+        }
+        return details;
+    }
+
+    private static void scanDirStatic(final File baseDir, final File currentDir, final List<String> yamlFiles)
+    {
+        final File[] files = currentDir.listFiles();
+        if (files != null)
+        {
+            for (final File file : files)
+            {
+                if (file.isDirectory())
+                {
+                    scanDirStatic(baseDir, file, yamlFiles);
+                }
+                else
+                {
+                    final String name = file.getName().toLowerCase();
+                    if (name.endsWith(".yaml") || name.endsWith(".yml"))
+                    {
+                        final String relativePath = baseDir.toURI().relativize(file.toURI()).getPath();
+                        yamlFiles.add(relativePath);
+                    }
+                }
+            }
+        }
+    }
+
+    private static ChatResponse runChatWorkflow(final ChatRequest req)
+    {
+        final StringBuilder thinkingLog = new StringBuilder();
+        thinkingLog.append("[AI Intent Classification] Running Stage 1...\n");
+
+        final LlmClient client = new LlmClient(Neodymium.aiConfiguration(), new AiStats());
+
+        // Stage 1: Intent Classifier
+        final String stage1SystemPrompt = 
+            "You are an AI router for a test automation manager called Neodymium Aura.\n" +
+            "Your job is to classify the user's intent into one of the following categories:\n" +
+            "- \"select\": The user wants to select, run, filter, check, or execute one or more test cases.\n" +
+            "- \"edit\": The user wants to edit, update, create, delete, add steps, or modify a test case.\n" +
+            "- \"both\": The user request implies both selection and editing.\n" +
+            "- \"neither\": The user is asking a general question, greeting, or querying system statistics/status.\n\n" +
+            "Respond ONLY with a valid JSON object matching this schema:\n" +
+            "{\n" +
+            "  \"intent\": \"select\" | \"edit\" | \"both\" | \"neither\",\n" +
+            "  \"reason\": \"Brief reason for classification\"\n" +
+            "}";
+
+        final List<ChatMessage> stage1Messages = new ArrayList<>();
+        stage1Messages.add(SystemMessage.from(stage1SystemPrompt));
+        if (req.history != null)
+        {
+            for (final ChatMessageDto msg : req.history)
+            {
+                if ("user".equalsIgnoreCase(msg.role))
+                {
+                    stage1Messages.add(UserMessage.from(msg.content));
+                }
+                else if ("assistant".equalsIgnoreCase(msg.role))
+                {
+                    stage1Messages.add(AiMessage.from(msg.content));
+                }
+            }
+        }
+        stage1Messages.add(UserMessage.from(req.prompt));
+
+        final String stage1Response = client.chat(stage1Messages);
+        thinkingLog.append("Stage 1 Response: ").append(stage1Response).append("\n");
+
+        String intent = "neither";
+        try
+        {
+            final Map<?, ?> result = gson.fromJson(stage1Response, Map.class);
+            if (result != null && result.containsKey("intent"))
+            {
+                intent = String.valueOf(result.get("intent"));
+            }
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to parse Stage 1 response", e);
+            thinkingLog.append("Error parsing Stage 1 response: ").append(e.getMessage()).append("\n");
+        }
+
+        thinkingLog.append("Classified intent: ").append(intent).append("\n");
+
+        if ("edit".equalsIgnoreCase(intent) || "both".equalsIgnoreCase(intent))
+        {
+            // Run editor / creation workflow
+            thinkingLog.append("[AI Test Generation] Running Stage 2 (Edit/Create)...\n");
+
+            // Assemble dynamic instructions from action plugins
+            final StringBuilder actionInstructions = new StringBuilder();
+            try
+            {
+                for (final Object plugin : ActionRegistry.getAllPlugins())
+                {
+                    final Method getInstructionsMethod = plugin.getClass().getMethod("getPromptInstructions");
+                    final Object instructions = getInstructionsMethod.invoke(plugin);
+                    if (instructions != null)
+                    {
+                        actionInstructions.append(instructions).append("\n");
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to load action plugins instructions", e);
+                thinkingLog.append("Error loading action plugins: ").append(e.getMessage()).append("\n");
+            }
+
+            final File resourcesDir = new File("src/test/resources").getAbsoluteFile();
+            String activeFileContent = "";
+            if (req.activeFile != null && !req.activeFile.trim().isEmpty())
+            {
+                try
+                {
+                    final File file = new File(resourcesDir, req.activeFile).getCanonicalFile();
+                    if (file.exists() && file.isFile() && file.getPath().startsWith(resourcesDir.getPath()))
+                    {
+                        activeFileContent = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.error("Failed to read active file: " + req.activeFile, e);
+                }
+            }
+
+            final String editorSystemPrompt =
+                "You are the Neodymium Aura Test Editor Assistant.\n" +
+                "Your goal is to edit or create a YAML test case file based on the user's request.\n" +
+                "You MUST generate the steps using the available action plugins. Here are the instructions for the registered actions:\n" +
+                actionInstructions.toString() + "\n" +
+                "CRITICAL REQUIREMENT ON YAML FORMATTING:\n" +
+                "The YAML file content must strictly follow this format:\n" +
+                "- Do NOT include metadata fields like 'name', 'description', or any other root-level properties.\n" +
+                "- The 'steps' property MUST be a multiline YAML string (using the '|' indicator), where each line is a natural English step sentence. Example:\n" +
+                "  steps: |\n" +
+                "    Open https://posters.xceptance.io:8443/posters/\n" +
+                "    Type \"${searchTerm}\" into the search field.\n" +
+                "    Click the Search Icon.\n" +
+                "    Verify that the main heading contains \"${searchTerm}\".\n" +
+                "- The 'data' property (optional, for parameterized datasets) must be a list of parameter maps. Example:\n" +
+                "  data:\n" +
+                "    - searchTerm: Test\n" +
+                "    - searchTerm: Chair\n" +
+                "- Do NOT output steps as structured arrays/lists of action/target/value objects (e.g. '- action: NAVIGATE'). Only write them as plain, natural English statements.\n" +
+                "- Do NOT guess or hallucinate HTML element IDs, CSS selectors, class names, or XPaths (such as \"search-form-input\" or \"div.no-results\") unless they are explicitly given. Stick to high-level, simple natural English descriptions of elements (e.g., \"search field\", \"no products found message\").\n\n" +
+                "If the user wants to EDIT an existing file, the current content of the active file is:\n" +
+                activeFileContent + "\n\n" +
+                "You MUST respond in JSON format with the following schema:\n" +
+                "{\n" +
+                "  \"status\": \"COMPLETE\" | \"ERROR\",\n" +
+                "  \"reasoning\": \"Explain your step-by-step thinking process for generating the test steps.\",\n" +
+                "  \"filename\": \"name-of-the-file.yaml\",\n" +
+                "  \"content\": \"The complete new or modified YAML file content (valid YAML format, with steps and optional data sections)\",\n" +
+                "  \"message\": \"Your user-facing response message summarizing what you changed or created.\"\n" +
+                "}";
+
+            final List<ChatMessage> editMessages = new ArrayList<>();
+            editMessages.add(SystemMessage.from(editorSystemPrompt));
+            if (req.history != null)
+            {
+                for (final ChatMessageDto msg : req.history)
+                {
+                    if ("user".equalsIgnoreCase(msg.role))
+                    {
+                        editMessages.add(UserMessage.from(msg.content));
+                    }
+                    else if ("assistant".equalsIgnoreCase(msg.role))
+                    {
+                        editMessages.add(AiMessage.from(msg.content));
+                    }
+                }
+            }
+            editMessages.add(UserMessage.from(req.prompt));
+
+            final String editorResponse = client.chat(editMessages);
+            thinkingLog.append("Editor Response: ").append(editorResponse).append("\n");
+
+            try
+            {
+                final Map<?, ?> editResult = gson.fromJson(editorResponse, Map.class);
+                final String status = String.valueOf(editResult.get("status"));
+                final String message = String.valueOf(editResult.get("message"));
+
+                if ("COMPLETE".equalsIgnoreCase(status))
+                {
+                    final String filename = String.valueOf(editResult.get("filename"));
+                    final String content = String.valueOf(editResult.get("content"));
+
+                    final File file = new File(resourcesDir, filename).getCanonicalFile();
+                    if (file.getPath().startsWith(resourcesDir.getPath()))
+                    {
+                        Files.writeString(file.toPath(), content, StandardCharsets.UTF_8);
+                        thinkingLog.append("Successfully saved file: ").append(filename).append("\n");
+                        return new ChatResponse(message, thinkingLog.toString(), "edit_or_create_test", null, filename, content, null);
+                    }
+                    else
+                    {
+                        return new ChatResponse("Access denied: Directory traversal detected", thinkingLog.toString(), "error", null, null, null, null);
+                    }
+                }
+                else
+                {
+                    return new ChatResponse("Failed to generate test case: " + message, thinkingLog.toString(), "error", null, null, null, null);
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to parse editor response JSON", e);
+                return new ChatResponse("Failed to parse generated test response: " + e.getMessage(), thinkingLog.toString(), "error", null, null, null, null);
+            }
+        }
+        else if ("select".equalsIgnoreCase(intent))
+        {
+            // Run selection escalation loop
+            thinkingLog.append("[AI Test Selection] Running Stage 2 (Selection Escalation)...\n");
+
+            final List<String> allFiles = new ArrayList<>();
+            final File resourcesDir = new File("src/test/resources").getAbsoluteFile();
+            scanDirStatic(resourcesDir, resourcesDir, allFiles);
+            allFiles.sort(String::compareTo);
+
+            final List<String> availableDatasets = new ArrayList<>();
+            for (final String file : allFiles)
+            {
+                final File yamlFile = new File(resourcesDir, file);
+                final Map<String, Object> details = getFileDetails(yamlFile);
+                final List<DatasetDto> datasets = (List<DatasetDto>) details.get("datasets");
+                if (datasets != null)
+                {
+                    for (final DatasetDto d : datasets)
+                    {
+                        availableDatasets.add("File: " + file + ", Dataset ID: " + d.id);
+                    }
+                }
+            }
+
+            final List<ChatMessage> conversation = new ArrayList<>();
+
+            final String selectionSystemPrompt =
+                "You are the Neodymium Aura Test Selector Assistant.\n" +
+                "Your goal is to identify and select the list of datasets (specifying both their YAML file name and dataset ID/index) that match the user's request.\n" +
+                "You have access to the test cases in three escalation levels:\n" +
+                "- Level 1: Just the relative file paths and dataset IDs of all available datasets.\n" +
+                "- Level 2: Metadata for specific files (step count, step summary, dataset keys).\n" +
+                "- Level 3: The complete YAML file content for specific files.\n\n" +
+                "To minimize token usage, you must start with Level 1. If you cannot decide which datasets to select based only on file paths and dataset IDs, you must output a JSON response requesting Level 2 metadata for candidate files. If you still cannot decide, request Level 3 full content.\n" +
+                "However, before requesting metadata or full content, if you realize you need specific data parameters or steps to identify the matching test cases, you can ask the user directly or explain what you need.\n\n" +
+                "CRITICAL REQUIREMENT ON DISCARDING FILES/DATASETS:\n" +
+                "When evaluating available datasets at Level 1 based on their file names and dataset IDs:\n" +
+                "- You MUST NOT assume a dataset is irrelevant just because its file name or dataset ID does not contain keywords from the user request.\n" +
+                "- Only rule out/discard files whose names and IDs make it completely impossible or highly improbable to match.\n" +
+                "- If a filename or ID is generic or ambiguous, you MUST request Level 2 metadata (\"NEED_DETAILS\") to inspect its steps before making a decision.\n\n" +
+                "The current available datasets (Level 1) are:\n" +
+                gson.toJson(availableDatasets) + "\n\n" +
+                "You MUST respond in JSON format with the following schema:\n" +
+                "{\n" +
+                "  \"status\": \"NEED_DETAILS\" | \"NEED_FULL_CONTENT\" | \"COMPLETE\" | \"ASK_USER\",\n" +
+                "  \"reasoning\": \"Explain your step-by-step thinking process, which candidate files/datasets you are looking at and why.\",\n" +
+                "  \"requestedFiles\": [\"relative/path/to/file1.yaml\", ...], // Files you need details/content for (only when status is NEED_DETAILS or NEED_FULL_CONTENT)\n" +
+                "  \"selectedDatasets\": [{\"file\": \"relative/path/to/file1.yaml\", \"id\": \"posters-search\"}, ...], // The final selected datasets (only when status is COMPLETE)\n" +
+                "  \"message\": \"Your user-facing response message. If status is COMPLETE, summarize which datasets you selected. If status is ASK_USER, ask for clarification.\"\n" +
+                "}";
+
+            conversation.add(SystemMessage.from(selectionSystemPrompt));
+            if (req.history != null)
+            {
+                for (final ChatMessageDto msg : req.history)
+                {
+                    if ("user".equalsIgnoreCase(msg.role))
+                    {
+                        conversation.add(UserMessage.from(msg.content));
+                    }
+                    else if ("assistant".equalsIgnoreCase(msg.role))
+                    {
+                        conversation.add(AiMessage.from(msg.content));
+                    }
+                }
+            }
+            conversation.add(UserMessage.from(req.prompt));
+
+            int iterations = 0;
+            while (iterations < 5)
+            {
+                iterations++;
+                thinkingLog.append("Escalation Loop Iteration ").append(iterations).append("...\n");
+
+                final String responseText = client.chat(conversation);
+                thinkingLog.append("Response: ").append(responseText).append("\n");
+
+                try
+                {
+                    final Map<?, ?> selResult = gson.fromJson(responseText, Map.class);
+                    final String status = String.valueOf(selResult.get("status"));
+                    final String message = String.valueOf(selResult.get("message"));
+
+                    if ("ASK_USER".equalsIgnoreCase(status))
+                    {
+                        return new ChatResponse(message, thinkingLog.toString(), null, null, null, null, null);
+                    }
+                    else if ("COMPLETE".equalsIgnoreCase(status))
+                    {
+                        final List<Map<?, ?>> rawDatasets = (List<Map<?, ?>>) selResult.get("selectedDatasets");
+                        final List<DatasetSelection> selectedDatasets = new ArrayList<>();
+                        if (rawDatasets != null)
+                        {
+                            for (final Map<?, ?> rawItem : rawDatasets)
+                            {
+                                final DatasetSelection sel = new DatasetSelection();
+                                sel.file = String.valueOf(rawItem.get("file"));
+                                sel.id = String.valueOf(rawItem.get("id"));
+                                selectedDatasets.add(sel);
+                            }
+                        }
+                        return new ChatResponse(message, thinkingLog.toString(), "select_tests", null, null, null, selectedDatasets);
+                    }
+                    else if ("NEED_DETAILS".equalsIgnoreCase(status))
+                    {
+                        final List<String> requested = (List<String>) selResult.get("requestedFiles");
+                        final List<Map<String, Object>> detailsList = new ArrayList<>();
+                        for (final String reqFile : requested)
+                        {
+                            final File f = new File(resourcesDir, reqFile).getCanonicalFile();
+                            if (f.exists() && f.isFile() && f.getPath().startsWith(resourcesDir.getPath()))
+                            {
+                                detailsList.add(getFileDetails(f));
+                            }
+                        }
+                        thinkingLog.append("Retrieved Level 2 details for: ").append(requested).append("\n");
+
+                        conversation.add(AiMessage.from(responseText));
+                        conversation.add(UserMessage.from("Here is the Level 2 metadata for your requested files:\n" + gson.toJson(detailsList)));
+                    }
+                    else if ("NEED_FULL_CONTENT".equalsIgnoreCase(status))
+                    {
+                        final List<String> requested = (List<String>) selResult.get("requestedFiles");
+                        final Map<String, String> contentsMap = new HashMap<>();
+                        for (final String reqFile : requested)
+                        {
+                            final File f = new File(resourcesDir, reqFile).getCanonicalFile();
+                            if (f.exists() && f.isFile() && f.getPath().startsWith(resourcesDir.getPath()))
+                            {
+                                contentsMap.put(reqFile, Files.readString(f.toPath(), StandardCharsets.UTF_8));
+                            }
+                        }
+                        thinkingLog.append("Retrieved Level 3 content for: ").append(requested).append("\n");
+
+                        conversation.add(AiMessage.from(responseText));
+                        conversation.add(UserMessage.from("Here is the Level 3 full content for your requested files:\n" + gson.toJson(contentsMap)));
+                    }
+                    else
+                    {
+                        return new ChatResponse("AI selector returned unknown status: " + status, thinkingLog.toString(), "error", null, null, null, null);
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.error("Failed to parse or execute loop step", e);
+                    return new ChatResponse("AI selector execution error: " + e.getMessage(), thinkingLog.toString(), "error", null, null, null, null);
+                }
+            }
+            return new ChatResponse("AI selector loop exceeded maximum iterations.", thinkingLog.toString(), "error", null, null, null, null);
+        }
+        else
+        {
+            // General talk / neither
+            thinkingLog.append("[AI General Chat] Running Stage 2 (Neither)...\n");
+            final String fallbackSystemPrompt =
+                "You are the Neodymium Aura AI Assistant.\n" +
+                "Respond nicely to the user's general message, greeting, or question.\n" +
+                "You can also inform them about your capabilities to select/run tests or create/edit test cases.\n\n" +
+                "You MUST respond in JSON format matching this schema:\n" +
+                "{\n" +
+                "  \"message\": \"Your markdown-formatted response message to the user.\"\n" +
+                "}";
+
+            final List<ChatMessage> fallbackMessages = new ArrayList<>();
+            fallbackMessages.add(SystemMessage.from(fallbackSystemPrompt));
+            if (req.history != null)
+            {
+                for (final ChatMessageDto msg : req.history)
+                {
+                    if ("user".equalsIgnoreCase(msg.role))
+                    {
+                        fallbackMessages.add(UserMessage.from(msg.content));
+                    }
+                    else if ("assistant".equalsIgnoreCase(msg.role))
+                    {
+                        fallbackMessages.add(AiMessage.from(msg.content));
+                    }
+                }
+            }
+            fallbackMessages.add(UserMessage.from(req.prompt));
+
+            final String fallbackResponse = client.chat(fallbackMessages);
+            String message = fallbackResponse;
+            try
+            {
+                final Map<?, ?> fallbackResult = gson.fromJson(fallbackResponse, Map.class);
+                if (fallbackResult != null && fallbackResult.containsKey("message"))
+                {
+                    message = String.valueOf(fallbackResult.get("message"));
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to parse fallback response JSON", e);
+            }
+            return new ChatResponse(message, thinkingLog.toString(), null, null, null, null, null);
         }
     }
 
@@ -1315,11 +2019,78 @@ public final class NeodymiumAuraManager
         String id;
     }
 
+    private static final class DatasetSelection
+    {
+        String file;
+        String id; // testId or index
+    }
+
     private static final class RunRequest
     {
-        List<String> files;
+        List<DatasetSelection> datasets;
         boolean headless;
         boolean interactive;
         boolean allure;
+    }
+
+    private static final class DatasetDto
+    {
+        final String id;
+        final String label;
+        final boolean hasTestId;
+
+        DatasetDto(final String id, final String label, final boolean hasTestId)
+        {
+            this.id = id;
+            this.label = label;
+            this.hasTestId = hasTestId;
+        }
+    }
+
+    private static final class YamlFileDto
+    {
+        final String file;
+        final List<DatasetDto> datasets;
+
+        YamlFileDto(final String file, final List<DatasetDto> datasets)
+        {
+            this.file = file;
+            this.datasets = datasets;
+        }
+    }
+
+    private static final class ChatMessageDto
+    {
+        String role;
+        String content;
+    }
+
+    private static final class ChatRequest
+    {
+        String prompt;
+        String activeFile;
+        List<ChatMessageDto> history;
+    }
+
+    private static final class ChatResponse
+    {
+        String message;
+        String thinking;
+        String action;
+        List<String> files;
+        String filename;
+        String content;
+        List<DatasetSelection> selectedDatasets;
+
+        ChatResponse(final String message, final String thinking, final String action, final List<String> files, final String filename, final String content, final List<DatasetSelection> selectedDatasets)
+        {
+            this.message = message;
+            this.thinking = thinking;
+            this.action = action;
+            this.files = files;
+            this.filename = filename;
+            this.content = content;
+            this.selectedDatasets = selectedDatasets;
+        }
     }
 }
