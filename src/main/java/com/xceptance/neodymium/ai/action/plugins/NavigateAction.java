@@ -95,9 +95,11 @@ public class NavigateAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() {
-        return "NAVIGATE: navigate to a specified URL (target must be empty, value must be the URL). If basic auth is needed, set target to the URL, and value to a JSON array with username and password, e.g. [\"user\", \"pass\"].";
+    public String getPromptInstructions()
+    {
+        return "NAVIGATE: Go to URL. Set v to the URL. For basic auth, set tg to the URL and v to ['user', 'pass'].";
     }
+
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

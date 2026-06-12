@@ -192,7 +192,7 @@ To handle this, the `STORE` action accepts an optional parameter: `"adjust": tru
   * **Classification**: It identifies if the text is a number or a price (it must contain digits, may contain standard separators, signs, or currency symbols, and at most one short letter sequence ≤ 3 characters like `USD` or `kr`). 
   * **Exclusions**: Standard text or alphanumeric IDs (such as order numbers like `ORD-12345678`, test labels like `TC-001`, or descriptors like `Page 1 of 5`) are left completely untouched.
   * **US Decimal Conversion**: Valid numbers and prices are normalized into clean, standardized US decimals (e.g., `14,96 €` and `$15.00` are both normalized and stored as `"14.96"` and `"15.00"`).
-* **Downstream Integration**: Once adjusted/normalized, these variables can be cleanly used in standard mathematical calculations (e.g., via `verifyCalculation`) or in the new numeric comparison assertions without formatting mismatches.
+* **Downstream Integration**: Once adjusted/normalized, these variables can be cleanly used in standard mathematical calculations (e.g., via `assertCalculation`) or in the new numeric comparison assertions without formatting mismatches.
 
 ---
 
@@ -243,15 +243,27 @@ Neodymium ships with a default utility class, `com.xceptance.neodymium.ai.util.A
 | `assertNumberGreaterThanOrEqual(String)` | Asserts that the first number/price is greater than or equal to the second |
 | `assertNumberLessThan(String)` | Asserts that the first number/price is strictly less than the second |
 | `assertNumberLessThanOrEqual(String)` | Asserts that the first number/price is less than or equal to the second |
-| `assertNumberEqual(String)` | Asserts that the first number/price is equal to the second |
-| `verifyCalculation(String)` | Securely validates mathematical equations (e.g. `0,90 € = (14,96 € + 0,00 €) * 6,00%`) programmatically via JDK JShell (locale-agnostic) |
+| `assertNumbersEqual(String)` | Asserts that the first number/price is equal to the second |
+| `assertCalculation(String)` | Securely validates mathematical equations (e.g. `0,90 € = (14,96 € + 0,00 €) * 6,00%`) programmatically via JDK JShell (locale-agnostic) |
 
 These methods are automatically available to the AI in every test class.
+
+### Built-in Utility Methods (Non-Assertion)
+
+In addition to assertion methods, `com.xceptance.neodymium.ai.util.AiAssertions` provides public utility methods for locale-aware numeric parsing, format classification, and normalization. These are useful in custom assertions or for direct invocation:
+
+| Method | Description |
+|--------|-------------|
+| `parseLocalizedBigDecimal(String)` | Parses a localized price or number string into a `BigDecimal` using the current Neodymium locale (e.g., `14,96 €` under `de-DE` parses to `14.96`). |
+| `detectDisplayPrecision(String)` | Returns the display precision (decimal places) of a numeric/price string (e.g., `$0.90` returns `2`). |
+| `isNumericOrPrice(String)` | Classifies whether a text sequence qualifies as a numeric value or price (returns `true` for `zł 150` or `1.234,56`, `false` for `ORD-123`). |
+| `normalizeNumericOrPrice(String)` | Normalizes a localized numeric/price string into a standard US decimal string (e.g., `14,96 €` is normalized to `14.96`). Non-numeric strings are returned unchanged. |
+
 
 > [!NOTE]
 > **Exact Precision via `BigDecimal`**:
 > Under the hood, all numeric assertions use `BigDecimal` for exact mathematical comparisons, avoiding floating-point binary representation errors (e.g. `0.90 - 0.88` yielding `0.020000000000000018`).
-> For mathematical equations, `verifyCalculation` evaluates the right-hand side using JDK JShell, parses the result to `BigDecimal`, scales/rounds it to the left-hand side's detected display precision using `RoundingMode.HALF_UP`, and asserts that the absolute difference does not exceed the allowed tolerance of `0.02`.
+> For mathematical equations, `assertCalculation` evaluates the right-hand side using JDK JShell, parses the result to `BigDecimal`, scales/rounds it to the left-hand side's detected display precision using `RoundingMode.HALF_UP`, and asserts that the absolute difference does not exceed the allowed tolerance of `0.02`.
 
 ### Extending with Custom Utility Classes
 

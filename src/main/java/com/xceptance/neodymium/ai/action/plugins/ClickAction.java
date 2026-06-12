@@ -55,7 +55,7 @@ public class ClickAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "CLICK: click on an element (requires target)."; }
+    public String getPromptInstructions() { return "CLICK: click on an element (requires tg)."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

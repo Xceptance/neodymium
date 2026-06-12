@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Verify that the active sessions count \u00271,842\u0027 is visible on the page.",
-      "reasoning": "Verified the visibility of \u00271,842\u0027 using the element with id \u0027active-sessions-count\u0027.",
+      "reasoning": "Verified the text \u00271,842\u0027 is visible using the element with id \u0027active-sessions-count\u0027.",
       "actions": [
         {
           "type": "ASSERT",
@@ -12,7 +12,7 @@
             "1,842"
           ],
           "description": "Verify that the active sessions count \u00271,842\u0027 is visible on the page.",
-          "elementDetails": "1,842",
+          "elementDetails": "active-sessions-count",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -23,7 +23,7 @@
     },
     {
       "promptLine": "Click \u0027Live Feeds (AJAX)\u0027.",
-      "reasoning": "Found a button with the name \u0027Live Feeds (AJAX)\u0027 and clicked it.",
+      "reasoning": "Identified the button with name \u0027Live Feeds (AJAX)\u0027 and clicked it using its data-neo-ref attribute.",
       "actions": [
         {
           "type": "CLICK",
@@ -45,7 +45,7 @@
     },
     {
       "promptLine": "Verify that the live feeds data table displays the HTMX log \u0027Asynchronous partial HTML page swap executed successfully.\u0027.",
-      "reasoning": "Verified the presence of the specified HTMX log message within the live feeds data table by targeting the element containing the text.",
+      "reasoning": "The instruction is to verify specific text. I found an element with data-neo-ref \u0027xc_blgboo\u0027 that contains the exact text \u0027Asynchronous partial HTML page swap executed successfully.\u0027 and created an ASSERT action for it.",
       "actions": [
         {
           "type": "ASSERT",

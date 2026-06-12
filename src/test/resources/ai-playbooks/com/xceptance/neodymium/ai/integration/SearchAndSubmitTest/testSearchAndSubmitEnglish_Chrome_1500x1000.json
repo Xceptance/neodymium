@@ -20,11 +20,11 @@
     },
     {
       "promptLine": "Type \u0027bear\u0027 into the search box and submit the search",
-      "reasoning": "Typed \u0027bear\u0027 into the search box and clicked the search button.",
+      "reasoning": "Typed \u0027bear\u0027 into the search box identified by its ID and then clicked the search button, also identified by its ID.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_7cjiuo",
+          "target": "#search-box",
           "value": [
             "bear"
           ],
@@ -43,7 +43,7 @@
         },
         {
           "type": "CLICK",
-          "target": "xc_r9bvv1",
+          "target": "#search-button",
           "description": "Click the search button",
           "elementDetails": "Search",
           "elementContext": {
@@ -62,11 +62,11 @@
     },
     {
       "promptLine": "Verify that the search results title contains \u0027bear\u0027",
-      "reasoning": "The instruction is to verify that the search results title contains \u0027bear\u0027. I found a heading element with the name \u0027Search Results for \u0027bear\u0027\u0027 which matches the criteria. An ASSERT action is used to check its content.",
+      "reasoning": "Verified that the text content of the element with id \u0027search-title\u0027 contains \u0027bear\u0027.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "xc_ph80bd",
+          "target": "#search-title",
           "value": [
             "bear"
           ],
@@ -78,11 +78,11 @@
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "AXTREE"
+      "healedContextLevel": "STANDARD"
     },
     {
       "promptLine": "Verify that the page displays \u00273 results found.\u0027",
-      "reasoning": "Verified that the element with id \u0027search-subtitle\u0027 contains the text \u00273 results found.\u0027.",
+      "reasoning": "The instruction is to verify the presence of the text \u00273 results found.\u0027. I found an element with id \u0027search-subtitle\u0027 that contains this exact text, so I used an ASSERT action targeting this element.",
       "actions": [
         {
           "type": "ASSERT",
@@ -90,8 +90,8 @@
           "value": [
             "3 results found."
           ],
-          "description": "Verify that the page displays \u00273 results found.\u0027.",
-          "elementDetails": "3 results found.",
+          "description": "Verify that the page displays \u00273 results found.\u0027",
+          "elementDetails": "search-subtitle",
           "elementContext": {},
           "replay": "",
           "adjust": false

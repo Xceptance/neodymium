@@ -25,7 +25,7 @@
       "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
       "expectedFailure": true,
       "expectedErrorType": "com.xceptance.neodymium.ai.core.AiAgent$DefinitiveAssertionError",
-      "expectedErrorMessage": "Verification failed: Visual verification failed: The screen is not mostly black and white. It contains various colors such as blue buttons and links, a red \u0027X\u0027, a colorful palette icon, a blue globe icon, and a brown bear in a green forest."
+      "expectedErrorMessage": "Verification failed: Visual verification failed: The screen is not mostly black and white. It contains various colors such as blue for links and buttons, red for the \u0027X\u0027 icon, and multiple colors within the product images (e.g., a colorful palette, a blue globe, a brown bear in a green forest)."
     }
   ]
 }

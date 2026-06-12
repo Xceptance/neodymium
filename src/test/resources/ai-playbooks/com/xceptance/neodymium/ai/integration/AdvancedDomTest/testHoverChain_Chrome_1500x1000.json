@@ -20,11 +20,11 @@
     },
     {
       "promptLine": "Hover over \u0027Products\u0027.",
-      "reasoning": "Hovering over the \u0027Products\u0027 link identified by its data-neo-ref attribute.",
+      "reasoning": "I found the \u0027Products\u0027 link in the accessibility tree and generated a HOVER action targeting it.",
       "actions": [
         {
           "type": "HOVER",
-          "target": "xc_bubl4z",
+          "target": "[data-neo-ref\u003d\u0027xc_bubl4z\u0027]",
           "description": "Hover over \u0027Products\u0027",
           "elementDetails": "Products ▾",
           "elementContext": {
@@ -41,13 +41,13 @@
     },
     {
       "promptLine": "Hover over \u0027Electronics\u0027.",
-      "reasoning": "Found the \u0027Electronics\u0027 link in the AXTree and created a HOVER action targeting its data-neo-ref.",
+      "reasoning": "Hovering over the \u0027Electronics\u0027 link as requested.",
       "actions": [
         {
           "type": "HOVER",
-          "target": "xc_ymu3zq",
-          "description": "Hover over \u0027Electronics\u0027 link",
-          "elementDetails": "Electronics ▸",
+          "target": "[data-neo-ref\u003d\u0027xc_ymu3zq\u0027]",
+          "description": "Hover over \u0027Electronics\u0027",
+          "elementDetails": "Electronics",
           "elementContext": {
             "text": "Electronics ▸",
             "href": "https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html#",
@@ -62,11 +62,11 @@
     },
     {
       "promptLine": "Click the \u0027Laptops\u0027 link.",
-      "reasoning": "Found the \u0027Laptops\u0027 link by its data-neo-ref attribute and generated a CLICK action.",
+      "reasoning": "Clicked the \u0027Laptops\u0027 link using its data-neo-ref attribute.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_y5k9xg",
+          "target": "[data-neo-ref\u003d\u0027xc_y5k9xg\u0027]",
           "description": "Click the \u0027Laptops\u0027 link",
           "elementDetails": "Laptops",
           "elementContext": {

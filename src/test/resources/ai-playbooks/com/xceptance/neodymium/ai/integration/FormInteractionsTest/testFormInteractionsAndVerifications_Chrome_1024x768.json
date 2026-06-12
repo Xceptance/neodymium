@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Type \u0027Jane Smith\u0027 into the \u0027Full Name\u0027 field.",
-      "reasoning": "Typed \u0027Jane Smith\u0027 into the \u0027Full Name\u0027 textbox identified by its data-neo-ref attribute.",
+      "reasoning": "Identified the \u0027Full Name\u0027 textbox by its data-neo-ref attribute and generated a TYPE action to input \u0027Jane Smith\u0027.",
       "actions": [
         {
           "type": "TYPE",
@@ -12,7 +12,7 @@
             "Jane Smith"
           ],
           "description": "Type \u0027Jane Smith\u0027 into the \u0027Full Name\u0027 field.",
-          "elementDetails": "Full Name",
+          "elementDetails": "Full Name textbox",
           "elementContext": {
             "classes": "form-control",
             "id": "reg-username",
@@ -29,7 +29,7 @@
     },
     {
       "promptLine": "Type \u0027invalidemail\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Typed \u0027invalidemail\u0027 into the \u0027Email Address\u0027 field using its data-neo-ref.",
+      "reasoning": "Typed \u0027invalidemail\u0027 into the \u0027Email Address\u0027 textbox identified by its data-neo-ref attribute.",
       "actions": [
         {
           "type": "TYPE",
@@ -55,7 +55,7 @@
     },
     {
       "promptLine": "Click the \u0027Create Account\u0027 button.",
-      "reasoning": "Found the \u0027Create Account\u0027 button by its name and data-neo-ref attribute and generated a CLICK action.",
+      "reasoning": "Found the \u0027Create Account\u0027 button by its name and data-neo-ref and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
@@ -78,7 +78,7 @@
     },
     {
       "promptLine": "Verify that the email format invalid warning \u0027This email format is invalid.\u0027 is visible.",
-      "reasoning": "Verified the visibility of the email format invalid warning by asserting the text content of the element with id \u0027email-error\u0027.",
+      "reasoning": "Found the warning message with id \u0027email-error\u0027 and asserted its text content.",
       "actions": [
         {
           "type": "ASSERT",
@@ -106,8 +106,8 @@
           "value": [
             "2"
           ],
-          "description": "Type \u00272\u0027",
-          "elementDetails": "\u0027Neon Gradient Poster\u0027 quantity field",
+          "description": "Type \u00272\u0027 into the quantity field.",
+          "elementDetails": "Neon Gradient Poster quantity field",
           "elementContext": {
             "classes": "form-control",
             "id": "qty-poster-1",
@@ -123,7 +123,7 @@
     },
     {
       "promptLine": "Verify that the Total Price is \u0027$39.98\u0027.",
-      "reasoning": "Verified the text content of the element with id \u0027cart-total\u0027 to match the expected total price.",
+      "reasoning": "Verified the text content of the element with id \u0027cart-total\u0027 to be \u0027$39.98\u0027.",
       "actions": [
         {
           "type": "ASSERT",
@@ -132,7 +132,7 @@
             "$39.98"
           ],
           "description": "Verify that the Total Price is \u0027$39.98\u0027.",
-          "elementDetails": "$39.98",
+          "elementDetails": "cart-total",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -149,7 +149,7 @@
           "type": "CLICK",
           "target": "#aura-trigger",
           "description": "Click on \u0027Aura Defect Controls\u0027 trigger button.",
-          "elementDetails": "Aura Defect Controls\u0027 trigger button",
+          "elementDetails": "Aura Defect Controls trigger button",
           "elementContext": {
             "classes": "aura-controls-trigger",
             "id": "aura-trigger",
@@ -169,8 +169,8 @@
         {
           "type": "CLICK",
           "target": "label[for\u003d\u0027toggle-overlap\u0027]",
-          "description": "Click \u0027Inject Element Overlap\u0027 toggle",
-          "elementDetails": "\u0027Inject Element Overlap\u0027 toggle",
+          "description": "Click \u0027Inject Element Overlap\u0027 toggle.",
+          "elementDetails": "Inject Element Overlap toggle",
           "elementContext": {
             "classes": "control-label",
             "text": "Inject Element Overlap\nPositions key controls directly over headings.",

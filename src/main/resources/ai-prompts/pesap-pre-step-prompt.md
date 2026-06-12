@@ -20,3 +20,5 @@ Return ONLY a raw minified JSON object (no markdown, no explanations):
 ## Rules
 1. Always predict the MINIMAL context level. Default to AXTREE unless the step clearly requires text validation (STANDARD) or visual/layout checks (VISUAL_LEAN/VISUAL).
 2. Analyze ONLY the `[CURRENT]` step. `[PREVIOUS]`/`[NEXT]` are surrounding context only. ALL output fields MUST describe the `[CURRENT]` step exclusively.
+3. Set "requiresJavaMethods" to true ONLY if the step requires a custom Java assertion/utility method (e.g., assertPriceGreaterThanZero, assertCalculation) rather than standard browser actions (click, type, select, hover, navigate, scroll, key press).
+

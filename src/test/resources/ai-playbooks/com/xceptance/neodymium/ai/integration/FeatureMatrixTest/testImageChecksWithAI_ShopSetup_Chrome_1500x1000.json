@@ -3,11 +3,11 @@
   "steps": [
     {
       "promptLine": "Assert that the \u0027Aura Neon Gradient Poster\u0027 card displays an image showcasing deep ultraviolet and cyan shades.",
-      "reasoning": "The screenshot for the \u0027Aura Neon Gradient Poster\u0027 clearly displays an image with a gradient featuring deep ultraviolet (purple) and cyan (blue-green) shades, matching the instruction.",
+      "reasoning": "The screenshot for the \u0027Aura Neon Gradient Poster\u0027 card visually displays an image with deep ultraviolet and cyan shades, matching the description.",
       "actions": [],
       "screenshotHash": "4800409300007f017e017f818000995031502330bbb063205330115015101510",
       "expectedFailure": false,
-      "healedContextLevel": "VISUAL_LEAN"
+      "healedContextLevel": "VISUAL"
     }
   ]
 }

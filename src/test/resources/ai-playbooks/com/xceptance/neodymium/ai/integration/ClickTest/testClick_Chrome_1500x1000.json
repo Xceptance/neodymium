@@ -26,7 +26,7 @@
           "type": "CLICK",
           "target": "#btn-submit",
           "description": "Click \u0027Submit Order\u0027 button",
-          "elementDetails": "Submit Order button",
+          "elementDetails": "\u0027Submit Order\u0027 button",
           "elementContext": {
             "text": "Submit Order",
             "id": "btn-submit",

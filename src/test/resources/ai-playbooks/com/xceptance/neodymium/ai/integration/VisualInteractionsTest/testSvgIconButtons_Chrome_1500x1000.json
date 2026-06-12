@@ -26,7 +26,7 @@
           "type": "CLICK",
           "target": "#btn-delete",
           "description": "Click the trash icon button",
-          "elementDetails": "Delete button",
+          "elementDetails": "btn-delete",
           "elementContext": {
             "classes": "aura-btn aura-btn-icon",
             "id": "btn-delete",

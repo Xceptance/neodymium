@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
-      "reasoning": "Typed \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 textbox identified by its data-neo-ref attribute.",
+      "reasoning": "Identified the \u0027Full Name\u0027 textbox by its accessibility name and data-neo-ref attribute, then generated a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
@@ -29,7 +29,7 @@
     },
     {
       "promptLine": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Found the \u0027Email Address\u0027 textbox by its accessibility name and data-neo-ref attribute, then generated a TYPE action to input the specified email address.",
+      "reasoning": "Typed the specified email address into the \u0027Email Address\u0027 field using its data-neo-ref attribute.",
       "actions": [
         {
           "type": "TYPE",
@@ -55,7 +55,7 @@
     },
     {
       "promptLine": "Click the \u0027Create Account\u0027 button.",
-      "reasoning": "Found the \u0027Create Account\u0027 button using its data-neo-ref attribute and generated a CLICK action.",
+      "reasoning": "Found the \u0027Create Account\u0027 button by its name and data-neo-ref attribute in the AXTree and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
@@ -78,7 +78,7 @@
     },
     {
       "promptLine": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
-      "reasoning": "Found the element with id \u0027reg-status-success\u0027 containing the text \u0027Account Registered!\u0027 and asserted its visibility.",
+      "reasoning": "Verified the visibility of the \u0027Account Registered!\u0027 success indicator using its ID.",
       "actions": [
         {
           "type": "ASSERT",

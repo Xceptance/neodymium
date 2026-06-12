@@ -36,7 +36,7 @@ public class ScrollAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "SCROLL: scroll to an element or position (requires target)."; }
+    public String getPromptInstructions() { return "SCROLL: scroll to an element or position (requires tg)."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

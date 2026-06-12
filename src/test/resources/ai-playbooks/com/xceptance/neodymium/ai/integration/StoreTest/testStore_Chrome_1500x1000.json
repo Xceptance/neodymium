@@ -20,35 +20,35 @@
     },
     {
       "promptLine": "Store the order ID value into a variable named \u0027orderId\u0027 (hint: #order-id)",
-      "reasoning": "Stored the text content of the element with id \u0027order-id\u0027 into the variable \u0027orderId\u0027.",
+      "reasoning": "The instruction asks to store the order ID. Although a hint `#order-id` was provided, the AXTREE does not expose `id` attributes. Falling back to the most semantically relevant element, the textbox with `name\u003d\u0027Verify Order ID:\u0027` and `data-neo-ref\u003d\u0027xc_kvumr8\u0027` is chosen to extract the order ID.",
       "actions": [
         {
           "type": "STORE",
-          "target": "#order-id",
+          "target": "[data-neo-ref\u003d\u0027xc_kvumr8\u0027]",
           "value": [
             "orderId"
           ],
-          "description": "Store the order ID value into a variable named \u0027orderId\u0027",
-          "elementDetails": "ORD-987654",
+          "description": "Store the order ID value from the textbox into \u0027orderId\u0027",
+          "elementDetails": "Verify Order ID: textbox",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "STANDARD"
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Type \u0027ORD-987654\u0027 into the verification field (hint: #input-target)",
-      "reasoning": "Typed \u0027ORD-987654\u0027 into the verification field.",
+      "promptLine": "Type \u0027\u0027 into the verification field (hint: #input-target)",
+      "reasoning": "Typed an empty string into the verification field.",
       "actions": [
         {
           "type": "TYPE",
           "target": "#input-target",
           "value": [
-            "ORD-987654"
+            ""
           ],
-          "description": "Type \u0027ORD-987654\u0027 into the verification field",
+          "description": "Type into the verification field",
           "elementDetails": "verification field",
           "elementContext": {
             "id": "input-target",
@@ -64,13 +64,13 @@
     },
     {
       "promptLine": "Click the \u0027Verify\u0027 button (hint: #btn-verify)",
-      "reasoning": "Clicked the \u0027Verify\u0027 button.",
+      "reasoning": "Clicked the \u0027Verify\u0027 button as instructed.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#btn-verify",
-          "description": "Click the \u0027Verify\u0027 button",
-          "elementDetails": "\u0027Verify\u0027 button",
+          "description": "Click \u0027Verify\u0027 button",
+          "elementDetails": "Verify button",
           "elementContext": {
             "text": "Verify",
             "id": "btn-verify",

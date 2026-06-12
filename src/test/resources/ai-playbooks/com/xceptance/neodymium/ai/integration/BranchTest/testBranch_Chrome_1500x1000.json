@@ -20,21 +20,21 @@
     },
     {
       "promptLine": "If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
-      "reasoning": "The instruction requires a conditional click. The \u0027Accept Cookies\u0027 button is present in the DOM, identified by its data-neo-ref attribute, making the condition true. Therefore, the \u0027Accept Cookies\u0027 button will be clicked. The provided ID hints were not found in the DOM, so data-neo-ref was used as the next preferred locator.",
+      "reasoning": "The instruction requires a conditional action. A BRANCH action is used to first assert the visibility of the \u0027Accept Cookies\u0027 button. If visible, the \u0027Accept Cookies\u0027 button is clicked. Otherwise, the \u0027Main Action Button\u0027 is clicked. Both buttons were identified by their \u0027name\u0027 attribute from the AXTree.",
       "actions": [
         {
           "type": "BRANCH",
-          "description": "If the Accept Cookies button is visible, then click it, else click the Main Action Button",
+          "description": "Conditional click based on button visibility",
           "elementContext": {},
           "replay": "",
           "condition": [
             {
               "type": "ASSERT",
-              "target": "[data-neo-ref\u003d\u0027xc_bymax6\u0027]",
+              "target": "[name\u003d\"Accept Cookies\"]",
               "value": [
                 "visible"
               ],
-              "description": "Verify Accept Cookies button is visible",
+              "description": "Check if Accept Cookies button is visible",
               "elementDetails": "Accept Cookies button",
               "elementContext": {},
               "replay": "",
@@ -44,7 +44,7 @@
           "then": [
             {
               "type": "CLICK",
-              "target": "[data-neo-ref\u003d\u0027xc_bymax6\u0027]",
+              "target": "[name\u003d\"Accept Cookies\"]",
               "description": "Click the Accept Cookies button",
               "elementDetails": "Accept Cookies button",
               "elementContext": {
@@ -60,7 +60,7 @@
           "else": [
             {
               "type": "CLICK",
-              "target": "[data-neo-ref\u003d\u0027xc_6gg6py\u0027]",
+              "target": "[name\u003d\"Main Action Button\"]",
               "description": "Click the Main Action Button",
               "elementDetails": "Main Action Button",
               "elementContext": {},

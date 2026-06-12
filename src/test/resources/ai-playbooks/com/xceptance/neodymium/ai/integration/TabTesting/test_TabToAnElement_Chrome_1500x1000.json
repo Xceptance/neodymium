@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Press the TAB key",
-      "reasoning": "The instruction is to press the TAB key, which directly translates to a KEY_PRESS action with \u0027TAB\u0027 as the value.",
+      "reasoning": "The instruction is to press the TAB key, which maps to a KEY_PRESS action with \u0027TAB\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -77,7 +77,7 @@
     },
     {
       "promptLine": "Verify that the search box has focus",
-      "reasoning": "Verified that the search box element with data-neo-ref \u0027xc_7cjiuo\u0027 has keyboard focus.",
+      "reasoning": "The instruction is to verify that the search box has focus. I identified the search box by its data-neo-ref and name, and created an ASSERT action with \u0027focused\u0027 as the value.",
       "actions": [
         {
           "type": "ASSERT",

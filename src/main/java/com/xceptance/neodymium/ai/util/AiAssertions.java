@@ -503,9 +503,9 @@ public final class AiAssertions
      *
      * @param args arguments string (e.g. "14,96 €, 14.96" or "[\"10.00\", \"10.00\"]")
      */
-    public static void assertNumberEqual(final String args)
+    public static void assertNumbersEqual(final String args)
     {
-        final String[] parsedArgs = parseTwoArguments(args, "assertNumberEqual");
+        final String[] parsedArgs = parseTwoArguments(args, "assertNumbersEqual");
         final BigDecimal val1 = parseLocalizedBigDecimal(parsedArgs[0]);
         final BigDecimal val2 = parseLocalizedBigDecimal(parsedArgs[1]);
 
@@ -593,17 +593,17 @@ public final class AiAssertions
     }
 
     /**
-     * Verifies that the provided mathematical equation is correct within an allowed tolerance of 0.02.
+     * Asserts that the provided mathematical equation is correct within an allowed tolerance of 0.02.
      * <p>
      * The method is locale-agnostic and supports parsing formatted currencies and percentage values.
      * Programmatic evaluation is performed securely via the JDK {@code JShell} engine.
      *
-     * @param equation the mathematical equation to verify (e.g. "0,90 € = (14,96 € + 0,00 €) * 6,00%")
+     * @param equation the mathematical equation to assert (e.g. "0,90 € = (14,96 € + 0,00 €) * 6,00%")
      * @throws AssertionError if the equation is null, empty, does not contain exactly one '=' operator,
      *                        fails to parse, or is mathematically inconsistent
      * @throws SecurityException if the equation fails the safety guardrail check
      */
-    public static void verifyCalculation(final String equation)
+    public static void assertCalculation(final String equation)
     {
         if (equation == null || equation.trim().isEmpty())
         {
@@ -661,7 +661,7 @@ public final class AiAssertions
         }
         catch (final Exception e)
         {
-            throw new AssertionError("Failed to parse and verify equation: " + equation, e);
+            throw new AssertionError("Failed to parse and assert equation: " + equation, e);
         }
     }
 

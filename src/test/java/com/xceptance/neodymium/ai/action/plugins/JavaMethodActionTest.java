@@ -36,7 +36,7 @@ public final class JavaMethodActionTest
     public void testGetPromptInstructionsIncludesUtilityMethods()
     {
         final JavaMethodAction action = new JavaMethodAction();
-        final String instructions = action.getPromptInstructions();
+        final String instructions = action.getPromptInstructions(JavaMethodActionTest.class, null);
         
         Assertions.assertNotNull(instructions);
         
@@ -46,8 +46,8 @@ public final class JavaMethodActionTest
         // Assert reflected methods from AiAssertions are present
         Assertions.assertTrue(instructions.contains("assertPriceGreaterThanZero(String)"));
         Assertions.assertTrue(instructions.contains("assertGreaterThanZero(String)"));
-        Assertions.assertTrue(instructions.contains("verifyCalculation(String)"));
+        Assertions.assertTrue(instructions.contains("assertCalculation(String)"));
         Assertions.assertTrue(instructions.contains("assertNumberGreaterThan(String)"));
-        Assertions.assertTrue(instructions.contains("assertNumberEqual(String)"));
+        Assertions.assertTrue(instructions.contains("assertNumbersEqual(String)"));
     }
 }

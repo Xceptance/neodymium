@@ -1,0 +1,193 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.TabTesting :: test_TabToAnElement_PesapComparison :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Press the TAB key",
+      "reasoning": "The instruction is to press the TAB key, which directly maps to the KEY_PRESS action with \u0027TAB\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "TAB"
+          ],
+          "description": "Press the TAB key",
+          "elementDetails": "TAB key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Press the TAB key",
+      "reasoning": "The instruction is to press the TAB key, which directly maps to the KEY_PRESS action with \u0027TAB\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "TAB"
+          ],
+          "description": "Press the TAB key",
+          "elementDetails": "TAB key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Press the TAB key",
+      "reasoning": "The instruction is to press the TAB key, which directly maps to the KEY_PRESS action with \u0027TAB\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "TAB"
+          ],
+          "description": "Press the TAB key",
+          "elementDetails": "TAB key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the search box has focus",
+      "reasoning": "Verified that the search box element with name \u0027Search posters...\u0027 has focus.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "xc_7cjiuo",
+          "value": [
+            "focused"
+          ],
+          "description": "Verify that the search box has focus",
+          "elementDetails": "Search posters...",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Press the TAB key",
+      "reasoning": "The instruction is to press the TAB key, which directly translates to a KEY_PRESS action with \u0027TAB\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "TAB"
+          ],
+          "description": "Press the TAB key",
+          "elementDetails": "TAB key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Press the TAB key",
+      "reasoning": "The instruction is to press the TAB key, which maps to a KEY_PRESS action with \u0027TAB\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "TAB"
+          ],
+          "description": "Press the TAB key",
+          "elementDetails": "TAB key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Press the TAB key",
+      "reasoning": "The instruction is to press the TAB key, which directly translates to a KEY_PRESS action with \u0027TAB\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "TAB"
+          ],
+          "description": "Press the TAB key",
+          "elementDetails": "TAB key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the search box has focus",
+      "reasoning": "The instruction is to verify that the search box has focus. I identified the search box by its data-neo-ref and name, and created an ASSERT action with \u0027focused\u0027 as the value.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "xc_7cjiuo",
+          "value": [
+            "focused"
+          ],
+          "description": "Verify that the search box has focus",
+          "elementDetails": "Search posters...",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

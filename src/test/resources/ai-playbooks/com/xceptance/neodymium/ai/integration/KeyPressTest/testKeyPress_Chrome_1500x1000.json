@@ -45,7 +45,7 @@
     },
     {
       "promptLine": "Press the TAB key on the active element",
-      "reasoning": "The instruction is to press the TAB key, which maps directly to the KEY_PRESS action with \u0027TAB\u0027 as the value.",
+      "reasoning": "The instruction is to press the TAB key, which is handled by the KEY_PRESS action.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -64,7 +64,7 @@
     },
     {
       "promptLine": "Type \u0027KeyPress works!\u0027 into the comment box",
-      "reasoning": "Identified the comment box by its accessibility name and data-neo-ref attribute, then generated a TYPE action to input the specified text.",
+      "reasoning": "Identified the \u0027Comments:\u0027 textbox using its data-neo-ref attribute and generated a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
@@ -89,7 +89,7 @@
     },
     {
       "promptLine": "Type \u0027Robert\u0027 into the \u0027First Name:\u0027 field",
-      "reasoning": "Typed \u0027Robert\u0027 into the \u0027First Name:\u0027 field using its data-neo-ref.",
+      "reasoning": "Typed \u0027Robert\u0027 into the \u0027First Name:\u0027 textbox identified by its accessibility name.",
       "actions": [
         {
           "type": "TYPE",
