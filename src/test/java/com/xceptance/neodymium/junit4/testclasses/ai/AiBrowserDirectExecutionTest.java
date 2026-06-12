@@ -106,4 +106,17 @@ public class AiBrowserDirectExecutionTest
         Assert.assertTrue("The current URL should still contain 'xceptance.com' after refreshing.", 
                           webDriver.getCurrentUrl().contains("xceptance.com"));
     }
+
+    @Test
+    public void testPromptWithComments()
+    {
+        Neodymium.ai().execute("open https://xceptance.com\n" +
+                               "# This is a comment\n" +
+                               "// This is also a comment\n" +
+                               "open https://www.xceptance.com/de/");
+
+        WebDriver webDriver = Neodymium.getDriver();
+        Assert.assertTrue("The current URL should be xceptance.de since comments should be ignored.",
+                          webDriver.getCurrentUrl().contains("xceptance.com/de/"));
+    }
 }

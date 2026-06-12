@@ -63,8 +63,8 @@ public class TestDataTest extends AbstractNeodymiumTest
     public void testTestData() throws Exception
     {
         // test the data utils using JSON data
-        NeodymiumTestExecutionSummary summary = run(TestDataTests.class);
-        checkPass(summary, 10, 0);
+        final NeodymiumTestExecutionSummary summary = run(TestDataTests.class);
+        checkPass(summary, 11, 0);
     }
 
     @Test

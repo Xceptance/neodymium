@@ -40,7 +40,7 @@ public class SelenideErrorDetailsFormatterTest
         {
             Assertions.assertEquals("Element not found {#someUnknownIDForThisSepcificTest}\n"
                                     + "Expected: exist\n"
-                                    + "(Timeout: 0 ms.)", e.getMessage(), "Wrong exception Message catched!");
+                                    + "(Timeout: 0ms)", e.getMessage(), "Wrong exception Message catched!");
         }
     }
 
@@ -61,7 +61,7 @@ public class SelenideErrorDetailsFormatterTest
             assertExpectedMessageContains(e.getMessage(), "Expected: exist\n");
             assertExpectedMessageContains(e.getMessage(), "Screenshot: ");
             assertExpectedMessageContains(e.getMessage(), "Page source: ");
-            assertExpectedMessageContains(e.getMessage(), "Timeout: 0 ms.\n");
+            assertExpectedMessageContains(e.getMessage(), "Timeout: 0ms\n");
             assertExpectedMessageContains(e.getMessage(),
                                           "Caused by: NoSuchElementException: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\"#someUnknownIDForThisSepcificTest\"}");
         }
@@ -82,7 +82,7 @@ public class SelenideErrorDetailsFormatterTest
         catch (AssertionError e)
         {
             Assertions.assertEquals("List size mismatch: expected: > 5, actual: 0, collection: #someUnknownIDForThisSepcificTest\n"
-                                    + "(Timeout: 0 ms.)", e.getMessage(), "Wrong exception Message catched!");
+                                    + "(Timeout: 0ms)", e.getMessage(), "Wrong exception Message catched!");
         }
     }
 
@@ -102,7 +102,7 @@ public class SelenideErrorDetailsFormatterTest
         {
             assertExpectedMessageContains(e.getMessage(), "List size mismatch: expected: > 5, actual: 0, collection: #someUnknownIDForThisSepcificTest\n");
             assertExpectedMessageContains(e.getMessage(), "Page source: ");
-            assertExpectedMessageContains(e.getMessage(), "Timeout: 0 ms.");
+            assertExpectedMessageContains(e.getMessage(), "Timeout: 0ms");
         }
     }
 

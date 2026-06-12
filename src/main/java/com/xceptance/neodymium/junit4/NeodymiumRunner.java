@@ -240,7 +240,9 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
             Neodymium.clearThreadContext();
             boolean noFiltersActive = StringUtils.isEmpty(testExecutionRegex) 
                     && StringUtils.isBlank(Neodymium.configuration().getTestFileFilter()) 
-                    && StringUtils.isBlank(Neodymium.configuration().getTestIdFilter());
+                    && StringUtils.isBlank(Neodymium.configuration().getTestIdFilter())
+                    && StringUtils.isEmpty(System.getProperty(BrowserData.SYSTEM_PROPERTY_BROWSERDEFINITION, ""))
+                    && StringUtils.isEmpty(Neodymium.configuration().getBrowserFilter());
 
             // only throw exception if test class has no execution methods accidentally
             if (noFiltersActive)

@@ -192,4 +192,36 @@ public class LocalizationTest extends NeodymiumTest
         String key = "key1";
         Assert.assertEquals("fr", Neodymium.localizedText(key, "fr_CA"));
     }
+
+    @Test
+    public void testTryLocalizedTextUnknown()
+    {
+        Neodymium.configuration().setProperty("neodymium.locale", "default");
+        Assert.assertEquals("key3", Neodymium.tryLocalizedText("key3"));
+    }
+
+    @Test
+    public void testTryLocalizedTextWithLocaleUnknown()
+    {
+        Neodymium.configuration().setProperty("neodymium.locale", "default");
+        Assert.assertEquals("key3", Neodymium.tryLocalizedText("key3", "fr_FR"));
+    }
+
+    @Test
+    public void testLocalizedTextUnknownThrowsAssertionError()
+    {
+        Neodymium.configuration().setProperty("neodymium.locale", "default");
+        Assert.assertThrows(AssertionError.class, () -> {
+            Neodymium.localizedText("key3");
+        });
+    }
+
+    @Test
+    public void testLocalizedTextWithLocaleUnknownThrowsAssertionError()
+    {
+        Neodymium.configuration().setProperty("neodymium.locale", "default");
+        Assert.assertThrows(AssertionError.class, () -> {
+            Neodymium.localizedText("key3", "fr_FR");
+        });
+    }
 }

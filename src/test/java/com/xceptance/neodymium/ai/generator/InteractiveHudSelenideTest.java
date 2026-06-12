@@ -94,7 +94,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.setAiPlaybook(null);
         Neodymium.setInteractiveHud(null);
         Neodymium.getData().clear();
-        Neodymium.getData().put("neodymium.sourceFile", "dummy-test.yml");
+        Neodymium.setTestdataSourceFile("dummy-test.yml");
 
         // Force config properties to prevent caching issues across test classes
         Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "true");
@@ -1510,7 +1510,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
             // 3. Configure the thread-local sourceFile and test data bindings in Neodymium
             Neodymium.getData().clear();
-            Neodymium.getData().put("neodymium.sourceFile", tempFileName);
+            Neodymium.setTestdataSourceFile(tempFileName);
             Neodymium.getData().put("myKey", "originalValue");
 
             // 4. Initialize the Playbook with a clean 1-step sequence matching the YAML

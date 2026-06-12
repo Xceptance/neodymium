@@ -21,6 +21,7 @@ import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.StartNewBrowserForCleanUp;
 import com.xceptance.neodymium.common.browser.StartNewBrowserForSetUp;
 import com.xceptance.neodymium.common.browser.WebDriverCache;
+import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
@@ -34,8 +35,7 @@ import com.xceptance.neodymium.util.Neodymium;
 @StartNewBrowserForSetUp
 @StartNewBrowserForCleanUp
 @RunWith(NeodymiumRunner.class)
-public class ValidateKeepWebDriverOpen
-{
+public class ValidateKeepWebDriverOpen {
     private static WebDriver webDriverBeforeForTest1;
 
     private static WebDriver webDriverBeforeForTest2;
@@ -75,33 +75,29 @@ public class ValidateKeepWebDriverOpen
     private static File tempConfigFile;
 
     @BeforeClass
-    public static void beforeClass()
-    {
+    public static void beforeClass() {
         // set up a temporary neodymium.properties
         final String fileLocation = "config/temp-ValidateKeepWebDriverOpen-neodymium.properties";
         tempConfigFile = new File("./" + fileLocation);
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpen", "true");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
         NeodymiumTest.writeMapToPropertiesFile(properties, tempConfigFile);
         ConfigFactory.setProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:" + fileLocation);
+        MultibrowserConfiguration.clearAllInstances();
+        MultibrowserConfiguration.getInstance(tempConfigFile.getPath());
     }
 
     @Before
-    public void before()
-    {
-        if (webDriverBeforeForTest1 == null)
-        {
+    public void before() {
+        if (webDriverBeforeForTest1 == null) {
             webDriverBeforeForTest1 = Neodymium.getDriver();
             proxyBeforeForTest1 = Neodymium.getLocalProxy();
-        }
-        else if (webDriverBeforeForTest2 == null)
-        {
+        } else if (webDriverBeforeForTest2 == null) {
             webDriverBeforeForTest2 = Neodymium.getDriver();
             proxyBeforeForTest2 = Neodymium.getLocalProxy();
-        }
-        else
-        {
+        } else {
             webDriverBeforeForTest3 = Neodymium.getDriver();
             proxyBeforeForTest3 = Neodymium.getLocalProxy();
         }
@@ -109,15 +105,13 @@ public class ValidateKeepWebDriverOpen
 
     @Test
     @Browser("Chrome_1024x768")
-    public void test1()
-    {
+    public void test1() {
         webDriverTest1 = Neodymium.getDriver();
         Assert.assertNotEquals(webDriverBeforeForTest1, webDriverTest1);
         Assert.assertNotEquals(webDriverBeforeForTest2, webDriverTest1);
         NeodymiumWebDriverTest.assertWebDriverAlive(webDriverBeforeForTest1);
         NeodymiumWebDriverTest.assertWebDriverAlive(webDriverTest1);
-        if (webDriverAfterForTest2 != null)
-        {
+        if (webDriverAfterForTest2 != null) {
             NeodymiumWebDriverTest.assertWebDriverAlive(webDriverAfterForTest2);
         }
 
@@ -126,23 +120,20 @@ public class ValidateKeepWebDriverOpen
         Assert.assertNotEquals(proxyBeforeForTest2, proxyTest1);
         NeodymiumWebDriverTest.assertProxyAlive(proxyBeforeForTest1);
         NeodymiumWebDriverTest.assertProxyAlive(proxyTest1);
-        if (proxyBeforeForTest2 != null)
-        {
+        if (proxyBeforeForTest2 != null) {
             NeodymiumWebDriverTest.assertProxyAlive(proxyBeforeForTest2);
         }
     }
 
     @Test
     @Browser("Chrome_1024x768")
-    public void test2()
-    {
+    public void test2() {
         webDriverTest2 = Neodymium.getDriver();
         Assert.assertNotEquals(webDriverBeforeForTest1, webDriverTest2);
         Assert.assertNotEquals(webDriverBeforeForTest2, webDriverTest1);
         NeodymiumWebDriverTest.assertWebDriverAlive(webDriverBeforeForTest2);
         NeodymiumWebDriverTest.assertWebDriverAlive(webDriverTest2);
-        if (webDriverAfterForTest2 != null)
-        {
+        if (webDriverAfterForTest2 != null) {
             NeodymiumWebDriverTest.assertWebDriverAlive(webDriverAfterForTest2);
         }
 
@@ -151,8 +142,7 @@ public class ValidateKeepWebDriverOpen
         Assert.assertNotEquals(proxyBeforeForTest2, proxyTest2);
         NeodymiumWebDriverTest.assertProxyAlive(proxyBeforeForTest2);
         NeodymiumWebDriverTest.assertProxyAlive(proxyTest2);
-        if (proxyBeforeForTest2 != null)
-        {
+        if (proxyBeforeForTest2 != null) {
             NeodymiumWebDriverTest.assertProxyAlive(proxyBeforeForTest2);
         }
         // Let condition fail
@@ -161,15 +151,13 @@ public class ValidateKeepWebDriverOpen
 
     @Test
     @Browser("Chrome_1024x768")
-    public void test3()
-    {
+    public void test3() {
         webDriverTest3 = Neodymium.getDriver();
         Assert.assertNotEquals(webDriverBeforeForTest1, webDriverTest3);
         Assert.assertNotEquals(webDriverBeforeForTest2, webDriverTest3);
         NeodymiumWebDriverTest.assertWebDriverAlive(webDriverBeforeForTest3);
         NeodymiumWebDriverTest.assertWebDriverAlive(webDriverTest3);
-        if (webDriverAfterForTest2 != null)
-        {
+        if (webDriverAfterForTest2 != null) {
             NeodymiumWebDriverTest.assertWebDriverAlive(webDriverAfterForTest2);
         }
         proxyTest3 = Neodymium.getLocalProxy();
@@ -178,24 +166,19 @@ public class ValidateKeepWebDriverOpen
         Assert.assertNotEquals(proxyBeforeForTest2, proxyTest3);
         NeodymiumWebDriverTest.assertProxyAlive(proxyBeforeForTest3);
         NeodymiumWebDriverTest.assertProxyAlive(proxyTest3);
-        if (proxyBeforeForTest3 != null)
-        {
+        if (proxyBeforeForTest3 != null) {
             NeodymiumWebDriverTest.assertProxyAlive(proxyBeforeForTest3);
         }
     }
 
     @After
-    public void after()
-    {
-        if (webDriverTest2 == null)
-        {
+    public void after() {
+        if (webDriverTest2 == null) {
             webDriverAfterForTest1 = Neodymium.getDriver();
             proxyAfterForTest1 = Neodymium.getLocalProxy();
             Assert.assertNotEquals(webDriverAfterForTest1, webDriverTest1);
             Assert.assertNotEquals(proxyAfterForTest1, proxyTest1);
-        }
-        else if (webDriverTest3 == null)
-        {
+        } else if (webDriverTest3 == null) {
             webDriverAfterForTest2 = Neodymium.getDriver();
             proxyAfterForTest2 = Neodymium.getLocalProxy();
             Assert.assertNotEquals(webDriverAfterForTest1, webDriverTest1);
@@ -204,9 +187,7 @@ public class ValidateKeepWebDriverOpen
             Assert.assertNotEquals(proxyAfterForTest1, proxyTest1);
             Assert.assertNotEquals(proxyAfterForTest2, proxyTest1);
             Assert.assertNotEquals(proxyAfterForTest2, proxyTest2);
-        }
-        else
-        {
+        } else {
             webDriverAfterForTest3 = Neodymium.getDriver();
             proxyAfterForTest3 = Neodymium.getLocalProxy();
             Assert.assertNotEquals(webDriverAfterForTest1, webDriverTest1);
@@ -228,8 +209,7 @@ public class ValidateKeepWebDriverOpen
     }
 
     @AfterClass
-    public static void afterClass()
-    {
+    public static void afterClass() {
         Assert.assertEquals(0, WebDriverCache.instance.getWebDriverStateContainerCacheSize());
 
         NeodymiumWebDriverTest.assertWebDriverAlive(webDriverBeforeForTest1);
