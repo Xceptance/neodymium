@@ -97,9 +97,29 @@ public final class AiAgentPrompts
     public static final String V2_EXTRACTION_RETRY_PROMPT = loadPrompt("v2-extraction-retry-prompt.md");
 
     /**
+     * Snippets for modular system prompt construction.
+     */
+    public static final String SNIPPET_ROLE = loadPrompt("snippet-role.md");
+    public static final String SNIPPET_CAPABILITIES = loadPrompt("snippet-capabilities.md");
+    public static final String SNIPPET_RESPONSE_FORMAT = loadPrompt("snippet-response-format.md");
+    public static final String SNIPPET_RULES_SUCCESS_FAILURE = loadPrompt("snippet-rules-success-failure.md");
+    public static final String SNIPPET_RULES_GENERAL = loadPrompt("snippet-rules-general.md");
+    public static final String SNIPPET_RULES_DOM_ANALYSIS = loadPrompt("snippet-rules-dom-analysis.md");
+    public static final String SNIPPET_RULES_ELEMENT_SELECTION = loadPrompt("snippet-rules-element-selection.md");
+    public static final String SNIPPET_RULES_VISUAL = loadPrompt("snippet-rules-visual.md");
+    public static final String SYSTEM_HEALING_INSTRUCTION = loadPrompt("system-healing-instruction.md");
+
+    /**
      * Base system prompt.
      */
-    public static final String SYSTEM_PROMPT = loadPrompt("system-prompt.md");
+    public static final String SYSTEM_PROMPT = SNIPPET_ROLE + "\n\n"
+            + SNIPPET_CAPABILITIES + "\n\n"
+            + SNIPPET_RESPONSE_FORMAT + "\n\n"
+            + SNIPPET_RULES_SUCCESS_FAILURE + "\n\n"
+            + SNIPPET_RULES_GENERAL + "\n\n"
+            + SNIPPET_RULES_DOM_ANALYSIS + "\n\n"
+            + SNIPPET_RULES_ELEMENT_SELECTION + "\n\n"
+            + SNIPPET_RULES_VISUAL;
 
     /**
      * Standard user prompt template.
@@ -119,7 +139,14 @@ public final class AiAgentPrompts
     /**
      * System prompt for playbook healing.
      */
-    public static final String SYSTEM_HEALING_PROMPT = loadPrompt("system-healing-prompt.md");
+    public static final String SYSTEM_HEALING_PROMPT = SNIPPET_ROLE + "\n\n"
+            + SNIPPET_CAPABILITIES + "\n\n"
+            + SNIPPET_RESPONSE_FORMAT + "\n\n"
+            + SNIPPET_RULES_SUCCESS_FAILURE + "\n\n"
+            + SNIPPET_RULES_GENERAL + "\n\n"
+            + SNIPPET_RULES_DOM_ANALYSIS + "\n\n"
+            + SNIPPET_RULES_ELEMENT_SELECTION + "\n\n"
+            + SYSTEM_HEALING_INSTRUCTION;
 
     /**
      * System prompt for PESAP (Pre-Execution Static Analysis Phase) classification.
@@ -496,6 +523,19 @@ public final class AiAgentPrompts
      */
     public static String injectPluginMetadata(final String promptTemplate)
     {
+        return injectPluginMetadata(promptTemplate, ContextLevel.STANDARD);
+    }
+
+    /**
+     * Injects the dynamic plugin metadata (available actions and their descriptions) into a prompt template,
+     * tailoring the output granularity to the specified context level.
+     *
+     * @param promptTemplate the raw template containing {actionTypes} and {actionDescriptions} placeholders
+     * @param level          the context level determining descriptions granularity
+     * @return the final prompt with plugins injected
+     */
+    public static String injectPluginMetadata(final String promptTemplate, final ContextLevel level)
+    {
         if (promptTemplate == null)
         {
             return null;
@@ -509,14 +549,22 @@ public final class AiAgentPrompts
         for (final AiActionPlugin plugin : plugins)
         {
             typeNames.add(plugin.getActionName());
-            final String desc = plugin.getPromptInstructions();
-            if (desc != null && !desc.isBlank())
+            if (level != ContextLevel.HINT)
             {
-                descriptions.append("- ").append(desc).append("\n");
+                final String desc = plugin.getPromptInstructions();
+                if (desc != null && !desc.isBlank())
+                {
+                    descriptions.append("- ").append(desc).append("\n");
+                }
             }
         }
 
         final String typesStr = String.join(" | ", typeNames);
+
+        if (level == ContextLevel.HINT)
+        {
+            descriptions.append("- ").append(String.join(", ", typeNames)).append("\n");
+        }
 
         return promptTemplate.replace("{actionTypes}", typesStr)
             .replace("{actionDescriptions}", descriptions.toString());
@@ -540,12 +588,95 @@ public final class AiAgentPrompts
      *
      * @param level the current context level
      * @return the fully prepared system prompt with context-level guidance
+     *
+     * @author AI-generated: Gemini 2.5 Pro
      */
     public static String getSystemPrompt(final ContextLevel level)
     {
-        final String base = injectPluginMetadata(SYSTEM_PROMPT);
-        final String contextGuidance = getContextLevelGuidance(level);
-        return base + "\n" + contextGuidance;
+        final StringBuilder sb = new StringBuilder();
+        sb.append(SNIPPET_ROLE).append("\n\n");
+
+        if (level == ContextLevel.HINT)
+        {
+            sb.append("## Your Capabilities\n")
+              .append("You can perform these action types targeting the element: CLICK | TYPE | CLEAR | SELECT | HOVER | ASSERT | CHECK | SCROLL | KEY_PRESS\n\n");
+
+            final String minResponseFormat = """
+                ## Response Format
+                Return raw minified single-line JSON without markdown code blocks:
+                {
+                  "s": true/false,
+                  "a": [
+                    {
+                      "t": "ACTION_TYPE",
+                      "tg": "locator string from hint",
+                      "v": "value if required",
+                      "desc": "brief action description",
+                      "ed": "short description of target element"
+                    }
+                  ],
+                  "d": true/false,
+                  "e": "error message if s is false",
+                  "r": "brief explanation"
+                }""";
+            sb.append(minResponseFormat).append("\n\n");
+
+            sb.append("## Rules\n")
+              .append("1. Set \"d\" to true when all instructions for this step are complete.\n")
+              .append("2. Keep descriptions (\"desc\") concise.\n")
+              .append("3. Map instructions to actions: CLICK (click/press), TYPE (type/enter), CLEAR (clear), SELECT (dropdown), HOVER (hover), ASSERT (verify/check), CHECK (checkbox/radio), SCROLL (scroll), KEY_PRESS (press keys or single letters e.g., Enter, Tab, a, b).\n")
+              .append("4. LOCATOR HINTS: If an inline hint is provided (e.g., \"(hint: selector)\"), you MUST extract the selector value and set it as the \"tg\" field of the action (including for KEY_PRESS).\n")
+              .append("5. For single character keyboard inputs (e.g. 'a', 'b', 'c'), use KEY_PRESS instead of CLICK or TYPE when instructing to press/type a single letter key.\n\n");
+        }
+        else
+        {
+            sb.append(injectPluginMetadata(SNIPPET_CAPABILITIES, level)).append("\n\n");
+            sb.append(SNIPPET_RESPONSE_FORMAT).append("\n\n");
+            sb.append(SNIPPET_RULES_GENERAL).append("\n\n");
+        }
+
+        switch (level)
+        {
+            case HINT:
+            {
+                break;
+            }
+
+            case AXTREE:
+            {
+                sb.append(SNIPPET_RULES_SUCCESS_FAILURE).append("\n\n");
+                sb.append(SNIPPET_RULES_DOM_ANALYSIS).append("\n\n");
+                sb.append(SNIPPET_RULES_ELEMENT_SELECTION).append("\n\n");
+                break;
+            }
+
+            case LEAN:
+            case STANDARD:
+            {
+                sb.append(SNIPPET_RULES_SUCCESS_FAILURE).append("\n\n");
+                sb.append(SNIPPET_RULES_DOM_ANALYSIS).append("\n\n");
+                sb.append(SNIPPET_RULES_ELEMENT_SELECTION).append("\n\n");
+                break;
+            }
+
+            case VISUAL_LEAN:
+            case VISUAL:
+            {
+                sb.append(SNIPPET_RULES_SUCCESS_FAILURE).append("\n\n");
+                sb.append(SNIPPET_RULES_DOM_ANALYSIS).append("\n\n");
+                sb.append(SNIPPET_RULES_ELEMENT_SELECTION).append("\n\n");
+                sb.append(SNIPPET_RULES_VISUAL).append("\n\n");
+                break;
+            }
+
+            default:
+            {
+                break;
+            }
+        }
+
+        sb.append(getContextLevelGuidance(level));
+        return sb.toString();
     }
 
     /**
@@ -564,11 +695,8 @@ public final class AiAgentPrompts
             case HINT -> """
 
                 ## Context Level: HINT
-                You are receiving MINIMAL context (no DOM elements). This is because the user provided an explicit inline locator hint (e.g., "(hint: #myId)") in the instruction.
-
-                CRITICAL: Use the provided hint to generate the requested action JSON immediately. Do not attempt to verify the element's existence in the DOM (since no DOM is provided). If you cannot fulfill the instruction based on the hint alone, respond with:
-                {"success": false, "status": "ESCALATE", "targetContext": "STANDARD", "reasoning": "I need the actual DOM to determine the action", "actions": []}
-                (Set targetContext to AXTREE, LEAN, STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
+                No DOM is provided. Translate the hint to the action JSON. If you cannot fulfill the instruction from the hint alone, respond with:
+                {"s": false, "st": "ESCALATE", "tc": "AXTREE", "r": "I need the DOM", "a": []}
                 """;
             case AXTREE -> """
 
@@ -577,8 +705,8 @@ public final class AiAgentPrompts
                 This contains links, buttons, inputs, headings, forms, and landmark sections with their resolved accessibility names and states.
 
                 CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you cannot find the requested element, or if you need full plain text content (like paragraph bodies, table cells, or static list item texts) to disambiguate between multiple elements, you MUST immediately respond with:
-                {"success": false, "status": "ESCALATE", "targetContext": "STANDARD", "reasoning": "This step requires standard text context which is not available in AXTREE context", "actions": []}
-                (Set targetContext to LEAN, STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
+                {"s": false, "st": "ESCALATE", "tc": "STANDARD", "r": "This step requires standard text context which is not available in AXTREE context", "a": []}
+                (Set tc to LEAN, STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
 
                 Do NOT guess. Do NOT pick an arbitrary element when multiple matches exist. Request escalation instead.
                 """;
@@ -592,8 +720,8 @@ public final class AiAgentPrompts
                 CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you cannot find the requested element, or if you need text content \
                 to disambiguate between multiple similar elements (e.g. multiple 'View Details' links), \
                 or if the instruction requires reading text that is not shown, you MUST immediately respond with:
-                {"success": false, "status": "ESCALATE", "targetContext": "STANDARD", "reasoning": "This step requires visual validation or additional text context which is not available in LEAN context", "actions": []}
-                (Set targetContext to STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
+                {"s": false, "st": "ESCALATE", "tc": "STANDARD", "r": "This step requires visual validation or additional text context which is not available in LEAN context", "a": []}
+                (Set tc to STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
 
                 Do NOT guess. Do NOT pick an arbitrary element when multiple matches exist. \
                 Request escalation instead.
@@ -607,7 +735,7 @@ public final class AiAgentPrompts
 
                 CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you still cannot find the target element or fulfill the instruction, \
                 you MUST immediately respond with:
-                {"success": false, "status": "ESCALATE", "targetContext": "VISUAL", "reasoning": "This step requires visual validation which is not available in STANDARD context", "actions": []}
+                {"s": false, "st": "ESCALATE", "tc": "VISUAL", "r": "This step requires visual validation which is not available in STANDARD context", "a": []}
                 to request visual context (a screenshot will be provided on the next attempt).
 
                 Do NOT guess if you are uncertain about which element to target.
@@ -623,11 +751,11 @@ public final class AiAgentPrompts
                 CRITICAL - VISUAL-ONLY VALIDATION:
                 If the instruction is a visual-only check (e.g. verifying colors, layout, styling, font, visual design, logo details, alignment, or image content), you MUST act as the validator yourself by inspecting the screenshot.
                 Since no browser/driver interaction is required to verify visual attributes, you do NOT need to return any browser actions. Instead, return:
-                - {"success": true, "done": true, "actions": [], "reasoning": "Detailed visual analysis explaining how the screenshot matches the instruction (e.g. explaining the colors, layouts, or visual elements you see)"} if the visual condition is met.
-                - {"success": false, "done": true, "actions": [], "error": "Visual verification failed: <explanation of what did not match>", "reasoning": "Detailed analysis of why the screenshot does not match the instruction"} if the visual condition is not met.
+                - {"s": true, "d": true, "a": [], "r": "Detailed visual analysis explaining how the screenshot matches the instruction (e.g. explaining the colors, layouts, or visual elements you see)"} if the visual condition is met.
+                - {"s": false, "d": true, "a": [], "e": "Visual verification failed: <explanation of what did not match>", "r": "Detailed analysis of why the screenshot does not match the instruction"} if the visual condition is not met.
 
                 This is the maximum available context for this initial tagged step. If you cannot fulfill the instruction (for example, if you need full text context of paragraphs or list items to complete the validation), \
-                respond with {"success": false, "status": "ESCALATE", "targetContext": "VISUAL", "reasoning": "This step requires full text context which is not available in VISUAL_LEAN", "actions": []} to escalate to VISUAL.
+                respond with {"s": false, "st": "ESCALATE", "tc": "VISUAL", "r": "This step requires full text context which is not available in VISUAL_LEAN", "a": []} to escalate to VISUAL.
                 """;
 
             case VISUAL -> """
@@ -639,11 +767,11 @@ public final class AiAgentPrompts
                 CRITICAL - VISUAL-ONLY VALIDATION:
                 If the instruction is a visual-only check (e.g. verifying colors, layout, styling, font, visual design, logo details, alignment, or image content), you MUST act as the validator yourself by inspecting the screenshot.
                 Since no browser/driver interaction is required to verify visual attributes, you do NOT need to return any browser actions. Instead, return:
-                - {"success": true, "done": true, "actions": [], "reasoning": "Detailed visual analysis explaining how the screenshot matches the instruction (e.g. explaining the colors, layouts, or visual elements you see)"} if the visual condition is met.
-                - {"success": false, "done": true, "actions": [], "error": "Visual verification failed: <explanation of what did not match>", "reasoning": "Detailed analysis of why the screenshot does not match the instruction"} if the visual condition is not met.
+                - {"s": true, "d": true, "a": [], "r": "Detailed visual analysis explaining how the screenshot matches the instruction (e.g. explaining the colors, layouts, or visual elements you see)"} if the visual condition is met.
+                - {"s": false, "d": true, "a": [], "e": "Visual verification failed: <explanation of what did not match>", "r": "Detailed analysis of why the screenshot does not match the instruction"} if the visual condition is not met.
 
                 This is the maximum available context. If you cannot fulfill the instruction, \
-                respond with {"success": false, "error": "explain what failed", "actions": []}. \
+                respond with {"s": false, "e": "explain what failed", "a": []}. \
                 Do not request escalation — there is no higher level.
                 """;
         };

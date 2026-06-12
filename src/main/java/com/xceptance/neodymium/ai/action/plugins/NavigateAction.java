@@ -53,8 +53,10 @@ public class NavigateAction implements AiActionPlugin {
         final boolean urlFound = urlMatcher.find();
 
         // let's check if our prompt needs this or if we have it inside our config
-        if (authFound || (urlFound && Neodymium.configuration().basicAuthUsername() != null)) {
-            if (authFound) {
+        if (authFound || (urlFound && Neodymium.configuration().basicAuthUsername() != null))
+        {
+            if (authFound)
+            {
                 final String url = authMatcher.group(1);
                 final String username = authMatcher.group("username");
                 final String password = authMatcher.group("password");

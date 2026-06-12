@@ -65,7 +65,7 @@ public interface AiConfiguration extends Mutable
     public boolean pesapClassifyEnabled();
 
     @Key("neodymium.ai.pesap.linter.enabled")
-    @DefaultValue("true")
+    @DefaultValue("false")
     public boolean pesapLinterEnabled();
 
     /**
@@ -97,7 +97,7 @@ public interface AiConfiguration extends Mutable
 
 
     @Key("neodymium.ai.temperature")
-    @DefaultValue("0.1")
+    @DefaultValue("0.0")
     public double aiTemperature();
 
     @Key("neodymium.ai.generate")
@@ -156,4 +156,36 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.agent.javaMethod.utilityClasses")
     @DefaultValue("com.xceptance.neodymium.ai.util.AiAssertions")
     public List<String> aiJavaMethodUtilityClasses();
+
+    /**
+     * API key for assertion LLM calls. If not configured, falls back to the standard API key.
+     *
+     * @return the assertion API key, or null if not configured
+     */
+    @Key("neodymium.ai.assertion.apiKey")
+    public String aiAssertionApiKey();
+
+    /**
+     * Model name for assertion LLM calls. If not configured, falls back to the standard model name.
+     *
+     * @return the assertion model name, or null if not configured
+     */
+    @Key("neodymium.ai.assertion.model")
+    public String aiAssertionModel();
+
+    /**
+     * Timeout in seconds for assertion LLM calls. If not configured, falls back to the standard timeout.
+     *
+     * @return the assertion timeout in seconds, or null if not configured
+     */
+    @Key("neodymium.ai.assertion.timeoutSeconds")
+    public Integer aiAssertionTimeoutSeconds();
+
+    /**
+     * Temperature for assertion LLM calls. If not configured, falls back to 0.0.
+     *
+     * @return the assertion temperature, or null if not configured
+     */
+    @Key("neodymium.ai.assertion.temperature")
+    public Double aiAssertionTemperature();
 }

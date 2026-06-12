@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hover Chain Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+    <style>
+        /* CSS Hover menu logic */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: #1a1a2e;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            min-width: 160px;
+            z-index: 100;
+            padding: 0.5rem 0;
+        }
+        .dropdown-submenu {
+            position: relative;
+        }
+        .dropdown-submenu .dropdown-menu {
+            top: 0;
+            left: 100%;
+            margin-top: -1px;
+        }
+        /* Show menu on hover */
+        .dropdown:hover > .dropdown-menu {
+            display: block;
+        }
+        .dropdown-submenu:hover > .dropdown-menu {
+            display: block;
+        }
+        .dropdown-menu a {
+            color: #fff;
+            padding: 8px 16px;
+            text-decoration: none;
+            display: block;
+            font-size: 14px;
+        }
+        .dropdown-menu a:hover {
+            background: rgba(0, 255, 204, 0.15);
+            color: #00ffcc;
+        }
+    </style>
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card" style="min-height: 400px;">
+                <h1>Hover Chain Menu Challenge</h1>
+                <p class="aura-desc">
+                    To select "Laptops", you must hover over the "Products" menu first, then hover over "Electronics" inside it, 
+                    and finally click the "Laptops" link. Direct interaction will fail as the elements are hidden from layout.
+                </p>
+
+                <div style="margin: 3rem 0; display: flex; justify-content: center;">
+                    <nav class="navbar" style="background: rgba(255,255,255,0.05); padding: 10px 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                        <div class="dropdown" id="menu-products">
+                            <a href="#" style="color: #fff; font-weight: bold; text-decoration: none;">Products ▾</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="#">Books</a></li>
+                                <li class="dropdown-submenu" id="menu-electronics">
+                                    <a href="#">Electronics ▸</a>
+                                    <ul class="dropdown-menu">
+                                        <li><a href="#" id="link-phones">Phones</a></li>
+                                        <li><a href="#" id="link-laptops">Laptops</a></li>
+                                    </ul>
+                                </li>
+                                <li><a href="#">Clothing</a></li>
+                            </ul>
+                        </div>
+                    </nav>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 5rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="hover-status" style="font-weight: bold; color: #ffcc00;">No product selected</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.getElementById('link-laptops').addEventListener('click', function(e) {
+            e.preventDefault();
+            const status = document.getElementById('hover-status');
+            status.innerText = 'Laptops selected successfully!';
+            status.style.color = '#00ffcc';
+        });
+        document.getElementById('link-phones').addEventListener('click', function(e) {
+            e.preventDefault();
+            const status = document.getElementById('hover-status');
+            status.innerText = 'Phones selected successfully!';
+            status.style.color = '#33ccff';
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

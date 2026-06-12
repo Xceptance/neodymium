@@ -61,6 +61,16 @@ public class LlmClient
     private final ThreadLocal<LlmMode> currentCallMode = ThreadLocal.withInitial(() -> null);
 
     /**
+     * Protected no-arg constructor to permit browserless instantiations without live config dependencies.
+     */
+    protected LlmClient()
+    {
+        this.config = null;
+        this.aiStats = null;
+        this.mode = null;
+    }
+
+    /**
      * Creates a new LLM client in {@link LlmMode#AGENT} mode.
      * Uses {@code neodymium.ai.temperature} (deterministic, for {@code @NeodymiumTest}).
      *
@@ -102,6 +112,30 @@ public class LlmClient
     }
 
     /**
+     * Masks the given API key for safe logging, keeping only the first 4 and the last 4 characters,
+     * and filling the middle characters with '*' to preserve the original key length.
+     * If the key length is 8 or fewer, the entire key is masked.
+     *
+     * @param key the API key to mask
+     * @return the masked API key
+     */
+    static String maskKey(final String key)
+    {
+        if (StringUtils.isBlank(key))
+        {
+            return "";
+        }
+
+        final int len = key.length();
+        if (len > 8)
+        {
+            return key.substring(0, 4) + "*".repeat(len - 8) + key.substring(len - 4);
+        }
+
+        return "*".repeat(len);
+    }
+
+    /**
      * Lazy-initializes and returns the LangChain4j ChatModel.
      * Selects configuration properties dynamically based on the execution mode (Agent vs Generator).
      *
@@ -114,19 +148,37 @@ public class LlmClient
             return model;
         }
 
-        final String apiKey = config.aiApiKey();
-        final String modelName = config.aiModel();
+        final String apiKey = (mode == LlmMode.ASSERT && StringUtils.isNotBlank(config.aiAssertionApiKey()))
+                ? config.aiAssertionApiKey() : config.aiApiKey();
+        final String modelName = (mode == LlmMode.ASSERT && StringUtils.isNotBlank(config.aiAssertionModel()))
+                ? config.aiAssertionModel() : config.aiModel();
 
-        if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey()))
+        if (StringUtils.isBlank(apiKey))
         {
             Assertions.fail(
-                    "AI API key not configured. Set in your ai.properties, neodymium.properties or as an evironment variable.");
+                    "AI API key not configured. Set in your ai.properties, neodymium.properties or as an environment variable.");
         }
 
-        LOG.debug("   🤖 Initializing Gemini model: {}", modelName);
+        LOG.debug("   🤖 Initializing Gemini model: {} using API key: {}", modelName, maskKey(apiKey));
 
-        final double temperature = mode == LlmMode.GENERATOR ? config.aiGenerateTemperature() : config.aiTemperature();
+        final double temperature;
+        if (mode == LlmMode.GENERATOR)
+        {
+            temperature = config.aiGenerateTemperature();
+        }
+        else if (mode == LlmMode.ASSERT)
+        {
+            final Double assertTemp = config.aiAssertionTemperature();
+            temperature = assertTemp != null ? assertTemp : 0.0;
+        }
+        else
+        {
+            temperature = config.aiTemperature();
+        }
         LOG.debug("   🌡️ Using temperature: {} (mode={})", temperature, mode);
+
+        final int timeoutSeconds = (mode == LlmMode.ASSERT && config.aiAssertionTimeoutSeconds() != null)
+                ? config.aiAssertionTimeoutSeconds() : config.geminiTimeoutSeconds();
 
         model = GoogleAiGeminiChatModel.builder()
                 .apiKey(apiKey)
@@ -134,7 +186,7 @@ public class LlmClient
                 .temperature(temperature)
                 .maxOutputTokens(4096)
                 .responseFormat(ResponseFormat.JSON)
-                .timeout(Duration.ofSeconds(config.geminiTimeoutSeconds()))
+                .timeout(Duration.ofSeconds(timeoutSeconds))
                 .build();
         return model;
     }
@@ -149,6 +201,11 @@ public class LlmClient
     public String chat(final String systemPrompt, final String userPrompt)
     {
         LOG.debug("   💬 Sending text-only prompt ({} chars)", userPrompt.length());
+        if (LOG.isTraceEnabled())
+        {
+            LOG.trace("🧠 --- System Prompt ---\n{}", systemPrompt);
+            LOG.trace("🗣️ --- User Prompt ---\n{}", userPrompt);
+        }
         final UserMessage userMessage = UserMessage.from(userPrompt);
 
         return chat(systemPrompt, userMessage);
@@ -187,6 +244,11 @@ public class LlmClient
             final String base64Screenshot)
     {
         LOG.debug("   💬 Sending multimodal prompt ({} chars + screenshot)", userPrompt.length());
+        if (LOG.isTraceEnabled())
+        {
+            LOG.trace("🧠 --- System Prompt ---\n{}", systemPrompt);
+            LOG.trace("🗣️ --- User Prompt ---\n{}", userPrompt);
+        }
         // Build a multimodal user message with text + image
         final UserMessage userMessage = UserMessage.from(
                 TextContent.from(userPrompt),

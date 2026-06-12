@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.xceptance</groupId>
 	<artifactId>neodymium-library</artifactId>
-	<version>5.4.3-SNAPSHOT</version>
+	<version>5.5.0-SNAPSHOT</version>
 
 	<name>neodymium-library</name>
 	<url>https://github.com/Xceptance/neodymium</url>
@@ -57,7 +57,7 @@
 		<junit.jupiter.version>6.1.0-M1</junit.jupiter.version>
 		<junit.vintage.version>6.1.0-M1</junit.vintage.version>
 		<langchain4j.version>1.15.0</langchain4j.version>
-		<surefire.forkCount>4</surefire.forkCount>
+		<surefire.forkCount>1</surefire.forkCount>
 	</properties>
 
 	<build>

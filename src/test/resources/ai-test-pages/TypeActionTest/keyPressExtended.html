@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>KeyPress Extended Test</title>
+    <style>
+        .nav-item {
+            padding: 8px;
+            margin: 4px;
+            background-color: #eee;
+            border: 1px solid #ccc;
+        }
+        .nav-item.active {
+            background-color: #007bff;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>KeyPress Extended Test</h1>
+    
+    <h3>Arrow Navigation</h3>
+    <div id="nav-container" tabindex="0" style="outline: none;">
+        <div class="nav-item active" id="item-1">Item 1</div>
+        <div class="nav-item" id="item-2">Item 2</div>
+        <div class="nav-item" id="item-3">Item 3</div>
+    </div>
+    <div id="active-item-label">Active: Item 1</div>
+
+    <h3>Single Letter Pressing</h3>
+    <input type="text" id="char-input" placeholder="Type single letters here">
+    <div id="char-result"></div>
+
+    <script>
+        var activeIndex = 0;
+        var items = document.querySelectorAll('.nav-item');
+        var label = document.getElementById('active-item-label');
+        
+        document.getElementById('nav-container').addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') {
+                items[activeIndex].classList.remove('active');
+                activeIndex = (activeIndex + 1) % items.length;
+                items[activeIndex].classList.add('active');
+                label.innerText = 'Active: ' + items[activeIndex].innerText;
+            } else if (e.key === 'ArrowUp') {
+                items[activeIndex].classList.remove('active');
+                activeIndex = (activeIndex - 1 + items.length) % items.length;
+                items[activeIndex].classList.add('active');
+                label.innerText = 'Active: ' + items[activeIndex].innerText;
+            }
+        });
+
+        document.getElementById('char-input').addEventListener('keydown', function(e) {
+            if (e.key.length === 1) {
+                var res = document.getElementById('char-result');
+                res.innerText = (res.innerText || '') + e.key;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -183,14 +183,20 @@ public class AiAgent {
      *
      * @param instructions natural language test instructions
      */
-    public void execute(final String instructions) {
+    public void execute(final String instructions)
+    {
+        execute(instructions, new AiExecutionResult(Neodymium.getData()));
+    }
+
+    public void execute(final String instructions, final AiExecutionResult result)
+    {
         // Dynamically reload the thread-local AI configuration to pick up any dynamic system property changes
         Neodymium.reloadAiConfiguration();
 
         // Re-read dynamically cached autoSkip field from the newly reloaded configuration
         this.autoSkip = Neodymium.aiConfiguration().aiInteractiveAutoSkip();
 
-        if (StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey())) {
+        if (!Boolean.getBoolean("neodymium.ai.offline") && StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey())) {
             Assertions.fail(
                     "AI API key not configured. Set in your ai.properties, neodymium.properties or as an evironment variable.");
         }
@@ -210,10 +216,31 @@ public class AiAgent {
         this.hudPromptChanged = false;
         this.hudSaveExit = false;
 
+        final AiStats statsSnapshot = llmClient.getAiStats();
+        final long startStandardIn = statsSnapshot.getInputTokens();
+        final long startStandardOut = statsSnapshot.getOutputTokens();
+        final long startStandardCached = statsSnapshot.getCachedInputTokens();
+
+        final long startPesapIn = statsSnapshot.getPesapInputTokens();
+        final long startPesapOut = statsSnapshot.getPesapOutputTokens();
+        final long startPesapCached = statsSnapshot.getPesapCachedInputTokens();
+
+        final int startRetry = statsSnapshot.getTotalRetryCount();
+        final int startEscalation = statsSnapshot.getTotalEscalationCount();
+        final int startReplay = statsSnapshot.getReplayCount();
+        final int startDirectParse = statsSnapshot.getDirectParseCount();
+
+        final long startTimeMs = System.currentTimeMillis();
+
         try
         {
             final List<String> stepsList = new ArrayList<>(Arrays.asList(splitInstructions(instructions)));
             LOG.debug("Split into {} step(s)", stepsList.size());
+
+            for (final String rawStep : stepsList)
+            {
+                result.getSteps().add(new StepDetails(rawStep));
+            }
 
             final String sourceFileVal = Neodymium.getTestdataSourceFile();
 
@@ -276,7 +303,7 @@ public class AiAgent {
             final boolean pesapEnabled = pesapEnabledVal;
             if (pesapEnabled && needsPesap)
             {
-                runPesap(stepsList, stepLines, sourceFileVal);
+                runPesap(stepsList, stepLines, sourceFileVal, result);
             }
             else
             {
@@ -371,7 +398,7 @@ public class AiAgent {
                         {
                             // If the user chooses to rewind, edit, or add during the final prompt,
                             // we update the loop index 'i' and continue from the new position
-                            i = processHudActionException(e, i, stepsList, performedInstructions, stepLines);
+                            i = processHudActionException(e, i, stepsList, performedInstructions, stepLines, result);
                             if (i < -1)
                             {
                                 break;
@@ -384,7 +411,7 @@ public class AiAgent {
 
                 // Resolve placeholders or variables in the raw instruction string
                 final String stepUnresolved = stepsList.get(i);
-                final String step = AiBrowser.resolveTestDataToPrompt(stepUnresolved);
+                final String step = AiBrowser.resolveTestDataToPrompt(stepUnresolved, result.getLookups());
 
                 // Extract expected failure tags
                 boolean expectedFailure = false;
@@ -481,12 +508,32 @@ public class AiAgent {
                     {
                         futureInstructions.add(stepsList.get(j));
                     }
-                    executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs, performedInstructions, stepUnresolved, futureInstructions, currentLineNumber, sourceFileVal);
+                    
+                    final StepDetails stepDetails = result.getSteps().get(i);
+                    stepDetails.setExpandedInstruction(strippedStep);
+                    final long stepStartTime = System.currentTimeMillis();
+                    try
+                    {
+                        executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs, performedInstructions, stepUnresolved, futureInstructions, currentLineNumber, sourceFileVal, stepDetails, result);
+                    }
+                    catch (final HudActionException e)
+                    {
+                        throw e;
+                    }
+                    catch (final Throwable t)
+                    {
+                        stepDetails.setFailureReason(t.getMessage());
+                        throw t;
+                    }
+                    finally
+                    {
+                        stepDetails.setDurationMs(System.currentTimeMillis() - stepStartTime);
+                    }
                     performedInstructions.add(stepUnresolved);
                 }
                 catch (final HudActionException e)
                 {
-                    i = processHudActionException(e, i, stepsList, performedInstructions, stepLines);
+                    i = processHudActionException(e, i, stepsList, performedInstructions, stepLines, result);
                     if (i < -1)
                     {
                         break;
@@ -509,6 +556,25 @@ public class AiAgent {
             }
             LOG.debug("───────────────────────────────────────────────────────────");
         } finally {
+            final long durationMs = System.currentTimeMillis() - startTimeMs;
+            result.setDurationMs(durationMs);
+
+            final AiStats stats = llmClient.getAiStats();
+            result.setInputTokens(stats.getInputTokens() - startStandardIn);
+            result.setOutputTokens(stats.getOutputTokens() - startStandardOut);
+            result.setCachedTokens(stats.getCachedInputTokens() - startStandardCached);
+            result.setTotalTokens(result.getInputTokens() + result.getOutputTokens());
+
+            result.setPesapInputTokens(stats.getPesapInputTokens() - startPesapIn);
+            result.setPesapOutputTokens(stats.getPesapOutputTokens() - startPesapOut);
+            result.setPesapCachedTokens(stats.getPesapCachedInputTokens() - startPesapCached);
+            result.setPesapTotalTokens(result.getPesapInputTokens() + result.getPesapOutputTokens());
+
+            result.setRetryCount(stats.getTotalRetryCount() - startRetry);
+            result.setEscalationCount(stats.getTotalEscalationCount() - startEscalation);
+            result.setReplayCount(stats.getReplayCount() - startReplay);
+            result.setDirectParseCount(stats.getDirectParseCount() - startDirectParse);
+
             final Playbook playbook = Neodymium.getAiPlaybook();
             if (playbook != null) {
                 if (hudPromptChanged && !hudSaveExit) {
@@ -527,7 +593,6 @@ public class AiAgent {
                 Allure.addAttachment("AI Discussion", "text/html", executionLog.generateHtml(), ".html");
             }
             if (Neodymium.aiConfiguration().attachTokenUsageToReport()) {
-                final AiStats stats = llmClient.getAiStats();
                 Allure.addAttachment("AI Execution Statistics", "text/plain", stats.toSummaryString(), ".txt");
             }
         }
@@ -560,7 +625,9 @@ public class AiAgent {
             final String unresolvedInstruction,
             final List<String> futureInstructions,
             final Integer currentLineNumber,
-            final String sourceFile) throws HudActionException
+            final String sourceFile,
+            final StepDetails stepDetails,
+            final AiExecutionResult result) throws HudActionException
     {
         int errorCount = 0;
         int playbookReplayAttempts = 0;
@@ -572,8 +639,9 @@ public class AiAgent {
         {
             try
             {
-                // AI-generated: Gemini 2.5 Flash - Reset compound step tracking on each attempt
+                // AI-generated: Gemini 3.5 Flash - Reset compound step tracking on each attempt
                 final List<Action> accumulatedActions = new ArrayList<>();
+                stepDetails.getActions().clear();
                 this.lastLlmDone = true;
 
                 while (true)
@@ -602,7 +670,7 @@ public class AiAgent {
 
                     // Try to resolve the required actions (from playbook cache, direct plugins, or
                     // LLM)
-                    final List<Action> actions = getStepActions(stepIndex, instruction, playbook, expectedFailure, bugId, accumulatedActions);
+                    final List<Action> actions = getStepActions(stepIndex, instruction, playbook, expectedFailure, bugId, accumulatedActions, stepDetails, result);
 
                     if (isInteractive && !hasApprovedCurrentStep)
                     {
@@ -700,6 +768,10 @@ public class AiAgent {
 
                 if (expectedFailure)
                 {
+                    if (isInteractive)
+                    {
+                        promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                    }
                     handleExpectedFailure(playbook.getCurrentStep(), instruction, unresolvedInstruction, bugId, e, playbook);
                     return;
                 }
@@ -736,6 +808,7 @@ public class AiAgent {
                                 escalated, e.getMessage());
                         executionLog.logInfo("Context escalation: " + currentLevel + " → " + escalated + " (error: "
                                 + e.getMessage() + ")");
+                        result.getEscalations().add(new EscalationDetails(currentLevel, escalated, false, e.getMessage()));
                         llmClient.getAiStats().recordEscalation(false);
                         escalatedOk = true;
                         // Do not increment error count when escalating
@@ -808,6 +881,24 @@ public class AiAgent {
             }
             catch (final AssertionError e)
             {
+                if (e instanceof DefinitiveAssertionError)
+                {
+                    if (expectedFailure)
+                    {
+                        if (isInteractive)
+                        {
+                            promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                        }
+                        handleExpectedFailure(playbook.getCurrentStep(), instruction, unresolvedInstruction, bugId, e, playbook);
+                        return;
+                    }
+                    final PlaybookStep step = playbook.getCurrentStep();
+                    if (step != null)
+                    {
+                        step.setFailure(new ActionExecutionException(e.getMessage(), e));
+                    }
+                    throw e;
+                }
                 if (optionalStep)
                 {
                     LOG.warn("    ⚠️ Optional/Soft step assertion failed: {}. Bypassing failure due to optional/soft tag.", e.getMessage());
@@ -826,6 +917,10 @@ public class AiAgent {
                 final PlaybookStep step = playbook.getCurrentStep();
                 if (expectedFailure)
                 {
+                    if (isInteractive)
+                    {
+                        promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                    }
                     handleExpectedFailure(step, instruction, unresolvedInstruction, bugId, e, playbook);
                     return;
                 }
@@ -847,6 +942,7 @@ public class AiAgent {
                                 escalated, e.getMessage());
                         executionLog.logInfo("Context escalation: " + currentLevel + " → " + escalated
                                 + " (assertion failed: " + e.getMessage() + ")");
+                        result.getEscalations().add(new EscalationDetails(currentLevel, escalated, false, e.getMessage()));
                         llmClient.getAiStats().recordEscalation(false);
                         escalatedOk = true;
 
@@ -924,6 +1020,10 @@ public class AiAgent {
                 final PlaybookStep step = playbook.getCurrentStep();
                 if (expectedFailure)
                 {
+                    if (isInteractive)
+                    {
+                        promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                    }
                     handleExpectedFailure(step, instruction, unresolvedInstruction, bugId, e, playbook);
                     return;
                 }
@@ -1239,7 +1339,8 @@ public class AiAgent {
     }
 
     private List<Action> getStepActions(final int stepIndex, final String instruction, final Playbook playbook,
-            final boolean expectedFailure, final String bugId, final List<Action> accumulatedActions)
+            final boolean expectedFailure, final String bugId, final List<Action> accumulatedActions,
+            final StepDetails stepDetails, final AiExecutionResult result)
     {
         List<Action> actions = new ArrayList<Action>();
         PlaybookStep step = playbook.getCurrentStep();
@@ -1247,6 +1348,13 @@ public class AiAgent {
 
         // 1. Are we replaying a playbook?
         if (playbook.isRecording() == false || (step.getPromptLine() != null && step.getPromptLine().equals(instruction) && !step.getActions().isEmpty() && !step.failed())) {
+            if (playbook.isRecording() == false && step.isExpectedFailure())
+            {
+                llmClient.getAiStats().recordReplay();
+                stepDetails.setReplayed(true);
+                final String errorMsg = step.getExpectedErrorMessage() != null ? step.getExpectedErrorMessage() : "Recorded expected failure";
+                throw new ActionExecutionException(errorMsg, null);
+            }
             // Only if we are not trying to heal a step
             if (step.failed() == false) {
                 // Check if the prompt is still the same, or if we are at the end of the
@@ -1281,6 +1389,7 @@ public class AiAgent {
                                 }
                                 executionLog.logInfo("Replaying actions from playbook (visual match succeeded, Hamming distance: " + distance + ").");
                                 llmClient.getAiStats().recordReplay();
+                                stepDetails.setReplayed(true);
                                 actions.addAll(step.getActions());
                                 visualMatchSucceeded = true;
                             }
@@ -1306,6 +1415,7 @@ public class AiAgent {
 
                         executionLog.logInfo("Replaying actions from playbook.");
                         llmClient.getAiStats().recordReplay();
+                        stepDetails.setReplayed(true);
                         actions.addAll(step.getActions());
                     }
                 }
@@ -1313,8 +1423,9 @@ public class AiAgent {
         }
 
         // 2. Try to identify the action intent upfront.
-        if (actions.isEmpty() && !visualMatchSucceeded) {
-            actions = identifyActions(instruction, step);
+        if (actions.isEmpty() && !visualMatchSucceeded)
+        {
+            actions = identifyActions(instruction, step, stepDetails);
         }
 
         // 3. Prepare Phase and LLM Check
@@ -1343,7 +1454,7 @@ public class AiAgent {
         if (requiresLlm) {
             // Intent extracted, but it requires the LLM to process it fully (or actions
             // empty)
-            actions = getActionsFromLLM(stepIndex, instruction, step, playbook, requiresScreenshot, expectedFailure, bugId, accumulatedActions);
+            actions = getActionsFromLLM(stepIndex, instruction, step, playbook, requiresScreenshot, expectedFailure, bugId, accumulatedActions, stepDetails, result);
         } else {
             // Simple action that can be executed directly, or local replay comparison
             // succeeded
@@ -1355,13 +1466,19 @@ public class AiAgent {
             }
         }
 
+        stepDetails.getActions().addAll(actions);
         return actions;
     }
 
-    // AI-generated: Gemini 2.5 Flash
-    private void runPesap(final List<String> stepsList, final List<Integer> stepLines, final String sourceFileVal)
+    // AI-generated: Gemini 3.5 Flash
+    private void runPesap(final List<String> stepsList, final List<Integer> stepLines, final String sourceFileVal, final AiExecutionResult result)
     {
         if (stepsList.isEmpty())
+        {
+            return;
+        }
+
+        if (Boolean.getBoolean("neodymium.ai.offline"))
         {
             return;
         }
@@ -1448,6 +1565,11 @@ public class AiAgent {
                                                 final ContextLevel level = ContextLevel.valueOf(levelStr.toUpperCase().trim());
                                                 pesapPredictions.set(stepIndex, level);
                                                 
+                                                if (stepIndex < result.getSteps().size())
+                                                {
+                                                    result.getSteps().get(stepIndex).setPesapPredictedContextLevel(level);
+                                                }
+
                                                 final Integer lineNum = (stepLines != null && stepIndex < stepLines.size()) ? stepLines.get(stepIndex) : null;
                                                 if (lineNum != null)
                                                 {
@@ -1476,7 +1598,7 @@ public class AiAgent {
                 catch (final Exception e)
                 {
                     LOG.warn("⚠️ PESAP classification JSON parsing failed (possibly due to LLM response truncation). Attempting regex recovery for partial predictions...");
-                    performRegexRecovery(response, stepsList, stepLines);
+                    performRegexRecovery(response, stepsList, stepLines, result);
                 }
             }
 
@@ -1532,7 +1654,12 @@ public class AiAgent {
 
                                             for (final JsonElement warningElem : val.getAsJsonArray())
                                             {
-                                                linterWarnings.add(String.format("%s: \"%s\" - %s", stepLabel, step, warningElem.getAsString()));
+                                                final String warningStr = warningElem.getAsString();
+                                                linterWarnings.add(String.format("%s: \"%s\" - %s", stepLabel, step, warningStr));
+                                                if (stepIndex < result.getSteps().size())
+                                                {
+                                                    result.getSteps().get(stepIndex).addPesapWarning(warningStr);
+                                                }
                                             }
                                         }
                                     }
@@ -1573,8 +1700,8 @@ public class AiAgent {
         }
     }
 
-    // AI-generated: Gemini 2.5 Flash
-    private void performRegexRecovery(final String response, final List<String> stepsList, final List<Integer> stepLines)
+    // AI-generated: Gemini 3.5 Flash
+    private void performRegexRecovery(final String response, final List<String> stepsList, final List<Integer> stepLines, final AiExecutionResult result)
     {
         final Pattern regexPattern = Pattern.compile("\"(\\d+)\"\\s*:\\s*\"(?i)(AXTREE|LEAN|STANDARD|VISUAL_LEAN|VISUAL)\"");
         final Matcher matcher = regexPattern.matcher(response);
@@ -1589,6 +1716,12 @@ public class AiAgent {
                     final String levelStr = matcher.group(2);
                     final ContextLevel level = ContextLevel.valueOf(levelStr.toUpperCase().trim());
                     pesapPredictions.set(stepIndex, level);
+                    
+                    if (stepIndex < result.getSteps().size())
+                    {
+                        result.getSteps().get(stepIndex).setPesapPredictedContextLevel(level);
+                    }
+
                     recoveredCount++;
                     
                     final Integer lineNum = (stepLines != null && stepIndex < stepLines.size()) ? stepLines.get(stepIndex) : null;
@@ -1661,8 +1794,14 @@ public class AiAgent {
 
     private List<Action> getActionsFromLLM(final int stepIndex, final String instruction, final PlaybookStep playbookStep,
             final Playbook playbook, final boolean requiresScreenshot, final boolean expectedFailure,
-            final String bugId, final List<Action> accumulatedActions)
+            final String bugId, final List<Action> accumulatedActions,
+            final StepDetails stepDetails, final AiExecutionResult result)
     {
+        if (Boolean.getBoolean("neodymium.ai.offline"))
+        {
+            throw new ActionExecutionException("Cannot query LLM client to self-heal in offline mode.", null);
+        }
+
         // If we are inside a playbook replay and failed, we have an initial error
         // already.
         String lastError;
@@ -1746,7 +1885,6 @@ public class AiAgent {
                 }
 
                 // 4. Send to LLM with context-level-aware system prompt
-                LOG.trace("🗣️ --- User Prompt ---\n{}", userPrompt);
                 executionLog.logPrompt(userPrompt);
 
                 final String systemPrompt = AiAgentPrompts.getSystemPrompt(contextLevel);
@@ -1754,6 +1892,11 @@ public class AiAgent {
                 LOG.debug("   💬 Sending prompt to LLM... [context: {}]", contextLevel);
                 llmClient.getAiStats().recordContextLevel(contextLevel);
                 final String llmResponse;
+                
+                final long standardInBefore = llmClient.getAiStats().getInputTokens();
+                final long standardOutBefore = llmClient.getAiStats().getOutputTokens();
+                final long standardCachedBefore = llmClient.getAiStats().getCachedInputTokens();
+
                 try {
                     if (screenshot != null) {
                         llmResponse = llmClient.chatWithScreenshot(
@@ -1761,10 +1904,65 @@ public class AiAgent {
                     } else {
                         llmResponse = llmClient.chat(systemPrompt, userPrompt);
                     }
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     LOG.warn("LLM call failed or timed out: {}", e.getMessage());
+                    final Integer code = (e instanceof LlmHttpException) ? ((LlmHttpException) e).getStatusCode() : null;
+                    stepDetails.getLlmCalls().add(new LlmCallDetails(
+                            systemPrompt,
+                            userPrompt,
+                            screenshot,
+                            domContext,
+                            domContext == null ? 0 : domContext.length(),
+                            contextLevel,
+                            null,
+                            null,
+                            0L,
+                            0L,
+                            0L,
+                            0L,
+                            e.getMessage(),
+                            code,
+                            LlmMode.AGENT
+                    ));
                     throw new ActionExecutionException("LLM call failed or timed out: " + e.getMessage(), e);
                 }
+
+                final long standardInAfter = llmClient.getAiStats().getInputTokens();
+                final long standardOutAfter = llmClient.getAiStats().getOutputTokens();
+                final long standardCachedAfter = llmClient.getAiStats().getCachedInputTokens();
+
+                final long callInputTokens = standardInAfter - standardInBefore;
+                final long callOutputTokens = standardOutAfter - standardOutBefore;
+                final long callCachedTokens = standardCachedAfter - standardCachedBefore;
+                final long callTotalTokens = callInputTokens + callOutputTokens;
+
+                String parsedActions = null;
+                try
+                {
+                    parsedActions = actionParser.extractJson(llmResponse);
+                }
+                catch (final Exception e)
+                {
+                    // Ignore
+                }
+
+                stepDetails.getLlmCalls().add(new LlmCallDetails(
+                        systemPrompt,
+                        userPrompt,
+                        screenshot,
+                        domContext,
+                        domContext == null ? 0 : domContext.length(),
+                        contextLevel,
+                        llmResponse,
+                        parsedActions,
+                        callInputTokens,
+                        callOutputTokens,
+                        callCachedTokens,
+                        callTotalTokens,
+                        null,
+                        200,
+                        LlmMode.AGENT
+                ));
 
                 executionLog.logResponse(llmResponse);
 
@@ -1803,6 +2001,7 @@ public class AiAgent {
                                 contextLevel, escalated, reasoning);
                         executionLog.logInfo("Context escalation: " + contextLevel + " → " + escalated
                                 + " (LLM requested: " + reasoning + ")");
+                        result.getEscalations().add(new EscalationDetails(contextLevel, escalated, true, reasoning));
                         contextLevel = escalated;
                         llmClient.getAiStats().recordEscalation(true);
                         // Do NOT increment errorCount — escalation is not a retry
@@ -1823,7 +2022,14 @@ public class AiAgent {
                             : "Verification failed: " + error;
                     LOG.error("    ❌ {}", message);
                     executionLog.logError(message);
-                    throw new ActionExecutionException(message, null);
+                    if (actionParser.isDone(llmResponse))
+                    {
+                        throw new DefinitiveAssertionError(message);
+                    }
+                    else
+                    {
+                        throw new ActionExecutionException(message, null);
+                    }
                 }
 
                 // 5. Parse actions
@@ -1965,16 +2171,23 @@ public class AiAgent {
         }
     }
 
-    private List<Action> identifyActions(final String instruction, final PlaybookStep playbookStep) {
-        for (AiActionPlugin plugin : ActionRegistry.getAllPlugins()) {
+    private List<Action> identifyActions(final String instruction, final PlaybookStep playbookStep, final StepDetails stepDetails)
+    {
+        for (final AiActionPlugin plugin : ActionRegistry.getAllPlugins())
+        {
             final List<Action> actions = plugin.parseDirectInstruction(instruction);
-            if (actions != null && !actions.isEmpty()) {
+            if (actions != null && !actions.isEmpty())
+            {
                 playbookStep.setActions(actions);
                 playbookStep.setPromptLine(instruction);
                 playbookStep.setReasoning("directly parsed");
                 playbookStep.setScreenshotHash(null);
                 playbookStep.setFailure(null);
                 llmClient.getAiStats().recordDirectParse();
+                if (stepDetails != null)
+                {
+                    stepDetails.setDirectParse(true);
+                }
                 return actions;
             }
         }
@@ -2018,6 +2231,26 @@ public class AiAgent {
         }
     }
 
+    private void promptUserOnExpectedFailure(final String instruction, final String unresolvedInstruction,
+            final List<String> futureInstructions, final List<String> performedInstructions, final Throwable t)
+            throws HudActionException
+    {
+        if (this.autoSkip)
+        {
+            return;
+        }
+        final List<String> plannedStrs = new ArrayList<>();
+        plannedStrs.add("⚠️ " + instruction);
+        if (futureInstructions != null)
+        {
+            plannedStrs.addAll(futureInstructions);
+        }
+        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                "Expected failure/defect detected: " + t.getMessage(), false);
+        waitForHudAction(false);
+    }
+
     /**
      * Exception thrown when the AI agent cannot complete an instruction.
      */
@@ -2032,6 +2265,21 @@ public class AiAgent {
          */
         public AiAgentException(final String message, final Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    /**
+     * Exception thrown when the AI agent definitively verifies that a condition has failed
+     * (i.e. success = false and done = true returned by the LLM).
+     * This represents a final verification failure and prevents context level escalation or retries.
+     */
+    public static class DefinitiveAssertionError extends AssertionError
+    {
+        private static final long serialVersionUID = 1L;
+
+        public DefinitiveAssertionError(final String message)
+        {
+            super(message);
         }
     }
 
@@ -2067,7 +2315,7 @@ public class AiAgent {
      */
     private int processHudActionException(final HudActionException e, final int i,
             final List<String> stepsList, final List<String> performedInstructions,
-            final List<Integer> stepLines)
+            final List<Integer> stepLines, final AiExecutionResult result)
     {
         if (HudActionType.REWIND == e.actionType)
         {
@@ -2096,6 +2344,10 @@ public class AiAgent {
             if (i >= 0 && i <= stepLines.size())
             {
                 stepLines.add(i, null);
+            }
+            if (result != null && result.getSteps().size() >= i)
+            {
+                result.getSteps().add(i, new StepDetails(newInstr));
             }
 
             final Playbook playbook = Neodymium.getAiPlaybook();
@@ -2129,6 +2381,10 @@ public class AiAgent {
             {
                 stepLines.set(i, null);
             }
+            if (result != null && result.getSteps().size() > i)
+            {
+                result.getSteps().set(i, new StepDetails(editInstr));
+            }
 
             final Playbook playbook = Neodymium.getAiPlaybook();
             if (playbook != null && playbook.getSteps().size() > i)
@@ -2160,6 +2416,10 @@ public class AiAgent {
             if (i >= 0 && i < stepLines.size())
             {
                 stepLines.remove(i);
+            }
+            if (result != null && result.getSteps().size() > i)
+            {
+                result.getSteps().remove(i);
             }
             return i - 1;
         }

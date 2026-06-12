@@ -1,0 +1,100 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.FeatureMatrixTest :: testDataResolutionAndTiming :: ShopSetup :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
+      "reasoning": "Typed \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 textbox identified by its data-neo-ref attribute.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "xc_u90fde",
+          "value": [
+            "Alice Cooper"
+          ],
+          "description": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
+          "elementDetails": "Full Name",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-username",
+            "placeholder": "Enter your full name",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
+      "reasoning": "Found the \u0027Email Address\u0027 textbox by its accessibility name and data-neo-ref attribute, then generated a TYPE action to input the specified email address.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "xc_f0d4sd",
+          "value": [
+            "alice@test.com"
+          ],
+          "description": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
+          "elementDetails": "Email Address",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-email",
+            "placeholder": "name@domain.com",
+            "tagName": "input",
+            "type": "email"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the \u0027Create Account\u0027 button.",
+      "reasoning": "Found the \u0027Create Account\u0027 button using its data-neo-ref attribute and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "xc_t6pll2",
+          "description": "Click the \u0027Create Account\u0027 button",
+          "elementDetails": "Create Account",
+          "elementContext": {
+            "classes": "btn-primary",
+            "text": "Create Account",
+            "id": "btn-submit-reg",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
+      "reasoning": "Found the element with id \u0027reg-status-success\u0027 containing the text \u0027Account Registered!\u0027 and asserted its visibility.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#reg-status-success",
+          "value": [
+            "visible"
+          ],
+          "description": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
+          "elementDetails": "Account Registered!",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

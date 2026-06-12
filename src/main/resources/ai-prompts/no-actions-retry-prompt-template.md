@@ -3,7 +3,7 @@
 {sutContextBlock}
 {historyBlock}
 ## YOUR PREVIOUS RESPONSE WAS EMPTY!
-You did NOT return any actions in your previous response. This is unacceptable.
+You did not return any actions in your previous response. You must return the actions necessary to fulfill the instruction.
 Analyze the page CAREFULLY and find the necessary elements to fulfill the instruction.
 
 ## Current Page State (DOM)

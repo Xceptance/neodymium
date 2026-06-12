@@ -40,6 +40,8 @@ public enum LlmMode
     GENERATOR,
 
     /** Pre-Execution Static Analysis Phase (PESAP) classification and linting mode. */
-    PESAP
-}
+    PESAP,
 
+    /** Specialized evaluation and assertion mode for test verification. */
+    ASSERT
+}

@@ -25,7 +25,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.List;
 
@@ -43,7 +45,8 @@ import com.xceptance.neodymium.ai.BaseAiTest;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.ai.core.LlmClient;
-import com.xceptance.neodymium.ai.generator.InteractiveHudTestUtils.MockLlmClient;
+import com.xceptance.neodymium.ai.testing.AiMockResponse;
+import com.xceptance.neodymium.ai.testing.MockLlmClient;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.util.Neodymium;
@@ -60,6 +63,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
     private volatile Throwable bgThrowable = null;
     private long originalTimeout;
     private boolean originalHeadless;
+    private File tempSourceFile;
 
     @BeforeAll
     public static void enableInteractiveMode()
@@ -94,7 +98,19 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.setAiPlaybook(null);
         Neodymium.setInteractiveHud(null);
         Neodymium.getData().clear();
-        Neodymium.setTestdataSourceFile("dummy-test.yml");
+        final File masterFile = new File("src/test/resources/dummy-test.yml");
+        try
+        {
+            this.tempSourceFile = File.createTempFile("temp-dummy-test-", ".yml", new File("target"));
+            Files.copy(masterFile.toPath(), this.tempSourceFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
+        catch (final IOException e)
+        {
+            throw new RuntimeException("Failed to copy master dummy-test.yml", e);
+        }
+
+        Neodymium.setTestdataSourceFile(this.tempSourceFile.getAbsolutePath());
+        Neodymium.getData().put("neodymium.sourceFile", this.tempSourceFile.getAbsolutePath());
 
         // Force config properties to prevent caching issues across test classes
         Neodymium.aiConfiguration().setProperty("neodymium.ai.interactive", "true");
@@ -152,6 +168,11 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
             // Ignore
         }
 
+        if (this.tempSourceFile != null && this.tempSourceFile.exists())
+        {
+            this.tempSourceFile.delete();
+        }
+
         // Restore agent max retries default configuration
         Neodymium.aiConfiguration().setProperty("neodymium.ai.agent.maxRetries", "3");
         System.clearProperty("neodymium.ai.interactive.allowHeadlessHUD");
@@ -192,7 +213,11 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
     private AiBrowser createTestAiBrowser() throws Exception
     {
-        return InteractiveHudTestUtils.createTestAiBrowser(this, prompt -> "{}");
+        final MockLlmClient mockLlm = new MockLlmClient();
+        mockLlm.addResponse(AiMockResponse.builder()
+                .responseText("{}")
+                .build());
+        return InteractiveHudTestUtils.createTestAiBrowser(this, mockLlm);
     }
 
     private AiBrowser createTestAiBrowser(final LlmClient mockLlmClient) throws Exception
@@ -331,7 +356,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.setAiPlaybook(playbook);
 
         // 3. Instantiate a Mock LLM that returns a standard failure payload when executing the failing step
-        final LlmClient mockLlm = new MockLlmClient(prompt -> "{\"s\":false,\"e\":\"Element not found\",\"d\":true}");
+        final MockLlmClient mockLlm = new MockLlmClient();
+        mockLlm.addResponse(AiMockResponse.builder()
+                .responseText("{\"s\":false,\"e\":\"Element not found\",\"d\":true}")
+                .build());
 
         // 4. Launch the AI agent in a background execution thread using the failure mock LLM
         runInteractiveInBg(() ->
@@ -414,7 +442,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.setAiPlaybook(playbook);
 
         // 3. Define a Mock LLM that returns a failure payload when executing Step 2
-        final LlmClient mockLlm = new MockLlmClient(prompt -> "{\"s\":false,\"e\":\"Element not found\",\"d\":true}");
+        final MockLlmClient mockLlm = new MockLlmClient();
+        mockLlm.addResponse(AiMockResponse.builder()
+                .responseText("{\"s\":false,\"e\":\"Element not found\",\"d\":true}")
+                .build());
 
         // 4. Launch the AI agent in a background execution thread using the mock LLM
         runInteractiveInBg(() ->
@@ -524,14 +555,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.setAiPlaybook(playbook);
 
         // 3. Define a Mock LLM that returns a successful execution payload for the edited "Click button 2" prompt
-        final LlmClient mockLlm = new MockLlmClient(prompt ->
-        {
-            if (prompt.contains("Click button 2"))
-            {
-                return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"d\":\"Click button 2\"}]}";
-            }
-            return "{}";
-        });
+        final MockLlmClient mockLlm = new MockLlmClient();
+        mockLlm.addResponse(AiMockResponse.builder()
+                .responseText("{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"desc\":\"Click button 2\"}]}")
+                .build());
 
         // 4. Launch the AI agent in a background execution thread using the mock LLM
         runInteractiveInBg(() ->
@@ -625,14 +652,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.setAiPlaybook(playbook);
 
         // 3. Define a Mock LLM that returns a successful execution payload for "Click button 2"
-        final LlmClient mockLlm = new MockLlmClient(prompt ->
-        {
-            if (prompt.contains("Click button 2"))
-            {
-                return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"d\":\"Click button 2\"}]}";
-            }
-            return "{}";
-        });
+        final MockLlmClient mockLlm = new MockLlmClient();
+        mockLlm.addResponse(AiMockResponse.builder()
+                .responseText("{}")
+                .build());
 
         // 4. Launch the AI agent in a background execution thread using the mock LLM
         runInteractiveInBg(() ->
@@ -714,14 +737,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.setAiPlaybook(playbook);
 
         // 3. Define a Mock LLM that returns a successful execution payload for the newly inserted "Click button 1" prompt
-        final LlmClient mockLlm = new MockLlmClient(prompt ->
-        {
-            if (prompt.contains("Click button 1"))
-            {
-                return "{\"r\":\"Click button 1\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn1\",\"d\":\"Click button 1\"}]}";
-            }
-            return "{}";
-        });
+        final MockLlmClient mockLlm = new MockLlmClient();
+        mockLlm.addResponse(AiMockResponse.builder()
+                .responseText("{\"r\":\"Click button 1\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn1\",\"desc\":\"Click button 1\"}]}")
+                .build());
 
         // 4. Launch the AI agent in a background execution thread using the mock LLM
         runInteractiveInBg(() ->
@@ -976,7 +995,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.setAiPlaybook(playbook);
 
         // 3. Define a Mock LLM that returns a failure payload when executing Step 2
-        final LlmClient mockLlm = new MockLlmClient(prompt -> "{\"s\":false,\"e\":\"Element not found\",\"d\":true}");
+        final MockLlmClient mockLlm = new MockLlmClient();
+        mockLlm.addResponse(AiMockResponse.builder()
+                .responseText("{\"s\":false,\"e\":\"Element not found\",\"d\":true}")
+                .build());
 
         // 4. Launch the AI agent in a background execution thread using the mock LLM
         runInteractiveInBg(() ->
@@ -1528,14 +1550,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
             Neodymium.setAiPlaybook(playbook);
 
             // 5. Define a Mock LLM that returns a successful execution payload for the edited "Click button 2" prompt
-            final LlmClient mockLlm = new MockLlmClient(prompt ->
-            {
-                if (prompt.contains("Click button 2"))
-                {
-                    return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"d\":\"Click button 2\"}]}";
-                }
-                return "{}";
-            });
+            final MockLlmClient mockLlm = new MockLlmClient();
+            mockLlm.addResponse(AiMockResponse.builder()
+                    .responseText("{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"desc\":\"Click button 2\"}]}")
+                    .build());
 
             // 6. Launch the AI agent in a background execution thread using the mock LLM
             runInteractiveInBg(() ->
@@ -1730,14 +1748,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.setAiPlaybook(playbook);
 
         // 3. Define a Mock LLM that returns a successful execution payload for the edited "Click button 2" prompt
-        final LlmClient mockLlm = new MockLlmClient(prompt ->
-        {
-            if (prompt.contains("Click button 2"))
-            {
-                return "{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"d\":\"Click button 2\"}]}";
-            }
-            return "{}";
-        });
+        final MockLlmClient mockLlm = new MockLlmClient();
+        mockLlm.addResponse(AiMockResponse.builder()
+                .responseText("{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"desc\":\"Click button 2\"}]}")
+                .build());
 
         // 4. Launch the AI agent in a background execution thread using the mock LLM
         runInteractiveInBg(() ->

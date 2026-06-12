@@ -36,7 +36,28 @@ src/test/resources/
 │       │   └── iframe-content.html # Nested sub-document inside the iframe
 │       ├── shop/                   # Sub-App 2: E-Commerce Storefront
 │       │   ├── index.html          # Product listings, image scales, and flex grids
-│       │   └── forms.html          # Registrations, validation error, price calculators
+│       │   ├── homepage-perfect.html # Apparel Shop (Perfect HTML/CSS code quality)
+│       │   ├── homepage-normal.html  # Apparel Shop (Average HTML/CSS code quality)
+│       │   ├── homepage-bad.html     # Apparel Shop (Worst HTML/CSS code quality)
+│       │   ├── plp-perfect.html      # Category Listing (Perfect HTML/CSS code quality)
+│       │   ├── plp-normal.html       # Category Listing (Average HTML/CSS code quality)
+│       │   ├── plp-bad.html          # Category Listing (Worst HTML/CSS code quality)
+│       │   ├── forms.html          # Registrations, validation error, price calculators
+│       │   ├── escalation.html     # AXTREE to LEAN context level escalation interactive challenge
+│       │   ├── visual-escalation.html # STANDARD to VISUAL context level escalation interactive challenge
+│       │   └── sandbox/            # Focused scenario playground
+│       │       ├── svg-icons.html      # SVG icon-only naming challenge
+│       │       ├── canvas-click.html   # Pixel coordinate click challenge
+│       │       ├── shadow-dom.html     # Shadow DOM piercing challenge
+│       │       ├── click-intercept.html# Overlay z-index block challenge
+│       │       ├── dynamic-reveal.html # Dynamic DOM timing transition challenge
+│       │       ├── hover-chain.html    # Nested hover hover chain challenge
+│       │       ├── table-sorting.html  # AJAX sorting settling lag challenge
+│       │       ├── scroll-list.html    # Viewport scroll overflow list challenge
+│       │       ├── floating-labels.html# Text overlay visual collision challenge
+│       │       ├── cross-origin-iframe.html # Context frame switching challenge
+│       │       ├── mock-payment-iframe.html # Iframe page source
+│       │       └── mock-oauth-login.html    # Authentication redirect challenge
 │       └── a11y/                   # Sub-App 3: Accessibility Test Grounds
 │           └── index.html          # Low contrast overrides, text clippings
 ```
@@ -92,7 +113,7 @@ When DOM loading completes, `controls.js` dynamically builds and injects a float
 The sandbox supports two complete test suites:
 
 ### 1. Unified Visual Integrity (`AuraGlanceTest.java`)
-Validates core requirements (visual overlaps, text clippings, nested iframes, custom served images, and conditional optional banners).
+Validates core requirements (visual overlaps, text clippings, nested iframes, custom served images, conditional optional banners, AXTREE-to-LEAN/LEAN-to-STANDARD escalations, and STANDARD-to-VISUAL multimodal escalations).
 
 ### 2. Multi-Dimensional Matrix (`AuraFeatureMatrixTest.java`)
 Validates advanced framework parameterization features:
@@ -136,3 +157,114 @@ Execute the JUnit 5 test classes:
 ```bash
 mvn test -Pjunit-5 -Dtest=com.xceptance.neodymium.ai.Aura*Test
 ```
+
+---
+
+## 7. Context Level Escalation Challenges
+
+The sandbox contains dedicated test pages designed to test the self-healing and context level escalation mechanisms of the Aura AI framework.
+
+### A. Shop Escalation Challenge (`shop/escalation.html`)
+
+This page contains elements that test standard text-based escalations:
+
+#### 1. AXTREE to LEAN Challenge (AXTree-Hidden Targets)
+- **The Elements**:
+  1. **Custom Link**: A `<span>` element styled with a pointer cursor and click handler, but without a semantic link role.
+  2. **Custom Button**: A `<div>` element styled as a pill button, but without an accessible button role.
+  3. **Hidden Input**: A standard text `<input>` field placed inside a parent container marked with `aria-hidden="true"`.
+- **Expected Flow**:
+  - **Attempt 1 (AXTREE)**: The agent starts with the default `AXTREE` context level. Since AXTree omits non-semantic interactive divs/spans and aria-hidden nodes, the LLM prompt does not contain these target elements.
+  - **Escalation**: The agent fails to find/interact with the elements and context escalates to `LEAN`.
+  - **Attempt 2 (LEAN)**: The agent retries with `LEAN` context. Since the LEAN simplified DOM extractor retrieves all visible elements with pointer cursors/click handlers and form inputs, the agent successfully locates the elements and completes the steps.
+
+#### 2. LEAN to STANDARD Challenge (Plain Text Verification)
+- **The Element**:
+  - **Plain Text Paragraph**: A standard `<p>` tag displaying the text: `Verification Token: AURA-9921-SECURE`.
+- **Expected Flow**:
+  - **Attempt 1 (LEAN)**: If asked to verify this token, the agent starts at `AXTREE`, escalates to `LEAN`, and retries. Since `LEAN` mode only extracts interactive elements, headings, and forms, the plain text paragraph is completely excluded from the LEAN prompt context.
+  - **Escalation**: The LLM determines that it cannot verify the text content using the LEAN DOM, and returns an `ESCALATE` response status with the target context `STANDARD`.
+  - **Attempt 2 (STANDARD)**: The agent escalates to `STANDARD` context level. In `STANDARD` mode, the DOM extractor appends all visible plain text contents (paragraphs, spans, table cells, etc.). The LLM now sees the token text in the prompt, successfully verifies its presence, and completes the step.
+
+### B. Visual Escalation Challenge (`shop/visual-escalation.html`)
+
+This page contains elements drawn purely graphically. Because their content does not exist in standard DOM text nodes, the agent must escalate to the `VISUAL` context level to see them in a screenshot.
+
+#### 1. Canvas-Rendered Target
+- **The Element**:
+  - A `<canvas id="canvas-target">` element containing the text `VISUAL-ONLY-TOKEN` drawn purely via Canvas 2D context pixels.
+- **Expected Flow**:
+  - **Attempt 1 (STANDARD)**: If asked to verify or click this token, the agent starts at `AXTREE` and escalates to `STANDARD`. Since canvas text is purely graphical and not part of DOM text nodes, the LLM cannot see the text in the STANDARD DOM context.
+  - **Escalation**: The LLM requests escalation to `VISUAL` context level so that it receives the viewport screenshot.
+  - **Attempt 2 (VISUAL)**: The agent escalates to `VISUAL`. The LLM receives the screenshot, visually identifies `VISUAL-ONLY-TOKEN` on the canvas, maps it to the canvas element (`#canvas-target`), and returns a click or success status.
+
+#### 2. CSS Pseudo-Element Target
+- **The Element**:
+  - An empty container `div` `#pseudo-container` with its text content `PSEUDO-ELEMENT-SECRET` injected purely via the CSS `:after` selector content rule.
+- **Expected Flow**:
+  - Similar to the canvas target, pseudo-element text does not exist in DOM text nodes. The agent must escalate to `VISUAL` to see the generated text in the screenshot and click or verify the container.
+
+---
+
+## 8. Unified Sandbox Scenario Challenges (`shop/sandbox/`)
+
+This directory contains standalone pages designed to test isolated edge cases in AI web automation:
+
+1. **SVG Icon Buttons (`svg-icons.html`):**
+   * *Challenge:* Buttons enclosing only raw SVG elements with zero text content, labels, or title attributes.
+   * *Aura AI Verification:* Tests the agent's ability to trigger the `VISUAL_LEAN` context level to analyze the SVG shape visually to identify "Edit", "Delete", or "Share".
+2. **Canvas Interactive Hotspots (`canvas-click.html`):**
+   * *Challenge:* A single `<canvas>` element containing targets drawn in pixels.
+   * *Aura AI Verification:* Tests coordinate-based offset clicks targeting specific parts of a single DOM element.
+3. **Shadow DOM Piercing (`shadow-dom.html`):**
+   * *Challenge:* A form encapsulated within the open shadow root of a Web Component.
+   * *Aura AI Verification:* Tests recursive shadow root traversal to locate inputs and execute typings.
+4. **Click Interception (`click-intercept.html`):**
+   * *Challenge:* A button overlayed by a transparent blocking element.
+   * *Aura AI Verification:* Tests the agent's recovery and self-healing mechanisms when encountering `ElementClickInterceptedException`.
+5. **Dynamic Reveal Timing (`dynamic-reveal.html`):**
+   * *Challenge:* Inputs injected into the DOM after a 200ms asynchronous transition.
+   * *Aura AI Verification:* Tests execution settling delays and checks that the runner doesn't fail on action batching.
+6. **Hover Chain Menu (`hover-chain.html`):**
+   * *Challenge:* Nested dropdown menus visible only via CSS hover states.
+   * *Aura AI Verification:* Tests chaining sequential hover actions prior to a click.
+7. **Table Price Sorting (`table-sorting.html`):**
+   * *Challenge:* Sorting items in a table with a 400ms loading overlay delay.
+   * *Aura AI Verification:* Tests waiting for DOM settling before performing sorted table assertions.
+8. **Scroll-Overflow List (`scroll-list.html`):**
+   * *Challenge:* A button placed at the bottom of a scrollable list, out of initial viewport view.
+   * *Aura AI Verification:* Tests scroll-into-view commands within containers.
+9. **Floating Label Overlaps (`floating-labels.html`):**
+   * *Challenge:* Visual text overlaps generated by programmatically autofilling fields without triggering focus.
+   * *Aura AI Verification:* Tests layout anomaly detection via the Visual Auditor (`(glance)`).
+10. **Cross-Origin iFrame (`cross-origin-iframe.html`):**
+    * *Challenge:* A parent HTTPS page loading an iframe hosted on an HTTP port (different origin).
+    * *Aura AI Verification:* Tests switching WebDriver contexts inside cross-origin borders.
+11. **Mock OAuth Login (`mock-oauth-login.html`):**
+    * *Challenge:* An external auth provider login form that redirects back with token parameters.
+    * *Aura AI Verification:* Tests cross-domain redirect flows, browser window redirection handles, and query token extraction.
+
+---
+
+## 9. Multi-Quality Apparel Store Sandbox (`shop/homepage-*.html` & `shop/plp-*.html`)
+
+To benchmark and stress-test the robustness of test automation locators (IDs, CSS Selectors, and XPath) alongside visual regression auditors, the sandbox provides three visually identical variations of an Apparel Store Homepage and Product Listing Page (PLP) built with varying underlying HTML/CSS code quality:
+
+### A. Perfect Quality (`homepage-perfect.html` & `plp-perfect.html`)
+- **Characteristics:** Built following W3C standards and AAA accessibility best practices.
+- **Locators:** Contains distinct, descriptive, and stable `id` and `class` attributes on all interactive elements (e.g. `id="nav-link-tops"`, `id="newsletter-email-input"`).
+- **Accessibility:** Semantic HTML elements (`<header>`, `<nav>`, `<aside>`, `<main>`, `<section>`), explicit `<label>` bindings, and rich `aria-*` roles.
+- **Auditing Value:** Validates the ideal baseline case for locator-based selector engines.
+
+### B. Normal Quality (`homepage-normal.html` & `plp-normal.html`)
+- **Characteristics:** Represents average commercial web development.
+- **Locators:** Uses generic or slightly inconsistent naming structures (e.g. `id="inp_email"`, `class="cb-cat"`, `id="region_btn"`).
+- **Accessibility:** Omits `aria-*` accessibility metadata. Inputs rely entirely on placeholder text rather than linked `<label>` tags. Semantic layout is replaced by generic `div`/`span` structures.
+- **Auditing Value:** Serves as a standard, real-world baseline.
+
+### C. Bad Quality (`homepage-bad.html` & `plp-bad.html`)
+- **Characteristics:** Simulates legacy, obfuscated, or poorly generated websites.
+- **Locators:** Uses duplicate IDs across elements (e.g. multiple `id="prod-info"`), random/obfuscated class names (e.g. `class="div-nest-3"`, `class="c-772x9"`), or completely lacks locators, forcing extremely long and brittle relative XPath references.
+- **Accessibility:** Complete absence of semantic tags, alt text, labels, and roles. Form fields are styled divs, and checkboxes are toggled via styled click elements.
+- **Auditing Value:** Validates the resilience of self-healing locators, visual locator mapping, and AI-driven selector healing algorithms under worst-case DOM conditions.
+

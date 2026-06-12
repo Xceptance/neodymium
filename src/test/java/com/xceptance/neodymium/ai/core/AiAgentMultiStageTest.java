@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -30,9 +29,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.ai.action.Action;
-import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
+import com.xceptance.neodymium.ai.testing.AiMockResponse;
+import com.xceptance.neodymium.ai.testing.MockActionExecutor;
+import com.xceptance.neodymium.ai.testing.MockLlmClient;
+import com.xceptance.neodymium.ai.testing.MockPageAnalyzer;
 import com.xceptance.neodymium.util.Neodymium;
 
 /**
@@ -85,34 +87,43 @@ public final class AiAgentMultiStageTest
         Neodymium.setAiPlaybook(playbook);
 
         // 2. Setup mock LLM Client that responds in two stages
-        final List<String> llmResponses = new ArrayList<>();
-        llmResponses.add("{\n" +
-            "  \"s\": true,\n" +
-            "  \"d\": false,\n" +
-            "  \"r\": \"Opening the dropdown first.\",\n" +
-            "  \"a\": [\n" +
-            "    {\n" +
-            "      \"t\": \"CLICK\",\n" +
-            "      \"tg\": \"#dropdown\",\n" +
-            "      \"d\": \"Click the dropdown\"\n" +
-            "    }\n" +
-            "  ]\n" +
-            "}");
-        llmResponses.add("{\n" +
-            "  \"s\": true,\n" +
-            "  \"d\": true,\n" +
-            "  \"r\": \"Dropdown open. Now selecting the option.\",\n" +
-            "  \"a\": [\n" +
-            "    {\n" +
-            "      \"t\": \"CLICK\",\n" +
-            "      \"tg\": \"#option-item\",\n" +
-            "      \"d\": \"Click the option item\"\n" +
-            "    }\n" +
-            "  ]\n" +
-            "}");
+        final MockLlmClient mockLlm = new MockLlmClient();
+        mockLlm.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "d": false,
+                      "r": "Opening the dropdown first.",
+                      "a": [
+                        {
+                          "t": "CLICK",
+                          "tg": "#dropdown",
+                          "desc": "Click the dropdown"
+                        }
+                      ]
+                    }
+                    """)
+                .build());
+        mockLlm.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "d": true,
+                      "r": "Dropdown open. Now selecting the option.",
+                      "a": [
+                        {
+                          "t": "CLICK",
+                          "tg": "#option-item",
+                          "desc": "Click the option item"
+                        }
+                      ]
+                    }
+                    """)
+                .build());
 
-        final MockLlmClient mockLlm = new MockLlmClient(llmResponses);
-        final MockPageAnalyzer mockAnalyzer = new MockPageAnalyzer();
+        final MockPageAnalyzer mockAnalyzer = new MockPageAnalyzer("<html><body>Mock DOM Context</body></html>");
         final MockActionExecutor mockExecutor = new MockActionExecutor();
 
         final AiAgent agent = new AiAgent(mockLlm, mockAnalyzer, mockExecutor, Neodymium.aiConfiguration());
@@ -144,103 +155,17 @@ public final class AiAgentMultiStageTest
         playbook.setRecording(false);
         playbook.setCursor(0);
         mockExecutor.getExecutedActions().clear();
-        mockLlm.resetCallCount();
+        mockLlm.getAiStats().reset();
 
         // Execute the same instruction under replay mode
         agent.execute("Click the dropdown and select the option item");
 
         // LLM should NOT have been called during replay
-        assertEquals(0, mockLlm.getCallCount());
+        assertEquals(0, mockLlm.getAiStats().getCallCount());
 
         // Both recorded actions should have been executed in one go
         assertEquals(2, mockExecutor.getExecutedActions().size());
         assertEquals("#dropdown", mockExecutor.getExecutedActions().get(0).getTarget());
         assertEquals("#option-item", mockExecutor.getExecutedActions().get(1).getTarget());
-    }
-
-    /**
-     * Mock LLM Client that returns predefined mock responses in sequence.
-     */
-    private static final class MockLlmClient extends LlmClient
-    {
-        private final List<String> responses;
-        private int callIndex = 0;
-
-        public MockLlmClient(final List<String> responses)
-        {
-            super(Neodymium.aiConfiguration(), new AiStats());
-            this.responses = responses;
-        }
-
-        @Override
-        public String chat(final String systemPrompt, final String userPrompt)
-        {
-            if (callIndex >= responses.size())
-            {
-                throw new IllegalStateException("Mock LlmClient: unexpected call to chat");
-            }
-            return responses.get(callIndex++);
-        }
-
-        @Override
-        public String chatWithScreenshot(final String systemPrompt, final String userPrompt, final String screenshot)
-        {
-            return chat(systemPrompt, userPrompt);
-        }
-
-        public int getCallCount()
-        {
-            return callIndex;
-        }
-
-        public void resetCallCount()
-        {
-            callIndex = 0;
-        }
-    }
-
-    /**
-     * Mock PageAnalyzer to avoid browser automation calls.
-     */
-    private static final class MockPageAnalyzer extends PageAnalyzer
-    {
-        @Override
-        public String getPageContext(final ContextLevel level)
-        {
-            return "<html><body>Mock DOM Context</body></html>";
-        }
-
-        @Override
-        public String captureScreenshot(final String title)
-        {
-            return "mock-screenshot-base64";
-        }
-    }
-
-    /**
-     * Mock ActionExecutor that stores and tracks executed actions instead of running actual Selenide interactions.
-     */
-    private static final class MockActionExecutor extends ActionExecutor
-    {
-        private final List<Action> executedActions = new ArrayList<>();
-
-        public MockActionExecutor()
-        {
-            super(new Object());
-        }
-
-        @Override
-        public void executeAll(final List<Action> actions)
-        {
-            if (actions != null)
-            {
-                executedActions.addAll(actions);
-            }
-        }
-
-        public List<Action> getExecutedActions()
-        {
-            return executedActions;
-        }
     }
 }

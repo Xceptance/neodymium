@@ -145,7 +145,7 @@ class ActionParserEscalateTest
                       "t": "TYPE",
                       "tg": "#username",
                       "v": "testuser",
-                      "d": "type username",
+                      "desc": "type username",
                       "ed": "Username input field",
                       "ad": true
                     }
