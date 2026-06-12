@@ -1,1394 +1,645 @@
-<!--
-  MIT License
-  Copyright (c) 2026 Xceptance Software Technologies
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
--->
-<!-- AI-generated: Gemini 3.5 Flash -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="description" content="Interactive visual test manager dashboard and Aura for Neodymium functional test automation.">
-    <title>Neodymium Aura Manager Dashboard</title>
-    <!-- Google Fonts for premium typography -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <!-- Font Awesome Icons -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neodymium Aura Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --bg-dark: #0e1015;
+            --bg-main: #f3f4f6;
+            --bg-sidebar: #ffffff;
+            --bg-card: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border: #e5e7eb;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --sidebar-active: #eff6ff;
+            --sidebar-active-text: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --font-main: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --transition: all 0.2s ease;
+        }
+
+        
+        :root.force-dark {
+            --bg-main: #0e1015;
             --bg-sidebar: #131620;
             --bg-card: rgba(255, 255, 255, 0.02);
-            --bg-active: rgba(59, 130, 246, 0.08);
-            --border-glass: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.05);
             --border-hover: rgba(255, 255, 255, 0.12);
             --text-primary: #f3f4f6;
             --text-secondary: #9ca3af;
-            --accent-primary: #3b82f6;
-            --accent-success: #10b981;
-            --accent-warning: #f59e0b;
-            --accent-danger: #ef4444;
-            --accent-purple: #a855f7;
-            --font-outfit: 'Outfit', sans-serif;
-            --font-mono: 'JetBrains Mono', monospace;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+            --sidebar-active: rgba(59, 130, 246, 0.08);
+            --sidebar-active-text: #60a5fa;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-main: #0e1015;
+                --bg-sidebar: #131620;
+                --bg-card: rgba(255, 255, 255, 0.02);
+                --border: rgba(255, 255, 255, 0.05);
+                --border-hover: rgba(255, 255, 255, 0.12);
+                --text-primary: #f3f4f6;
+                --text-secondary: #9ca3af;
+                --accent: #3b82f6;
+                --accent-hover: #60a5fa;
+                --sidebar-active: rgba(59, 130, 246, 0.08);
+                --sidebar-active-text: #60a5fa;
+            }
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
+        
+        
+        
+        :root.force-light {
+            --bg-main: #f3f4f6;
+            --bg-sidebar: #ffffff;
+            --bg-card: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border: #e5e7eb;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --sidebar-active: #eff6ff;
+            --sidebar-active-text: #2563eb;
         }
 
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
         body {
-            background-color: var(--bg-dark);
+            background-color: var(--bg-main);
             color: var(--text-primary);
-            font-family: var(--font-outfit);
+            font-family: var(--font-main);
             display: flex;
             height: 100vh;
             overflow: hidden;
+            font-size: 13px;
         }
 
-        /* Sidebar Styling */
+        /* Sidebar Navigation */
         .sidebar {
-            width: 320px;
+            width: 70px;
             background-color: var(--bg-sidebar);
-            border-right: 1px solid var(--border-glass);
+            border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+            z-index: 10;
             flex-shrink: 0;
         }
 
-        .sidebar-header {
-            padding: 20px;
-            border-bottom: 1px solid var(--border-glass);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+        .logo { font-size: 24px; color: var(--accent); margin-bottom: 40px; }
 
-        .logo-icon {
-            font-size: 24px;
-            color: var(--accent-primary);
-            text-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
-        }
-
-        .sidebar-title {
-            margin: 0;
-            font-size: 18px;
-            font-weight: 700;
-            letter-spacing: -0.3px;
-        }
-
-        .sidebar-actions {
-            padding: 15px;
-        }
-
-        .btn-create-test {
-            width: 100%;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-purple));
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 8px;
-            font-family: var(--font-outfit);
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.25s ease;
-            box-shadow: 0 4px 15px rgba(168, 85, 247, 0.25);
-        }
-
-        .btn-create-test:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.35);
-        }
-
-        /* File List & Reports sections */
-        .section-title {
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: var(--text-secondary);
-            padding: 10px 20px;
-            margin-top: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .list-container {
-            overflow-y: auto;
-            flex-grow: 1;
-            padding: 0 10px;
-        }
-
-        .list-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            margin-bottom: 4px;
-            border: 1px solid transparent;
-            font-size: 14px;
-        }
-
-        .list-item:hover {
-            background-color: rgba(255, 255, 255, 0.03);
-            border-color: var(--border-glass);
-        }
-
-        .delete-report-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            outline: none;
-            font-family: inherit;
-            font-size: inherit;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: color 0.15s ease;
-        }
-
-        .delete-report-btn:hover {
-            color: var(--accent-danger) !important;
-        }
-
-        .edit-icon-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            outline: none;
-            font-family: inherit;
-            font-size: inherit;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: color 0.15s ease;
-        }
-
-        .edit-icon-btn:hover {
-            color: var(--accent-primary) !important;
-        }
-
-        .list-item.active {
-            background-color: var(--bg-active);
-            border-color: rgba(59, 130, 246, 0.25);
-            color: white;
-        }
-
-        .item-main {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .item-icon {
-            font-size: 14px;
-            color: var(--text-secondary);
-            width: 16px;
-            text-align: center;
-        }
-
-        .list-item.active .item-icon {
-            color: var(--accent-primary);
-        }
-
-        .badge-status {
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-weight: 600;
-        }
-
-        .badge-success {
-            background-color: rgba(16, 185, 129, 0.12);
-            color: var(--accent-success);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-        }
-
-        .badge-failed {
-            background-color: rgba(239, 68, 68, 0.12);
-            color: var(--accent-danger);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-
-        /* Main Workspace */
-        .workspace {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+        .nav-item {
+            width: 44px; height: 44px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 8px; color: var(--text-secondary);
+            font-size: 18px; margin-bottom: 12px; cursor: pointer;
             position: relative;
         }
+        .nav-item:hover { color: var(--text-primary); background-color: var(--bg-main); }
+        .nav-item.active { color: var(--sidebar-active-text); background-color: var(--sidebar-active); }
 
-        /* Top Header */
-        .top-navbar {
-            height: 65px;
-            border-bottom: 1px solid var(--border-glass);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 30px;
-            background-color: rgba(19, 22, 32, 0.3);
-            backdrop-filter: blur(10px);
-        }
-
-        .env-badge-container {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .env-badge {
-            font-size: 12px;
-            padding: 6px 12px;
-            border-radius: 6px;
-            background-color: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-glass);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .env-ok {
-            color: var(--accent-success);
-        }
-
-        /* Views (Dashboard vs Editor vs Report) */
-        .view-pane {
-            width: 100%;
-            height: calc(100vh - 65px);
-            overflow: hidden;
-            padding: 30px;
-            display: none; /* Controlled by JS tab switcher */
-        }
-
-        .view-pane.active {
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
-        }
-
-        .stat-card {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-glass);
-            border-radius: 12px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .stat-card::before {
-            content: '';
+        .nav-badge {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 4px;
-            height: 100%;
-            background: var(--accent-primary);
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .stat-card:hover::before {
-            opacity: 1;
-        }
-
-        .stat-card.stat-success::before { background: var(--accent-success); }
-        .stat-card.stat-failed::before { background: var(--accent-danger); }
-        .stat-card.stat-purple::before { background: var(--accent-purple); }
-
-        .stat-label {
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .stat-value {
-            font-size: 28px;
-            font-weight: 700;
-        }
-
-        /* Configuration and Queue */
-        .dashboard-content {
-            display: grid;
-            grid-template-columns: 1fr 320px;
-            gap: 20px;
-            flex-grow: 1;
-            min-height: 0;
-        }
-
-        .panel-card {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-glass);
-            border-radius: 12px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .panel-title {
-            font-size: 16px;
+            top: -5px; right: -5px;
+            background: var(--accent);
+            color: white;
+            font-size: 10px;
             font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 10px;
+            border: 2px solid var(--bg-sidebar);
             display: flex;
             align-items: center;
-            gap: 8px;
-            border-bottom: 1px solid var(--border-glass);
-            padding-bottom: 10px;
-        }
-
-        /* Options layout */
-        .option-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 0;
-        }
-
-        .option-info {
-            display: flex;
-            flex-direction: column;
             gap: 4px;
         }
+        
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .spinner { animation: spin 1s linear infinite; }
 
-        .option-label {
-            font-size: 14px;
-            font-weight: 600;
+        /* Main Container */
+        .main-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
         }
-
-        .option-desc {
-            font-size: 11px;
-            color: var(--text-secondary);
-        }
-
-        /* Toggle switches */
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 44px;
-            height: 24px;
+        
+        .top-navbar {
+            height: 48px;
+            background: var(--bg-sidebar);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
             flex-shrink: 0;
         }
 
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(255, 255, 255, 0.1);
-            transition: .3s;
-            border-radius: 24px;
-            border: 1px solid var(--border-glass);
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 16px;
-            width: 16px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: .3s;
-            border-radius: 50%;
-        }
-
-        input:checked + .slider {
-            background-color: var(--accent-primary);
-        }
-
-        input:checked + .slider:before {
-            transform: translateX(20px);
-        }
-
-        /* Run Queue Queue Box */
-        .queue-list {
+        /* Workspace Layout */
+        .workspace-layout {
             display: flex;
-            flex-direction: column;
-            gap: 8px;
-            overflow-y: auto;
-            max-height: 200px;
-            padding-right: 5px;
-        }
-
-        .queue-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 12px;
-            background-color: rgba(255, 255, 255, 0.01);
-            border: 1px solid var(--border-glass);
-            border-radius: 6px;
-            font-size: 13.5px;
-        }
-
-        .btn-run-queue {
-            background: linear-gradient(135deg, var(--accent-success), #059669);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 14px;
-            font-family: var(--font-outfit);
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.25);
-            transition: all 0.2s ease;
-            margin-top: auto;
-        }
-
-        .btn-run-queue:hover {
-            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
-            transform: translateY(-1px);
-        }
-
-        .btn-run-queue:disabled {
-            background: #272a30;
-            color: var(--text-secondary);
-            border: 1px solid var(--border-glass);
-            box-shadow: none;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-
-        /* Live Terminal console */
-        .terminal-box {
-            background-color: #0b0c10;
-            border: 1px solid var(--border-glass);
-            border-radius: 8px;
-            font-family: var(--font-mono);
-            font-size: 13px;
-            padding: 15px;
-            color: #10b981;
-            height: 250px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
-        }
-
-        /* Editor Layout */
-        .editor-container {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
+            padding: 16px;
+            gap: 16px;
             flex-grow: 1;
-            height: 100%;
+            overflow: hidden;
         }
 
-        .editor-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .editor-title-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .editor-title {
-            font-size: 18px;
-            font-weight: 700;
-        }
-
-        .editor-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .editor-btn {
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-family: var(--font-outfit);
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            border: 1px solid var(--border-glass);
-            background-color: rgba(255, 255, 255, 0.02);
-            color: var(--text-primary);
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.2s ease;
-        }
-
-        .editor-btn-save {
-            background-color: var(--accent-success);
-            color: white;
-            border-color: var(--accent-success);
-        }
-
-        .editor-btn-save:hover {
-            background-color: #059669;
-        }
-
-        .editor-btn-delete:hover {
-            background-color: var(--accent-danger) !important;
-            border-color: var(--accent-danger) !important;
-            color: white !important;
-            box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
-        }
-
-        .editor-btn-close:hover {
-            background-color: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        .editor-textarea {
-            width: 100%;
-            flex-grow: 1;
-            min-height: 400px;
-            background-color: #161922;
-            border: 1px solid var(--border-glass);
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 20px;
-            color: #d1d5db;
-            font-family: var(--font-mono);
-            font-size: 14px;
-            line-height: 1.6;
-            resize: none;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        .editor-textarea:focus {
-            border-color: var(--accent-primary);
-        }
-
-        /* Iframe Reports Container */
-        .iframe-view-pane {
-            width: 100%;
-            height: calc(100vh - 65px);
-            display: none; /* Switch with JS */
+            display: flex;
             flex-direction: column;
             overflow: hidden;
         }
 
-        .iframe-view-pane.active {
+        .panel-header {
+            padding: 12px 16px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-main);
             display: flex;
-        }
-
-        .neo-report-header {
-            height: 50px;
-            background-color: var(--bg-sidebar);
-            border-bottom: 1px solid var(--border-glass);
-            display: flex;
-            align-items: center;
             justify-content: space-between;
-            padding: 0 20px;
-            flex-shrink: 0;
-            z-index: 10;
-        }
-
-        .report-header-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-            display: flex;
             align-items: center;
-            gap: 8px;
-        }
-
-        .report-header-btn {
-            background-color: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--border-glass);
+            font-size: 13px;
             color: var(--text-primary);
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-family: var(--font-outfit);
-            font-size: 12.5px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: background 0.2s;
         }
 
-        .report-header-btn:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        .report-iframe {
-            width: 100%;
+        /* Left Area */
+        .left-area {
             flex-grow: 1;
-            border: none;
-            background-color: white;
-        }
-
-        /* Create Test Modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 20000;
-            display: none; /* Toggle with JS */
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(4px);
-        }
-
-        .modal-card {
-            width: 420px;
-            background-color: var(--bg-sidebar);
-            border: 1px solid var(--border-glass);
-            border-radius: 12px;
-            padding: 24px;
             display: flex;
             flex-direction: column;
             gap: 16px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            animation: modalScale 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        @keyframes modalScale {
-            from { transform: scale(0.95); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
-
-        .modal-header {
-            font-size: 18px;
-            font-weight: 700;
-            color: white;
-        }
-
-        .modal-body {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .modal-label {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-
-        .modal-input {
-            width: 100%;
-            background-color: var(--bg-dark);
-            border: 1px solid var(--border-glass);
-            border-radius: 6px;
-            padding: 10px 12px;
-            color: white;
-            font-family: var(--font-outfit);
-            font-size: 14px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        .modal-input:focus {
-            border-color: var(--accent-primary);
-        }
-
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 5px;
-        }
-
-        .modal-btn {
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-family: var(--font-outfit);
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            border: 1px solid transparent;
-        }
-
-        .modal-btn-cancel {
-            background-color: transparent;
-            border-color: var(--border-glass);
-            color: var(--text-primary);
-        }
-
-        .modal-btn-cancel:hover {
-            background-color: rgba(255,255,255,0.05);
-        }
-
-        .modal-btn-submit {
-            background-color: var(--accent-primary);
-            color: white;
-        }
-
-        .modal-btn-submit:hover {
-            background-color: var(--accent-primary);
-        }
-
-        /* Edit Split Mode and Chat Panel Styles */
-        .workspace-split-mode .sidebar {
-            display: none !important;
-        }
-
-        .workspace-split-mode .top-navbar {
-            padding-left: 20px;
-        }
-
-        .workspace-split-mode #sidebar-right {
-            display: none !important;
-        }
-
-        .main-workspace-area {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            flex-grow: 1;
             min-width: 0;
-            min-height: 0;
         }
 
-        #splitArea {
-            display: flex;
-            flex-direction: row;
+        .view-state {
             flex-grow: 1;
-            min-height: 0;
-            gap: 20px;
-            width: 100%;
-        }
-
-        /* Split-screen edit mode layout overrides */
-        .workspace-split-mode .dashboard-content {
-            grid-template-columns: 1fr;
-            gap: 0;
-        }
-
-        .workspace-split-mode #splitArea {
-            gap: 0px;
-        }
-
-        .workspace-split-mode #editorPanel {
-            flex: 1;
-            min-width: 0;
-            border-top-right-radius: 0;
-            border-bottom-right-radius: 0;
-            border-right: 1px solid var(--border-glass);
-            animation: editorSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-
-        .workspace-split-mode #chatPanel {
-            width: 480px;
-            flex-shrink: 0;
-            border-top-left-radius: 0;
-            border-bottom-left-radius: 0;
-            background-color: rgba(19, 22, 32, 0.4);
-            animation: chatShift 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-
-        @keyframes editorSlideIn {
-            from {
-                opacity: 0;
-                transform: translateX(-40px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        @keyframes chatShift {
-            from {
-                opacity: 0.8;
-                transform: translateX(40px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        .chat-panel {
-            display: flex;
-            flex-direction: column;
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-glass);
-            border-radius: 12px;
-            padding: 20px;
-            min-height: 0;
-            flex-grow: 1;
-        }
-
-        .chat-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid var(--border-glass);
-            padding-bottom: 12px;
-            margin-bottom: 12px;
-            flex-shrink: 0;
-        }
-
-        .chat-header-title {
-            font-size: 15px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .chat-messages {
-            flex-grow: 1;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding-right: 5px;
-            margin-bottom: 12px;
-            min-height: 0;
-        }
-
-        .chat-message {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            max-width: 85%;
-            padding: 10px 14px;
-            border-radius: 8px;
-            font-size: 13.5px;
-            line-height: 1.5;
-            animation: messageFadeIn 0.25s ease-out;
-        }
-
-        @keyframes messageFadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .message-user {
-            align-self: flex-end;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(168, 85, 247, 0.15));
-            border: 1px solid rgba(59, 130, 246, 0.25);
-            color: #ffffff;
-            border-bottom-right-radius: 2px;
-        }
-
-        .message-ai {
-            align-self: flex-start;
-            background-color: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-glass);
-            color: var(--text-primary);
-            border-bottom-left-radius: 2px;
-        }
-
-        .chat-input-area {
-            display: flex;
-            gap: 10px;
-            flex-shrink: 0;
-        }
-
-        .chat-input {
-            flex-grow: 1;
-            background-color: rgba(0, 0, 0, 0.2);
-            border: 1px solid var(--border-glass);
-            border-radius: 6px;
-            padding: 10px 12px;
-            color: white;
-            font-family: var(--font-outfit);
-            font-size: 13.5px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        .chat-input:focus {
-            border-color: var(--accent-primary);
-        }
-
-        .chat-send-btn {
-            background-color: var(--accent-primary);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            width: 40px;
-            height: 40px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .chat-send-btn:hover {
-            background-color: #2563eb;
-            transform: translateY(-1px);
-        }
-
-        .api-key-banner {
-            background-color: rgba(239, 68, 68, 0.12);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-            border-radius: 6px;
-            padding: 10px 12px;
-            color: var(--accent-danger);
-            font-size: 12px;
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            margin-bottom: 12px;
-            line-height: 1.4;
-            flex-shrink: 0;
-        }
-
-        .api-key-banner i {
-            margin-top: 2px;
-        }
-
-        /* AI Reasoning Collapsible */
-        .thinking-details {
-            margin-top: 8px;
-            border-top: 1px solid var(--border-glass);
-            padding-top: 8px;
-            font-size: 11px;
-            color: var(--text-secondary);
-            width: 100%;
-        }
-
-        .thinking-details summary {
-            cursor: pointer;
-            outline: none;
-            font-weight: 600;
-            user-select: none;
-            list-style: none;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .thinking-details summary::-webkit-details-marker {
             display: none;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .view-state.active {
+            display: flex;
         }
 
-        .thinking-details summary::before {
-            content: '►';
-            font-size: 9px;
-            transition: transform 0.2s;
-            display: inline-block;
+        /* State: Selection + Queue */
+        .selection-queue-grid {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            min-height: 0;
         }
 
-        .thinking-details[open] summary::before {
-            transform: rotate(90deg);
-        }
-
-        .thinking-content {
-            background-color: rgba(0, 0, 0, 0.25);
-            border-radius: 4px;
-            padding: 8px;
-            margin-top: 6px;
-            font-family: var(--font-mono);
-            white-space: pre-wrap;
-            max-height: 150px;
+        .content-scroll {
+            flex-grow: 1;
             overflow-y: auto;
-            border: 1px solid var(--border-glass);
-            color: var(--text-secondary);
+            padding: 12px;
         }
 
-        /* Chat Typing/Thinking Indicator */
-        .typing-indicator {
-            display: inline-flex;
+        /* Test List / File Container (mapping to old classes) */
+        .file-container { margin-bottom: 6px; }
+        .list-item { padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+        .list-item:hover { background: var(--bg-main); }
+        .dataset-list { padding: 4px 12px 4px 24px; background: var(--bg-card); }
+        .dataset-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+        .dataset-item:last-child { border-bottom: none; }
+        
+        .edit-icon-btn, .btn-edit {
+            background: var(--bg-main);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            display: flex;
             align-items: center;
             gap: 4px;
-            height: 12px;
-            margin-left: 8px;
         }
-        .typing-indicator span {
-            width: 6px;
-            height: 6px;
-            background-color: var(--accent-primary);
-            border-radius: 50%;
-            display: inline-block;
-            animation: typingBlink 1.4s infinite both;
-        }
-        .typing-indicator span:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-        .typing-indicator span:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-        @keyframes typingBlink {
-            0% { opacity: 0.2; transform: scale(0.8); }
-            20% { opacity: 1; transform: scale(1.1); }
-            100% { opacity: 0.2; transform: scale(0.8); }
-        }
+        .edit-icon-btn:hover, .btn-edit:hover { background: var(--border); }
 
-        /* Modern Spinner Animation */
-        .modern-spinner {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 2px solid rgba(16, 185, 129, 0.1);
-            border-top-color: var(--accent-success);
-            border-radius: 50%;
-            animation: spinSmooth 0.8s linear infinite;
-            box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+        /* Queue View */
+        .queue-list { display: flex; flex-direction: column; gap: 8px; }
+        .queue-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg-main); border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px; }
+        .queue-item.running { border-left: 3px solid var(--accent); }
+        
+        /* Editor */
+        .editor-container { flex-grow: 1; display: flex; flex-direction: column; min-height: 0; }
+        .editor-actions { display: flex; gap: 8px; }
+        .btn-editor { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+        .btn-editor:hover { background: var(--bg-main); }
+        .btn-editor.save { color: var(--success); border-color: rgba(16, 185, 129, 0.3); }
+        .btn-editor.delete { color: var(--danger); border-color: rgba(239, 68, 68, 0.3); }
+        .editor-textarea { font-family: var(--font-mono); font-size: 13px; line-height: 1.6; color: var(--text-primary); padding: 16px; flex-grow: 1; outline: none; border: none; background: transparent; resize: none; }
+
+        /* Terminal Logs */
+        .terminal-panel { height: 100%; width: 100%; max-width: 100%; box-sizing: border-box; background: #1e1e1e; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: var(--font-mono); font-size: 12px; color: #d4d4d4; overflow-y: auto; overflow-x: hidden; flex-shrink: 0; display: flex; flex-direction: column; }
+        #terminalConsole { flex-grow: 1; overflow-y: auto; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+        .log-line { white-space: pre-wrap; word-break: break-all; word-wrap: break-word; margin: 0; padding: 0; }
+        .log-error { color: #ef4444; }
+        .log-info { color: #d4d4d4; }
+
+        /* Right Area */
+        .right-area { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; }
+
+        .chat-container { flex-grow: 1; display: flex; flex-direction: column; min-height: 0; }
+        .chat-messages { flex-grow: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .chat-message { display: flex; flex-direction: column; gap: 4px; max-width: 90%; padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.4; }
+        .message-ai { background: var(--bg-main); border: 1px solid var(--border); align-self: flex-start; border-bottom-left-radius: 2px; }
+        .message-user { background: var(--accent); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .chat-input { margin: 12px; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text-primary); font-family: inherit; outline: none; }
+        
+        .thinking-details { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; font-size: 11px; color: var(--text-secondary); }
+        .thinking-content { background-color: rgba(0,0,0,0.1); padding: 8px; margin-top: 6px; font-family: var(--font-mono); white-space: pre-wrap; max-height: 150px; overflow-y: auto; border-radius: 4px; }
+
+        /* Config Panel */
+        .config-container { flex-shrink: 0; }
+        .config-panel { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .config-row { display: flex; justify-content: space-between; align-items: center; }
+        .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; border-radius: 20px; transition: .2s; }
+        @media (prefers-color-scheme: dark) { .slider { background-color: #475569; } }
+        :root.force-dark .slider { background-color: #475569; }
+        .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(16px); }
+
+        .btn-primary { background: var(--accent); color: white; border: none; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px; }
+        .btn-primary:disabled { background: var(--bg-main); color: var(--text-secondary); border: 1px solid var(--border); cursor: not-allowed; }
+        .btn-danger { background: var(--danger); color: white; border: none; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px; }
+
+        /* Iframe view */
+        .iframe-view-pane { display: none; flex-direction: column; height: 100vh; }
+        .neo-report-header { background: var(--bg-card); padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .report-iframe { flex-grow: 1; border: none; width: 100%; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+        .modal-card { background: var(--bg-card); width: 400px; border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; }
+        .modal-header { padding: 16px; border-bottom: 1px solid var(--border); font-weight: 600; }
+        .modal-body { padding: 16px; }
+        .modal-input { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main); color: var(--text-primary); }
+        .modal-footer { padding: 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+        
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .history-table th {
+            padding: 10px 12px;
+            font-weight: 600;
+            border-bottom: 2px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: left;
+        }
+        .history-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-primary);
             vertical-align: middle;
         }
-        @keyframes spinSmooth {
-            to { transform: rotate(360deg); }
+        .history-row {
+            cursor: pointer;
+            transition: background 0.15s ease;
         }
-
-        /* Report full-screen mode overrides */
-        body.report-active .sidebar {
-            display: none !important;
+        .history-row:hover {
+            background: var(--bg-main);
         }
-        body.report-active .top-navbar {
-            display: none !important;
+        .report-link-active {
+            color: var(--accent);
+            font-size: 14px;
         }
-        body.report-active .iframe-view-pane {
-            height: 100vh;
+        .report-link-inactive {
+            color: var(--text-secondary);
+            opacity: 0.4;
+            font-size: 14px;
         }
-
-        /* 2x2 Stats Grid for Right Sidebar */
-        #sidebar-right .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            margin-bottom: 15px;
+        .badge-success { background: rgba(16,185,129,0.1); color: var(--success); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .badge-failed { background: rgba(239,68,68,0.1); color: var(--danger); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .delete-report-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 4px;
+            transition: color 0.15s ease;
         }
-        #sidebar-right .stat-card {
-            padding: 12px;
-            gap: 4px;
-            border-radius: 8px;
-        }
-        #sidebar-right .stat-label {
-            font-size: 10px;
-            letter-spacing: 0.2px;
-        }
-        #sidebar-right .stat-value {
-            font-size: 18px;
-        }
-
-        /* Split mode edge-to-edge layout */
-        .workspace-split-mode #dashboardView {
-            padding: 0px !important;
-            gap: 0px !important;
-        }
-        .workspace-split-mode #mainWorkspace {
-            padding-right: 0px !important;
-        }
-        .workspace-split-mode #editorPanel {
-            border-radius: 0 !important;
-            border: none !important;
-            border-right: 1px solid var(--border-glass) !important;
-        }
-        .workspace-split-mode #chatPanel {
-            border-radius: 0 !important;
-            border: none !important;
+        .delete-report-btn:hover {
+            color: var(--danger);
         }
     </style>
 </head>
 <body>
 
-    <!-- SIDEBAR -->
-    <aside class="sidebar" id="sidebar" role="complementary" aria-label="Sidebar Explorer">
-        <div class="sidebar-header">
-            <i class="fa-solid fa-square-poll-horizontal logo-icon" aria-hidden="true"></i>
-            <h1 class="sidebar-title">Neodymium Aura</h1>
+    <div class="sidebar">
+        <div class="logo"><i class="fa-solid fa-atom"></i></div>
+        <div class="nav-item active" id="navWorkspace" title="Workspace" onclick="showView('dashboardView')">
+            <i class="fa-solid fa-laptop-code"></i>
+            <div class="nav-badge" id="sidebarRunBadge" style="display:none;"><i class="fa-solid fa-circle-notch spinner"></i></div>
         </div>
+        <div class="nav-item" id="navReports" title="History & Reports" onclick="showView('reportViewContainer')">
+            <i class="fa-solid fa-chart-bar"></i>
+        </div>
+    </div>
 
-        <div class="sidebar-actions">
-            <button class="btn-create-test" id="openModalBtn" alt="Create New Test" title="Create New Test" aria-label="Create New Test">
-                <i class="fa-solid fa-plus"></i> Create New Test
-            </button>
-        </div>
-
-        <div class="section-title">
-            <span>YAML Test Cases</span>
-            <span style="font-size: 9px; opacity: 0.5;">Resource files</span>
-        </div>
+    <div class="main-container">
         
-        <div class="list-container" id="yamlFileList">
-            <!-- Discovered YAML files rendered here -->
-        </div>
-
-        <div class="section-title">
-            <span>Allure History</span>
-            <i class="fa-solid fa-clock-rotate-left" style="font-size: 10px;"></i>
-        </div>
-        
-        <div class="list-container" style="max-height: 220px; flex-grow: 0;" id="allureHistoryList">
-            <!-- Allure History items rendered here -->
-        </div>
-    </aside>
-
-    <!-- WORKSPACE -->
-    <main class="workspace" id="main-content">
-        
-        <!-- Top Navigation -->
         <div class="top-navbar">
-            <div style="font-size: 14px; font-weight: 500; color: var(--text-secondary);">
-                Active Project: <span style="color: white; font-weight: 600;">neodymium-test-suite</span>
-            </div>
-            <div class="env-badge-container">
-                <div class="env-badge"><i class="fa-brands fa-java" aria-hidden="true"></i> JDK 21</div>
-                <div class="env-badge env-ok" id="envCheck"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Environment OK</div>
-            </div>
-        </div>
-
-        <!-- 1. DASHBOARD VIEW -->
-        <div class="view-pane active" id="dashboardView">
-            
-            <!-- Dashboard Content Panels -->
-            <div class="dashboard-content" id="dashboardContent">
+            <div style="font-weight: 500;">Neodymium Aura Dashboard</div>
+            <div style="display:flex; gap: 16px; align-items:center;">
                 
-                <!-- Left Main Panel: Welcome, Editor, and Console -->
-                <div class="main-workspace-area" id="mainWorkspace" style="overflow: hidden; padding-right: 5px;">
-                    
-                    <!-- Side-by-Side Editor & Chat Area -->
-                    <div id="splitArea">
-                         <!-- YAML Editor Panel -->
-                         <div class="panel-card" id="editorPanel" style="display: none; flex-direction: column; gap: 15px; flex-grow: 1; min-height: 0;">
-                              <div class="editor-header" style="display: flex; justify-content: space-between; align-items: center;">
-                                  <div class="editor-title-group" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                                      <i class="fa-regular fa-file-lines" style="font-size: 20px; color: var(--accent-purple); flex-shrink: 0;" aria-hidden="true"></i>
-                                      <div style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                          <div class="editor-title" id="editorFileName" style="font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">test-file-name.yaml</div>
-                                          <span style="font-size: 11px; color: var(--text-secondary);">YAML Test Case Definition</span>
-                                      </div>
-                                  </div>
-                                  <div class="editor-actions" style="display: flex; gap: 10px; flex-shrink: 0;">
-                                      <button class="editor-btn" onclick="closeEditor()" alt="Close (Esc)" title="Close (Esc)" aria-label="Close Editor">
-                                          <i class="fa-solid fa-xmark" aria-hidden="true"></i> Close
-                                      </button>
-                                      <button class="editor-btn editor-btn-delete" id="deleteTestBtn" onclick="deleteYamlFile()" style="background-color: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.25); color: var(--accent-danger);" alt="Delete Test" title="Delete Test" aria-label="Delete Test File">
-                                          <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete Test
-                                      </button>
-                                      <button class="editor-btn editor-btn-save" onclick="saveYamlFile()" alt="Save Changes (Ctrl+S)" title="Save Changes (Ctrl+S)" aria-label="Save Changes">
-                                          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Changes
-                                      </button>
-                                  </div>
-                              </div>
-                               <textarea class="editor-textarea" id="editorContent" spellcheck="false" style="flex-grow: 1; min-height: 100px;" aria-label="YAML Editor Content"></textarea>
-                         </div>
-                        <!-- AI Assistant Chat Panel -->
-                        <div class="chat-panel" id="chatPanel">
-                            <div class="chat-header" style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-                                <div class="chat-header-title" style="display: flex; align-items: center; gap: 8px;">
-                                    <i class="fa-solid fa-robot" style="color: var(--accent-primary);" aria-hidden="true"></i>
-                                    <span>Aura</span>
-                                </div>
-                                <div class="chat-sessions-control" style="display: flex; align-items: center; gap: 4px;">
-                                    <select id="chatSessionSelect" onchange="switchChatSession()" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); color: white; border-radius: 4px; padding: 2px 4px; font-size: 11px; font-family: var(--font-outfit); max-width: 120px; outline: none; cursor: pointer;"></select>
-                                    <button class="editor-btn" onclick="createNewChatSession()" style="padding: 2px 6px; font-size: 10px;" title="New Chat" aria-label="New Chat"><i class="fa-solid fa-plus"></i></button>
-                                    <button class="editor-btn" onclick="renameCurrentChatSession()" style="padding: 2px 6px; font-size: 10px;" title="Rename Chat" aria-label="Rename Chat"><i class="fa-solid fa-pen"></i></button>
-                                    <button class="editor-btn" onclick="deleteCurrentChatSession()" style="padding: 2px 6px; font-size: 10px; color: var(--accent-danger); background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.15);" title="Delete Chat" aria-label="Delete Chat"><i class="fa-solid fa-trash"></i></button>
-                                </div>
-                            </div>
-                            
-                            <div class="api-key-banner" id="apiKeyBanner" style="display: none;">
-                                <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
-                                <span id="apiKeyBannerText">Gemini API key is not configured or failed to initialize. Please configure <code>neodymium.ai.apiKey</code>.</span>
-                            </div>
-                            
-                            <div class="chat-messages" id="chatMessages">
-                                <div class="chat-message message-ai">
-                                    <span>Hello! I am Aura, your test automation assistant. How can I help you today? You can ask me to select/run test suites or create/modify tests!</span>
-                                </div>
-                            </div>
-                            
-                            <div class="chat-input-area">
-                                <input type="text" class="chat-input" id="chatInput" placeholder="Ask Aura to select, run or edit tests..." aria-label="Chat Input">
-                                <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()" aria-label="Send message" alt="Send message" title="Send message">
-                                    <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Execution Log -->
-                    <div class="panel-card" id="consolePanel" style="display: none; flex-direction: column; gap: 10px; height: 300px; flex-shrink: 0; min-height: 0;">
-                        <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-glass); padding-bottom: 10px;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <i class="fa-solid fa-terminal" style="color: var(--accent-success);" aria-hidden="true"></i>
-                                <span>Live Maven Process Console</span>
-                                <span id="runSpinner" style="display: none; margin-left: 10px;"><span class="modern-spinner" aria-hidden="true"></span></span>
-                            </div>
-                            <div style="display: flex; align-items: center; margin-left: auto; margin-right: 15px;">
-                                <input type="checkbox" id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)" style="margin-right: 5px; cursor: pointer;">
-                                <label for="errorsOnlyCb" style="font-size: 11px; cursor: pointer; color: var(--text-secondary);">Errors Only</label>
-                            </div>
-                            <button class="editor-btn" id="toggleConsoleSizeBtn" onclick="toggleConsoleSize()" style="padding: 2px 8px; font-size: 11px; margin-right: 8px;" alt="Toggle Console Size" title="Toggle Size" aria-label="Toggle Console Size">
-                                <i class="fa-solid fa-chevron-up" id="consoleSizeIcon" aria-hidden="true"></i> Expand
-                            </button>
-                            <button class="editor-btn" id="closeConsoleBtn" onclick="closeConsole()" style="padding: 2px 8px; font-size: 11px; display: none;" alt="Dismiss Console" title="Dismiss Console" aria-label="Dismiss Console">
-                                <i class="fa-solid fa-xmark" aria-hidden="true"></i> Dismiss
-                            </button>
-                        </div>
-                        <div class="terminal-box" id="terminalConsole" style="flex-grow: 1; height: calc(100% - 35px); display: flex; flex-direction: column;">Console idle. Select YAML tests in the explorer sidebar and click 'Run Queue' to initiate execution.</div>
-                    </div>
-                </div>
-
-                <!-- Right Side: Settings & Queue List -->
-                <div id="sidebar-right" class="side-workspace-area" style="overflow-y: auto; padding-right: 5px;">
-                    
-                    <!-- Stats Grid -->
-                    <div class="stats-grid">
-                        <div class="stat-card stat-purple">
-                            <span class="stat-label">Queue Selected</span>
-                            <span class="stat-value" id="statsQueueCount">0 Datasets</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-label">Total Run</span>
-                            <span class="stat-value" id="statsTotalExecution">0 Tests</span>
-                        </div>
-                        <div class="stat-card stat-success">
-                            <span class="stat-label">Passed</span>
-                            <span class="stat-value" id="statsPassed">0</span>
-                        </div>
-                        <div class="stat-card stat-failed">
-                            <span class="stat-label">Failed</span>
-                            <span class="stat-value" id="statsFailed">0</span>
-                        </div>
-                    </div>
-
-                    <!-- Run Panel -->
-                    <div class="panel-card">
-                        <div class="panel-title">
-                            <i class="fa-solid fa-sliders" style="color: var(--accent-primary);"></i>
-                            <span>Run Configurations</span>
-                        </div>
-                        
-                        <div class="option-item">
-                            <div class="option-info">
-                                <span class="option-label">Headless Mode</span>
-                                <span class="option-desc">Execute browser without GUI window</span>
-                            </div>
-                            <label class="switch" for="optHeadless">
-                                <input type="checkbox" id="optHeadless" checked aria-label="Headless Mode">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="option-item">
-                            <div class="option-info">
-                                <span class="option-label">Interactive HUD</span>
-                                <span class="option-desc">Wait for manual approval/edit overlays</span>
-                            </div>
-                            <label class="switch" for="optInteractive">
-                                <input type="checkbox" id="optInteractive" aria-label="Interactive HUD">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="option-item">
-                            <div class="option-info">
-                                <span class="option-label">Allure Report</span>
-                                <span class="option-desc">Auto-compile and serve on completion</span>
-                            </div>
-                            <label class="switch" for="optAllure">
-                                <input type="checkbox" id="optAllure" checked aria-label="Allure Report">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                        </div>
-
-                        <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
-                            <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">Selected Queue:</span>
-                            <div class="queue-list" id="queueListContainer">
-                                <div style="font-size: 13px; color: var(--text-secondary); font-style: italic; padding: 15px; border: 1px dashed var(--border-hover); border-radius: 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                                    <i class="fa-solid fa-arrow-left" style="font-size: 16px; color: var(--accent-primary);"></i>
-                                    <span>No tests selected. Please check one or more YAML test cases in the sidebar explorer.</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button class="btn-run-queue" id="runQueueBtn" onclick="runQueue()" disabled alt="Run Queue" title="Run Queue" aria-label="Run Queue">
-                            <i class="fa-solid fa-play" aria-hidden="true"></i> Run Queue
-                        </button>
-                        <button class="btn-run-queue" id="stopQueueBtn" onclick="stopQueue()" style="display: none; background: linear-gradient(135deg, var(--accent-danger), #b91c1c); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.25); margin-top: 10px;" alt="Stop Execution" title="Stop Execution" aria-label="Stop Execution">
-                            <i class="fa-solid fa-stop" aria-hidden="true"></i> Stop Execution
-                        </button>
-                    </div>
+                <div style="display:flex; gap: 8px; background: var(--bg-main); padding: 4px; border-radius: 6px; border: 1px solid var(--border);">
+                    <button class="btn-edit" id="themeLight" onclick="changeTheme('light')" style="padding: 4px 8px; border:none;" title="Light Mode"><i class="fa-solid fa-sun"></i></button>
+                    <button class="btn-edit" id="themeDark" onclick="changeTheme('dark')" style="padding: 4px 8px; border:none;" title="Dark Mode"><i class="fa-solid fa-moon"></i></button>
+                    <button class="btn-edit" id="themeSystem" onclick="changeTheme('system')" style="padding: 4px 8px; border:none;" title="System Theme"><i class="fa-solid fa-desktop"></i></button>
                 </div>
             </div>
         </div>
 
-        <!-- 3. ALLURE REPORT IFRAME VIEW -->
-        <div class="iframe-view-pane" id="reportView">
-            <div class="neo-report-header">
-                <div class="report-header-title">
-                    <i class="fa-solid fa-chart-column" style="color: var(--accent-success);" aria-hidden="true"></i>
-                    <span>Allure Test Execution Report: <span id="reportDisplayName" style="font-weight: 700;">Run #4_checkout</span></span>
+        <!-- DASHBOARD VIEW -->
+        <div id="dashboardView" style="display: flex; flex-grow: 1; min-height: 0;">
+            <div class="workspace-layout">
+                
+                <!-- LEFT AREA -->
+                <div class="left-area">
+                    
+                    <!-- STATE: Selection & Queue -->
+                    <div id="state-selection" class="view-state active">
+                        <div class="selection-queue-grid">
+                            
+                            <div class="panel">
+                                <div class="panel-header">Test Selection</div>
+                                <div class="content-scroll" id="yamlFileList">
+                                    <!-- Populated by JS -->
+                                </div>
+                                <div style="padding: 12px; border-top: 1px solid var(--border);"><button id="openModalBtn" class="btn-edit" style="width: 100%; justify-content: center;" onclick="document.getElementById('createTestModal').style.display='flex'; document.getElementById('newTestName').focus();"><i class="fa-solid fa-plus"></i> Create New Test</button></div>
+                            </div>
+
+                            <div class="panel">
+                                <div class="panel-header">Run Queue</div>
+                                <div class="content-scroll">
+                                    <div class="queue-list" id="queueListContainer">
+                                        <!-- Populated by JS -->
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- STATE: Editor -->
+                    <div id="state-editor" class="view-state">
+                        <div class="panel editor-container" id="editorPanel">
+                            <div class="panel-header">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fa-solid fa-file-lines" style="color:var(--text-secondary);"></i> 
+                                    <span id="editorFileName">test.yaml</span>
+                                </div>
+                                <div class="editor-actions">
+                                    <button class="btn-editor save" onclick="saveYamlFile()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                                    <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><i class="fa-solid fa-trash"></i> Delete</button>
+                                    <button class="btn-editor" onclick="closeEditor()"><i class="fa-solid fa-xmark"></i> Close</button>
+                                </div>
+                            </div>
+                            <textarea class="editor-textarea" id="editorContent" spellcheck="false"></textarea>
+                        </div>
+                    </div>
+
+                    
+                    <div class="panel" id="statsPanel" style="display: none; flex-shrink: 0; padding: 12px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; font-weight: 600;">
+                            <div>Total Run: <span id="statsTotalExecution" style="color:var(--accent);">0</span></div>
+                            <div>Passed: <span id="statsPassed" style="color:var(--success);">0</span></div>
+                            <div>Failed: <span id="statsFailed" style="color:var(--danger);">0</span></div>
+                        </div>
+                    </div>
+                    <!-- Terminal Panel -->
+
+                    <div class="panel" id="consolePanel" style="display:none; flex-shrink: 0; border:none; width: 100%; max-width: 100%; box-sizing: border-box; transition: height 0.3s ease;">
+                        <div class="terminal-panel">
+                            <div style="font-size:11px; margin-bottom:8px; opacity: 0.7; display:flex; justify-content:space-between;">
+                                <span>TERMINAL OUTPUT <span id="runSpinner" style="display:none;"><i class="fa-solid fa-circle-notch spinner" style="margin-left:8px;"></i></span></span>
+                                <div style="display: flex; gap: 12px; align-items: center;">
+                                    <input type="checkbox" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" checked> <label for="aiOnlyCb">AI Only</label>
+                                    <input type="checkbox" id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)"> <label for="errorsOnlyCb">Errors Only</label>
+                                </div>
+                            </div>
+                            <div id="terminalConsole">Console idle.</div>
+                        </div>
+                    </div>
+                    
                 </div>
-                <button class="report-header-btn" onclick="closeReportView()" alt="Back to Dashboard" title="Back to Dashboard" aria-label="Back to Dashboard">
-                    <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to Dashboard
-                </button>
+
+                <!-- RIGHT AREA -->
+                <div class="right-area">
+                    
+                    <div class="panel chat-container">
+                        <div class="panel-header" style="display:flex; justify-content:space-between;">
+                            <div><i class="fa-solid fa-sparkles" style="color:var(--accent);"></i> Aura Assistant</div>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <select id="chatSessionSelect" onchange="switchChatSession()" style="width: 110px; max-width: 110px; background:var(--bg-main); color:var(--text-primary); border:1px solid var(--border); font-size:11px; border-radius:4px; padding:2px; box-sizing: border-box; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"></select>
+                                <button class="btn-edit" onclick="createNewChatSession()" style="padding: 2px 6px; font-size: 10px;" title="New Chat"><i class="fa-solid fa-plus"></i></button>
+                                <button class="btn-edit" onclick="renameCurrentChatSession()" style="padding: 2px 6px; font-size: 10px;" title="Rename Chat"><i class="fa-solid fa-pen"></i></button>
+                                <button class="btn-edit" onclick="deleteCurrentChatSession()" style="padding: 2px 6px; font-size: 10px; color: var(--danger);" title="Delete Chat"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="api-key-banner" id="apiKeyBanner" style="display: none; padding: 10px; background: rgba(239, 68, 68, 0.1); border-bottom: 1px solid var(--danger); color: var(--danger); font-size: 11px;">
+                            <i class="fa-solid fa-triangle-exclamation"></i> <span id="apiKeyBannerText"></span>
+                        </div>
+                        <div class="chat-messages" id="chatMessages"></div>
+                        <input type="text" class="chat-input" id="chatInput" placeholder="Ask Aura...">
+                    </div>
+
+                    <div class="panel config-container">
+                        <div class="panel-header">Run Configuration</div>
+                        <div class="config-panel" style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                            
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Headless Mode</span>
+                                    <label class="switch" for="optHeadless"><input type="checkbox" id="optHeadless" checked><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Runs the browser in the background without a GUI.</span>
+                            </div>
+                            
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Record Video</span>
+                                    <label class="switch" for="optVideo"><input type="checkbox" id="optVideo"><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Records execution video and attaches it to the Allure report.</span>
+                            </div>
+
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Keep Browser Open</span>
+                                    <label class="switch" for="optKeepOpen"><input type="checkbox" id="optKeepOpen"><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Leaves the browser window open after execution finishes.</span>
+                            </div>
+
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Interactive HUD</span>
+                                    <label class="switch" for="optInteractive"><input type="checkbox" id="optInteractive"><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Enables interactive AI elements in the browser during execution.</span>
+                            </div>
+
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Allure Report</span>
+                                    <label class="switch" for="optAllure"><input type="checkbox" id="optAllure" checked><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Compiles and opens the visual test report after execution completes.</span>
+                            </div>
+
+                            <button class="btn-primary" id="runQueueBtn" onclick="runQueue()"><i class="fa-solid fa-play"></i> Run Queue</button>
+                            <button class="btn-danger" id="stopQueueBtn" onclick="stopQueue()" style="display:none;"><i class="fa-solid fa-stop"></i> Stop Execution</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- HISTORY & REPORTS VIEW -->
+        <div id="reportViewContainer" style="display: none; flex-direction: column; flex-grow: 1; padding: 16px; overflow: hidden; gap: 16px; height: 100%;">
+            <div class="panel" style="flex-grow: 1; padding: 16px; display: flex; flex-direction: column; min-height: 0;">
+                <h3 style="margin-bottom: 12px; color: var(--text-primary);">Run History</h3>
+                <div style="flex-grow: 1; overflow-y: auto;">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Date & Time</th>
+                                <th style="text-align: center;">Total</th>
+                                <th style="text-align: center; color: var(--success);">Passed</th>
+                                <th style="text-align: center; color: var(--danger);">Failed</th>
+                                <th style="text-align: center;">Report</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allureHistoryList">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- REPORT IFRAME VIEW (Hidden until report opened) -->
+        <div id="reportView" class="iframe-view-pane">
+            <div class="neo-report-header">
+                <div style="font-weight: 600;"><i class="fa-solid fa-chart-column" style="color: var(--success);"></i> Allure Report: <span id="reportDisplayName"></span></div>
+                <button class="btn-edit" onclick="closeReportView()"><i class="fa-solid fa-arrow-left"></i> Back</button>
             </div>
             <iframe class="report-iframe" id="reportIframe" src="about:blank"></iframe>
         </div>
-    </main>
+
+    </div>
 
     <!-- CREATE TEST MODAL -->
-    <div class="modal-overlay" id="createTestModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-overlay" id="createTestModal">
         <div class="modal-card">
             <div class="modal-header" id="modalTitle">Create New Test Case</div>
             <div class="modal-body">
-                <label class="modal-label" for="newTestName">Test Case Name</label>
+                <label style="display:block; margin-bottom:8px; font-weight:500;">Test Case Name</label>
                 <input type="text" class="modal-input" id="newTestName" placeholder="e.g. Add Product to Basket">
-                <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-top: 5px;">
-                    This will automatically create a YAML file named <code>add-product-to-basket.yaml</code> and configure the default <code>testId</code> parameter.
-                </div>
             </div>
             <div class="modal-footer">
-                <button class="modal-btn modal-btn-cancel" id="closeModalBtn" alt="Cancel (Esc)" title="Cancel (Esc)" aria-label="Cancel">Cancel</button>
-                <button class="modal-btn modal-btn-submit" onclick="submitCreateTest()" alt="Create Test" title="Create Test" aria-label="Create Test">Create Test</button>
+                <button class="btn-editor" id="closeModalBtn">Cancel</button>
+                <button class="btn-primary" style="margin-top:0;" onclick="submitCreateTest()">Create Test</button>
             </div>
         </div>
     </div>
 
-    <!-- JavaScript Interactive API Integration -->
     <script>
+
+        // Theme Logic
+        function initTheme() {
+            const savedTheme = localStorage.getItem('aura_theme') || 'system';
+            applyTheme(savedTheme);
+            
+        }
+
+        
+        function applyTheme(theme) {
+            const root = document.documentElement;
+            if (theme === 'dark') {
+                root.classList.add('force-dark');
+                root.classList.remove('force-light');
+            } else if (theme === 'light') {
+                root.classList.add('force-light');
+                root.classList.remove('force-dark');
+            } else {
+                root.classList.remove('force-dark', 'force-light');
+            }
+            
+            document.getElementById('themeLight').style.background = theme === 'light' ? 'var(--border)' : 'transparent';
+            document.getElementById('themeDark').style.background = theme === 'dark' ? 'var(--border)' : 'transparent';
+            document.getElementById('themeSystem').style.background = theme === 'system' ? 'var(--border)' : 'transparent';
+        }
+
+        function changeTheme(theme) {
+            localStorage.setItem('aura_theme', theme);
+            applyTheme(theme);
+        }
+
+        function switchState(stateName) {
+            document.querySelectorAll('.view-state').forEach(el => el.classList.remove('active'));
+            document.getElementById('state-' + stateName).classList.add('active');
+        }
+
+        function showView(viewId) {
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('reportViewContainer').style.display = 'none';
+            document.getElementById('reportView').style.display = 'none';
+            document.getElementById(viewId).style.display = 'flex';
+
+            if (viewId !== 'reportView') {
+                lastActiveView = viewId;
+            }
+
+            const navWorkspace = document.getElementById('navWorkspace');
+            const navReports = document.getElementById('navReports');
+            
+            if (viewId === 'dashboardView') {
+                if (navWorkspace) navWorkspace.classList.add('active');
+                if (navReports) navReports.classList.remove('active');
+            } else if (viewId === 'reportViewContainer') {
+                if (navWorkspace) navWorkspace.classList.remove('active');
+                if (navReports) navReports.classList.add('active');
+            } else if (viewId === 'reportView') {
+                if (lastActiveView === 'reportViewContainer') {
+                    if (navWorkspace) navWorkspace.classList.remove('active');
+                    if (navReports) navReports.classList.add('active');
+                } else {
+                    if (navWorkspace) navWorkspace.classList.add('active');
+                    if (navReports) navReports.classList.remove('active');
+                }
+            }
+        }
+
         // DOM Elements
         const dashboardView = document.getElementById('dashboardView');
         const reportView = document.getElementById('reportView');
@@ -1408,6 +659,7 @@
         const queueListContainer = document.getElementById('queueListContainer');
         let isRunning = false;
         let logFilterErrorsOnly = false;
+        let logFilterAiOnly = true;
         const terminalConsole = document.getElementById('terminalConsole');
         const runSpinner = document.getElementById('runSpinner');
         const yamlFileList = document.getElementById('yamlFileList');
@@ -1424,6 +676,7 @@
         let activeEditingFile = null;
         let consoleOpened = false;
         let conversationHistory = [];
+        let lastActiveView = 'dashboardView';
 
         function init() {
             loadSessions();
@@ -1513,16 +766,15 @@
                 
                 return `
                     <div class="file-container" style="display: flex; flex-direction: column; margin-bottom: 6px;">
-                        <div class="list-item" style="position: relative; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between;" tabindex="0" onclick="toggleExpandFile('${item.file}')">
+                        <div class="list-item" style="position: relative; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0" onclick="toggleExpandFile('${item.file}')">
                             <div class="item-main" style="min-width: 0; overflow: hidden; display: flex; align-items: center; flex-grow: 1;">
+                                <i class="fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}" 
+                                   style="margin-right: 8px; color: var(--text-secondary); font-size: 10px; width: 12px; text-align: center;"></i>
                                 <input type="checkbox" class="file-select-cb" data-file="${item.file}" 
                                        style="margin-right: 8px; cursor: pointer;" 
                                        ${allChecked ? 'checked' : ''} 
                                        onclick="event.stopPropagation(); toggleSelectAllDatasets('${item.file}', this.checked)">
-                                <i class="fa-solid ${isExpanded ? 'fa-folder-open' : 'fa-folder'}" 
-                                   style="margin-right: 8px; color: var(--accent-purple); cursor: pointer;" 
-                                   onclick="event.stopPropagation(); toggleExpandFile('${item.file}')"></i>
-                                <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;">${item.file}</span>
+                                <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.file}</span>
                             </div>
                             <button class="edit-icon-btn" onclick="event.stopPropagation(); openYamlEditor('${item.file}')" 
                                     style="padding: 4px 8px; color: var(--text-secondary);" 
@@ -1535,7 +787,7 @@
                             ${item.datasets.map(dataset => {
                                 const isChecked = isDatasetSelected(item.file, dataset.id);
                                 return `
-                                    <div class="dataset-item" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); justify-content: space-between;">
+                                    <div class="dataset-item" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); justify-content: space-between; cursor: pointer;" onclick="const cb = this.querySelector('.dataset-select-cb'); cb.checked = !cb.checked; toggleSelectDataset('${item.file}', '${dataset.id}', cb.checked);">
                                         <div style="display: flex; align-items: center; min-width: 0; overflow: hidden;">
                                             <input type="checkbox" class="dataset-select-cb" data-file="${item.file}" data-id="${dataset.id}" 
                                                    style="margin-right: 8px; cursor: pointer;" 
@@ -1554,36 +806,98 @@
             updateQueueList();
         }
 
+        let historyCached = [];
+        let activeRunStats = { total: 0, passed: 0, failed: 0, running: false, startTime: null };
+
+        function formatHistoryTimestamp(ts) {
+            if (!ts || ts.length < 15) return ts;
+            try {
+                const year = parseInt(ts.substring(0, 4));
+                const month = parseInt(ts.substring(4, 6)) - 1;
+                const day = parseInt(ts.substring(6, 8));
+                const hour = parseInt(ts.substring(9, 11));
+                const minute = parseInt(ts.substring(11, 13));
+                const second = parseInt(ts.substring(13, 15));
+                
+                const date = new Date(year, month, day, hour, minute, second);
+                if (!isNaN(date.getTime())) {
+                    return date.toLocaleString();
+                }
+            } catch (e) {
+                // fallback
+            }
+            return ts;
+        }
+
         async function loadHistory() {
             try {
                 const res = await fetch('/api/allure/history');
-                const history = await res.json();
-                if (history.length === 0) {
-                    allureHistoryList.innerHTML = `<div style="font-size: 12px; color: var(--text-secondary); font-style: italic; padding: 10px 15px;">No historical reports.</div>`;
-                } else {
-                    allureHistoryList.innerHTML = history.map(item => {
-                        const isSuccess = item.status === 'Passed';
-                        const iconColor = isSuccess ? 'var(--accent-success)' : 'var(--accent-danger)';
-                        const badgeClass = isSuccess ? 'badge-success' : 'badge-failed';
-                        return `
-                            <div class="list-item" onclick="openReportView('${item.id}')" style="position: relative;" tabindex="0">
-                                <div class="item-main" style="min-width: 0; overflow: hidden;">
-                                    <i class="fa-solid fa-chart-pie item-icon" style="color: ${iconColor}; flex-shrink: 0;" aria-hidden="true"></i>
-                                    <span style="font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.id}</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                                    <span class="badge-status ${badgeClass}">${item.status}</span>
-                                    <button class="delete-report-btn" onclick="event.stopPropagation(); deleteReport('${item.id}')" style="padding: 4px; color: var(--text-secondary);" title="Delete Report" alt="Delete Report ${item.id}" aria-label="Delete Report ${item.id}">
-                                        <i class="fa-solid fa-trash-can" style="font-size: 11px;" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-                }
+                historyCached = await res.json();
+                renderHistoryTable();
             } catch (e) {
                 console.error("Failed to load allure history", e);
             }
+        }
+
+        function renderHistoryTable() {
+            let rowsHtml = '';
+            
+            if (activeRunStats.running) {
+                const statusBadge = `<span style="background: rgba(59,130,246,0.1); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;"><i class="fa-solid fa-circle-notch spinner" style="margin-right: 4px;"></i> Running</span>`;
+                const formattedTime = activeRunStats.startTime ? activeRunStats.startTime.toLocaleString() : new Date().toLocaleString();
+                const reportIcon = `<i class="fa-solid fa-ban report-link-inactive" title="Running - No Report Yet"></i>`;
+                
+                rowsHtml += `
+                    <tr class="history-row" style="cursor: default; border-left: 3px solid var(--accent);">
+                        <td style="padding: 10px 12px;">${statusBadge}</td>
+                        <td style="padding: 10px 12px; font-weight: 500;">${formattedTime}</td>
+                        <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono);">${activeRunStats.total}</td>
+                        <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--success);">${activeRunStats.passed}</td>
+                        <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--danger);">${activeRunStats.failed}</td>
+                        <td style="padding: 10px 12px; text-align: center;">${reportIcon}</td>
+                        <td style="padding: 10px 12px; text-align: right;"></td>
+                    </tr>
+                `;
+            }
+            
+            if (historyCached.length === 0 && !activeRunStats.running) {
+                rowsHtml += `<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No historical reports.</td></tr>`;
+            } else {
+                rowsHtml += historyCached.map(item => {
+                    const isSuccess = item.status === 'Passed';
+                    const statusBadge = isSuccess 
+                        ? `<span class="badge-success">Passed</span>` 
+                        : `<span class="badge-failed">Failed</span>`;
+                    
+                    const formattedTime = formatHistoryTimestamp(item.timestamp || item.id.substring(0, 15));
+                    const hasReport = item.hasReport === 'true';
+                    
+                    const reportIcon = hasReport 
+                        ? `<i class="fa-solid fa-chart-column report-link-active" title="Open Report"></i> <i class="fa-solid fa-arrow-right" style="font-size: 10px; color: var(--accent); margin-left: 4px;"></i>` 
+                        : `<i class="fa-solid fa-ban report-link-inactive" title="No Report Available"></i>`;
+                    
+                    const rowClickAction = hasReport 
+                        ? `onclick="openReportView('${item.id}')"` 
+                        : `style="cursor: default;"`;
+                        
+                    return `
+                        <tr class="history-row" ${rowClickAction}>
+                            <td style="padding: 10px 12px;">${statusBadge}</td>
+                            <td style="padding: 10px 12px; font-weight: 500;">${formattedTime}</td>
+                            <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono);">${item.total || '-'}</td>
+                            <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--success);">${item.passed || '-'}</td>
+                            <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--danger);">${item.failed || '-'}</td>
+                            <td style="padding: 10px 12px; text-align: center;">${reportIcon}</td>
+                            <td style="padding: 10px 12px; text-align: right;" onclick="event.stopPropagation();">
+                                <button class="delete-report-btn" onclick="deleteReport('${item.id}')" title="Delete Report">
+                                    <i class="fa-solid fa-trash-can" style="font-size: 12px;"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+            allureHistoryList.innerHTML = rowsHtml;
         }
 
         async function deleteReport(reportId) {
@@ -1597,6 +911,7 @@
                     const data = await res.json();
                     if (data.success) {
                         loadHistory();
+                        updateCenterLayout();
                     } else {
                         alert("Error deleting report: " + data.error);
                     }
@@ -1814,12 +1129,7 @@
             }
         }
 
-        function showView(viewId) {
-            dashboardView.classList.remove('active');
-            reportView.classList.remove('active');
-            
-            document.getElementById(viewId).classList.add('active');
-        }
+
 
         let consoleExpanded = false;
 
@@ -1852,25 +1162,25 @@
             
             if (hasEdit) {
                 document.body.classList.add('workspace-split-mode');
-                editorPanel.style.display = 'flex';
-                chatPanel.style.display = 'flex';
+                switchState('editor');
+                
                 if (hasConsole) {
-                    consolePanel.style.display = 'flex';
+                    consolePanel.style.display = 'flex'; setTimeout(() => consolePanel.style.height = '150px', 10);
                     consolePanel.style.flexGrow = '0';
                     consolePanel.style.height = consoleExpanded ? '400px' : '200px';
                 } else {
-                    consolePanel.style.display = 'none';
+                    consolePanel.style.height = '0px'; setTimeout(() => { if (!consoleOpened && !isRunning) consolePanel.style.display = 'none'; }, 300);
                 }
             } else {
                 document.body.classList.remove('workspace-split-mode');
-                editorPanel.style.display = 'none';
-                chatPanel.style.display = 'flex';
+                switchState('selection');
+                
                 if (hasConsole) {
-                    consolePanel.style.display = 'flex';
+                    consolePanel.style.display = 'flex'; setTimeout(() => consolePanel.style.height = '150px', 10);
                     consolePanel.style.flexGrow = '0';
                     consolePanel.style.height = consoleExpanded ? '550px' : '280px';
                 } else {
-                    consolePanel.style.display = 'none';
+                    consolePanel.style.height = '0px'; setTimeout(() => { if (!consoleOpened && !isRunning) consolePanel.style.display = 'none'; }, 300);
                 }
             }
         }
@@ -2074,7 +1384,7 @@
 
         function closeReportView() {
             document.body.classList.remove('report-active');
-            showView('dashboardView');
+            showView(lastActiveView || 'dashboardView');
             reportIframe.src = 'about:blank';
         }
 
@@ -2082,11 +1392,21 @@
             if (selectedDatasets.length === 0) return;
             
             const headless = document.getElementById('optHeadless').checked;
+            const video = document.getElementById('optVideo').checked;
+            const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
             const allure = document.getElementById('optAllure').checked;
             
             isRunning = true;
             consoleOpened = true;
+            
+            activeRunStats.running = true;
+            activeRunStats.startTime = new Date();
+            activeRunStats.total = 0;
+            activeRunStats.passed = 0;
+            activeRunStats.failed = 0;
+            renderHistoryTable();
+
             updateCenterLayout();
             
             runQueueBtn.disabled = true;
@@ -2099,18 +1419,22 @@
                 const res = await fetch('/api/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ datasets: selectedDatasets, headless, interactive, allure })
+                    body: JSON.stringify({ datasets: selectedDatasets, headless, video, keepOpen, interactive, allure })
                 });
                 const data = await res.json();
                 if (data.error) {
                     alert("Execution failed to start: " + data.error);
                     isRunning = false;
+                    activeRunStats.running = false;
+                    renderHistoryTable();
                     consoleOpened = false;
                     updateCenterLayout();
                 }
             } catch (e) {
                 alert("Failed to start run queue: " + e.message);
                 isRunning = false;
+                activeRunStats.running = false;
+                renderHistoryTable();
                 consoleOpened = false;
                 updateCenterLayout();
             }
@@ -2124,16 +1448,68 @@
             }
         }
 
+        function isAiLogLine(line) {
+            if (!line) return false;
+            
+            // Check if the line contains standard AI emojis
+            const emojiPattern = /[🤖🧠👣🔮⚙️✨🔍║]/u;
+            if (emojiPattern.test(line)) {
+                return true;
+            }
+            
+            // Check if the line contains AI keywords
+            const lower = line.toLowerCase();
+            const aiKeywords = [
+                'aura',
+                'pesap',
+                'playbook',
+                'llmclient',
+                'aiagent',
+                'actionexecutor',
+                'aibrowser',
+                'aiassertion',
+                'reasoning',
+                'token usage',
+                'execution statistics',
+                'llm calls',
+                'input tokens',
+                'output tokens',
+                'total tokens',
+                'context levels',
+                'escalations',
+                'direct parses'
+            ];
+            
+            if (aiKeywords.some(keyword => lower.includes(keyword))) {
+                return true;
+            }
+            
+            return false;
+        }
+
+        function toggleAiOnly(checked) {
+            logFilterAiOnly = checked;
+            refreshLogFiltering();
+        }
+
         function toggleErrorsOnly(checked) {
             logFilterErrorsOnly = checked;
+            refreshLogFiltering();
+        }
+
+        function refreshLogFiltering() {
             const logLines = terminalConsole.querySelectorAll('.log-line');
             logLines.forEach(line => {
-                if (checked) {
-                    if (!line.classList.contains('log-error')) {
-                        line.style.display = 'none';
-                    }
-                } else {
+                const text = line.innerText;
+                const isErrorOrWarn = text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]');
+                
+                const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
+                const matchesAiFilter = !logFilterAiOnly || isAiLogLine(text);
+                
+                if (matchesErrorFilter && matchesAiFilter) {
                     line.style.display = 'block';
+                } else {
+                    line.style.display = 'none';
                 }
             });
         }
@@ -2143,7 +1519,11 @@
                 terminalConsole.innerHTML = '';
             }
             const isErrorOrWarn = line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[FATAL]');
-            const displayStyle = (logFilterErrorsOnly && !isErrorOrWarn) ? 'none' : 'block';
+            
+            const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
+            const matchesAiFilter = !logFilterAiOnly || isAiLogLine(line);
+            
+            const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
             const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
             
@@ -2161,28 +1541,54 @@
                 } else if (data.type === 'reportReady') {
                     openReportView(data.reportId);
                 } else if (data.type === 'status') {
+                    const statsPanel = document.getElementById('statsPanel');
+                    if (statsPanel) {
+                        statsPanel.style.display = (data.running || data.total > 0) ? 'block' : 'none';
+                    }
+
                     document.getElementById('statsTotalExecution').innerText = `${data.total} Test${data.total === 1 ? '' : 's'}`;
                     document.getElementById('statsPassed').innerText = data.passed;
                     document.getElementById('statsFailed').innerText = data.failed;
                     
-                    isRunning = data.running;
-                    if (isRunning) {
-                        consoleOpened = true;
+                    activeRunStats.running = data.running;
+                    activeRunStats.total = data.total;
+                    activeRunStats.passed = data.passed;
+                    activeRunStats.failed = data.failed;
+                    if (data.running && !activeRunStats.startTime) {
+                        activeRunStats.startTime = new Date();
                     }
-                    updateCenterLayout();
+                    renderHistoryTable();
                     
-                    if (isRunning) {
-                        runQueueBtn.disabled = true;
-                        runQueueBtn.style.display = 'none';
-                        stopQueueBtn.style.display = 'flex';
-                        runSpinner.style.display = 'inline-block';
-                    } else {
-                        runQueueBtn.disabled = selectedDatasets.length === 0;
-                        runQueueBtn.style.display = 'flex';
-                        stopQueueBtn.style.display = 'none';
-                        runSpinner.style.display = 'none';
-                        loadHistory();
+                    try {
+                        isRunning = data.running;
+                        if (isRunning) {
+                            runQueueBtn.disabled = true;
+                            runQueueBtn.style.display = 'none';
+                            stopQueueBtn.style.display = 'flex';
+                            if (runSpinner) runSpinner.style.display = 'inline-block';
+                            const sidebarBadge = document.getElementById('sidebarRunBadge');
+                            if (sidebarBadge) {
+                                sidebarBadge.style.display = 'flex';
+                                sidebarBadge.innerHTML = `<i class="fa-solid fa-circle-notch spinner"></i> ${data.passed + data.failed + 1}/${data.total}`;
+                            }
+                        } else {
+                            runQueueBtn.disabled = selectedDatasets.length === 0;
+                            runQueueBtn.style.display = 'flex';
+                            stopQueueBtn.style.display = 'none';
+                            if (runSpinner) runSpinner.style.display = 'none';
+                            const sidebarBadge = document.getElementById('sidebarRunBadge');
+                            if (sidebarBadge) sidebarBadge.style.display = 'none';
+                            
+                            activeRunStats.running = false;
+                            activeRunStats.startTime = null;
+                            loadHistory();
+                            updateCenterLayout();
+                        }
+                    } catch (err) {
+                        console.error('Error updating UI state from status:', err);
                     }
+
+
                 }
             };
             
@@ -2247,6 +1653,17 @@
             init();
             updateCenterLayout();
         };
+    
+        // Initialize Theme
+        initTheme();
+        
+        // Ensure Enter works on chat input since we decoupled the original listener
+        document.getElementById('chatInput').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                sendChatMessage();
+            }
+        });
     </script>
 </body>
 </html>

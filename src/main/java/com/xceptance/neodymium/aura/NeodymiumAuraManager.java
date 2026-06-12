@@ -697,6 +697,9 @@ public final class NeodymiumAuraManager
                     {
                         String status = "Passed";
                         String timestamp = "";
+                        String total = "-";
+                        String passed = "-";
+                        String failed = "-";
                         final File metadataFile = new File(dir, "metadata.json");
                         if (metadataFile.exists() && metadataFile.isFile())
                         {
@@ -714,6 +717,18 @@ public final class NeodymiumAuraManager
                                     {
                                         timestamp = String.valueOf(map.get("timestamp"));
                                     }
+                                    if (map.containsKey("total"))
+                                    {
+                                        total = String.valueOf(Math.round(Double.parseDouble(String.valueOf(map.get("total")))));
+                                    }
+                                    if (map.containsKey("passed"))
+                                    {
+                                        passed = String.valueOf(Math.round(Double.parseDouble(String.valueOf(map.get("passed")))));
+                                    }
+                                    if (map.containsKey("failed"))
+                                    {
+                                        failed = String.valueOf(Math.round(Double.parseDouble(String.valueOf(map.get("failed")))));
+                                    }
                                 }
                             }
                             catch (final Exception e)
@@ -722,10 +737,17 @@ public final class NeodymiumAuraManager
                             }
                         }
 
+                        final File indexHtml = new File(dir, "index.html");
+                        final boolean hasReport = indexHtml.exists() && indexHtml.isFile();
+
                         final Map<String, String> item = new HashMap<>();
                         item.put("id", dir.getName());
                         item.put("status", status);
                         item.put("timestamp", timestamp);
+                        item.put("total", total);
+                        item.put("passed", passed);
+                        item.put("failed", failed);
+                        item.put("hasReport", String.valueOf(hasReport));
                         historyList.add(item);
                     }
                 }
@@ -1102,6 +1124,9 @@ public final class NeodymiumAuraManager
                     command.add("-Dbrowserprofile.Default.headless=" + req.headless);
                     command.add("-Dselenide.headless=" + req.headless);
                     command.add("-Dneodymium.ai.interactive=" + req.interactive);
+                    command.add("-Dvideo.enableFilming=" + req.video);
+                    command.add("-Dneodymium.webDriver.keepBrowserOpen=" + req.keepOpen);
+                    command.add("-Dfile.encoding=UTF-8");
 
                     LOGGER.info("[Aura Server] Executing command: {}", String.join(" ", command));
                     broadcastLog("[INFO] Command: " + String.join(" ", command));
@@ -1321,7 +1346,8 @@ public final class NeodymiumAuraManager
             // Write metadata.json
             final File metadataFile = new File(destDir, "metadata.json");
             final String status = globalFailed.get() == 0 ? "Passed" : "Failed";
-            final String metadataContent = String.format("{\n  \"status\": \"%s\",\n  \"timestamp\": \"%s\"\n}", status, timestamp);
+            final String metadataContent = String.format("{\n  \"status\": \"%s\",\n  \"timestamp\": \"%s\",\n  \"total\": %d,\n  \"passed\": %d,\n  \"failed\": %d\n}", 
+                status, timestamp, globalTestsRun.get(), globalPassed.get(), globalFailed.get());
             Files.writeString(metadataFile.toPath(), metadataContent, StandardCharsets.UTF_8);
 
             LOGGER.info("[Aura Server] Allure report copied to history: {}", destDir.getName());
@@ -2031,6 +2057,8 @@ public final class NeodymiumAuraManager
         boolean headless;
         boolean interactive;
         boolean allure;
+        boolean video;
+        boolean keepOpen;
     }
 
     private static final class DatasetDto
