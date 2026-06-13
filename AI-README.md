@@ -213,6 +213,22 @@ Because the LLM pre-compiles this logic during the initial generation phase, the
 
 > **Best Practice:** While branching is fully supported, simple, deterministic data-driven tests are generally preferred over massive "choose your own adventure" scripts. Keep conditionals focused on dismissing dynamic UI elements (like banners or modals).
 
+## ✂️ Dynamic Multi-Action Step Splitting
+
+Multi-action or compound steps (e.g. "Click profile icon and then click Create Account in dropdown") are prone to failure if the second action relies on elements that are not yet visible or present in the current DOM state. 
+
+To solve this, Neodymium AI implements a **dual-layer splitting strategy** to break compound steps into sequential simple steps:
+
+1. **Upfront Splitting (Unified JIT PESAP Call)**: Before capturing the DOM or executing the step, the JIT PESAP static analysis checks the step text. If it is compound, it returns the split parts. The engine replaces the current step in the execution list and inserts the remaining parts as subsequent steps. This saves massive token overhead by avoiding DOM captures for compound steps.
+2. **Runtime Fallback Splitting**: If PESAP is disabled or misses a compound step, the main LLM can emit a `SPLIT` action during execution. This executes any preceding actions, updates the current step, and inserts the remaining instruction text (returned in the `value` field) as a new step in the execution list and playbook.
+
+### Line Number Preservation and Failure Reporting
+All split steps inherit the original instruction's line number, ensuring failure traces accurately map back to the source test file. If a dynamically split virtual step fails, the failure message will explicitly note the relationship, e.g.:
+`Instruction 'Click Create Account' (virtual step split from: 'Click profile icon and then click Create Account in dropdown') failed at line 12 in ...`
+
+### Offline Replay Integration
+During replay, the engine runs an alignment pass (`alignStepsWithPlaybookForReplay`) that pre-splits Java-defined instructions to match the cached split steps in the playbook. This ensures that the cached actions are replayed offline without re-triggering the LLM or falling out of replay mode.
+
 ---
 
 ## 🔧 Programmatic Assertions (`JAVA_METHOD`)

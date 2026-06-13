@@ -43,6 +43,7 @@ public final class PlaybookStep
     private String expectedErrorType;
     private String expectedErrorMessage;
     private transient String lastFailure;
+    private String originalUnsplitInstruction;
 
     /**
      * The context level that was successfully used for this step.
@@ -286,9 +287,29 @@ public final class PlaybookStep
         this.expectedErrorMessage = expectedErrorMessage;
     }
 
+    /**
+     * Gets the original unsplit instruction if this is a split virtual step.
+     *
+     * @return the original compound instruction, or {@code null}
+     */
+    public String getOriginalUnsplitInstruction()
+    {
+        return this.originalUnsplitInstruction;
+    }
+
+    /**
+     * Sets the original unsplit instruction if this is a split virtual step.
+     *
+     * @param originalUnsplitInstruction the original compound instruction
+     */
+    public void setOriginalUnsplitInstruction(final String originalUnsplitInstruction)
+    {
+        this.originalUnsplitInstruction = originalUnsplitInstruction;
+    }
+
     @Override
     public String toString()
     {
-        return "PlaybookStep [promptLine=" + promptLine + ", reasoning=" + reasoning + ", actions=" + actions + ", screenshotHash=" + screenshotHash + ", expectedFailure=" + expectedFailure + ", bugId=" + bugId + ", expectedErrorType=" + expectedErrorType + ", expectedErrorMessage=" + expectedErrorMessage + "]";
+        return "PlaybookStep [promptLine=" + promptLine + ", reasoning=" + reasoning + ", actions=" + actions + ", screenshotHash=" + screenshotHash + ", expectedFailure=" + expectedFailure + ", bugId=" + bugId + ", expectedErrorType=" + expectedErrorType + ", expectedErrorMessage=" + expectedErrorMessage + ", originalUnsplitInstruction=" + originalUnsplitInstruction + "]";
     }
 }
