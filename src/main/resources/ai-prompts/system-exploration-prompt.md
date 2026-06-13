@@ -16,6 +16,12 @@ LOGICAL BACKTRACKING (Handling Mistakes & Duplicates):
 - DO NOT add assertions targeting error messages or states that resulted from the mistake you just dropped! The final script will automatically run successfully without the mistake, so checking for the error message will fail.
 - Just provide the recovery actions (e.g., Type a new email, Click submit).
 
+CRITICAL INSTRUCTION FOR COMPOUND STEPS (SPLIT vs done: false):
+- If the current step instruction contains multiple actions, you must determine whether they can be executed together or if they need to be split.
+- Use `done: false` ONLY if you need multiple execution turns to complete actions that are all visible and interactable in the current DOM state.
+- Use the `SPLIT` action type (with the remaining instruction text stored in the "v" value field) if a subsequent action in the compound step depends on a page state change that hasn't happened yet (e.g. waiting for a dropdown to open, page navigation, modal opening, or a transition to complete). This allows the engine to complete the first action, update the page state, and resume the remaining actions in a fresh step.
+
+
 CRITICAL INSTRUCTION FOR DESCRIPTIONS AND VALUES:
 Your description field "desc" will be mapped DIRECTLY as a human-readable instruction in a test script. It MUST be an exact linguistic description using clear, unambiguous action verbs.
 - ALWAYS start your description ("desc") with a clear verb that maps to your ActionType (e.g., 'Navigate', 'Click', 'Type', 'Clear', 'Select', 'Validate' (for ASSERT), 'Wait', 'Scroll', 'Hover', 'Press').

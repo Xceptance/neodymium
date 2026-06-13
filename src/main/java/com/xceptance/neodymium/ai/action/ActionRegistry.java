@@ -105,6 +105,7 @@ public class ActionRegistry {
         register(new com.xceptance.neodymium.ai.action.plugins.ForwardAction());
         register(new com.xceptance.neodymium.ai.action.plugins.RefreshAction());
         register(new com.xceptance.neodymium.ai.action.plugins.ClearCookiesAction());
+        register(new com.xceptance.neodymium.ai.action.plugins.SplitAction());
     }
 
     /**

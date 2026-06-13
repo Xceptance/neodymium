@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -133,7 +134,8 @@ public class AiAgent {
         String expectedTargetTagName,
         boolean pageNavigation,
         boolean requiresJavaMethods,
-        String direction
+        String direction,
+        List<String> splitSteps
     ) {}
 
     /**
@@ -292,6 +294,7 @@ public class AiAgent {
                     step.setFailure(null);
                 }
             }
+            alignStepsWithPlaybookForReplay(stepsList, stepLines, result, playbook);
 
             // Determine if JIT per-step PESAP should run (only during recording, not replay)
             final boolean needsPesap;
@@ -337,6 +340,7 @@ public class AiAgent {
 
             final boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
             final List<String> performedInstructions = new ArrayList<>();
+            final Set<String> alreadySplitSteps = new HashSet<>();
             boolean abortedDueToExpectedFailure = false;
             String abortedBugId = null;
 
@@ -446,6 +450,44 @@ public class AiAgent {
                 // Fully strip ALL registered tags beautifully via stripAllTags static helper
                 final String strippedStep = stripAllTags(step);
 
+                final StepDetails stepDetails = result.getSteps().get(i);
+                if (this.pesapEnabled && !alreadySplitSteps.contains(strippedStep))
+                {
+                    final Object testInstance = actionExecutor.getTestInstance();
+                    final Class<?> testClass = testInstance != null ? testInstance.getClass() : null;
+                    final PreStepPesapResult pesapResult = runPreStepPesap(i, testClass, stepDetails);
+                    if (pesapResult != null && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
+                    {
+                        LOG.info("✂️ Upfront JIT step split detected: '{}' split into {}", strippedStep, pesapResult.splitSteps());
+                        final List<String> splitList = pesapResult.splitSteps();
+                        final Integer origLine = i < stepLines.size() ? stepLines.get(i) : null;
+
+                        stepsList.set(i, splitList.get(0));
+                        stepDetails.setExpandedInstruction(splitList.get(0));
+                        stepDetails.setOriginalUnsplitInstruction(stepUnresolved);
+
+                        for (int j = 1; j < splitList.size(); j++)
+                        {
+                            final String part = splitList.get(j);
+                            stepsList.add(i + j, part);
+                            if (i + j <= stepLines.size())
+                            {
+                                stepLines.add(i + j, origLine);
+                            }
+                            else
+                            {
+                                stepLines.add(origLine);
+                            }
+                            final StepDetails partDetails = new StepDetails(part);
+                            partDetails.setOriginalUnsplitInstruction(stepUnresolved);
+                            result.getSteps().add(i + j, partDetails);
+                        }
+                        alreadySplitSteps.add(strippedStep);
+                        i--;
+                        continue;
+                    }
+                }
+
                 boolean isReplay = false;
                 final Playbook playbookForCheck = Neodymium.getAiPlaybook();
                 // Check if we have an active, non-recording playbook matching the current step
@@ -489,26 +531,33 @@ public class AiAgent {
                     for (int j = i + 1; j < stepsList.size(); j++) {
                         futureInstructions.add(stepsList.get(j));
                     }
-
                     final StepDetails stepDetails = result.getSteps().get(i);
                     stepDetails.setExpandedInstruction(strippedStep);
                     final long stepStartTime = System.currentTimeMillis();
-                    try {
-                        executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs,
-                                performedInstructions, stepUnresolved, futureInstructions, currentLineNumber,
-                                sourceFileVal, stepDetails, result);
-                    } catch (final HudActionException e) {
+                    try
+                    {
+                        executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs, performedInstructions, stepUnresolved, futureInstructions, currentLineNumber, sourceFileVal, stepDetails, result, stepsList, stepLines);
+                    }
+                    catch (final HudActionException e)
+                    {
                         throw e;
-                    } catch (final Throwable t) {
+                    }
+                    catch (final Throwable t)
+                    {
                         stepDetails.setFailureReason(t.getMessage());
                         throw t;
-                    } finally {
+                    }
+                    finally
+                    {
                         stepDetails.setDurationMs(System.currentTimeMillis() - stepStartTime);
                     }
-                    performedInstructions.add(stepUnresolved);
-                } catch (final HudActionException e) {
+                    performedInstructions.add(stepsList.get(i));
+                }
+                catch (final HudActionException e)
+                {
                     i = processHudActionException(e, i, stepsList, performedInstructions, stepLines, result);
-                    if (i < -1) {
+                    if (i < -1)
+                    {
                         break;
                     }
                     continue;
@@ -605,7 +654,10 @@ public class AiAgent {
             final Integer currentLineNumber,
             final String sourceFile,
             final StepDetails stepDetails,
-            final AiExecutionResult result) throws HudActionException {
+            final AiExecutionResult result,
+            final List<String> stepsList,
+            final List<Integer> stepLines) throws HudActionException
+    {
         int errorCount = 0;
         int playbookReplayAttempts = 0;
         boolean hasApprovedCurrentStep = false;
@@ -674,8 +726,101 @@ public class AiAgent {
                         hasApprovedCurrentStep = true;
                     }
 
-                    // Execute the approved actions via Selenium/WebDriver, applying timeout
-                    // isolation
+                    // Check if LLM returned a SPLIT action
+                    int splitActionIndex = -1;
+                    for (int aIdx = 0; aIdx < actions.size(); aIdx++)
+                    {
+                        if ("SPLIT".equals(actions.get(aIdx).getType()))
+                        {
+                            splitActionIndex = aIdx;
+                            break;
+                        }
+                    }
+
+                    if (splitActionIndex != -1)
+                    {
+                        final Action splitAction = actions.get(splitActionIndex);
+                        final String remainingInstruction = splitAction.getValue();
+                        if (remainingInstruction != null && !remainingInstruction.trim().isEmpty())
+                        {
+                            LOG.info("✂️ Runtime SPLIT action detected. Remaining: '{}'", remainingInstruction);
+
+                            // 1. Get preceding actions
+                            final List<Action> precedingActions = new ArrayList<>(actions.subList(0, splitActionIndex));
+
+                            // 2. Execute preceding actions
+                            final long originalTimeout = com.codeborne.selenide.Configuration.timeout;
+                            if (customTimeoutMs != null)
+                            {
+                                com.codeborne.selenide.Configuration.timeout = customTimeoutMs;
+                            }
+                            try
+                            {
+                                actionExecutor.executeAll(precedingActions);
+                            }
+                            finally
+                            {
+                                if (customTimeoutMs != null)
+                                {
+                                    com.codeborne.selenide.Configuration.timeout = originalTimeout;
+                                }
+                            }
+                            accumulatedActions.addAll(precedingActions);
+
+                            // 3. Update current playbook step
+                            final String firstPartPrompt = deriveFirstPartPrompt(instruction, remainingInstruction);
+                            stepDetails.setOriginalUnsplitInstruction(unresolvedInstruction);
+                            if (playbook.isRecording())
+                            {
+                                final PlaybookStep currentPbStep = playbook.getCurrentStep();
+                                currentPbStep.setPromptLine(firstPartPrompt);
+                                currentPbStep.setOriginalUnsplitInstruction(unresolvedInstruction);
+                                currentPbStep.setActions(new ArrayList<>(precedingActions));
+                                playbook.setChanged(true);
+                            }
+
+                            // 4. Insert remaining instruction in stepsList, stepLines, result.getSteps()
+                            final int nextStepIndex = stepIndex + 1;
+                            stepsList.set(stepIndex, firstPartPrompt);
+                            stepsList.add(nextStepIndex, remainingInstruction);
+                            if (nextStepIndex <= stepLines.size())
+                            {
+                                stepLines.add(nextStepIndex, currentLineNumber);
+                            }
+                            else
+                            {
+                                stepLines.add(currentLineNumber);
+                            }
+
+                            final StepDetails nextStepDetails = new StepDetails(remainingInstruction);
+                            nextStepDetails.setOriginalUnsplitInstruction(unresolvedInstruction);
+                            result.getSteps().add(nextStepIndex, nextStepDetails);
+
+                            // 5. Insert remaining step in playbook
+                            if (playbook.isRecording())
+                            {
+                                final PlaybookStep nextPbStep = new PlaybookStep();
+                                nextPbStep.setPromptLine(remainingInstruction);
+                                nextPbStep.setOriginalUnsplitInstruction(unresolvedInstruction);
+                                nextPbStep.setReasoning("Split remainder from: " + instruction);
+                                if (playbook.getSteps().size() > playbook.getCursor() + 1)
+                                {
+                                    playbook.getSteps().add(playbook.getCursor() + 1, nextPbStep);
+                                }
+                                else
+                                {
+                                    playbook.getSteps().add(nextPbStep);
+                                }
+                                playbook.setChanged(true);
+                            }
+
+                            // 6. Advance playbook cursor and return immediately
+                            playbook.nextStep();
+                            return;
+                        }
+                    }
+
+                    // Execute the approved actions via Selenium/WebDriver, applying timeout isolation
                     final long originalTimeout = com.codeborne.selenide.Configuration.timeout;
                     if (customTimeoutMs != null) {
                         com.codeborne.selenide.Configuration.timeout = customTimeoutMs;
@@ -805,10 +950,8 @@ public class AiAgent {
                         errorCount = 0;
                     } else {
                         SelenideAddons.wrapAssertionError(() -> {
-                            throw new AssertionError(formatFailureMessage(instruction, currentLineNumber, sourceFile,
-                                    " (" + (getMaxRetries() + 1)
-                                            + " tries):\n\n")
-                                    + finalThrowable.getMessage(), finalThrowable);
+                            throw new AssertionError(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, " (" + (getMaxRetries() + 1)
+                                    + " tries):\n\n") + finalThrowable.getMessage(), finalThrowable);
                         });
                     }
                 } else {
@@ -936,18 +1079,18 @@ public class AiAgent {
                             performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
                             "Assertion Failed: " + e.getMessage(), false);
                     waitForHudAction(false); // Never auto-skip errors
-                } else {
-                    throw new AssertionError(
-                            formatFailureMessage(instruction, currentLineNumber, sourceFile, ":\n" + e.getMessage()),
-                            e);
                 }
-            } catch (final Exception e) {
-                if (optionalStep) {
-                    LOG.warn(
-                            "    ⚠️ Optional/Soft step unexpected error: {}. Bypassing failure due to optional/soft tag.",
-                            e.getMessage());
-                    executionLog
-                            .logWarning("Optional step unexpected error: " + e.getMessage() + ". Bypassing failure.");
+                else
+                {
+                    throw new AssertionError(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\n" + e.getMessage()), e);
+                }
+            }
+            catch (final Exception e)
+            {
+                if (optionalStep)
+                {
+                    LOG.warn("    ⚠️ Optional/Soft step unexpected error: {}. Bypassing failure due to optional/soft tag.", e.getMessage());
+                    executionLog.logWarning("Optional step unexpected error: " + e.getMessage() + ". Bypassing failure.");
                     final PlaybookStep step = playbook.getCurrentStep();
                     if (playbook.isRecording() && step != null) {
                         step.setPromptLine(instruction);
@@ -986,27 +1129,31 @@ public class AiAgent {
                     waitForHudAction(false); // Never auto-skip errors
                 } else {
                     SelenideAddons.wrapAssertionError(() -> {
-                        throw new AiAgentException(formatFailureMessage(instruction, currentLineNumber, sourceFile,
-                                ":\nUnexpected error executing step: " + instruction), e);
+                        throw new AiAgentException(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\nUnexpected error executing step: " + instruction), e);
                     });
                 }
             }
         }
 
-        if (expectedFailure) {
-            final String msg = formatFailureMessage(instruction, currentLineNumber, sourceFile,
-                    ": Expected step to fail with " + (bugId != null ? "bug: " + bugId : "expected failure")
-                            + ", but it succeeded.");
+        if (expectedFailure)
+        {
+            final String msg = formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ": Expected step to fail with " + (bugId != null ? "bug: " + bugId : "expected failure") + ", but it succeeded.");
             LOG.error("    ❌ {}", msg);
             throw new AssertionError(msg);
         }
     }
 
-    private static String formatFailureMessage(final String instruction, final Integer lineNumber,
-            final String sourceFile, final String suffix) {
+    private static String formatFailureMessage(final String instruction, final String originalUnsplitInstruction, final Integer lineNumber, final String sourceFile, final String suffix)
+    {
         final StringBuilder sb = new StringBuilder();
-        sb.append("Instruction '").append(instruction).append("' failed");
-        if (lineNumber != null) {
+        sb.append("Instruction '").append(instruction).append("'");
+        if (originalUnsplitInstruction != null)
+        {
+            sb.append(" (virtual step split from: '").append(originalUnsplitInstruction).append("')");
+        }
+        sb.append(" failed");
+        if (lineNumber != null)
+        {
             sb.append(" at line ").append(lineNumber);
         }
         if (sourceFile != null) {
@@ -1466,8 +1613,18 @@ public class AiAgent {
             final String direction = responseObj.has("direction")
                     ? responseObj.get("direction").getAsString() : null;
 
+            List<String> splitSteps = null;
+            if (responseObj.has("splitSteps") && responseObj.get("splitSteps").isJsonArray())
+            {
+                splitSteps = new ArrayList<>();
+                for (final JsonElement el : responseObj.getAsJsonArray("splitSteps"))
+                {
+                    splitSteps.add(el.getAsString());
+                }
+            }
+
             final PreStepPesapResult result = new PreStepPesapResult(
-                level, stepType, expectedTargetTagName, pageNavigation, requiresJavaMethods, direction
+                level, stepType, expectedTargetTagName, pageNavigation, requiresJavaMethods, direction, splitSteps
             );
 
             // Populate StepDetails
@@ -2203,16 +2360,144 @@ public class AiAgent {
         return -2; // Unhandled or generic break;
     }
 
-    private static final class ExpectedFailureAbortException extends RuntimeException {
+    private void alignStepsWithPlaybookForReplay(
+            final List<String> stepsList,
+            final List<Integer> stepLines,
+            final AiExecutionResult result,
+            final Playbook playbook)
+    {
+        if (playbook == null || playbook.isRecording() || playbook.getSteps() == null)
+        {
+            return;
+        }
+
+        final List<PlaybookStep> playbookSteps = playbook.getSteps();
+        int playbookIdx = 0;
+
+        for (int i = 0; i < stepsList.size(); i++)
+        {
+            if (playbookIdx >= playbookSteps.size())
+            {
+                break;
+            }
+
+            final String currentInstr = stripAllTags(stepsList.get(i));
+            final PlaybookStep pbStep = playbookSteps.get(playbookIdx);
+
+            final String origUnsplit = pbStep.getOriginalUnsplitInstruction();
+            if (origUnsplit != null && stripAllTags(origUnsplit).equals(currentInstr))
+            {
+                final List<PlaybookStep> splitParts = new ArrayList<>();
+                splitParts.add(pbStep);
+
+                int nextPbIdx = playbookIdx + 1;
+                while (nextPbIdx < playbookSteps.size())
+                {
+                    final PlaybookStep nextPbStep = playbookSteps.get(nextPbIdx);
+                    final String nextOrig = nextPbStep.getOriginalUnsplitInstruction();
+                    if (nextOrig != null && stripAllTags(nextOrig).equals(currentInstr))
+                    {
+                        splitParts.add(nextPbStep);
+                        nextPbIdx++;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                if (splitParts.size() > 1)
+                {
+                    final Integer origLine = i < stepLines.size() ? stepLines.get(i) : null;
+
+                    // Replace the first one
+                    stepsList.set(i, splitParts.get(0).getPromptLine());
+                    final StepDetails firstDetails = result.getSteps().get(i);
+                    firstDetails.setExpandedInstruction(splitParts.get(0).getPromptLine());
+                    firstDetails.setOriginalUnsplitInstruction(origUnsplit);
+
+                    // Insert the subsequent parts
+                    for (int j = 1; j < splitParts.size(); j++)
+                    {
+                        final String partPrompt = splitParts.get(j).getPromptLine();
+                        stepsList.add(i + j, partPrompt);
+                        if (i + j <= stepLines.size())
+                        {
+                            stepLines.add(i + j, origLine);
+                        }
+                        else
+                        {
+                            stepLines.add(origLine);
+                        }
+
+                        final StepDetails newDetails = new StepDetails(partPrompt);
+                        newDetails.setOriginalUnsplitInstruction(origUnsplit);
+                        result.getSteps().add(i + j, newDetails);
+                    }
+
+                    // Advance i past the newly inserted steps
+                    i += splitParts.size() - 1;
+                }
+                else
+                {
+                    stepsList.set(i, pbStep.getPromptLine());
+                    final StepDetails details = result.getSteps().get(i);
+                    details.setExpandedInstruction(pbStep.getPromptLine());
+                    details.setOriginalUnsplitInstruction(origUnsplit);
+                }
+
+                playbookIdx = nextPbIdx;
+            }
+            else
+            {
+                playbookIdx++;
+            }
+        }
+    }
+
+    private String deriveFirstPartPrompt(final String original, final String remaining)
+    {
+        if (original == null)
+        {
+            return "";
+        }
+        if (remaining == null || remaining.trim().isEmpty())
+        {
+            return original;
+        }
+
+        final String origLower = original.toLowerCase();
+        final String remLower = remaining.toLowerCase().trim();
+
+        final int idx = origLower.lastIndexOf(remLower);
+        if (idx != -1)
+        {
+            String firstPart = original.substring(0, idx).trim();
+            // Clean up trailing connecting words like "and", "then", ",", "and then", "after that"
+            firstPart = firstPart.replaceAll("(?i)\\b(and|then|and\\s+then|after\\s+that|after|then\\s+click|and\\s+click)\\b\\s*$", "").trim();
+            // Also strip trailing punctuation
+            firstPart = firstPart.replaceAll("[,.;:-]+$", "").trim();
+            if (!firstPart.isEmpty())
+            {
+                return firstPart;
+            }
+        }
+        return "Execute first part of: " + original;
+    }
+
+    private static final class ExpectedFailureAbortException extends RuntimeException
+    {
         private static final long serialVersionUID = 1L;
         private final String bugId;
 
-        public ExpectedFailureAbortException(final String bugId, final Throwable cause) {
+        public ExpectedFailureAbortException(final String bugId, final Throwable cause)
+        {
             super("Expected failure abort for bug: " + bugId, cause);
             this.bugId = bugId;
         }
 
-        public String getBugId() {
+        public String getBugId()
+        {
             return this.bugId;
         }
     }

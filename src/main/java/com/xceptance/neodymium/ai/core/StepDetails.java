@@ -274,4 +274,26 @@ public final class StepDetails
         }
         return this.llmCalls.get(0).getReasoning();
     }
+
+    private String originalUnsplitInstruction;
+
+    /**
+     * Gets the original unsplit instruction if this is a split virtual step.
+     *
+     * @return the original compound instruction, or {@code null}
+     */
+    public final String getOriginalUnsplitInstruction()
+    {
+        return this.originalUnsplitInstruction;
+    }
+
+    /**
+     * Sets the original unsplit instruction if this is a split virtual step.
+     *
+     * @param originalUnsplitInstruction the original compound instruction
+     */
+    public final void setOriginalUnsplitInstruction(final String originalUnsplitInstruction)
+    {
+        this.originalUnsplitInstruction = originalUnsplitInstruction;
+    }
 }
