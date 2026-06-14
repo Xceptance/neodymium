@@ -26,12 +26,28 @@ import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 
+import com.xceptance.neodymium.ai.action.SelectorParser;
+
 public class HoverAction implements AiActionPlugin {
     @Override
     public String getActionName() { return "HOVER"; }
 
     @Override
-    public List<Action> parseDirectInstruction(String instruction) { return null; }
+    public List<Action> parseDirectInstruction(final String instruction)
+    {
+        final String normalized = instruction.replaceAll("\\s+", " ").trim();
+        if (normalized.startsWith("HOVER "))
+        {
+            final String target = normalized.substring(6).trim();
+            if (target.isEmpty())
+            {
+                throw new IllegalArgumentException("Selector target for HOVER command cannot be empty");
+            }
+            final SelectorParser.ParsedSelector parsed = SelectorParser.parse(target);
+            return List.of(new Action("HOVER", parsed.getExpression(), "Hover over " + parsed.getExpression()));
+        }
+        return null;
+    }
 
     @Override
     public void preCheck(Action action, ActionExecutor executor) {

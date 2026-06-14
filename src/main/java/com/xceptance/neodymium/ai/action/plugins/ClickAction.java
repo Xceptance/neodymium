@@ -28,12 +28,28 @@ import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 
+import com.xceptance.neodymium.ai.action.SelectorParser;
+
 public class ClickAction implements AiActionPlugin {
     @Override
     public String getActionName() { return "CLICK"; }
 
     @Override
-    public List<Action> parseDirectInstruction(String instruction) { return null; }
+    public List<Action> parseDirectInstruction(final String instruction)
+    {
+        final String normalized = instruction.replaceAll("\\s+", " ").trim();
+        if (normalized.startsWith("CLICK "))
+        {
+            final String target = normalized.substring(6).trim();
+            if (target.isEmpty())
+            {
+                throw new IllegalArgumentException("Selector target for CLICK command cannot be empty");
+            }
+            final SelectorParser.ParsedSelector parsed = SelectorParser.parse(target);
+            return List.of(new Action("CLICK", parsed.getExpression(), "Click " + parsed.getExpression()));
+        }
+        return null;
+    }
 
     @Override
     public void preCheck(Action action, ActionExecutor executor) {

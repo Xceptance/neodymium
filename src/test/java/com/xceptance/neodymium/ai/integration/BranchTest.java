@@ -63,7 +63,7 @@ public class BranchTest extends BaseAiTest
     public final void testBranch()
     {
         final String steps = """
-                Open ${branch.test.url}
+                OPEN ${branch.test.url}
                 If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)
             """;
 

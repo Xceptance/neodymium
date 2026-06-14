@@ -3,16 +3,16 @@
   "steps": [
     {
       "promptLine": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
-      "reasoning": "Identified the \u0027Full Name\u0027 textbox by its accessibility name and data-neo-ref attribute, then generated a TYPE action to input the specified text.",
+      "reasoning": "Successfully identified the \u0027Full Name\u0027 textbox by its ID and generated a TYPE action.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_u90fde",
+          "target": "#reg-username",
           "value": [
             "Alice Cooper"
           ],
-          "description": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
-          "elementDetails": "Full Name",
+          "description": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field",
+          "elementDetails": "Full Name textbox",
           "elementContext": {
             "classes": "form-control",
             "id": "reg-username",
@@ -29,16 +29,16 @@
     },
     {
       "promptLine": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Identified the \u0027Email Address\u0027 textbox by its name and data-neo-ref attribute and generated a TYPE action.",
+      "reasoning": "Identified the \u0027Email Address\u0027 field by its ID \u0027reg-email\u0027 and generated a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_f0d4sd",
+          "target": "#reg-email",
           "value": [
             "alice@test.com"
           ],
           "description": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
-          "elementDetails": "Email Address",
+          "elementDetails": "Email Address field",
           "elementContext": {
             "classes": "form-control",
             "id": "reg-email",
@@ -55,13 +55,13 @@
     },
     {
       "promptLine": "Click the \u0027Create Account\u0027 button.",
-      "reasoning": "Found the \u0027Create Account\u0027 button by its name and data-neo-ref attribute and generated a CLICK action.",
+      "reasoning": "Found the \u0027Create Account\u0027 button by its ID and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_t6pll2",
+          "target": "#btn-submit-reg",
           "description": "Click the \u0027Create Account\u0027 button",
-          "elementDetails": "Create Account",
+          "elementDetails": "Create Account button",
           "elementContext": {
             "classes": "btn-primary",
             "text": "Create Account",
@@ -78,7 +78,7 @@
     },
     {
       "promptLine": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
-      "reasoning": "Verified the visibility of the \u0027Account Registered!\u0027 success indicator using its ID.",
+      "reasoning": "Verified the visibility of the \u0027Account Registered!\u0027 success indicator using its unique ID.",
       "actions": [
         {
           "type": "ASSERT",
@@ -87,7 +87,7 @@
             "visible"
           ],
           "description": "Verify that the success indicator \u0027Account Registered!\u0027 is visible.",
-          "elementDetails": "Account Registered!",
+          "elementDetails": "Account Registered! success message",
           "elementContext": {},
           "replay": "",
           "adjust": false

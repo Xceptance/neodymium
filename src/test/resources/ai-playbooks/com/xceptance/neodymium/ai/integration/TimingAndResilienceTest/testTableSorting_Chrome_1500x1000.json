@@ -3,30 +3,32 @@
   "steps": [
     {
       "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html",
-      "reasoning": "directly parsed or local validation succeeded",
+      "reasoning": "Navigating to the specified URL.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html"
           ],
-          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html",
+          "description": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html",
+          "elementDetails": "Navigate to URL",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Click the \u0027Price\u0027 header column link to sort.",
-      "reasoning": "Clicked the \u0027Price\u0027 link based on the instruction and AXTree.",
+      "reasoning": "Identified the \u0027Price\u0027 link by its ID and name in the AXTree and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "[data-neo-ref\u003d\u0027xc_lkfgoz\u0027]",
-          "description": "Click the \u0027Price\u0027 header column link",
-          "elementDetails": "Price ▾",
+          "target": "#sort-price",
+          "description": "Click the \u0027Price\u0027 header column link to sort.",
+          "elementDetails": "Price ▾ link",
           "elementContext": {
             "text": "Price ▾",
             "id": "sort-price",
@@ -42,15 +44,15 @@
     },
     {
       "promptLine": "Verify that the price in the first table row displays $4.99.",
-      "reasoning": "The instruction is to verify the price in the first table row. I found an element with data-neo-ref \u0027xc_3i41wj\u0027 that contains the text \u0027$4.99\u0027, which matches the expected value.",
+      "reasoning": "The instruction is to verify the price in the first table row. Based on the provided DOM, the element with data-neo-ref \u0027xc_3i41wj\u0027 contains the text \u0027$4.99\u0027, which corresponds to the price of the first item \u0027Aura Premium Sticker\u0027. An ASSERT action is used to verify this text.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "xc_3i41wj",
+          "target": "[data-neo-ref\u003d\u0027xc_3i41wj\u0027]",
           "value": [
             "$4.99"
           ],
-          "description": "Verify that the price in the first table row displays $4.99.",
+          "description": "Verify that the price in the first table row displays $4.99",
           "elementDetails": "$4.99",
           "elementContext": {},
           "replay": "",

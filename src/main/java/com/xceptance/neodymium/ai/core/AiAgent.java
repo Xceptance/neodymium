@@ -138,11 +138,7 @@ public class AiAgent {
         List<String> splitSteps
     ) {}
 
-    /**
-     * Execution-scoped flag: whether JIT per-step PESAP is active for the current execution.
-     * Set once in {@code execute()} and read by {@code getActionsFromLLM()}.
-     */
-    private boolean pesapEnabled = false;
+
 
     /**
      * Execution-scoped reference to the current steps list.
@@ -164,6 +160,8 @@ public class AiAgent {
         }
         return stripped.replaceAll("\\s+", " ").trim();
     }
+
+
 
     /**
      * Constructs a new AiAgent.
@@ -317,22 +315,7 @@ public class AiAgent {
             alignStepsWithPlaybookForReplay(stepsList, stepLines, result, playbook);
 
             // Determine if JIT per-step PESAP should run (only during recording, not replay)
-            final boolean needsPesap;
-            if (playbook != null)
-            {
-                needsPesap = playbook.isRecording();
-            }
-            else
-            {
-                needsPesap = true;
-            }
-
-            boolean pesapEnabledVal = Neodymium.aiConfiguration().pesapEnabled();
-            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.enabled"))
-            {
-                pesapEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.enabled", pesapEnabledVal);
-            }
-            this.pesapEnabled = pesapEnabledVal && needsPesap;
+            final boolean needsPesap = playbook == null || playbook.isRecording();
             this.currentStepsList = stepsList;
 
             // Run local offline semantic linter independently (when enabled)
@@ -492,7 +475,7 @@ public class AiAgent {
                 final String strippedStep = stripAllTags(step);
 
                 final StepDetails stepDetails = result.getSteps().get(i);
-                if (this.pesapEnabled && !alreadySplitSteps.contains(strippedStep))
+                if (!isDirectInstruction(strippedStep) && needsPesap && !alreadySplitSteps.contains(strippedStep))
                 {
                     final Object testInstance = actionExecutor.getTestInstance();
                     final Class<?> testClass = testInstance != null ? testInstance.getClass() : null;
@@ -958,6 +941,14 @@ public class AiAgent {
                             playbookReplayAttempts);
                     executionLog.logWarning("Playbook replay action failed. Retrying recorded actions first...");
                     continue;
+                }
+
+                if (isDirectInstruction(instruction))
+                {
+                    final Throwable finalThrowable = e.getCause() != null ? e.getCause() : e;
+                    SelenideAddons.wrapAssertionError(() -> {
+                        throw new AssertionError(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, " (direct shortcut):\n\n") + finalThrowable.getMessage(), finalThrowable);
+                    });
                 }
 
                 // something went wrong, but we can try to retry
@@ -1663,7 +1654,10 @@ public class AiAgent {
         {
             return null;
         }
-
+        if (stepDetails != null)
+        {
+            stepDetails.setPesapCalled(true);
+        }
         try
         {
             // Build 1-previous / current / 2-next flow context
@@ -1865,7 +1859,7 @@ public class AiAgent {
             }
             final boolean classifyEnabled = classifyEnabledVal;
 
-            if (this.pesapEnabled && classifyEnabled && !isRecoveryAttempt && baseLevel == ContextLevel.AXTREE)
+            if (classifyEnabled && (!isRecoveryAttempt || !stepDetails.isPesapCalled()) && baseLevel == ContextLevel.AXTREE)
             {
                 pesapResult = runPreStepPesap(stepIndex, testClass, stepDetails);
                 if (pesapResult != null)
@@ -2284,7 +2278,13 @@ public class AiAgent {
         return new ArrayList<>();
     }
 
-    private boolean isDirectInstruction(final String instruction)
+    /**
+     * Checks if any registered plugin can directly parse the instruction.
+     *
+     * @param instruction the instruction string
+     * @return true if directly parsed, false otherwise
+     */
+    public static boolean isDirectInstruction(final String instruction)
     {
         for (final AiActionPlugin plugin : ActionRegistry.getAllPlugins())
         {

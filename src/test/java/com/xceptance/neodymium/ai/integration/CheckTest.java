@@ -63,7 +63,7 @@ public class CheckTest extends BaseAiTest
     public final void testCheck()
     {
         final String steps = """
-                Open ${check.test.url}
+                OPEN ${check.test.url}
                 Check the checkbox 'Subscribe to newsletter' (hint: #newsletter)
                 Check the radio button 'Phone' (hint: #contact-phone)
                 Click the button 'Submit Preferences' (hint: #btn-submit)

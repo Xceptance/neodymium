@@ -54,7 +54,7 @@ public class AiIntegrationTest extends AbstractNeodymiumTest
         addPropertiesForTest("testDirectExecutionWithoutValidKey.properties", properties);
 
         NeodymiumTestExecutionSummary result = run(AiBrowserDirectExecutionTest.class);
-        checkPass(result, 6, 0);
+        checkPass(result, 9, 0);
     }
 
     @Test

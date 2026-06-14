@@ -68,7 +68,7 @@ public class NavigateTest extends BaseAiTest
     @NeodymiumTest
     public final void test_Open()
     {
-        final AiExecutionResult r1 = runAi("Open ${posters.storefront.url}", VerificationMode.LIVE_LLM);
+        final AiExecutionResult r1 = runAi("OPEN ${posters.storefront.url}", VerificationMode.LIVE_LLM);
         
         assertThat(r1)
             .hasLlmCalls(0)
@@ -84,7 +84,7 @@ public class NavigateTest extends BaseAiTest
         // close it and start replay
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi("Open ${posters.storefront.url}", VerificationMode.REPLAY);
+        final AiExecutionResult r2 = runAi("OPEN ${posters.storefront.url}", VerificationMode.REPLAY);
         
         assertThat(r2)
             .hasLlmCalls(0)
@@ -107,7 +107,7 @@ public class NavigateTest extends BaseAiTest
     @NeodymiumTest
     public final void test_OpenWithPlaybookChange()
     {
-        final AiExecutionResult r1 = runAi("Open ${posters.storefront.url}", VerificationMode.LIVE_LLM);
+        final AiExecutionResult r1 = runAi("OPEN ${posters.storefront.url}", VerificationMode.LIVE_LLM);
         
         assertThat(r1)
             .hasLlmCalls(0)
@@ -182,25 +182,5 @@ public class NavigateTest extends BaseAiTest
 
         // we are now in posters
         assertEquals("Posters Art Store", Selenide.title());
-    }
-
-    /**
-     * Compares navigation execution in German with and without PESAP enabled, asserting equivalent results.
-     */
-    @NeodymiumTest
-    public final void test_GermanOpen_PesapComparison()
-    {
-        final String steps = "Gehe zu ${posters.storefront.url}";
-
-        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
-        assertEquals("Posters Art Store", Selenide.title());
-
-        this.resetBrowser();
-
-        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
-        assertEquals("Posters Art Store", Selenide.title());
-
-        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
-        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
     }
 }

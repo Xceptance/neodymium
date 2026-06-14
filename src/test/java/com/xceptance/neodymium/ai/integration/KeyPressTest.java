@@ -67,7 +67,7 @@ public class KeyPressTest extends BaseAiTest
     public final void testKeyPress()
     {
         final String steps = """
-                Open ${keyPress.test.url}
+                OPEN ${keyPress.test.url}
                 Type 'Bob' into the 'First Name:' field (hint: #first-name)
                 Press the TAB key on the active element
                 Type 'KeyPress works!' into the comment box
@@ -170,7 +170,7 @@ public class KeyPressTest extends BaseAiTest
     public final void testArrowNavigation()
     {
         final String steps = """
-                Open ${keyPress.extended.url}
+                OPEN ${keyPress.extended.url}
                 Click the navigation container (hint: #nav-container)
                 Press ArrowDown
                 Press ArrowDown
@@ -211,7 +211,7 @@ public class KeyPressTest extends BaseAiTest
     public final void testSingleLetterKeyPress()
     {
         final String steps = """
-                Open ${keyPress.extended.url}
+                OPEN ${keyPress.extended.url}
                 Click the single character input field (hint: #char-input)
                 Press key 'a'
                 Type key 'b'

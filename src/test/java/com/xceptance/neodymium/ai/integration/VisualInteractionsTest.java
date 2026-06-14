@@ -51,7 +51,6 @@ public class VisualInteractionsTest extends BaseAiTest
     @BeforeEach
     public final void setupSandboxUrls()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
         final int httpPort = server.getPort();
         this.baseHttpsUrl = String.format("https://localhost:%d/AuraGlanceTest/shop/sandbox", server.getHttpsPort());
         final String baseHttpUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox", httpPort);
@@ -75,31 +74,6 @@ public class VisualInteractionsTest extends BaseAiTest
 
         assertTrue(result.isSuccess());
         assertThat(result).hasNoPesapCalls();
-        Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
-    }
-
-    /**
-     * Compares visual recognition with and without PESAP enabled, asserting equivalent success.
-     */
-    @NeodymiumTest
-    public final void testSvgIconButtons_PesapComparison()
-    {
-        final String pageUrl = this.baseHttpsUrl + "/svg-icons.html";
-        final String steps = String.format("""
-                Open %s
-                Click the trash icon button (visual).
-                """, pageUrl);
-
-        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
-        assertTrue(rWithPesap.isSuccess());
-        assertThat(rWithPesap).hasNoPesapCalls();
-        Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
-
-        this.resetBrowser();
-
-        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
-        assertTrue(rWithoutPesap.isSuccess());
-        assertThat(rWithoutPesap).hasNoPesapCalls();
         Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
     }
 

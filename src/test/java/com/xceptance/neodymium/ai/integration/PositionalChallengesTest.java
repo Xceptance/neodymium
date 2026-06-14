@@ -64,7 +64,7 @@ public class PositionalChallengesTest extends BaseAiTest
     public final void testPositionalChallenges()
     {
         final String steps = """
-                Open ${positional.test.url}
+                OPEN ${positional.test.url}
                 Click the first element and the text "Clicked: 1" is shown
                 Remove the last item in the list by clicking the "Delete" button and the text "Item D" is no longer shown
                 Click the second "Click Me" button and the text "Clicked: 2" is shown

@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.ForwardTest :: testForward :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -19,7 +19,7 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Open http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -36,7 +36,7 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "back",
+      "promptLine": "BACK",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -49,7 +49,7 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "forward",
+      "promptLine": "FORWARD",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {

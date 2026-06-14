@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserDirectExecutionTest :: testPromptWithComments :: Browser Default",
   "steps": [
     {
-      "promptLine": "open https://xceptance.com",
+      "promptLine": "OPEN https://xceptance.com",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -19,7 +19,7 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "open https://www.xceptance.com/de/",
+      "promptLine": "OPEN https://www.xceptance.com/de/",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {

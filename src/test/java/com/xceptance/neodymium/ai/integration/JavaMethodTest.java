@@ -170,7 +170,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodDirectDefault()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertPriceGreaterThanZero("14.96 €")
             """;
 
@@ -215,7 +215,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodDirectParanthesis()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 (java: assertPriceGreaterThanZero("14.96 €"))
             """;
 
@@ -259,7 +259,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodIndirectDiscovery()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 Verify using the java method assertPriceGreaterThanZero that '14.96 €' is greater than zero
             """;
 
@@ -295,39 +295,13 @@ public class JavaMethodTest extends BaseAiTest
     }
 
     /**
-     * Compares Java method indirect discovery execution with and without PESAP enabled, asserting equivalent results.
-     */
-    @NeodymiumTest
-    public final void testJavaMethodIndirectDiscovery_PesapComparison()
-    {
-        final String steps = """
-                Open ${javaMethod.test.url}
-                Verify using the java method assertPriceGreaterThanZero that '14.96 €' is greater than zero
-            """;
-
-        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
-        final StepDetails stepWithPesap = rWithPesap.getSteps().get(1);
-        assertFalse(stepWithPesap.isDirectParse());
-
-        this.resetBrowser();
-
-        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
-        final StepDetails stepWithoutPesap = rWithoutPesap.getSteps().get(1);
-        assertFalse(stepWithoutPesap.isDirectParse());
-
-        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
-        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
-        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
-    }
-
-    /**
      * Test calling a public instance method defined directly in the active test class.
      */
     @NeodymiumTest
     public final void testJavaMethodLocalInstanceMethod()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertLocalMethod("expected_value")
             """;
 
@@ -370,7 +344,7 @@ public class JavaMethodTest extends BaseAiTest
             Neodymium.reloadAiConfiguration();
 
             final String steps = """
-                    Open ${javaMethod.test.url}
+                    OPEN ${javaMethod.test.url}
                     java: assertCustomValue("custom_value")
                 """;
 
@@ -417,7 +391,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodDefaultAssertions()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertNumbersEqual("[\"10.00\", \"10.00\"]")
                 java: assertMatchesRegex("[\"ORD-12345\", \"^ORD-[0-9]{5}$\"]")
                 java: assertCalculation("0.90 € = (14.96 € + 0.00 €) * 6.00%")
@@ -488,7 +462,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodLocalStaticMethodDirect()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: verifyWelcomeMessage("Assert Action Test")
             """;
 
@@ -522,7 +496,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodLocalStaticMethodWithStoredVariable()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 Get the text of 'h1' and store it as 'myWelcomeMsg'
                 Verify the welcome message length is 18 using the java method verifyWelcomeMessageLength with the stored 'myWelcomeMsg' as parameter
             """;
@@ -557,7 +531,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodLocalStaticMethodCombined()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 Get the text of 'h1' and verify its length is 18 using the java method 'verifyWelcomeMessageLength'
             """;
 
@@ -587,7 +561,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodInlineConvention()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 Verify the price is correct (java: assertPriceGreaterThanZero("14.96 €"))
                 Run a standalone parenthesized command (java: assertLocalMethod("expected_value"))
                 Call a parameterless method (java: assertParameterless())
@@ -624,7 +598,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodVariableInterpolation()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 Get the text of 'h1' and store it as 'headerText'
                 java: verifyWelcomeMessageLength("${headerText}")
             """;
@@ -653,7 +627,7 @@ public class JavaMethodTest extends BaseAiTest
             Neodymium.reloadAiConfiguration();
 
             final String steps = """
-                    Open ${javaMethod.test.url}
+                    OPEN ${javaMethod.test.url}
                     java: assertShadowedMethod("shadow_value")
                 """;
 
@@ -705,7 +679,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodVisibilityError()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertPrivateMethod("test")
             """;
 
@@ -719,7 +693,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodWrapperParamError()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertWrapperParam("123")
             """;
 
@@ -733,7 +707,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodAssertionErrorPropagation()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertFailingMethod("fail")
             """;
 
@@ -750,7 +724,7 @@ public class JavaMethodTest extends BaseAiTest
         overloadedWithArgCalled = false;
 
         final String stepsArg = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertOverloaded("test_val")
             """;
 
@@ -762,7 +736,7 @@ public class JavaMethodTest extends BaseAiTest
         overloadedWithArgCalled = false;
 
         final String stepsNoArg = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertOverloaded
             """;
 

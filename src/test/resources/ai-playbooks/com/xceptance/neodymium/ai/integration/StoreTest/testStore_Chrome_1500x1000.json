@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.StoreTest :: testStore :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/StoreActionTest/testStoreHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/StoreActionTest/testStoreHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -20,35 +20,35 @@
     },
     {
       "promptLine": "Store the order ID value into a variable named \u0027orderId\u0027 (hint: #order-id)",
-      "reasoning": "The instruction asks to store the order ID. Although a hint `#order-id` was provided, the AXTREE does not expose `id` attributes. Falling back to the most semantically relevant element, the textbox with `name\u003d\u0027Verify Order ID:\u0027` and `data-neo-ref\u003d\u0027xc_kvumr8\u0027` is chosen to extract the order ID.",
+      "reasoning": "Stored the text content of the element with id \u0027order-id\u0027 into the variable \u0027orderId\u0027.",
       "actions": [
         {
           "type": "STORE",
-          "target": "[data-neo-ref\u003d\u0027xc_kvumr8\u0027]",
+          "target": "#order-id",
           "value": [
             "orderId"
           ],
-          "description": "Store the order ID value from the textbox into \u0027orderId\u0027",
-          "elementDetails": "Verify Order ID: textbox",
+          "description": "Store the order ID value into a variable named \u0027orderId\u0027",
+          "elementDetails": "order ID",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "AXTREE"
+      "healedContextLevel": "STANDARD"
     },
     {
-      "promptLine": "Type \u0027\u0027 into the verification field (hint: #input-target)",
-      "reasoning": "Typed an empty string into the verification field.",
+      "promptLine": "Type \u0027ORD-987654\u0027 into the verification field (hint: #input-target)",
+      "reasoning": "Typed \u0027ORD-987654\u0027 into the verification field.",
       "actions": [
         {
           "type": "TYPE",
           "target": "#input-target",
           "value": [
-            ""
+            "ORD-987654"
           ],
-          "description": "Type into the verification field",
+          "description": "Type \u0027ORD-987654\u0027 into the verification field",
           "elementDetails": "verification field",
           "elementContext": {
             "id": "input-target",
@@ -64,7 +64,7 @@
     },
     {
       "promptLine": "Click the \u0027Verify\u0027 button (hint: #btn-verify)",
-      "reasoning": "Clicked the \u0027Verify\u0027 button as instructed.",
+      "reasoning": "Clicked the \u0027Verify\u0027 button.",
       "actions": [
         {
           "type": "CLICK",

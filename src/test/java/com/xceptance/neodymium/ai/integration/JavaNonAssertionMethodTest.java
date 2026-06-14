@@ -166,7 +166,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
         Neodymium.getData().put("locale", "de-DE");
 
         final String successSteps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: parseLocalizedBigDecimal("14,96 €")
             """;
 
@@ -176,7 +176,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
             .hasActionsCount(2);
 
         final String failingSteps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: parseLocalizedBigDecimal("abc")
             """;
 
@@ -190,7 +190,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
     public final void testJavaNonAssertionMethodsCorrectness()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertParsedBigDecimal("14,96 €, 14.96")
                 java: assertDisplayPrecision("$0.90, 2")
                 java: assertIsNumericOrPrice("zł 150, true")
@@ -214,7 +214,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
         // Test German locale (comma decimal separator)
         Neodymium.getData().put("locale", "de-DE");
         final String germanSteps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertParsedBigDecimal("1.234,56, 1234.56")
             """;
         runAi(germanSteps, VerificationMode.LIVE_LLM);
@@ -224,7 +224,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
         // Test US locale (dot decimal separator)
         Neodymium.getData().put("locale", "en-US");
         final String usSteps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertParsedBigDecimal("1,234.56, 1234.56")
             """;
         runAi(usSteps, VerificationMode.LIVE_LLM);

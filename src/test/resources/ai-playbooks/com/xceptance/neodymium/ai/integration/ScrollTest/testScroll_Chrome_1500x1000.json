@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.ScrollTest :: testScroll :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/ScrollActionTest/testScrollHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/ScrollActionTest/testScrollHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -37,12 +37,12 @@
     },
     {
       "promptLine": "Click the bottom button (hint: #btn-bottom)",
-      "reasoning": "Clicked the bottom button as instructed.",
+      "reasoning": "Successfully translated the instruction to click the bottom button.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#btn-bottom",
-          "description": "Click the bottom button",
+          "description": "Click bottom button",
           "elementDetails": "bottom button",
           "elementContext": {
             "text": "Bottom Button",
