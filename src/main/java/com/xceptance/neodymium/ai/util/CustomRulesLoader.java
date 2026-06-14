@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
  * Supports loading from classpath resources, filesystem paths, and default fallback files.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class CustomRulesLoader
 {

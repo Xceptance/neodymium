@@ -32,7 +32,7 @@ We will implement a custom scanner that processes the step string character by c
 
 ### 2. Lexical Validation Rules
 For each extracted parenthesized group:
-- Trim the contents and check if it starts with a known directive prefix (case-insensitively): `visual`, `glance`, `soft`, `optional`, `bug`, `timeout`, `hint`, `selector`.
+- Trim the contents and check if it starts with a known directive prefix (case-insensitively): `visual`, `layout`, `soft`, `optional`, `bug`, `timeout`, `hint`, `selector`.
 - If it starts with one of these prefixes, it is validated:
   - If a colon is expected (e.g., `hint:`, `selector:`, `timeout:`, and optionally `bug:`), it checks that the value is present and non-empty.
   - For `timeout`, it verifies that the parameter value is a valid integer optionally followed by `ms` or `s`.

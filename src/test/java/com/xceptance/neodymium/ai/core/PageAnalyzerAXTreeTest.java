@@ -40,6 +40,7 @@ import com.codeborne.selenide.WebDriverRunner;
  * extraction, resolved CDP node references, and cross-browser fallbacks.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 class PageAnalyzerAXTreeTest
 {

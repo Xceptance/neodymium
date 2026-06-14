@@ -31,6 +31,7 @@ import com.xceptance.neodymium.ai.core.ContextLevel;
  * and optional expected visual/functional bug and failure annotations.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class PlaybookStep
 {

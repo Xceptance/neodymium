@@ -18,7 +18,6 @@
  */
 package com.xceptance.neodymium.ai.core;
 
-// AI-generated: Gemini 3.5 Flash
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -43,6 +42,7 @@ import com.xceptance.neodymium.ai.playbook.PlaybookStep;
  * in a ConcurrentHashMap to allow runtime reloading.
  *
  * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiAgentPrompts
 {

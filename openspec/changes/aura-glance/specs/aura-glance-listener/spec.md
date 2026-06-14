@@ -27,11 +27,11 @@ The system MUST extract the structural and visual layout metadata using a single
 
 ---
 
-### Requirement: Playbook tag routing for (glance)
-Neodymium's routing system SHALL scan playbook instructions for case-insensitive `(glance)` tags and route matching steps directly to `ContextLevel.VISUAL` on the very first turn.
+### Requirement: Playbook tag routing for (visual)
+Neodymium's routing system SHALL scan playbook instructions for case-insensitive `(visual)` tags and route matching steps directly to `ContextLevel.VISUAL` on the very first turn.
 
-#### Scenario: Route step containing glance tag
-- **WHEN** the user runs a step `Observe visual consistency (glance)`
+#### Scenario: Route step containing visual tag
+- **WHEN** the user runs a step `Observe visual consistency (visual)`
 - **THEN** the AI agent initializes execution directly at `ContextLevel.VISUAL`, loading full DOM information and the current page screenshot without context escalation.
 
 ---

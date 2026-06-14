@@ -48,6 +48,7 @@ import dev.langchain4j.model.output.TokenUsage;
  * Tracks token usage via {@link AiStats}.
   *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
 */
 public class LlmClient
 {

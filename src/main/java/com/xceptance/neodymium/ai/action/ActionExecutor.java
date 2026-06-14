@@ -57,6 +57,7 @@ import io.qameta.allure.Step;
  * strategies.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public class ActionExecutor {
     private static final Logger LOG = LoggerFactory.getLogger(ActionExecutor.class);

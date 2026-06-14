@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 2.5 Pro
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.BaseAiTest;
@@ -39,6 +38,9 @@ import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 /**
  * Integration test verifying AI execution of non-assertion helper methods from AiAssertions.
+ *
+ * @author AI-generated: Gemini 2.5 Pro
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")

@@ -21,6 +21,7 @@
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the \"Menu\" button and then click the \"Create Account\" link in the dropdown and then the text \"Account Form Opened!\" is shown",
       "healedContextLevel": "AXTREE"
     },
     {
@@ -43,11 +44,12 @@
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the \"Menu\" button and then click the \"Create Account\" link in the dropdown and then the text \"Account Form Opened!\" is shown",
       "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Verify the text \"Account Form Opened!\" is shown",
-      "reasoning": "The instruction is to verify the text \u0027Account Form Opened!\u0027. I found an element with id \u0027status\u0027 that contains this text and created an ASSERT action for it.",
+      "reasoning": "Verified that the text \u0027Account Form Opened!\u0027 is present in the element with id \u0027status\u0027.",
       "actions": [
         {
           "type": "ASSERT",
@@ -63,6 +65,7 @@
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the \"Menu\" button and then click the \"Create Account\" link in the dropdown and then the text \"Account Form Opened!\" is shown",
       "healedContextLevel": "STANDARD"
     }
   ]

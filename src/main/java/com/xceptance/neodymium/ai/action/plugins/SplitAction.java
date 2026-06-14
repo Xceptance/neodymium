@@ -27,7 +27,8 @@ import com.xceptance.neodymium.ai.action.AiActionPlugin;
  * Action plugin that signals a dynamic step split during execution.
  * Conceptually, it represents a boundary where a compound instruction has been split.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class SplitAction implements AiActionPlugin
 {

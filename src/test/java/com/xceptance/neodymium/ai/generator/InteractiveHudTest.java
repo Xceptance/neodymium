@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
  * Unit tests for the {@link InteractiveHud} class, verifying the breakpoint parsing logic.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 final class InteractiveHudTest
 {

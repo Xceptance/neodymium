@@ -39,7 +39,8 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Test cases verifying template placeholder resolution and variable lookup logging.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiTemplateResolutionTest extends BaseAiOfflineTest
 {

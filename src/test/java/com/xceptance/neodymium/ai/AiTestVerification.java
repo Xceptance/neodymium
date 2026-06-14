@@ -26,7 +26,8 @@ import java.lang.annotation.Target;
 /**
  * Declares the sequence of verification modes to run for an AI test case.
  * 
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Target({ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)

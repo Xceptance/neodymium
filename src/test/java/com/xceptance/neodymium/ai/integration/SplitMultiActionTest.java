@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 2.5 Pro
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -25,7 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
@@ -40,6 +39,9 @@ import com.xceptance.neodymium.util.Neodymium;
  * This class tests the dual-layer splitting strategy:
  * 1. Upfront splitting during the JIT Pre-step Execution Static Analysis Phase (PESAP).
  * 2. Runtime fallback splitting when a standard LLM execution returns a SPLIT action.
+ * 
+ * @author AI-generated: Gemini 2.5 Pro
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -59,7 +61,7 @@ public class SplitMultiActionTest extends BaseAiTest
 
     /**
      * Verifies upfront step splitting (JIT PESAP) during live execution
-     * and offline playback.
+     * and offline playbook.
      * <p>
      * When PESAP is enabled, a compound instruction is split upfront before
      * standard DOM parsing or LLM calls take place.
@@ -72,31 +74,34 @@ public class SplitMultiActionTest extends BaseAiTest
                 Click the "Menu" button and then click the "Create Account" link in the dropdown and then the text "Account Form Opened!" is shown
             """;
 
-        final String apiKey = Neodymium.aiConfiguration().aiApiKey();
-        if (apiKey != null && !apiKey.trim().isEmpty())
-        {
-            // Execute the compound step under LIVE_LLM mode.
-            // This should split the step upfront into two separate execution steps.
-            final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        // Execute the compound step under LIVE_LLM mode.
+        // This should split the step upfront into three separate execution steps.
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
-            // Expect exactly 2 steps to have been executed (split from the original single compound step)
-            assertEquals(2, r1.getSteps().size());
-            assertEquals("Click the \"Menu\" button", r1.getSteps().get(0).getExpandedInstruction());
-            assertEquals(steps.trim(), r1.getSteps().get(0).getOriginalUnsplitInstruction());
+        // Expect exactly 3 steps to have been executed (split from the original single compound step)
+        assertThat(r1)
+            .hasStepsCount(3)
+            .step(0, s -> s.hasExpandedInstruction("Click the \"Menu\" button")
+                           .hasOriginalUnsplitInstruction(steps.trim()))
+            .step(1, s -> s.hasExpandedInstruction("Click the \"Create Account\" link in the dropdown")
+                           .hasOriginalUnsplitInstruction(steps.trim()))
+            .step(2, s -> s.hasExpandedInstruction("Verify the text \"Account Form Opened!\" is shown")
+                           .hasOriginalUnsplitInstruction(steps.trim()));
 
-            // Verify the SUT has updated correctly
-            assertEquals("Account Form Opened!", Selenide.$("#status").text());
+        // Verify the SUT has updated correctly
+        assertEquals("Account Form Opened!", Selenide.$("#status").text());
 
-            this.resetBrowser();
-            Selenide.open(url);
-        }
+        this.resetBrowser();
+        Selenide.open(url);
 
         // Verify that replaying the playbook offline runs successfully without LLM calls,
         // and correctly aligns the steps list using the saved playbook's originalUnsplitInstruction field.
         final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
-        assertEquals(2, r2.getSteps().size());
-        assertTrue(r2.getSteps().get(0).isReplayed());
-        assertTrue(r2.getSteps().get(1).isReplayed());
+        assertThat(r2)
+            .hasStepsCount(3)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed());
         assertEquals("Account Form Opened!", Selenide.$("#status").text());
     }
 }

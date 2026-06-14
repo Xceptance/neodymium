@@ -33,6 +33,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * are conditionally hidden, utilizing the case-insensitive '(optional)' tag.
  * 
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1024x768")
 public final class OptionalBannerTest extends BaseAiTest

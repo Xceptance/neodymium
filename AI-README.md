@@ -466,13 +466,11 @@ During step execution, the logs will verify the starting context being optimized
 ---
 
 #### ⚙️ Configuration Properties
-You can fully configure or granularly disable the Pre-Execution Static Analysis Phase (PESAP) and its sub-phases via your `neodymium.properties`, `ai.properties`, or system properties.
+You can configure or disable the PESAP semantic linter via your `neodymium.properties`, `ai.properties`, or system properties. PESAP classification (context level prediction and step splitting) is always active during playbook recording and cannot be disabled.
 
 | Property | Default Value | Description |
 | :--- | :--- | :--- |
-| `neodymium.ai.pesap.enabled` | `true` | **Master Switch**. Enables or disables the entire PESAP phase. If set to `false`, Neodymium skips the remote static query entirely and falls back directly to the local offline linter. |
-| `neodymium.ai.pesap.classify.enabled` | `true` | **Context Classification Sub-Switch**. Controls whether the static starting context level prediction query is run. If set to `false`, steps will start at the default minimum context level (`AXTREE`). |
-| `neodymium.ai.pesap.linter.enabled` | `true` | **Semantic Linter Sub-Switch**. Controls whether the LLM-powered static semantic step linting query is run. If set to `false`, remote semantic warnings are skipped. |
+| `neodymium.ai.pesap.linter.enabled` | `true` | **Semantic Linter Switch**. Controls whether the LLM-powered static semantic step linting query is run. If set to `false`, remote semantic warnings are skipped. |
 | `neodymium.ai.pesap.custom.file` | *(empty)* | **Custom Linter Rules File**. Specifies a path to a custom Markdown (.md) or Text (.txt) rules file to extend the default PESAP semantic linter rules list dynamically. |
 
 ##### 📝 Extending PESAP Linter with Custom Rules
@@ -507,34 +505,28 @@ The rules resolver dynamically evaluates and loads the rules in this exact order
 4. **Default Classpath Fallbacks**: Checks for `ai-prompts/pesap-custom-rules.md` (and then `ai-prompts/pesap-custom-rules.txt`) on the classpath.
 5. **Disabled State**: Proceeds with default standard core linter rules only.
 
-##### Example Configuration (Disable PESAP completely):
+##### Example Configuration (Disable LLM Linter):
 ```properties
-neodymium.ai.pesap.enabled=false
-```
-
-##### Example Configuration (Run Classification but Disable LLM Linter):
-```properties
-neodymium.ai.pesap.classify.enabled=true
 neodymium.ai.pesap.linter.enabled=false
 ```
 
 > [!NOTE]
-> If PESAP is disabled or a remote query fails, Neodymium seamlessly falls back to the **Local Offline Step Linter** and starts execution at the default minimum context level (`AXTREE`), ensuring high reliability under all circumstances.
+> If the remote query fails, Neodymium seamlessly falls back to the **Local Offline Step Linter** and starts execution at the default minimum context level (`AXTREE`), ensuring high reliability under all circumstances.
 
 ##### 🔄 Dynamic YAML and Thread-Local Overrides
 
-For maximum convenience, you can override any PESAP configuration properties (`neodymium.ai.pesap.enabled`, `neodymium.ai.pesap.classify.enabled`, `neodymium.ai.pesap.linter.enabled`) directly inside your YAML playbook files or dynamically in code. Neodymium resolves these overrides with the following precedence order:
+For maximum convenience, you can override any PESAP configuration properties (`neodymium.ai.pesap.linter.enabled`) directly inside your YAML playbook files or dynamically in code. Neodymium resolves these overrides with the following precedence order:
 
 1. **Local (Dataset/Iteration Level) YAML Overrides**: Defined inside a specific dataset under `data:`. This has the highest precedence.
 2. **Global (Root Level) YAML Overrides**: Defined at the root of the playbook YAML file. Automatically propagates to all datasets/iterations unless overridden locally.
-3. **Thread-Local Programmatic Overrides**: Programmatically set via the thread-local context `Neodymium.getData().put("neodymium.ai.pesap.enabled", "false")`.
+3. **Thread-Local Programmatic Overrides**: Programmatically set via the thread-local context `Neodymium.getData().put("neodymium.ai.pesap.linter.enabled", "false")`.
 4. **Static Configuration**: Defined statically in `neodymium.properties`, `ai.properties`, or system properties.
 
 ###### Example: Overriding at Playbook Root Level
-To turn off PESAP completely for all iterations defined in a specific playbook:
+To turn off the PESAP linter for all iterations defined in a specific playbook:
 
 ```yaml
-neodymium.ai.pesap.enabled: false
+neodymium.ai.pesap.linter.enabled: false
 
 steps: |
   Open the homepage.
@@ -823,8 +815,8 @@ To ensure maximum test robustness and eliminate AI execution ambiguity before re
 
 #### Execution Modes
 The linter has two operational modes based on configuration:
-1. **Remote LLM-Powered Linter (PESAP Enabled)**: When `neodymium.ai.pesap.enabled=true` (the default), the semantic linter runs directly as part of the Pre-Execution Static Analysis Phase (PESAP) remote LLM query. In this mode, the LLM analyzes all steps statically for semantic and instruction anti-patterns in whatever language the playbook is written (English, German, etc.), leveraging deep language understanding instead of simple heuristics.
-2. **Local Offline Linter (PESAP Disabled / Fallback)**: If PESAP is disabled or fails, Neodymium falls back to the high-performance local offline `StepLinter` which uses regex and keyword heuristics to inspect steps statically.
+1. **Remote LLM-Powered Linter**: When `neodymium.ai.pesap.linter.enabled=true` (the default) and the playbook is recording, the semantic linter runs directly as part of the Pre-Execution Static Analysis Phase (PESAP) remote LLM query. In this mode, the LLM analyzes all steps statically for semantic and instruction anti-patterns in whatever language the playbook is written (English, German, etc.), leveraging deep language understanding instead of simple heuristics.
+2. **Local Offline Linter (Fallback)**: If remote linting is disabled or fails, Neodymium falls back to the high-performance local offline `StepLinter` which uses regex and keyword heuristics to inspect steps statically.
 
 In both modes, any detected warnings are clearly logged in the developer console with line numbers and filename tags:
 ```text

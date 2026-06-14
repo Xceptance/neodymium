@@ -35,10 +35,11 @@ import com.xceptance.neodymium.util.Neodymium;
  * <p>
  * This class automatically handles the boilerplate configuration required to test
  * Neodymium Aura AI features offline, including backing up and restoring system properties,
- * configuring dummy credentials to satisfy validation guards, disabling PESAP analysis, 
+ * configuring dummy credentials to satisfy validation guards, 
  * and initializing mock stand-ins (LLM client, SUT page context, Selenium executor).
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public abstract class BaseAiOfflineTest
 {

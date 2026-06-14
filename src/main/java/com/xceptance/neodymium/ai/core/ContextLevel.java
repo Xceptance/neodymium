@@ -28,6 +28,7 @@ package com.xceptance.neodymium.ai.core;
  * different strategy, not a repeated attempt with the same data.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public enum ContextLevel
 {

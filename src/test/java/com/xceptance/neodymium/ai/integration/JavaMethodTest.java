@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -40,6 +39,9 @@ import com.xceptance.neodymium.util.Neodymium;
  * Integration test verifying AI java method commands, including direct parsing,
  * indirect discovery via LLM mapping, local instance method calls, dynamic custom utility class
  * registration, and multiple default assertion types.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -182,17 +184,9 @@ public class JavaMethodTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
-            .hasActionsCount(2);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertTrue(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertTrue(stepDetails1.getLlmCalls().isEmpty());
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse());
 
         this.resetBrowser();
 
@@ -204,7 +198,9 @@ public class JavaMethodTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
-            .hasActionsCount(2);
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
     }
 
     /**
@@ -227,17 +223,9 @@ public class JavaMethodTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
-            .hasActionsCount(2);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertTrue(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertTrue(stepDetails1.getLlmCalls().isEmpty());
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse());
 
         this.resetBrowser();
 
@@ -249,7 +237,9 @@ public class JavaMethodTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
-            .hasActionsCount(2);
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
     }
 
     /**
@@ -271,15 +261,9 @@ public class JavaMethodTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
-            .hasActionsCount(2);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertFalse(stepDetails1.isDirectParse());
-        assertEquals(1, stepDetails1.getLlmCalls().size());
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isLlm(1));
 
         this.resetBrowser();
 
@@ -291,7 +275,9 @@ public class JavaMethodTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
-            .hasActionsCount(2);
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
     }
 
     /**

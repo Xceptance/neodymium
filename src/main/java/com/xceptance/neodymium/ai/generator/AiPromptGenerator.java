@@ -48,6 +48,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * browser interaction.
   *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
 */
 public class AiPromptGenerator {
     private static final Logger LOG = LoggerFactory.getLogger(AiPromptGenerator.class);

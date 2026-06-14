@@ -21,7 +21,8 @@ package com.xceptance.neodymium.ai;
 /**
  * Execution modes for AI test verification phases.
  * 
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public enum VerificationMode
 {

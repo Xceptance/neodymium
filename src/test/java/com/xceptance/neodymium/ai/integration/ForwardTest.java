@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -39,6 +38,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Integration test verifying AI forward navigation commands and their validation flow
  * in both live LLM and replay modes.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -80,27 +82,11 @@ public class ForwardTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(4)
             .hasReplays(0)
-            .hasActionsCount(4);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertTrue(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertTrue(stepDetails1.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails2 = r1.getSteps().get(2);
-        assertTrue(stepDetails2.isDirectParse());
-        assertFalse(stepDetails2.isReplayed());
-        assertTrue(stepDetails2.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails3 = r1.getSteps().get(3);
-        assertTrue(stepDetails3.isDirectParse());
-        assertFalse(stepDetails3.isReplayed());
-        assertTrue(stepDetails3.getLlmCalls().isEmpty());
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse())
+            .step(2, s -> s.isDirectParse())
+            .step(3, s -> s.isDirectParse());
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
 
@@ -115,27 +101,11 @@ public class ForwardTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(4)
-            .hasActionsCount(4);
-
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep1 = r2.getSteps().get(1);
-        assertFalse(replayStep1.isDirectParse());
-        assertTrue(replayStep1.isReplayed());
-        assertTrue(replayStep1.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep2 = r2.getSteps().get(2);
-        assertFalse(replayStep2.isDirectParse());
-        assertTrue(replayStep2.isReplayed());
-        assertTrue(replayStep2.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep3 = r2.getSteps().get(3);
-        assertFalse(replayStep3.isDirectParse());
-        assertTrue(replayStep3.isReplayed());
-        assertTrue(replayStep3.getLlmCalls().isEmpty());
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed());
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
     }
@@ -161,27 +131,11 @@ public class ForwardTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(3)
             .hasReplays(0)
-            .hasActionsCount(4);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertTrue(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertTrue(stepDetails1.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails2 = r1.getSteps().get(2);
-        assertTrue(stepDetails2.isDirectParse());
-        assertFalse(stepDetails2.isReplayed());
-        assertTrue(stepDetails2.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails3 = r1.getSteps().get(3);
-        assertFalse(stepDetails3.isDirectParse());
-        assertFalse(stepDetails3.isReplayed());
-        assertEquals(1, stepDetails3.getLlmCalls().size());
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse())
+            .step(2, s -> s.isDirectParse())
+            .step(3, s -> s.isLlm(1));
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
 
@@ -196,27 +150,11 @@ public class ForwardTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(4)
-            .hasActionsCount(4);
-
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep1 = r2.getSteps().get(1);
-        assertFalse(replayStep1.isDirectParse());
-        assertTrue(replayStep1.isReplayed());
-        assertTrue(replayStep1.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep2 = r2.getSteps().get(2);
-        assertFalse(replayStep2.isDirectParse());
-        assertTrue(replayStep2.isReplayed());
-        assertTrue(replayStep2.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep3 = r2.getSteps().get(3);
-        assertFalse(replayStep3.isDirectParse());
-        assertTrue(replayStep3.isReplayed());
-        assertTrue(replayStep3.getLlmCalls().isEmpty());
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed());
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
     }
@@ -242,27 +180,11 @@ public class ForwardTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
-            .hasActionsCount(4);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertTrue(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertTrue(stepDetails1.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails2 = r1.getSteps().get(2);
-        assertFalse(stepDetails2.isDirectParse());
-        assertFalse(stepDetails2.isReplayed());
-        assertEquals(1, stepDetails2.getLlmCalls().size());
-
-        final StepDetails stepDetails3 = r1.getSteps().get(3);
-        assertFalse(stepDetails3.isDirectParse());
-        assertFalse(stepDetails3.isReplayed());
-        assertEquals(1, stepDetails3.getLlmCalls().size());
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse())
+            .step(2, s -> s.isLlm(1))
+            .step(3, s -> s.isLlm(1));
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
 
@@ -277,27 +199,11 @@ public class ForwardTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(4)
-            .hasActionsCount(4);
-
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep1 = r2.getSteps().get(1);
-        assertFalse(replayStep1.isDirectParse());
-        assertTrue(replayStep1.isReplayed());
-        assertTrue(replayStep1.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep2 = r2.getSteps().get(2);
-        assertFalse(replayStep2.isDirectParse());
-        assertTrue(replayStep2.isReplayed());
-        assertTrue(replayStep2.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep3 = r2.getSteps().get(3);
-        assertFalse(replayStep3.isDirectParse());
-        assertTrue(replayStep3.isReplayed());
-        assertTrue(replayStep3.getLlmCalls().isEmpty());
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed());
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
     }

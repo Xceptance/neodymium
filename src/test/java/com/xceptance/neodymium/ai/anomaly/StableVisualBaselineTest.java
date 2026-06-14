@@ -33,6 +33,7 @@ import com.xceptance.neodymium.ai.playbook.Playbook;
  * succeeds instantly offline by matching the cached baseline dHash.
  * 
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1024x768")
 public final class StableVisualBaselineTest extends BaseAiTest
@@ -45,7 +46,7 @@ public final class StableVisualBaselineTest extends BaseAiTest
         open(shopUrl);
 
         // 1. Establish the baseline run (calls Gemini)
-        Neodymium.ai().execute("Observe page visual consistency (glance)");
+        Neodymium.ai().execute("Observe page visual consistency (visual)");
 
         final Playbook playbook = Neodymium.getAiPlaybook();
         if (playbook != null)
@@ -57,7 +58,7 @@ public final class StableVisualBaselineTest extends BaseAiTest
         final long startTime = System.nanoTime();
 
         // 2. Immediate second run should hit the local dHash visual playbook cache
-        Neodymium.ai().execute("Observe page visual consistency (glance)");
+        Neodymium.ai().execute("Observe page visual consistency (visual)");
 
         final long durationUs = (System.nanoTime() - startTime) / 1000;
         

@@ -56,6 +56,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * user interaction, stepping, failure recovery, skipping, and fast-forward modes.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class InteractiveHudSelenideTest extends BaseAiTest
 {

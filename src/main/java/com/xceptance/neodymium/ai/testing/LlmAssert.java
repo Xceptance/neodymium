@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.testing;
 
 import org.junit.jupiter.api.Assertions;
@@ -34,6 +33,9 @@ import com.xceptance.neodymium.util.Neodymium;
  * Specialized test helper class providing LLM-assisted semantic assertions.
  * Allows verifying unstructured text (like reasoning, explanations, or outputs)
  * against natural language criteria or checking semantic equivalence between two texts.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class LlmAssert
 {

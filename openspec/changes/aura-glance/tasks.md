@@ -21,7 +21,7 @@
 - [ ] 4.1 Implement `AuraGlanceAuditor` that prepares the multimodal prompts (Screenshot PNG + Aura AST layout text) and queries Gemini.
 - [ ] 4.2 Define the structured JSON schema for visual anomalies returned by the LLM (type, severity, description, coordinates).
 - [ ] 4.3 Implement local dHash visual playbook caching (`VisualPlaybookCache`) that stores approved baselines and computes local Hamming distance to bypass Gemini calls offline for identical screens.
-- [ ] 4.4 Update `AiAgent.java` step router to recognize the case-insensitive `(glance)` tag and route steps directly to `ContextLevel.VISUAL`.
+- [ ] 4.4 Update `AiAgent.java` step router to recognize the case-insensitive `(visual)` tag and route steps directly to `ContextLevel.VISUAL`.
 - [ ] 4.5 Refactor `AiAgent.java` tag compiler to separate `OPTIONAL_TAG_PATTERN` and `SOFT_TAG_PATTERN`.
 - [ ] 4.6 Implement decoupled handlers in `AiAgent.executeStep()`:
   - If `(optional)`: skip silently without warning, logging `status: "SKIPPED"` (or `"PASSED"`).

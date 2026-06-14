@@ -48,6 +48,10 @@ import com.xceptance.neodymium.ai.core.AiStats;
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })
+/**
+ * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
+ */
 public final class ContrastWarningTest extends BaseAiTest
 {
     private LogCaptureAppender logAppender;
@@ -92,7 +96,7 @@ public final class ContrastWarningTest extends BaseAiTest
             Neodymium.ai().execute("Click the 'Inject Low Contrast' toggle. (hint: label[for='toggle-contrast'])");
 
             // Run audit in non-blocking warning mode; it should NOT throw exception but record warning
-            Neodymium.ai().execute("Observe page visual consistency (soft) (glance)");
+            Neodymium.ai().execute("Observe page visual consistency (soft) (visual)");
         });
 
         // 1. Programmatic assertions on internal stats

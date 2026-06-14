@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
  * PESAP token usage counters, overall totals, resets, and summary printouts.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 class AiStatsTest
 {

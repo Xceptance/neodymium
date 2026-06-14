@@ -1,0 +1,74 @@
+{
+  "id": "com.xceptance.neodymium.ai.anomaly.LayoutShiftAnomalyTest :: testLayoutShiftVisualAnomaly :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
+      "reasoning": "",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls trigger button",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Click the \u0027Inject Layout Misalignment\u0027 toggle. (hint: label[for\u003d\u0027toggle-shift\u0027])",
+      "reasoning": "Clicked the \u0027Inject Layout Misalignment\u0027 toggle.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "label[for\u003d\u0027toggle-shift\u0027]",
+          "description": "Click the \u0027Inject Layout Misalignment\u0027 toggle.",
+          "elementDetails": "\u0027Inject Layout Misalignment\u0027 toggle",
+          "elementContext": {
+            "classes": "control-label",
+            "text": "Inject Layout Misalignment\nApplies asymmetrical shifts to broken grids.",
+            "tagName": "label"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Click the close button of the controls drawer. (hint: #aura-close)",
+      "reasoning": "Clicked the close button of the controls drawer.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-close",
+          "description": "Click the close button",
+          "elementDetails": "close button of the controls drawer",
+          "elementContext": {
+            "classes": "drawer-close",
+            "text": "×",
+            "id": "aura-close",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "actions": [],
+      "expectedFailure": false
+    }
+  ]
+}

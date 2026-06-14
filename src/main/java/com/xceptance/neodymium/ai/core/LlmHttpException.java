@@ -21,7 +21,8 @@ package com.xceptance.neodymium.ai.core;
 /**
  * Exception representing an HTTP communication error during an LLM call.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class LlmHttpException extends RuntimeException
 {

@@ -35,7 +35,8 @@ import com.xceptance.neodymium.ai.core.LlmMode;
  * It simulates network latency delays, maps HTTP error codes (e.g. HTTP 429 / 503) into production exceptions,
  * and maintains mock token footprints for verification.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class MockLlmClient extends LlmClient
 {
@@ -105,6 +106,23 @@ public final class MockLlmClient extends LlmClient
      */
     private String nextResponse(final LlmMode callMode)
     {
+        if (callMode == LlmMode.PESAP)
+        {
+            final AiMockResponse peek = this.responseQueue.peek();
+            if (peek != null && peek.getResponseText() != null && peek.getResponseText().contains("contextLevel"))
+            {
+                final AiMockResponse response = this.responseQueue.poll();
+                final long in = response.getInputTokens() != null ? response.getInputTokens() : 0L;
+                final long out = response.getOutputTokens() != null ? response.getOutputTokens() : 0L;
+                final long cached = response.getCachedTokens() != null ? response.getCachedTokens() : 0L;
+                this.mockStats.record(callMode, in, out, cached);
+                return response.getResponseText();
+            }
+
+            this.mockStats.record(LlmMode.PESAP, 0L, 0L, 0L);
+            return "{\"contextLevel\":\"AXTREE\",\"stepType\":\"INTERACTION\",\"expectedTargetTagName\":\"body\",\"pageNavigation\":false,\"requiresJavaMethods\":false,\"direction\":\"\"}";
+        }
+
         final AiMockResponse response = this.responseQueue.poll();
         if (response == null)
         {

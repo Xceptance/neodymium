@@ -29,7 +29,8 @@ import com.xceptance.neodymium.ai.action.Action;
 /**
  * Aggregates results of an AI execution run.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiExecutionResult
 {

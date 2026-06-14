@@ -1,0 +1,93 @@
+{
+  "id": "com.xceptance.neodymium.ai.anomaly.ClippedAnomalyTest :: testClippedLabelVisualAnomaly :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/a11y/index.html",
+      "reasoning": "Navigating to the provided URL as instructed.",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/a11y/index.html"
+          ],
+          "description": "Open the specified URL",
+          "elementDetails": "http://localhost:43377/AuraGlanceTest/a11y/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+      "reasoning": "Found the \u0027Aura Defect Controls\u0027 trigger button by its ID \u0027aura-trigger\u0027 and title attribute, and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button",
+          "elementDetails": "Aura Defect Controls button",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Toggle \u0027Inject Clipped Text\u0027.",
+      "reasoning": "Clicked the \u0027Inject Clipped Text\u0027 button to toggle the feature as requested.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_dnf3sc\u0027]",
+          "description": "Toggle \u0027Inject Clipped Text\u0027",
+          "elementDetails": "Inject Clipped Text",
+          "elementContext": {
+            "classes": "control-name",
+            "text": "Inject Clipped Text",
+            "tagName": "span"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Click the close button",
+      "reasoning": "The instruction is to click the \u0027close button\u0027. Based on the previous steps where the \u0027Aura Defect Controls\u0027 drawer was opened, the button with id \u0027aura-close\u0027 and text \u0027×\u0027 is the appropriate target to close that drawer.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-close",
+          "description": "Click the close button for the Aura Chaos Controls drawer",
+          "elementDetails": "Aura Chaos Controls close button",
+          "elementContext": {
+            "classes": "drawer-close",
+            "text": "×",
+            "id": "aura-close",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "actions": [],
+      "expectedFailure": false
+    }
+  ]
+}
