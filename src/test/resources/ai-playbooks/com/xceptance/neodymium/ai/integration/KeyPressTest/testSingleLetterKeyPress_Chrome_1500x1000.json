@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.KeyPressTest :: testSingleLetterKeyPress :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/TypeActionTest/keyPressExtended.html",
+      "promptLine": "OPEN http://localhost:43377/TypeActionTest/keyPressExtended.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -50,7 +50,7 @@
             "a"
           ],
           "description": "Press key \u0027a\u0027",
-          "elementDetails": "Keyboard key \u0027a\u0027",
+          "elementDetails": "key \u0027a\u0027",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -61,7 +61,7 @@
     },
     {
       "promptLine": "Type key \u0027b\u0027",
-      "reasoning": "The instruction is to type a key \u0027b\u0027, so a KEY_PRESS action with value \u0027b\u0027 is used.",
+      "reasoning": "The instruction is to type a key, so the KEY_PRESS action is used with \u0027b\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -69,7 +69,7 @@
             "b"
           ],
           "description": "Type key \u0027b\u0027",
-          "elementDetails": "Keyboard key \u0027b\u0027",
+          "elementDetails": "key \u0027b\u0027",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -80,7 +80,7 @@
     },
     {
       "promptLine": "Press \u0027c\u0027",
-      "reasoning": "The instruction is to press the \u0027c\u0027 key, which directly maps to a KEY_PRESS action with \u0027c\u0027 as the value.",
+      "reasoning": "The instruction is to press the \u0027c\u0027 key, which directly maps to the KEY_PRESS action with \u0027c\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",

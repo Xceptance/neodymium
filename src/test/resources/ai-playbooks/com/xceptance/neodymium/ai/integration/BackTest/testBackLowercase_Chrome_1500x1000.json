@@ -1,8 +1,8 @@
 {
-  "id": "com.xceptance.neodymium.ai.integration.BackTest :: testGoBack :: Browser Chrome_1500x1000",
+  "id": "com.xceptance.neodymium.ai.integration.BackTest :: testBackLowercase :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -19,7 +19,7 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Open http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -36,17 +36,19 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "navigate back",
-      "reasoning": "directly parsed or local validation succeeded",
+      "promptLine": "back",
+      "reasoning": "The user requested to navigate back, so a BACK action is performed.",
       "actions": [
         {
           "type": "BACK",
-          "description": "Go back",
+          "description": "Navigate back in browser history",
+          "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     }
   ]
 }

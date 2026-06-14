@@ -67,7 +67,7 @@ public final class SearchAndSubmitTest extends BaseAiTest
     public final void testSearchAndSubmitEnglish()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Type 'bear' into the search box and submit the search
                 Verify that the search results title contains 'bear'
                 Verify that the page displays '3 results found.'

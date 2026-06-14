@@ -55,11 +55,10 @@ public abstract class BaseAiOfflineTest
         // 1. Back up system properties to prevent test contamination
         this.originalSystemProperties = new HashMap<>();
         this.storeAndClearSystemProperty("neodymium.ai.apiKey");
-        this.storeAndClearSystemProperty("neodymium.ai.pesap.enabled");
         this.storeAndClearSystemProperty("neodymium.ai.agent.maxRetries");
 
         // 2. Configure mock settings browserlessly
-        MockLlmClient.configureForOffline("mock-offline-demo-key", false);
+        MockLlmClient.configureForOffline("mock-offline-demo-key");
 
         // 3. Clear data contexts
         Neodymium.setAiPlaybook(null);
@@ -96,7 +95,6 @@ public abstract class BaseAiOfflineTest
 
         // 3. Restore backed-up system properties
         System.clearProperty("neodymium.ai.apiKey");
-        System.clearProperty("neodymium.ai.pesap.enabled");
         System.clearProperty("neodymium.ai.agent.maxRetries");
 
         for (final Map.Entry<String, String> entry : this.originalSystemProperties.entrySet())

@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.ClickTest :: testClick :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/ClickActionTest/testClickStandardButton.html",
+      "promptLine": "OPEN http://localhost:43377/ClickActionTest/testClickStandardButton.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {

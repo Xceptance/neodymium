@@ -63,7 +63,7 @@ public class WaitTest extends BaseAiTest
     public final void testWait()
     {
         final String steps = """
-                Open ${wait.test.url}
+                OPEN ${wait.test.url}
                 Click the 'Start Process' button (hint: #btn-start)
                 Wait for the success indicator to be visible (hint: #success)
             """;

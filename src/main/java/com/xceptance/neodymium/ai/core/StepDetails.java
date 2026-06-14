@@ -46,6 +46,7 @@ public final class StepDetails
     private boolean pesapRequiresJavaMethods;
     private boolean replayed;
     private boolean directParse;
+    private boolean pesapCalled;
 
     public StepDetails(final String rawInstruction)
     {
@@ -54,7 +55,19 @@ public final class StepDetails
         this.actions = Collections.synchronizedList(new ArrayList<>());
         this.llmCalls = Collections.synchronizedList(new ArrayList<>());
         this.pesapWarnings = Collections.synchronizedList(new ArrayList<>());
+        this.pesapCalled = false;
     }
+
+    public final boolean isPesapCalled()
+    {
+        return this.pesapCalled;
+    }
+
+    public final void setPesapCalled(final boolean pesapCalled)
+    {
+        this.pesapCalled = pesapCalled;
+    }
+
 
     public final String getRawInstruction()
     {

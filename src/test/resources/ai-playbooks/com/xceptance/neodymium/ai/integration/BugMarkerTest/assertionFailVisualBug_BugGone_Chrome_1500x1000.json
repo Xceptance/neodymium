@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.BugMarkerTest :: assertionFailVisualBug_BugGone :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -20,9 +20,9 @@
     },
     {
       "promptLine": "Verify that the screen is mostly blue and white (visual).",
-      "reasoning": "The screenshot shows a page predominantly featuring white backgrounds and blue accents for buttons, links, and some text. While there are minor elements in red (like the \u0027X Posters\u0027 logo) and natural colors within the \u0027Majestic Brown Bear\u0027 image, the overall color scheme is clearly dominated by blue and white, fulfilling the instruction.",
+      "reasoning": "The screenshot shows a page with a predominantly white background, white content cards, and blue elements such as the \u0027Search\u0027 button and text in the header. This matches the instruction to verify the screen is mostly blue and white.",
       "actions": [],
-      "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
+      "screenshotHash": "0008000000600020401a0018881cc81c881e8810001a0a100000000000000000",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL_LEAN"
     }

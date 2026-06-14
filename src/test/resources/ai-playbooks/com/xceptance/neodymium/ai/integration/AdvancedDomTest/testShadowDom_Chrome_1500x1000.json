@@ -3,33 +3,35 @@
   "steps": [
     {
       "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
-      "reasoning": "directly parsed or local validation succeeded",
+      "reasoning": "Navigating to the provided URL as instructed.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html"
           ],
-          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
+          "description": "Open the specified URL",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Type \u0027admin\u0027 into the username input inside the shadow root.",
-      "reasoning": "Identified the username input by its accessibility name and data-neo-ref, then generated a TYPE action to enter \u0027admin\u0027.",
+      "reasoning": "The instruction asks to type \u0027admin\u0027 into the username input. The AXTree provides a textbox with id \u0027shadow-username\u0027 which is suitable for targeting.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_eg716g",
+          "target": "#shadow-username",
           "value": [
             "admin"
           ],
-          "description": "Type \u0027admin\u0027 into the username input inside the shadow root.",
-          "elementDetails": "Username",
+          "description": "Type \u0027admin\u0027 into the username input field.",
+          "elementDetails": "Username input",
           "elementContext": {
             "id": "shadow-username",
             "placeholder": "Username",
@@ -45,16 +47,16 @@
     },
     {
       "promptLine": "Type \u0027secret\u0027 into the password input inside the shadow root.",
-      "reasoning": "Identified the password input field using its data-neo-ref attribute and typed \u0027secret\u0027 as instructed.",
+      "reasoning": "Identified the password input field by its ID and generated a TYPE action to enter \u0027secret\u0027.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_p1up95\u0027]",
+          "target": "#shadow-password",
           "value": [
             "secret"
           ],
-          "description": "Type \u0027secret\u0027 into the password input",
-          "elementDetails": "Password",
+          "description": "Type \u0027secret\u0027 into the password input field.",
+          "elementDetails": "Password input",
           "elementContext": {
             "id": "shadow-password",
             "placeholder": "Password",
@@ -70,11 +72,11 @@
     },
     {
       "promptLine": "Click the login button inside the shadow root.",
-      "reasoning": "The \u0027Login\u0027 button was identified and clicked based on the provided AXTree context.",
+      "reasoning": "The \u0027Login\u0027 button was found in the Accessibility Tree with ID \u0027shadow-submit\u0027 and targeted for a click action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "[data-neo-ref\u003d\u0027xc_eo1ifg\u0027]",
+          "target": "#shadow-submit",
           "description": "Click the login button",
           "elementDetails": "Login button",
           "elementContext": {

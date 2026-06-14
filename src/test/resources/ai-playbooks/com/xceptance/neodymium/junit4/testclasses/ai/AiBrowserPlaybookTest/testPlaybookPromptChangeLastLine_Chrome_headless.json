@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.junit4.testclasses.ai.AiBrowserPlaybookTest :: testPlaybookPromptChangeLastLine :: Browser Chrome_headless :: ",
   "steps": [
     {
-      "promptLine": "java executeDummy1()",
+      "promptLine": "java:executeDummy1()",
       "reasoning": "mock reasoning",
       "actions": [
         {
@@ -20,7 +20,7 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "java executeDummy2()",
+      "promptLine": "java:executeDummy2()",
       "reasoning": "mock reasoning",
       "actions": [
         {
@@ -38,7 +38,7 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "java executeDummy3()",
+      "promptLine": "java:executeDummy3()",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {

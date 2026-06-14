@@ -52,8 +52,6 @@ public class HintTesting extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
-
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", this.url);
     }
@@ -65,7 +63,7 @@ public class HintTesting extends BaseAiTest
     public final void test_MatchingHint()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search button (hint: #search-button)
                 """;
 
@@ -113,29 +111,6 @@ public class HintTesting extends BaseAiTest
     }
 
     /**
-     * Compares hint execution with and without PESAP enabled, asserting equivalent actions.
-     */
-    @NeodymiumTest
-    public final void test_MatchingHint_PesapComparison()
-    {
-        final String steps = """
-                Open ${posters.storefront.url}
-                Click the search button (hint: #search-button)
-                """;
-
-        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
-        this.resetBrowser();
-        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
-
-        assertThat(rWithPesap).hasNoPesapCalls();
-        assertThat(rWithoutPesap).hasNoPesapCalls();
-
-        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
-        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
-        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
-    }
-
-    /**
      * Complex Hint CSS, including selectors with 
      * [], (), '' and more
      */
@@ -143,7 +118,7 @@ public class HintTesting extends BaseAiTest
     public final void test_ComplexCSSHint()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the storefront active link (hint: ul.nav-links li:nth-child(1) a[href='index.html'])
                 """, VerificationMode.LIVE_LLM);
 
@@ -175,7 +150,7 @@ public class HintTesting extends BaseAiTest
     public final void test_ComplexXpathHint()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the storefront active link (hint: xpath=(//ul[contains(@class,'nav-links')]/li/a)[1])
                 """, VerificationMode.LIVE_LLM);
 
@@ -206,7 +181,7 @@ public class HintTesting extends BaseAiTest
     public final void test_IDHint()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the featured bear image (hint: #featured-bear-img)
                 """, VerificationMode.LIVE_LLM);
 
@@ -237,7 +212,7 @@ public class HintTesting extends BaseAiTest
     public final void test_MissingHintValue()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search button (hint: )
                 """;
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
@@ -294,7 +269,7 @@ public class HintTesting extends BaseAiTest
         // Space before colon / hint: ( hint: #search-box ) and ( hint : #search-button )
         // Note: These will not trigger HINT context level initially but LLM still extracts them from the prompt.
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search box ( hint: #search-box )
                 Click the search button ( hint : #search-button )
                 """, VerificationMode.LIVE_LLM);
@@ -319,7 +294,7 @@ public class HintTesting extends BaseAiTest
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search box (Hint: #search-box)
                 Click the search button (HINT: #search-button)
                 """, VerificationMode.LIVE_LLM);
@@ -358,7 +333,7 @@ public class HintTesting extends BaseAiTest
     public final void test_InvalidHintEscalation()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search button (hint: #non-existent-button)
                 """, VerificationMode.LIVE_LLM);
 
@@ -398,7 +373,7 @@ public class HintTesting extends BaseAiTest
     public final void test_TypeHint()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Type "bear" into search input (hint: #search-box)
                 """;
 
@@ -440,7 +415,7 @@ public class HintTesting extends BaseAiTest
     public final void test_ClearHint()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Type "bear" into search input (hint: #search-box)
                 Clear the search input (hint: #search-box)
                 """;
@@ -700,7 +675,7 @@ public class HintTesting extends BaseAiTest
     public final void test_KeyPressHint()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Type "bear" into the search box (hint: #search-box)
                 Press ENTER on the search box (hint: #search-box)
                 """;
@@ -745,7 +720,7 @@ public class HintTesting extends BaseAiTest
     public final void test_KeyPressHintNoTargetInText()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Type "bear" into the search box (hint: #search-box)
                 Press the ENTER key (hint: #search-box)
                 """;

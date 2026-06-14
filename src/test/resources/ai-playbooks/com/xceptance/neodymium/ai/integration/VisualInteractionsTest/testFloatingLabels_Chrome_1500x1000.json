@@ -3,30 +3,32 @@
   "steps": [
     {
       "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/floating-labels.html",
-      "reasoning": "directly parsed or local validation succeeded",
+      "reasoning": "Navigating to the provided URL as instructed.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/floating-labels.html"
           ],
-          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/floating-labels.html",
+          "description": "Open the specified URL",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/floating-labels.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Click the red button to simulate autofill.",
-      "reasoning": "The instruction asks to click a button to simulate autofill. I found a button with the name \u0027Simulate Browser Autofill\u0027 and generated a CLICK action for it. I cannot verify the \u0027red\u0027 color from the AXTree, but the text matches the intent.",
+      "reasoning": "The instruction asks to click the button to \u0027simulate autofill\u0027. The AXTree contains a button with the name \u0027Simulate Browser Autofill\u0027 and id \u0027btn-autofill\u0027. This is the most appropriate target. The \u0027red button\u0027 detail cannot be verified with the current context, but the primary action is clear.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_pe4wp9",
-          "description": "Click the \u0027Simulate Browser Autofill\u0027 button",
-          "elementDetails": "Simulate Browser Autofill",
+          "target": "#btn-autofill",
+          "description": "Click the button to simulate autofill",
+          "elementDetails": "Simulate Browser Autofill button",
           "elementContext": {
             "classes": "aura-btn",
             "text": "Simulate Browser Autofill",
@@ -43,13 +45,13 @@
     },
     {
       "promptLine": "Click the green button to fix the label overlap.",
-      "reasoning": "Identified the button \u0027Fix Label Overlap\u0027 based on the instruction and AXTree, and generated a CLICK action.",
+      "reasoning": "The instruction asks to click the \u0027green button to fix the label overlap\u0027. The AXTree shows a button with the name \u0027Fix Label Overlap\u0027 and id \u0027btn-fix\u0027. This is the most relevant button based on the description, so I\u0027m targeting it.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_aqq9al",
-          "description": "Click the button to fix label overlap",
-          "elementDetails": "Fix Label Overlap",
+          "target": "#btn-fix",
+          "description": "Click the button to fix the label overlap",
+          "elementDetails": "Fix Label Overlap button",
           "elementContext": {
             "classes": "aura-btn",
             "text": "Fix Label Overlap",

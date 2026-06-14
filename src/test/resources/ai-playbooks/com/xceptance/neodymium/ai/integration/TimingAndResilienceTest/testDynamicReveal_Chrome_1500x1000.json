@@ -3,30 +3,32 @@
   "steps": [
     {
       "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/dynamic-reveal.html",
-      "reasoning": "directly parsed or local validation succeeded",
+      "reasoning": "Navigating to the provided URL as instructed.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/dynamic-reveal.html"
           ],
-          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/dynamic-reveal.html",
+          "description": "Open the specified URL",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/dynamic-reveal.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Click the \u0027Have a promo code?\u0027 link.",
-      "reasoning": "Clicked the \u0027Have a promo code?\u0027 link using its data-neo-ref attribute.",
+      "reasoning": "Identified the \u0027Have a promo code?\u0027 link by its unique ID and name in the accessibility tree and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_8a5ii9",
-          "description": "Click the \u0027Have a promo code?\u0027 link.",
-          "elementDetails": "Have a promo code?",
+          "target": "#promo-toggle",
+          "description": "Click the \u0027Have a promo code?\u0027 link",
+          "elementDetails": "Have a promo code? link",
           "elementContext": {
             "text": "Have a promo code?",
             "id": "promo-toggle",
@@ -42,11 +44,11 @@
     },
     {
       "promptLine": "Type \u0027DISCOUNT\u0027 into the promo input field.",
-      "reasoning": "Identified the \u0027Enter coupon\u0027 textbox as the promo input field and generated a TYPE action.",
+      "reasoning": "Identified the promo input field by its ID \u0027coupon-field\u0027 and generated a TYPE action to enter \u0027DISCOUNT\u0027.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_nlpuwa\u0027]",
+          "target": "#coupon-field",
           "value": [
             "DISCOUNT"
           ],
@@ -67,11 +69,11 @@
     },
     {
       "promptLine": "Click the Apply button next to it.",
-      "reasoning": "Clicked the \u0027Apply\u0027 button as identified in the AXTREE.",
+      "reasoning": "The \u0027Apply\u0027 button was identified by its ID and name in the AXTree and a CLICK action was generated.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "[data-neo-ref\u003d\u0027xc_sz7lv5\u0027]",
+          "target": "#coupon-btn",
           "description": "Click the Apply button",
           "elementDetails": "Apply button",
           "elementContext": {

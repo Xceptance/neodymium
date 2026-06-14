@@ -33,9 +33,11 @@ public class BackAction implements AiActionPlugin {
     public String getActionName() { return "BACK"; }
 
     @Override
-    public List<Action> parseDirectInstruction(String instruction) {
-        String patternStr = com.xceptance.neodymium.util.Neodymium.configuration().getProperty("neodymium.ai.agent.pattern.back", "(?i)^(?:go\\s+)?back$|^navigate\\s+back$");
-        if (java.util.regex.Pattern.compile(patternStr).matcher(instruction.strip()).find()) {
+    public List<Action> parseDirectInstruction(final String instruction)
+    {
+        final String normalized = instruction.replaceAll("\\s+", " ").trim();
+        if ("BACK".equals(normalized))
+        {
             return List.of(new Action("BACK", null, "Go back"));
         }
         return null;

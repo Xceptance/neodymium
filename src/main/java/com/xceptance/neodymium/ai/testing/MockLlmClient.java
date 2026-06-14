@@ -207,22 +207,20 @@ public final class MockLlmClient extends LlmClient
 
     /**
      * Convenience method configuring default system properties for browserless offline testing.
-     * Satisfies the API key guard validation checks using "mock-offline-key" and disables PESAP.
+     * Satisfies the API key guard validation checks using "mock-offline-key".
      */
     public static void configureForOffline()
     {
-        configureForOffline("mock-offline-key", false);
+        configureForOffline("mock-offline-key");
     }
 
     /**
      * Configures the system properties required for offline mock execution.
      *
      * @param apiKey       the mock API key to register
-     * @param pesapEnabled whether PESAP analysis should remain active
      */
-    public static void configureForOffline(final String apiKey, final boolean pesapEnabled)
+    public static void configureForOffline(final String apiKey)
     {
         System.setProperty("neodymium.ai.apiKey", apiKey);
-        System.setProperty("neodymium.ai.pesap.enabled", String.valueOf(pesapEnabled));
     }
 }

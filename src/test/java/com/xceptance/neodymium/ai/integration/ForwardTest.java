@@ -66,10 +66,10 @@ public class ForwardTest extends BaseAiTest
     public final void testForward()
     {
         final String steps = """
-                Open ${forward.test.url1}
-                Open ${forward.test.url2}
-                back
-                forward
+                OPEN ${forward.test.url1}
+                OPEN ${forward.test.url2}
+                BACK
+                FORWARD
             """;
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
@@ -141,14 +141,95 @@ public class ForwardTest extends BaseAiTest
     }
 
     /**
+     * Test forward navigation using lowercase forward (LLM fallback).
+     */
+    @NeodymiumTest
+    public final void testForwardLowercase()
+    {
+        final String steps = """
+                OPEN ${forward.test.url1}
+                OPEN ${forward.test.url2}
+                BACK
+                forward
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(3)
+            .hasReplays(0)
+            .hasActionsCount(4);
+
+        final StepDetails stepDetails0 = r1.getSteps().get(0);
+        assertTrue(stepDetails0.isDirectParse());
+        assertFalse(stepDetails0.isReplayed());
+        assertTrue(stepDetails0.getLlmCalls().isEmpty());
+
+        final StepDetails stepDetails1 = r1.getSteps().get(1);
+        assertTrue(stepDetails1.isDirectParse());
+        assertFalse(stepDetails1.isReplayed());
+        assertTrue(stepDetails1.getLlmCalls().isEmpty());
+
+        final StepDetails stepDetails2 = r1.getSteps().get(2);
+        assertTrue(stepDetails2.isDirectParse());
+        assertFalse(stepDetails2.isReplayed());
+        assertTrue(stepDetails2.getLlmCalls().isEmpty());
+
+        final StepDetails stepDetails3 = r1.getSteps().get(3);
+        assertFalse(stepDetails3.isDirectParse());
+        assertFalse(stepDetails3.isReplayed());
+        assertEquals(1, stepDetails3.getLlmCalls().size());
+
+        assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(4)
+            .hasActionsCount(4);
+
+        final StepDetails replayStep0 = r2.getSteps().get(0);
+        assertFalse(replayStep0.isDirectParse());
+        assertTrue(replayStep0.isReplayed());
+        assertTrue(replayStep0.getLlmCalls().isEmpty());
+
+        final StepDetails replayStep1 = r2.getSteps().get(1);
+        assertFalse(replayStep1.isDirectParse());
+        assertTrue(replayStep1.isReplayed());
+        assertTrue(replayStep1.getLlmCalls().isEmpty());
+
+        final StepDetails replayStep2 = r2.getSteps().get(2);
+        assertFalse(replayStep2.isDirectParse());
+        assertTrue(replayStep2.isReplayed());
+        assertTrue(replayStep2.getLlmCalls().isEmpty());
+
+        final StepDetails replayStep3 = r2.getSteps().get(3);
+        assertFalse(replayStep3.isDirectParse());
+        assertTrue(replayStep3.isReplayed());
+        assertTrue(replayStep3.getLlmCalls().isEmpty());
+
+        assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
+    }
+
+    /**
      * Test forward navigation with LLM fallback for sentences that cannot be directly parsed.
      */
     @NeodymiumTest
     public final void testForwardWithLlmFallback()
     {
         final String steps = """
-                Open ${forward.test.url1}
-                Open ${forward.test.url2}
+                OPEN ${forward.test.url1}
+                OPEN ${forward.test.url2}
                 Go to the previous page
                 Navigate to the next page
             """;

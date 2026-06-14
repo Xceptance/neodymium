@@ -75,9 +75,9 @@ public class SplitMultiActionTest extends BaseAiTest
         final String apiKey = Neodymium.aiConfiguration().aiApiKey();
         if (apiKey != null && !apiKey.trim().isEmpty())
         {
-            // Execute the compound step under LIVE_LLM mode with PESAP enabled.
+            // Execute the compound step under LIVE_LLM mode.
             // This should split the step upfront into two separate execution steps.
-            final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM, true);
+            final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
             // Expect exactly 2 steps to have been executed (split from the original single compound step)
             assertEquals(2, r1.getSteps().size());
@@ -93,49 +93,7 @@ public class SplitMultiActionTest extends BaseAiTest
 
         // Verify that replaying the playbook offline runs successfully without LLM calls,
         // and correctly aligns the steps list using the saved playbook's originalUnsplitInstruction field.
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY, true);
-        assertEquals(2, r2.getSteps().size());
-        assertTrue(r2.getSteps().get(0).isReplayed());
-        assertTrue(r2.getSteps().get(1).isReplayed());
-        assertEquals("Account Form Opened!", Selenide.$("#status").text());
-    }
-
-    /**
-     * Verifies runtime fallback step splitting (SPLIT action) during live execution
-     * and offline playback when PESAP is disabled.
-     * <p>
-     * When PESAP is disabled, the standard LLM receives the compound step. Since the
-     * second element is hidden initially, the LLM returns a SPLIT action to execute
-     * the first action and defer the rest.
-     */
-    @NeodymiumTest
-    public final void testSplitMultiActionRuntime()
-    {
-        Selenide.open(url);
-        final String steps = """
-                Click the "Menu" button and then click the "Create Account" link in the dropdown and then the text "Account Form Opened!" is shown
-            """;
-
-        final String apiKey = Neodymium.aiConfiguration().aiApiKey();
-        if (apiKey != null && !apiKey.trim().isEmpty())
-        {
-            // Execute the compound step under LIVE_LLM mode with PESAP disabled.
-            // This should trigger the SPLIT action fallback at runtime.
-            final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM, false);
-
-            assertEquals(2, r1.getSteps().size());
-            assertEquals(steps.trim(), r1.getSteps().get(0).getOriginalUnsplitInstruction());
-
-            // Verify the SUT has updated correctly
-            assertEquals("Account Form Opened!", Selenide.$("#status").text());
-
-            this.resetBrowser();
-            Selenide.open(url);
-        }
-
-        // Verify that replaying the playbook offline runs successfully without LLM calls,
-        // and correctly aligns the steps list using the saved playbook's originalUnsplitInstruction field.
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY, false);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
         assertEquals(2, r2.getSteps().size());
         assertTrue(r2.getSteps().get(0).isReplayed());
         assertTrue(r2.getSteps().get(1).isReplayed());

@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.BugMarkerTest :: assertionFailVisualBug :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -22,10 +22,10 @@
       "promptLine": "Verify that the screen is mostly black and white (visual).",
       "reasoning": "Expected failure recorded for bug: unspecified",
       "actions": [],
-      "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
+      "screenshotHash": "0008000000600020401a0018881cc81c881e8810001a0a100000000000000000",
       "expectedFailure": true,
       "expectedErrorType": "com.xceptance.neodymium.ai.core.AiAgent$DefinitiveAssertionError",
-      "expectedErrorMessage": "Verification failed: Visual verification failed: The screen is not mostly black and white. It contains various colors such as blue for links and buttons, red for the \u0027X\u0027 icon, and multiple colors within the product images (e.g., a colorful palette, a blue globe, a brown bear in a green forest)."
+      "expectedErrorMessage": "Verification failed: Visual verification failed: The screen is not mostly black and white. It contains several prominent colors including red, blue, green, and brown in various elements and images."
     }
   ]
 }

@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.CheckTest :: testCheck :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/CheckActionTest/testCheckHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/CheckActionTest/testCheckHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -25,9 +25,6 @@
         {
           "type": "CHECK",
           "target": "#newsletter",
-          "value": [
-            "true"
-          ],
           "description": "Check the checkbox \u0027Subscribe to newsletter\u0027",
           "elementDetails": "checkbox \u0027Subscribe to newsletter\u0027",
           "elementContext": {},
@@ -45,11 +42,8 @@
         {
           "type": "CHECK",
           "target": "#contact-phone",
-          "value": [
-            "true"
-          ],
-          "description": "Check the \u0027Phone\u0027 radio button.",
-          "elementDetails": "radio button with id contact-phone",
+          "description": "Check radio button \u0027Phone\u0027",
+          "elementDetails": "radio button \u0027Phone\u0027",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -60,12 +54,12 @@
     },
     {
       "promptLine": "Click the button \u0027Submit Preferences\u0027 (hint: #btn-submit)",
-      "reasoning": "Clicked the \u0027Submit Preferences\u0027 button.",
+      "reasoning": "Clicked the button \u0027Submit Preferences\u0027.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#btn-submit",
-          "description": "Click the \u0027Submit Preferences\u0027 button",
+          "description": "Click button Submit Preferences",
           "elementDetails": "button \u0027Submit Preferences\u0027",
           "elementContext": {
             "text": "Submit Preferences",

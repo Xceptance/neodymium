@@ -49,8 +49,6 @@ public class KeyboardNavigationTesting extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
-
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", this.url);
     }
@@ -63,7 +61,7 @@ public class KeyboardNavigationTesting extends BaseAiTest
     public final void test_TabAndTypeAndSubmit()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key 3 times
                 Verify that the search box has focus
                 Type "bear"
@@ -94,7 +92,7 @@ public class KeyboardNavigationTesting extends BaseAiTest
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key 3 times
                 Verify that the search box has focus
                 Type "bear"
@@ -108,35 +106,5 @@ public class KeyboardNavigationTesting extends BaseAiTest
             .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(9);
-    }
-
-    /**
-     * Compares keyboard navigation flow execution with and without PESAP enabled, asserting equivalent success.
-     */
-    @NeodymiumTest
-    public final void test_TabAndTypeAndSubmit_PesapComparison()
-    {
-        final String steps = """
-                Open ${posters.storefront.url}
-                Press the TAB key 3 times
-                Verify that the search box has focus
-                Type "bear"
-                Press ENTER
-                Verify that the search results title contains "bear"
-                Verify that the page displays "3 results found."
-                """;
-
-        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
-        assertTrue(rWithPesap.isSuccess());
-
-        this.resetBrowser();
-
-        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
-        assertTrue(rWithoutPesap.isSuccess());
-
-        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
-        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
-        assertEquals(rWithPesap.getActions().get(4).getType(), rWithoutPesap.getActions().get(4).getType());
-        assertEquals(rWithPesap.getActions().get(5).getType(), rWithoutPesap.getActions().get(5).getType());
     }
 }

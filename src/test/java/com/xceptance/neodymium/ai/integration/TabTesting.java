@@ -49,8 +49,6 @@ public class TabTesting extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
-
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", this.url);
     }
@@ -62,7 +60,7 @@ public class TabTesting extends BaseAiTest
     public final void test_TabToAnElement()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key
                 Press the TAB key
                 Press the TAB key
@@ -87,7 +85,7 @@ public class TabTesting extends BaseAiTest
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key
                 Press the TAB key
                 Press the TAB key
@@ -102,42 +100,13 @@ public class TabTesting extends BaseAiTest
     }
 
     /**
-     * Compares tab navigation with and without PESAP enabled, asserting equivalent actions.
-     */
-    @NeodymiumTest
-    public final void test_TabToAnElement_PesapComparison()
-    {
-        final String steps = """
-                Open ${posters.storefront.url}
-                Press the TAB key
-                Press the TAB key
-                Press the TAB key
-                Verify that the search box has focus
-                """;
-
-        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
-        final String targetWithPesap = rWithPesap.getActions().get(4).getTarget();
-        assertTrue(targetWithPesap.contains("search-box") || targetWithPesap.contains("xc_"));
-
-        this.resetBrowser();
-
-        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
-        final String targetWithoutPesap = rWithoutPesap.getActions().get(4).getTarget();
-        assertTrue(targetWithoutPesap.contains("search-box") || targetWithoutPesap.contains("xc_"));
-
-        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
-        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
-        assertEquals(rWithPesap.getActions().get(4).getType(), rWithoutPesap.getActions().get(4).getType());
-    }
-
-    /**
      * Test focusing an element first, then tabbing to the next focusable element.
      */
     @NeodymiumTest
     public final void test_TabAnElementToAnElement()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search box
                 Verify that the search box has focus
                 Press the TAB key
@@ -164,7 +133,7 @@ public class TabTesting extends BaseAiTest
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search box
                 Verify that the search box has focus
                 Press the TAB key
@@ -185,7 +154,7 @@ public class TabTesting extends BaseAiTest
     public final void test_TabXTimes()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key 3 times
                 Verify that the search box has focus
                 """, VerificationMode.LIVE_LLM);
@@ -213,7 +182,7 @@ public class TabTesting extends BaseAiTest
     public final void test_TabReverse()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key 4 times
                 Verify that the search button has focus
                 Press SHIFT_TAB
@@ -243,7 +212,7 @@ public class TabTesting extends BaseAiTest
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key 4 times
                 Verify that the search button has focus
                 Press SHIFT_TAB

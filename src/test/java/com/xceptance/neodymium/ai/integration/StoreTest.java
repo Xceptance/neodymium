@@ -63,7 +63,7 @@ public class StoreTest extends BaseAiTest
     public final void testStore()
     {
         final String steps = """
-                Open ${store.test.url}
+                OPEN ${store.test.url}
                 Store the order ID value into a variable named 'orderId' (hint: #order-id)
                 Type '${orderId}' into the verification field (hint: #input-target)
                 Click the 'Verify' button (hint: #btn-verify)

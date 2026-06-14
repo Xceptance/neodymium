@@ -1,0 +1,67 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.ForwardTest :: testForwardLowercase :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AssertActionTest/testAssertHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "OPEN http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/TypeActionTest/testTypeHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "BACK",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "BACK",
+          "description": "Go back",
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "forward",
+      "reasoning": "The instruction is to navigate forward, which directly maps to the FORWARD action type.",
+      "actions": [
+        {
+          "type": "FORWARD",
+          "description": "Navigate forward in browser history",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

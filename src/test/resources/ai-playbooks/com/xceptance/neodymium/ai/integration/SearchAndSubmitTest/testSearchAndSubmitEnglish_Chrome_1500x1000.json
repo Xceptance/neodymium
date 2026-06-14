@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.SearchAndSubmitTest :: testSearchAndSubmitEnglish :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -19,8 +19,8 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Type \u0027bear\u0027 into the search box and submit the search",
-      "reasoning": "Typed \u0027bear\u0027 into the search box identified by its ID and then clicked the search button, also identified by its ID.",
+      "promptLine": "Type \u0027bear\u0027 into the search box",
+      "reasoning": "Identified the search box by its ID and generated a TYPE action to input \u0027bear\u0027.",
       "actions": [
         {
           "type": "TYPE",
@@ -40,12 +40,20 @@
           },
           "replay": "",
           "adjust": false
-        },
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Submit the search",
+      "reasoning": "The instruction is to submit the search. The AXTree shows a button with id \u0027search-button\u0027 and name \u0027Search\u0027 within a form. Clicking this button will submit the search.",
+      "actions": [
         {
           "type": "CLICK",
           "target": "#search-button",
-          "description": "Click the search button",
-          "elementDetails": "Search",
+          "description": "Click the search button to submit the search",
+          "elementDetails": "Search button",
           "elementContext": {
             "classes": "btn-search",
             "text": "Search",
@@ -62,7 +70,7 @@
     },
     {
       "promptLine": "Verify that the search results title contains \u0027bear\u0027",
-      "reasoning": "Verified that the text content of the element with id \u0027search-title\u0027 contains \u0027bear\u0027.",
+      "reasoning": "The instruction is to verify that the search results title contains \u0027bear\u0027. The element with id \u0027search-title\u0027 contains the text \u0027Search Results for \u0027bear\u0027\u0027, which includes \u0027bear\u0027. An ASSERT action is used to check this.",
       "actions": [
         {
           "type": "ASSERT",
@@ -82,7 +90,7 @@
     },
     {
       "promptLine": "Verify that the page displays \u00273 results found.\u0027",
-      "reasoning": "The instruction is to verify the presence of the text \u00273 results found.\u0027. I found an element with id \u0027search-subtitle\u0027 that contains this exact text, so I used an ASSERT action targeting this element.",
+      "reasoning": "The instruction is to verify that the page displays \u00273 results found.\u0027. I found an element with id \u0027search-subtitle\u0027 that contains this exact text, so I created an ASSERT action targeting it.",
       "actions": [
         {
           "type": "ASSERT",

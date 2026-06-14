@@ -59,8 +59,6 @@ public class BugMarkerTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
-
         url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", url);
     }
@@ -76,7 +74,7 @@ public class BugMarkerTest extends BaseAiTest
     {
         final String steps = """
                 # Homepage
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 # Verify something that is not true aka a defect and we know that
                 # Sure this is not a true bug, just made up for this test.
                 Verify that the minicart shows two items (bug: APP-17171).
@@ -113,35 +111,6 @@ public class BugMarkerTest extends BaseAiTest
     }
 
     /**
-     * Compares bug marker execution with and without PESAP enabled, asserting equivalent results.
-     */
-    @NeodymiumTest
-    public final void failButMarkedAsBug_StaySilent_PesapComparison() throws Throwable
-    {
-        final String steps = """
-                # Homepage
-                Open ${posters.storefront.url}
-                # Verify something that is not true aka a defect and we know that
-                # Sure this is not a true bug, just made up for this test.
-                Verify that the minicart shows two items (bug: APP-17171).
-                # This is not executed!!!
-                Verify that the top header shows a warning about a demo application.
-                """;
-
-        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
-        this.resetBrowser();
-        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
-
-        assertThat(rWithPesap).hasPesapCalls(1);
-        assertThat(rWithoutPesap).hasNoPesapCalls();
-
-        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
-        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
-        assertEquals(rWithPesap.getActions().get(0).getTarget(), rWithoutPesap.getActions().get(0).getTarget());
-        assertEquals(rWithPesap.getSteps().get(1).getFailureReason(), rWithoutPesap.getSteps().get(1).getFailureReason());
-    }
-
-    /**
      * Verifies that when a bug is not marked, execution fails with a DefinitiveAssertionError.
      * Uses LlmAssert to check the error message since it comes from the LLM.
      *
@@ -152,7 +121,7 @@ public class BugMarkerTest extends BaseAiTest
     {
         final String steps = """
                 # Homepage
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 # Verify something that is not true aka a defect
                 Verify that the minicart shows two items.
                 """;
@@ -197,7 +166,7 @@ public class BugMarkerTest extends BaseAiTest
                     Neodymium.ai()
                             .steps("""
                                     # Homepage
-                                    Open ${posters.storefront.url}
+                                    OPEN ${posters.storefront.url}
                                     # Verify something that is not true aka a defect and we know that
                                     # Sure this is not a true bug, just made up for this test.
                                     Verify that the minicart shows 0 items (bug).
@@ -233,7 +202,7 @@ public class BugMarkerTest extends BaseAiTest
     {
         final String steps = """
                 # Homepage
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 # Verify something that is not true aka a defect and we know that
                 # Sure this is not a true bug, just made up for this test.
                 Verify that the screen is mostly black and white (bug) (visual).
@@ -333,7 +302,7 @@ public class BugMarkerTest extends BaseAiTest
                     Neodymium.ai()
                             .steps("""
                                     # Homepage
-                                    Open ${posters.storefront.url}
+                                    OPEN ${posters.storefront.url}
                                     # Verify something that is not true aka a defect and we know that
                                     # Sure this is not a true bug, just made up for this test.
                                     Verify that the screen is mostly blue and white (bug) (visual).

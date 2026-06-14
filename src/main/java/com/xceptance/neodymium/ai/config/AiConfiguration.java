@@ -55,11 +55,9 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.agent.screenshotBeforeAction")
     @DefaultValue("false")
     public boolean agentScreenshotBeforeAction();
-
     @Key("neodymium.ai.pesap.enabled")
     @DefaultValue("true")
     public boolean pesapEnabled();
-
     @Key("neodymium.ai.pesap.classify.enabled")
     @DefaultValue("true")
     public boolean pesapClassifyEnabled();

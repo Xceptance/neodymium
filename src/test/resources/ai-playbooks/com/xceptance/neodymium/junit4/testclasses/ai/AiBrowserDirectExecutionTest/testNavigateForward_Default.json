@@ -1,8 +1,8 @@
 {
-  "id": "com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserDirectExecutionTest :: testNavigateForward :: Browser Default",
+  "id": "com.xceptance.neodymium.junit4.testclasses.ai.AiBrowserDirectExecutionTest :: testNavigateForward :: Browser Default :: ",
   "steps": [
     {
-      "promptLine": "open https://xceptance.com/de",
+      "promptLine": "OPEN https://xceptance.com/de",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -12,12 +12,14 @@
           ],
           "description": "Navigate to https://xceptance.com/de",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     },
     {
-      "promptLine": "open https://xceptance.com/en",
+      "promptLine": "OPEN https://xceptance.com/en",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -27,31 +29,37 @@
           ],
           "description": "Navigate to https://xceptance.com/en",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     },
     {
-      "promptLine": "navigate back",
+      "promptLine": "BACK",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "BACK",
           "description": "Go back",
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     },
     {
-      "promptLine": "navigate forward",
+      "promptLine": "FORWARD",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "FORWARD",
           "description": "Go forward",
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     }
   ]
 }

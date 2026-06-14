@@ -63,8 +63,8 @@ public class RefreshTest extends BaseAiTest
     public final void test_Refresh()
     {
         final String steps = """
-                Open ${posters.storefront.url}
-                refresh
+                OPEN ${posters.storefront.url}
+                REFRESH
             """;
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
@@ -96,17 +96,16 @@ public class RefreshTest extends BaseAiTest
     }
 
     /**
-     * Test a multi-step instruction with step-by-step verification of status.
-     *
-     * @throws Throwable if execution fails
+     * Test a multi-step instruction with step-by-step verification of status using lowercase refresh.
      */
     @NeodymiumTest
-    public final void test_RefreshWithoutDirectResolution()
+    public final void test_RefreshLowercase()
     {
         final String steps = """
-                Open ${posters.storefront.url}
-                Refresh the page
+                OPEN ${posters.storefront.url}
+                refresh
             """;
+
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
@@ -136,28 +135,42 @@ public class RefreshTest extends BaseAiTest
     }
 
     /**
-     * Compares refresh execution with and without PESAP enabled, asserting equivalent results.
+     * Test a multi-step instruction with step-by-step verification of status.
+     *
+     * @throws Throwable if execution fails
      */
     @NeodymiumTest
-    public final void test_RefreshWithoutDirectResolution_PesapComparison()
+    public final void test_RefreshWithoutDirectResolution()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Refresh the page
             """;
-        final AiExecutionResult rWithPesap = runAi(steps, VerificationMode.LIVE_LLM, true);
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(2);
+
         assertEquals("Posters Art Store", Selenide.title());
 
+        // close it and start replay
         this.resetBrowser();
 
-        final AiExecutionResult rWithoutPesap = runAi(steps, VerificationMode.LIVE_LLM, false);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2);
+
         assertEquals("Posters Art Store", Selenide.title());
-
-        assertThat(rWithPesap).hasPesapCalls(1);
-        assertThat(rWithoutPesap).hasNoPesapCalls();
-
-        assertEquals(rWithPesap.getActions().size(), rWithoutPesap.getActions().size());
-        assertEquals(rWithPesap.getActions().get(0).getType(), rWithoutPesap.getActions().get(0).getType());
-        assertEquals(rWithPesap.getActions().get(1).getType(), rWithoutPesap.getActions().get(1).getType());
     }
 }

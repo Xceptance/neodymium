@@ -1,8 +1,8 @@
 {
-  "id": "com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserDirectExecutionTest :: testOpen :: Browser Default",
+  "id": "com.xceptance.neodymium.junit4.testclasses.ai.AiBrowserDirectExecutionTest :: testOpen :: Browser Default :: ",
   "steps": [
     {
-      "promptLine": "open https://xceptance.com",
+      "promptLine": "OPEN https://xceptance.com",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -12,9 +12,11 @@
           ],
           "description": "Navigate to https://xceptance.com",
           "elementContext": {},
-          "replay": ""
+          "replay": "",
+          "adjust": false
         }
-      ]
+      ],
+      "expectedFailure": false
     }
   ]
 }

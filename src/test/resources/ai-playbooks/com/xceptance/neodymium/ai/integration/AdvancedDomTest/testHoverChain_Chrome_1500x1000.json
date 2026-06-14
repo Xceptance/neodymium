@@ -3,30 +3,32 @@
   "steps": [
     {
       "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html",
-      "reasoning": "directly parsed or local validation succeeded",
+      "reasoning": "Navigating to the provided URL as instructed.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html"
           ],
-          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html",
+          "description": "Open the specified URL",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Hover over \u0027Products\u0027.",
-      "reasoning": "I found the \u0027Products\u0027 link in the accessibility tree and generated a HOVER action targeting it.",
+      "reasoning": "Hovering over the \u0027Products\u0027 link as requested.",
       "actions": [
         {
           "type": "HOVER",
-          "target": "[data-neo-ref\u003d\u0027xc_bubl4z\u0027]",
-          "description": "Hover over \u0027Products\u0027",
-          "elementDetails": "Products ▾",
+          "target": "[name\u003d\u0027Products ▾\u0027]",
+          "description": "Hover over the \u0027Products\u0027 link",
+          "elementDetails": "Products ▾ link",
           "elementContext": {
             "text": "Products ▾",
             "href": "https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html#",
@@ -41,13 +43,13 @@
     },
     {
       "promptLine": "Hover over \u0027Electronics\u0027.",
-      "reasoning": "Hovering over the \u0027Electronics\u0027 link as requested.",
+      "reasoning": "Hovered over the \u0027Electronics\u0027 link using its data-neo-ref attribute.",
       "actions": [
         {
           "type": "HOVER",
           "target": "[data-neo-ref\u003d\u0027xc_ymu3zq\u0027]",
           "description": "Hover over \u0027Electronics\u0027",
-          "elementDetails": "Electronics",
+          "elementDetails": "Electronics link",
           "elementContext": {
             "text": "Electronics ▸",
             "href": "https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html#",
@@ -62,13 +64,13 @@
     },
     {
       "promptLine": "Click the \u0027Laptops\u0027 link.",
-      "reasoning": "Clicked the \u0027Laptops\u0027 link using its data-neo-ref attribute.",
+      "reasoning": "The \u0027Laptops\u0027 link was identified by its unique ID and a CLICK action was generated.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "[data-neo-ref\u003d\u0027xc_y5k9xg\u0027]",
+          "target": "#link-laptops",
           "description": "Click the \u0027Laptops\u0027 link",
-          "elementDetails": "Laptops",
+          "elementDetails": "Laptops link",
           "elementContext": {
             "text": "Laptops",
             "id": "link-laptops",

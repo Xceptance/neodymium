@@ -1,0 +1,10 @@
+{
+  "id": "com.xceptance.neodymium.junit4.testclasses.ai.AiBrowserDirectExecutionTest :: testDirectCommandFailFastMissingSelector :: Browser Default :: ",
+  "steps": [
+    {
+      "actions": [],
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    }
+  ]
+}

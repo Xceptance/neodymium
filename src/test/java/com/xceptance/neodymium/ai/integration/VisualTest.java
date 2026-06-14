@@ -66,7 +66,7 @@ public class VisualTest extends BaseAiTest
     public final void test_VisualVerification_Positive()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 A bear is shown on the right side (visual)
             """, VerificationMode.LIVE_LLM);
 
@@ -95,7 +95,7 @@ public class VisualTest extends BaseAiTest
     public final void test_VisualVerification_IndirectPositive()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 There is no fox visible (visual) and there is no red button either
             """, VerificationMode.LIVE_LLM);
 
@@ -126,7 +126,7 @@ public class VisualTest extends BaseAiTest
         final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () ->
         {
             runAi("""
-                    Open ${posters.storefront.url}
+                    OPEN ${posters.storefront.url}
                     A lion dancing (visual) on the moon is shown
                 """, VerificationMode.LIVE_LLM);
         });
@@ -162,7 +162,7 @@ public class VisualTest extends BaseAiTest
     public final void test04_SearchAndVerify()
     {
         final AiExecutionResult r = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Type 'bear' into the search box.
                 Click the blue button next to the input box (visual).
                 Store the color of the animal shown on the second result image in the variable 'animalColor' (visual).

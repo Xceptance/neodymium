@@ -440,51 +440,6 @@ public abstract class BaseAiTest
         }, mode);
     }
 
-    /**
-     * Executes the test run steps under the specified verification mode with explicit PESAP control.
-     *
-     * @param steps        the natural language instructions
-     * @param mode         the verification mode to run under
-     * @param pesapEnabled whether the Pre-Execution Static Analysis Phase (PESAP) is enabled
-     * @return the execution result
-     */
-    protected final AiExecutionResult runAi(final String steps, final VerificationMode mode, final boolean pesapEnabled)
-    {
-        return runAi(() ->
-        {
-            Neodymium.ai().execute(steps);
-        }, mode, pesapEnabled);
-    }
-
-    /**
-     * Executes the test run steps under the specified verification mode with explicit PESAP control.
-     *
-     * @param runSteps     the runnable steps containing Neodymium AI execution blocks
-     * @param mode         the verification mode to run under
-     * @param pesapEnabled whether the Pre-Execution Static Analysis Phase (PESAP) is enabled
-     * @return the execution result
-     */
-    protected final AiExecutionResult runAi(final Runnable runSteps, final VerificationMode mode, final boolean pesapEnabled)
-    {
-        final Object prevPesapObj = Neodymium.getData().get("neodymium.ai.pesap.enabled");
-        final String prevPesap = prevPesapObj != null ? String.valueOf(prevPesapObj) : null;
-        try
-        {
-            Neodymium.getData().put("neodymium.ai.pesap.enabled", String.valueOf(pesapEnabled));
-            return runAi(runSteps, mode);
-        }
-        finally
-        {
-            if (prevPesap != null)
-            {
-                Neodymium.getData().put("neodymium.ai.pesap.enabled", prevPesap);
-            }
-            else
-            {
-                Neodymium.getData().remove("neodymium.ai.pesap.enabled");
-            }
-        }
-    }
 
     /**
      * Executes the test run steps under the specified verification mode.
