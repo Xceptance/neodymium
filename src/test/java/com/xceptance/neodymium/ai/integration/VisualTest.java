@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
@@ -41,6 +40,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * A freeform test case migrated to neodymium-library to test storefront functionalities
  * like searching, product details, and image content validation.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -70,12 +72,12 @@ public class VisualTest extends BaseAiTest
                 A bear is shown on the right side (visual)
             """, VerificationMode.LIVE_LLM);
 
-        assertThat(r1).hasNoPesapCalls();
+        assertThat(r1)
+            .hasPesapCalls(1)
+            .hasContextLevel(0, ContextLevel.VISUAL_LEAN)
+            .step(1, s -> s.isLlm(1));
 
         final var s = r1.getSteps().get(1);
-        assertEquals(1, s.getLlmCalls().size());
-        assertEquals(ContextLevel.VISUAL_LEAN, s.getLlmCalls().get(0).getContextLevel());
-
         assertTrue(s.getLlmCalls().get(0).isSuccess());
         assertTrue(s.getLlmCalls().get(0).isDone());
 
@@ -83,8 +85,7 @@ public class VisualTest extends BaseAiTest
         LlmAssert.assertViaLlmSemanticMatch(s.getReasoning(), "explain that a brown bear or bear image is visible on the right side of the page");
 
         // no actions, LLM identified things on its own
-        final var a = s.getActions();
-        assertEquals(0, a.size());
+        assertEquals(0, s.getActions().size());
     }
 
 
@@ -99,12 +100,12 @@ public class VisualTest extends BaseAiTest
                 There is no fox visible (visual) and there is no red button either
             """, VerificationMode.LIVE_LLM);
 
-        assertThat(r1).hasNoPesapCalls();
+        assertThat(r1)
+            .hasPesapCalls(1)
+            .hasContextLevel(0, ContextLevel.VISUAL_LEAN)
+            .step(1, s -> s.isLlm(1));
 
         final var s = r1.getSteps().get(1);
-        assertEquals(1, s.getLlmCalls().size());
-        assertEquals(ContextLevel.VISUAL_LEAN, s.getLlmCalls().get(0).getContextLevel());
-
         assertTrue(s.getLlmCalls().get(0).isSuccess());
         assertTrue(s.getLlmCalls().get(0).isDone());
 
@@ -112,8 +113,7 @@ public class VisualTest extends BaseAiTest
         LlmAssert.assertViaLlmSemanticMatch(s.getReasoning(), "no fox and no red buttons");
 
         // no actions, LLM identified things on its own
-        final var a = s.getActions();
-        assertEquals(0, a.size());
+        assertEquals(0, s.getActions().size());
     }
 
     /**
@@ -136,12 +136,12 @@ public class VisualTest extends BaseAiTest
         final AiExecutionResult r1 = Neodymium.getLastAiExecutionResult();
         Assertions.assertNotNull(r1);
 
-        assertThat(r1).hasNoPesapCalls();
+        assertThat(r1)
+            .hasPesapCalls(1)
+            .hasContextLevel(0, ContextLevel.VISUAL_LEAN)
+            .step(1, s -> s.isLlm(1));
 
         final var s = r1.getSteps().get(1);
-        assertEquals(1, s.getLlmCalls().size());
-        assertEquals(ContextLevel.VISUAL_LEAN, s.getLlmCalls().get(0).getContextLevel());
-
         assertFalse(s.getLlmCalls().get(0).isSuccess());
         assertTrue(s.getLlmCalls().get(0).isDone());
 
@@ -151,8 +151,7 @@ public class VisualTest extends BaseAiTest
             "There is no lion dancing on the moon.");
 
         // no actions, LLM identified things on its own
-        final var a = s.getActions();
-        assertEquals(0, a.size());
+        assertEquals(0, s.getActions().size());
     }
 
     /**
@@ -170,14 +169,13 @@ public class VisualTest extends BaseAiTest
 
         assertThat(r)
             .hasLlmCalls(3)
-            .hasPesapCalls(1)
+            .hasPesapCalls(3)
             .hasNoEscalations()
-            .hasActionsCount(4);
-
-        assertThat(r).hasAction(0, "NAVIGATE");
-        assertThat(r).hasAction(1, "TYPE", "xc_", "bear");
-        assertThat(r).hasAction(2, "CLICK");
-        assertThat(r).hasAction(3, "STORE", "", "animalColor");
+            .hasActionsCount(4)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "CLICK")
+            .hasAction(3, "STORE", "", "animalColor");
 
         // Verify elements on results page
         Selenide.$("#img-bear-1").shouldBe(Condition.visible);

@@ -108,11 +108,11 @@ To easily mock complex, repeatable execution flows, the developer can declare a 
 ### Requirement: Offline Configuration Prerequisites
 To run mock execution successfully offline, the system configuration SHALL allow setting required prerequisites via system properties.
 - The `neodymium.ai.apiKey` property SHALL be set to a non-blank mock string to satisfy production validation checks.
-- The `neodymium.ai.pesap.enabled` property SHOULD be set to `false` to prevent unwanted LLM network requests or queue exhaustion in mock environments where PESAP is not mocked.
+- The `neodymium.ai.pesap.linter.enabled` property SHOULD be set to `false` if remote semantic lint warnings are not needed. PESAP classification is automatically mocked under `MockLlmClient` to prevent queue exhaustion offline.
 
-#### Scenario: Satisfy API key validation and disable PESAP
+#### Scenario: Satisfy API key validation
 - **WHEN** a mock test starts and `MockLlmClient.configureForOffline()` is called
-- **THEN** the system properties are configured, the API key validation passes successfully offline, and PESAP does not make extra LLM calls
+- **THEN** the system properties are configured and the API key validation passes successfully offline
 
 ### Requirement: Support Browserless Page Context Stand-ins
 The system SHALL support injecting a subclass-based `MockPageAnalyzer` to supply canned DOM content strings and capture requested `ContextLevel`s and screenshots offline without a browser session. The core `PageAnalyzer` and AI agent MUST be completely unaware of this mock.

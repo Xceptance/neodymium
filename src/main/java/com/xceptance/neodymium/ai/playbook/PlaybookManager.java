@@ -35,6 +35,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * and dynamically mapping playbook IDs to hierarchical filesystem locations.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class PlaybookManager
 {

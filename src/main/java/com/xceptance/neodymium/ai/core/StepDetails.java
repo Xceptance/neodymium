@@ -27,7 +27,8 @@ import com.xceptance.neodymium.ai.action.Action;
 /**
  * Details of a single instruction step executed by the AI.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class StepDetails
 {
@@ -35,6 +36,8 @@ public final class StepDetails
     private String expandedInstruction;
     private final List<Action> actions;
     private final List<LlmCallDetails> llmCalls;
+    private final List<EscalationDetails> escalations;
+    private LlmCallDetails pesapCall;
     private long durationMs;
     private String failureReason;
     private ContextLevel pesapPredictedContextLevel;
@@ -54,8 +57,24 @@ public final class StepDetails
         this.expandedInstruction = rawInstruction;
         this.actions = Collections.synchronizedList(new ArrayList<>());
         this.llmCalls = Collections.synchronizedList(new ArrayList<>());
+        this.escalations = Collections.synchronizedList(new ArrayList<>());
         this.pesapWarnings = Collections.synchronizedList(new ArrayList<>());
         this.pesapCalled = false;
+    }
+
+    public final List<EscalationDetails> getEscalations()
+    {
+        return this.escalations;
+    }
+
+    public final LlmCallDetails getPesapCall()
+    {
+        return this.pesapCall;
+    }
+
+    public final void setPesapCall(final LlmCallDetails pesapCall)
+    {
+        this.pesapCall = pesapCall;
     }
 
     public final boolean isPesapCalled()

@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.AiTestVerification;
@@ -46,6 +45,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Test that we fail as expected and don't continue. Verifies expected failures (bug tags)
  * for both structural text checks and visual checks.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("featuretest")
@@ -228,24 +230,19 @@ public class BugMarkerTest extends BaseAiTest
             // Step 2: Unexecuted step
 
         // Explicit step details verifications for LIVE_LLM
-        final var stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
+        assertThat(r1.getSteps().get(0)).isDirectParse();
 
         final var stepDetails1 = r1.getSteps().get(1);
-        assertFalse(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        
+        assertThat(stepDetails1).isLlm(1);
         final var llmCall1 = stepDetails1.getLlmCalls().get(0);
         assertEquals(ContextLevel.VISUAL_LEAN, llmCall1.getContextLevel());
         assertNotNull(llmCall1.getBase64Screenshot());
         assertFalse(llmCall1.getBase64Screenshot().isEmpty());
 
-        final var stepDetails2 = r1.getSteps().get(2);
-        assertFalse(stepDetails2.isDirectParse());
-        assertFalse(stepDetails2.isReplayed());
-        assertTrue(stepDetails2.getLlmCalls().isEmpty());
+        assertThat(r1.getSteps().get(2))
+            .isNotDirectParse()
+            .isNotReplayed()
+            .hasNoLlmCalls();
 
         // back to start
         this.resetBrowser();
@@ -262,26 +259,10 @@ public class BugMarkerTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
-            .hasActionsCount(1);
-            // Step 0: Open storefront URL
-            // Step 1: Visual verification (bug)
-            // Step 2: Unexecuted step
-
-        // Explicit step details verifications for REPLAY
-        final var replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
-
-        final var replayStep1 = r2.getSteps().get(1);
-        assertFalse(replayStep1.isDirectParse());
-        assertTrue(replayStep1.isReplayed());
-        assertTrue(replayStep1.getLlmCalls().isEmpty());
-
-        final var replayStep2 = r2.getSteps().get(2);
-        assertFalse(replayStep2.isDirectParse());
-        assertFalse(replayStep2.isReplayed());
-        assertTrue(replayStep2.getLlmCalls().isEmpty());
+            .hasActionsCount(1)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isNotDirectParse().isNotReplayed().hasNoLlmCalls());
     }
 
     /**

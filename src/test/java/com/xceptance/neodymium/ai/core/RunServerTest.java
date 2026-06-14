@@ -28,6 +28,7 @@ import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
  * Keeps the server running indefinitely to allow manual interaction and visual inspection of all test pages.
  * 
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Disabled("Manual utility server - do not run in automated test suites")
 public final class RunServerTest

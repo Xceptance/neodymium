@@ -43,6 +43,7 @@ import com.xceptance.neodymium.common.ScreenshotWriter;
  * single JavaScript execution to minimize WebDriver round-trips for performance.
   *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
 */
 public class PageAnalyzer
 {

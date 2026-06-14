@@ -41,6 +41,10 @@ import com.xceptance.neodymium.util.Neodymium;
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })
+/**
+ * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
+ */
 public final class FormInteractionsTest extends BaseAiTest
 {
     @NeodymiumTest
@@ -84,7 +88,7 @@ public final class FormInteractionsTest extends BaseAiTest
         // The page close/cancel button now overlaps the heading; an immediate visual audit should throw
         assertThrows(AssertionError.class, () -> 
         {
-            Neodymium.ai().execute("Observe page visual consistency (glance). Assert that the 'Cancel' button does not overlap with the 'Security Password' field or adjacent form elements.");
+            Neodymium.ai().execute("Observe page visual consistency (visual). Assert that the 'Cancel' button does not overlap with the 'Security Password' field or adjacent form elements.");
         }, "Visual overlap of cancel button over heading should throw an AssertionError");
     }
 }

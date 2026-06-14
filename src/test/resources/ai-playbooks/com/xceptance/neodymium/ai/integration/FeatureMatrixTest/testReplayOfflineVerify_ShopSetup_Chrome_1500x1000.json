@@ -2,8 +2,8 @@
   "id": "com.xceptance.neodymium.ai.integration.FeatureMatrixTest :: testReplayOfflineVerify :: ShopSetup :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Observe page visual consistency (glance)",
-      "reasoning": "The instruction is to \u0027Observe page visual consistency (glance)\u0027. Based on a visual inspection of the provided screenshot, the page appears to be visually consistent. All elements, including the main heading, navigation, and product cards, are aligned and styled consistently. Although the DOM shows `misaligned-element` classes on some headings, their visual effect is not apparent from a quick glance at the screenshot, and thus, visually, the page is consistent.",
+      "promptLine": "Observe page visual consistency (visual)",
+      "reasoning": "The instruction is to \u0027Observe page visual consistency (visual)\u0027. Based on a visual inspection of the provided screenshot, the page appears to be visually consistent. All elements, including the main heading, navigation, and product cards, are aligned and styled consistently. Although the DOM shows `misaligned-element` classes on some headings, their visual effect is not apparent from a quick glance at the screenshot, and thus, visually, the page is consistent.",
       "actions": [],
       "screenshotHash": "4800010000007f010f017f010000111015503330333033306660111011101110",
       "expectedFailure": false,

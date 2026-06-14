@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
  * and thread-local override resolution logic.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 final class CustomRulesLoaderTest
 {

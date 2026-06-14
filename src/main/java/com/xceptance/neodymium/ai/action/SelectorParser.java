@@ -17,7 +17,8 @@ package com.xceptance.neodymium.ai.action;
  * Utility class to parse and validate selector targets in direct command shortcuts.
  * Supports css= and xpath= prefixes, defaulting to CSS.
  *
- * // AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 2.5 Pro
+ * @author Xceptance GmbH 2026
  */
 public final class SelectorParser
 {

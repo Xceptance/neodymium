@@ -58,6 +58,10 @@ import com.xceptance.neodymium.ai.playbook.Playbook;
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })
+/**
+ * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
+ */
 public final class FeatureMatrixTest extends BaseAiTest
 {
     private String httpShopUrl;
@@ -92,8 +96,6 @@ public final class FeatureMatrixTest extends BaseAiTest
         // Start capturing logs in parallel
         logAppender = LogCaptureAppender.startCapture();
 
-        // Explicitly enable PESAP for FeatureMatrixTest as it tests multi-port, timing, and dHash features
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
     }
 
     /**
@@ -196,7 +198,7 @@ public final class FeatureMatrixTest extends BaseAiTest
         open(httpShopUrl);
 
         // Stage 1: Live visual check (generates local dHash baseline cache)
-        Neodymium.ai().execute("Observe page visual consistency (glance)");
+        Neodymium.ai().execute("Observe page visual consistency (visual)");
         final AiExecutionResult r1 = Neodymium.getLastAiExecutionResult();
         assertThat(r1).hasPesapCalls(1);
 
@@ -210,7 +212,7 @@ public final class FeatureMatrixTest extends BaseAiTest
         final long replayStart = System.nanoTime();
 
         // Stage 2: Replay the identical step (succeeds instantly offline via cache)
-        Neodymium.ai().execute("Observe page visual consistency (glance)");
+        Neodymium.ai().execute("Observe page visual consistency (visual)");
         final AiExecutionResult r2 = Neodymium.getLastAiExecutionResult();
         assertThat(r2).hasNoPesapCalls();
 

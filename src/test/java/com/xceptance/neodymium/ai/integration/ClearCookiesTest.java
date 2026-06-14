@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -42,6 +41,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Integration test verifying AI clear cookies commands and their validation flow
  * in both live LLM and replay modes.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -79,12 +81,8 @@ public class ClearCookiesTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
-            .hasActionsCount(1);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
+            .hasActionsCount(1)
+            .step(0, s -> s.isDirectParse());
 
         assertNull(WebDriverRunner.getWebDriver().manage().getCookieNamed("test_cookie"));
 
@@ -103,12 +101,8 @@ public class ClearCookiesTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(1)
-            .hasActionsCount(1);
-
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
+            .hasActionsCount(1)
+            .step(0, s -> s.isReplayed());
 
         assertNull(WebDriverRunner.getWebDriver().manage().getCookieNamed("test_cookie"));
     }
@@ -133,12 +127,8 @@ public class ClearCookiesTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(0)
-            .hasActionsCount(1);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertFalse(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertEquals(1, stepDetails0.getLlmCalls().size());
+            .hasActionsCount(1)
+            .step(0, s -> s.isLlm(1));
 
         assertNull(WebDriverRunner.getWebDriver().manage().getCookieNamed("test_cookie"));
 
@@ -157,12 +147,8 @@ public class ClearCookiesTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(1)
-            .hasActionsCount(1);
-
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
+            .hasActionsCount(1)
+            .step(0, s -> s.isReplayed());
 
         assertNull(WebDriverRunner.getWebDriver().manage().getCookieNamed("test_cookie"));
     }

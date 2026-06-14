@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Claude Opus 4.6
 package com.xceptance.neodymium.ai.integration;
 
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
@@ -39,6 +38,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * language instructions against the Posters storefront search form.
  *
  * @author AI-generated: Claude Opus 4.6
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")

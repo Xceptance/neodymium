@@ -1,7 +1,7 @@
 ## 1. Parser Implementation
 
 - [ ] 1.1 Create `com.xceptance.neodymium.ai.core.parser.StepParser` class with a stack-based, nesting-aware parser.
-- [ ] 1.2 Implement parsing and extraction of tags: `visual`, `glance`, `soft`, `optional`, `bug`, `timeout`, `hint`, `selector`.
+- [ ] 1.2 Implement parsing and extraction of tags: `visual`, `layout`, `soft`, `optional`, `bug`, `timeout`, `hint`, `selector`.
 - [ ] 1.3 Add syntax validation rules for unbalanced parentheses, empty tag parameters, and malformed timeouts.
 
 ## 2. Integration and Updates

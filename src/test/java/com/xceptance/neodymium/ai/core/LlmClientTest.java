@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,6 +24,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests for the {@link LlmClient} masking utilities.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 class LlmClientTest
 {

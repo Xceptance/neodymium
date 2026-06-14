@@ -1,0 +1,43 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.LayoutTest :: testLayoutTagForcesVisualContext :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/a11y/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/a11y/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/a11y/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Verify that the main heading says \u0027Visual Integrity \u0026 Accessibility Auditing\u0027 (layout)",
+      "reasoning": "The main heading element `h1` with text \u0027Visual Integrity \u0026 Accessibility Auditing\u0027 was found and verified against the instruction.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "h1",
+          "value": [
+            "Visual Integrity \u0026 Accessibility Auditing"
+          ],
+          "description": "Verify that the main heading says \u0027Visual Integrity \u0026 Accessibility Auditing\u0027",
+          "elementDetails": "Visual Integrity \u0026 Accessibility Auditing",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "screenshotHash": "4801000100017f0145017f01000101010101516d210121018001010101000100",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    }
+  ]
+}

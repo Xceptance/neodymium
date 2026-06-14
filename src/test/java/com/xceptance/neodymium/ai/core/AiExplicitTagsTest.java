@@ -54,6 +54,9 @@ import com.xceptance.neodymium.ai.core.LlmClient;
  * - Tag parsing & clean tag stripping architecture.
  * - Soft/Optional step execution failure bypassing.
  * - Timeout isolation under all outcomes.
+ * 
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiExplicitTagsTest
 {
@@ -192,16 +195,19 @@ public final class AiExplicitTagsTest
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
             List.class, String.class, List.class, Integer.class, String.class,
-            StepDetails.class, AiExecutionResult.class
+            StepDetails.class, AiExecutionResult.class,
+            List.class, List.class
         );
         executeStepMethod.setAccessible(true);
 
+        final String stepText = "Click element";
         executeStepMethod.invoke(
             agent,
-            0, "Click element", false, null,
+            0, stepText, false, null,
             false, 500L,
             new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
-            new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
+            new StepDetails(stepText), new AiExecutionResult(new HashMap<>()),
+            new ArrayList<String>(), new ArrayList<Integer>()
         );
 
         assertEquals(1, recordedTimeouts.size());
@@ -245,18 +251,21 @@ public final class AiExplicitTagsTest
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
             List.class, String.class, List.class, Integer.class, String.class,
-            StepDetails.class, AiExecutionResult.class
+            StepDetails.class, AiExecutionResult.class,
+            List.class, List.class
         );
         executeStepMethod.setAccessible(true);
 
+        final String stepText = "Click element";
         try
         {
             executeStepMethod.invoke(
                 agent,
-                0, "Click element", false, null,
+                0, stepText, false, null,
                 false, 2000L,
                 new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
-                new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
+                new StepDetails(stepText), new AiExecutionResult(new HashMap<>()),
+                new ArrayList<String>(), new ArrayList<Integer>()
             );
         }
         catch (final Exception e)
@@ -301,17 +310,20 @@ public final class AiExplicitTagsTest
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
             List.class, String.class, List.class, Integer.class, String.class,
-            StepDetails.class, AiExecutionResult.class
+            StepDetails.class, AiExecutionResult.class,
+            List.class, List.class
         );
         executeStepMethod.setAccessible(true);
 
+        final String stepText = "Click element";
         // This invocation should complete cleanly without throwing an exception!
         executeStepMethod.invoke(
             agent,
-            0, "Click element", false, null,
+            0, stepText, false, null,
             true, null,
             new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
-            new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
+            new StepDetails(stepText), new AiExecutionResult(new HashMap<>()),
+            new ArrayList<String>(), new ArrayList<Integer>()
         );
 
         // Verify the step was handled as optional and saved to playbook step
@@ -348,17 +360,20 @@ public final class AiExplicitTagsTest
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
             List.class, String.class, List.class, Integer.class, String.class,
-            StepDetails.class, AiExecutionResult.class
+            StepDetails.class, AiExecutionResult.class,
+            List.class, List.class
         );
         executeStepMethod.setAccessible(true);
 
+        final String stepText = "Verify text";
         // This invocation should complete cleanly without throwing an exception!
         executeStepMethod.invoke(
             agent,
-            0, "Verify text", false, null,
+            0, stepText, false, null,
             true, null,
             new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
-            new StepDetails("Verify text"), new AiExecutionResult(new HashMap<>())
+            new StepDetails(stepText), new AiExecutionResult(new HashMap<>()),
+            new ArrayList<String>(), new ArrayList<Integer>()
         );
 
         assertEquals("Verify text", pbStep.getPromptLine(), "Expected prompt line to be 'Verify text', but got: '" + pbStep.getPromptLine() + "'");
@@ -394,17 +409,20 @@ public final class AiExplicitTagsTest
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
             List.class, String.class, List.class, Integer.class, String.class,
-            StepDetails.class, AiExecutionResult.class
+            StepDetails.class, AiExecutionResult.class,
+            List.class, List.class
         );
         executeStepMethod.setAccessible(true);
 
+        final String stepText = "Click element";
         // This invocation should complete cleanly without throwing an exception!
         executeStepMethod.invoke(
             agent,
-            0, "Click element", false, null,
+            0, stepText, false, null,
             true, null,
             new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
-            new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
+            new StepDetails(stepText), new AiExecutionResult(new HashMap<>()),
+            new ArrayList<String>(), new ArrayList<Integer>()
         );
 
         assertEquals("Click element", pbStep.getPromptLine(), "Expected prompt line to be 'Click element', but got: '" + pbStep.getPromptLine() + "'");
@@ -442,7 +460,8 @@ public final class AiExplicitTagsTest
         // Set the currentStepsList field via reflection
         final Field stepsField = AiAgent.class.getDeclaredField("currentStepsList");
         stepsField.setAccessible(true);
-        stepsField.set(agent, List.of("Open the homepage", "Verify the price is greater than zero", "Click checkout"));
+        final StepDetails stepDetails = new StepDetails("Verify the price is greater than zero");
+        stepsField.set(agent, List.of("Open the homepage", stepDetails.getRawInstruction(), "Click checkout"));
 
         // Invoke runPreStepPesap via reflection
         final Method runPreStepPesapMethod = AiAgent.class.getDeclaredMethod(
@@ -451,7 +470,6 @@ public final class AiExplicitTagsTest
         );
         runPreStepPesapMethod.setAccessible(true);
 
-        final StepDetails stepDetails = new StepDetails("Verify the price is greater than zero");
         final Object result = runPreStepPesapMethod.invoke(agent, 1, null, stepDetails);
 
         assertNotNull(result, "Expected JIT PESAP to return a non-null result");
@@ -459,11 +477,7 @@ public final class AiExplicitTagsTest
         assertEquals("Verify the price value", stepDetails.getPesapDirection());
 
         // Verify the cache is populated
-        final Field cacheField = AiAgent.class.getDeclaredField("pesapCache");
-        cacheField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        final Map<Integer, ?> cache = (Map<Integer, ?>) cacheField.get(agent);
-        assertNotNull(cache.get(1), "Expected cache to contain step 1 result");
+        assertTrue(stepDetails.isPesapCalled(), "Expected JIT PESAP call flag to be true");
     }
 
     /**
@@ -496,7 +510,8 @@ public final class AiExplicitTagsTest
 
         final Field stepsField = AiAgent.class.getDeclaredField("currentStepsList");
         stepsField.setAccessible(true);
-        stepsField.set(agent, List.of("Click button"));
+        final StepDetails stepDetails = new StepDetails("Click button");
+        stepsField.set(agent, List.of(stepDetails.getRawInstruction()));
 
         final Method runPreStepPesapMethod = AiAgent.class.getDeclaredMethod(
             "runPreStepPesap",
@@ -504,7 +519,6 @@ public final class AiExplicitTagsTest
         );
         runPreStepPesapMethod.setAccessible(true);
 
-        final StepDetails stepDetails = new StepDetails("Click button");
         final Object result = runPreStepPesapMethod.invoke(agent, 0, null, stepDetails);
 
         // Should return null on failure (graceful fallback)
@@ -544,9 +558,10 @@ public final class AiExplicitTagsTest
 
         final Field stepsField = AiAgent.class.getDeclaredField("currentStepsList");
         stepsField.setAccessible(true);
+        final StepDetails stepDetails = new StepDetails("Click the first product");
         stepsField.set(agent, List.of(
             "Search for Screwdriver",
-            "Click the first product",
+            stepDetails.getRawInstruction(),
             "Add to cart",
             "Go to checkout",
             "Enter payment details"
@@ -558,7 +573,6 @@ public final class AiExplicitTagsTest
         );
         runPreStepPesapMethod.setAccessible(true);
 
-        final StepDetails stepDetails = new StepDetails("Click the first product");
         runPreStepPesapMethod.invoke(agent, 1, null, stepDetails);
 
         final String prompt = capturedUserPrompt.get();

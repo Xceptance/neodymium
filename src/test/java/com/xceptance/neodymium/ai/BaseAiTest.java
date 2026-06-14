@@ -52,8 +52,9 @@ import java.util.Objects;
  * Automatically manages an embedded HTTP server and determines the test URL based on class/method name.
  * 
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
-public abstract class BaseAiTest
+public abstract class BaseAiTest extends BaseLlmTest
 {
     protected static EmbeddedHtmlServer server;
     protected String currentTestUrl;
@@ -68,12 +69,6 @@ public abstract class BaseAiTest
     public static void startServer() throws IOException
     {
         Configuration.headless = true;
-        // Resolve key dynamically from standard environment variable to avoid hardcoding secrets in git
-        final String envKey = System.getenv("GEMINI_API_KEY");
-        if (envKey != null && !envKey.trim().isEmpty() && System.getProperty("neodymium.ai.apiKey") == null)
-        {
-            System.setProperty("neodymium.ai.apiKey", envKey.trim());
-        }
         server = new EmbeddedHtmlServer();
         server.start();
     }

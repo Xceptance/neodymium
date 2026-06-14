@@ -79,8 +79,8 @@ Before running a browserless mock test, you **must** configure these system prop
 // Sets a dummy mock key to satisfy the API key guard
 System.setProperty("neodymium.ai.apiKey", "mock-offline-key");
 
-// Disables default PESAP static analysis LLM calls
-System.setProperty("neodymium.ai.pesap.enabled", "false");
+// Optionally disables the PESAP semantic linter
+System.setProperty("neodymium.ai.pesap.linter.enabled", "false");
 ```
 
 Alternatively, you can call the convenience helper `MockLlmClient.configureForOffline()` which sets these system properties automatically.
@@ -541,7 +541,7 @@ To run the automated visual regression and parameterization suites locally:
 # 1. Compile all test cases
 mvn test-compile
 
-# 2. Run all local visual matrix and glance tests
+# 2. Run all local visual matrix and visual integration tests
 mvn test -Pjunit-5 -Dtest=com.xceptance.neodymium.ai.Aura*Test
 ```
 

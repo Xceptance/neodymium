@@ -54,7 +54,7 @@ Each interactive browser step intercepted by Neodymium's runner MUST be logged a
 - **THEN** Neodymium logs a `STEP_EXECUTION` event containing:
   - `index` (1-indexed chronological position)
   - `instruction` (fully stripped natural language instruction)
-  - `stepType` (one of `STANDARD`, `LAYOUT`, `GLANCE`, `USABILITY`, `LANGUAGE`)
+  - `stepType` (one of `STANDARD`, `LAYOUT`, `VISUAL`, `USABILITY`, `LANGUAGE`)
   - `status` (one of `PASSED`, `FAILED`, `WARNING`, `SKIPPED`)
   - `durationMs` (execution time in milliseconds)
   - `actions` (array of physical WebDriver/Selenide action records)
@@ -81,7 +81,7 @@ The logging protocol MUST support embedding visual and layout linter audit resul
 When a test step tagged with `(soft)` fails or detects non-critical visual anomalies, the runner SHALL log the step with `status: "WARNING"` and continue execution without halting the test.
 
 #### Scenario: Verify soft step warning logging
-- **WHEN** a playbook step `Observe visual consistency (soft) (glance)` fails with visual anomalies
+- **WHEN** a playbook step `Observe visual consistency (soft) (visual)` fails with visual anomalies
 - **THEN** Neodymium:
   - Emits a `STEP_EXECUTION` event with `status: "WARNING"` and populates the `visualAnomalies` array.
   - Logs a warning message to the standard developer console: `⚠️ Soft step warning: [anomaly descriptions]`.

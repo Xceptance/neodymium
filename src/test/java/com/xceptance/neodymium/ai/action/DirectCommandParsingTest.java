@@ -39,7 +39,8 @@ import com.xceptance.neodymium.ai.action.plugins.ClearCookiesAction;
  * Pure unit tests verifying direct command shortcut parsing logic across all interactive plugins
  * and the shared SelectorParser utility.
  *
- * // AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 2.5 Pro
+ * @author Xceptance GmbH 2026
  */
 public final class DirectCommandParsingTest
 {

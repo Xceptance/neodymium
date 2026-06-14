@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
  * Thread-safe via atomic counters.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public class AiStats
 {

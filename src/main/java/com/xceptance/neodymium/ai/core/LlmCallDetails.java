@@ -23,7 +23,8 @@ import com.xceptance.neodymium.ai.action.ActionParser;
 /**
  * Details of a single LLM call made during AI execution.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class LlmCallDetails
 {

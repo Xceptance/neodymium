@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
  * or vague actions) and suggests improvements before executing the test.
  * 
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class StepLinter
 {

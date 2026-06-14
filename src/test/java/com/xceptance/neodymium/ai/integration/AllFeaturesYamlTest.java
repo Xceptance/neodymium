@@ -46,6 +46,10 @@ import com.xceptance.neodymium.util.Neodymium;
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })
+/**
+ * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
+ */
 public final class AllFeaturesYamlTest extends BaseAiTest
 {
     /**
@@ -59,10 +63,8 @@ public final class AllFeaturesYamlTest extends BaseAiTest
     {
         final int port = server.getPort();
         final int httpsPort = server.getHttpsPort();
-        
         Neodymium.getData().put("port", String.valueOf(port));
         Neodymium.getData().put("httpsPort", String.valueOf(httpsPort));
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
     }
 
     /**

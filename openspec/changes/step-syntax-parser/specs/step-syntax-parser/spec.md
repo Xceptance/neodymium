@@ -1,10 +1,10 @@
 ## ADDED Requirements
 
 ### Requirement: Step Syntax Parsing
-The system SHALL parse step instructions to extract and validate special directives/tags (case-insensitive `(visual)`, `(glance)`, `(soft)`, `(bug)`, `(bug: <id>)`, `(hint: <selector>)`, and `(selector: <selector>)`).
+The system SHALL parse step instructions to extract and validate special directives/tags (case-insensitive `(visual)`, `(layout)`, `(soft)`, `(bug)`, `(bug: <id>)`, `(hint: <selector>)`, and `(selector: <selector>)`).
 
-#### Scenario: Parse visual and glance tags
-- **WHEN** the step contains the directive `(visual)` or `(glance)`
+#### Scenario: Parse visual and layout tags
+- **WHEN** the step contains the directive `(visual)` or `(layout)`
 - **THEN** the parser SHALL successfully identify and extract the directive
 
 #### Scenario: Parse parameterised tags with nested parentheses

@@ -32,7 +32,8 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Test cases verifying Pre-Execution Static Analysis Phase (PESAP) classification and linter logic.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiPesapExecutionTest extends BaseAiOfflineTest
 {
@@ -46,9 +47,7 @@ public final class AiPesapExecutionTest extends BaseAiOfflineTest
     @Test
     public final void testEndToEndPesapFlow()
     {
-        // 1. Explicitly enable PESAP for this test run
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
-        Neodymium.getData().put("neodymium.ai.pesap.classify.enabled", "true");
+        // 1. Explicitly configure linter for this test run
         Neodymium.getData().put("neodymium.ai.pesap.linter.enabled", "false");
 
         // 2. Queue the PESAP classification mock response (LlmMode.PESAP query)
@@ -110,6 +109,11 @@ public final class AiPesapExecutionTest extends BaseAiOfflineTest
         Assertions.assertFalse(step.isPesapPageNavigation());
         Assertions.assertFalse(step.isPesapRequiresJavaMethods());
         Assertions.assertEquals("Click standard button", step.getPesapDirection());
+        Assertions.assertNotNull(step.getPesapCall());
+        final LlmCallDetails pesapCall = step.getPesapCall();
+        Assertions.assertEquals(50L, pesapCall.getInputTokens());
+        Assertions.assertEquals(25L, pesapCall.getOutputTokens());
+        Assertions.assertEquals(LlmMode.PESAP, pesapCall.getCallMode());
     }
 
     /**
@@ -119,9 +123,7 @@ public final class AiPesapExecutionTest extends BaseAiOfflineTest
     @Test
     public final void testPesapClassifierAndLinterFlow()
     {
-        // 1. Explicitly enable both PESAP classification and linter properties
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
-        Neodymium.getData().put("neodymium.ai.pesap.classify.enabled", "true");
+        // 1. Explicitly enable linter property
         Neodymium.getData().put("neodymium.ai.pesap.linter.enabled", "true");
 
         // 2. Queue classification response
@@ -168,93 +170,13 @@ public final class AiPesapExecutionTest extends BaseAiOfflineTest
         Assertions.assertEquals(50L, result.getPesapInputTokens());
         Assertions.assertEquals(25L, result.getPesapOutputTokens());
         Assertions.assertEquals(75L, result.getPesapTotalTokens());
-    }
 
-    /**
-     * Verifies that when classification is disabled, no JIT pre-step PESAP calls are made,
-     * even if linter is enabled.
-     */
-    @Test
-    public final void testPesapOnlyLinterEnabledFlow()
-    {
-        // 1. Enable linter but disable classification
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
-        Neodymium.getData().put("neodymium.ai.pesap.classify.enabled", "false");
-        Neodymium.getData().put("neodymium.ai.pesap.linter.enabled", "true");
-
-        // 2. Queue standard agent execution response
-        this.llmClient.addResponse(AiMockResponse.builder()
-                .responseText(
-                    """
-                    {
-                      "s": true,
-                      "r": "Success",
-                      "a": [{"t": "CLICK", "tg": "#btn"}],
-                      "d": true
-                    }
-                    """)
-                .tokens(100L, 50L, 0L)
-                .build());
-
-        // 3. Run the execution
-        final AiExecutionResult result = this.mockBrowser.execute("Click button");
-
-        // 4. Assertions
-        Assertions.assertNotNull(result);
-        Assertions.assertTrue(result.isSuccess());
-
-        // Assert exact PESAP call count is 0 (classification disabled)
-        Assertions.assertEquals(0, this.llmClient.getAiStats().getPesapCallCount());
-
-        // PESAP tokens should be zero
-        Assertions.assertEquals(0L, result.getPesapInputTokens());
-        Assertions.assertEquals(0L, result.getPesapOutputTokens());
-
-        // Step predicted context level should remain null
         Assertions.assertEquals(1, result.getSteps().size());
         final StepDetails step = result.getSteps().get(0);
-        Assertions.assertNull(step.getPesapPredictedContextLevel());
-    }
-
-    /**
-     * Verifies that when both classification and linter are disabled, no PESAP queries
-     * are sent to the LLM, and PESAP token metrics are zero.
-     */
-    @Test
-    public final void testPesapBothDisabledFlow()
-    {
-        // 1. Disable both PESAP sub-switches
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
-        Neodymium.getData().put("neodymium.ai.pesap.classify.enabled", "false");
-        Neodymium.getData().put("neodymium.ai.pesap.linter.enabled", "false");
-
-        // 2. Queue standard agent execution response (first and only call)
-        this.llmClient.addResponse(AiMockResponse.builder()
-                .responseText(
-                    """
-                    {
-                      "s": true,
-                      "r": "Success",
-                      "a": [{"t": "CLICK", "tg": "#btn"}],
-                      "d": true
-                    }
-                    """)
-                .tokens(100L, 50L, 0L)
-                .build());
-
-        // 3. Run the execution
-        final AiExecutionResult result = this.mockBrowser.execute("Click button");
-
-        // 4. Assertions
-        Assertions.assertNotNull(result);
-        Assertions.assertTrue(result.isSuccess());
-
-        // Assert exact PESAP call count is 0
-        Assertions.assertEquals(0, this.llmClient.getAiStats().getPesapCallCount());
-
-        // PESAP tokens should be zero
-        Assertions.assertEquals(0L, result.getPesapInputTokens());
-        Assertions.assertEquals(0L, result.getPesapOutputTokens());
-        Assertions.assertEquals(0L, result.getPesapTotalTokens());
+        Assertions.assertNotNull(step.getPesapCall());
+        final LlmCallDetails pesapCall = step.getPesapCall();
+        Assertions.assertEquals(50L, pesapCall.getInputTokens());
+        Assertions.assertEquals(25L, pesapCall.getOutputTokens());
+        Assertions.assertEquals(LlmMode.PESAP, pesapCall.getCallMode());
     }
 }
