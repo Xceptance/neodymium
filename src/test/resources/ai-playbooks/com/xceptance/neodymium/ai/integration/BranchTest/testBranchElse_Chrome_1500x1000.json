@@ -1,16 +1,16 @@
 {
-  "id": "com.xceptance.neodymium.ai.integration.BranchTest :: testBranch :: Browser Chrome_1500x1000",
+  "id": "com.xceptance.neodymium.ai.integration.BranchTest :: testBranchElse :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "OPEN http://localhost:43377/BranchActionTest/testBranchHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/BranchActionTest/testBranchHappyPath.html?noCookies\u003dtrue",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
-            "http://localhost:43377/BranchActionTest/testBranchHappyPath.html"
+            "http://localhost:43377/BranchActionTest/testBranchHappyPath.html?noCookies\u003dtrue"
           ],
-          "description": "Navigate to http://localhost:43377/BranchActionTest/testBranchHappyPath.html",
+          "description": "Navigate to http://localhost:43377/BranchActionTest/testBranchHappyPath.html?noCookies\u003dtrue",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -20,11 +20,11 @@
     },
     {
       "promptLine": "If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
-      "reasoning": "Translated the conditional instruction into a BRANCH action.",
+      "reasoning": "Performed a conditional branch to click either the Accept Cookies button or the Main Action Button based on visibility.",
       "actions": [
         {
           "type": "BRANCH",
-          "description": "Conditional click based on Accept Cookies button visibility",
+          "description": "Conditional click based on cookie button visibility",
           "elementContext": {},
           "replay": "",
           "condition": [
@@ -47,12 +47,7 @@
               "target": "#btn-accept",
               "description": "Click the Accept Cookies button",
               "elementDetails": "Accept Cookies button",
-              "elementContext": {
-                "text": "Accept Cookies",
-                "id": "btn-accept",
-                "tagName": "button",
-                "type": "submit"
-              },
+              "elementContext": {},
               "replay": "",
               "adjust": false
             }
@@ -63,7 +58,12 @@
               "target": "#btn-main-action",
               "description": "Click the Main Action Button",
               "elementDetails": "Main Action Button",
-              "elementContext": {},
+              "elementContext": {
+                "text": "Main Action Button",
+                "id": "btn-main-action",
+                "tagName": "button",
+                "type": "submit"
+              },
               "replay": "",
               "adjust": false
             }

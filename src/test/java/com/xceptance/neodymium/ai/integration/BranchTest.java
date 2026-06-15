@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Tag;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
+import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.common.browser.Browser;
@@ -78,7 +79,8 @@ public class BranchTest extends BaseAiTest
             .step(0, s -> s.isDirectParse())
             .step(1, s -> s.isLlm(1));
 
-        assertEquals("Cookies Accepted!", Selenide.$("#result").text());
+        assertEquals("Cookies Accepted!", 
+            Selenide.$("#result").shouldBe(Condition.visible).text());
 
         // close browser and start replay
         this.resetBrowser();
@@ -96,6 +98,93 @@ public class BranchTest extends BaseAiTest
             .step(1, s -> s.isReplayed());
 
         assertEquals("Cookies Accepted!", Selenide.$("#result").text());
+    }
+
+    /**
+     * Test conditional branches where the condition is false and executes the else branch.
+     */
+    @NeodymiumTest
+    public final void testBranchElse()
+    {
+        final String steps = """
+                OPEN ${branch.test.url}?noCookies=true
+                If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isLlm(1));
+
+        assertEquals("Main Action Triggered!", 
+            Selenide.$("#result").shouldBe(Condition.visible).text());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
+
+        assertEquals("Main Action Triggered!", Selenide.$("#result").text());
+    }
+
+    /**
+     * Test conditional branches where the condition is false and no else branch exists.
+     */
+    @NeodymiumTest
+    public final void testBranchNoElse()
+    {
+        final String steps = """
+                OPEN ${branch.test.url}?noCookies=true
+                If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept)
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isLlm(1));
+
+        assertEquals("", Selenide.$("#result").text());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
+
+        assertEquals("", Selenide.$("#result").text());
     }
 
     /**
