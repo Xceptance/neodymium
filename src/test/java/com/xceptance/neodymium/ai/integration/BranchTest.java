@@ -193,7 +193,7 @@ public class BranchTest extends BaseAiTest
     {
         final String steps = """
                 OPEN ${branch.test.url}
-                Wenn die Schaltfläche Cookies akzeptieren (hint: #btn-accept) sichtbar ist, dann klicke auf die Schaltfläche Cookies akzeptieren (hint: #btn-accept), andernfalls klicke auf die Hauptschaltfläche (hint: #btn-main-action)
+                Wenn die Schaltfläche Cookies akzeptieren (hint: #btn-accept) sichtbar ist, dann klicke sie (hint: #btn-accept), andernfalls klicke auf den Hauptknopf (hint: #btn-main-action)
             """;
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
@@ -226,6 +226,94 @@ public class BranchTest extends BaseAiTest
             .step(1, s -> s.isReplayed());
 
         assertEquals("Cookies Accepted!", Selenide.$("#result").text());
+    }
+
+    /**
+     * Test nested conditional branches (if-else inside if-else).
+     */
+    @NeodymiumTest
+    public final void testBranchNested()
+    {
+        final String steps = """
+                OPEN ${branch.test.url}?acceptHidden=true
+                If the Cookie Banner (hint: #cookie-banner) is visible, then (If the Accept Cookies button (hint: #btn-accept) is visible, then click it (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)), else click the Main Action Button (hint: #btn-main-action)
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isLlm(1));
+
+        assertEquals("Main Action Triggered!", 
+            Selenide.$("#result").shouldBe(Condition.visible).text());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
+
+        assertEquals("Main Action Triggered!", Selenide.$("#result").text());
+    }
+
+    /**
+     * Test compound conditional branch (multiple conditions in the 'c' condition array).
+     */
+    @NeodymiumTest
+    public final void testBranchCompound()
+    {
+        final String steps = """
+                OPEN ${branch.test.url}?acceptText=Accept
+                If the Accept Cookies button (hint: #btn-accept) is visible and contains the text "Accept Cookies" (hint: #btn-accept), then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isLlm(1));
+
+        assertEquals("Main Action Triggered!", 
+            Selenide.$("#result").shouldBe(Condition.visible).text());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
+
+        assertEquals("Main Action Triggered!", Selenide.$("#result").text());
     }
 }
 

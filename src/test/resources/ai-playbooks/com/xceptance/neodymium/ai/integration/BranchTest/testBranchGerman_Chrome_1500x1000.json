@@ -19,12 +19,12 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Wenn die Schaltfläche Cookies akzeptieren (hint: #btn-accept) sichtbar ist, dann klicke auf die Schaltfläche Cookies akzeptieren (hint: #btn-accept), andernfalls klicke auf die Hauptschaltfläche (hint: #btn-main-action)",
-      "reasoning": "Performed a conditional click: if \u0027Cookies akzeptieren\u0027 button is visible, click it, otherwise click \u0027Hauptschaltfläche\u0027.",
+      "promptLine": "Wenn die Schaltfläche Cookies akzeptieren (hint: #btn-accept) sichtbar ist, dann klicke sie (hint: #btn-accept), andernfalls klicke auf den Hauptknopf (hint: #btn-main-action)",
+      "reasoning": "Performed a conditional click: if \u0027Cookies akzeptieren\u0027 button is visible, click it, otherwise click the main button.",
       "actions": [
         {
           "type": "BRANCH",
-          "description": "Conditional click based on visibility of \u0027Cookies akzeptieren\u0027 button",
+          "description": "Conditional click based on cookie button visibility",
           "elementContext": {},
           "replay": "",
           "condition": [
@@ -61,8 +61,8 @@
             {
               "type": "CLICK",
               "target": "#btn-main-action",
-              "description": "Click \u0027Hauptschaltfläche\u0027",
-              "elementDetails": "Hauptschaltfläche",
+              "description": "Click main button",
+              "elementDetails": "Hauptknopf",
               "elementContext": {},
               "replay": "",
               "adjust": false

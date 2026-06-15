@@ -20,11 +20,11 @@
     },
     {
       "promptLine": "If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
-      "reasoning": "Translated the conditional instruction into a BRANCH action.",
+      "reasoning": "Performed a conditional check: if \u0027Accept Cookies button\u0027 is visible, click it, otherwise click \u0027Main Action Button\u0027.",
       "actions": [
         {
           "type": "BRANCH",
-          "description": "Conditional click based on Accept Cookies button visibility",
+          "description": "Conditional check for Accept Cookies button visibility",
           "elementContext": {},
           "replay": "",
           "condition": [

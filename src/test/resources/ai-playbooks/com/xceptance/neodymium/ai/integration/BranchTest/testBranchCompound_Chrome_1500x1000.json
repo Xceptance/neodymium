@@ -1,16 +1,16 @@
 {
-  "id": "com.xceptance.neodymium.ai.integration.BranchTest :: testBranchElse :: Browser Chrome_1500x1000",
+  "id": "com.xceptance.neodymium.ai.integration.BranchTest :: testBranchCompound :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "OPEN http://localhost:43377/BranchActionTest/testBranchHappyPath.html?noCookies\u003dtrue",
+      "promptLine": "OPEN http://localhost:43377/BranchActionTest/testBranchHappyPath.html?acceptText\u003dAccept",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
-            "http://localhost:43377/BranchActionTest/testBranchHappyPath.html?noCookies\u003dtrue"
+            "http://localhost:43377/BranchActionTest/testBranchHappyPath.html?acceptText\u003dAccept"
           ],
-          "description": "Navigate to http://localhost:43377/BranchActionTest/testBranchHappyPath.html?noCookies\u003dtrue",
+          "description": "Navigate to http://localhost:43377/BranchActionTest/testBranchHappyPath.html?acceptText\u003dAccept",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -19,12 +19,12 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
-      "reasoning": "Performed a conditional check: if the Accept Cookies button is visible, click it, otherwise click the Main Action Button.",
+      "promptLine": "If the Accept Cookies button (hint: #btn-accept) is visible and contains the text \"Accept Cookies\" (hint: #btn-accept), then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
+      "reasoning": "Translated the conditional instruction into a BRANCH action with visibility and text assertions, and corresponding click actions.",
       "actions": [
         {
           "type": "BRANCH",
-          "description": "Conditional check for Accept Cookies button visibility",
+          "description": "Conditional action based on cookie button visibility and text",
           "elementContext": {},
           "replay": "",
           "condition": [
@@ -35,6 +35,18 @@
                 "visible"
               ],
               "description": "Check if Accept Cookies button is visible",
+              "elementDetails": "Accept Cookies button",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            },
+            {
+              "type": "ASSERT",
+              "target": "#btn-accept",
+              "value": [
+                "Accept Cookies"
+              ],
+              "description": "Check if Accept Cookies button contains text \u0027Accept Cookies\u0027",
               "elementDetails": "Accept Cookies button",
               "elementContext": {},
               "replay": "",
