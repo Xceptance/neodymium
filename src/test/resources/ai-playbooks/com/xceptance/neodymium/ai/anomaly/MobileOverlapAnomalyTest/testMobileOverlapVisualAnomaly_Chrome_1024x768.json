@@ -8,8 +8,8 @@
         {
           "type": "CLICK",
           "target": "#aura-trigger",
-          "description": "Click on \u0027Aura Defect Controls\u0027 trigger button.",
-          "elementDetails": "\u0027Aura Defect Controls\u0027 trigger button",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls trigger button",
           "elementContext": {
             "classes": "aura-controls-trigger",
             "id": "aura-trigger",
@@ -50,8 +50,8 @@
         {
           "type": "CLICK",
           "target": "#aura-close",
-          "description": "Click close button",
-          "elementDetails": "close button",
+          "description": "Click the close button",
+          "elementDetails": "close button of the controls drawer",
           "elementContext": {
             "classes": "drawer-close",
             "text": "×",
@@ -68,7 +68,7 @@
     },
     {
       "promptLine": "Observe page visual consistency (visual). Assert that the cards are fully responsive, wrapping to new lines, and that there is NO massive horizontal grid overflow, layout clipping, or card squeezing.",
-      "reasoning": "The screenshot shows a well-structured layout with no visible horizontal grid overflow, layout clipping, or card squeezing. The content within the cards appears to be fully contained and responsive, wrapping appropriately within their boundaries. The overall visual consistency is good.",
+      "reasoning": "The screenshot shows the cards (sections) are stacked vertically, indicating they are responsive and wrapping as expected. There is no visible horizontal scrollbar, content overflow, layout clipping, or card squeezing. The layout appears visually consistent and well-aligned.",
       "actions": [],
       "screenshotHash": "0001800100017e817f017d812a637f8100010001280100011001700300010003",
       "expectedFailure": false,

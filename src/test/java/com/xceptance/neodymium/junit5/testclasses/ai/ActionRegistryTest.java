@@ -32,7 +32,6 @@ import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionRegistry;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 import com.xceptance.neodymium.ai.action.plugins.AssertAction;
-import com.xceptance.neodymium.ai.action.plugins.ClickAction;
 import com.xceptance.neodymium.util.Neodymium;
 
 public class ActionRegistryTest {

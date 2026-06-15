@@ -62,7 +62,7 @@ Sending an entire HTML page to an LLM on every step consumes vast amounts of pro
 
 #### 4. Perceptual Visual Caching (dHash & Hamming Distance)
 Traditional visual validation frameworks either perform pixel-by-pixel comparisons or require expensive cloud visual testing platform integrations.
-* **Neodymium's Edge:** Visual steps are cached locally using **perceptual hashing (dHash)**. On replay, the live screen's dHash is compared locally using **Hamming distance**. This bypasses all DOM parsing and LLM visual queries entirely, executing visual assertions locally in microseconds.
+* **Neodymium's Edge:** Visual steps are cached locally using **perceptual hashing (dHash)**. On replay, the live screen's dHash is compared locally using **Hamming distance**. This bypasses all DOM parsing and LLM visual queries entirely, executing visual assertions locally in microseconds. **This visual caching also extends to failure states**: when a visual step fails during creation/recording, its defective screenshot dHash and the thrown exception are cached in the playbook. Subsequent replays check the current SUT dHash against the cached failure hash, immediately throwing the cached failure offline if the defect is still present, saving API token overhead.
 *(See [Perceptual Visual Replay Caching](#-perceptual-visual-replay-caching-dhash--hamming-distance) for more details and code examples.)*
 
 #### 5. Known Defect Management via Expected Failures
@@ -414,7 +414,7 @@ To test, debug, and verify complex edge cases in visual parsing, action timing, 
 6. **`hover-chain.html` (Hover Dropdown Chains):** Tests chaining sequential parent hover actions prior to clicking nested children styled with CSS hover rules.
 7. **`table-sorting.html` (AJAX Sorting Settling):** Tests waiting for DOM settling (400ms spinner delay) after clicking table header sorting buttons before running assertions.
 8. **`scroll-list.html` (Scroll Overflow List):** Tests scroll-into-view viewport scrolling on elements hidden at the bottom of overflowing list containers.
-9. **`floating-labels.html` (Floating Label Overlaps):** Tests visual text overlap bug detection (e.g., labels and input text layering directly on top of each other due to programmatic autofill) using the Visual Auditor (`(glance)`).
+9. **`floating-labels.html` (Floating Label Overlaps):** Tests visual text overlap bug detection (e.g., labels and input text layering directly on top of each other due to programmatic autofill) using the Visual Auditor (`(visual)`).
 10. **`cross-origin-iframe.html` (Cross-Origin iFrames):** Tests switching WebDriver window context into an iframe hosted on a different HTTP port (origin) under parent HTTPS.
 11. **`mock-oauth-login.html` (Mock OAuth Redirects):** Tests cross-domain redirect authentication flows, code extraction from query parameters, and redirect window handles.
 
@@ -944,7 +944,7 @@ Neodymium.expectFailure("APP-1234")
 
 ---
 
-## 🏷️ Explicit Step Control Tags (optional, soft, timeout)
+## 🏷️ Explicit Step Control Tags (optional, soft, timeout, no-replay)
 
 Neodymium supports a set of special, language-agnostic tags that allow developers to explicitly control step execution flow, assertion behaviors, and browser timeouts directly from natural language instructions.
 
@@ -989,6 +989,31 @@ steps: |
 * **Strict Try-Finally Rollback**: Neodymium wraps the execution in a strict `try-finally` block. Under all possible outcomes (successful action, failed action, or unexpected exception), the original global timeout is guaranteed to be restored to its exact original value, ensuring zero side-effects on subsequent steps.
 
 ---
+
+### 3. Forcing Live Evaluation: `(no-replay)`
+
+By default, Neodymium AI optimizes execution by replaying cached playbook actions offline and using perceptual visual caching (dHash) to bypass LLM calls on subsequent runs. However, there are scenarios where you want to force the agent to evaluate a step live via the LLM (or execute plugins/heuristics) every single time, bypassing the playbook replay cache. This is particularly useful when:
+* The visual difference between states is extremely small but critical (e.g. checking for tiny visual shifts or subtle layout issues).
+* The step depends on dynamic runtime data or state that must be analyzed afresh via LLM vision on every execution.
+
+You can enforce live LLM evaluation by appending `(no-replay)` to the natural language instruction.
+
+#### Example
+```yaml
+steps: |
+  Open the homepage.
+  Verify that the dynamic carousel has loaded (no-replay).
+  Click the 'Add to Cart' button.
+```
+
+#### How It Works
+* **Tag Stripping**: The framework automatically parses and strips `(no-replay)` case-insensitively from instructions *before* performing execution logic or prompting the LLM, ensuring the LLM is not confused by the tag.
+* **Bypass Replay Cache**: When `(no-replay)` is present, the agent:
+  - Bypasses any cached visual failure checks on replay.
+  - Bypasses cached playbook actions execution, forcing a live query to the LLM or direct/upfront plugins.
+
+---
+
 
 ## ⚡ Perceptual Visual Replay Caching (dHash & Hamming Distance)
 
@@ -1058,34 +1083,65 @@ If a visual step has a successful visual hash match and contains an empty list o
 > **Playbook Version Control**:
 > Because the `screenshotHash` is recorded inside the playbook JSON file, make sure to commit your updated playbooks to Git. This guarantees that your CI/CD pipelines run completely offline and with extreme speed.
 
+### 🐞 Visual Defect Failure Caching (Offline Replay Optimization)
+
+When a step containing the `(visual)` tag fails during initial recording/creation mode (e.g., due to a layout shift, visual overlap, or failed aesthetic assertion), the framework automatically caches the defect signature to optimize subsequent runs. 
+
+Instead of contacting the LLM again on future executions to re-evaluate the same broken layout, Neodymium saves the defect's visual and programmatic fingerprint to fail **instantly and offline**.
+
+#### How It Works
+
+1. **Recording/Creation Mode**: 
+   When a `(visual)` step throws an exception (e.g., `AssertionError` or `ActionExecutionException`), the agent catches it and:
+   - Captures the current SUT screenshot and computes its **dHash**.
+   - Serializes the exception class name (`expectedErrorType`) and details (`expectedErrorMessage`) alongside the dHash into the step's playbook JSON.
+   
+2. **Replay/CI Mode**:
+   Before executing a visual step, the agent checks if a cached screenshot hash and error message exist. If found:
+   - It captures a live screenshot and calculates the Hamming distance between the live dHash and the cached failure dHash.
+   - **Defect Still Present (Hamming Distance $\le$ 15)**: The agent immediately advances the playbook, increments the replay stats, and throws the cached `AssertionError` offline—**bypassing all LLM calls, DOM parses, and network requests**.
+   - **Defect Resolved or Changed (Hamming Distance $>$ 15)**: If the screen layout has changed (meaning the bug is likely resolved or behaves differently), the agent proceeds with normal execution or self-healing to let the LLM analyze the updated SUT state.
+
+```json
+{
+  "prompt": "Observe page visual consistency (visual)",
+  "actions": [],
+  "screenshotHash": "8f03c73c3f0c3f0c3f0c3c0c3c0c3c0c3c0c3c0c3c0c3f0c3f0c3f0c3c0c3c0c",
+  "expectedErrorType": "java.lang.AssertionError",
+  "expectedErrorMessage": "Instruction 'Observe page visual consistency (visual)' failed at line 14: Visual mismatch detected..."
+}
+```
+
+> [!IMPORTANT]
+> **Visual Defect Caching vs. Unified Expected Failures (`(bug)` tags)**:
+> - **Expected Failures (`(bug)` tags)**: Designed for known bugs where you want the CI pipeline to **pass** as long as the bug is present.
+> - **Visual Defect Caching**: Designed for standard visual validation steps where the test **must fail** when a defect is present. Caching ensures it fails **instantly and offline** without querying the LLM repeatedly.
+
 ---
 
-## 👁️ Aura Glance: Observational Visual Auditing (`(glance)`)
+## 👁️ Aura Glance: Observational Visual Auditing
 
 Traditional visual regression tools can only verify that a page hasn't changed pixel-for-pixel from a baseline, but cannot reason about the *meaning* of visual states. Neodymium AI introduces **Aura Glance: Observational Visual Auditing**, which combines visual screenshot hashes with multimodal LLM visual inspections to identify design defects, layouts, and accessibility shifts on the fly.
 
-### The `(glance)` Tag vs. `(visual)` Tag
+To execute advanced visual auditing, use the powerful `(visual)` tag in your natural language instructions.
 
-To execute advanced visual auditing, Neodymium AI introduces two powerful natural language keywords/tags:
+When the `(visual)` tag is present, the AI agent acts as a visual reviewer. It captures a full screenshot of the page viewport on the very first attempt and activates local **dHash caching** for offline playbacks in under 10ms.
 
-* **`(glance)` — Observational Audit Goal**: Instructs the AI agent to act as a purely observational reviewer. Instead of trying to click, type, or interact with elements, the AI reviews the page visually (via screenshot) to assert layout alignment, contrast, visual design consistency, or dynamic anomalies. **Note:** Specifying `(glance)` implicitly triggers the `(visual)` viewport capture and dHash caching automatically under the hood, simplifying your instructions.
-* **`(visual)` — Viewport Capture Directive**: Directs the underlying automation driver to capture a full screenshot of the page viewport on the very first attempt and activate local **dHash caching** for offline playbacks in under 10ms.
-
-Because `(glance)` implicitly triggers `(visual)` capture, you can run high-speed offline visual assertions with a single clean instruction:
+You can run visual audits or high-speed offline visual assertions using instructions like:
 
 1. **Verify Visual Consistency (Baseline)**:
    ```java
-   Neodymium.ai().execute("Observe page visual consistency (glance)");
+   Neodymium.ai().execute("Observe page visual consistency (visual)");
    ```
 2. **Explicit Layout Overlap Detection**:
    ```java
    // Directs the LLM to inspect visual boxes and assert overlap bugs
-   Neodymium.ai().execute("Observe page visual consistency (glance). Assert that the 'Cancel' button does not overlap with the 'Security Password' field or adjacent form elements.");
+   Neodymium.ai().execute("Observe page visual consistency (visual). Assert that the 'Cancel' button does not overlap with the 'Security Password' field or adjacent form elements.");
    ```
 3. **Accessibility Contrast Warnings**:
-   By adding the case-insensitive `(soft)` tag alongside `(glance)`, visual checks (like contrast shifts or styling inconsistencies) will log warnings in Allure reports and execution logs instead of throwing a blocking error:
+   By adding the case-insensitive `(soft)` tag alongside `(visual)`, visual checks (like contrast shifts or styling inconsistencies) will log warnings in Allure reports and execution logs instead of throwing a blocking error:
    ```java
-   Neodymium.ai().execute("Observe page visual consistency (soft) (glance)");
+   Neodymium.ai().execute("Observe page visual consistency (soft) (visual)");
    ```
 
 ---

@@ -23,7 +23,6 @@ import com.xceptance.neodymium.ai.BaseAiTest;
 
 import static com.codeborne.selenide.Selenide.open;
 
-import org.junit.jupiter.api.BeforeEach;
 
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;

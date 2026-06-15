@@ -42,10 +42,7 @@ public final class StepDetails
     private String failureReason;
     private ContextLevel pesapPredictedContextLevel;
     private final List<String> pesapWarnings;
-    private String pesapDirection;
-    private String pesapStepType;
-    private String pesapExpectedTargetTagName;
-    private boolean pesapPageNavigation;
+
     private boolean pesapRequiresJavaMethods;
     private boolean replayed;
     private boolean directParse;
@@ -153,25 +150,7 @@ public final class StepDetails
         this.pesapWarnings.add(warning);
     }
 
-    /**
-     * Returns the JIT PESAP direction guidance for this step.
-     *
-     * @return the direction hint, or {@code null} if not set
-     */
-    public final String getPesapDirection()
-    {
-        return this.pesapDirection;
-    }
 
-    /**
-     * Sets the JIT PESAP direction guidance for this step.
-     *
-     * @param pesapDirection the direction hint
-     */
-    public final void setPesapDirection(final String pesapDirection)
-    {
-        this.pesapDirection = pesapDirection;
-    }
 
     /**
      * Checks if this step was replayed from a playbook.
@@ -213,65 +192,7 @@ public final class StepDetails
         this.directParse = directParse;
     }
 
-    /**
-     * Gets the predicted PESAP step type.
-     *
-     * @return the step type
-     */
-    public final String getPesapStepType()
-    {
-        return this.pesapStepType;
-    }
 
-    /**
-     * Sets the predicted PESAP step type.
-     *
-     * @param pesapStepType the step type
-     */
-    public final void setPesapStepType(final String pesapStepType)
-    {
-        this.pesapStepType = pesapStepType;
-    }
-
-    /**
-     * Gets the predicted PESAP expected target tag name.
-     *
-     * @return the target tag name
-     */
-    public final String getPesapExpectedTargetTagName()
-    {
-        return this.pesapExpectedTargetTagName;
-    }
-
-    /**
-     * Sets the predicted PESAP expected target tag name.
-     *
-     * @param pesapExpectedTargetTagName the target tag name
-     */
-    public final void setPesapExpectedTargetTagName(final String pesapExpectedTargetTagName)
-    {
-        this.pesapExpectedTargetTagName = pesapExpectedTargetTagName;
-    }
-
-    /**
-     * Checks if PESAP predicted that this step would cause page navigation.
-     *
-     * @return true if page navigation is predicted, false otherwise
-     */
-    public final boolean isPesapPageNavigation()
-    {
-        return this.pesapPageNavigation;
-    }
-
-    /**
-     * Sets whether PESAP predicted that this step would cause page navigation.
-     *
-     * @param pesapPageNavigation the page navigation prediction
-     */
-    public final void setPesapPageNavigation(final boolean pesapPageNavigation)
-    {
-        this.pesapPageNavigation = pesapPageNavigation;
-    }
 
     /**
      * Checks if PESAP predicted that this step requires custom Java methods.

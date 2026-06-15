@@ -29,8 +29,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -158,6 +156,7 @@ public final class AiExplicitTagsTest
         assertEquals("Wait for element to load", AiAgent.stripAllTags("Wait for element to load (timeout: 500ms)"));
         assertEquals("Check dashboard visibility", AiAgent.stripAllTags("Check dashboard visibility (timeout: 2s) (optional)"));
         assertEquals("Verify text in field", AiAgent.stripAllTags("Verify text in field (OPTIONAL) (TIMEOUT: 100)"));
+        assertEquals("Observe visual consistency", AiAgent.stripAllTags("Observe visual consistency (no-replay)"));
     }
 
     /**
@@ -443,7 +442,7 @@ public final class AiExplicitTagsTest
             @Override
             public String chat(final LlmMode mode, final String systemPrompt, final String userPrompt)
             {
-                return "{\"contextLevel\": \"STANDARD\", \"javaMethods\": [\"assertGreaterThanZero\"], \"direction\": \"Verify the price value\"}";
+                return "{\"c\": \"STANDARD\", \"jm\": false, \"sp\": []}";
             }
 
             @Override
@@ -474,7 +473,6 @@ public final class AiExplicitTagsTest
 
         assertNotNull(result, "Expected JIT PESAP to return a non-null result");
         assertEquals(ContextLevel.STANDARD, stepDetails.getPesapPredictedContextLevel());
-        assertEquals("Verify the price value", stepDetails.getPesapDirection());
 
         // Verify the cache is populated
         assertTrue(stepDetails.isPesapCalled(), "Expected JIT PESAP call flag to be true");
@@ -494,7 +492,7 @@ public final class AiExplicitTagsTest
             @Override
             public String chat(final LlmMode mode, final String systemPrompt, final String userPrompt)
             {
-                return "{\"contextLevel\": \"malformed_garbage_value\"";
+                return "{\"c\": \"malformed_garbage_value\"";
             }
 
             @Override
@@ -542,7 +540,7 @@ public final class AiExplicitTagsTest
             public String chat(final LlmMode mode, final String systemPrompt, final String userPrompt)
             {
                 capturedUserPrompt.set(userPrompt);
-                return "{\"contextLevel\": \"AXTREE\", \"javaMethods\": [], \"direction\": \"Click the first product\"}";
+                return "{\"c\": \"AXTREE\", \"jm\": false, \"sp\": []}";
             }
 
             @Override
@@ -594,5 +592,58 @@ public final class AiExplicitTagsTest
         final Field logField = AiAgent.class.getDeclaredField("executionLog");
         logField.setAccessible(true);
         logField.set(agent, new AiDiscussionLogger("dummy instructions"));
+    }
+
+    /**
+     * Verifies that the (no-replay) tag successfully bypasses replay loading
+     * and forces live execution (which triggers identifyActions or the LLM).
+     */
+    @Test
+    public void testNoReplayBypassesPlaybookReplay() throws Exception
+    {
+        final List<Action> executedActions = new ArrayList<>();
+        final ActionExecutor recordingExecutor = new ActionExecutor(null)
+        {
+            @Override
+            public void executeAll(final List<Action> actions)
+            {
+                executedActions.addAll(actions);
+            }
+        };
+
+        final AiAgent agent = new AiAgent(dummyLlmClient, dummyAnalyzer, recordingExecutor, config);
+        setExecutionLog(agent);
+
+        final String prompt = "Click element (no-replay)";
+        final Playbook playbook = Neodymium.getAiPlaybook();
+        playbook.setRecording(false); // Replay mode
+
+        // Cache actions in the playbook step
+        final PlaybookStep pbStep = playbook.getCurrentStep();
+        pbStep.setPromptLine("Click element");
+        pbStep.setActions(List.of(new Action("CLICK", "#cached-btn", "Cached click")));
+
+        final Method getStepActionsMethod = AiAgent.class.getDeclaredMethod(
+            "getStepActions",
+            int.class, String.class, String.class, Playbook.class,
+            boolean.class, String.class, List.class,
+            StepDetails.class, AiExecutionResult.class
+        );
+        getStepActionsMethod.setAccessible(true);
+
+        final String stepText = "Click element";
+        @SuppressWarnings("unchecked")
+        final List<Action> actions = (List<Action>) getStepActionsMethod.invoke(
+            agent,
+            0, stepText, prompt, playbook,
+            false, null, new ArrayList<Action>(),
+            new StepDetails(stepText), new AiExecutionResult(new HashMap<>())
+        );
+
+        // Verify that the cached action "#cached-btn" was bypassed,
+        // and instead the live LLM actions (from dummyLlmClient: "#dummy-btn") were returned!
+        assertNotNull(actions, "Expected actions to be resolved");
+        assertFalse(actions.isEmpty(), "Expected actions list to not be empty");
+        assertEquals("#dummy-btn", actions.get(0).getTarget(), "Expected LLM resolved action target");
     }
 }

@@ -1,0 +1,64 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.NoReplayTest :: testNoReplayBypassesPlaybookReplay :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/ClickActionTest/testClickStandardButton.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/ClickActionTest/testClickStandardButton.html"
+          ],
+          "description": "Navigate to http://localhost:43377/ClickActionTest/testClickStandardButton.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the \u0027Submit Order\u0027 button",
+      "reasoning": "Found a button with the name \u0027Submit Order\u0027 and ID \u0027btn-submit\u0027 in the AXTree. Using the ID as the locator for the CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit",
+          "description": "Click the \u0027Submit Order\u0027 button",
+          "elementDetails": "Submit Order button",
+          "elementContext": {
+            "text": "Submit Order",
+            "id": "btn-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the result contains \"Order Submitted!\"",
+      "reasoning": "The instruction is to verify the text \u0027Order Submitted!\u0027. I found an element with id \u0027result\u0027 containing this text and created an ASSERT action for it.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#result",
+          "value": [
+            "Order Submitted!"
+          ],
+          "description": "Verify that the result contains \u0027Order Submitted!\u0027",
+          "elementDetails": "result",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

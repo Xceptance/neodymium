@@ -1,0 +1,55 @@
+{
+  "id": "com.xceptance.neodymium.ai.anomaly.ContrastWarningTest :: testAccessibilityLowContrastSoftWarning :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
+      "reasoning": "Clicked on the \u0027Aura Defect Controls\u0027 trigger button.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls\u0027 trigger button",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Click the \u0027Inject Low Contrast\u0027 toggle. (hint: label[for\u003d\u0027toggle-contrast\u0027])",
+      "reasoning": "Clicked the \u0027Inject Low Contrast\u0027 toggle.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "label[for\u003d\u0027toggle-contrast\u0027]",
+          "description": "Click the \u0027Inject Low Contrast\u0027 toggle.",
+          "elementDetails": "\u0027Inject Low Contrast\u0027 toggle",
+          "elementContext": {
+            "classes": "control-label",
+            "text": "Inject Low Contrast\nForces poor visibility on text colors.",
+            "tagName": "label"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Observe page visual consistency (visual)",
+      "reasoning": "The instruction is to observe page visual consistency. The screenshot shows that the \u0027Inject Low Contrast\u0027 toggle in the \u0027Aura Chaos Controls\u0027 sidebar is enabled. Correspondingly, the main heading \u0027Visual Integrity \u0026 Accessibility Auditing\u0027 on the page exhibits very low contrast, which is consistent with the enabled \u0027Inject Low Contrast\u0027 setting. Therefore, the page is visually consistent with its current configuration.",
+      "actions": [],
+      "screenshotHash": "5c6900d180e100c000e283e4d57c80dda1e481e880e00160017901f469610160",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}
