@@ -22,13 +22,13 @@
     },
     {
       "promptLine": "Scroll down the container list viewport.",
-      "reasoning": "The instruction is to scroll down the container list viewport. The page state indicates that the \u0027Unlock Achievement\u0027 button is at the bottom of the scroll container and off-screen. Therefore, scrolling to this button will effectively scroll down the container list viewport as requested.",
+      "reasoning": "The instruction is to scroll down the \u0027container list viewport\u0027. Based on the DOM, the element with id \u0027scroll-container\u0027 is identified as the scrollable container that needs to be scrolled to reveal content. The SCROLL action is used to scroll this element.",
       "actions": [
         {
           "type": "SCROLL",
-          "target": "#hidden-target-btn",
-          "description": "Scroll down the container list viewport to reveal the \u0027Unlock Achievement\u0027 button.",
-          "elementDetails": "Unlock Achievement button",
+          "target": "#scroll-container",
+          "description": "Scroll down the container list viewport to reveal hidden content.",
+          "elementDetails": "scroll-container",
           "elementContext": {},
           "replay": "",
           "adjust": false
