@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop/index.html?controls\u003dtrue",
-      "reasoning": "Navigated to the provided URL as instructed.",
+      "reasoning": "The instruction is to open a specific URL, so a NAVIGATE action is used with the provided URL.",
       "actions": [
         {
           "type": "NAVIGATE",
@@ -11,7 +11,7 @@
             "http://localhost:43377/AuraGlanceTest/shop/index.html?controls\u003dtrue"
           ],
           "description": "Open the specified URL",
-          "elementDetails": "URL navigation",
+          "elementDetails": "http://localhost:43377/AuraGlanceTest/shop/index.html?controls\u003dtrue",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -22,12 +22,12 @@
     },
     {
       "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
-      "reasoning": "Clicked on the \u0027Aura Defect Controls\u0027 trigger button using the provided hint.",
+      "reasoning": "Clicked the \u0027Aura Defect Controls\u0027 trigger button using the provided hint.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#aura-trigger",
-          "description": "Click on \u0027Aura Defect Controls\u0027 trigger button.",
+          "description": "Click \u0027Aura Defect Controls\u0027 trigger button",
           "elementDetails": "Aura Defect Controls trigger button",
           "elementContext": {
             "classes": "aura-controls-trigger",
@@ -48,8 +48,8 @@
         {
           "type": "CLICK",
           "target": "label[for\u003d\u0027toggle-banner\u0027]",
-          "description": "Click the \u0027Show Promo Banner\u0027 toggle",
-          "elementDetails": "Show Promo Banner toggle",
+          "description": "Click the \u0027Show Promo Banner\u0027 toggle to hide it.",
+          "elementDetails": "\u0027Show Promo Banner\u0027 toggle",
           "elementContext": {
             "classes": "control-label",
             "text": "Show Promo Banner\nToggles optional marketing header.",
@@ -64,13 +64,13 @@
     },
     {
       "promptLine": "Click \u0027Close Banner\u0027",
-      "reasoning": "The instruction \u0027Click \u0027Close Banner\u0027\u0027 is interpreted as clicking the close button for the \u0027Aura Chaos Controls\u0027 drawer, which is identified by the stable ID \u0027#aura-close\u0027.",
+      "reasoning": "The instruction \u0027Click Close Banner\u0027 was interpreted as clicking the button with id \u0027aura-close\u0027 and name \u0027×\u0027, as this is a common pattern for closing banners and no other element explicitly matched \u0027Close Banner\u0027.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#aura-close",
-          "description": "Click \u0027Close Banner\u0027",
-          "elementDetails": "Close button for Aura Chaos Controls",
+          "description": "Click the close button for the banner",
+          "elementDetails": "Close button with \u0027×\u0027 name",
           "elementContext": {
             "classes": "drawer-close",
             "text": "×",
@@ -83,11 +83,11 @@
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "STANDARD"
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Observe page visual consistency (visual)",
-      "reasoning": "The page exhibits good visual consistency. The dark theme with purple and blue gradients is uniformly applied across the header, banner, and product cards. Elements are well-aligned, and there are no visible layout issues, overlapping elements, or inconsistent styling. The navigation links, main heading, and product cards all maintain a cohesive visual design.",
+      "reasoning": "The page appears visually consistent based on the provided screenshot. The header, banner, and product cards maintain a uniform design, color scheme, and layout without any apparent inconsistencies or defects.",
       "actions": [],
       "screenshotHash": "00018401000100017f015d817f017f817f01841108011ac390c318c798c33086",
       "expectedFailure": false,
