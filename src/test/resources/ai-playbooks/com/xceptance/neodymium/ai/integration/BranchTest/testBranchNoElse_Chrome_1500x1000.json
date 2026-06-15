@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept)",
-      "reasoning": "Conditional action to click the Accept Cookies button if visible.",
+      "reasoning": "Conditional action to click \u0027Accept Cookies\u0027 if visible.",
       "actions": [
         {
           "type": "BRANCH",
@@ -52,7 +52,6 @@
               "adjust": false
             }
           ],
-          "else": [],
           "adjust": false
         }
       ],
