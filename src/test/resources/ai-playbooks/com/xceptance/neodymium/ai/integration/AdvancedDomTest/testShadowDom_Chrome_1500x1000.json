@@ -11,7 +11,7 @@
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html"
           ],
           "description": "Open the specified URL",
-          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
+          "elementDetails": "URL: https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -47,7 +47,7 @@
     },
     {
       "promptLine": "Type \u0027secret\u0027 into the password input inside the shadow root.",
-      "reasoning": "Identified the password input field by its ID and generated a TYPE action to enter \u0027secret\u0027.",
+      "reasoning": "Identified the password input field by its ID \u0027#shadow-password\u0027 and generated a TYPE action to enter \u0027secret\u0027.",
       "actions": [
         {
           "type": "TYPE",

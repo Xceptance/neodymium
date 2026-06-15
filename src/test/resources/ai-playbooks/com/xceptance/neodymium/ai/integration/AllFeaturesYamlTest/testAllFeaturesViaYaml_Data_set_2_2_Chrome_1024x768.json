@@ -1,0 +1,97 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.AllFeaturesYamlTest :: testAllFeaturesViaYaml :: Data set 2 / 2 :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/index.html?controls\u003dtrue",
+      "reasoning": "The instruction is to open a URL. A NAVIGATE action is used to go to the specified URL.",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "https://localhost:39389/AuraGlanceTest/shop/index.html?controls\u003dtrue"
+          ],
+          "description": "Open the specified URL",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/index.html?controls\u003dtrue",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
+      "reasoning": "Clicked on the \u0027Aura Defect Controls\u0027 trigger button using the provided hint.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "Aura Defect Controls trigger button",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Click the \u0027Show Promo Banner\u0027 toggle to hide it. (hint: label[for\u003d\u0027toggle-banner\u0027])",
+      "reasoning": "Clicked the \u0027Show Promo Banner\u0027 toggle as instructed.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "label[for\u003d\u0027toggle-banner\u0027]",
+          "description": "Click the \u0027Show Promo Banner\u0027 toggle",
+          "elementDetails": "Show Promo Banner toggle",
+          "elementContext": {
+            "classes": "control-label",
+            "text": "Show Promo Banner\nToggles optional marketing header.",
+            "tagName": "label"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Click \u0027Close Banner\u0027",
+      "reasoning": "The instruction \u0027Click Close Banner\u0027 is interpreted as clicking the \u0027×\u0027 button with id \u0027aura-close\u0027, which is the close button for the \u0027Aura Chaos Controls\u0027 panel. This is the most logical action given the context of the previous steps involving the control panel.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-close",
+          "description": "Click \u0027Close Banner\u0027 by targeting the close button of the control panel.",
+          "elementDetails": "aura-close button",
+          "elementContext": {
+            "classes": "drawer-close",
+            "text": "×",
+            "id": "aura-close",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Observe page visual consistency (visual)",
+      "reasoning": "The page exhibits good visual consistency. The header navigation elements are uniformly styled and aligned. The main banner is well-presented with consistent typography and layout. The three poster cards displayed below the banner are identical in their visual appearance, including size, content, and styling, indicating a consistent design pattern. The overall dark theme with neon accents is maintained across all visible components, contributing to a cohesive visual experience.",
+      "actions": [],
+      "screenshotHash": "00018401000100017f015d817f017f817f01841108011ac390c318c798c33086",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}

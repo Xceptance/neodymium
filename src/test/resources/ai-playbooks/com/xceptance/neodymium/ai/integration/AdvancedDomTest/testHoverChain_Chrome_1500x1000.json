@@ -43,7 +43,7 @@
     },
     {
       "promptLine": "Hover over \u0027Electronics\u0027.",
-      "reasoning": "Found the \u0027Electronics\u0027 link in the AXTree and generated a HOVER action targeting its data-neo-ref attribute.",
+      "reasoning": "Hovered over the \u0027Electronics\u0027 link using its data-neo-ref attribute.",
       "actions": [
         {
           "type": "HOVER",

@@ -37,6 +37,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * 4. Two-phase live LLM execution and instant offline playbacks.
  * 
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1024x768")
 @DataFolder("com/xceptance/neodymium/ai/AllFeaturesYamlTest")
@@ -46,10 +47,6 @@ import com.xceptance.neodymium.util.Neodymium;
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })
-/**
- * @author AI-generated: Gemini 2.5 Flash
- * @author Xceptance GmbH 2026
- */
 public final class AllFeaturesYamlTest extends BaseAiTest
 {
     /**
