@@ -22,6 +22,11 @@ import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpsServer;
+import com.sun.net.httpserver.HttpsConfigurator;
+import java.security.KeyStore;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
 import java.awt.Desktop;
 import java.io.BufferedReader;
 import java.io.File;
@@ -80,7 +85,9 @@ public final class NeodymiumAuraManager
     private static final Pattern STATS_PATTERN = Pattern.compile("Tests run:\\s*(\\d+),\\s*Failures:\\s*(\\d+),\\s*Errors:\\s*(\\d+)");
     private static final Gson gson = new Gson();
     
-    private static final Map<String, HttpExchange> sseClientsMap = new ConcurrentHashMap<>();
+    private static final Map<String, Long> activeClients = new ConcurrentHashMap<>();
+    private static final CopyOnWriteArrayList<String> currentRunLogs = new CopyOnWriteArrayList<>();
+    private static final CopyOnWriteArrayList<Map<String, Object>> currentRunEvents = new CopyOnWriteArrayList<>();
     private static final AtomicReference<Process> activeProcess = new AtomicReference<>(null);
     private static final AtomicInteger globalTestsRun = new AtomicInteger(0);
     private static final AtomicInteger globalPassed = new AtomicInteger(0);
@@ -133,7 +140,7 @@ public final class NeodymiumAuraManager
         {
             try
             {
-                server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
+                server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
                 break;
             }
             catch (final IOException e)
@@ -154,6 +161,53 @@ public final class NeodymiumAuraManager
             return t;
         }));
         server.start();
+        LOGGER.info("[Aura Server] HTTP server started on http://localhost:{}", port);
+
+        // Also start HTTPS secure server on the next port if keystore.p12 is available
+        try
+        {
+            final KeyStore ks = KeyStore.getInstance("PKCS12");
+            try (final InputStream ksf = Thread.currentThread().getContextClassLoader().getResourceAsStream("keystore.p12"))
+            {
+                if (ksf != null)
+                {
+                    ks.load(ksf, "changeit".toCharArray());
+                    final KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
+                    kmf.init(ks, "changeit".toCharArray());
+                    final SSLContext sslContext = SSLContext.getInstance("TLS");
+                    sslContext.init(kmf.getKeyManagers(), null, null);
+
+                    int httpsPort = port + 1;
+                    HttpsServer httpsServer = null;
+                    while (httpsPort < port + 100)
+                    {
+                        try
+                        {
+                            httpsServer = HttpsServer.create(new InetSocketAddress("0.0.0.0", httpsPort), 0);
+                            break;
+                        }
+                        catch (final IOException e)
+                        {
+                            httpsPort++;
+                        }
+                    }
+
+                    if (httpsServer != null)
+                    {
+                        httpsServer.setHttpsConfigurator(new HttpsConfigurator(sslContext));
+                        httpsServer.createContext("/", new MainHandler());
+                        httpsServer.setExecutor(server.getExecutor());
+                        httpsServer.start();
+                        LOGGER.info("[Aura Server] HTTPS secure server started on https://localhost:{}", httpsPort);
+                    }
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOGGER.warn("[Aura Server] Failed to initialize secure HttpsServer: {}", e.getMessage());
+        }
+
         return server;
     }
 
@@ -563,15 +617,41 @@ public final class NeodymiumAuraManager
         {
             final String query = exchange.getRequestURI().getQuery();
             String clientId = null;
+            int lastIndex = 0;
+            int lastEventIndex = 0;
             if (query != null)
             {
                 for (final String param : query.split("&"))
                 {
                     final String[] pair = param.split("=");
-                    if (pair.length > 1 && "clientId".equals(pair[0]))
+                    if (pair.length > 1)
                     {
-                        clientId = pair[1];
-                        break;
+                        if ("clientId".equals(pair[0]))
+                        {
+                            clientId = pair[1];
+                        }
+                        else if ("lastIndex".equals(pair[0]))
+                        {
+                            try
+                            {
+                                lastIndex = Integer.parseInt(pair[1]);
+                            }
+                            catch (NumberFormatException e)
+                            {
+                                // ignore
+                            }
+                        }
+                        else if ("lastEventIndex".equals(pair[0]))
+                        {
+                            try
+                            {
+                                lastEventIndex = Integer.parseInt(pair[1]);
+                            }
+                            catch (NumberFormatException e)
+                            {
+                                // ignore
+                            }
+                        }
                     }
                 }
             }
@@ -580,105 +660,45 @@ public final class NeodymiumAuraManager
                 clientId = "fallback-" + UUID.randomUUID().toString();
             }
 
-            LOGGER.info("[Aura Server] SSE client connected: {} (clientId: {})", exchange.getRemoteAddress(), clientId);
-            exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=UTF-8");
-            exchange.getResponseHeaders().set("Cache-Control", "no-cache");
-            exchange.getResponseHeaders().set("Connection", "keep-alive");
-            exchange.sendResponseHeaders(200, 0);
+            activeClients.put(clientId, System.currentTimeMillis());
 
-            synchronized (sseClientsMap)
+            if (pendingShutdown != null)
             {
-                final HttpExchange oldExchange = sseClientsMap.remove(clientId);
-                if (oldExchange != null)
-                {
-                    try
-                    {
-                        oldExchange.close();
-                    }
-                    catch (final Exception e)
-                    {
-                        // ignore
-                    }
-                }
-
-                if (pendingShutdown != null)
-                {
-                    pendingShutdown.cancel(false);
-                    pendingShutdown = null;
-                    LOGGER.info("[Aura Server] New client connected. Cancelled pending server shutdown.");
-                }
-                sseClientsMap.put(clientId, exchange);
-            }
-            
-            // Broadcast initial status to this client
-            final String initialStatus = String.format(
-                "{\"type\":\"status\",\"total\":%d,\"passed\":%d,\"failed\":%d,\"running\":%b,\"activeFile\":\"%s\"}",
-                globalTestsRun.get(), globalPassed.get(), globalFailed.get(), runningQueue.get(), activeFile.get()
-            );
-            try
-            {
-                synchronized (exchange)
-                {
-                    exchange.getResponseBody().write(("data: " + initialStatus + "\n\n").getBytes(StandardCharsets.UTF_8));
-                    exchange.getResponseBody().flush();
-                }
-            }
-            catch (final IOException e)
-            {
-                synchronized (sseClientsMap)
-                {
-                    sseClientsMap.values().remove(exchange);
-                }
-                LOGGER.info("[Aura Server] SSE client disconnected before initiation: {}", exchange.getRemoteAddress());
-                exchange.close();
-                checkShutdownOnDisconnect();
-                return;
+                pendingShutdown.cancel(false);
+                pendingShutdown = null;
+                LOGGER.info("[Aura Server] Client polled. Cancelled pending server shutdown.");
             }
 
-            try
+            final Map<String, Object> status = new HashMap<>();
+            status.put("type", "status");
+            status.put("total", globalTestsRun.get());
+            status.put("passed", globalPassed.get());
+            status.put("failed", globalFailed.get());
+            status.put("running", runningQueue.get());
+            status.put("activeFile", activeFile.get());
+
+            final List<String> logs = new ArrayList<>();
+            final int currentLogSize = currentRunLogs.size();
+            for (int i = lastIndex; i < currentLogSize; i++)
             {
-                while (sseClientsMap.containsValue(exchange))
-                {
-                    Thread.sleep(15000);
-                    try
-                    {
-                        synchronized (exchange)
-                        {
-                            exchange.getResponseBody().write(":\n\n".getBytes(StandardCharsets.UTF_8));
-                            exchange.getResponseBody().flush();
-                        }
-                    }
-                    catch (final IOException e)
-                    {
-                        break;
-                    }
-                }
+                logs.add(currentRunLogs.get(i));
             }
-            catch (final InterruptedException e)
+
+            final List<Map<String, Object>> events = new ArrayList<>();
+            final int currentEventSize = currentRunEvents.size();
+            for (int i = lastEventIndex; i < currentEventSize; i++)
             {
-                Thread.currentThread().interrupt();
+                events.add(currentRunEvents.get(i));
             }
-            finally
-            {
-                final String finalClientId = clientId;
-                synchronized (sseClientsMap)
-                {
-                    if (sseClientsMap.get(finalClientId) == exchange)
-                    {
-                        sseClientsMap.remove(finalClientId);
-                    }
-                }
-                LOGGER.info("[Aura Server] SSE client disconnected: {} (clientId: {})", exchange.getRemoteAddress(), finalClientId);
-                try
-                {
-                    exchange.close();
-                }
-                catch (final Exception e)
-                {
-                    // ignore
-                }
-                checkShutdownOnDisconnect();
-            }
+
+            final Map<String, Object> response = new HashMap<>();
+            response.put("status", status);
+            response.put("logs", logs);
+            response.put("newIndex", currentLogSize);
+            response.put("events", events);
+            response.put("newEventIndex", currentEventSize);
+
+            sendJsonResponse(exchange, 200, gson.toJson(response));
         }
 
 
@@ -896,19 +916,8 @@ public final class NeodymiumAuraManager
 
             if (clientId != null && !clientId.trim().isEmpty())
             {
-                final HttpExchange sseExchange = sseClientsMap.remove(clientId);
-                if (sseExchange != null)
-                {
-                    LOGGER.info("[Aura Server] Removed active SSE client: {}", clientId);
-                    try
-                    {
-                        sseExchange.close();
-                    }
-                    catch (final Exception e)
-                    {
-                        // ignore
-                    }
-                }
+                activeClients.remove(clientId);
+                LOGGER.info("[Aura Server] Removed active client: {}", clientId);
             }
 
             sendJsonResponse(exchange, 200, gson.toJson(Map.of("success", true)));
@@ -994,16 +1003,10 @@ public final class NeodymiumAuraManager
 
         private String readBody(final HttpExchange exchange) throws IOException
         {
-            try (final InputStream is = exchange.getRequestBody();
-                 final BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8)))
+            try (final InputStream is = exchange.getRequestBody())
             {
-                final StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = br.readLine()) != null)
-                {
-                    sb.append(line);
-                }
-                return sb.toString();
+                final byte[] bytes = is.readAllBytes();
+                return new String(bytes, StandardCharsets.UTF_8);
             }
         }
 
@@ -1076,6 +1079,8 @@ public final class NeodymiumAuraManager
                 globalTestsRun.set(0);
                 globalPassed.set(0);
                 globalFailed.set(0);
+                currentRunLogs.clear();
+                currentRunEvents.clear();
 
                 final List<Map.Entry<String, List<String>>> entries = new ArrayList<>(datasetsByFile.entrySet());
                 for (int i = 0; i < entries.size(); i++)
@@ -1127,12 +1132,21 @@ public final class NeodymiumAuraManager
                     command.add("-Dvideo.enableFilming=" + req.video);
                     command.add("-Dneodymium.webDriver.keepBrowserOpen=" + req.keepOpen);
                     command.add("-Dfile.encoding=UTF-8");
+                    command.add("-Dsun.stdout.encoding=UTF-8");
+                    command.add("-Dsun.stderr.encoding=UTF-8");
+                    command.add("-Dnative.encoding=UTF-8");
+                    // Run tests in-process so all stdout/stderr flows back through our reader.
+                    // Without this, Surefire forks a child JVM and its output is silently lost.
+                    command.add("-DforkCount=0");
+                    command.add("-DreuseForks=true");
+                    command.add("-Dsurefire.useFile=false");
 
                     LOGGER.info("[Aura Server] Executing command: {}", String.join(" ", command));
                     broadcastLog("[INFO] Command: " + String.join(" ", command));
                     broadcastLog("[INFO] ------------------------------------------------------------------------");
 
                     final ProcessBuilder pb = new ProcessBuilder(command);
+                    pb.environment().put("MAVEN_OPTS", "-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8");
                     pb.redirectErrorStream(true);
 
                     final Process p;
@@ -1160,6 +1174,7 @@ public final class NeodymiumAuraManager
                         while ((line = reader.readLine()) != null)
                         {
                             broadcastLog(line);
+                            LOGGER.info("[Aura Subprocess] {}", stripAnsi(line));
 
                             final Matcher m = STATS_PATTERN.matcher(line);
                             if (m.find())
@@ -1350,6 +1365,9 @@ public final class NeodymiumAuraManager
                 status, timestamp, globalTestsRun.get(), globalPassed.get(), globalFailed.get());
             Files.writeString(metadataFile.toPath(), metadataContent, StandardCharsets.UTF_8);
 
+            final File logFile = new File(destDir, "execution.log");
+            Files.write(logFile.toPath(), currentRunLogs, StandardCharsets.UTF_8);
+
             LOGGER.info("[Aura Server] Allure report copied to history: {}", destDir.getName());
             broadcastLog("[INFO] Allure report copied to history: " + destDir.getName());
             broadcastReportReady(destDir.getName());
@@ -1402,10 +1420,7 @@ public final class NeodymiumAuraManager
     private static void broadcastLog(final String line)
     {
         final String cleanLine = stripAnsi(line);
-        final Map<String, Object> event = new HashMap<>();
-        event.put("type", "log");
-        event.put("line", cleanLine);
-        broadcast(gson.toJson(event));
+        currentRunLogs.add(cleanLine);
     }
 
     private static void broadcastReportReady(final String reportId)
@@ -1413,38 +1428,31 @@ public final class NeodymiumAuraManager
         final Map<String, Object> event = new HashMap<>();
         event.put("type", "reportReady");
         event.put("reportId", reportId);
-        broadcast(gson.toJson(event));
+        currentRunEvents.add(event);
     }
 
     private static void broadcastStatus(final boolean running)
     {
-        final Map<String, Object> event = new HashMap<>();
-        event.put("type", "status");
-        event.put("total", globalTestsRun.get());
-        event.put("passed", globalPassed.get());
-        event.put("failed", globalFailed.get());
-        event.put("running", running);
-        event.put("activeFile", activeFile.get());
-        broadcast(gson.toJson(event));
+        // Status is now computed on-the-fly during /api/status polling.
+        // We leave this method here to avoid breaking existing calls.
     }
 
     private static void checkShutdownOnDisconnect()
     {
-        synchronized (sseClientsMap)
+        synchronized (activeClients)
         {
-            if (sseClientsMap.isEmpty())
+            if (activeClients.isEmpty())
             {
                 if (pendingShutdown == null || pendingShutdown.isDone())
                 {
-                    LOGGER.info("[Aura Server] No clients connected. Scheduling server shutdown in 5 seconds...");
+                    LOGGER.info("[Aura Server] No active clients. Scheduling server shutdown in 5 seconds...");
                     pendingShutdown = shutdownScheduler.schedule(() -> {
-                        synchronized (sseClientsMap)
+                        synchronized (activeClients)
                         {
-                            if (sseClientsMap.isEmpty())
+                            if (activeClients.isEmpty())
                             {
-                                LOGGER.info("[Aura Server] No clients connected for 5 seconds. Shutting down...");
+                                LOGGER.info("[Aura Server] No active clients for 5 seconds. Shutting down...");
                                 
-                                // Stop any active subprocesses
                                 final Process p = activeProcess.get();
                                 if (p != null)
                                 {
@@ -1469,34 +1477,7 @@ public final class NeodymiumAuraManager
 
     private static void broadcast(final String eventJson)
     {
-        final byte[] payload = ("data: " + eventJson + "\n\n").getBytes(StandardCharsets.UTF_8);
-        for (final HttpExchange exchange : sseClientsMap.values())
-        {
-            try
-            {
-                synchronized (exchange)
-                {
-                    exchange.getResponseBody().write(payload);
-                    exchange.getResponseBody().flush();
-                }
-            }
-            catch (final IOException e)
-            {
-                synchronized (sseClientsMap)
-                {
-                    sseClientsMap.values().remove(exchange);
-                }
-                try
-                {
-                    exchange.close();
-                }
-                catch (final Exception ex)
-                {
-                    // ignore
-                }
-                checkShutdownOnDisconnect();
-            }
-        }
+        // Removed as we are using polling instead of SSE stream
     }
 
     public static Map<String, Object> getFileDetails(final File file)

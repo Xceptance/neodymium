@@ -182,7 +182,10 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
-            min-width: 0;
+            min-width: 300px;
+            resize: horizontal;
+            overflow: hidden;
+            max-width: calc(100vw - 380px);
         }
 
         .view-state {
@@ -296,6 +299,26 @@
         .modal-input { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main); color: var(--text-primary); }
         .modal-footer { padding: 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
         
+        /* Resizers */
+        .resizer-h {
+            width: 8px;
+            cursor: ew-resize;
+            background: transparent;
+            flex-shrink: 0;
+            z-index: 10;
+            margin: 0 -4px;
+        }
+        .resizer-h:hover { background: var(--border); }
+        .resizer-v {
+            height: 8px;
+            cursor: ns-resize;
+            background: transparent;
+            flex-shrink: 0;
+            z-index: 10;
+            margin: -4px 0;
+        }
+        .resizer-v:hover { background: var(--border); }
+        
         .history-table {
             width: 100%;
             border-collapse: collapse;
@@ -380,14 +403,17 @@
             <div class="workspace-layout">
                 
                 <!-- LEFT AREA -->
-                <div class="left-area">
+                <div class="left-area" id="leftArea" style="resize: none;">
                     
                     <!-- STATE: Selection & Queue -->
                     <div id="state-selection" class="view-state active">
                         <div class="selection-queue-grid">
                             
                             <div class="panel">
-                                <div class="panel-header">Test Selection</div>
+                                <div class="panel-header">
+                                    <span>Test Selection</span>
+                                    <button class="btn-edit" onclick="loadFiles()" style="padding: 2px 6px; font-size: 10px;" title="Refresh Files"><i class="fa-solid fa-rotate-right"></i></button>
+                                </div>
                                 <div class="content-scroll" id="yamlFileList">
                                     <!-- Populated by JS -->
                                 </div>
@@ -434,7 +460,8 @@
                     </div>
                     <!-- Terminal Panel -->
 
-                    <div class="panel" id="consolePanel" style="display:none; flex-shrink: 0; border:none; width: 100%; max-width: 100%; box-sizing: border-box; transition: height 0.3s ease;">
+                    <div class="resizer-v" id="consoleResizer" style="display:none;"></div>
+                    <div class="panel" id="consolePanel" style="display:none; flex-shrink: 0; border:none; width: 100%; max-width: 100%; box-sizing: border-box;">
                         <div class="terminal-panel">
                             <div style="font-size:11px; margin-bottom:8px; opacity: 0.7; display:flex; justify-content:space-between;">
                                 <span>TERMINAL OUTPUT <span id="runSpinner" style="display:none;"><i class="fa-solid fa-circle-notch spinner" style="margin-left:8px;"></i></span></span>
@@ -448,9 +475,12 @@
                     </div>
                     
                 </div>
+                
+                <!-- HORIZONTAL RESIZER -->
+                <div class="resizer-h" id="sidebarResizer"></div>
 
                 <!-- RIGHT AREA -->
-                <div class="right-area">
+                <div class="right-area" id="rightArea">
                     
                     <div class="panel chat-container">
                         <div class="panel-header" style="display:flex; justify-content:space-between;">
@@ -573,6 +603,22 @@
         </div>
     </div>
 
+    <!-- VIEW LOG MODAL -->
+    <div class="modal-overlay" id="logModal" style="z-index: 200;">
+        <div class="modal-card" style="width: 80%; height: 80%; max-width: 1200px; max-height: 90vh;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>Execution Log</span>
+                <button class="btn-editor" id="downloadLogBtn" style="margin:0;"><i class="fa-solid fa-download"></i> Download</button>
+            </div>
+            <div class="modal-body" style="flex-grow: 1; overflow-y: auto; padding: 0; background: #1e1e1e;">
+                <pre id="logModalContent" style="margin: 0; padding: 16px; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; word-wrap: break-word; color: #d4d4d4;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" style="margin:0;" onclick="closeLogModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
 
         // Theme Logic
@@ -595,10 +641,56 @@
                 root.classList.remove('force-dark', 'force-light');
             }
             
-            document.getElementById('themeLight').style.background = theme === 'light' ? 'var(--border)' : 'transparent';
-            document.getElementById('themeDark').style.background = theme === 'dark' ? 'var(--border)' : 'transparent';
-            document.getElementById('themeSystem').style.background = theme === 'system' ? 'var(--border)' : 'transparent';
+            localStorage.setItem('aura_theme', theme);
         }
+
+        // Layout Resizers
+        let isResizingH = false;
+        let isResizingV = false;
+
+        document.getElementById('sidebarResizer').addEventListener('mousedown', function(e) {
+            isResizingH = true;
+            document.body.style.cursor = 'ew-resize';
+            e.preventDefault();
+        });
+
+        document.getElementById('consoleResizer').addEventListener('mousedown', function(e) {
+            isResizingV = true;
+            document.body.style.cursor = 'ns-resize';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (isResizingH) {
+                const workspace = document.querySelector('.workspace-layout');
+                const workspaceRect = workspace.getBoundingClientRect();
+                // calculate right area width
+                const newWidth = workspaceRect.right - e.clientX - 16; 
+                if (newWidth > 200 && newWidth < workspaceRect.width * 0.6) {
+                    document.getElementById('rightArea').style.width = newWidth + 'px';
+                }
+            }
+            if (isResizingV) {
+                const consolePanel = document.getElementById('consolePanel');
+                if (consolePanel.style.display !== 'none') {
+                    const workspace = document.querySelector('.workspace-layout');
+                    const workspaceRect = workspace.getBoundingClientRect();
+                    const newHeight = workspaceRect.bottom - e.clientY - 16;
+                    if (newHeight > 100 && newHeight < workspaceRect.height * 0.8) {
+                        consolePanel.style.height = newHeight + 'px';
+                    }
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', function(e) {
+            if (isResizingH || isResizingV) {
+                isResizingH = false;
+                isResizingV = false;
+                document.body.style.cursor = 'default';
+            }
+        });
+
 
         function changeTheme(theme) {
             localStorage.setItem('aura_theme', theme);
@@ -660,6 +752,7 @@
         let isRunning = false;
         let logFilterErrorsOnly = false;
         let logFilterAiOnly = true;
+        let hasShownStartMessage = false;
         const terminalConsole = document.getElementById('terminalConsole');
         const runSpinner = document.getElementById('runSpinner');
         const yamlFileList = document.getElementById('yamlFileList');
@@ -682,7 +775,7 @@
             loadSessions();
             loadFiles();
             loadHistory();
-            setupSSE();
+            startPolling();
 
             document.getElementById('chatInput').addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
@@ -690,6 +783,22 @@
                     sendChatMessage();
                 }
             });
+
+            // Enforce mutual exclusivity: Headless Mode vs Interactive HUD
+            const optHeadless = document.getElementById('optHeadless');
+            const optInteractive = document.getElementById('optInteractive');
+            if (optHeadless && optInteractive) {
+                optHeadless.addEventListener('change', () => {
+                    if (optHeadless.checked) {
+                        optInteractive.checked = false;
+                    }
+                });
+                optInteractive.addEventListener('change', () => {
+                    if (optInteractive.checked) {
+                        optHeadless.checked = false;
+                    }
+                });
+            }
         }
 
         // Modal Controls
@@ -760,6 +869,14 @@
         }
 
         function loadFilesList(files) {
+            if (!Array.isArray(files)) {
+                yamlFileList.innerHTML = `<div style="padding: 12px; color: var(--danger); font-size: 12px;">Failed to load files. Response was not an array.</div>`;
+                return;
+            }
+            if (files.length === 0) {
+                yamlFileList.innerHTML = `<div style="padding: 12px; color: var(--text-secondary); font-size: 12px; font-style: italic; text-align: center;">No YAML test files found in src/test/resources.</div>`;
+                return;
+            }
             yamlFileList.innerHTML = files.map(item => {
                 const isExpanded = !!expandedFiles[item.file];
                 const allChecked = isAllDatasetsChecked(item);
@@ -846,6 +963,7 @@
                 const statusBadge = `<span style="background: rgba(59,130,246,0.1); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;"><i class="fa-solid fa-circle-notch spinner" style="margin-right: 4px;"></i> Running</span>`;
                 const formattedTime = activeRunStats.startTime ? activeRunStats.startTime.toLocaleString() : new Date().toLocaleString();
                 const reportIcon = `<i class="fa-solid fa-ban report-link-inactive" title="Running - No Report Yet"></i>`;
+                const logIcon = `<i class="fa-solid fa-ban report-link-inactive" title="Running - No Log Yet"></i>`;
                 
                 rowsHtml += `
                     <tr class="history-row" style="cursor: default; border-left: 3px solid var(--accent);">
@@ -854,7 +972,7 @@
                         <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono);">${activeRunStats.total}</td>
                         <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--success);">${activeRunStats.passed}</td>
                         <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--danger);">${activeRunStats.failed}</td>
-                        <td style="padding: 10px 12px; text-align: center;">${reportIcon}</td>
+                        <td style="padding: 10px 12px; text-align: center;">${reportIcon} &nbsp; ${logIcon}</td>
                         <td style="padding: 10px 12px; text-align: right;"></td>
                     </tr>
                 `;
@@ -873,21 +991,21 @@
                     const hasReport = item.hasReport === 'true';
                     
                     const reportIcon = hasReport 
-                        ? `<i class="fa-solid fa-chart-column report-link-active" title="Open Report"></i> <i class="fa-solid fa-arrow-right" style="font-size: 10px; color: var(--accent); margin-left: 4px;"></i>` 
+                        ? `<i class="fa-solid fa-chart-column report-link-active" title="Open Report" onclick="openReportView('${item.id}')"></i>` 
                         : `<i class="fa-solid fa-ban report-link-inactive" title="No Report Available"></i>`;
                     
-                    const rowClickAction = hasReport 
-                        ? `onclick="openReportView('${item.id}')"` 
-                        : `style="cursor: default;"`;
-                        
+                    const logIcon = hasReport 
+                        ? `<i class="fa-solid fa-file-lines report-link-active" title="Open Execution Log" onclick="openLogModal('${item.id}')"></i>` 
+                        : `<i class="fa-solid fa-ban report-link-inactive" title="No Log Available"></i>`;
+                    
                     return `
-                        <tr class="history-row" ${rowClickAction}>
+                        <tr class="history-row" style="cursor: default;">
                             <td style="padding: 10px 12px;">${statusBadge}</td>
                             <td style="padding: 10px 12px; font-weight: 500;">${formattedTime}</td>
                             <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono);">${item.total || '-'}</td>
                             <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--success);">${item.passed || '-'}</td>
                             <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--danger);">${item.failed || '-'}</td>
-                            <td style="padding: 10px 12px; text-align: center;">${reportIcon}</td>
+                            <td style="padding: 10px 12px; text-align: center;">${reportIcon} &nbsp; ${logIcon}</td>
                             <td style="padding: 10px 12px; text-align: right;" onclick="event.stopPropagation();">
                                 <button class="delete-report-btn" onclick="deleteReport('${item.id}')" title="Delete Report">
                                     <i class="fa-solid fa-trash-can" style="font-size: 12px;"></i>
@@ -919,6 +1037,41 @@
                     alert("Error deleting report: " + e.message);
                 }
             }
+        }
+
+        async function openLogModal(reportId) {
+            const modal = document.getElementById('logModal');
+            const content = document.getElementById('logModalContent');
+            const downloadBtn = document.getElementById('downloadLogBtn');
+            content.innerText = 'Loading...';
+            modal.style.display = 'flex';
+            try {
+                const res = await fetch(`/api/allure/report/${reportId}/execution.log`);
+                if (res.ok) {
+                    const text = await res.text();
+                    content.innerText = text;
+                    downloadBtn.onclick = () => {
+                        const blob = new Blob([text], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${reportId}_execution.log`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    };
+                    downloadBtn.style.display = 'flex';
+                } else {
+                    content.innerText = 'Log file not found or empty.';
+                    downloadBtn.style.display = 'none';
+                }
+            } catch (e) {
+                content.innerText = 'Failed to load log.';
+                downloadBtn.style.display = 'none';
+            }
+        }
+
+        function closeLogModal() {
+            document.getElementById('logModal').style.display = 'none';
         }
 
         function updateQueueList() {
@@ -1154,6 +1307,7 @@
             const chatPanel = document.getElementById('chatPanel');
             const editorPanel = document.getElementById('editorPanel');
             const consolePanel = document.getElementById('consolePanel');
+            const consoleResizer = document.getElementById('consoleResizer');
             const closeConsoleBtn = document.getElementById('closeConsoleBtn');
             
             if (closeConsoleBtn) {
@@ -1165,10 +1319,12 @@
                 switchState('editor');
                 
                 if (hasConsole) {
+                    consoleResizer.style.display = 'block';
                     consolePanel.style.display = 'flex'; setTimeout(() => consolePanel.style.height = '150px', 10);
                     consolePanel.style.flexGrow = '0';
                     consolePanel.style.height = consoleExpanded ? '400px' : '200px';
                 } else {
+                    consoleResizer.style.display = 'none';
                     consolePanel.style.height = '0px'; setTimeout(() => { if (!consoleOpened && !isRunning) consolePanel.style.display = 'none'; }, 300);
                 }
             } else {
@@ -1176,10 +1332,12 @@
                 switchState('selection');
                 
                 if (hasConsole) {
+                    consoleResizer.style.display = 'block';
                     consolePanel.style.display = 'flex'; setTimeout(() => consolePanel.style.height = '150px', 10);
                     consolePanel.style.flexGrow = '0';
                     consolePanel.style.height = consoleExpanded ? '550px' : '280px';
                 } else {
+                    consoleResizer.style.display = 'none';
                     consolePanel.style.height = '0px'; setTimeout(() => { if (!consoleOpened && !isRunning) consolePanel.style.display = 'none'; }, 300);
                 }
             }
@@ -1414,6 +1572,7 @@
             stopQueueBtn.style.display = 'flex';
             runSpinner.style.display = 'inline-block';
             terminalConsole.innerHTML = 'Connecting to run stream...\n';
+            hasShownStartMessage = false;
             
             try {
                 const res = await fetch('/api/run', {
@@ -1451,14 +1610,24 @@
         function isAiLogLine(line) {
             if (!line) return false;
             
-            // Check if the line contains standard AI emojis
-            const emojiPattern = /[🤖🧠👣🔮⚙️✨🔍║]/u;
+            const lower = line.toLowerCase();
+            
+            // Filter out Maven execution boilerplate
+            const isMavenLog = lower.includes('[info] command: mvn') ||
+                               lower.includes('[info] --<') ||
+                               lower.includes('[info] building ') ||
+                               lower.includes('[info] --- maven-') ||
+                               lower.includes('[info] skip non existing resource') ||
+                               lower.includes('[info] deleting ');
+            if (isMavenLog) return false;
+            
+            // Check if the line contains standard AI emojis or box drawing chars
+            const emojiPattern = /[🤖🧠👣🔮⚙️✨🔍║│├└─═▶✅❌\?]/u;
             if (emojiPattern.test(line)) {
                 return true;
             }
             
             // Check if the line contains AI keywords
-            const lower = line.toLowerCase();
             const aiKeywords = [
                 'aura',
                 'pesap',
@@ -1477,7 +1646,28 @@
                 'total tokens',
                 'context levels',
                 'escalations',
-                'direct parses'
+                'direct parses',
+                'step',
+                'open http',
+                'navigating to',
+                'capturing',
+                'sending prompt',
+                'sending multimodal',
+                'sending chat message',
+                'tokens:',
+                'llm response',
+                'llm reasoning',
+                'parsed',
+                'llm proposed actions',
+                'action{type=',
+                '[exec]',
+                'executing action',
+                'resolved using strategy',
+                'assertion passed',
+                'all steps completed successfully',
+                'playbook saved',
+                'navigating to:',
+                'simplified dom size'
             ];
             
             if (aiKeywords.some(keyword => lower.includes(keyword))) {
@@ -1515,8 +1705,13 @@
         }
 
         function appendLog(line) {
-            if (terminalConsole.innerHTML.includes('Console idle.')) {
+            if (terminalConsole.innerHTML.includes('Console idle.') || terminalConsole.innerHTML.includes('Connecting to run stream...')) {
                 terminalConsole.innerHTML = '';
+                if (logFilterAiOnly && !hasShownStartMessage) {
+                    hasShownStartMessage = true;
+                    const startLine = '🤖 Test runner started. Compiling and initializing AI tests (this may take a few seconds)...';
+                    terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line log-info" style="display: block; margin: 0; padding: 0;">${startLine}</div>`);
+                }
             }
             const isErrorOrWarn = line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[FATAL]');
             
@@ -1531,72 +1726,100 @@
             terminalConsole.scrollTop = terminalConsole.scrollHeight;
         }
 
-        function setupSSE() {
-            const eventSource = new EventSource('/api/status?clientId=' + encodeURIComponent(clientId));
-            
-            eventSource.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'log') {
-                    appendLog(data.line);
-                } else if (data.type === 'reportReady') {
-                    openReportView(data.reportId);
-                } else if (data.type === 'status') {
-                    const statsPanel = document.getElementById('statsPanel');
-                    if (statsPanel) {
-                        statsPanel.style.display = (data.running || data.total > 0) ? 'block' : 'none';
-                    }
+        let pollingIntervalId = null;
+        let lastLogIndex = 0;
+        let lastEventIndex = 0;
 
-                    document.getElementById('statsTotalExecution').innerText = `${data.total} Test${data.total === 1 ? '' : 's'}`;
-                    document.getElementById('statsPassed').innerText = data.passed;
-                    document.getElementById('statsFailed').innerText = data.failed;
+        function startPolling() {
+            if (pollingIntervalId) {
+                clearTimeout(pollingIntervalId);
+            }
+            pollStatus();
+        }
+
+        async function pollStatus() {
+            try {
+                const response = await fetch('/api/status?clientId=' + encodeURIComponent(clientId) + '&lastIndex=' + lastLogIndex + '&lastEventIndex=' + lastEventIndex);
+                if (response.ok) {
+                    const data = await response.json();
                     
-                    activeRunStats.running = data.running;
-                    activeRunStats.total = data.total;
-                    activeRunStats.passed = data.passed;
-                    activeRunStats.failed = data.failed;
-                    if (data.running && !activeRunStats.startTime) {
-                        activeRunStats.startTime = new Date();
+                    if (data.logs && data.logs.length > 0) {
+                        data.logs.forEach(log => appendLog(log));
                     }
-                    renderHistoryTable();
+                    if (data.newIndex !== undefined) {
+                        lastLogIndex = data.newIndex;
+                    }
                     
-                    try {
-                        isRunning = data.running;
-                        if (isRunning) {
-                            runQueueBtn.disabled = true;
-                            runQueueBtn.style.display = 'none';
-                            stopQueueBtn.style.display = 'flex';
-                            if (runSpinner) runSpinner.style.display = 'inline-block';
-                            const sidebarBadge = document.getElementById('sidebarRunBadge');
-                            if (sidebarBadge) {
-                                sidebarBadge.style.display = 'flex';
-                                sidebarBadge.innerHTML = `<i class="fa-solid fa-circle-notch spinner"></i> ${data.passed + data.failed + 1}/${data.total}`;
+                    if (data.events && data.events.length > 0) {
+                        data.events.forEach(event => {
+                            if (event.type === 'reportReady') {
+                                openReportView(event.reportId);
                             }
-                        } else {
-                            runQueueBtn.disabled = selectedDatasets.length === 0;
-                            runQueueBtn.style.display = 'flex';
-                            stopQueueBtn.style.display = 'none';
-                            if (runSpinner) runSpinner.style.display = 'none';
-                            const sidebarBadge = document.getElementById('sidebarRunBadge');
-                            if (sidebarBadge) sidebarBadge.style.display = 'none';
-                            
-                            activeRunStats.running = false;
-                            activeRunStats.startTime = null;
-                            loadHistory();
-                            updateCenterLayout();
-                        }
-                    } catch (err) {
-                        console.error('Error updating UI state from status:', err);
+                        });
+                    }
+                    if (data.newEventIndex !== undefined) {
+                        lastEventIndex = data.newEventIndex;
                     }
 
+                    if (data.status) {
+                        const statusData = data.status;
+                        const statsPanel = document.getElementById('statsPanel');
+                        if (statsPanel) {
+                            statsPanel.style.display = (statusData.running || statusData.total > 0) ? 'block' : 'none';
+                        }
 
+                        document.getElementById('statsTotalExecution').innerText = `${statusData.total} Test${statusData.total === 1 ? '' : 's'}`;
+                        document.getElementById('statsPassed').innerText = statusData.passed;
+                        document.getElementById('statsFailed').innerText = statusData.failed;
+                        
+                        activeRunStats.running = statusData.running;
+                        activeRunStats.total = statusData.total;
+                        activeRunStats.passed = statusData.passed;
+                        activeRunStats.failed = statusData.failed;
+                        if (statusData.running && !activeRunStats.startTime) {
+                            activeRunStats.startTime = new Date();
+                        }
+                        renderHistoryTable();
+                        
+                        try {
+                            isRunning = statusData.running;
+                            if (isRunning) {
+                                runQueueBtn.disabled = true;
+                                runQueueBtn.style.display = 'none';
+                                stopQueueBtn.style.display = 'flex';
+                                if (runSpinner) runSpinner.style.display = 'inline-block';
+                                const sidebarBadge = document.getElementById('sidebarRunBadge');
+                                if (sidebarBadge) {
+                                    sidebarBadge.style.display = 'flex';
+                                    sidebarBadge.innerHTML = `<i class="fa-solid fa-circle-notch spinner"></i> ${statusData.passed + statusData.failed + 1}/${statusData.total}`;
+                                }
+                            } else {
+                                runQueueBtn.disabled = selectedDatasets.length === 0;
+                                runQueueBtn.style.display = 'flex';
+                                stopQueueBtn.style.display = 'none';
+                                if (runSpinner) runSpinner.style.display = 'none';
+                                const sidebarBadge = document.getElementById('sidebarRunBadge');
+                                if (sidebarBadge) sidebarBadge.style.display = 'none';
+                                
+                                activeRunStats.running = false;
+                                activeRunStats.startTime = null;
+                                loadHistory();
+                                updateCenterLayout();
+                            }
+                        } catch (err) {
+                            console.error('Error updating UI state from status:', err);
+                        }
+                    }
+                } else {
+                    console.error("Polling response error:", response.status);
                 }
-            };
-            
-            eventSource.onerror = (e) => {
-                console.error("SSE connection error", e);
-                eventSource.close();
-                setTimeout(setupSSE, 3000);
-            };
+            } catch (err) {
+                console.error("Polling fetch error:", err);
+            } finally {
+                if (!disconnected) {
+                    pollingIntervalId = setTimeout(pollStatus, 2000);
+                }
+            }
         }
 
 
