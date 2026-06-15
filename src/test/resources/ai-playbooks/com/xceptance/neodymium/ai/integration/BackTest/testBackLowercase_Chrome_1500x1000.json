@@ -37,7 +37,7 @@
     },
     {
       "promptLine": "back",
-      "reasoning": "The user requested to navigate back, so a BACK action is performed.",
+      "reasoning": "The instruction is to navigate back, so the BACK action is used.",
       "actions": [
         {
           "type": "BACK",

@@ -538,4 +538,29 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
         Assertions.assertEquals(ContextLevel.VISUAL, stepDetails.getPesapPredictedContextLevel());
         Assertions.assertFalse(stepDetails.isPesapRequiresJavaMethods());
     }
+
+    /**
+     * Tests that a step containing hints is predicted as HINT context level by PESAP.
+     * 
+     * @throws Exception if JIT pre-step PESAP fails
+     */
+    @Test
+    public final void testHintStepContextLevel() throws Exception
+    {
+        final AiAgent agent = new AiAgent(this.liveLlmClient, this.dummyAnalyzer, null, this.config);
+        final String stepText = "Click the 'Login' button (hint: #login-btn)";
+        final List<String> steps = List.of(stepText);
+        final StepDetails stepDetails = new StepDetails(stepText);
+
+        final AiAgent.PreStepPesapResult result = agent.runPreStepPesapForTest(steps, 0, stepDetails);
+
+        // Validate result record properties
+        Assertions.assertEquals(ContextLevel.HINT, result.contextLevel());
+        Assertions.assertFalse(result.requiresJavaMethods());
+        Assertions.assertTrue(result.splitSteps().isEmpty());
+
+        // Validate stepDetails properties
+        Assertions.assertEquals(ContextLevel.HINT, stepDetails.getPesapPredictedContextLevel());
+        Assertions.assertFalse(stepDetails.isPesapRequiresJavaMethods());
+    }
 }

@@ -446,7 +446,7 @@ public class HintTesting extends BaseAiTest
     {
         final String targetUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/plp-perfect.html", server.getPort());
         final String steps = String.format("""
-                Open %s
+                OPEN %s
                 Select "Price: Low to High" from sorting dropdown (hint: #sort-select-input)
                 """, targetUrl);
 
@@ -485,7 +485,7 @@ public class HintTesting extends BaseAiTest
     {
         final String targetUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/plp-perfect.html", server.getPort());
         final String steps = String.format("""
-                Open %s
+                OPEN %s
                 Check the tops category checkbox (hint: #filter-cat-tops)
                 """, targetUrl);
 
@@ -524,7 +524,7 @@ public class HintTesting extends BaseAiTest
     {
         final String targetUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/plp-perfect.html", server.getPort());
         final String steps = String.format("""
-                Open %s
+                OPEN %s
                 Hover over the Tops navigation link (hint: #nav-link-tops)
                 """, targetUrl);
 
@@ -563,7 +563,7 @@ public class HintTesting extends BaseAiTest
     {
         final String targetUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/plp-perfect.html", server.getPort());
         final String steps = String.format("""
-                Open %s
+                OPEN %s
                 Assert that the page title is visible (hint: #plp-page-title)
                 """, targetUrl);
 
@@ -602,7 +602,7 @@ public class HintTesting extends BaseAiTest
     {
         final String targetUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/plp-perfect.html", server.getPort());
         final String steps = String.format("""
-                Open %s
+                OPEN %s
                 Scroll to the email input field in newsletter section (hint: #newsletter-email-input)
                 """, targetUrl);
 
@@ -715,5 +715,45 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "TYPE", "#search-box", "bear")
             .hasAction(2, "KEY_PRESS", "#search-box", "Enter");
+    }
+
+    /**
+     * Test compound step with hints to verify they stay intact during split.
+     */
+    @NeodymiumTest
+    public final void test_HintSplit()
+    {
+        final String steps = """
+                OPEN ${posters.storefront.url}
+                Type "bear" into search input (hint: #search-box) and click search button (hint: #search-button)
+                """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "CLICK", "#search-button");
+
+        assertEquals("#search-box", r1.getActions().get(1).getTarget());
+        assertEquals("#search-button", r1.getActions().get(2).getTarget());
+
+        // Reset and check Replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "CLICK", "#search-button");
     }
 }

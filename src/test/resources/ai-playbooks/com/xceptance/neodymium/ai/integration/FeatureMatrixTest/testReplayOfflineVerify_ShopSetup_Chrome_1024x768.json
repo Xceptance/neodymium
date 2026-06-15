@@ -1,0 +1,13 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.FeatureMatrixTest :: testReplayOfflineVerify :: ShopSetup :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Observe page visual consistency (visual)",
+      "reasoning": "The page appears visually consistent based on the provided screenshot. The header, navigation, banner, and product cards all maintain a consistent layout, styling, and alignment. No visual anomalies or inconsistencies were detected.",
+      "actions": [],
+      "screenshotHash": "5c0000008400000000007d810c817e015f817f01000008019a4398c318c71ac3",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}

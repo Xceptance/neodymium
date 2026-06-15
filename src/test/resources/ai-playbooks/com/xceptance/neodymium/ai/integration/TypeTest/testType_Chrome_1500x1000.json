@@ -70,12 +70,12 @@
     },
     {
       "promptLine": "Click the \u0027Submit Details\u0027 button (hint: #btn-submit)",
-      "reasoning": "Clicked the \u0027Submit Details\u0027 button.",
+      "reasoning": "Successfully translated the instruction to click the \u0027Submit Details\u0027 button.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#btn-submit",
-          "description": "Click \u0027Submit Details\u0027 button",
+          "description": "Click the \u0027Submit Details\u0027 button",
           "elementDetails": "\u0027Submit Details\u0027 button",
           "elementContext": {
             "text": "Submit Details",

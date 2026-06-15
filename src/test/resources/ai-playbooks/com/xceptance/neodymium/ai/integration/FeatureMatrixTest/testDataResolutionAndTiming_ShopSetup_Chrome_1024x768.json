@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
-      "reasoning": "Successfully identified the \u0027Full Name\u0027 textbox by its ID and generated a TYPE action.",
+      "reasoning": "Identified the \u0027Full Name\u0027 textbox by its ID and generated a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
@@ -11,7 +11,7 @@
           "value": [
             "Alice Cooper"
           ],
-          "description": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field",
+          "description": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
           "elementDetails": "Full Name textbox",
           "elementContext": {
             "classes": "form-control",
@@ -29,7 +29,7 @@
     },
     {
       "promptLine": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Identified the \u0027Email Address\u0027 field by its ID \u0027reg-email\u0027 and generated a TYPE action to input the specified text.",
+      "reasoning": "Identified the \u0027Email Address\u0027 field by its unique ID \u0027reg-email\u0027 and generated a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
@@ -55,7 +55,7 @@
     },
     {
       "promptLine": "Click the \u0027Create Account\u0027 button.",
-      "reasoning": "Found the \u0027Create Account\u0027 button by its ID and generated a CLICK action.",
+      "reasoning": "Found the \u0027Create Account\u0027 button by its unique ID and name in the AXTree and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",

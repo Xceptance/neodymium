@@ -22,10 +22,10 @@
       "promptLine": "Verify that the screen is mostly black and white (visual).",
       "reasoning": "Expected failure recorded for bug: unspecified",
       "actions": [],
-      "screenshotHash": "0008000000600020401a0018881cc81c881e8810001a0a100000000000000000",
+      "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
       "expectedFailure": true,
       "expectedErrorType": "com.xceptance.neodymium.ai.core.AiAgent$DefinitiveAssertionError",
-      "expectedErrorMessage": "Verification failed: Visual verification failed: The screen is not mostly black and white. It contains several prominent colors including red, blue, green, and brown in various elements and images."
+      "expectedErrorMessage": "Verification failed: Visual verification failed: The screen is not mostly black and white. It contains prominent colors such as blue (search button, storefront link, globe icon), red (X Posters), and a full-color image of a bear in a forest, as well as a colorful palette icon."
     }
   ]
 }

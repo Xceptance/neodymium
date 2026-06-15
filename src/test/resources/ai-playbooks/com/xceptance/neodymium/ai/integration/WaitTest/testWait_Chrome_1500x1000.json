@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the \u0027Start Process\u0027 button (hint: #btn-start)",
-      "reasoning": "Clicked the \u0027Start Process\u0027 button.",
+      "reasoning": "Clicked the \u0027Start Process\u0027 button using the provided hint.",
       "actions": [
         {
           "type": "CLICK",
@@ -42,11 +42,14 @@
     },
     {
       "promptLine": "Wait for the success indicator to be visible (hint: #success)",
-      "reasoning": "Successfully translated the instruction to wait for the success indicator to be visible.",
+      "reasoning": "",
       "actions": [
         {
           "type": "ASSERT",
           "target": "#success",
+          "value": [
+            "visible"
+          ],
           "description": "Wait for the success indicator to be visible",
           "elementDetails": "success indicator",
           "elementContext": {},

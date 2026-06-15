@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Type \u0027bear\u0027 into the search box",
-      "reasoning": "Identified the search box by its ID and generated a TYPE action to input \u0027bear\u0027.",
+      "reasoning": "Identified the search box by its unique ID \u0027search-box\u0027 and generated a TYPE action to input \u0027bear\u0027.",
       "actions": [
         {
           "type": "TYPE",
@@ -43,6 +43,7 @@
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "Type \u0027bear\u0027 into the search box and submit the search",
       "healedContextLevel": "AXTREE"
     },
     {
@@ -66,6 +67,7 @@
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "Type \u0027bear\u0027 into the search box and submit the search",
       "healedContextLevel": "AXTREE"
     },
     {

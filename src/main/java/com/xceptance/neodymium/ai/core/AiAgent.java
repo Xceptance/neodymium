@@ -521,6 +521,7 @@ public class AiAgent {
                 LOG.debug("{}", strippedStep);
                 LOG.debug("───────────────────────────────────────────────────────────");
 
+                // We always run PESAP for non-direct instructions to classify context level, check custom java methods, and handle step splitting.
                 if (!isDirectInstruction(strippedStep) && needsPesap && !alreadySplitSteps.contains(strippedStep))
                 {
                     final Object testInstance = actionExecutor.getTestInstance();
@@ -1983,7 +1984,7 @@ public class AiAgent {
         if (contextLevel == null)
         {
             final ContextLevel baseLevel = getInitialContextLevel(instruction);
-            if (baseLevel == ContextLevel.AXTREE)
+            if (baseLevel == ContextLevel.AXTREE || baseLevel == ContextLevel.HINT)
             {
                 if (stepDetails.isPesapCalled())
                 {
@@ -1991,7 +1992,7 @@ public class AiAgent {
                     includeJavaMethod = stepDetails.isPesapRequiresJavaMethods();
                     LOG.info("    🔮 JIT PESAP retrieved cached ContextLevel: {}, requiresJavaMethods: {}", contextLevel, includeJavaMethod);
                 }
-                else if (!isRecoveryAttempt)
+                else if (baseLevel == ContextLevel.AXTREE && !isRecoveryAttempt)
                 {
                     pesapResult = runPreStepPesap(stepIndex, testClass, stepDetails);
                     if (pesapResult != null)
@@ -2001,6 +2002,14 @@ public class AiAgent {
                         targetedMethods = null;
                         LOG.info("    🔮 JIT PESAP predicted ContextLevel: {}, requiresJavaMethods: {}", contextLevel, includeJavaMethod);
                     }
+                }
+            }
+            else
+            {
+                if (stepDetails.isPesapCalled())
+                {
+                    includeJavaMethod = stepDetails.isPesapRequiresJavaMethods();
+                    LOG.info("    🔮 JIT PESAP retrieved cached requiresJavaMethods: {}", includeJavaMethod);
                 }
             }
 

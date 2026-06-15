@@ -104,4 +104,46 @@ public class SplitMultiActionTest extends BaseAiTest
             .step(2, s -> s.isReplayed());
         assertEquals("Account Form Opened!", Selenide.$("#status").text());
     }
+
+    /**
+     * Verifies upfront step splitting (JIT PESAP) in German.
+     */
+    @NeodymiumTest
+    public final void testSplitMultiActionUpfrontGerman()
+    {
+        Selenide.open(url);
+        final String steps = """
+                Klicke auf die Schaltfläche "Menu" und klicke dann auf den Link "Create Account" im Dropdown-Menü und überprüfe, ob der Text "Account Form Opened!" angezeigt wird
+            """;
+
+        // Execute the compound step under LIVE_LLM mode.
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        // Expect exactly 3 steps to have been executed (split from the original single compound step)
+        assertThat(r1)
+            .hasStepsCount(3)
+            .step(0, s -> s.hasExpandedInstruction("Klicke auf die Schaltfläche \"Menu\"")
+                           .hasOriginalUnsplitInstruction(steps.trim()))
+            .step(1, s -> s.hasExpandedInstruction("Klicke auf den Link \"Create Account\" im Dropdown-Menü")
+                           .hasOriginalUnsplitInstruction(steps.trim()))
+            .step(2, s -> s.hasExpandedInstruction("Überprüfe, ob der Text \"Account Form Opened!\" angezeigt wird")
+                           .hasOriginalUnsplitInstruction(steps.trim()));
+
+        // Verify the SUT has updated correctly
+        assertEquals("Account Form Opened!", Selenide.$("#status").text());
+
+        this.resetBrowser();
+        Selenide.open(url);
+
+        // Verify that replaying the playbook offline runs successfully without LLM calls,
+        // and correctly aligns the steps list using the saved playbook's originalUnsplitInstruction field.
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertThat(r2)
+            .hasStepsCount(3)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed());
+        assertEquals("Account Form Opened!", Selenide.$("#status").text());
+    }
 }
+

@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the \u0027Submit Order\u0027 button",
-      "reasoning": "Found a button with the name \u0027Submit Order\u0027 and ID \u0027btn-submit\u0027 in the AXTree. Using the ID as the locator for the CLICK action.",
+      "reasoning": "Found a button with the name \u0027Submit Order\u0027 and ID \u0027btn-submit\u0027 in the AXTree. Using the ID for the click action.",
       "actions": [
         {
           "type": "CLICK",
