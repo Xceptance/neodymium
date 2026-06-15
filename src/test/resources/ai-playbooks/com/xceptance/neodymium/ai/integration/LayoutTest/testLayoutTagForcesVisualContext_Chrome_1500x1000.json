@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Verify that the main heading says \u0027Visual Integrity \u0026 Accessibility Auditing\u0027 (layout)",
-      "reasoning": "The main heading element `h1` with text \u0027Visual Integrity \u0026 Accessibility Auditing\u0027 was found and verified against the instruction.",
+      "reasoning": "The instruction was to verify the main heading text. I located the h1 element using its selector and asserted that its text content matches \u0027Visual Integrity \u0026 Accessibility Auditing\u0027.",
       "actions": [
         {
           "type": "ASSERT",
@@ -28,14 +28,14 @@
           "value": [
             "Visual Integrity \u0026 Accessibility Auditing"
           ],
-          "description": "Verify that the main heading says \u0027Visual Integrity \u0026 Accessibility Auditing\u0027",
-          "elementDetails": "Visual Integrity \u0026 Accessibility Auditing",
+          "description": "Verify the main heading text",
+          "elementDetails": "Main heading \u0027Visual Integrity \u0026 Accessibility Auditing\u0027",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "screenshotHash": "4801000100017f0145017f01000101010101516d210121018001010101000100",
+      "screenshotHash": "4800243300017f015f017f818100010153014141710101010100010101000100",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     }

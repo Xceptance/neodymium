@@ -22,12 +22,12 @@
     },
     {
       "promptLine": "Hover over \u0027Products\u0027.",
-      "reasoning": "Hovering over the \u0027Products\u0027 link as requested.",
+      "reasoning": "Found the \u0027Products\u0027 link in the accessibility tree and generated a HOVER action targeting it.",
       "actions": [
         {
           "type": "HOVER",
-          "target": "[name\u003d\u0027Products ▾\u0027]",
-          "description": "Hover over the \u0027Products\u0027 link",
+          "target": "[data-neo-ref\u003d\u0027xc_bubl4z\u0027]",
+          "description": "Hover over \u0027Products\u0027",
           "elementDetails": "Products ▾ link",
           "elementContext": {
             "text": "Products ▾",
@@ -43,7 +43,7 @@
     },
     {
       "promptLine": "Hover over \u0027Electronics\u0027.",
-      "reasoning": "Hovered over the \u0027Electronics\u0027 link using its data-neo-ref attribute.",
+      "reasoning": "Found the \u0027Electronics\u0027 link in the AXTree and generated a HOVER action targeting its data-neo-ref attribute.",
       "actions": [
         {
           "type": "HOVER",

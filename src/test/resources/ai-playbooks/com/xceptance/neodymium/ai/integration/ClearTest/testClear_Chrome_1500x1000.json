@@ -67,7 +67,7 @@
     },
     {
       "promptLine": "Click the \u0027Submit Details\u0027 button (hint: #btn-submit)",
-      "reasoning": "Clicked the \u0027Submit Details\u0027 button.",
+      "reasoning": "",
       "actions": [
         {
           "type": "CLICK",

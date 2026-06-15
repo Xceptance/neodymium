@@ -22,7 +22,7 @@
     },
     {
       "promptLine": "Click the red text box containing \u0027Blocking Overlay Active\u0027 to dismiss the overlay.",
-      "reasoning": "The instruction asks to click the \u0027red text box containing \u0027Blocking Overlay Active\u0027\u0027. Based on the DOM, the element with id \u0027blocking-overlay\u0027 and text \u0027Blocking Overlay Active (Click here to dismiss)\u0027 is the most appropriate target for this action.",
+      "reasoning": "The instruction asks to click the \u0027red text box containing \u0027Blocking Overlay Active\u0027\u0027. Based on the DOM, the element with id \u0027blocking-overlay\u0027 and text \u0027Blocking Overlay Active (Click here to dismiss)\u0027 is the most appropriate target for dismissing the overlay.",
       "actions": [
         {
           "type": "CLICK",
@@ -43,7 +43,7 @@
     },
     {
       "promptLine": "Click the \u0027Submit Transaction\u0027 button.",
-      "reasoning": "Found a button with the name \u0027Submit Transaction\u0027 and ID \u0027intercepted-btn\u0027 in the accessibility tree and generated a CLICK action targeting it.",
+      "reasoning": "Found the \u0027Submit Transaction\u0027 button by its ID and created a CLICK action.",
       "actions": [
         {
           "type": "CLICK",

@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop/sandbox/mock-oauth-login.html?redirect_uri\u003dhttps://localhost:39389/AuraGlanceTest/shop/sandbox/index.html",
-      "reasoning": "Navigating to the provided URL as instructed.",
+      "reasoning": "Navigated to the provided URL as instructed.",
       "actions": [
         {
           "type": "NAVIGATE",
@@ -11,7 +11,7 @@
             "http://localhost:43377/AuraGlanceTest/shop/sandbox/mock-oauth-login.html?redirect_uri\u003dhttps://localhost:39389/AuraGlanceTest/shop/sandbox/index.html"
           ],
           "description": "Open the specified URL",
-          "elementDetails": "URL navigation",
+          "elementDetails": "URL for mock OAuth login",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -47,7 +47,7 @@
     },
     {
       "promptLine": "Type \u0027password123\u0027 into the password input.",
-      "reasoning": "Identified the password input field by its ID and generated a TYPE action to enter the specified text.",
+      "reasoning": "Identified the password input field by its ID \u0027oauth-password\u0027 and generated a TYPE action to enter the specified text.",
       "actions": [
         {
           "type": "TYPE",
@@ -72,7 +72,7 @@
     },
     {
       "promptLine": "Click the \u0027Authorize \u0026 Sign In\u0027 button.",
-      "reasoning": "Identified the \u0027Authorize \u0026 Sign In\u0027 button by its ID and created a CLICK action.",
+      "reasoning": "Found and targeted the \u0027Authorize \u0026 Sign In\u0027 button using its ID.",
       "actions": [
         {
           "type": "CLICK",

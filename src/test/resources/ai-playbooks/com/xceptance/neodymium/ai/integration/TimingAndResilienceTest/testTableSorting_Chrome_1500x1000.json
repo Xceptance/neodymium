@@ -11,7 +11,7 @@
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html"
           ],
           "description": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html",
-          "elementDetails": "Navigate to URL",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -44,7 +44,7 @@
     },
     {
       "promptLine": "Verify that the price in the first table row displays $4.99.",
-      "reasoning": "The instruction is to verify the price in the first table row. Based on the provided DOM, the element with data-neo-ref \u0027xc_3i41wj\u0027 contains the text \u0027$4.99\u0027, which corresponds to the price of the first item \u0027Aura Premium Sticker\u0027. An ASSERT action is used to verify this text.",
+      "reasoning": "The instruction is to verify the price in the first table row. The DOM shows a text element with \u0027$4.99\u0027 and data-neo-ref \u0027xc_3i41wj\u0027, which corresponds to the first product\u0027s price. An ASSERT action is used to check its text content.",
       "actions": [
         {
           "type": "ASSERT",

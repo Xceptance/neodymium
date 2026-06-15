@@ -1,0 +1,69 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.HintTesting :: test_ComplexIDHint :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the search box ( hint: #search-box )",
+      "reasoning": "Clicked the search box as instructed.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#search-box",
+          "description": "Click the search box",
+          "elementDetails": "search box",
+          "elementContext": {
+            "classes": "search-input",
+            "name": "searchText",
+            "id": "search-box",
+            "placeholder": "Search posters...",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Click the search button ( hint : #search-button )",
+      "reasoning": "Clicked the search button as instructed.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#search-button",
+          "description": "Click the search button",
+          "elementDetails": "search button",
+          "elementContext": {
+            "classes": "btn-search",
+            "text": "Search",
+            "id": "search-button",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    }
+  ]
+}

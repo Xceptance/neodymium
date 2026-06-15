@@ -22,7 +22,7 @@
     },
     {
       "promptLine": "Click the \u0027Have a promo code?\u0027 link.",
-      "reasoning": "Identified the \u0027Have a promo code?\u0027 link by its unique ID and name in the accessibility tree and generated a CLICK action.",
+      "reasoning": "Found a link with the text \u0027Have a promo code?\u0027 and ID \u0027promo-toggle\u0027. Using the ID for targeting.",
       "actions": [
         {
           "type": "CLICK",

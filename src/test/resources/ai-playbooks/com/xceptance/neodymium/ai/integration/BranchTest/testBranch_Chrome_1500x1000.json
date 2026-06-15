@@ -20,39 +20,21 @@
     },
     {
       "promptLine": "If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
-      "reasoning": "The instruction requires a conditional click. A BRANCH action is used to first assert the visibility of the \u0027Accept Cookies\u0027 button. If visible, it will be clicked. Otherwise, the \u0027Main Action Button\u0027 will be clicked.",
+      "reasoning": "Conditional action to click either the Accept Cookies button or the Main Action Button based on visibility.",
       "actions": [
         {
           "type": "BRANCH",
-          "description": "Conditionally click Accept Cookies or Main Action Button",
+          "target": "#btn-accept",
+          "description": "If the Accept Cookies button is visible, then click it, else click the Main Action Button",
           "elementContext": {},
           "replay": "",
-          "condition": [
-            {
-              "type": "ASSERT",
-              "target": "#btn-accept",
-              "value": [
-                "visible"
-              ],
-              "description": "Check if Accept Cookies button is visible",
-              "elementDetails": "Accept Cookies button",
-              "elementContext": {},
-              "replay": "",
-              "adjust": false
-            }
-          ],
           "then": [
             {
               "type": "CLICK",
               "target": "#btn-accept",
               "description": "Click the Accept Cookies button",
               "elementDetails": "Accept Cookies button",
-              "elementContext": {
-                "text": "Accept Cookies",
-                "id": "btn-accept",
-                "tagName": "button",
-                "type": "submit"
-              },
+              "elementContext": {},
               "replay": "",
               "adjust": false
             }
@@ -72,7 +54,7 @@
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "AXTREE"
+      "healedContextLevel": "HINT"
     }
   ]
 }

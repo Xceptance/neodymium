@@ -70,7 +70,50 @@ public class BranchTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isLlm(1));
+
+        assertEquals("Cookies Accepted!", Selenide.$("#result").text());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
             .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
+
+        assertEquals("Cookies Accepted!", Selenide.$("#result").text());
+    }
+
+    /**
+     * Test conditional branches in German.
+     */
+    @NeodymiumTest
+    public final void testBranchGerman()
+    {
+        final String steps = """
+                OPEN ${branch.test.url}
+                Wenn die Schaltfläche Cookies akzeptieren (hint: #btn-accept) sichtbar ist, dann klicke auf die Schaltfläche Cookies akzeptieren (hint: #btn-accept), andernfalls klicke auf die Hauptschaltfläche (hint: #btn-main-action)
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -98,3 +141,4 @@ public class BranchTest extends BaseAiTest
         assertEquals("Cookies Accepted!", Selenide.$("#result").text());
     }
 }
+

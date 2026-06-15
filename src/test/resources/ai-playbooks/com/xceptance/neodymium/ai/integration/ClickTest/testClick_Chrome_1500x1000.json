@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the \u0027Submit Order\u0027 button (hint: #btn-submit)",
-      "reasoning": "Clicked the \u0027Submit Order\u0027 button.",
+      "reasoning": "Successfully translated the instruction to click the \u0027Submit Order\u0027 button.",
       "actions": [
         {
           "type": "CLICK",

@@ -42,7 +42,7 @@
         {
           "type": "CHECK",
           "target": "#contact-phone",
-          "description": "Check radio button \u0027Phone\u0027",
+          "description": "Check the radio button \u0027Phone\u0027",
           "elementDetails": "radio button \u0027Phone\u0027",
           "elementContext": {},
           "replay": "",
@@ -54,7 +54,7 @@
     },
     {
       "promptLine": "Click the button \u0027Submit Preferences\u0027 (hint: #btn-submit)",
-      "reasoning": "Clicked the button \u0027Submit Preferences\u0027.",
+      "reasoning": "Successfully translated the instruction to click the button.",
       "actions": [
         {
           "type": "CLICK",

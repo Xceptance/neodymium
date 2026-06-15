@@ -45,6 +45,7 @@
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "Gib \u0027bear\u0027 in das Suchfeld ein und sende die Suche ab",
       "healedContextLevel": "AXTREE"
     },
     {
@@ -68,6 +69,7 @@
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "Gib \u0027bear\u0027 in das Suchfeld ein und sende die Suche ab",
       "healedContextLevel": "AXTREE"
     },
     {
@@ -92,7 +94,7 @@
     },
     {
       "promptLine": "Überprüfe, dass auf der Seite \u00273 results found.\u0027 angezeigt wird",
-      "reasoning": "The instruction is to verify the presence of specific text. I found an element with id \u0027search-subtitle\u0027 that contains the exact text \u00273 results found.\u0027 and created an ASSERT action targeting it.",
+      "reasoning": "The instruction is to verify the presence of the text \u00273 results found.\u0027. I found an element with id \u0027search-subtitle\u0027 that contains this exact text and created an ASSERT action targeting it.",
       "actions": [
         {
           "type": "ASSERT",
@@ -100,7 +102,7 @@
           "value": [
             "3 results found."
           ],
-          "description": "Verify that \u00273 results found.\u0027 is displayed on the page",
+          "description": "Verify \u00273 results found.\u0027 is displayed on the page",
           "elementDetails": "search-subtitle",
           "elementContext": {},
           "replay": "",

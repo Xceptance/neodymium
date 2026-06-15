@@ -1,0 +1,62 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.HintTesting :: test_HintSplit :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Type \"bear\" into search input (hint: #search-box) and click search button (hint: #search-button)",
+      "reasoning": "Typed \"bear\" into the search box and clicked the search button.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#search-box",
+          "value": [
+            "bear"
+          ],
+          "description": "Type \"bear\" into search input",
+          "elementContext": {
+            "classes": "search-input",
+            "name": "searchText",
+            "id": "search-box",
+            "placeholder": "Search posters...",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        },
+        {
+          "type": "CLICK",
+          "target": "#search-button",
+          "description": "Click search button",
+          "elementContext": {
+            "classes": "btn-search",
+            "text": "Search",
+            "id": "search-button",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    }
+  ]
+}
