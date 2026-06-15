@@ -44,16 +44,14 @@ import com.xceptance.neodymium.util.Neodymium;
 @Tag("freeform")
 public class BranchTest extends BaseAiTest
 {
-    private String url;
-
     /**
      * Set up storefront url parameter before each test execution.
      */
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        this.url = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
-        Neodymium.getData().put("branch.test.url", this.url);
+        final String url = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
+        Neodymium.getData().put("branch.test.url", url);
     }
 
     /**
