@@ -1,5 +1,5 @@
 {
-  "id": "com.xceptance.neodymium.ai.integration.BranchTest :: testBranch :: Browser Chrome_1500x1000",
+  "id": "com.xceptance.neodymium.ai.integration.BranchTest :: testBranchGerman :: Browser Chrome_1500x1000",
   "steps": [
     {
       "promptLine": "OPEN http://localhost:43377/BranchActionTest/testBranchHappyPath.html",
@@ -19,12 +19,12 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
-      "reasoning": "Translated the conditional instruction into a BRANCH action.",
+      "promptLine": "Wenn die Schaltfläche Cookies akzeptieren (hint: #btn-accept) sichtbar ist, dann klicke auf die Schaltfläche Cookies akzeptieren (hint: #btn-accept), andernfalls klicke auf die Hauptschaltfläche (hint: #btn-main-action)",
+      "reasoning": "Performed a conditional click: if \u0027Cookies akzeptieren\u0027 button is visible, click it, otherwise click \u0027Hauptschaltfläche\u0027.",
       "actions": [
         {
           "type": "BRANCH",
-          "description": "Conditional click based on Accept Cookies button visibility",
+          "description": "Conditional click based on visibility of \u0027Cookies akzeptieren\u0027 button",
           "elementContext": {},
           "replay": "",
           "condition": [
@@ -34,8 +34,8 @@
               "value": [
                 "visible"
               ],
-              "description": "Check if Accept Cookies button is visible",
-              "elementDetails": "Accept Cookies button",
+              "description": "Check if \u0027Cookies akzeptieren\u0027 button is visible",
+              "elementDetails": "Schaltfläche Cookies akzeptieren",
               "elementContext": {},
               "replay": "",
               "adjust": false
@@ -45,8 +45,8 @@
             {
               "type": "CLICK",
               "target": "#btn-accept",
-              "description": "Click the Accept Cookies button",
-              "elementDetails": "Accept Cookies button",
+              "description": "Click \u0027Cookies akzeptieren\u0027 button",
+              "elementDetails": "Schaltfläche Cookies akzeptieren",
               "elementContext": {
                 "text": "Accept Cookies",
                 "id": "btn-accept",
@@ -61,8 +61,8 @@
             {
               "type": "CLICK",
               "target": "#btn-main-action",
-              "description": "Click the Main Action Button",
-              "elementDetails": "Main Action Button",
+              "description": "Click \u0027Hauptschaltfläche\u0027",
+              "elementDetails": "Hauptschaltfläche",
               "elementContext": {},
               "replay": "",
               "adjust": false
