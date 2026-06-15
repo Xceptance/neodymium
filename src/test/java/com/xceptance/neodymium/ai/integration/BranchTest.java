@@ -315,5 +315,47 @@ public class BranchTest extends BaseAiTest
 
         assertEquals("Main Action Triggered!", Selenide.$("#result").text());
     }
+
+    /**
+     * Test compound conditional branch without any hints.
+     */
+    @NeodymiumTest
+    public final void testBranchCompoundNoHints()
+    {
+        final String steps = """
+                OPEN ${branch.test.url}?acceptText=Accept
+                If the Accept Cookies button is visible and contains the text "Accept Cookies", then click the Accept Cookies button, else click the Main Action Button
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse());
+
+        assertEquals("Main Action Triggered!", 
+            Selenide.$("#result").shouldBe(Condition.visible).text());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
+
+        assertEquals("Main Action Triggered!", Selenide.$("#result").text());
+    }
 }
 
