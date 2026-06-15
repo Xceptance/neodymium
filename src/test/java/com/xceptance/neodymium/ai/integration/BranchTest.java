@@ -357,5 +357,47 @@ public class BranchTest extends BaseAiTest
 
         assertEquals("Main Action Triggered!", Selenide.$("#result").text());
     }
+
+    /**
+     * Test nested conditional branch without any hints.
+     */
+    @NeodymiumTest
+    public final void testBranchNestedNoHints()
+    {
+        final String steps = """
+                OPEN ${branch.test.url}?acceptHidden=true
+                If the Cookie Banner is visible, then (If the Accept Cookies button is visible, then click it, else click the Main Action Button), else click the Main Action Button
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse());
+
+        assertEquals("Main Action Triggered!", 
+            Selenide.$("#result").shouldBe(Condition.visible).text());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
+
+        assertEquals("Main Action Triggered!", Selenide.$("#result").text());
+    }
 }
 

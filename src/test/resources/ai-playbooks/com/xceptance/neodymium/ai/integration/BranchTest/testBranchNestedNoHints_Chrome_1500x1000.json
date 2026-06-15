@@ -1,0 +1,44 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.BranchTest :: testBranchNestedNoHints :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/BranchActionTest/testBranchHappyPath.html?acceptHidden\u003dtrue",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/BranchActionTest/testBranchHappyPath.html?acceptHidden\u003dtrue"
+          ],
+          "description": "Navigate to http://localhost:43377/BranchActionTest/testBranchHappyPath.html?acceptHidden\u003dtrue",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "If the Cookie Banner is visible, then (If the Accept Cookies button is visible, then click it, else click the Main Action Button), else click the Main Action Button",
+      "reasoning": "The \u0027Cookie Banner\u0027 was not found in the provided Accessibility Tree, so the \u0027else\u0027 branch of the outer condition was executed, leading to a click on the \u0027Main Action Button\u0027.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-main-action",
+          "description": "Clicking the Main Action Button as the Cookie Banner is not visible.",
+          "elementDetails": "Main Action Button",
+          "elementContext": {
+            "text": "Main Action Button",
+            "id": "btn-main-action",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

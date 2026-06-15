@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "If the Cookie Banner (hint: #cookie-banner) is visible, then (If the Accept Cookies button (hint: #btn-accept) is visible, then click it (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)), else click the Main Action Button (hint: #btn-main-action)",
-      "reasoning": "Translated the conditional instruction into a BRANCH action with nested conditions.",
+      "reasoning": "Translated the nested conditional instruction into a BRANCH action.",
       "actions": [
         {
           "type": "BRANCH",
