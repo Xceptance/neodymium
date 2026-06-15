@@ -109,7 +109,7 @@ public final class MockLlmClient extends LlmClient
         if (callMode == LlmMode.PESAP)
         {
             final AiMockResponse peek = this.responseQueue.peek();
-            if (peek != null && peek.getResponseText() != null && peek.getResponseText().contains("contextLevel"))
+            if (peek != null && peek.getResponseText() != null && (peek.getResponseText().contains("\"c\"") || peek.getResponseText().contains("contextLevel")))
             {
                 final AiMockResponse response = this.responseQueue.poll();
                 final long in = response.getInputTokens() != null ? response.getInputTokens() : 0L;
@@ -120,7 +120,7 @@ public final class MockLlmClient extends LlmClient
             }
 
             this.mockStats.record(LlmMode.PESAP, 0L, 0L, 0L);
-            return "{\"contextLevel\":\"AXTREE\",\"stepType\":\"INTERACTION\",\"expectedTargetTagName\":\"body\",\"pageNavigation\":false,\"requiresJavaMethods\":false,\"direction\":\"\"}";
+            return "{\"c\":\"AXTREE\",\"jm\":false,\"sp\":[]}";
         }
 
         final AiMockResponse response = this.responseQueue.poll();

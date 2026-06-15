@@ -79,19 +79,12 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.AXTREE, result.contextLevel());
-        Assertions.assertEquals("INTERACTION", result.stepType());
-        Assertions.assertEquals("button", result.expectedTargetTagName());
-        Assertions.assertEquals(result.pageNavigation(), stepDetails.isPesapPageNavigation());
         Assertions.assertFalse(result.requiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
 
         // Validate stepDetails properties
         Assertions.assertEquals(ContextLevel.AXTREE, stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("INTERACTION", stepDetails.getPesapStepType());
-        Assertions.assertEquals("button", stepDetails.getPesapExpectedTargetTagName());
         Assertions.assertFalse(stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -111,19 +104,12 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.AXTREE, result.contextLevel());
-        Assertions.assertEquals("INTERACTION", result.stepType());
-        Assertions.assertEquals("input", result.expectedTargetTagName());
-        Assertions.assertEquals(result.pageNavigation(), stepDetails.isPesapPageNavigation());
         Assertions.assertFalse(result.requiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
 
         // Validate stepDetails properties
         Assertions.assertEquals(ContextLevel.AXTREE, stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("INTERACTION", stepDetails.getPesapStepType());
-        Assertions.assertEquals("input", stepDetails.getPesapExpectedTargetTagName());
         Assertions.assertFalse(stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -143,20 +129,12 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.STANDARD, result.contextLevel());
-        Assertions.assertEquals("ASSERTION", result.stepType());
-        Assertions.assertEquals("none", result.expectedTargetTagName());
-        Assertions.assertFalse(result.pageNavigation());
         Assertions.assertFalse(result.requiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
 
         // Validate stepDetails properties
         Assertions.assertEquals(ContextLevel.STANDARD, stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("ASSERTION", stepDetails.getPesapStepType());
-        Assertions.assertEquals("none", stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertFalse(stepDetails.isPesapPageNavigation());
         Assertions.assertFalse(stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -177,19 +155,11 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
         // Validate result record properties
         final ContextLevel level = result.contextLevel();
         Assertions.assertEquals(ContextLevel.VISUAL_LEAN, level);
-        Assertions.assertEquals("ASSERTION", result.stepType());
-        Assertions.assertEquals("none", result.expectedTargetTagName());
-        Assertions.assertFalse(result.pageNavigation());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
         Assertions.assertEquals(result.requiresJavaMethods(), stepDetails.isPesapRequiresJavaMethods());
 
         // Validate stepDetails properties
         Assertions.assertEquals(level, stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("ASSERTION", stepDetails.getPesapStepType());
-        Assertions.assertEquals("none", stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertFalse(stepDetails.isPesapPageNavigation());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
 
@@ -210,19 +180,11 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.VISUAL_LEAN, result.contextLevel());
-        Assertions.assertEquals("ASSERTION", result.stepType());
-        Assertions.assertEquals("none", result.expectedTargetTagName());
-        Assertions.assertFalse(result.pageNavigation());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
         Assertions.assertEquals(result.requiresJavaMethods(), stepDetails.isPesapRequiresJavaMethods());
 
         // Validate stepDetails properties
         Assertions.assertEquals(result.contextLevel(), stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("ASSERTION", stepDetails.getPesapStepType());
-        Assertions.assertEquals("none", stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertFalse(stepDetails.isPesapPageNavigation());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -242,19 +204,11 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.VISUAL, result.contextLevel());
-        Assertions.assertEquals("ASSERTION", result.stepType());
-        Assertions.assertEquals("none", result.expectedTargetTagName());
-        Assertions.assertFalse(result.pageNavigation());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
         Assertions.assertEquals(result.requiresJavaMethods(), stepDetails.isPesapRequiresJavaMethods());
 
         // Validate stepDetails properties
         Assertions.assertEquals(result.contextLevel(), stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("ASSERTION", stepDetails.getPesapStepType());
-        Assertions.assertEquals("none", stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertFalse(stepDetails.isPesapPageNavigation());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -274,18 +228,11 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertNotNull(result.contextLevel());
-        Assertions.assertEquals("INTERACTION", result.stepType());
-        Assertions.assertNotNull(result.expectedTargetTagName());
-        Assertions.assertEquals(result.pageNavigation(), stepDetails.isPesapPageNavigation());
         Assertions.assertEquals(result.requiresJavaMethods(), stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
 
         // Validate stepDetails properties
         Assertions.assertEquals(result.contextLevel(), stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals(result.stepType(), stepDetails.getPesapStepType());
-        Assertions.assertEquals(result.expectedTargetTagName(), stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -305,20 +252,13 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertNotNull(result.contextLevel());
-        Assertions.assertEquals("INTERACTION", result.stepType());
-        Assertions.assertNotNull(result.expectedTargetTagName());
-        Assertions.assertEquals(result.pageNavigation(), stepDetails.isPesapPageNavigation());
         Assertions.assertEquals(result.requiresJavaMethods(), stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertNotNull(result.splitSteps(), "Expected steps to be split");
         Assertions.assertTrue(result.splitSteps().size() >= 2,
             "Expected at least 2 split steps, but got: " + result.splitSteps());
 
         // Validate stepDetails properties
         Assertions.assertEquals(result.contextLevel(), stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals(result.stepType(), stepDetails.getPesapStepType());
-        Assertions.assertEquals(result.expectedTargetTagName(), stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -338,21 +278,13 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertNotNull(result.contextLevel());
-        Assertions.assertTrue("INTERACTION".equals(result.stepType()) || "ASSERTION".equals(result.stepType()) || "OTHER".equals(result.stepType()),
-            "Expected stepType to be INTERACTION, ASSERTION or OTHER, but got: " + result.stepType());
-        Assertions.assertNotNull(result.expectedTargetTagName());
-        Assertions.assertEquals(result.pageNavigation(), stepDetails.isPesapPageNavigation());
         Assertions.assertEquals(result.requiresJavaMethods(), stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertNotNull(result.splitSteps(), "Expected steps to be split");
         Assertions.assertTrue(result.splitSteps().size() >= 3,
             "Expected at least 3 split steps, but got: " + result.splitSteps());
 
         // Validate stepDetails properties
         Assertions.assertEquals(result.contextLevel(), stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals(result.stepType(), stepDetails.getPesapStepType());
-        Assertions.assertEquals(result.expectedTargetTagName(), stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -372,19 +304,11 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertNotNull(result.contextLevel());
-        Assertions.assertTrue("INTERACTION".equals(result.stepType()) || "ASSERTION".equals(result.stepType()) || "OTHER".equals(result.stepType()),
-            "Expected stepType to be INTERACTION, ASSERTION or OTHER, but got: " + result.stepType());
-        Assertions.assertNotNull(result.expectedTargetTagName());
-        Assertions.assertEquals(result.pageNavigation(), stepDetails.isPesapPageNavigation());
         Assertions.assertEquals(result.requiresJavaMethods(), stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertEquals(3, result.splitSteps().size());
 
         // Validate stepDetails properties
         Assertions.assertEquals(result.contextLevel(), stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals(result.stepType(), stepDetails.getPesapStepType());
-        Assertions.assertEquals(result.expectedTargetTagName(), stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -404,20 +328,12 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.STANDARD, result.contextLevel());
-        Assertions.assertEquals("ASSERTION", result.stepType());
-        Assertions.assertEquals("none", result.expectedTargetTagName());
-        Assertions.assertFalse(result.pageNavigation());
         Assertions.assertTrue(result.requiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
 
         // Validate stepDetails properties
         Assertions.assertEquals(ContextLevel.STANDARD, stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("ASSERTION", stepDetails.getPesapStepType());
-        Assertions.assertEquals("none", stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertFalse(stepDetails.isPesapPageNavigation());
         Assertions.assertTrue(stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -437,20 +353,12 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.STANDARD, result.contextLevel());
-        Assertions.assertEquals("ASSERTION", result.stepType());
-        Assertions.assertEquals("none", result.expectedTargetTagName());
-        Assertions.assertFalse(result.pageNavigation());
         Assertions.assertTrue(result.requiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
 
         // Validate stepDetails properties
         Assertions.assertEquals(ContextLevel.STANDARD, stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("ASSERTION", stepDetails.getPesapStepType());
-        Assertions.assertEquals("none", stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertFalse(stepDetails.isPesapPageNavigation());
         Assertions.assertTrue(stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -470,20 +378,12 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertTrue(result.contextLevel() == ContextLevel.AXTREE || result.contextLevel() == ContextLevel.STANDARD);
-        Assertions.assertEquals("ASSERTION", result.stepType());
-        Assertions.assertEquals("none", result.expectedTargetTagName());
-        Assertions.assertFalse(result.pageNavigation());
         Assertions.assertTrue(result.requiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
 
         // Validate stepDetails properties
         Assertions.assertTrue(stepDetails.getPesapPredictedContextLevel() == ContextLevel.AXTREE || stepDetails.getPesapPredictedContextLevel() == ContextLevel.STANDARD);
-        Assertions.assertEquals("ASSERTION", stepDetails.getPesapStepType());
-        Assertions.assertEquals("none", stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertFalse(stepDetails.isPesapPageNavigation());
         Assertions.assertTrue(stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -503,21 +403,13 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertNotNull(result.contextLevel());
-        Assertions.assertTrue("INTERACTION".equals(result.stepType()) || "ASSERTION".equals(result.stepType()) || "OTHER".equals(result.stepType()),
-            "Expected stepType to be INTERACTION, ASSERTION or OTHER, but got: " + result.stepType());
-        Assertions.assertNotNull(result.expectedTargetTagName());
-        Assertions.assertEquals(result.pageNavigation(), stepDetails.isPesapPageNavigation());
         Assertions.assertEquals(result.requiresJavaMethods(), stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertNotNull(result.splitSteps(), "Expected steps to be split");
         Assertions.assertTrue(result.splitSteps().size() >= 3,
             "Expected at least 3 split steps, but got: " + result.splitSteps());
 
         // Validate stepDetails properties
         Assertions.assertEquals(result.contextLevel(), stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals(result.stepType(), stepDetails.getPesapStepType());
-        Assertions.assertEquals(result.expectedTargetTagName(), stepDetails.getPesapExpectedTargetTagName());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -537,19 +429,12 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.AXTREE, result.contextLevel());
-        Assertions.assertEquals("INTERACTION", result.stepType());
-        Assertions.assertEquals("button", result.expectedTargetTagName());
-        Assertions.assertEquals(result.pageNavigation(), stepDetails.isPesapPageNavigation());
         Assertions.assertFalse(result.requiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
 
         // Validate stepDetails properties
         Assertions.assertEquals(ContextLevel.AXTREE, stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("INTERACTION", stepDetails.getPesapStepType());
-        Assertions.assertEquals("button", stepDetails.getPesapExpectedTargetTagName());
         Assertions.assertFalse(stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
     }
 
     /**
@@ -569,19 +454,12 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.AXTREE, result.contextLevel());
-        Assertions.assertEquals("NAVIGATION", result.stepType());
-        Assertions.assertEquals("none", result.expectedTargetTagName());
-        Assertions.assertTrue(result.pageNavigation());
         Assertions.assertFalse(result.requiresJavaMethods());
-        Assertions.assertNotNull(result.direction());
         Assertions.assertTrue(result.splitSteps().isEmpty());
 
         // Validate stepDetails properties
         Assertions.assertEquals(ContextLevel.AXTREE, stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("NAVIGATION", stepDetails.getPesapStepType());
-        Assertions.assertEquals("none", stepDetails.getPesapExpectedTargetTagName());
         Assertions.assertFalse(stepDetails.isPesapRequiresJavaMethods());
-        Assertions.assertNotNull(stepDetails.getPesapDirection());
         Assertions.assertNotNull(stepDetails.getPesapCall());
         Assertions.assertEquals(LlmMode.PESAP, stepDetails.getPesapCall().getCallMode());
     }
@@ -603,14 +481,11 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.VISUAL, result.contextLevel());
-        Assertions.assertEquals("ASSERTION", result.stepType());
-        Assertions.assertEquals("none", result.expectedTargetTagName());
         Assertions.assertFalse(result.requiresJavaMethods());
         Assertions.assertTrue(result.splitSteps().isEmpty());
 
         // Validate stepDetails properties
         Assertions.assertEquals(ContextLevel.VISUAL, stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("ASSERTION", stepDetails.getPesapStepType());
         Assertions.assertFalse(stepDetails.isPesapRequiresJavaMethods());
     }
 
@@ -632,12 +507,10 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.STANDARD, result.contextLevel());
-        Assertions.assertEquals("ASSERTION", result.stepType());
         Assertions.assertFalse(result.requiresJavaMethods());
 
         // Validate stepDetails properties
         Assertions.assertEquals(ContextLevel.STANDARD, stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("ASSERTION", stepDetails.getPesapStepType());
         Assertions.assertFalse(stepDetails.isPesapRequiresJavaMethods());
     }
 
@@ -659,13 +532,10 @@ public final class PesapLlmIntegrationTest extends BaseLlmTest
 
         // Validate result record properties
         Assertions.assertEquals(ContextLevel.VISUAL, result.contextLevel());
-        Assertions.assertEquals("ASSERTION", result.stepType());
         Assertions.assertFalse(result.requiresJavaMethods());
 
         // Validate stepDetails properties
         Assertions.assertEquals(ContextLevel.VISUAL, stepDetails.getPesapPredictedContextLevel());
-        Assertions.assertEquals("ASSERTION", stepDetails.getPesapStepType());
         Assertions.assertFalse(stepDetails.isPesapRequiresJavaMethods());
     }
 }
-

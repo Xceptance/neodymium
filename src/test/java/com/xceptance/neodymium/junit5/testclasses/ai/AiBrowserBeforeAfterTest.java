@@ -29,7 +29,6 @@ import com.xceptance.neodymium.common.testdata.DataFile;
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.ai.core.AiBrowser;
 
 @Browser("Chrome_headless")
 @DataFile("com/xceptance/neodymium/junit5/testclasses/ai/AiBrowserBeforeAfterTest.yaml")

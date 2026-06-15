@@ -1,5 +1,5 @@
 {
-  "id": "com.xceptance.neodymium.ai.anomaly.LayoutShiftAnomalyTest :: testLayoutShiftVisualAnomaly :: Browser Chrome_1500x1000",
+  "id": "com.xceptance.neodymium.ai.anomaly.ContrastWarningTest :: testAccessibilityLowContrastSoftWarning :: Browser Chrome_1500x1000",
   "steps": [
     {
       "promptLine": "Open http://localhost:43377/AuraGlanceTest/a11y/index.html",
@@ -28,7 +28,7 @@
           "type": "CLICK",
           "target": "#aura-trigger",
           "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
-          "elementDetails": "\u0027Aura Defect Controls\u0027 trigger button",
+          "elementDetails": "Aura Defect Controls trigger button",
           "elementContext": {
             "classes": "aura-controls-trigger",
             "id": "aura-trigger",
@@ -42,17 +42,17 @@
       "healedContextLevel": "HINT"
     },
     {
-      "promptLine": "Toggle \u0027Inject Layout Misalignment\u0027. (hint: label[for\u003d\u0027toggle-shift\u0027])",
-      "reasoning": "",
+      "promptLine": "Click the \u0027Inject Low Contrast\u0027 toggle. (hint: label[for\u003d\u0027toggle-contrast\u0027])",
+      "reasoning": "Clicked the \u0027Inject Low Contrast\u0027 toggle.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "label[for\u003d\u0027toggle-shift\u0027]",
-          "description": "Toggle \u0027Inject Layout Misalignment\u0027",
-          "elementDetails": "label[for\u003d\u0027toggle-shift\u0027]",
+          "target": "label[for\u003d\u0027toggle-contrast\u0027]",
+          "description": "Click \u0027Inject Low Contrast\u0027 toggle",
+          "elementDetails": "\u0027Inject Low Contrast\u0027 toggle",
           "elementContext": {
             "classes": "control-label",
-            "text": "Inject Layout Misalignment\nApplies asymmetrical shifts to broken grids.",
+            "text": "Inject Low Contrast\nForces poor visibility on text colors.",
             "tagName": "label"
           },
           "replay": "",
@@ -86,28 +86,12 @@
       "healedContextLevel": "HINT"
     },
     {
-      "promptLine": "Scroll to \u0027.misaligned-element\u0027. (hint: .misaligned-element)",
-      "reasoning": "Scrolled to the specified element.",
-      "actions": [
-        {
-          "type": "SCROLL",
-          "target": ".misaligned-element",
-          "description": "Scroll to element",
-          "elementDetails": "\u0027.misaligned-element\u0027",
-          "elementContext": {},
-          "replay": "",
-          "adjust": false
-        }
-      ],
-      "expectedFailure": false,
-      "healedContextLevel": "HINT"
-    },
-    {
+      "promptLine": "Observe page visual consistency (visual)",
+      "reasoning": "The page appears visually consistent based on the provided screenshot. The layout, colors, and element positioning are as expected without any obvious inconsistencies or defects.",
       "actions": [],
-      "screenshotHash": "13817f0180010101130141012101010180010001400130010201850121000a00",
+      "screenshotHash": "48002433000181fea17e81fe80810101ad8081c0c10101010101010101010101",
       "expectedFailure": false,
-      "expectedErrorType": "com.xceptance.neodymium.ai.core.AiAgent$DefinitiveAssertionError",
-      "expectedErrorMessage": "Verification failed: Visual verification failed: The \u0027Grid Alignment \u0026 Shifts\u0027 card is clearly tilted and shifted from its expected grid position, violating the assertion that it should be perfectly aligned and not tilted, rotated, offset, or shifted."
+      "healedContextLevel": "VISUAL_LEAN"
     }
   ]
 }

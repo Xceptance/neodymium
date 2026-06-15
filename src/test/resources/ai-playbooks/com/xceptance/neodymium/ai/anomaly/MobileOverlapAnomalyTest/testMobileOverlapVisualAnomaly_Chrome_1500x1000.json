@@ -1,16 +1,16 @@
 {
-  "id": "com.xceptance.neodymium.ai.anomaly.LayoutShiftAnomalyTest :: testLayoutShiftVisualAnomaly :: Browser Chrome_1500x1000",
+  "id": "com.xceptance.neodymium.ai.anomaly.MobileOverlapAnomalyTest :: testMobileOverlapVisualAnomaly :: Browser Chrome_1500x1000",
   "steps": [
     {
       "promptLine": "Open http://localhost:43377/AuraGlanceTest/a11y/index.html",
-      "reasoning": "Navigating to the specified URL.",
+      "reasoning": "Navigating to the provided URL as instructed.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "http://localhost:43377/AuraGlanceTest/a11y/index.html"
           ],
-          "description": "Open http://localhost:43377/AuraGlanceTest/a11y/index.html",
+          "description": "Open the specified URL",
           "elementDetails": "http://localhost:43377/AuraGlanceTest/a11y/index.html",
           "elementContext": {},
           "replay": "",
@@ -42,17 +42,17 @@
       "healedContextLevel": "HINT"
     },
     {
-      "promptLine": "Toggle \u0027Inject Layout Misalignment\u0027. (hint: label[for\u003d\u0027toggle-shift\u0027])",
-      "reasoning": "",
+      "promptLine": "Toggle \u0027Inject Mobile Overlap\u0027. (hint: label[for\u003d\u0027toggle-grid\u0027])",
+      "reasoning": "Toggled \u0027Inject Mobile Overlap\u0027 by clicking the associated label.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "label[for\u003d\u0027toggle-shift\u0027]",
-          "description": "Toggle \u0027Inject Layout Misalignment\u0027",
-          "elementDetails": "label[for\u003d\u0027toggle-shift\u0027]",
+          "target": "label[for\u003d\u0027toggle-grid\u0027]",
+          "description": "Toggle \u0027Inject Mobile Overlap\u0027",
+          "elementDetails": "label[for\u003d\u0027toggle-grid\u0027]",
           "elementContext": {
             "classes": "control-label",
-            "text": "Inject Layout Misalignment\nApplies asymmetrical shifts to broken grids.",
+            "text": "Inject Mobile Overlap\nSqueezes responsive columns without wrapping.",
             "tagName": "label"
           },
           "replay": "",
@@ -86,28 +86,11 @@
       "healedContextLevel": "HINT"
     },
     {
-      "promptLine": "Scroll to \u0027.misaligned-element\u0027. (hint: .misaligned-element)",
-      "reasoning": "Scrolled to the specified element.",
-      "actions": [
-        {
-          "type": "SCROLL",
-          "target": ".misaligned-element",
-          "description": "Scroll to element",
-          "elementDetails": "\u0027.misaligned-element\u0027",
-          "elementContext": {},
-          "replay": "",
-          "adjust": false
-        }
-      ],
-      "expectedFailure": false,
-      "healedContextLevel": "HINT"
-    },
-    {
       "actions": [],
-      "screenshotHash": "13817f0180010101130141012101010180010001400130010201850121000a00",
+      "screenshotHash": "4800243300017f015f017f8100010003528b7003000300010001000100000000",
       "expectedFailure": false,
       "expectedErrorType": "com.xceptance.neodymium.ai.core.AiAgent$DefinitiveAssertionError",
-      "expectedErrorMessage": "Verification failed: Visual verification failed: The \u0027Grid Alignment \u0026 Shifts\u0027 card is clearly tilted and shifted from its expected grid position, violating the assertion that it should be perfectly aligned and not tilted, rotated, offset, or shifted."
+      "expectedErrorMessage": "Verification failed: Visual verification failed: The card titled \u0027Clipped Content \u0026 Text Boundaries\u0027 is partially visible and clipped on the right side of the screen, violating the condition that all cards should be fully visible and not clipped or pushed off-screen."
     }
   ]
 }

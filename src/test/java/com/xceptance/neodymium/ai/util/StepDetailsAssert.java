@@ -23,7 +23,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.function.Consumer;
-import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.core.StepDetails;
 
 /**

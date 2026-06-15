@@ -18,7 +18,6 @@
  */
 package com.xceptance.neodymium.junit5.testclasses.ai;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assertions;
 import java.util.List;
 import java.util.ArrayList;

@@ -1,0 +1,13 @@
+{
+  "id": "com.xceptance.neodymium.ai.anomaly.StableVisualBaselineTest :: testStableVisualBaseline :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Observe page visual consistency (visual)",
+      "reasoning": "The page appears visually consistent based on the provided screenshot. The layout, element positioning, and overall design seem coherent and well-aligned. No inconsistencies or visual defects were observed.",
+      "actions": [],
+      "screenshotHash": "0000000001ff01fd01fd01fd01fd81e901e581e501fd01fd81ff200080000100",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}

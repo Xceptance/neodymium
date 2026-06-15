@@ -24,7 +24,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.xceptance.neodymium.ai.core.AiExecutionResult;

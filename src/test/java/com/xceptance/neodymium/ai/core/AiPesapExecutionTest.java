@@ -55,12 +55,9 @@ public final class AiPesapExecutionTest extends BaseAiOfflineTest
                 .responseText(
                     """
                     {
-                      "contextLevel": "STANDARD",
-                      "stepType": "INTERACTION",
-                      "expectedTargetTagName": "button",
-                      "pageNavigation": false,
-                      "requiresJavaMethods": false,
-                      "direction": "Click standard button"
+                      "c": "STANDARD",
+                      "jm": false,
+                      "sp": []
                     }
                     """)
                 .tokens(50L, 25L, 0L)
@@ -104,11 +101,7 @@ public final class AiPesapExecutionTest extends BaseAiOfflineTest
         final StepDetails step = result.getSteps().get(0);
         Assertions.assertEquals("Click standard button", step.getRawInstruction());
         Assertions.assertEquals(ContextLevel.STANDARD, step.getPesapPredictedContextLevel());
-        Assertions.assertEquals("INTERACTION", step.getPesapStepType());
-        Assertions.assertEquals("button", step.getPesapExpectedTargetTagName());
-        Assertions.assertFalse(step.isPesapPageNavigation());
         Assertions.assertFalse(step.isPesapRequiresJavaMethods());
-        Assertions.assertEquals("Click standard button", step.getPesapDirection());
         Assertions.assertNotNull(step.getPesapCall());
         final LlmCallDetails pesapCall = step.getPesapCall();
         Assertions.assertEquals(50L, pesapCall.getInputTokens());
@@ -131,12 +124,9 @@ public final class AiPesapExecutionTest extends BaseAiOfflineTest
                 .responseText(
                     """
                     {
-                      "contextLevel": "AXTREE",
-                      "stepType": "INTERACTION",
-                      "expectedTargetTagName": "button",
-                      "pageNavigation": false,
-                      "requiresJavaMethods": false,
-                      "direction": "Click button"
+                      "c": "AXTREE",
+                      "jm": false,
+                      "sp": []
                     }
                     """)
                 .tokens(50L, 25L, 0L)
