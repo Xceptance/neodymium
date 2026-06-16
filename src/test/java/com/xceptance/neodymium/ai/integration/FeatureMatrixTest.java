@@ -52,12 +52,6 @@ import com.xceptance.neodymium.ai.playbook.Playbook;
  */
 @Browser("Chrome_1024x768")
 @Browser("Chrome_1500x1000")
-@AiTestVerification({
-    VerificationMode.LIVE_LLM,
-    VerificationMode.OFFLINE_REPLAY,
-    VerificationMode.HUD_OFFLINE_REPLAY,
-    VerificationMode.HUD_LLM
-})
 /**
  * @author AI-generated: Gemini 2.5 Flash
  * @author Xceptance GmbH 2026
@@ -65,10 +59,6 @@ import com.xceptance.neodymium.ai.playbook.Playbook;
 public final class FeatureMatrixTest extends BaseAiTest
 {
     private String httpShopUrl;
-    private String httpsShopUrl;
-    private String httpDashboardUrl;
-    private String httpsDashboardUrl;
-    private String httpFormsUrl;
     private String httpsFormsUrl;
     private LogCaptureAppender logAppender;
 
@@ -85,12 +75,8 @@ public final class FeatureMatrixTest extends BaseAiTest
 
         // HTTP URLs
         httpShopUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/index.html", httpPort);
-        httpDashboardUrl = String.format("http://localhost:%d/AuraGlanceTest/dashboard/index.html", httpPort);
-        httpFormsUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/forms.html", httpPort);
 
         // HTTPS secure URLs (reusing self-signed certificates keystore.p12)
-        httpsShopUrl = String.format("https://localhost:%d/AuraGlanceTest/shop/index.html", httpsPort);
-        httpsDashboardUrl = String.format("https://localhost:%d/AuraGlanceTest/dashboard/index.html", httpsPort);
         httpsFormsUrl = String.format("https://localhost:%d/AuraGlanceTest/shop/forms.html", httpsPort);
 
         // Start capturing logs in parallel
@@ -120,42 +106,44 @@ public final class FeatureMatrixTest extends BaseAiTest
     {
         final long startTime = System.currentTimeMillis();
 
-        final Runnable steps = () ->
-        {
-            // Open secure HTTPS forms sub-application (Chrome ignores cert warning via args)
-            open(httpsFormsUrl);
-
-            // Verify dynamic resolution of placeholders injected from FeatureMatrixTest.json
-            Neodymium.ai().execute("Type '${userFullName}' into the 'Full Name' field.");
-            Neodymium.ai().execute("Type '${userEmail}' into the 'Email Address' field.");
-            Neodymium.ai().execute("Click the 'Create Account' button.");
-            Neodymium.ai().execute("Verify that the success indicator 'Account Registered!' is visible.");
-        };
+        final String steps = String.format("""
+            OPEN %s
+            Type '${userFullName}' into the 'Full Name' field.
+            Type '${userEmail}' into the 'Email Address' field.
+            Click the 'Create Account' button.
+            Verify that the success indicator 'Account Registered!' is visible.
+        """, httpsFormsUrl);
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
         assertThat(r1)
+            .hasLlmCalls(4)
             .hasPesapCalls(4)
-            .hasNoEscalations();
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(5)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1))
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1))
+            .step(3, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1))
+            .step(4, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1));
 
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
         assertThat(r2)
-            .hasNoPesapCalls();
-
-        // Measure execution latency
-        final long elapsed = System.currentTimeMillis() - startTime;
-        assertTrue(elapsed > 0, "Execution duration should be positive");
-
-        // 1. Programmatic assertions on internal stats
-        final AiStats stats = Neodymium.ai().getStats();
-        assertTrue(stats.getOverallCallCount() > 0 || stats.getReplayCount() > 0, "Expected either LLM calls or offline replays to be recorded");
-
-        // 2. Programmatic assertions on captured parallel log output
-        final List<String> capturedLogs = logAppender.getLogs();
-        final boolean hasAuraIndicator = capturedLogs.stream()
-                .anyMatch(line -> line.contains("Aura") || line.contains("Tokens") || line.contains("Observe") || line.contains("Type") || line.contains("Click"));
-        assertTrue(hasAuraIndicator, "Expected logs to capture Aura framework trace lines");
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(5)
+            .hasActionsCount(5)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed())
+            .step(4, s -> s.isReplayed());
     }
 
     /**
@@ -166,24 +154,32 @@ public final class FeatureMatrixTest extends BaseAiTest
     @DataSet(id = "ShopSetup")
     public void testImageChecksWithAI()
     {
-        final Runnable steps = () ->
-        {
-            open(httpShopUrl);
-
-            // Direct the visual linter to audit raw artwork characteristics
-            Neodymium.ai().execute("Assert that the 'Aura Neon Gradient Poster' card displays an image showcasing deep ultraviolet and cyan shades.");
-        };
+        final String steps = String.format("""
+            OPEN %s
+            Assert that the 'Aura Neon Gradient Poster' card displays an image showcasing deep ultraviolet and cyan shades.
+        """, httpShopUrl);
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
         assertThat(r1)
+            .hasLlmCalls(1)
             .hasPesapCalls(1)
-            .hasNoEscalations();
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(0));
 
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
         assertThat(r2)
-            .hasNoPesapCalls();
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
     }
 
     /**
@@ -200,7 +196,14 @@ public final class FeatureMatrixTest extends BaseAiTest
         // Stage 1: Live visual check (generates local dHash baseline cache)
         Neodymium.ai().execute("Observe page visual consistency (visual)");
         final AiExecutionResult r1 = Neodymium.getLastAiExecutionResult();
-        assertThat(r1).hasPesapCalls(1);
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(0)
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(0)
+            .hasActionsCount(1)
+            .step(0, s -> s.hasLlmCalls(1).hasNoPesapCall().hasActionsCount(1));
 
         final Playbook playbook = Neodymium.getAiPlaybook();
         if (playbook != null)
@@ -214,9 +217,17 @@ public final class FeatureMatrixTest extends BaseAiTest
         // Stage 2: Replay the identical step (succeeds instantly offline via cache)
         Neodymium.ai().execute("Observe page visual consistency (visual)");
         final AiExecutionResult r2 = Neodymium.getLastAiExecutionResult();
-        assertThat(r2).hasNoPesapCalls();
-
+        
         final long durationUs = (System.nanoTime() - replayStart) / 1000;
         assertTrue(durationUs < 1000000, "Offline cached replay check exceeded time boundary: " + durationUs + " us");
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(1)
+            .hasActionsCount(1)
+            .step(0, s -> s.isReplayed());
     }
 }

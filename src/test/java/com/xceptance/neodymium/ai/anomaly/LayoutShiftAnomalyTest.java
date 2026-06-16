@@ -48,7 +48,7 @@ public final class LayoutShiftAnomalyTest extends BaseAiTest
                 Click on the 'Aura Defect Controls' trigger button. (hint: #aura-trigger)
                 Toggle 'Inject Layout Misalignment'. (hint: label[for='toggle-shift'])
                 Click the close button of the controls drawer. (hint: #aura-close)
-                Scroll to '.misaligned-element'. (hint: .misaligned-element)
+                Scroll to '.shift-target'. (hint: .shift-target)
                 Observe page visual consistency (visual). Assert that all cards in the main layout, including the 'Grid Alignment & Shifts' card, are perfectly aligned in the grid and that the 'Grid Alignment & Shifts' card is NOT tilted, rotated, offset, or shifted.
                 """;
 

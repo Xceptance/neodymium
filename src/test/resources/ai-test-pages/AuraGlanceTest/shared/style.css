@@ -326,7 +326,7 @@ body.has-contrast-defect p {
     flex-shrink: 0;
 }
 
-.misaligned-element.has-layout-shift {
+.shift-target.has-layout-shift {
     margin-left: -120px !important;
     margin-top: 150px !important;
     transform: rotate(15deg) scale(0.85) !important;
