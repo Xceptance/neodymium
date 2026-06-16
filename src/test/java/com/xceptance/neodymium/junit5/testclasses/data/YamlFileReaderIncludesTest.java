@@ -41,6 +41,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 import com.xceptance.neodymium.common.testdata.util.MalformedPlaybookException;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.xceptance.neodymium.util.Neodymium;
 
 public final class YamlFileReaderIncludesTest
 {
@@ -53,7 +56,7 @@ public final class YamlFileReaderIncludesTest
     private File defaultUserFile;
 
     @BeforeEach
-    public void setUp() throws IOException
+    public final void setUp() throws IOException
     {
         this.fragmentFolder = new File(this.tempDir, "fragments");
         this.fragmentFolder.mkdirs();
@@ -64,7 +67,7 @@ public final class YamlFileReaderIncludesTest
 
     @Test
     @DisplayName("Verify list-based steps and simple step inclusions resolution")
-    public void testSimpleStepInclusion() throws IOException
+    public final void testSimpleStepInclusion() throws IOException
     {
         final String loginSteps = 
             "- Enter username \"${username}\"\n" +
@@ -99,7 +102,7 @@ public final class YamlFileReaderIncludesTest
 
     @Test
     @DisplayName("Verify interleaved variable loop and circular inclusion guard")
-    public void testCircularInclusionGuard() throws IOException
+    public final void testCircularInclusionGuard() throws IOException
     {
         final File fileA = new File(this.tempDir, "A.yaml");
         final File fileB = new File(this.tempDir, "B.yaml");
@@ -114,7 +117,7 @@ public final class YamlFileReaderIncludesTest
 
     @Test
     @DisplayName("Verify map-level data inclusion with local overrides")
-    public void testMapLevelDataInclusion() throws IOException
+    public final void testMapLevelDataInclusion() throws IOException
     {
         final String defaultUser = 
             "username: guest_user\n" +
@@ -152,7 +155,7 @@ public final class YamlFileReaderIncludesTest
 
     @Test
     @DisplayName("Verify step location tracing and JSON array serialization")
-    public void testStepLocationTracing() throws IOException
+    public final void testStepLocationTracing() throws IOException
     {
         final String loginSteps = 
             "- Enter credentials\n" +
@@ -175,9 +178,9 @@ public final class YamlFileReaderIncludesTest
         final String stepsTraceJson = row.get("neodymium.stepLineNumbers");
         assertNotNull(stepsTraceJson);
 
-        final List<String> traces = new com.google.gson.Gson().fromJson(
+        final List<String> traces = new Gson().fromJson(
             stepsTraceJson,
-            new com.google.gson.reflect.TypeToken<List<String>>() {}.getType()
+            new TypeToken<List<String>>() {}.getType()
         );
         assertEquals(4, traces.size());
         assertTrue(traces.get(0).endsWith("main.yaml:2"));
@@ -190,7 +193,7 @@ public final class YamlFileReaderIncludesTest
 
     @Test
     @DisplayName("Verify Framework Key Guard throws exception on invalid underscore key")
-    public void testFrameworkKeyGuard() throws IOException
+    public final void testFrameworkKeyGuard() throws IOException
     {
         final String mainPlaybook = 
             "_meta:\n" +
@@ -208,7 +211,7 @@ public final class YamlFileReaderIncludesTest
 
     @Test
     @DisplayName("Verify dynamic include path parameterization from test data")
-    public void testDynamicIncludePathParameterization() throws IOException
+    public final void testDynamicIncludePathParameterization() throws IOException
     {
         final String extraSteps = 
             "- Special step 1\n" +
@@ -234,7 +237,7 @@ public final class YamlFileReaderIncludesTest
 
     @Test
     @DisplayName("Verify inline conditional inclusion replacement")
-    public void testInlineConditionalInclusion() throws IOException
+    public final void testInlineConditionalInclusion() throws IOException
     {
         final String subSteps = 
             "- Click A\n" +
@@ -260,7 +263,7 @@ public final class YamlFileReaderIncludesTest
 
     @Test
     @DisplayName("Verify inline conditional inclusion with else inclusion replacement")
-    public void testInlineConditionalElseInclusion() throws IOException
+    public final void testInlineConditionalElseInclusion() throws IOException
     {
         final String subSteps = 
             "- Click A\n" +
@@ -292,7 +295,7 @@ public final class YamlFileReaderIncludesTest
 
     @Test
     @DisplayName("Verify loadInclude resolves correctly from file and classpath")
-    public void testLoadIncludeResolution() throws IOException
+    public final void testLoadIncludeResolution() throws IOException
     {
         final String extraSteps = 
             "- Click some button\n" +
@@ -301,23 +304,23 @@ public final class YamlFileReaderIncludesTest
         Files.writeString(extraStepsFile.toPath(), extraSteps, StandardCharsets.UTF_8);
 
         // 1. File system resolution
-        com.xceptance.neodymium.util.Neodymium.getData().put("neodymium.sourceFile", this.mainPlaybookFile.getAbsolutePath());
-        List<YamlFileReader.Step> steps = YamlFileReader.loadInclude("fragments/extra.steps");
-        assertEquals(2, steps.size());
-        assertEquals("Click some button", steps.get(0).text);
-        assertEquals("Click other button", steps.get(1).text);
+        Neodymium.getData().put("neodymium.sourceFile", this.mainPlaybookFile.getAbsolutePath());
+        final List<YamlFileReader.Step> steps1 = YamlFileReader.loadInclude("fragments/extra.steps");
+        assertEquals(2, steps1.size());
+        assertEquals("Click some button", steps1.get(0).text);
+        assertEquals("Click other button", steps1.get(1).text);
 
         // 2. Classpath resolution
-        com.xceptance.neodymium.util.Neodymium.getData().put("neodymium.sourceFile", "another-dummy.yaml");
-        steps = YamlFileReader.loadInclude("dummy-test.yml");
-        assertEquals(1, steps.size());
-        assertEquals("Click button 2", steps.get(0).text);
+        Neodymium.getData().put("neodymium.sourceFile", "another-dummy.yaml");
+        final List<YamlFileReader.Step> steps2 = YamlFileReader.loadInclude("dummy-test.yml");
+        assertEquals(1, steps2.size());
+        assertEquals("Click button 2", steps2.get(0).text);
 
         // 3. Fallback classpath extraction from filesystem path containing target/test-classes/
-        com.xceptance.neodymium.util.Neodymium.getData().put("neodymium.sourceFile", "/some/path/target/test-classes/dummy-test.yml");
-        com.xceptance.neodymium.util.Neodymium.getData().remove("neodymium.classpathResourcePath");
-        steps = YamlFileReader.loadInclude("dummy-test.yml");
-        assertEquals(1, steps.size());
-        assertEquals("Click button 2", steps.get(0).text);
+        Neodymium.getData().put("neodymium.sourceFile", "/some/path/target/test-classes/dummy-test.yml");
+        Neodymium.getData().remove("neodymium.classpathResourcePath");
+        final List<YamlFileReader.Step> steps3 = YamlFileReader.loadInclude("dummy-test.yml");
+        assertEquals(1, steps3.size());
+        assertEquals("Click button 2", steps3.get(0).text);
     }
 }

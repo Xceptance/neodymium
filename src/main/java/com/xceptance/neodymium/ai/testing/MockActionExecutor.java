@@ -21,9 +21,12 @@ package com.xceptance.neodymium.ai.testing;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
+import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.ai.action.ActionRegistry;
 
 /**
  * A mock implementation of {@link ActionExecutor} designed for browserless, offline execution testing.
@@ -47,7 +50,7 @@ public final class MockActionExecutor extends ActionExecutor
      */
     private ActionExecutionException exceptionToThrow;
 
-    private java.util.function.Consumer<Action> beforeExecuteHook;
+    private Consumer<Action> beforeExecuteHook;
 
     /**
      * Constructs a new MockActionExecutor with a null test class context to prevent any 
@@ -74,7 +77,7 @@ public final class MockActionExecutor extends ActionExecutor
      *
      * @param beforeExecuteHook the hook callback
      */
-    public final void setBeforeExecuteHook(final java.util.function.Consumer<Action> beforeExecuteHook)
+    public final void setBeforeExecuteHook(final Consumer<Action> beforeExecuteHook)
     {
         this.beforeExecuteHook = beforeExecuteHook;
     }
@@ -102,8 +105,7 @@ public final class MockActionExecutor extends ActionExecutor
             this.executedActions.add(action);
             if ("BRANCH".equals(action.getType()) || "INCLUDE".equals(action.getType()))
             {
-                final com.xceptance.neodymium.ai.action.AiActionPlugin plugin = 
-                    com.xceptance.neodymium.ai.action.ActionRegistry.getPlugin(action.getType());
+                final AiActionPlugin plugin = ActionRegistry.getPlugin(action.getType());
                 if (plugin != null)
                 {
                     try

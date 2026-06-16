@@ -30,36 +30,39 @@ import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 /**
  * Executes steps from an external include file as part of the AI execution loop.
  */
-public class IncludeAction implements AiActionPlugin
+public final class IncludeAction implements AiActionPlugin
 {
+    /**
+     * The action name identifier.
+     */
     public static final String ACTION_NAME = "INCLUDE";
 
     @Override
-    public final String getActionName()
+    public String getActionName()
     {
         return ACTION_NAME;
     }
 
     @Override
-    public final List<Action> parseDirectInstruction(final String instruction)
+    public List<Action> parseDirectInstruction(final String instruction)
     {
         return null;
     }
 
     @Override
-    public final boolean requiresLlm(final Action action)
+    public boolean requiresLlm(final Action action)
     {
         return false;
     }
 
     @Override
-    public final String getPromptInstructions()
+    public String getPromptInstructions()
     {
         return "INCLUDE: Used to execute steps from an external file. Requires target ('tg') set to the path of the file (e.g. 'fragments/login.steps'). Use this action type whenever the instruction asks to '_include' a file path.";
     }
 
     @Override
-    public final void execute(final Action action, final Object testInstance, final ActionExecutor executor) throws ActionExecutionException
+    public void execute(final Action action, final Object testInstance, final ActionExecutor executor) throws ActionExecutionException
     {
         final String path = action.getTarget();
         if (path == null || path.isBlank())

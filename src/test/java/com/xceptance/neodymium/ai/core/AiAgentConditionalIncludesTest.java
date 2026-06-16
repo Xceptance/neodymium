@@ -323,7 +323,7 @@ public final class AiAgentConditionalIncludesTest
         final MockActionExecutor mockExecutor = new MockActionExecutor();
 
         // Force condition check (ASSERT) to fail so else branch is chosen
-        mockExecutor.setBeforeExecuteHook((action) -> {
+        mockExecutor.setBeforeExecuteHook((final Action action) -> {
             if ("ASSERT".equals(action.getType()))
             {
                 throw new AssertionError("Element not visible!");

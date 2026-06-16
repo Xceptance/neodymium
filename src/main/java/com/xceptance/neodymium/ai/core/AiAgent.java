@@ -711,27 +711,30 @@ public class AiAgent {
             final StepDetails stepDetails = new StepDetails(step.text);
             result.getSteps().add(stepDetails);
 
-            boolean expectedFailure = false;
-            String bugId = null;
+            boolean expectedFailureVal = false;
+            String bugIdVal = null;
             final Matcher bugMatcher = BUG_TAG_PATTERN.matcher(stepText);
             if (bugMatcher.find())
             {
-                expectedFailure = true;
-                bugId = bugMatcher.group(1);
-                if (bugId != null)
+                expectedFailureVal = true;
+                bugIdVal = bugMatcher.group(1);
+                if (bugIdVal != null)
                 {
-                    bugId = bugId.trim();
+                    bugIdVal = bugIdVal.trim();
                 }
             }
+            final boolean expectedFailure = expectedFailureVal;
+            final String bugId = bugIdVal;
 
-            boolean optionalStep = false;
+            boolean optionalStepVal = false;
             final Matcher optionalMatcher = OPTIONAL_TAG_PATTERN.matcher(stepText);
             if (optionalMatcher.find())
             {
-                optionalStep = true;
+                optionalStepVal = true;
             }
+            final boolean optionalStep = optionalStepVal;
 
-            Long customTimeoutMs = null;
+            Long customTimeoutMsVal = null;
             final Matcher timeoutMatcher = TIMEOUT_TAG_PATTERN.matcher(stepText);
             if (timeoutMatcher.find())
             {
@@ -739,13 +742,14 @@ public class AiAgent {
                 final String unit = timeoutMatcher.group(2);
                 if (unit != null && unit.equalsIgnoreCase("s"))
                 {
-                    customTimeoutMs = value * 1000;
+                    customTimeoutMsVal = value * 1000;
                 }
                 else
                 {
-                    customTimeoutMs = value;
+                    customTimeoutMsVal = value;
                 }
             }
+            final Long customTimeoutMs = customTimeoutMsVal;
 
             final String strippedStep = stripAllTags(stepText);
 
@@ -2638,7 +2642,7 @@ public class AiAgent {
         return -2; // Unhandled or generic break;
     }
 
-    private final java.util.Map<String, Boolean> evaluatedConditions = new java.util.HashMap<>();
+    private final Map<String, Boolean> evaluatedConditions = new HashMap<>();
 
     private static final class ConditionInfo
     {

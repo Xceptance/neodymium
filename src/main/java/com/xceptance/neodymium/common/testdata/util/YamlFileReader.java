@@ -51,7 +51,7 @@ import com.google.gson.GsonBuilder;
  * Utility class to read and parse YAML test scripts with support for dynamic and static inclusions,
  * variables resolution, and location tracing.
  */
-public class YamlFileReader
+public final class YamlFileReader
 {
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
 
@@ -963,11 +963,11 @@ public class YamlFileReader
                 ? Neodymium.getData().asString("neodymium.sourceFile")
                 : null;
 
-        String classpathResourcePath = Neodymium.getData() != null && Neodymium.getData().exists("neodymium.classpathResourcePath")
+        String classpathResourcePathVal = Neodymium.getData() != null && Neodymium.getData().exists("neodymium.classpathResourcePath")
                 ? Neodymium.getData().asString("neodymium.classpathResourcePath")
                 : null;
 
-        if (classpathResourcePath == null && sourceFileVal != null)
+        if (classpathResourcePathVal == null && sourceFileVal != null)
         {
             final String normalized = sourceFileVal.replace('\\', '/');
             final String[] patterns = {
@@ -988,39 +988,58 @@ public class YamlFileReader
                 final int idx = normalized.indexOf(pat);
                 if (idx != -1)
                 {
-                    classpathResourcePath = normalized.substring(idx + pat.length());
+                    classpathResourcePathVal = normalized.substring(idx + pat.length());
                     break;
                 }
             }
         }
 
-        File baseDir = null;
+        File baseDirVal = null;
         if (sourceFileVal != null)
         {
             final File f = new File(sourceFileVal);
             if (f.isAbsolute() || f.exists())
             {
-                baseDir = f.getParentFile();
+                baseDirVal = f.getParentFile();
             }
-            else if (classpathResourcePath == null)
+            else if (classpathResourcePathVal == null)
             {
-                classpathResourcePath = sourceFileVal;
+                classpathResourcePathVal = sourceFileVal;
             }
         }
 
-        if (baseDir == null && classpathResourcePath == null)
+        if (baseDirVal == null && classpathResourcePathVal == null)
         {
-            baseDir = new File(".");
+            baseDirVal = new File(".");
         }
+
+        final File baseDir = baseDirVal;
+        final String classpathResourcePath = classpathResourcePathVal;
 
         return loadIncludedSteps(path, baseDir, classpathResourcePath, new ArrayList<>());
     }
 
-    public static class Step
+    /**
+     * Represents a single step in a test playbook with trace information.
+     */
+    public static final class Step
     {
+        /**
+         * The text of the step.
+         */
         public String text;
+
+        /**
+         * The location trace of the step.
+         */
         public String trace;
 
+        /**
+         * Constructs a new Step.
+         *
+         * @param text  the step text
+         * @param trace the location trace
+         */
         public Step(final String text, final String trace)
         {
             this.text = text;

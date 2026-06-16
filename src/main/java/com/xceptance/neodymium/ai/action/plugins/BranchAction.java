@@ -25,8 +25,14 @@ import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 
-public class BranchAction implements AiActionPlugin
+/**
+ * Action plugin that implements conditional branching (if-then-else) for AI playbook execution.
+ */
+public final class BranchAction implements AiActionPlugin
 {
+    /**
+     * The action name identifier.
+     */
     public static final String ACTION_NAME = "BRANCH";
 
     @Override
@@ -48,6 +54,7 @@ public class BranchAction implements AiActionPlugin
     {
         return false;
     }
+    
     private static final ThreadLocal<Boolean> lastConditionResult = new ThreadLocal<>();
 
     /**
@@ -83,16 +90,18 @@ public class BranchAction implements AiActionPlugin
             {
                 condAction.setSilent(true);
             }
-            boolean conditionMet = true;
+            
+            boolean conditionMetValue = true;
             try
             {
                 executor.executeAll(action.getCondition());
             }
             catch (final Exception | AssertionError e)
             {
-                conditionMet = false;
+                conditionMetValue = false;
             }
 
+            final boolean conditionMet = conditionMetValue;
             lastConditionResult.set(conditionMet);
 
             if (conditionMet)
