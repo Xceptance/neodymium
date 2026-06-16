@@ -84,11 +84,11 @@ public class KeyPressTest extends BaseAiTest
             .hasReplays(0)
             .hasActionsCount(6)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.isLlm(1))
-            .step(2, s -> s.isLlm(1))
-            .step(3, s -> s.isLlm(1))
-            .step(4, s -> s.isLlm(1))
-            .step(5, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1))
+            .step(2, s -> s.hasLlmCalls(1))
+            .step(3, s -> s.hasLlmCalls(1))
+            .step(4, s -> s.hasLlmCalls(1))
+            .step(5, s -> s.hasLlmCalls(1));
 
         assertEquals("Submitted: Robert - KeyPress works!", Selenide.$("#result").text());
 

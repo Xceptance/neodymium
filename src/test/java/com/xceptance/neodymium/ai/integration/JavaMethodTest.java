@@ -263,7 +263,7 @@ public class JavaMethodTest extends BaseAiTest
             .hasReplays(0)
             .hasActionsCount(2)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 

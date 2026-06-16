@@ -132,7 +132,7 @@ public class ForwardTest extends BaseAiTest
             .step(0, s -> s.isDirectParse())
             .step(1, s -> s.isDirectParse())
             .step(2, s -> s.isDirectParse())
-            .step(3, s -> s.isLlm(1));
+            .step(3, s -> s.hasLlmCalls(1));
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
 
@@ -180,8 +180,8 @@ public class ForwardTest extends BaseAiTest
             .hasActionsCount(4)
             .step(0, s -> s.isDirectParse())
             .step(1, s -> s.isDirectParse())
-            .step(2, s -> s.isLlm(1))
-            .step(3, s -> s.isLlm(1));
+            .step(2, s -> s.hasLlmCalls(1))
+            .step(3, s -> s.hasLlmCalls(1));
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
 

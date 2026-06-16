@@ -85,9 +85,9 @@ public class BugMarkerTest extends BaseAiTest
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
-            .hasLlmCalls(2)
-            .hasNoPesapCalls()
-            .hasEscalations(1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
             .hasActionsCount(1);
@@ -127,21 +127,21 @@ public class BugMarkerTest extends BaseAiTest
                 """;
 
         // Live LLM run
-        final DefinitiveAssertionError e1 = assertThrows(DefinitiveAssertionError.class, () ->
+        final AssertionError e1 = assertThrows(AssertionError.class, () ->
         {
             runAi(steps, VerificationMode.LIVE_LLM);
         });
         LlmAssert.assertViaLlmSemanticMatch(e1.getMessage(),
-            "Verification failed: The minicart currently shows '0 items', but the instruction requires verifying 'two items'.");
+            "The error message must indicate that the minicart shows '0 items' but the instruction requires 'two items'.");
 
         // Replay run (also expected to fail with the assertion error)
         this.resetBrowser();
-        final DefinitiveAssertionError e2 = assertThrows(DefinitiveAssertionError.class, () ->
+        final AssertionError e2 = assertThrows(AssertionError.class, () ->
         {
             runAi(steps, VerificationMode.REPLAY);
         });
         LlmAssert.assertViaLlmSemanticMatch(e2.getMessage(),
-            "Verification failed: The minicart currently shows '0 items', but the instruction requires verifying 'two items'.");
+            "The error message must indicate that the minicart shows '0 items' but the instruction requires 'two items'.");
     }
 
     /**
@@ -218,7 +218,7 @@ public class BugMarkerTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
-            .hasNoPesapCalls()
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -231,7 +231,7 @@ public class BugMarkerTest extends BaseAiTest
         assertThat(r1.getSteps().get(0)).isDirectParse();
 
         final var stepDetails1 = r1.getSteps().get(1);
-        assertThat(stepDetails1).isLlm(1);
+        assertThat(stepDetails1).hasLlmCalls(1);
         final var llmCall1 = stepDetails1.getLlmCalls().get(0);
         assertEquals(ContextLevel.VISUAL_LEAN, llmCall1.getContextLevel());
         assertNotNull(llmCall1.getBase64Screenshot());

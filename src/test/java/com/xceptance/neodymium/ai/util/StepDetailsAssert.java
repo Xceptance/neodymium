@@ -121,7 +121,7 @@ public final class StepDetailsAssert
      * @param expectedLlmCalls the expected number of LLM calls
      * @return this assertion helper
      */
-    public final StepDetailsAssert isLlm(final int expectedLlmCalls)
+    public final StepDetailsAssert hasLlmCalls(final int expectedLlmCalls)
     {
         assertFalse(step.isDirectParse(), "Expected step not to be direct parsed");
         assertFalse(step.isReplayed(), "Expected step not to be replayed");
@@ -141,6 +141,17 @@ public final class StepDetailsAssert
     }
 
     /**
+     * Asserts that JIT PESAP was not called for this step.
+     *
+     * @return this assertion helper
+     */
+    public final StepDetailsAssert hasNoPesapCall()
+    {
+        assertFalse(step.isPesapCalled(), "Expected JIT PESAP not to be called for this step");
+        return this;
+    }
+
+    /**
      * Asserts the type of an action at a specific index in this step.
      *
      * @param index the index of the action
@@ -151,6 +162,18 @@ public final class StepDetailsAssert
     {
         assertTrue(step.getActions().size() > index, "No action found at index " + index);
         assertEquals(type, step.getActions().get(index).getType(), "Action type mismatch at index " + index);
+        return this;
+    }
+
+    /**
+     * Asserts the count of actions
+     *
+     * @param expectedCount the count of actions
+     * @return this assertion helper
+     */
+    public final StepDetailsAssert hasActionsCount(final int expectedCount)
+    {
+        assertEquals(expectedCount, step.getActions().size(), "Action count mismatch");
         return this;
     }
 

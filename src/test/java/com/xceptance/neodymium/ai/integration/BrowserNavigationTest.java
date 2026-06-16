@@ -42,7 +42,6 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1500x1000")
 @Tag("sandbox")
-@AiTestVerification({ VerificationMode.LIVE_LLM })
 public class BrowserNavigationTest extends BaseAiTest
 {
     private String baseHttpsUrl;
