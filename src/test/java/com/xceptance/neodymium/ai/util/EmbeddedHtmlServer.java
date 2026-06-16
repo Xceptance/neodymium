@@ -207,6 +207,12 @@ public final class EmbeddedHtmlServer
                 {
                     contentType = "image/svg+xml";
                 }
+                else if (path.endsWith(".pdf"))
+                {
+                    contentType = "application/pdf";
+                    final String fileName = path.contains("/") ? path.substring(path.lastIndexOf('/') + 1) : path;
+                    exchange.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+                }
                 
                 exchange.getResponseHeaders().set("Content-Type", contentType);
                 exchange.sendResponseHeaders(200, bytes.length);

@@ -17,6 +17,7 @@ import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.WebDriverCache;
+import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
@@ -51,11 +52,14 @@ public class ValidateKeepWebDriverOpenOnFailure
         // set up a temporary neodymium.properties
         final String fileLocation = "config/temp-ValidateKeepWebDriverOpenOnFailure-neodymium.properties";
         tempConfigFile = new File("./" + fileLocation);
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "true");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
         NeodymiumTest.writeMapToPropertiesFile(properties, tempConfigFile);
         ConfigFactory.setProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:" + fileLocation);
+        MultibrowserConfiguration.clearAllInstances();
+        MultibrowserConfiguration.getInstance(tempConfigFile.getPath());
 
         Assert.assertNull(webDriver1);
         Assert.assertNull(Neodymium.getDriver());

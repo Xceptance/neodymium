@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Download Test — Form Submission</title>
+    <style>
+        body { font-family: sans-serif; margin: 40px; }
+        #uploadBtn { display: inline-block; padding: 10px 20px; background: #555; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-right: 12px; }
+        #downloadBtn { display: none; padding: 12px 24px; background: #28a745; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; text-decoration: none; }
+        #downloadBtn:hover { background: #1e7e34; }
+        #status { margin-top: 16px; color: #555; }
+    </style>
+</head>
+<body>
+    <h1>Upload &amp; Convert</h1>
+    <p>Select a PNG file and click "Convert &amp; Download" to get a PDF.</p>
+
+    <input id="fileInput" type="file" accept="image/png" />
+    <button id="uploadBtn" onclick="handleUpload()">Convert &amp; Download</button>
+    <!--
+        The download link is a real <a> element with the download attribute.
+        Selenium clicks it directly, preserving the user-gesture context so
+        headless Chrome allows the file download without JS intermediary.
+    -->
+    <a id="downloadBtn" href="files/test.pdf" download="test.pdf">DOWNLOAD</a>
+    <div id="status"></div>
+
+    <script>
+        function handleUpload() {
+            var file = document.getElementById('fileInput').files[0];
+            if (!file) {
+                document.getElementById('status').textContent = 'Please select a PNG file first.';
+                return;
+            }
+            document.getElementById('status').textContent = 'Converting...';
+            // Simulate conversion delay then show the download anchor
+            setTimeout(function() {
+                document.getElementById('status').textContent = 'Conversion complete!';
+                document.getElementById('uploadBtn').style.display = 'none';
+                document.getElementById('downloadBtn').style.display = 'inline-block';
+            }, 500);
+        }
+    </script>
+</body>
+</html>

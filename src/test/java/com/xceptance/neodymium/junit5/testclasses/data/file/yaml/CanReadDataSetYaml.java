@@ -16,6 +16,6 @@ public class CanReadDataSetYaml
         Assertions.assertEquals("john@example.com", data.get("user"));
         Assertions.assertEquals("password123", data.get("password"));
         Assertions.assertEquals("Verify login logic", data.get("steps"));
-        Assertions.assertEquals(5, data.size());
+        Assertions.assertEquals(4, data.size());
     }
 }

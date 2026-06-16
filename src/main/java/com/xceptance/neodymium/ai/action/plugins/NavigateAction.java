@@ -47,10 +47,12 @@ public class NavigateAction implements AiActionPlugin {
                 "(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(\\.)*$");
         java.util.regex.Matcher urlMatcher = java.util.regex.Pattern.compile(urlPatternStr).matcher(instruction.strip());
 
-        // let's check if our prompt needs this or if we have it inside our config
+        // Call find() once per matcher and store the boolean results to avoid
+        // consuming the match state by calling find() multiple times on the same instance.
         final boolean authFound = authMatcher.find();
         final boolean urlFound = urlMatcher.find();
 
+        // let's check if our prompt needs this or if we have it inside our config
         if (authFound || (urlFound && Neodymium.configuration().basicAuthUsername() != null))
         {
             if (authFound)

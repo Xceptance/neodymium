@@ -117,17 +117,7 @@ public final class InteractiveHud
      */
     private void evaluateCanEdit()
     {
-        try
-        {
-            if (Neodymium.getData() != null)
-            {
-                this.sourceFile = Neodymium.getData().exists("neodymium.sourceFile") ? Neodymium.getData().asString("neodymium.sourceFile") : null;
-            }
-        }
-        catch (final Exception e)
-        {
-            // ignore if no data is present
-        }
+        this.sourceFile = Neodymium.getTestdataSourceFile();
 
         if (this.sourceFile == null)
         {

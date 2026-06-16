@@ -19,10 +19,10 @@ public class DriverCustomCapabilitiesTest extends NeodymiumTest
     public static void createSettings() throws IOException
     {
         Map<String, String> properties = new HashMap<>();
-        properties.put("browserprofile.FF_headless.name", "FF headless");
-        properties.put("browserprofile.FF_headless.headless", "true");
-        properties.put("browserprofile.FF_headless.browserResolution", "1024x768");
-        properties.put("browserprofile.FF_headless.browser", "firefox");
+        properties.put("browserprofile.Chrome_headless.name", "Chrome headless");
+        properties.put("browserprofile.Chrome_headless.headless", "true");
+        properties.put("browserprofile.Chrome_headless.browserResolution", "1024x768");
+        properties.put("browserprofile.Chrome_headless.browser", "chrome");
         
         properties.put("browserprofile.FF_with_capability.name", "FF with capability");
         properties.put("browserprofile.FF_with_capability.headless", "true");
@@ -48,6 +48,9 @@ public class DriverCustomCapabilitiesTest extends NeodymiumTest
     public void test()
     {
         Result result = run(DriverCustomCapabilitiesTestClass.class);
-        checkPass(result, 4, 0);
+        // 3 runs: Chrome_headless × failsOnUnhandledAlert
+        //       + Chrome_with_capability × doesntFailOnUnhandledAlert
+        //       + FF_with_capability × doesntFailOnUnhandledAlert
+        checkPass(result, 3, 0);
     }
 }

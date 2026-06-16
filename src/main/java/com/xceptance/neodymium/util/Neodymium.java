@@ -56,6 +56,9 @@ public class Neodymium
     // keep our current browser profile name
     private String browserProfileName;
 
+    // keep our active test data source file path/name
+    private String testdataSourceFile;
+
     // keep our current browser name
     private String browserName;
 
@@ -356,6 +359,27 @@ public class Neodymium
     public static void setBrowserProfileName(String browserProfileName)
     {
         getContext().browserProfileName = browserProfileName;
+    }
+
+    /**
+     * Get the active test data source file path/name.
+     * 
+     * @return test data source file path/name
+     */
+    public static String getTestdataSourceFile()
+    {
+        return getContext().testdataSourceFile;
+    }
+
+    /**
+     * Set the active test data source file path/name.
+     * 
+     * @param testdataSourceFile
+     *            the test data source file path/name
+     */
+    public static void setTestdataSourceFile(final String testdataSourceFile)
+    {
+        getContext().testdataSourceFile = testdataSourceFile;
     }
 
     /**

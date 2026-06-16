@@ -64,8 +64,8 @@ public class TestDataTest extends NeodymiumTest
     public void testDataUtils() throws Exception
     {
         // test the data utils using JSON data
-        Result result = run(TestDataTests.class);
-        checkPass(result, 10, 0);
+        final Result result = run(TestDataTests.class);
+        checkPass(result, 11, 0);
     }
 
     @Test

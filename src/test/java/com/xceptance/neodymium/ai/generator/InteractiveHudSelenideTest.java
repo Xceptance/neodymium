@@ -98,7 +98,6 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Neodymium.setAiPlaybook(null);
         Neodymium.setInteractiveHud(null);
         Neodymium.getData().clear();
-
         final File masterFile = new File("src/test/resources/dummy-test.yml");
         try
         {
@@ -110,6 +109,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
             throw new RuntimeException("Failed to copy master dummy-test.yml", e);
         }
 
+        Neodymium.setTestdataSourceFile(this.tempSourceFile.getAbsolutePath());
         Neodymium.getData().put("neodymium.sourceFile", this.tempSourceFile.getAbsolutePath());
 
         // Force config properties to prevent caching issues across test classes
@@ -1532,7 +1532,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
             // 3. Configure the thread-local sourceFile and test data bindings in Neodymium
             Neodymium.getData().clear();
-            Neodymium.getData().put("neodymium.sourceFile", tempFileName);
+            Neodymium.setTestdataSourceFile(tempFileName);
             Neodymium.getData().put("myKey", "originalValue");
 
             // 4. Initialize the Playbook with a clean 1-step sequence matching the YAML

@@ -261,15 +261,7 @@ public class AiAgent {
                 result.getSteps().add(new StepDetails(rawStep));
             }
 
-            final String sourceFileVal;
-            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.sourceFile"))
-            {
-                sourceFileVal = Neodymium.getData().asString("neodymium.sourceFile");
-            }
-            else
-            {
-                sourceFileVal = null;
-            }
+            final String sourceFileVal = Neodymium.getTestdataSourceFile();
 
             List<String> stepLineNumbers = null;
             if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.stepLineNumbers"))
