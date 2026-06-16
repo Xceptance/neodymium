@@ -717,7 +717,14 @@ public class AiAgent {
                         stepDetails.setReplayed(true);
                         playbook.nextStep();
 
-                        throw new AssertionError(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\n" + step.getExpectedErrorMessage()));
+                        final String errorType = step.getExpectedErrorType();
+                        final String errorMsg = formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\n" + step.getExpectedErrorMessage());
+                        if (DefinitiveAssertionError.class.getName().equals(errorType))
+                        {
+                            throw new DefinitiveAssertionError(errorMsg);
+                        }
+
+                        throw new AssertionError(errorMsg);
                     }
                     else
                     {
