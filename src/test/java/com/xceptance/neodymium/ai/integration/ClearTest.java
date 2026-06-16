@@ -72,15 +72,14 @@ public class ClearTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(3)
-            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
             .hasActionsCount(4)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.hasLlmCalls(1))
-            .step(2, s -> s.hasLlmCalls(1))
-            .step(3, s -> s.hasLlmCalls(1));
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1))
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1))
+            .step(3, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1));
 
         assertEquals("Submitted: -", Selenide.$("#result").text());
 
@@ -103,4 +102,52 @@ public class ClearTest extends BaseAiTest
 
         assertEquals("Submitted: -", Selenide.$("#result").text());
     }
+
+    /**
+     * Use a different phrase
+     */
+    @NeodymiumTest
+    public final void testEmpty()
+    {
+        final String steps = """
+                OPEN ${clear.test.url}
+                Type 'Alice' into the 'First Name:' field (hint: #first-name)
+                Empty the 'First Name:' field
+                Click the 'Submit Details' button (hint: #btn-submit)
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(3)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1))
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1))
+            .step(3, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1));
+
+        assertEquals("Submitted: -", Selenide.$("#result").text());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(4)
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed());
+
+        assertEquals("Submitted: -", Selenide.$("#result").text());
+    }    
 }
