@@ -86,14 +86,14 @@
       "healedContextLevel": "HINT"
     },
     {
-      "promptLine": "Scroll to \u0027.misaligned-element\u0027. (hint: .misaligned-element)",
+      "promptLine": "Scroll to \u0027.shift-target\u0027. (hint: .shift-target)",
       "reasoning": "Scrolled to the specified element.",
       "actions": [
         {
           "type": "SCROLL",
-          "target": ".misaligned-element",
+          "target": ".shift-target",
           "description": "Scroll to element",
-          "elementDetails": "\u0027.misaligned-element\u0027",
+          "elementDetails": "\u0027.shift-target\u0027",
           "elementContext": {},
           "replay": "",
           "adjust": false
