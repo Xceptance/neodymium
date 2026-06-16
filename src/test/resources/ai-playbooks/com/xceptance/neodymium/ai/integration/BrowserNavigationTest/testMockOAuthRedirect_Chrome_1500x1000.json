@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop/sandbox/mock-oauth-login.html?redirect_uri\u003dhttps://localhost:39389/AuraGlanceTest/shop/sandbox/index.html",
-      "reasoning": "Navigated to the provided URL as instructed.",
+      "reasoning": "Navigating to the provided URL as instructed.",
       "actions": [
         {
           "type": "NAVIGATE",
@@ -11,7 +11,7 @@
             "http://localhost:43377/AuraGlanceTest/shop/sandbox/mock-oauth-login.html?redirect_uri\u003dhttps://localhost:39389/AuraGlanceTest/shop/sandbox/index.html"
           ],
           "description": "Open the specified URL",
-          "elementDetails": "URL for mock OAuth login",
+          "elementDetails": "URL navigation",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -56,7 +56,7 @@
             "password123"
           ],
           "description": "Type \u0027password123\u0027 into the password input field",
-          "elementDetails": "Password input",
+          "elementDetails": "Password input field",
           "elementContext": {
             "id": "oauth-password",
             "placeholder": "Password",
@@ -72,7 +72,7 @@
     },
     {
       "promptLine": "Click the \u0027Authorize \u0026 Sign In\u0027 button.",
-      "reasoning": "Found and targeted the \u0027Authorize \u0026 Sign In\u0027 button using its ID.",
+      "reasoning": "Identified the \u0027Authorize \u0026 Sign In\u0027 button by its ID and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",

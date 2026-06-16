@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/cross-origin-iframe.html?iframePort\u003d43377",
-      "reasoning": "The instruction is to open a URL, so a NAVIGATE action is used with the provided URL.",
+      "reasoning": "Navigating to the provided URL as instructed.",
       "actions": [
         {
           "type": "NAVIGATE",
@@ -11,7 +11,7 @@
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/cross-origin-iframe.html?iframePort\u003d43377"
           ],
           "description": "Open the specified URL",
-          "elementDetails": "URL: https://localhost:39389/AuraGlanceTest/shop/sandbox/cross-origin-iframe.html?iframePort\u003d43377",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/cross-origin-iframe.html?iframePort\u003d43377",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -22,7 +22,7 @@
     },
     {
       "promptLine": "Type \u0027Alice\u0027 into the cardholder name field.",
-      "reasoning": "Identified the cardholder name input field by its ID \u0027#cc-holder\u0027 within the specified iframe and generated a TYPE action to enter \u0027Alice\u0027.",
+      "reasoning": "Identified the \u0027Cardholder Name\u0027 input field by its ID \u0027#cc-holder\u0027 within the specified iframe and generated a TYPE action to enter \u0027Alice\u0027.",
       "actions": [
         {
           "type": "TYPE",
@@ -30,7 +30,7 @@
           "value": [
             "Alice"
           ],
-          "description": "Type \u0027Alice\u0027 into the cardholder name field.",
+          "description": "Type \u0027Alice\u0027 into the cardholder name field",
           "elementDetails": "Cardholder Name input field",
           "elementContext": {
             "id": "cc-holder",
@@ -48,7 +48,7 @@
     },
     {
       "promptLine": "Type \u00271234-5678-9012\u0027 into the card number field.",
-      "reasoning": "Identified the card number input field by its ID \u0027#cc-number\u0027 within the specified iframe and generated a TYPE action to input the provided card number.",
+      "reasoning": "Identified the \u0027Card Number\u0027 input field by its ID \u0027#cc-number\u0027 within the specified iframe and generated a TYPE action to input the provided card number.",
       "actions": [
         {
           "type": "TYPE",
@@ -56,7 +56,7 @@
           "value": [
             "1234-5678-9012"
           ],
-          "description": "Type \u00271234-5678-9012\u0027 into the card number field",
+          "description": "Type \u00271234-5678-9012\u0027 into the card number field.",
           "elementDetails": "Card Number input field",
           "elementContext": {
             "id": "cc-number",

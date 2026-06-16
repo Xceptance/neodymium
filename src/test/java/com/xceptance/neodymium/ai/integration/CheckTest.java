@@ -72,15 +72,12 @@ public class CheckTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(3)
-            .hasNoPesapCalls()
             .hasNoEscalations()
-            .hasDirectParses(1)
             .hasReplays(0)
-            .hasActionsCount(4)
-            .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.hasLlmCalls(1))
-            .step(2, s -> s.hasLlmCalls(1))
-            .step(3, s -> s.hasLlmCalls(1));
+            .step(0, s -> s.isDirectParse().hasActionsCount(1))
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1))
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1))
+            .step(3, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1));
 
         assertEquals("Newsletter: true, Contact: phone", Selenide.$("#result").text());
 
@@ -100,6 +97,96 @@ public class CheckTest extends BaseAiTest
             .step(1, s -> s.isReplayed())
             .step(2, s -> s.isReplayed())
             .step(3, s -> s.isReplayed());
+
+        assertEquals("Newsletter: true, Contact: phone", Selenide.$("#result").text());
+    }
+
+    /**
+     * Use alternative phrase
+     */
+    @NeodymiumTest
+    public final void testCheckAlternativePhrases()
+    {
+        final String steps = """
+                OPEN ${check.test.url}
+                Mark the checkbox 'Subscribe to newsletter' 
+                Toogle the radio button 'Phone' 
+                Click the button 'Submit Preferences'
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(3)
+            .hasNoEscalations()
+            .hasReplays(0)
+            .step(0, s -> s.isDirectParse().hasActionsCount(1))
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1))
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1))
+            .step(3, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1));
+
+        assertEquals("Newsletter: true, Contact: phone", Selenide.$("#result").text());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(4)
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed());
+
+        assertEquals("Newsletter: true, Contact: phone", Selenide.$("#result").text());
+    }
+
+
+    /**
+     * Combine into one line
+     */
+    @NeodymiumTest
+    public final void testCheckCombined()
+    {
+        final String steps = """
+                OPEN ${check.test.url}
+                Click the checkbox 'Subscribe to newsletter' and toogle the radio button 'Phone' 
+                Click the button 'Submit Preferences'
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasNoEscalations()
+            .hasReplays(0)
+            .step(0, s -> s.isDirectParse().hasActionsCount(1))
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(2))
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1));
+
+        assertEquals("Newsletter: true, Contact: phone", Selenide.$("#result").text());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(3)
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed());
 
         assertEquals("Newsletter: true, Contact: phone", Selenide.$("#result").text());
     }
