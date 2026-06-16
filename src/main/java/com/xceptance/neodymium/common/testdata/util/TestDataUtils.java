@@ -315,11 +315,8 @@ public final class TestDataUtils
     {
         for (final Map<String, String> dataSet : newDataSets)
         {
-            String testId = dataSet.get("testId");
-            if (StringUtils.isBlank(testId))
-            {
-                testId = dataSet.get("TEST_ID");
-            }
+            final String testIdVal = dataSet.get("testId");
+            final String testId = StringUtils.isBlank(testIdVal) ? dataSet.get("TEST_ID") : testIdVal;
 
             final String sourceFileFromDataSet = dataSet.get("neodymium.sourceFile");
             final String actualSourceName = (StringUtils.isNotBlank(sourceFileFromDataSet) && !".".equals(sourceFileFromDataSet)) ? sourceFileFromDataSet : sourceName;
