@@ -1,0 +1,10 @@
+{
+  "id": "com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserPlaybookTest :: testPlaybookPromptChange :: Browser Chrome_headless",
+  "steps": [
+    {
+      "actions": [],
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    }
+  ]
+}

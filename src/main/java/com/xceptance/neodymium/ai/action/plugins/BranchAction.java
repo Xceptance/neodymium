@@ -48,6 +48,25 @@ public class BranchAction implements AiActionPlugin
     {
         return false;
     }
+    private static final ThreadLocal<Boolean> lastConditionResult = new ThreadLocal<>();
+
+    /**
+     * Gets the last condition execution result of a BranchAction on this thread.
+     *
+     * @return the last condition evaluation result, or null if none
+     */
+    public static Boolean getLastConditionResult()
+    {
+        return lastConditionResult.get();
+    }
+
+    /**
+     * Clears the last condition execution result on this thread.
+     */
+    public static void clearLastConditionResult()
+    {
+        lastConditionResult.remove();
+    }
 
     @Override
     public String getPromptInstructions()
@@ -60,7 +79,7 @@ public class BranchAction implements AiActionPlugin
     {
         if (action.getCondition() != null && !action.getCondition().isEmpty())
         {
-            for (Action condAction : action.getCondition())
+            for (final Action condAction : action.getCondition())
             {
                 condAction.setSilent(true);
             }
@@ -73,6 +92,8 @@ public class BranchAction implements AiActionPlugin
             {
                 conditionMet = false;
             }
+
+            lastConditionResult.set(conditionMet);
 
             if (conditionMet)
             {

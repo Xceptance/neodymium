@@ -14,6 +14,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.net.URL;
 import java.util.Set;
 
 import org.apache.commons.io.FileUtils;
@@ -339,7 +340,7 @@ public final class TestDataUtils
                 final File batchDataFile = new File(directory, fileName);
                 if (batchDataFile.isFile())
                 {
-                    return readDataSetsFromFile(batchDataFile);
+                    return readDataSetsFromFile(batchDataFile, null);
                 }
             }
         }
@@ -347,13 +348,29 @@ public final class TestDataUtils
         // look for a data set file in the class path
         for (final String fileName : fileNames)
         {
-            final InputStream input = testClass.getResourceAsStream("/" + fileName);
-            if (input != null)
+            final URL url = testClass.getResource("/" + fileName);
+            if (url != null)
             {
+                if ("file".equals(url.getProtocol()))
+                {
+                    try
+                    {
+                        final File batchDataFile = new File(url.toURI());
+                        if (batchDataFile.isFile())
+                        {
+                            return readDataSetsFromFile(batchDataFile, null);
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        // Fall back to stream copying if URI conversion fails
+                    }
+                }
+
                 OutputStream output = null;
                 File batchDataFile = null;
 
-                try
+                try (final InputStream input = url.openStream())
                 {
                     // copy the stream to a temporary file
                     final String extension = "." + FilenameUtils.getExtension(fileName);
@@ -363,15 +380,19 @@ public final class TestDataUtils
                     IOUtils.copy(input, output);
                     output.flush();
 
-                    // read the data sets from the temporary file
-                    return readDataSetsFromFile(batchDataFile);
+                    // read the data sets from the temporary file passing original classpath path context
+                    return readDataSetsFromFile(batchDataFile, fileName);
                 }
                 finally
                 {
-                    // clean up
-                    input.close();
-                    output.close();
-                    FileUtils.deleteQuietly(batchDataFile);
+                    if (output != null)
+                    {
+                        output.close();
+                    }
+                    if (batchDataFile != null)
+                    {
+                        FileUtils.deleteQuietly(batchDataFile);
+                    }
                 }
             }
         }
@@ -388,6 +409,20 @@ public final class TestDataUtils
      * @return the data sets
      */
     public static List<Map<String, String>> readDataSetsFromFile(final File dataSetsFile)
+    {
+        return readDataSetsFromFile(dataSetsFile, null);
+    }
+
+    /**
+     * Returns the test data sets contained in the given test data file, providing classpath resource context.
+     *
+     * @param dataSetsFile
+     *            the test data set file
+     * @param classpathResourcePath
+     *            the original classpath resource path
+     * @return the data sets
+     */
+    public static List<Map<String, String>> readDataSetsFromFile(final File dataSetsFile, final String classpathResourcePath)
     {
         LOGGER.debug("Test data set file used: " + dataSetsFile.getAbsolutePath());
 
@@ -406,7 +441,7 @@ public final class TestDataUtils
 
             case "yaml":
             case "yml":
-                return YamlFileReader.readFile(dataSetsFile);
+                return YamlFileReader.readFile(dataSetsFile, classpathResourcePath);
 
             case "properties":
                 return PropertyFileReader.readFile(dataSetsFile);

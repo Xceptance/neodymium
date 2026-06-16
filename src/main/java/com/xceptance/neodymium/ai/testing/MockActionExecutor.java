@@ -47,6 +47,8 @@ public final class MockActionExecutor extends ActionExecutor
      */
     private ActionExecutionException exceptionToThrow;
 
+    private java.util.function.Consumer<Action> beforeExecuteHook;
+
     /**
      * Constructs a new MockActionExecutor with a null test class context to prevent any 
      * Selenide or browser initialization.
@@ -68,6 +70,16 @@ public final class MockActionExecutor extends ActionExecutor
     }
 
     /**
+     * Configures a hook callback to run before any action execution.
+     *
+     * @param beforeExecuteHook the hook callback
+     */
+    public final void setBeforeExecuteHook(final java.util.function.Consumer<Action> beforeExecuteHook)
+    {
+        this.beforeExecuteHook = beforeExecuteHook;
+    }
+
+    /**
      * Intercepts a single proposed browser action. Logs the action in memory or throws a 
      * pre-configured exception if set.
      *
@@ -77,6 +89,10 @@ public final class MockActionExecutor extends ActionExecutor
     @Override
     public final void execute(final Action action)
     {
+        if (this.beforeExecuteHook != null && action != null)
+        {
+            this.beforeExecuteHook.accept(action);
+        }
         if (this.exceptionToThrow != null)
         {
             throw this.exceptionToThrow;
@@ -84,6 +100,22 @@ public final class MockActionExecutor extends ActionExecutor
         if (action != null)
         {
             this.executedActions.add(action);
+            if ("BRANCH".equals(action.getType()) || "INCLUDE".equals(action.getType()))
+            {
+                final com.xceptance.neodymium.ai.action.AiActionPlugin plugin = 
+                    com.xceptance.neodymium.ai.action.ActionRegistry.getPlugin(action.getType());
+                if (plugin != null)
+                {
+                    try
+                    {
+                        plugin.execute(action, null, this);
+                    }
+                    catch (final Exception e)
+                    {
+                        throw new ActionExecutionException(e.getMessage(), e);
+                    }
+                }
+            }
         }
     }
 
@@ -97,13 +129,12 @@ public final class MockActionExecutor extends ActionExecutor
     @Override
     public final void executeAll(final List<Action> actions)
     {
-        if (this.exceptionToThrow != null)
-        {
-            throw this.exceptionToThrow;
-        }
         if (actions != null)
         {
-            this.executedActions.addAll(actions);
+            for (final Action action : actions)
+            {
+                execute(action);
+            }
         }
     }
 

@@ -609,7 +609,7 @@ public final class AiAgentPrompts
                   "a": [
                     {
                       "t": "ACTION_TYPE",
-                      "tg": "locator string from hint",
+                      "tg": "locator string from hint or name of java method to be executed in case ACTION_TYPE is JAVA_METHOD",
                       "v": "value if required",
                       "desc": "brief action description",
                       "ed": "short description of target element"
