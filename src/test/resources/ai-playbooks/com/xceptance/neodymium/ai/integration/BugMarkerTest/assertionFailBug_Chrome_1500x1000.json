@@ -19,8 +19,27 @@
       "expectedFailure": false
     },
     {
-      "actions": [],
-      "expectedFailure": false
+      "promptLine": "Verify that the minicart shows two items.",
+      "reasoning": "The instruction is to verify the number of items in the minicart. I\u0027ve identified the minicart element by its ID \u0027#minicart\u0027 and created an ASSERT action to check if its text content is \u00272 items\u0027.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#minicart",
+          "value": [
+            "2 items"
+          ],
+          "description": "Verify that the minicart shows two items",
+          "elementDetails": "minicart",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
+      "expectedFailure": false,
+      "expectedErrorType": "com.codeborne.selenide.ex.UIAssertionError",
+      "expectedErrorMessage": "java.lang.AssertionError: Assertion failed: \u00272 items\u0027 not found in common or element attributes. Found: [Text: \u0027🛒\n0 items\u0027, Value: \u0027null\u0027, Attributes: {class\u003dminicart, data-neo-ref\u003dxc_uryvke, id\u003dminicart}]\n(Timeout: 0ms)",
+      "healedContextLevel": "VISUAL"
     }
   ]
 }
