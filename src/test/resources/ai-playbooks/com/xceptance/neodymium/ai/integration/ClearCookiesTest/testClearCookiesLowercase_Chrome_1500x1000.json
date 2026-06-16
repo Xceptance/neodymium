@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "clear cookies",
-      "reasoning": "The instruction is to clear cookies, which maps directly to the CLEAR_COOKIES action.",
+      "reasoning": "The instruction is to clear cookies, which directly maps to the CLEAR_COOKIES action.",
       "actions": [
         {
           "type": "CLEAR_COOKIES",

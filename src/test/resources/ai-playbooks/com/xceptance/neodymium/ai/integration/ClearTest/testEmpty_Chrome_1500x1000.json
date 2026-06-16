@@ -1,5 +1,5 @@
 {
-  "id": "com.xceptance.neodymium.ai.integration.ClearTest :: testClear :: Browser Chrome_1500x1000",
+  "id": "com.xceptance.neodymium.ai.integration.ClearTest :: testEmpty :: Browser Chrome_1500x1000",
   "steps": [
     {
       "promptLine": "OPEN http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
@@ -44,14 +44,14 @@
       "healedContextLevel": "HINT"
     },
     {
-      "promptLine": "Clear the \u0027First Name:\u0027 field (hint: #first-name)",
-      "reasoning": "Cleared the \u0027First Name:\u0027 field.",
+      "promptLine": "Empty the \u0027First Name:\u0027 field",
+      "reasoning": "Identified the \u0027First Name:\u0027 field by its ID and generated a CLEAR action to empty it.",
       "actions": [
         {
           "type": "CLEAR",
           "target": "#first-name",
-          "description": "Clear \u0027First Name:\u0027 field",
-          "elementDetails": "\u0027First Name:\u0027 field",
+          "description": "Empty the \u0027First Name:\u0027 field",
+          "elementDetails": "First Name: field",
           "elementContext": {
             "id": "first-name",
             "placeholder": "Enter first name",
@@ -63,7 +63,7 @@
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "HINT"
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Click the \u0027Submit Details\u0027 button (hint: #btn-submit)",
@@ -72,8 +72,8 @@
         {
           "type": "CLICK",
           "target": "#btn-submit",
-          "description": "Click Submit Details button",
-          "elementDetails": "Submit Details button",
+          "description": "Click \u0027Submit Details\u0027 button",
+          "elementDetails": "\u0027Submit Details\u0027 button",
           "elementContext": {
             "text": "Submit Details",
             "id": "btn-submit",
