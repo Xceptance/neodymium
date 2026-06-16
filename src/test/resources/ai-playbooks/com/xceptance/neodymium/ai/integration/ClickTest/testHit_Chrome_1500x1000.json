@@ -1,5 +1,5 @@
 {
-  "id": "com.xceptance.neodymium.ai.integration.ClickTest :: testClick :: Browser Chrome_1500x1000",
+  "id": "com.xceptance.neodymium.ai.integration.ClickTest :: testHit :: Browser Chrome_1500x1000",
   "steps": [
     {
       "promptLine": "OPEN http://localhost:43377/ClickActionTest/testClickStandardButton.html",
@@ -19,14 +19,14 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Click the \u0027Submit Order\u0027 button (hint: #btn-submit)",
-      "reasoning": "Clicked the \u0027Submit Order\u0027 button.",
+      "promptLine": "Hit \u0027Submit Order\u0027",
+      "reasoning": "The \u0027Submit Order\u0027 button was identified by its ID and a CLICK action was generated.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#btn-submit",
           "description": "Click \u0027Submit Order\u0027 button",
-          "elementDetails": "\u0027Submit Order\u0027 button",
+          "elementDetails": "Submit Order button",
           "elementContext": {
             "text": "Submit Order",
             "id": "btn-submit",
@@ -38,7 +38,7 @@
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "HINT"
+      "healedContextLevel": "AXTREE"
     }
   ]
 }

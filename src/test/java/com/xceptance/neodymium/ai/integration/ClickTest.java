@@ -56,27 +56,70 @@ public class ClickTest extends BaseAiTest
     }
 
     /**
-     * Test button clicking with step-by-step verification of status.
+     * Test click
      */
     @NeodymiumTest
     public final void testClick()
     {
-        final String steps = """
+        testWith("""
                 OPEN ${click.test.url}
                 Click the 'Submit Order' button (hint: #btn-submit)
-            """;
+            """);
+    }
 
+    /**
+     * Test press
+     */
+    @NeodymiumTest
+    public final void testPress()
+    {
+        testWith("""
+                OPEN ${click.test.url}
+                Press the 'Submit Order' link
+            """);
+    }
+
+    /**
+     * Test hit
+     */
+    @NeodymiumTest
+    public final void testHit()
+    {
+        testWith("""
+                OPEN ${click.test.url}
+                Hit 'Submit Order'
+            """);
+    }
+
+    /**
+     * Rather ambiguous command
+     */
+    @NeodymiumTest
+    public final void testAmbiguous()
+    {
+        testWith("""
+                OPEN ${click.test.url}
+                submit the order
+            """);
+    }
+
+    /**
+     * Just to test different styles easily
+     * 
+     * @param steps the steps to run
+     */
+    private void testWith(final String steps)
+    {
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasLlmCalls(1)
-            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
             .hasActionsCount(2)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.hasLlmCalls(1));
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1));
 
         assertEquals("Order Submitted!", Selenide.$("#result").text());
 
