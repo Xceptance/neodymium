@@ -1,5 +1,5 @@
 {
-  "id": "com.xceptance.neodymium.ai.integration.CheckTest :: testCheck :: Browser Chrome_1500x1000",
+  "id": "com.xceptance.neodymium.ai.integration.CheckTest :: testCheckCombined :: Browser Chrome_1500x1000",
   "steps": [
     {
       "promptLine": "OPEN http://localhost:43377/CheckActionTest/testCheckHappyPath.html",
@@ -19,8 +19,8 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Check the checkbox \u0027Subscribe to newsletter\u0027 (hint: #newsletter)",
-      "reasoning": "Checked the checkbox \u0027Subscribe to newsletter\u0027.",
+      "promptLine": "Click the checkbox \u0027Subscribe to newsletter\u0027 and toogle the radio button \u0027Phone\u0027",
+      "reasoning": "Identified the checkbox by its ID \u0027newsletter\u0027 and the radio button by its ID \u0027contact-phone\u0027. Used the CHECK action for both to ensure they are selected.",
       "actions": [
         {
           "type": "CHECK",
@@ -28,42 +28,37 @@
           "value": [
             "true"
           ],
-          "description": "Check the checkbox \u0027Subscribe to newsletter\u0027",
-          "elementDetails": "checkbox \u0027Subscribe to newsletter\u0027",
+          "description": "Click the checkbox \u0027Subscribe to newsletter\u0027",
+          "elementDetails": "Subscribe to newsletter checkbox",
           "elementContext": {},
           "replay": "",
           "adjust": false
-        }
-      ],
-      "expectedFailure": false,
-      "healedContextLevel": "HINT"
-    },
-    {
-      "promptLine": "Check the radio button \u0027Phone\u0027 (hint: #contact-phone)",
-      "reasoning": "Checked the radio button \u0027Phone\u0027.",
-      "actions": [
+        },
         {
           "type": "CHECK",
           "target": "#contact-phone",
-          "description": "Check the radio button \u0027Phone\u0027",
-          "elementDetails": "radio button \u0027Phone\u0027",
+          "value": [
+            "true"
+          ],
+          "description": "Toggle the radio button \u0027Phone\u0027",
+          "elementDetails": "Phone radio button",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "HINT"
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Click the button \u0027Submit Preferences\u0027 (hint: #btn-submit)",
-      "reasoning": "Clicked the \u0027Submit Preferences\u0027 button.",
+      "promptLine": "Click the button \u0027Submit Preferences\u0027",
+      "reasoning": "Identified the button by its ID and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#btn-submit",
-          "description": "Click \u0027Submit Preferences\u0027 button",
-          "elementDetails": "button \u0027Submit Preferences\u0027",
+          "description": "Click the button \u0027Submit Preferences\u0027",
+          "elementDetails": "Submit Preferences button",
           "elementContext": {
             "text": "Submit Preferences",
             "id": "btn-submit",
@@ -75,7 +70,7 @@
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "HINT"
+      "healedContextLevel": "AXTREE"
     }
   ]
 }
