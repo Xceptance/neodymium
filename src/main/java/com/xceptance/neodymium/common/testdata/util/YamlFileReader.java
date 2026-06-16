@@ -959,9 +959,10 @@ public final class YamlFileReader
 
     public static List<Step> loadInclude(final String path)
     {
-        final String sourceFileVal = Neodymium.getData() != null && Neodymium.getData().exists("neodymium.sourceFile")
+        final String sourceFileValTemp = Neodymium.getData() != null && Neodymium.getData().exists("neodymium.sourceFile")
                 ? Neodymium.getData().asString("neodymium.sourceFile")
                 : null;
+        final String sourceFileVal = sourceFileValTemp != null ? sourceFileValTemp : Neodymium.getTestdataSourceFile();
 
         String classpathResourcePathVal = Neodymium.getData() != null && Neodymium.getData().exists("neodymium.classpathResourcePath")
                 ? Neodymium.getData().asString("neodymium.classpathResourcePath")

@@ -367,7 +367,7 @@ public final class TestDataUtils
                 final File batchDataFile = new File(directory, fileName);
                 if (batchDataFile.isFile())
                 {
-                    final List<Map<String, String>> datasets = readDataSetsFromFile(batchDataFile, null);
+                    final List<Map<String, String>> datasets = readDataSetsFromFile(batchDataFile, fileName);
                     final String baseName = FilenameUtils.getName(fileName);
                     for (final Map<String, String> ds : datasets)
                     {
@@ -471,6 +471,42 @@ public final class TestDataUtils
     {
         LOGGER.debug("Test data set file used: " + dataSetsFile.getAbsolutePath());
 
+        final String resolvedClasspathResourcePath;
+        if (classpathResourcePath != null)
+        {
+            resolvedClasspathResourcePath = classpathResourcePath;
+        }
+        else
+        {
+            String path = null;
+            final String absolutePath = dataSetsFile.getAbsolutePath().replace('\\', '/');
+            final String[] patterns = {
+                "src/test/resources/",
+                "src/main/resources/",
+                "target/test-classes/",
+                "target/classes/",
+                "build/resources/main/",
+                "build/resources/test/",
+                "build/classes/java/main/",
+                "build/classes/java/test/",
+                "out/production/resources/",
+                "out/test/resources/",
+                "out/production/classes/",
+                "out/test/classes/",
+                "bin/"
+            };
+            for (final String pat : patterns)
+            {
+                final int idx = absolutePath.indexOf(pat);
+                if (idx != -1)
+                {
+                    path = absolutePath.substring(idx + pat.length());
+                    break;
+                }
+            }
+            resolvedClasspathResourcePath = path;
+        }
+
         final String fileExtension = FilenameUtils.getExtension(dataSetsFile.getName());
 
         switch (fileExtension.toLowerCase())
@@ -486,7 +522,7 @@ public final class TestDataUtils
 
             case "yaml":
             case "yml":
-                return YamlFileReader.readFile(dataSetsFile, classpathResourcePath);
+                return YamlFileReader.readFile(dataSetsFile, resolvedClasspathResourcePath);
 
             case "properties":
                 return PropertyFileReader.readFile(dataSetsFile);
