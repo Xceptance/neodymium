@@ -75,7 +75,7 @@ public class VisualTest extends BaseAiTest
         assertThat(r1)
             .hasPesapCalls(1)
             .hasContextLevel(0, ContextLevel.VISUAL_LEAN)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         final var s = r1.getSteps().get(1);
         assertTrue(s.getLlmCalls().get(0).isSuccess());
@@ -103,7 +103,7 @@ public class VisualTest extends BaseAiTest
         assertThat(r1)
             .hasPesapCalls(1)
             .hasContextLevel(0, ContextLevel.VISUAL_LEAN)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         final var s = r1.getSteps().get(1);
         assertTrue(s.getLlmCalls().get(0).isSuccess());
@@ -139,7 +139,7 @@ public class VisualTest extends BaseAiTest
         assertThat(r1)
             .hasPesapCalls(1)
             .hasContextLevel(0, ContextLevel.VISUAL_LEAN)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         final var s = r1.getSteps().get(1);
         assertFalse(s.getLlmCalls().get(0).isSuccess());

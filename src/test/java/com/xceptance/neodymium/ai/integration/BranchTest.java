@@ -75,7 +75,7 @@ public class BranchTest extends BaseAiTest
             .hasReplays(0)
             .hasActionsCount(2)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         assertEquals("Cookies Accepted!", 
             Selenide.$("#result").shouldBe(Condition.visible).text());
@@ -119,7 +119,7 @@ public class BranchTest extends BaseAiTest
             .hasReplays(0)
             .hasActionsCount(2)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         assertEquals("Main Action Triggered!", 
             Selenide.$("#result").shouldBe(Condition.visible).text());
@@ -163,7 +163,7 @@ public class BranchTest extends BaseAiTest
             .hasReplays(0)
             .hasActionsCount(2)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         assertEquals("", Selenide.$("#result").text());
 
@@ -206,7 +206,7 @@ public class BranchTest extends BaseAiTest
             .hasReplays(0)
             .hasActionsCount(2)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         assertEquals("Cookies Accepted!", Selenide.$("#result").text());
 
@@ -249,7 +249,7 @@ public class BranchTest extends BaseAiTest
             .hasReplays(0)
             .hasActionsCount(2)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         assertEquals("Main Action Triggered!", 
             Selenide.$("#result").shouldBe(Condition.visible).text());
@@ -293,7 +293,7 @@ public class BranchTest extends BaseAiTest
             .hasReplays(0)
             .hasActionsCount(2)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         assertEquals("Main Action Triggered!", 
             Selenide.$("#result").shouldBe(Condition.visible).text());

@@ -124,7 +124,7 @@ public class ClearCookiesTest extends BaseAiTest
             .hasDirectParses(0)
             .hasReplays(0)
             .hasActionsCount(1)
-            .step(0, s -> s.isLlm(1));
+            .step(0, s -> s.hasLlmCalls(1));
 
         assertNull(WebDriverRunner.getWebDriver().manage().getCookieNamed("test_cookie"));
 

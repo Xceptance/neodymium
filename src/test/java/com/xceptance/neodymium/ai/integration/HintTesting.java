@@ -80,7 +80,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "CLICK")
             .hasContextLevel(0, ContextLevel.HINT)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
         
         assertEquals("#search-button", r1.getActions().get(1).getTarget());
 
@@ -129,7 +129,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "CLICK")
             .hasContextLevel(0, ContextLevel.HINT)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         final String target = r1.getActions().get(1).getTarget();
         assertTrue(target.contains("index.html") || target.contains("nav-links") || target.contains("Storefront") || target.contains("brand") || target.contains("xc_"));
@@ -161,7 +161,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "CLICK")
             .hasContextLevel(0, ContextLevel.HINT)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         final String target = r1.getActions().get(1).getTarget();
         assertTrue(target.contains("nav-links") || target.contains("brand") || target.contains("Storefront") || target.contains("xc_"));
@@ -192,7 +192,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "CLICK")
             .hasContextLevel(0, ContextLevel.HINT)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
         
         final String target = r1.getActions().get(1).getTarget();
         assertTrue(target.contains("featured-bear-img"));
@@ -227,7 +227,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(1, "CLICK")
             .hasContextLevel(0, ContextLevel.HINT)
             .hasContextLevel(1, ContextLevel.AXTREE)
-            .step(1, s -> s.isLlm(2));
+            .step(1, s -> s.hasLlmCalls(2));
 
         final String target = r1.getActions().get(1).getTarget();
         assertTrue(target.contains("search-button") || target.contains("xc_"));
@@ -275,8 +275,8 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "CLICK")
             .hasAction(2, "CLICK")
-            .step(1, s -> s.isLlm(1))
-            .step(2, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1))
+            .step(2, s -> s.hasLlmCalls(1));
         
         final String targetBox1 = r1.getActions().get(1).getTarget();
         final String targetBtn1 = r1.getActions().get(2).getTarget();
@@ -303,8 +303,8 @@ public class HintTesting extends BaseAiTest
             .hasAction(2, "CLICK")
             .hasContextLevel(0, ContextLevel.HINT)
             .hasContextLevel(1, ContextLevel.HINT)
-            .step(1, s -> s.isLlm(1))
-            .step(2, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1))
+            .step(2, s -> s.hasLlmCalls(1));
 
         final String targetBox2 = r2.getActions().get(1).getTarget();
         final String targetBtn2 = r2.getActions().get(2).getTarget();
@@ -343,7 +343,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(1, "CLICK")
             .hasContextLevel(0, ContextLevel.HINT)
             .hasContextLevel(1, ContextLevel.AXTREE)
-            .step(1, s -> s.isLlm(2));
+            .step(1, s -> s.hasLlmCalls(2));
         
         final String target = r1.getActions().get(1).getTarget();
         assertTrue(target.contains("search-button") || target.contains("xc_"));
@@ -381,7 +381,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "TYPE", "#search-box", "bear")
             .hasContextLevel(0, ContextLevel.HINT)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -421,7 +421,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(1, "TYPE", "#search-box", "bear")
             .hasAction(2, "CLEAR", "#search-box")
             .hasContextLevel(1, ContextLevel.HINT)
-            .step(2, s -> s.isLlm(1));
+            .step(2, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -461,7 +461,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "SELECT", "#sort-select-input", "Price: Low to High")
             .hasContextLevel(0, ContextLevel.HINT)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -500,7 +500,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "CHECK", "#filter-cat-tops")
             .hasContextLevel(0, ContextLevel.HINT)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -539,7 +539,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "HOVER", "#nav-link-tops")
             .hasContextLevel(0, ContextLevel.HINT)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -578,7 +578,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "ASSERT", "#plp-page-title")
             .hasContextLevel(0, ContextLevel.HINT)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -617,7 +617,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(0, "NAVIGATE")
             .hasAction(1, "SCROLL", "#newsletter-email-input")
             .hasContextLevel(0, ContextLevel.HINT)
-            .step(1, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -657,7 +657,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(1, "TYPE", "#search-box", "bear")
             .hasAction(2, "KEY_PRESS", "#search-box", "Enter")
             .hasContextLevel(1, ContextLevel.HINT)
-            .step(2, s -> s.isLlm(1));
+            .step(2, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -698,7 +698,7 @@ public class HintTesting extends BaseAiTest
             .hasAction(1, "TYPE", "#search-box", "bear")
             .hasAction(2, "KEY_PRESS", "#search-box", "Enter")
             .hasContextLevel(1, ContextLevel.HINT)
-            .step(2, s -> s.isLlm(1));
+            .step(2, s -> s.hasLlmCalls(1));
 
         // back to start for replay
         this.resetBrowser();

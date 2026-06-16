@@ -80,9 +80,9 @@ public class PositionalChallengesTest extends BaseAiTest
                 .hasReplays(0)
                 .hasActionsCount(7)
                 .step(0, s -> s.isDirectParse())
-                .step(1, s -> s.isLlm(1))
-                .step(2, s -> s.isLlm(1))
-                .step(3, s -> s.isLlm(1));
+                .step(1, s -> s.hasLlmCalls(1))
+                .step(2, s -> s.hasLlmCalls(1))
+                .step(3, s -> s.hasLlmCalls(1));
 
             // Verify the result of the clicks in the SUT
             assertEquals("Clicked: 2", Selenide.$("#click-result").text());

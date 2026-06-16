@@ -78,8 +78,8 @@ public final class NoReplayTest extends BaseAiTest
             .hasReplays(0)
             .hasActionsCount(3)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.isLlm(1))
-            .step(2, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1))
+            .step(2, s -> s.hasLlmCalls(1));
 
         assertEquals("Order Submitted!", Selenide.$("#result").text());
 
@@ -99,7 +99,7 @@ public final class NoReplayTest extends BaseAiTest
             .hasReplays(2) // Step 0 and Step 2 are replayed
             .hasActionsCount(3)
             .step(0, s -> s.isReplayed())
-            .step(1, s -> s.isLlm(1)) // Step 1 bypassed replay and called LLM
+            .step(1, s -> s.hasLlmCalls(1)) // Step 1 bypassed replay and called LLM
             .step(2, s -> s.isReplayed()); // Step 2 was replayed from cache
 
         assertEquals("Order Submitted!", Selenide.$("#result").text());
@@ -128,8 +128,8 @@ public final class NoReplayTest extends BaseAiTest
             .hasReplays(0)
             .hasActionsCount(3)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.isLlm(1))
-            .step(2, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1))
+            .step(2, s -> s.hasLlmCalls(1));
 
         assertEquals("Order Submitted!", Selenide.$("#result").text());
 
@@ -149,8 +149,8 @@ public final class NoReplayTest extends BaseAiTest
             .hasReplays(1) // Only Step 0 is replayed
             .hasActionsCount(3)
             .step(0, s -> s.isReplayed())
-            .step(1, s -> s.isLlm(1)) // Bypassed and called LLM
-            .step(2, s -> s.isLlm(1)); // Bypassed and called LLM
+            .step(1, s -> s.hasLlmCalls(1)) // Bypassed and called LLM
+            .step(2, s -> s.hasLlmCalls(1)); // Bypassed and called LLM
 
         assertEquals("Order Submitted!", Selenide.$("#result").text());
     }

@@ -127,7 +127,7 @@ public class BackTest extends BaseAiTest
 
         assertThat(r1.getSteps().get(0)).isDirectParse();
         assertThat(r1.getSteps().get(1)).isDirectParse();
-        assertThat(r1.getSteps().get(2)).isLlm(1);
+        assertThat(r1.getSteps().get(2)).hasLlmCalls(1);
 
         assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
 
@@ -175,7 +175,7 @@ public class BackTest extends BaseAiTest
             .hasActionsCount(3)
             .step(0, s -> s.isDirectParse())
             .step(1, s -> s.isDirectParse())
-            .step(2, s -> s.isLlm(1).action(0, a -> a.hasType("BACK")));
+            .step(2, s -> s.hasLlmCalls(1).action(0, a -> a.hasType("BACK")));
 
         assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
 

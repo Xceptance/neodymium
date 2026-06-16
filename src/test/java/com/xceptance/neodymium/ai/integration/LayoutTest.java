@@ -75,7 +75,7 @@ public final class LayoutTest extends BaseAiTest
             .hasNoEscalations()
             .hasContextLevel(0, ContextLevel.VISUAL)
             .step(0, step -> step.isDirectParse())
-            .step(1, step -> step.isLlm(1));
+            .step(1, step -> step.hasLlmCalls(1));
 
         assertTrue(r1.getActions().size() == 1 || r1.getActions().size() == 2,
             "Expected action count to be 1 or 2, but was: " + r1.getActions().size());

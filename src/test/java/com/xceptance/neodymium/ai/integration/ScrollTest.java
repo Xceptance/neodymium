@@ -77,8 +77,8 @@ public class ScrollTest extends BaseAiTest
             .hasReplays(0)
             .hasActionsCount(3)
             .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.isLlm(1))
-            .step(2, s -> s.isLlm(1));
+            .step(1, s -> s.hasLlmCalls(1))
+            .step(2, s -> s.hasLlmCalls(1));
 
         assertEquals("Scrolled and clicked bottom button!", Selenide.$("#result").text());
 

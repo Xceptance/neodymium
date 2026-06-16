@@ -85,11 +85,11 @@ public final class ContrastWarningTest extends BaseAiTest
             .hasLlmCalls(5)
             .hasNoEscalations()
             .hasReplays(0)
-            .step(0, s -> s.isLlm(1))
-            .step(1, s -> s.isLlm(1))
-            .step(2, s -> s.isLlm(1))
-            .step(3, s -> s.isLlm(1))
-            .step(4, s -> s.isLlm(1));
+            .step(0, s -> s.hasLlmCalls(1))
+            .step(1, s -> s.hasLlmCalls(1))
+            .step(2, s -> s.hasLlmCalls(1))
+            .step(3, s -> s.hasLlmCalls(1))
+            .step(4, s -> s.hasLlmCalls(1));
 
         // Programmatic assertions on internal stats
         final AiStats stats = Neodymium.ai().getStats();
