@@ -101,6 +101,15 @@ When an `INCLUDE` action is executed at runtime:
 4. The target path (e.g., `fragments/add-simple-product-to-cart.steps`) is resolved relative to that directory structure (e.g. `posters_tests/fragments/add-simple-product-to-cart.steps`).
 5. The resource is read either directly from the classpath or from the local filesystem directories.
 
+### Nested Include Paths
+
+For nested includes (when an included file contains another `_include` directive), **the path must always be specified relative to the file containing the include**:
+* If `posters_tests/main.yml` includes `fragments/add-simple-product-to-cart.steps` (using path `fragments/add-simple-product-to-cart.steps`), and `add-simple-product-to-cart.steps` in turn includes `save-product-info.steps` (both located under `posters_tests/fragments/`), the path in `add-simple-product-to-cart.steps` must be:
+  ```text
+  _include: save-product-info.steps
+  ```
+  Specifying `fragments/save-product-info.steps` is incorrect because it is resolved relative to the folder of the including file (`fragments/`), which would look for `fragments/fragments/save-product-info.steps` and fail.
+
 ---
 
 ## 5. Variable Resolution & State Inheritance inside Includes
@@ -141,6 +150,8 @@ You can mix and nest inclusions as needed:
 ### Circular Loop Prevention
 To prevent infinite recursion, the compiler and execution runner track the call stack of active inclusions. If an include file references itself (either directly or transitively via a cycle), the system terminates immediately with a `MalformedPlaybookException` detailing the include sequence:
 `Circular inclusion detected: fragments/a.steps -> fragments/b.steps -> fragments/a.steps`
+
+To ensure robust detection, all path arguments are canonicalized (for filesystem-based playbooks) or normalized (for classpath-based playbooks). This prevents bypassing the guard when loop references utilize differing relative path formats (e.g. referencing `fragments/B.steps` and `fragments/./B.steps` or utilizing `..` directories).
 
 ---
 

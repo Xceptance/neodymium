@@ -248,6 +248,7 @@ Includes can also be nested inside conditional logic. The AI agent compiles this
 1. **Dynamic AST Compilation**: The LLM parses the conditional statement and generates a `BRANCH` action. Within its `then` or `else` blocks, it emits an `INCLUDE` action containing the path of the target steps file.
 2. **One-Time Evaluation**: When the branch is executed, the condition (e.g., checking if the product page is an XPDP page) is evaluated exactly **once**.
 3. **Step Resolution**: The framework resolves the file path dynamically relative to the parent playbook's classpath folder (e.g., `posters_tests/`) or local directory. It loads the included steps and injects them directly into the runtime execution queue.
+   * *Note:* For nested includes (e.g., an include file that itself includes another file), the nested `_include` path **must always be specified relative to the directory of the file that includes it** (e.g., `_include: save-product-info.steps` instead of `fragments/save-product-info.steps` if both are under the `fragments/` subfolder).
 4. **Independent Debugging & Tracing**: Every included step retains its origin trace (e.g., `configure-xpdp-product-steps.steps:3 -> stokkeOrderPayPalTest.yml:6`), ensuring full trace visibility during debugging and in reports.
 
 ### 🔄 Mixing Static & Dynamic Includes
@@ -259,6 +260,8 @@ You can freely mix and nest static and dynamic includes:
 ### 🛡️ Circular Loop Detection
 
 To prevent infinite loops and stack overflows, the execution runner tracks the inclusion stack recursively. If a circular inclusion path is detected, the run immediately terminates with a `MalformedPlaybookException` showing the exact dependency chain (e.g., `Circular inclusion detected: a.steps -> b.steps -> a.steps`).
+
+To ensure robust detection, all path arguments are canonicalized (for filesystem-based playbooks) or normalized (for classpath-based playbooks). This prevents bypassing the guard when loop references utilize differing relative path formats (e.g. referencing `fragments/B.steps` and `fragments/./B.steps` or utilizing `..` directories).
 
 ### 📊 Dataset & Stored Variable Inheritance
 

@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai.action.plugins;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.xceptance.neodymium.ai.action.Action;
@@ -25,6 +26,7 @@ import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 import com.xceptance.neodymium.ai.core.AiAgent;
+import com.xceptance.neodymium.ai.core.AiAgent.DefinitiveAssertionError;
 import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 
 /**
@@ -36,6 +38,8 @@ public final class IncludeAction implements AiActionPlugin
      * The action name identifier.
      */
     public static final String ACTION_NAME = "INCLUDE";
+
+    private static final ThreadLocal<List<String>> RUNTIME_INCLUDE_STACK = ThreadLocal.withInitial(ArrayList::new);
 
     @Override
     public String getActionName()
@@ -70,21 +74,41 @@ public final class IncludeAction implements AiActionPlugin
             throw new ActionExecutionException("INCLUDE action target path is null or empty");
         }
 
-        final List<YamlFileReader.Step> includedSteps = YamlFileReader.loadInclude(path);
-
-        final AiAgent agent = AiAgent.getActiveAgent();
-        if (agent == null)
+        final List<String> stack = RUNTIME_INCLUDE_STACK.get();
+        if (stack.contains(path))
         {
-            throw new ActionExecutionException("No active AI Agent found to execute INCLUDE action: " + path);
+            final StringBuilder sb = new StringBuilder();
+            for (final String s : stack)
+            {
+                sb.append(s).append(" -> ");
+            }
+            sb.append(path);
+            throw new DefinitiveAssertionError("Circular dynamic inclusion detected: " + sb.toString());
         }
 
+        stack.add(path);
         try
         {
+            final List<YamlFileReader.Step> includedSteps = YamlFileReader.loadInclude(path);
+
+            final AiAgent agent = AiAgent.getActiveAgent();
+            if (agent == null)
+            {
+                throw new ActionExecutionException("No active AI Agent found to execute INCLUDE action: " + path);
+            }
+
             agent.executeIncludeSteps(includedSteps);
         }
         catch (final Exception e)
         {
             throw new ActionExecutionException("Failed executing included steps from path: " + path, e);
+        }
+        finally
+        {
+            if (!stack.isEmpty())
+            {
+                stack.remove(stack.size() - 1);
+            }
         }
     }
 }

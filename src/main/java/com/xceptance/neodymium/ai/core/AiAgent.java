@@ -754,12 +754,18 @@ public class AiAgent {
             final long stepStartTime = System.currentTimeMillis();
             try
             {
+                stepDetails.setExpandedInstruction(strippedStep);
                 executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs,
                         performedInstructions, step.text, futureInstructions,
                         step.trace, step.trace, stepDetails, result);
             }
             catch (final HudActionException e)
             {
+                throw e;
+            }
+            catch (final AssertionError e)
+            {
+                stepDetails.setFailureReason(e.getMessage());
                 throw e;
             }
             catch (final Throwable t)

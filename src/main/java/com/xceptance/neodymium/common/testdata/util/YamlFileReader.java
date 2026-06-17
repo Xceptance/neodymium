@@ -233,7 +233,14 @@ public final class YamlFileReader
                 final List<File> inclusionStack = new ArrayList<>();
                 if (file != null)
                 {
-                    inclusionStack.add(file);
+                    try
+                    {
+                        inclusionStack.add(file.getCanonicalFile());
+                    }
+                    catch (final IOException e)
+                    {
+                        inclusionStack.add(file);
+                    }
                 }
 
                 while (changed && depth < 10)
@@ -689,7 +696,14 @@ public final class YamlFileReader
         File includedFile = null;
         if (baseDir != null)
         {
-            includedFile = new File(baseDir, path);
+            try
+            {
+                includedFile = new File(baseDir, path).getCanonicalFile();
+            }
+            catch (final IOException e)
+            {
+                includedFile = new File(baseDir, path);
+            }
         }
 
         if (includedFile != null && includedFile.exists())
@@ -727,7 +741,9 @@ public final class YamlFileReader
                     }
                 }
 
-                return normalizeSteps(stepsObj, includedFile, content);
+                final List<Step> normalized = normalizeSteps(stepsObj, includedFile, content);
+                expandIncludesInSteps(normalized, baseDir, classpathResourcePath, newStack, new HashMap<>(), new HashMap<>());
+                return normalized;
             }
             catch (final IOException e)
             {
@@ -744,6 +760,23 @@ public final class YamlFileReader
                 resourcePath = classpathResourcePath.substring(0, lastSlash + 1) + path;
             }
         }
+
+        resourcePath = new File(resourcePath).toPath().normalize().toString().replace('\\', '/');
+
+        final File classpathFile = new File(resourcePath);
+        if (inclusionStack.contains(classpathFile))
+        {
+            final StringBuilder sb = new StringBuilder();
+            for (final File f : inclusionStack)
+            {
+                sb.append(f.getName()).append(" -> ");
+            }
+            sb.append(classpathFile.getName());
+            throw new MalformedPlaybookException("Circular inclusion detected: " + sb.toString());
+        }
+
+        final List<File> newStack = new ArrayList<>(inclusionStack);
+        newStack.add(classpathFile);
 
         final InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourcePath);
         if (is != null)
@@ -768,7 +801,9 @@ public final class YamlFileReader
                     }
                 }
 
-                return normalizeSteps(stepsObj, new File(path), content);
+                final List<Step> normalized = normalizeSteps(stepsObj, new File(path), content);
+                expandIncludesInSteps(normalized, baseDir, resourcePath, newStack, new HashMap<>(), new HashMap<>());
+                return normalized;
             }
             catch (final IOException e)
             {

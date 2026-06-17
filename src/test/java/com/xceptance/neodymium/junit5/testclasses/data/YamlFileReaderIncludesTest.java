@@ -323,4 +323,85 @@ public final class YamlFileReaderIncludesTest
         assertEquals(1, steps3.size());
         assertEquals("Click button 2", steps3.get(0).text);
     }
+
+    @Test
+    @DisplayName("Verify nested static includes and variable propagation")
+    public final void testNestedStaticIncludes() throws IOException
+    {
+        final File level2File = new File(this.fragmentFolder, "level2.steps");
+        final String level2Content = "- Inner step with ${username}";
+        Files.writeString(level2File.toPath(), level2Content, StandardCharsets.UTF_8);
+
+        final File level1File = new File(this.fragmentFolder, "level1.steps");
+        final String level1Content = 
+            "- Mid step 1\n" +
+            "- _include: fragments/level2.steps\n" +
+            "- Mid step 2";
+        Files.writeString(level1File.toPath(), level1Content, StandardCharsets.UTF_8);
+
+        final String mainPlaybook = 
+            "steps:\n" +
+            "  - Top step\n" +
+            "  - _include: fragments/level1.steps\n" +
+            "data:\n" +
+            "  - _testId: TC01\n" +
+            "    username: nested_user";
+        Files.writeString(this.mainPlaybookFile.toPath(), mainPlaybook, StandardCharsets.UTF_8);
+
+        final List<Map<String, String>> dataSets = YamlFileReader.readFile(this.mainPlaybookFile);
+        assertEquals(1, dataSets.size());
+        final String steps = dataSets.get(0).get("steps");
+        assertNotNull(steps);
+        assertTrue(steps.contains("Top step"));
+        assertTrue(steps.contains("Mid step 1"));
+        assertTrue(steps.contains("Inner step with nested_user"));
+        assertTrue(steps.contains("Mid step 2"));
+    }
+
+    @Test
+    @DisplayName("Verify classpath circular inclusion detection throws MalformedPlaybookException")
+    public final void testClasspathCircularInclusionGuard()
+    {
+        Neodymium.getData().put("neodymium.sourceFile", "another-dummy.yaml");
+        // circular-a.steps includes circular-b.steps which includes circular-a.steps in test resources
+        final MalformedPlaybookException exception = assertThrows(MalformedPlaybookException.class, () -> {
+            YamlFileReader.loadInclude("circular-a.steps");
+        });
+        assertTrue(exception.getMessage().contains("Circular inclusion detected"));
+    }
+
+    @Test
+    @DisplayName("Verify resolving non-existent include path throws RuntimeException")
+    public final void testFileNotFound()
+    {
+        Neodymium.getData().put("neodymium.sourceFile", this.mainPlaybookFile.getAbsolutePath());
+        final RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            YamlFileReader.loadInclude("fragments/non-existent.steps");
+        });
+        assertTrue(exception.getMessage().contains("Could not resolve include path"));
+    }
+
+    @Test
+    @DisplayName("Verify circular inclusion detection works with differing relative paths pointing to the same file")
+    public final void testCircularInclusionDifferentRelativePaths() throws IOException
+    {
+        final File fragmentsDir = new File(this.tempDir, "fragments");
+        fragmentsDir.mkdirs();
+
+        final File fileA = new File(this.tempDir, "A.yaml");
+        final File fileB = new File(fragmentsDir, "B.steps");
+        final File fileC = new File(fragmentsDir, "C.steps");
+
+        Files.writeString(fileA.toPath(), "steps:\n  - _include: fragments/B.steps", StandardCharsets.UTF_8);
+        // B includes C using absolute path fragments/C.steps to succeed load
+        Files.writeString(fileB.toPath(), "- _include: fragments/C.steps", StandardCharsets.UTF_8);
+        // C includes B (using redundant relative path fragments/./B.steps to bypass loop check)
+        Files.writeString(fileC.toPath(), "- _include: fragments/./B.steps", StandardCharsets.UTF_8);
+
+        final RuntimeException ex = assertThrows(RuntimeException.class, () -> {
+            YamlFileReader.readFile(fileA);
+        });
+        assertEquals("Circular inclusion detected: A.yaml -> B.steps -> C.steps -> B.steps", ex.getMessage());
+    }
 }
+
