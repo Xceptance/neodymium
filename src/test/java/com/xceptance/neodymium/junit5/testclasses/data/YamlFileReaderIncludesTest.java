@@ -158,6 +158,97 @@ public final class YamlFileReaderIncludesTest
     }
 
     @Test
+    @DisplayName("Verify block-level data inclusion from file")
+    public final void testBlockLevelDataInclusion() throws IOException
+    {
+        final File dataListFile = new File(this.fragmentFolder, "data_list.yaml");
+        final String dataListContent = """
+            - _testId: Case1
+              username: user1
+            - _testId: Case2
+              username: user2""";
+        Files.writeString(dataListFile.toPath(), dataListContent, StandardCharsets.UTF_8);
+
+        final String mainPlaybook = """
+            steps:
+              - Do nothing
+            data:
+              _include: fragments/data_list.yaml""";
+        Files.writeString(this.mainPlaybookFile.toPath(), mainPlaybook, StandardCharsets.UTF_8);
+
+        final List<Map<String, String>> dataSets = YamlFileReader.readFile(this.mainPlaybookFile);
+        assertEquals(2, dataSets.size());
+
+        final Map<String, String> row1 = dataSets.get(0);
+        assertEquals("Case1", row1.get("_testId"));
+        assertEquals("user1", row1.get("username"));
+
+        final Map<String, String> row2 = dataSets.get(1);
+        assertEquals("Case2", row2.get("_testId"));
+        assertEquals("user2", row2.get("username"));
+    }
+
+    @Test
+    @DisplayName("Verify row-level list expansion for data inclusion")
+    public final void testRowLevelListExpansion() throws IOException
+    {
+        final File dataListFile = new File(this.fragmentFolder, "data_list.yaml");
+        final String dataListContent = """
+            - _testId: Case1
+              username: user1
+            - _testId: Case2
+              username: user2""";
+        Files.writeString(dataListFile.toPath(), dataListContent, StandardCharsets.UTF_8);
+
+        final String mainPlaybook = """
+            steps:
+              - Do nothing
+            data:
+              - _include: fragments/data_list.yaml""";
+        Files.writeString(this.mainPlaybookFile.toPath(), mainPlaybook, StandardCharsets.UTF_8);
+
+        final List<Map<String, String>> dataSets = YamlFileReader.readFile(this.mainPlaybookFile);
+        assertEquals(2, dataSets.size());
+
+        final Map<String, String> row1 = dataSets.get(0);
+        assertEquals("Case1", row1.get("_testId"));
+        assertEquals("user1", row1.get("username"));
+
+        final Map<String, String> row2 = dataSets.get(1);
+        assertEquals("Case2", row2.get("_testId"));
+        assertEquals("user2", row2.get("username"));
+    }
+
+    @Test
+    @DisplayName("Verify dynamic path parameterization for data inclusion")
+    public final void testDynamicDataPathParameterization() throws IOException
+    {
+        final File userDataFile = new File(this.fragmentFolder, "user_data.yaml");
+        final String userDataContent = """
+            username: dynamic_user
+            role: tester""";
+        Files.writeString(userDataFile.toPath(), userDataContent, StandardCharsets.UTF_8);
+
+        final String mainPlaybook = """
+            steps:
+              - Do nothing
+            data:
+              - _testId: Case1
+                target_file: fragments/user_data.yaml
+                _include: ${target_file}""";
+        Files.writeString(this.mainPlaybookFile.toPath(), mainPlaybook, StandardCharsets.UTF_8);
+
+        final List<Map<String, String>> dataSets = YamlFileReader.readFile(this.mainPlaybookFile);
+        assertEquals(1, dataSets.size());
+
+        final Map<String, String> row = dataSets.get(0);
+        assertEquals("Case1", row.get("_testId"));
+        assertEquals("fragments/user_data.yaml", row.get("target_file"));
+        assertEquals("dynamic_user", row.get("username"));
+        assertEquals("tester", row.get("role"));
+    }
+
+    @Test
     @DisplayName("Verify step location tracing and JSON array serialization")
     public final void testStepLocationTracing() throws IOException
     {
