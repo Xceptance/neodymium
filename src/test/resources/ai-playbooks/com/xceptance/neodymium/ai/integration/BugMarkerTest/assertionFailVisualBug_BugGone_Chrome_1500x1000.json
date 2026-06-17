@@ -1,0 +1,30 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.BugMarkerTest :: assertionFailVisualBug_BugGone :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Verify that the screen is mostly blue and white (visual).",
+      "reasoning": "The screenshot shows a page with a white background, white content cards, and a light blue header bar. The search button and some text elements are also blue. While there are minor elements in other colors (e.g., red \u0027Posters\u0027 text, green/brown in the bear image), the overall dominant colors are clearly blue and white, fulfilling the instruction.",
+      "actions": [],
+      "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}

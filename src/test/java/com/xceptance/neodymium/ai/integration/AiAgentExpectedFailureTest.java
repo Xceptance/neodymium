@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.xceptance.neodymium.ai.core;
+package com.xceptance.neodymium.ai.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -32,6 +32,7 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.ai.core.AiAgent;
 
 /**
  * Tests for the unified expected failure (bug tags) feature in both standard Neodymium
@@ -127,7 +128,6 @@ public final class AiAgentExpectedFailureTest
         final AssertionError error = assertThrows(AssertionError.class, () -> {
             Neodymium.expectFailure("BUG-5", () -> {
                 // Succeeded! That is bad because we expected a failure.
-                final int a = 1 + 1;
             });
         });
 

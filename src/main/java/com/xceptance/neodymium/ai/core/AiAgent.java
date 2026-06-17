@@ -54,6 +54,7 @@ import com.xceptance.neodymium.util.SelenideAddons;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.util.ScreenshotHasher;
 import com.xceptance.neodymium.ai.util.CustomRulesLoader;
+import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -79,6 +80,19 @@ import io.qameta.allure.Allure;
 public class AiAgent {
 
     private static final Logger LOG = LoggerFactory.getLogger(AiAgent.class);
+
+    private static final ThreadLocal<AiAgent> activeAgent = new ThreadLocal<>();
+    private static final ThreadLocal<AiExecutionResult> activeResult = new ThreadLocal<>();
+
+    public static AiAgent getActiveAgent()
+    {
+        return activeAgent.get();
+    }
+
+    public static AiExecutionResult getActiveResult()
+    {
+        return activeResult.get();
+    }
 
     private void logPauseReason(String reason) {
         try {
@@ -204,9 +218,11 @@ public class AiAgent {
         execute(instructions, new AiExecutionResult(Neodymium.getData()));
     }
 
-    public void execute(final String instructions, final AiExecutionResult result) {
-        // Dynamically reload the thread-local AI configuration to pick up any dynamic
-        // system property changes
+    public void execute(final String instructions, final AiExecutionResult result)
+    {
+        activeAgent.set(this);
+        activeResult.set(result);
+        // Dynamically reload the thread-local AI configuration to pick up any dynamic system property changes
         Neodymium.reloadAiConfiguration();
 
         // Re-read dynamically cached autoSkip field from the newly reloaded
@@ -262,19 +278,23 @@ public class AiAgent {
                 sourceFileVal = null;
             }
 
-            List<Integer> stepLineNumbers = null;
-            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.stepLineNumbers")) {
+            List<String> stepLineNumbers = null;
+            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.stepLineNumbers"))
+            {
                 final String stepLineNumbersJson = Neodymium.getData().asString("neodymium.stepLineNumbers");
-                try {
-                    stepLineNumbers = new Gson().fromJson(stepLineNumbersJson, new TypeToken<List<Integer>>() {
-                    }.getType());
-                } catch (final Exception e) {
+                try
+                {
+                    stepLineNumbers = new Gson().fromJson(stepLineNumbersJson, new TypeToken<List<String>>(){}.getType());
+                }
+                catch (final Exception e)
+                {
                     // Ignore
                 }
             }
 
-            final List<Integer> stepLines = new ArrayList<>();
-            if (stepLineNumbers != null) {
+            final List<String> stepLines = new ArrayList<>();
+            if (stepLineNumbers != null)
+            {
                 stepLines.addAll(stepLineNumbers);
             } else {
                 for (int idx = 0; idx < stepsList.size(); idx++) {
@@ -298,13 +318,6 @@ public class AiAgent {
             // Determine if JIT per-step PESAP should run (only during recording, not replay)
             final boolean needsPesap = playbook == null || playbook.isRecording();
 
-            boolean pesapEnabledVal = Neodymium.aiConfiguration().pesapEnabled();
-            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.enabled"))
-            {
-                pesapEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.enabled", pesapEnabledVal);
-            }
-
-            this.pesapEnabled = pesapEnabledVal && needsPesap;
             this.currentStepsList = stepsList;
 
             // Run local offline semantic linter independently (when enabled)
@@ -451,7 +464,7 @@ public class AiAgent {
                     {
                         LOG.info("✂️ Upfront JIT step split detected: '{}' split into {}", strippedStep, pesapResult.splitSteps());
                         final List<String> splitList = pesapResult.splitSteps();
-                        final Integer origLine = i < stepLines.size() ? stepLines.get(i) : null;
+                        final String origLine = i < stepLines.size() ? stepLines.get(i) : null;
 
                         stepsList.set(i, splitList.get(0));
                         stepDetails.setExpandedInstruction(splitList.get(0));
@@ -492,18 +505,69 @@ public class AiAgent {
                     }
                 }
 
-                final Integer currentLineNumber = (i < stepLines.size()) ? stepLines.get(i) : null;
+                final String currentLineNumber = (i < stepLines.size()) ? stepLines.get(i) : null;
+
+                final String parentTrace = getParentTrace(currentLineNumber);
+                final ConditionInfo condInfo = parseCondition(strippedStep);
+
+                boolean shouldSkip = false;
+                String finalStepText = strippedStep;
+
+                if (parentTrace != null && condInfo != null)
+                {
+                    final String cacheKey = parentTrace + "::" + condInfo.conditionText;
+                    if (evaluatedConditions.containsKey(cacheKey))
+                    {
+                        final boolean conditionMet = evaluatedConditions.get(cacheKey);
+                        final boolean stepConditionResult = condInfo.negated ? !conditionMet : conditionMet;
+
+                        if (stepConditionResult)
+                        {
+                            finalStepText = stripConditionPrefix(strippedStep);
+                            LOG.info("   ⏭️ Condition '{}' cached as {}. Executing step without recheck: '{}'",
+                                     condInfo.conditionText, conditionMet, finalStepText);
+                        }
+                        else
+                        {
+                            shouldSkip = true;
+                            LOG.info("   ⏭️ Skipping step '{}' because condition '{}' was evaluated as {}",
+                                     strippedStep, condInfo.conditionText, conditionMet);
+                        }
+                    }
+                }
+
+                if (shouldSkip)
+                {
+                    stepDetails.setExpandedInstruction(strippedStep + " (Skipped)");
+                    stepDetails.setReplayed(true);
+                    performedInstructions.add(stepUnresolved);
+                    continue;
+                }
+
                 final StringBuilder stepContext = new StringBuilder();
                 if (currentLineNumber != null || sourceFileVal != null) {
                     stepContext.append(" ");
                     if (sourceFileVal != null) {
                         final String fileName = new File(sourceFileVal).getName();
-                        stepContext.append(fileName);
-                        if (currentLineNumber != null) {
-                            stepContext.append(":").append(currentLineNumber);
+                        if (currentLineNumber != null && currentLineNumber.contains(":"))
+                        {
+                            stepContext.append(currentLineNumber);
                         }
-                    } else {
-                        stepContext.append("line ").append(currentLineNumber);
+                        else
+                        {
+                            stepContext.append(fileName);
+                            if (currentLineNumber != null)
+                            {
+                                stepContext.append(":").append(currentLineNumber);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (currentLineNumber != null)
+                        {
+                            stepContext.append(currentLineNumber);
+                        }
                     }
                 }
                 final String contextStr = stepContext.toString();
@@ -517,7 +581,7 @@ public class AiAgent {
                 LOG.debug("{}", strippedStep);
                 LOG.debug("───────────────────────────────────────────────────────────");
                 // We always run PESAP for non-direct instructions to classify context level, check custom java methods, and handle step splitting.
-                if (!isDirectInstruction(strippedStep) && needsPesap && !alreadySplitSteps.contains(strippedStep))
+                if (!isDirectInstruction(strippedStep) && needsPesap && Neodymium.aiConfiguration().pesapEnabled() && !alreadySplitSteps.contains(strippedStep))
                 {
                     final Object testInstance = actionExecutor.getTestInstance();
                     final Class<?> testClass = testInstance != null ? testInstance.getClass() : null;
@@ -526,7 +590,7 @@ public class AiAgent {
                     {
                         LOG.info("✂️ Upfront JIT step split detected: '{}' split into {}", strippedStep, pesapResult.splitSteps());
                         final List<String> splitList = pesapResult.splitSteps();
-                        final Integer origLine = i < stepLines.size() ? stepLines.get(i) : null;
+                        final String origLine = i < stepLines.size() ? stepLines.get(i) : null;
 
                         stepsList.set(i, splitList.get(0));
                         stepDetails.setExpandedInstruction(splitList.get(0));
@@ -564,9 +628,16 @@ public class AiAgent {
                     stepDetails = result.getSteps().get(i);
                     stepDetails.setExpandedInstruction(strippedStep);
                     final long stepStartTime = System.currentTimeMillis();
+                    com.xceptance.neodymium.ai.action.plugins.BranchAction.clearLastConditionResult();
                     try
                     {
-                        executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs, performedInstructions, stepUnresolved, futureInstructions, currentLineNumber, sourceFileVal, stepDetails, result, stepsList, stepLines);
+                        executeStep(i, finalStepText, expectedFailure, bugId, optionalStep, customTimeoutMs, performedInstructions, stepUnresolved, futureInstructions, currentLineNumber, sourceFileVal, stepDetails, result, stepsList, stepLines);
+                        final Boolean lastCond = com.xceptance.neodymium.ai.action.plugins.BranchAction.getLastConditionResult();
+                        if (lastCond != null && parentTrace != null && condInfo != null)
+                        {
+                            final String cacheKey = parentTrace + "::" + condInfo.conditionText;
+                            evaluatedConditions.put(cacheKey, lastCond);
+                        }
                     }
                     catch (final HudActionException e)
                     {
@@ -609,6 +680,8 @@ public class AiAgent {
             }
             LOG.debug("───────────────────────────────────────────────────────────");
         } finally {
+            activeAgent.remove();
+            activeResult.remove();
             final long durationMs = System.currentTimeMillis() - startTimeMs;
             result.setDurationMs(durationMs);
 
@@ -681,12 +754,12 @@ public class AiAgent {
             final List<String> performedInstructions,
             final String unresolvedInstruction,
             final List<String> futureInstructions,
-            final Integer currentLineNumber,
+            final String currentLineNumber,
             final String sourceFile,
             final StepDetails stepDetails,
             final AiExecutionResult result,
             final List<String> stepsList,
-            final List<Integer> stepLines) throws HudActionException
+            final List<String> stepLines) throws HudActionException
     {
         int errorCount = 0;
         int playbookReplayAttempts = 0;
@@ -746,6 +819,7 @@ public class AiAgent {
         {
             try
             {
+                final int cursorBefore = playbook != null ? playbook.getCursor() : -1;
                 // AI-generated: Gemini 3.5 Flash - Reset compound step tracking on each attempt
                 final List<Action> accumulatedActions = new ArrayList<>();
                 stepDetails.getActions().clear();
@@ -927,15 +1001,18 @@ public class AiAgent {
                 }
 
                 // If recording, assign all accumulated actions to the current playbook step
-                final PlaybookStep finalStep = playbook.getCurrentStep();
-                if (playbook.isRecording() && finalStep != null) {
-                    finalStep.setActions(new ArrayList<>(accumulatedActions));
-                    playbook.setChanged(true);
-                }
+                if (playbook != null && playbook.getCursor() == cursorBefore)
+                {
+                    final PlaybookStep finalStep = playbook.getCurrentStep();
+                    if (playbook.isRecording() && finalStep != null)
+                    {
+                        finalStep.setActions(new ArrayList<>(accumulatedActions));
+                        playbook.setChanged(true);
+                    }
 
-                // Move the playbook cursor forward upon successful execution of all compound
-                // actions
-                playbook.nextStep();
+                    // Move the playbook cursor forward upon successful execution of all compound actions
+                    playbook.nextStep();
+                }
 
                 break;
             } catch (final ActionExecutionException e) {
@@ -1247,7 +1324,7 @@ public class AiAgent {
         }
     }
 
-    private static String formatFailureMessage(final String instruction, final String originalUnsplitInstruction, final Integer lineNumber, final String sourceFile, final String suffix)
+    private static String formatFailureMessage(final String instruction, final String originalUnsplitInstruction, final String lineNumber, final String sourceFile, final String suffix)
     {
         final StringBuilder sb = new StringBuilder();
         sb.append("Instruction '").append(instruction).append("'");
@@ -1258,28 +1335,57 @@ public class AiAgent {
         sb.append(" failed");
         if (lineNumber != null)
         {
-            sb.append(" at line ").append(lineNumber);
+            if (lineNumber.contains(":") || lineNumber.contains("->"))
+            {
+                sb.append(" at ").append(lineNumber);
+            }
+            else
+            {
+                sb.append(" at line ").append(lineNumber);
+            }
         }
-        if (sourceFile != null) {
+        if (sourceFile != null && !Objects.equals(lineNumber, sourceFile))
+        {
             sb.append(" in ").append(sourceFile);
         }
         sb.append(suffix);
         return sb.toString();
     }
 
-    private static String formatFailureLogContext(final Integer lineNumber, final String sourceFile) {
-        if (lineNumber == null && sourceFile == null) {
+    private static String formatFailureLogContext(final String lineNumber, final String sourceFile)
+    {
+        if (lineNumber == null && sourceFile == null)
+        {
             return "";
         }
         final StringBuilder sb = new StringBuilder();
         sb.append(" (");
-        if (sourceFile != null) {
-            sb.append(new File(sourceFile).getName());
-            if (lineNumber != null) {
-                sb.append(":").append(lineNumber);
+        if (sourceFile != null)
+        {
+            final String fileName = new File(sourceFile).getName();
+            if (lineNumber != null && lineNumber.contains(":"))
+            {
+                sb.append(lineNumber);
             }
-        } else {
-            sb.append("line ").append(lineNumber);
+            else
+            {
+                sb.append(fileName);
+                if (lineNumber != null)
+                {
+                    sb.append(":").append(lineNumber);
+                }
+            }
+        }
+        else
+        {
+            if (lineNumber.contains(":"))
+            {
+                sb.append(lineNumber);
+            }
+            else
+            {
+                sb.append("line ").append(lineNumber);
+            }
         }
         sb.append(")");
         return sb.toString();
@@ -1936,7 +2042,7 @@ public class AiAgent {
                     includeJavaMethod = stepDetails.isPesapRequiresJavaMethods();
                     LOG.info("    🔮 JIT PESAP retrieved cached ContextLevel: {}, requiresJavaMethods: {}", contextLevel, includeJavaMethod);
                 }
-                else if (baseLevel == ContextLevel.AXTREE && !isRecoveryAttempt)
+                else if (baseLevel == ContextLevel.AXTREE && !isRecoveryAttempt && Neodymium.aiConfiguration().pesapEnabled())
                 {
                     pesapResult = runPreStepPesap(stepIndex, testClass, stepDetails);
                     if (pesapResult != null)
@@ -2484,7 +2590,7 @@ public class AiAgent {
      */
     private int processHudActionException(final HudActionException e, final int i,
             final List<String> stepsList, final List<String> performedInstructions,
-            final List<Integer> stepLines, final AiExecutionResult result)
+            final List<String> stepLines, final AiExecutionResult result)
     {
         if (HudActionType.REWIND == e.actionType)
         {
@@ -2581,7 +2687,7 @@ public class AiAgent {
 
     private void alignStepsWithPlaybookForReplay(
             final List<String> stepsList,
-            final List<Integer> stepLines,
+            final List<String> stepLines,
             final AiExecutionResult result,
             final Playbook playbook)
     {
@@ -2627,7 +2733,7 @@ public class AiAgent {
 
                 if (splitParts.size() > 1)
                 {
-                    final Integer origLine = i < stepLines.size() ? stepLines.get(i) : null;
+                    final String origLine = i < stepLines.size() ? stepLines.get(i) : null;
 
                     // Replace the first one
                     stepsList.set(i, splitParts.get(0).getPromptLine());
@@ -2734,6 +2840,210 @@ public class AiAgent {
                     playbook.setChanged(true);
                 }
             }
+        }
+    }
+
+    private final Map<String, Boolean> evaluatedConditions = new HashMap<>();
+
+    private static final class ConditionInfo
+    {
+        final String conditionText;
+        final boolean negated;
+
+        ConditionInfo(final String conditionText, final boolean negated)
+        {
+            this.conditionText = conditionText;
+            this.negated = negated;
+        }
+    }
+
+    private String getParentTrace(final String trace)
+    {
+        if (trace == null)
+        {
+            return null;
+        }
+        if (trace.contains(" -> "))
+        {
+            final String[] parts = trace.split(" -> ");
+            return parts[parts.length - 1].trim();
+        }
+        return trace.trim();
+    }
+
+    private ConditionInfo parseCondition(final String instruction)
+    {
+        final String trimmed = instruction.trim();
+        if (trimmed.startsWith("If not "))
+        {
+            final int thenIdx = trimmed.indexOf(", then ");
+            if (thenIdx != -1)
+            {
+                return new ConditionInfo(trimmed.substring(7, thenIdx).trim(), true);
+            }
+            final int thenIdx2 = trimmed.indexOf(" then ");
+            if (thenIdx2 != -1)
+            {
+                return new ConditionInfo(trimmed.substring(7, thenIdx2).trim(), true);
+            }
+        }
+        else if (trimmed.startsWith("If "))
+        {
+            final int thenIdx = trimmed.indexOf(", then ");
+            if (thenIdx != -1)
+            {
+                return new ConditionInfo(trimmed.substring(3, thenIdx).trim(), false);
+            }
+            final int thenIdx2 = trimmed.indexOf(" then ");
+            if (thenIdx2 != -1)
+            {
+                return new ConditionInfo(trimmed.substring(3, thenIdx2).trim(), false);
+            }
+        }
+        return null;
+    }
+
+    private String stripConditionPrefix(final String instruction)
+    {
+        final String trimmed = instruction.trim();
+        final int thenIdx = trimmed.indexOf(", then ");
+        if (thenIdx != -1)
+        {
+            return trimmed.substring(thenIdx + 7).trim();
+        }
+        final int thenIdx2 = trimmed.indexOf(" then ");
+        if (thenIdx2 != -1)
+        {
+            return trimmed.substring(thenIdx2 + 6).trim();
+        }
+        return instruction;
+    }
+
+    public final void executeIncludeSteps(final List<YamlFileReader.Step> steps) throws HudActionException
+    {
+        final AiExecutionResult result = getActiveResult();
+        if (result == null)
+        {
+            throw new IllegalStateException("No active AiExecutionResult found in thread context");
+        }
+
+        final List<String> performedInstructions = new ArrayList<>();
+
+        final List<String> includeStepsList = new ArrayList<>();
+        final List<String> includeStepLines = new ArrayList<>();
+        for (final YamlFileReader.Step step : steps)
+        {
+            includeStepsList.add(step.text);
+            includeStepLines.add(step.trace);
+        }
+
+        for (int i = 0; i < steps.size(); i++)
+        {
+            final YamlFileReader.Step step = steps.get(i);
+            final String stepText = AiBrowser.resolveTestDataToPrompt(step.text, result.getLookups());
+
+            final StepDetails stepDetails = new StepDetails(step.text);
+            result.getSteps().add(stepDetails);
+
+            boolean expectedFailureVal = false;
+            String bugIdVal = null;
+            final Matcher bugMatcher = BUG_TAG_PATTERN.matcher(stepText);
+            if (bugMatcher.find())
+            {
+                expectedFailureVal = true;
+                bugIdVal = bugMatcher.group(1);
+                if (bugIdVal != null)
+                {
+                    bugIdVal = bugIdVal.trim();
+                }
+            }
+            final boolean expectedFailure = expectedFailureVal;
+            final String bugId = bugIdVal;
+
+            boolean optionalStepVal = false;
+            final Matcher optionalMatcher = OPTIONAL_TAG_PATTERN.matcher(stepText);
+            if (optionalMatcher.find())
+            {
+                optionalStepVal = true;
+            }
+            final boolean optionalStep = optionalStepVal;
+
+            Long customTimeoutMsVal = null;
+            final Matcher timeoutMatcher = TIMEOUT_TAG_PATTERN.matcher(stepText);
+            if (timeoutMatcher.find())
+            {
+                final long value = Long.parseLong(timeoutMatcher.group(1));
+                final String unit = timeoutMatcher.group(2);
+                if (unit != null && unit.equalsIgnoreCase("s"))
+                {
+                    customTimeoutMsVal = value * 1000;
+                }
+                else
+                {
+                    customTimeoutMsVal = value;
+                }
+            }
+            final Long customTimeoutMs = customTimeoutMsVal;
+
+            final String strippedStep = stripAllTags(stepText);
+
+            final List<String> futureInstructions = new ArrayList<>();
+            for (int j = i + 1; j < steps.size(); j++)
+            {
+                futureInstructions.add(steps.get(j).text);
+            }
+
+            final String traceLine;
+            final String traceFile;
+            if (step.trace != null)
+            {
+                final int arrowIdx = step.trace.indexOf(" -> ");
+                final String immediateTrace = (arrowIdx != -1) ? step.trace.substring(0, arrowIdx) : step.trace;
+                final int colonIdx = immediateTrace.lastIndexOf(':');
+                if (colonIdx != -1)
+                {
+                    traceFile = immediateTrace.substring(0, colonIdx);
+                    traceLine = immediateTrace.substring(colonIdx + 1);
+                }
+                else
+                {
+                    traceFile = immediateTrace;
+                    traceLine = null;
+                }
+            }
+            else
+            {
+                traceFile = null;
+                traceLine = null;
+            }
+
+            final long stepStartTime = System.currentTimeMillis();
+            try
+            {
+                stepDetails.setExpandedInstruction(strippedStep);
+                executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs,
+                        performedInstructions, step.text, futureInstructions,
+                        traceLine, traceFile, stepDetails, result, includeStepsList, includeStepLines);
+            }
+            catch (final HudActionException e)
+            {
+                throw e;
+            }
+            catch (final AssertionError e)
+            {
+                stepDetails.setFailureReason(e.getMessage());
+                throw e;
+            }
+            catch (final Throwable t)
+            {
+                stepDetails.setFailureReason(t.getMessage());
+                throw new RuntimeException(t);
+            }
+            finally
+            {
+                stepDetails.setDurationMs(System.currentTimeMillis() - stepStartTime);
+            }
+            performedInstructions.add(step.text);
         }
     }
 

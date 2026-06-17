@@ -365,11 +365,15 @@ public class ActionParser {
     {
         try
         {
-            final String typeStr = obj.has("t") ? obj.get("t").getAsString() : null;
+            String typeStr = obj.has("t") ? obj.get("t").getAsString() : null;
             if (typeStr == null)
             {
                 LOG.warn("Action missing 't' field: {}", obj);
                 return null;
+            }
+            if (typeStr.startsWith("_"))
+            {
+                typeStr = typeStr.substring(1);
             }
 
             final String type;
@@ -445,32 +449,51 @@ public class ActionParser {
                 action.setElementContext(ctxMap);
             }
 
-            if (obj.has("c") && obj.get("c").isJsonArray()) {
-                List<Action> condActions = new ArrayList<>();
-                for (JsonElement e : obj.getAsJsonArray("c")) {
-                    Action a = parseAction(e.getAsJsonObject());
-                    if (a != null) condActions.add(a);
+            if ((obj.has("c") && obj.get("c").isJsonArray()) || (obj.has("condition") && obj.get("condition").isJsonArray()))
+            {
+                final JsonArray arr = obj.has("c") ? obj.getAsJsonArray("c") : obj.getAsJsonArray("condition");
+                final List<Action> condActions = new ArrayList<>();
+                for (final JsonElement e : arr)
+                {
+                    final Action a = parseAction(e.getAsJsonObject());
+                    if (a != null)
+                    {
+                        condActions.add(a);
+                    }
                 }
                 action.setCondition(condActions);
             }
 
-            if (obj.has("th") && obj.get("th").isJsonArray()) {
-                List<Action> thenActions = new ArrayList<>();
-                for (JsonElement e : obj.getAsJsonArray("th")) {
-                    Action a = parseAction(e.getAsJsonObject());
-                    if (a != null) thenActions.add(a);
+            if ((obj.has("th") && obj.get("th").isJsonArray()) || (obj.has("then") && obj.get("then").isJsonArray()))
+            {
+                final JsonArray arr = obj.has("th") ? obj.getAsJsonArray("th") : obj.getAsJsonArray("then");
+                final List<Action> thenActions = new ArrayList<>();
+                for (final JsonElement e : arr)
+                {
+                    final Action a = parseAction(e.getAsJsonObject());
+                    if (a != null)
+                    {
+                        thenActions.add(a);
+                    }
                 }
                 action.setThen(thenActions);
             }
 
-            if (obj.has("el") && obj.get("el").isJsonArray()) {
-                List<Action> elseActions = new ArrayList<>();
-                for (JsonElement e : obj.getAsJsonArray("el")) {
-                    Action a = parseAction(e.getAsJsonObject());
-                    if (a != null) elseActions.add(a);
+            if ((obj.has("el") && obj.get("el").isJsonArray()) || (obj.has("else") && obj.get("else").isJsonArray()))
+            {
+                final JsonArray arr = obj.has("el") ? obj.getAsJsonArray("el") : obj.getAsJsonArray("else");
+                final List<Action> elseActions = new ArrayList<>();
+                for (final JsonElement e : arr)
+                {
+                    final Action a = parseAction(e.getAsJsonObject());
+                    if (a != null)
+                    {
+                        elseActions.add(a);
+                    }
                 }
                 action.setElseActions(elseActions);
             }
+
 
             return action;
         }
