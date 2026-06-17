@@ -168,10 +168,10 @@ class PageAnalyzerAXTreeTest
         assertTrue(result.contains("Page URL: https://example.com/test-axtree"));
         assertTrue(result.contains("Page Title: Mock AXTree Test Page"));
         assertTrue(result.contains("=== Accessibility Tree (AXTree) ==="));
-        assertTrue(result.contains("<button data-neo-ref=\"xc_ax_ref_1001\" name=\"Click Me\"/>"));
-        assertTrue(result.contains("<link data-neo-ref=\"xc_ax_ref_1002\" name=\"Go to Google\" value=\"https://google.com\"/>"));
-        assertTrue(result.contains("<textbox data-neo-ref=\"xc_ax_ref_1003\" name=\"Username\" required=\"true\" placeholder=\"Enter Username\"/>"));
-        assertTrue(result.contains("<checkbox data-neo-ref=\"xc_ax_ref_1005\" name=\"Flat String Checkbox\"/>"));
+        assertTrue(result.contains("<button data-neo-ref=\"xc_ax_ref_1001\" aria-label=\"Click Me\"/>"));
+        assertTrue(result.contains("<link data-neo-ref=\"xc_ax_ref_1002\" aria-label=\"Go to Google\" value=\"https://google.com\"/>"));
+        assertTrue(result.contains("<textbox data-neo-ref=\"xc_ax_ref_1003\" aria-label=\"Username\" required=\"true\" placeholder=\"Enter Username\"/>"));
+        assertTrue(result.contains("<checkbox data-neo-ref=\"xc_ax_ref_1005\" aria-label=\"Flat String Checkbox\"/>"));
         
         // Assert that Node 4 with generic/ignored role is correctly filtered out
         assertTrue(!result.contains("generic") && !result.contains("some container"));
@@ -305,9 +305,9 @@ class PageAnalyzerAXTreeTest
         final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
 
         assertNotNull(result);
-        assertTrue(result.contains("<button data-neo-ref=\"xc_ref_search\" name=\"Search Icon\"/>"));
-        assertTrue(result.contains("<button data-neo-ref=\"xc_ref_cart\" name=\"Cart Icon: 1\"/>"));
-        assertTrue(result.contains("<button data-neo-ref=\"xc_ref_flag\" name=\"🇩🇪\"/>"));
+        assertTrue(result.contains("<button data-neo-ref=\"xc_ref_search\" aria-label=\"Search Icon\"/>"));
+        assertTrue(result.contains("<button data-neo-ref=\"xc_ref_cart\" aria-label=\"Cart Icon: 1\"/>"));
+        assertTrue(result.contains("<button data-neo-ref=\"xc_ref_flag\" aria-label=\"🇩🇪\"/>"));
     }
 
     @SuppressWarnings("unchecked")
@@ -477,11 +477,11 @@ class PageAnalyzerAXTreeTest
 
         final String expected = "=== Accessibility Tree (AXTree) ===\n" +
             "<banner data-neo-ref=\"xc_ref_banner\">\n" +
-            "  <heading data-neo-ref=\"xc_ref_heading\" id=\"foo\" name=\"Store Catalog\"/>\n" +
+            "  <heading data-neo-ref=\"xc_ref_heading\" id=\"foo\" aria-label=\"Store Catalog\"/>\n" +
             "</banner>\n" +
             "<form data-neo-ref=\"xc_ref_form\">\n" +
             "  <textbox data-neo-ref=\"xc_ref_textbox\" id=\"search-box\" name=\"searchText\" aria-label=\"Search posters...\" required=\"true\" placeholder=\"Search posters...\"/>\n" +
-            "  <button data-neo-ref=\"xc_ref_button\" id=\"search-button\" name=\"Search\"/>\n" +
+            "  <button data-neo-ref=\"xc_ref_button\" id=\"search-button\" aria-label=\"Search\"/>\n" +
             "</form>\n";
 
         assertTrue(result.contains(expected), "AXTree serialization should be visual-flow ordered, nested with 2-spaces indentation, and populated with DOM attributes.\nActual result:\n" + result);

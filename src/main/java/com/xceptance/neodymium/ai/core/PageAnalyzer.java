@@ -1461,7 +1461,7 @@ public class PageAnalyzer
         }
         else if (!name.isEmpty())
         {
-            dom.append(" name=\"").append(escapeAttributeValue(name)).append("\"");
+            dom.append(" aria-label=\"").append(escapeAttributeValue(name)).append("\"");
         }
 
         if (!value.isEmpty())

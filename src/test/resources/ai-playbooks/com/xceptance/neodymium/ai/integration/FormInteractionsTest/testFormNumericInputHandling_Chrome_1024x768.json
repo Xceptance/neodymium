@@ -1,0 +1,67 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.FormInteractionsTest :: testFormNumericInputHandling :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop/forms.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop/forms.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop/forms.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Type \u00275\u0027 into the \u0027Neon Gradient Poster\u0027 quantity field. (hint: #qty-poster-1)",
+      "reasoning": "Typed \u00275\u0027 into the specified quantity field.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#qty-poster-1",
+          "value": [
+            "5"
+          ],
+          "description": "Type \u00275\u0027 into the \u0027Neon Gradient Poster\u0027 quantity field.",
+          "elementDetails": "Neon Gradient Poster quantity field",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "qty-poster-1",
+            "tagName": "input",
+            "type": "number"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Verify that the Total Price is \u0027$99.95\u0027.",
+      "reasoning": "The instruction is to verify the total price. I found the element with id \u0027cart-total\u0027 which displays the total price and created an ASSERT action to check its text content.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#cart-total",
+          "value": [
+            "$99.95"
+          ],
+          "description": "Verify that the Total Price is \u0027$99.95\u0027.",
+          "elementDetails": "Total Price",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}
