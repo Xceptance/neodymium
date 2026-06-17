@@ -435,6 +435,32 @@ public abstract class BaseAiTest extends BaseLlmTest
         }, mode);
     }
 
+    /**
+     * Executes the implicit steps from the test dataset under the specified verification mode.
+     *
+     * @param mode the verification mode to run under
+     * @return the execution result
+     */
+    protected final AiExecutionResult runAi(final VerificationMode mode)
+    {
+        return runAi(() ->
+        {
+            try
+            {
+                Neodymium.ai().execute();
+            }
+            catch (final RuntimeException e)
+            {
+                throw e;
+            }
+            catch (final Throwable t)
+            {
+                throw new RuntimeException(t);
+            }
+        }, mode);
+    }
+
+
 
     /**
      * Executes the test run steps under the specified verification mode.

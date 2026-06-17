@@ -213,6 +213,54 @@ Because the LLM pre-compiles this logic during the initial generation phase, the
 
 > **Best Practice:** While branching is fully supported, simple, deterministic data-driven tests are generally preferred over massive "choose your own adventure" scripts. Keep conditionals focused on dismissing dynamic UI elements (like banners or modals).
 
+---
+
+## 📦 Step Inclusion & Modular Reusability (`_include`)
+
+To prevent duplicate step definitions across test cases and playbooks, Neodymium AI introduces step inclusion via the `_include` action. This allows you to split common, reusable workflows (e.g., logging in, setting up a guest user, or cleaning cookies) into separate, standalone step fragment files.
+
+### 📝 Syntax and Usage
+
+To include an external file of steps, write `_include: ` followed by the classpath resource path to the target steps file (typically using the `.steps` extension):
+
+```yaml
+steps: |
+  Open the homepage.
+  _include: fragments/testLogin_setup.steps
+  Verify that the dashboard is loaded.
+```
+
+The referenced fragment file contains a simple YAML list of natural language steps:
+```yaml
+# fragments/testLogin_setup.steps
+- Type 'user@example.com' into the email field (hint: #email)
+- Type 'secret123' into the password field (hint: #password)
+- Click the sign-in button (hint: #btn-signin)
+```
+
+### 🔀 Conditional/Dynamic Inclusion
+
+You can combine includes with conditional branching to execute different fragments dynamically based on the state of the SUT:
+
+```yaml
+steps: |
+  OPEN ${include.test.url}
+  If the element (hint: #element) is visible, then _include: fragments/then_branch.steps else _include: fragments/else_branch.steps
+```
+
+### 🛡️ Circular Inclusion Guard
+
+To prevent accidental infinite recursion, the framework tracks the active include stack at runtime. If a file directly or transitively attempts to include itself (e.g., `loopA.steps` includes `loopB.steps` which includes `loopA.steps`), the execution immediately halts and throws a `DefinitiveAssertionError`:
+`Circular dynamic inclusion detected: fragments/loopA.steps -> fragments/loopB.steps -> fragments/loopA.steps`
+
+### 📋 Line Number & File Context Tracing
+
+When executing included steps, error reporting and step logs do not treat them as part of one massive flattened list. Instead, Neodymium AI preserves the trace context (`step.trace`):
+* Filenames and line numbers are tracked **per file**.
+* If a step inside `fragments/login.steps` fails, the error message reports the exact line number and filename of the step within that include fragment, making debugging extremely straightforward.
+
+---
+
 ## ✂️ Dynamic Multi-Action Step Splitting
 
 Multi-action or compound steps (e.g. "Click profile icon and then click Create Account in dropdown") are prone to failure if the second action relies on elements that are not yet visible or present in the current DOM state. 

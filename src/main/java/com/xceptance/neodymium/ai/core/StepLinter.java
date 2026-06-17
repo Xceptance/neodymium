@@ -74,7 +74,7 @@ public final class StepLinter
      * @param sourceFile  the path of the source file
      * @return a list of descriptive warning messages
      */
-    public static List<String> lint(final List<String> steps, final List<Integer> lineNumbers, final String sourceFile)
+    public static List<String> lint(final List<String> steps, final List<?> lineNumbers, final String sourceFile)
     {
         final List<String> warnings = new ArrayList<>();
         if (steps == null)
@@ -94,10 +94,18 @@ public final class StepLinter
             final int stepNumber = i + 1;
 
             final String stepLabel;
-            final Integer currentLineNumber = (lineNumbers != null && i < lineNumbers.size()) ? lineNumbers.get(i) : null;
+            final Object currentLineNumberObj = (lineNumbers != null && i < lineNumbers.size()) ? lineNumbers.get(i) : null;
+            final String currentLineNumber = currentLineNumberObj != null ? String.valueOf(currentLineNumberObj) : null;
             if (currentLineNumber != null)
             {
-                stepLabel = "Step " + stepNumber + " (line " + currentLineNumber + ")";
+                if (currentLineNumber.contains(":"))
+                {
+                    stepLabel = "Step " + stepNumber + " (" + currentLineNumber + ")";
+                }
+                else
+                {
+                    stepLabel = "Step " + stepNumber + " (line " + currentLineNumber + ")";
+                }
             }
             else
             {
