@@ -74,7 +74,7 @@
     },
     {
       "promptLine": "click the \u0027Create Account\u0027 button",
-      "reasoning": "Identified the \u0027Create Account\u0027 button by its unique ID \u0027#btn-submit-reg\u0027 and generated a CLICK action.",
+      "reasoning": "Found the \u0027Create Account\u0027 button by its ID and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
