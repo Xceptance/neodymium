@@ -26,7 +26,7 @@
           "type": "SCROLL",
           "target": "#newsletter-email-input",
           "description": "Scroll to the email input field in newsletter section",
-          "elementDetails": "email input field",
+          "elementDetails": "email input field in newsletter section",
           "elementContext": {},
           "replay": "",
           "adjust": false

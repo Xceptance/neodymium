@@ -20,11 +20,14 @@
     },
     {
       "promptLine": "Assert that the page title is visible (hint: #plp-page-title)",
-      "reasoning": "Asserted that the page title is visible using the provided hint.",
+      "reasoning": "Asserted that the page title is visible.",
       "actions": [
         {
           "type": "ASSERT",
           "target": "#plp-page-title",
+          "value": [
+            "visible"
+          ],
           "description": "Assert that the page title is visible",
           "elementDetails": "page title",
           "elementContext": {},

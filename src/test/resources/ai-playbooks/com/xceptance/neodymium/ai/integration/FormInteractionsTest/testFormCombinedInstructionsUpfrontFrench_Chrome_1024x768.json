@@ -47,7 +47,7 @@
     },
     {
       "promptLine": "entrer \u0027jane.smith@example.com\u0027 dans le champ \u0027Email Address\u0027",
-      "reasoning": "Identified the \u0027Email Address\u0027 input field by its aria-label and id, and generated a TYPE action to enter the specified email address.",
+      "reasoning": "Identified the \u0027Email Address\u0027 textbox by its ID \u0027reg-email\u0027 and generated a TYPE action to enter the specified email address.",
       "actions": [
         {
           "type": "TYPE",
@@ -55,7 +55,7 @@
           "value": [
             "jane.smith@example.com"
           ],
-          "description": "Type \u0027jane.smith@example.com\u0027 into the \u0027Email Address\u0027 field.",
+          "description": "Type \u0027jane.smith@example.com\u0027 into the \u0027Email Address\u0027 field",
           "elementDetails": "Email Address textbox",
           "elementContext": {
             "classes": "form-control",

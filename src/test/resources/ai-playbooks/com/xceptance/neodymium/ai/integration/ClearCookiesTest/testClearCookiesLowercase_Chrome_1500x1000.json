@@ -8,7 +8,6 @@
         {
           "type": "CLEAR_COOKIES",
           "description": "Clear browser cookies and local storage",
-          "elementDetails": "Clear cookies",
           "elementContext": {},
           "replay": "",
           "adjust": false

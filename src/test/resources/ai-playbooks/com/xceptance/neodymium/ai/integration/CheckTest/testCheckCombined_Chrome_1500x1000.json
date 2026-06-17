@@ -19,8 +19,8 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Click the checkbox \u0027Subscribe to newsletter\u0027 and toogle the radio button \u0027Phone\u0027",
-      "reasoning": "Identified the checkbox by its ID \u0027newsletter\u0027 and the radio button by its ID \u0027contact-phone\u0027. Used the CHECK action for both to ensure they are selected.",
+      "promptLine": "Click the checkbox \u0027Subscribe to newsletter\u0027",
+      "reasoning": "Identified the checkbox by its ID and aria-label and generated a CHECK action to click it.",
       "actions": [
         {
           "type": "CHECK",
@@ -33,7 +33,16 @@
           "elementContext": {},
           "replay": "",
           "adjust": false
-        },
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the checkbox \u0027Subscribe to newsletter\u0027 and toogle the radio button \u0027Phone\u0027",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "toogle the radio button \u0027Phone\u0027",
+      "reasoning": "Identified the radio button \u0027Phone\u0027 by its ID and aria-label in the AXTREE and generated a CHECK action to toggle it.",
+      "actions": [
         {
           "type": "CHECK",
           "target": "#contact-phone",
@@ -48,11 +57,12 @@
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the checkbox \u0027Subscribe to newsletter\u0027 and toogle the radio button \u0027Phone\u0027",
       "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Click the button \u0027Submit Preferences\u0027",
-      "reasoning": "Identified the button by its ID and generated a CLICK action.",
+      "reasoning": "Identified the button with id \u0027btn-submit\u0027 and aria-label \u0027Submit Preferences\u0027 and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",

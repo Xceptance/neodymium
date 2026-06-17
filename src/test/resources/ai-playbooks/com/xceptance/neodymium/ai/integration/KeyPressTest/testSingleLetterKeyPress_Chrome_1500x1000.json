@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the single character input field (hint: #char-input)",
-      "reasoning": "Clicked the single character input field.",
+      "reasoning": "Clicked the single character input field as instructed.",
       "actions": [
         {
           "type": "CLICK",
@@ -61,7 +61,7 @@
     },
     {
       "promptLine": "Type key \u0027b\u0027",
-      "reasoning": "The instruction is to type a key, so the KEY_PRESS action is used with \u0027b\u0027 as the value.",
+      "reasoning": "The instruction is to type a key. The KEY_PRESS action is used with \u0027b\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -80,14 +80,14 @@
     },
     {
       "promptLine": "Press \u0027c\u0027",
-      "reasoning": "The instruction is to press the \u0027c\u0027 key, which directly maps to the KEY_PRESS action with \u0027c\u0027 as the value.",
+      "reasoning": "The instruction is to press the \u0027c\u0027 key. The KEY_PRESS action is used for this purpose.",
       "actions": [
         {
           "type": "KEY_PRESS",
           "value": [
             "c"
           ],
-          "description": "Press the \u0027c\u0027 key",
+          "description": "Presses the \u0027c\u0027 key",
           "elementDetails": "Keyboard key \u0027c\u0027",
           "elementContext": {},
           "replay": "",

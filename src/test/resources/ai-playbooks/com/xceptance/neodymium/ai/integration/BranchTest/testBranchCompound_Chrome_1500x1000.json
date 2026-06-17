@@ -20,11 +20,11 @@
     },
     {
       "promptLine": "If the Accept Cookies button (hint: #btn-accept) is visible and contains the text \"Accept Cookies\" (hint: #btn-accept), then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
-      "reasoning": "Conditional action based on visibility and text content of the \u0027Accept Cookies\u0027 button.",
+      "reasoning": "Translated the conditional instruction into a BRANCH action with visibility and text assertions, and corresponding click actions.",
       "actions": [
         {
           "type": "BRANCH",
-          "description": "Conditional check for Accept Cookies button visibility and text, then click or click main action button",
+          "description": "Conditional action based on cookie button visibility and text",
           "elementContext": {},
           "replay": "",
           "condition": [
@@ -34,7 +34,7 @@
               "value": [
                 "visible"
               ],
-              "description": "Assert visibility of Accept Cookies button",
+              "description": "Check if Accept Cookies button is visible",
               "elementDetails": "Accept Cookies button",
               "elementContext": {},
               "replay": "",
@@ -46,7 +46,7 @@
               "value": [
                 "Accept Cookies"
               ],
-              "description": "Assert text content of Accept Cookies button",
+              "description": "Check if Accept Cookies button contains text \u0027Accept Cookies\u0027",
               "elementDetails": "Accept Cookies button",
               "elementContext": {},
               "replay": "",

@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the navigation container (hint: #nav-container)",
-      "reasoning": "Clicked the navigation container.",
+      "reasoning": "Clicked the navigation container as instructed.",
       "actions": [
         {
           "type": "CLICK",
@@ -41,7 +41,7 @@
     },
     {
       "promptLine": "Press ArrowDown",
-      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key. The KEY_PRESS action with \u0027ArrowDown\u0027 as the value is the appropriate action.",
+      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key. The KEY_PRESS action with \u0027ArrowDown\u0027 as the value is appropriate for this.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -60,7 +60,7 @@
     },
     {
       "promptLine": "Press ArrowDown",
-      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key. The KEY_PRESS action with \u0027ArrowDown\u0027 as the value is the appropriate action.",
+      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key. The KEY_PRESS action with \u0027ArrowDown\u0027 as the value is appropriate for this.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -79,7 +79,7 @@
     },
     {
       "promptLine": "Press ArrowUp",
-      "reasoning": "The instruction is to press the \u0027ArrowUp\u0027 key, which directly maps to a KEY_PRESS action with \u0027ArrowUp\u0027 as the value.",
+      "reasoning": "The instruction is to press the \u0027ArrowUp\u0027 key. The KEY_PRESS action with \u0027ArrowUp\u0027 as the value is the appropriate action.",
       "actions": [
         {
           "type": "KEY_PRESS",

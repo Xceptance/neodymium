@@ -1,5 +1,5 @@
 {
-  "id": "com.xceptance.neodymium.ai.integration.NoReplayTest :: testNoReplayBypassesPlaybookReplay :: Browser Chrome_1500x1000",
+  "id": "com.xceptance.neodymium.ai.integration.ClickTest :: testPress :: Browser Chrome_1500x1000",
   "steps": [
     {
       "promptLine": "OPEN http://localhost:43377/ClickActionTest/testClickStandardButton.html",
@@ -19,8 +19,8 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Click the \u0027Submit Order\u0027 button",
-      "reasoning": "Identified the \u0027Submit Order\u0027 button by its ID and aria-label in the AXTree and generated a CLICK action.",
+      "promptLine": "Press the \u0027Submit Order\u0027 link",
+      "reasoning": "The instruction requested to click a \u0027Submit Order\u0027 link. The accessibility tree shows a button with the aria-label \u0027Submit Order\u0027 and id \u0027btn-submit\u0027. I will click this button using its ID.",
       "actions": [
         {
           "type": "CLICK",
@@ -39,26 +39,6 @@
       ],
       "expectedFailure": false,
       "healedContextLevel": "AXTREE"
-    },
-    {
-      "promptLine": "Verify that the result contains \"Order Submitted!\"",
-      "reasoning": "The instruction is to verify that the result contains \u0027Order Submitted!\u0027. I found an element with id \u0027result\u0027 that contains this text, so I generated an ASSERT action targeting it.",
-      "actions": [
-        {
-          "type": "ASSERT",
-          "target": "#result",
-          "value": [
-            "Order Submitted!"
-          ],
-          "description": "Verify that the result contains \u0027Order Submitted!\u0027",
-          "elementDetails": "result",
-          "elementContext": {},
-          "replay": "",
-          "adjust": false
-        }
-      ],
-      "expectedFailure": false,
-      "healedContextLevel": "STANDARD"
     }
   ]
 }

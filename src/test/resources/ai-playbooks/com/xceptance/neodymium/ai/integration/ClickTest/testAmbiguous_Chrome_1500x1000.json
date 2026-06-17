@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "submit the order",
-      "reasoning": "The instruction is to \u0027submit the order\u0027. I found a button with the name \u0027Submit Order\u0027 and id \u0027btn-submit\u0027, which is the most appropriate element to click.",
+      "reasoning": "Identified the \u0027Submit Order\u0027 button by its ID and aria-label and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",

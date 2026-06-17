@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html",
-      "reasoning": "Navigating to the provided URL as instructed.",
+      "reasoning": "The instruction is to open a URL, so a NAVIGATE action is used with the provided URL.",
       "actions": [
         {
           "type": "NAVIGATE",
@@ -22,13 +22,13 @@
     },
     {
       "promptLine": "Hover over \u0027Products\u0027.",
-      "reasoning": "Found the \u0027Products\u0027 link in the accessibility tree and generated a HOVER action targeting it.",
+      "reasoning": "Identified the \u0027Products\u0027 link by its aria-label and data-neo-ref attribute in the AXTree and generated a HOVER action.",
       "actions": [
         {
           "type": "HOVER",
           "target": "[data-neo-ref\u003d\u0027xc_bubl4z\u0027]",
-          "description": "Hover over \u0027Products\u0027",
-          "elementDetails": "Products ▾ link",
+          "description": "Hover over the \u0027Products\u0027 link",
+          "elementDetails": "Products ▾",
           "elementContext": {
             "text": "Products ▾",
             "href": "https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html#",
@@ -43,7 +43,7 @@
     },
     {
       "promptLine": "Hover over \u0027Electronics\u0027.",
-      "reasoning": "Hovered over the \u0027Electronics\u0027 link using its data-neo-ref attribute.",
+      "reasoning": "Identified the \u0027Electronics\u0027 link by its data-neo-ref attribute and generated a HOVER action.",
       "actions": [
         {
           "type": "HOVER",
@@ -64,7 +64,7 @@
     },
     {
       "promptLine": "Click the \u0027Laptops\u0027 link.",
-      "reasoning": "The \u0027Laptops\u0027 link was identified by its unique ID and a CLICK action was generated.",
+      "reasoning": "Found a unique link with id \u0027link-laptops\u0027 and aria-label \u0027Laptops\u0027 and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",

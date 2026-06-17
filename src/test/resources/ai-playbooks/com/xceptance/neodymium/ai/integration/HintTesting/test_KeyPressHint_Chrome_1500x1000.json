@@ -28,7 +28,7 @@
           "value": [
             "bear"
           ],
-          "description": "Type \"bear\" into the search box.",
+          "description": "Type \"bear\" into the search box",
           "elementDetails": "search box",
           "elementContext": {
             "classes": "search-input",

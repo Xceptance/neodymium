@@ -50,7 +50,7 @@
     },
     {
       "promptLine": "forward",
-      "reasoning": "The instruction is to navigate forward, which directly maps to the FORWARD action type.",
+      "reasoning": "The user requested to navigate forward in the browser history, so a FORWARD action is generated.",
       "actions": [
         {
           "type": "FORWARD",

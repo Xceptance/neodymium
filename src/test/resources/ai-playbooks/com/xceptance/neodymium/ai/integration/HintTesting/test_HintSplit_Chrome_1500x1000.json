@@ -19,8 +19,8 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Type \"bear\" into search input (hint: #search-box) and click search button (hint: #search-button)",
-      "reasoning": "Typed \"bear\" into the search box and clicked the search button.",
+      "promptLine": "Type \"bear\" into search input (hint: #search-box)",
+      "reasoning": "Typed \"bear\" into the search input.",
       "actions": [
         {
           "type": "TYPE",
@@ -29,6 +29,7 @@
             "bear"
           ],
           "description": "Type \"bear\" into search input",
+          "elementDetails": "search input",
           "elementContext": {
             "classes": "search-input",
             "name": "searchText",
@@ -39,11 +40,21 @@
           },
           "replay": "",
           "adjust": false
-        },
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Type \"bear\" into search input (hint: #search-box) and click search button (hint: #search-button)",
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "click search button (hint: #search-button)",
+      "reasoning": "Clicked the search button.",
+      "actions": [
         {
           "type": "CLICK",
           "target": "#search-button",
           "description": "Click search button",
+          "elementDetails": "search button",
           "elementContext": {
             "classes": "btn-search",
             "text": "Search",
@@ -56,6 +67,7 @@
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "Type \"bear\" into search input (hint: #search-box) and click search button (hint: #search-button)",
       "healedContextLevel": "HINT"
     }
   ]

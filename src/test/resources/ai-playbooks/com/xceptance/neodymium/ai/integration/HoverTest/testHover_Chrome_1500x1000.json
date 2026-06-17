@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Hover over the button \u0027Hover Me\u0027",
-      "reasoning": "Hovering over the button identified by its ID \u0027#menu-btn\u0027 which has the accessible name \u0027Hover Me\u0027.",
+      "reasoning": "The instruction is to hover over the button \u0027Hover Me\u0027. I found a button with id \u0027menu-btn\u0027 and aria-label \u0027Hover Me\u0027 in the AXTree, which is a direct match. I am using the HOVER action targeting this button by its ID.",
       "actions": [
         {
           "type": "HOVER",
@@ -42,7 +42,7 @@
     },
     {
       "promptLine": "Click the \u0027Sub Item 1\u0027 link",
-      "reasoning": "Found and targeted the \u0027Sub Item 1\u0027 link using its ID.",
+      "reasoning": "The instruction is to click the \u0027Sub Item 1\u0027 link. An element with id \u0027menu-item-1\u0027 and aria-label \u0027Sub Item 1\u0027 was found in the Accessibility Tree, which directly matches the instruction. A CLICK action targeting this element has been generated.",
       "actions": [
         {
           "type": "CLICK",

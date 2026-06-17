@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Type \u0027Alice Cooper\u0027 into the \u0027Full Name\u0027 field.",
-      "reasoning": "Identified the \u0027Full Name\u0027 textbox by its ID \u0027reg-username\u0027 and generated a TYPE action to input the specified text.",
+      "reasoning": "Identified the \u0027Full Name\u0027 input field by its unique ID \u0027reg-username\u0027 and generated a TYPE action to enter the specified text.",
       "actions": [
         {
           "type": "TYPE",
@@ -46,7 +46,7 @@
     },
     {
       "promptLine": "Type \u0027alice@test.com\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Identified the \u0027Email Address\u0027 textbox by its ID and generated a TYPE action to input the specified text.",
+      "reasoning": "Identified the \u0027Email Address\u0027 input field by its ID \u0027reg-email\u0027 and generated a TYPE action to enter the specified text.",
       "actions": [
         {
           "type": "TYPE",
@@ -72,7 +72,7 @@
     },
     {
       "promptLine": "Click the \u0027Create Account\u0027 button.",
-      "reasoning": "Found the \u0027Create Account\u0027 button by its ID and generated a CLICK action.",
+      "reasoning": "Found the \u0027Create Account\u0027 button by its aria-label and id, and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",

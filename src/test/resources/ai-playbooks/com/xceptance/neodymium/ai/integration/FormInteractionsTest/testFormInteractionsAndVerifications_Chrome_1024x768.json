@@ -46,7 +46,7 @@
     },
     {
       "promptLine": "Type \u0027invalidemail\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Identified the \u0027Email Address\u0027 field by its unique ID \u0027reg-email\u0027 and aria-label, then generated a TYPE action to input the specified text.",
+      "reasoning": "Identified the \u0027Email Address\u0027 field by its unique ID \u0027reg-email\u0027 and generated a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
@@ -95,13 +95,13 @@
     },
     {
       "promptLine": "Verify that the email format invalid warning \u0027This email format is invalid.\u0027 is visible.",
-      "reasoning": "The instruction is to verify the visibility of the email format invalid warning. I found an element with id \u0027email-error\u0027 that contains the exact warning text \u0027⚠ This email format is invalid.\u0027. I will use an ASSERT action to check its visibility.",
+      "reasoning": "The instruction is to verify the visibility of the warning message \u0027This email format is invalid.\u0027. I found an element with id \u0027email-error\u0027 that contains this text and created an ASSERT action to check its visibility and text content.",
       "actions": [
         {
           "type": "ASSERT",
           "target": "#email-error",
           "value": [
-            "visible"
+            "This email format is invalid."
           ],
           "description": "Verify that the email format invalid warning \u0027This email format is invalid.\u0027 is visible.",
           "elementDetails": "email-error",

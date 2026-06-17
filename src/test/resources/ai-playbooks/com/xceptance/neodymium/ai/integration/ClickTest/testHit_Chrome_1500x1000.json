@@ -20,12 +20,12 @@
     },
     {
       "promptLine": "Hit \u0027Submit Order\u0027",
-      "reasoning": "The \u0027Submit Order\u0027 button was identified by its ID and a CLICK action was generated.",
+      "reasoning": "The instruction is to click the \u0027Submit Order\u0027 button. An element with id \u0027btn-submit\u0027 and aria-label \u0027Submit Order\u0027 was found in the accessibility tree, which directly matches the instruction. A CLICK action targeting this element has been generated.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#btn-submit",
-          "description": "Click \u0027Submit Order\u0027 button",
+          "description": "Click the \u0027Submit Order\u0027 button",
           "elementDetails": "Submit Order button",
           "elementContext": {
             "text": "Submit Order",

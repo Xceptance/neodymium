@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the search button (hint: )",
-      "reasoning": "Identified the search button by its unique ID \u0027#search-button\u0027 and generated a CLICK action.",
+      "reasoning": "Identified the search button by its ID and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",

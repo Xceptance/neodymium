@@ -46,13 +46,13 @@
     },
     {
       "promptLine": "Click the \u0027Close Banner\u0027 button (hint: #promo-close-btn)",
-      "reasoning": "Clicked the \u0027Close Banner\u0027 button.",
+      "reasoning": "Clicked the \u0027Close Banner\u0027 button as instructed.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#promo-close-btn",
-          "description": "Click \u0027Close Banner\u0027 button",
-          "elementDetails": "\u0027Close Banner\u0027 button",
+          "description": "Click the \u0027Close Banner\u0027 button",
+          "elementDetails": "Close Banner button",
           "elementContext": {
             "classes": "promo-close",
             "text": "Close Banner",
@@ -95,7 +95,7 @@
     },
     {
       "promptLine": "Click the \u0027Create Account\u0027 button.",
-      "reasoning": "Identified the \u0027Create Account\u0027 button by its unique ID and aria-label in the accessibility tree and generated a CLICK action.",
+      "reasoning": "Found a button with aria-label \u0027Create Account\u0027 and id \u0027btn-submit-reg\u0027. Using the ID as the target.",
       "actions": [
         {
           "type": "CLICK",

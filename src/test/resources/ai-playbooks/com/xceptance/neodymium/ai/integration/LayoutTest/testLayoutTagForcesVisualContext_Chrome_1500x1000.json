@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Verify that the main heading says \u0027Visual Integrity \u0026 Accessibility Auditing\u0027 (layout)",
-      "reasoning": "The instruction was to verify the main heading text. I located the h1 element using its selector and asserted that its text content matches \u0027Visual Integrity \u0026 Accessibility Auditing\u0027.",
+      "reasoning": "The instruction is to verify the text of the main heading. I identified the main heading using the \u0027h1\u0027 selector and created an ASSERT action to check its text content against the expected value \u0027Visual Integrity \u0026 Accessibility Auditing\u0027.",
       "actions": [
         {
           "type": "ASSERT",
@@ -29,7 +29,7 @@
             "Visual Integrity \u0026 Accessibility Auditing"
           ],
           "description": "Verify the main heading text",
-          "elementDetails": "Main heading \u0027Visual Integrity \u0026 Accessibility Auditing\u0027",
+          "elementDetails": "Visual Integrity \u0026 Accessibility Auditing",
           "elementContext": {},
           "replay": "",
           "adjust": false

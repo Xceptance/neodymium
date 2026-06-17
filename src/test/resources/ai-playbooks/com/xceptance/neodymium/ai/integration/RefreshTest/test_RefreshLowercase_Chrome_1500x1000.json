@@ -20,11 +20,12 @@
     },
     {
       "promptLine": "refresh",
-      "reasoning": "The instruction is to refresh the page, which directly maps to the REFRESH action.",
+      "reasoning": "The instruction is to refresh the page, so a REFRESH action is generated.",
       "actions": [
         {
           "type": "REFRESH",
           "description": "Refresh the current page",
+          "elementDetails": "Current page",
           "elementContext": {},
           "replay": "",
           "adjust": false

@@ -19,60 +19,50 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "If the Accept Cookies button is visible and contains the text \"Accept Cookies\", then click the Accept Cookies button, else click the Main Action Button",
-      "reasoning": "The instruction requires a conditional click. A BRANCH action is used to check if the \u0027#btn-accept\u0027 button contains the text \u0027Accept Cookies\u0027. If it does, it will be clicked. Otherwise, the \u0027#btn-main-action\u0027 button will be clicked.",
+      "promptLine": "click the Accept Cookies button",
+      "reasoning": "Identified the \u0027Accept\u0027 button by its ID and aria-label in the accessibility tree and generated a CLICK action.",
       "actions": [
         {
-          "type": "BRANCH",
-          "description": "Conditionally click \u0027Accept Cookies\u0027 or \u0027Main Action Button\u0027",
-          "elementContext": {},
+          "type": "CLICK",
+          "target": "#btn-accept",
+          "description": "Click the \u0027Accept\u0027 button to accept cookies",
+          "elementDetails": "Accept button",
+          "elementContext": {
+            "text": "Accept",
+            "id": "btn-accept",
+            "tagName": "button",
+            "type": "submit"
+          },
           "replay": "",
-          "condition": [
-            {
-              "type": "ASSERT",
-              "target": "#btn-accept",
-              "value": [
-                "Accept Cookies"
-              ],
-              "description": "Check if \u0027Accept Cookies\u0027 button is visible and contains the text \u0027Accept Cookies\u0027",
-              "elementDetails": "Accept button",
-              "elementContext": {},
-              "replay": "",
-              "adjust": false
-            }
-          ],
-          "then": [
-            {
-              "type": "CLICK",
-              "target": "#btn-accept",
-              "description": "Click the \u0027Accept Cookies\u0027 button",
-              "elementDetails": "Accept button",
-              "elementContext": {},
-              "replay": "",
-              "adjust": false
-            }
-          ],
-          "else": [
-            {
-              "type": "CLICK",
-              "target": "#btn-main-action",
-              "description": "Click the \u0027Main Action Button\u0027",
-              "elementDetails": "Main Action Button",
-              "elementContext": {
-                "text": "Main Action Button",
-                "id": "btn-main-action",
-                "tagName": "button",
-                "type": "submit"
-              },
-              "replay": "",
-              "adjust": false
-            }
-          ],
           "adjust": false
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "STANDARD"
+      "originalUnsplitInstruction": "If the Accept Cookies button is visible and contains the text \"Accept Cookies\", then click the Accept Cookies button, else click the Main Action Button",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "click the Main Action Button",
+      "reasoning": "Identified the \u0027Main Action Button\u0027 by its ID and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-main-action",
+          "description": "click the Main Action Button",
+          "elementDetails": "Main Action Button",
+          "elementContext": {
+            "text": "Main Action Button",
+            "id": "btn-main-action",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "If the Accept Cookies button is visible and contains the text \"Accept Cookies\", then click the Accept Cookies button, else click the Main Action Button",
+      "healedContextLevel": "AXTREE"
     }
   ]
 }

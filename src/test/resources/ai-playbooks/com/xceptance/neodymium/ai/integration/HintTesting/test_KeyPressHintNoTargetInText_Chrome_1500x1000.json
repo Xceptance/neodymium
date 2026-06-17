@@ -28,7 +28,7 @@
           "value": [
             "bear"
           ],
-          "description": "Type \"bear\" into the search box.",
+          "description": "Type \"bear\" into the search box",
           "elementDetails": "search box",
           "elementContext": {
             "classes": "search-input",
@@ -55,8 +55,8 @@
           "value": [
             "Enter"
           ],
-          "description": "Press the ENTER key on the search box.",
-          "elementDetails": "search-box",
+          "description": "Press the ENTER key",
+          "elementDetails": "#search-box",
           "elementContext": {},
           "replay": "",
           "adjust": false

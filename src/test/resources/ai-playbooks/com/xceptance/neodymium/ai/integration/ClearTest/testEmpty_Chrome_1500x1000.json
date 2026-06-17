@@ -45,13 +45,13 @@
     },
     {
       "promptLine": "Empty the \u0027First Name:\u0027 field",
-      "reasoning": "Identified the \u0027First Name:\u0027 field by its ID and generated a CLEAR action to empty it.",
+      "reasoning": "Identified the \u0027First Name:\u0027 textbox by its ID and generated a CLEAR action to empty it.",
       "actions": [
         {
           "type": "CLEAR",
           "target": "#first-name",
           "description": "Empty the \u0027First Name:\u0027 field",
-          "elementDetails": "First Name: field",
+          "elementDetails": "First Name: textbox",
           "elementContext": {
             "id": "first-name",
             "placeholder": "Enter first name",
