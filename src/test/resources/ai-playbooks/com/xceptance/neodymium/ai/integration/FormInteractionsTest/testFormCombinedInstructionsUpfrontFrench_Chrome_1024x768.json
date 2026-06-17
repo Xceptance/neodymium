@@ -1,0 +1,100 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.FormInteractionsTest :: testFormCombinedInstructionsUpfrontFrench :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop/forms.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop/forms.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop/forms.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Saisir \u0027Jane Smith\u0027 dans le champ \u0027Full Name\u0027",
+      "reasoning": "Identified the input field by its \u0027id\u0027 attribute \u0027reg-username\u0027 which corresponds to the \u0027Full Name\u0027 label in the accessibility tree and generated a TYPE action.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#reg-username",
+          "value": [
+            "Jane Smith"
+          ],
+          "description": "Saisir \u0027Jane Smith\u0027 dans le champ \u0027Full Name\u0027",
+          "elementDetails": "Full Name textbox",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-username",
+            "placeholder": "Enter your full name",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Saisir \u0027Jane Smith\u0027 dans le champ \u0027Full Name\u0027, entrer \u0027jane.smith@example.com\u0027 dans le champ \u0027Email Address\u0027, puis cliquer sur le bouton \u0027Create Account\u0027",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "entrer \u0027jane.smith@example.com\u0027 dans le champ \u0027Email Address\u0027",
+      "reasoning": "Identified the \u0027Email Address\u0027 textbox by its ID \u0027reg-email\u0027 and generated a TYPE action to enter the specified email address.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#reg-email",
+          "value": [
+            "jane.smith@example.com"
+          ],
+          "description": "Type \u0027jane.smith@example.com\u0027 into the \u0027Email Address\u0027 field",
+          "elementDetails": "Email Address textbox",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-email",
+            "placeholder": "name@domain.com",
+            "tagName": "input",
+            "type": "email"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Saisir \u0027Jane Smith\u0027 dans le champ \u0027Full Name\u0027, entrer \u0027jane.smith@example.com\u0027 dans le champ \u0027Email Address\u0027, puis cliquer sur le bouton \u0027Create Account\u0027",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "cliquer sur le bouton \u0027Create Account\u0027",
+      "reasoning": "Identified the button with aria-label \u0027Create Account\u0027 and generated a CLICK action using its ID.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit-reg",
+          "description": "Click on the \u0027Create Account\u0027 button",
+          "elementDetails": "Create Account button",
+          "elementContext": {
+            "classes": "btn-primary",
+            "text": "Create Account",
+            "id": "btn-submit-reg",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Saisir \u0027Jane Smith\u0027 dans le champ \u0027Full Name\u0027, entrer \u0027jane.smith@example.com\u0027 dans le champ \u0027Email Address\u0027, puis cliquer sur le bouton \u0027Create Account\u0027",
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

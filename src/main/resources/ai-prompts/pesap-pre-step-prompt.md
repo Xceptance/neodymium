@@ -27,7 +27,6 @@ Return ONLY minified JSON:
        * "The error text 'Invalid email' appears below the input"
 2. Analyze the `[CURRENT]` step exclusively. `[PREVIOUS]`/`[NEXT]` are for context only.
 3. Set "jm" to true ONLY if a custom Java method name (e.g., assertCalculation, validateShippingCost, runPriceCheck) is explicitly identified in the step. Do NOT set to true for natural language descriptions like "verify the calculation" or "check the total".
-4. Step Splitting: If the step is compound/multi-stage and the second action depends on page state changes (e.g., "click menu then click Sign out"), split into simple, individual steps in "sp" (one step per page state change).
-   - Do NOT split if actions target the same page state without navigation or DOM mutation between them (e.g., filling out multiple fields in the same form).
+4. Step Splitting: If the step is compound/multi-stage (i.e., contains multiple actions, regardless of the language of the step or conjunctions/punctuation used to join them), split it into simple, individual steps in "sp" (one step per action). This allows the execution engine to run, retry, and heal each action independently.
    - If no split is needed, omit "sp".
 

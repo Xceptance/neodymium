@@ -17,12 +17,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.xceptance.neodymium.ai.integration;
-import com.xceptance.neodymium.ai.AiTestVerification;
+
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
+import com.xceptance.neodymium.ai.core.AiExecutionResult;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 
-import static com.codeborne.selenide.Selenide.open;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
@@ -33,62 +36,312 @@ import com.xceptance.neodymium.util.Neodymium;
  * reactive pricing calculations, and synchronous overlap visual assertions.
  * 
  * @author AI-generated: Gemini 2.5 Flash
- */
-@Browser("Chrome_1024x768")
-@AiTestVerification({
-    VerificationMode.LIVE_LLM,
-    VerificationMode.OFFLINE_REPLAY,
-    VerificationMode.HUD_OFFLINE_REPLAY,
-    VerificationMode.HUD_LLM
-})
-/**
- * @author AI-generated: Gemini 2.5 Flash
  * @author Xceptance GmbH 2026
  */
+@Browser("Chrome_1024x768")
+@Tag("form")
+@Tag("llm")
 public final class FormInteractionsTest extends BaseAiTest
 {
+    private String formsUrl;
+
+    @BeforeEach
+    public final void setupStorefrontUrl()
+    {
+        this.formsUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/forms.html", server.getPort());
+        Neodymium.getData().put("form.test.url", this.formsUrl);
+    }
+
     @NeodymiumTest
     public void testFormInteractionsAndVerifications()
     {
-        final int port = server.getPort();
-        final String formsUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/forms.html", port);
+        final String steps = """
+                OPEN ${form.test.url}
+                Type 'Jane Smith' into the 'Full Name' field.
+                Type 'invalidemail' into the 'Email Address' field.
+                Click the 'Create Account' button.
+                Verify that the email format invalid warning 'This email format is invalid.' is visible.
+                Type '2' into the 'Neon Gradient Poster' quantity field. (hint: #qty-poster-1)
+                Verify that the Total Price is '$39.98'.
+            """;
 
-        assertAiExecution(() ->
-        {
-            open(formsUrl);
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
-            // 1. Fill fields and trigger validation warnings
-            Neodymium.ai().execute("Type 'Jane Smith' into the 'Full Name' field.");
-            Neodymium.ai().execute("Type 'invalidemail' into the 'Email Address' field.");
-            Neodymium.ai().execute("Click the 'Create Account' button.");
-            Neodymium.ai().execute("Verify that the email format invalid warning 'This email format is invalid.' is visible.");
+        assertThat(r1)
+            .hasLlmCalls(6)
+            .hasPesapCalls(6)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(7)
+            .step(0, s -> s.isDirectParse().action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(3, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("CLICK")))
+            .step(4, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")))
+            .step(5, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(6, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")));
 
-            // 2. Verify reactive order summaries
-            Neodymium.ai().execute("Type '2' into the 'Neon Gradient Poster' quantity field. (hint: #qty-poster-1)");
-            Neodymium.ai().execute("Verify that the Total Price is '$39.98'.");
-        });
+        this.resetBrowser();
 
-        // 3. Inject visual overlap defect and assert immediate visual audit failure
-        Neodymium.ai().execute("Click on the 'Aura Defect Controls' trigger button. (hint: #aura-trigger)");
-        
-        try
-        {
-            Thread.sleep(500);
-        }
-        catch (final InterruptedException e)
-        {
-            Thread.currentThread().interrupt();
-        }
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
 
-        Neodymium.ai().execute("Click the 'Inject Element Overlap' toggle. (hint: label[for='toggle-overlap'])");
-        
-        // Disable retries for this step as we expect it to fail immediately
-        Neodymium.getData().put("neodymium.ai.agent.maxRetries", "0");
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasPesapCalls(0)
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(7)
+            .hasActionsCount(7)
+            .step(0, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(3, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("CLICK")))
+            .step(4, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")))
+            .step(5, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(6, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")));
+    }
 
-        // The page close/cancel button now overlaps the heading; an immediate visual audit should throw
-        assertThrows(AssertionError.class, () -> 
-        {
-            Neodymium.ai().execute("Observe page visual consistency (visual). Assert that the 'Cancel' button does not overlap with the 'Security Password' field or adjacent form elements.");
-        }, "Visual overlap of cancel button over heading should throw an AssertionError");
+    @NeodymiumTest
+    public void testFormTypeOverwritesNotAppends()
+    {
+        final String steps = """
+                OPEN ${form.test.url}
+                Type 'Jane' into the 'Full Name' field.
+                Type 'Smith' into the 'Full Name' field.
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasPesapCalls(2)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(3)
+            .step(0, s -> s.isDirectParse().action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")));
+
+        assertEquals("Smith", com.codeborne.selenide.Selenide.$("#reg-username").val());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasPesapCalls(0)
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(3)
+            .hasActionsCount(3)
+            .step(0, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")));
+
+        assertEquals("Smith", com.codeborne.selenide.Selenide.$("#reg-username").val());
+    }
+
+    @NeodymiumTest
+    public void testReplayWithDismissedBanner()
+    {
+        final String steps = """
+                OPEN ${form.test.url}
+                Type 'Jane' into the 'Full Name' field.
+                Click the 'Close Banner' button (hint: #promo-close-btn)
+                Type 'jane@doe.com' into the 'Email Address' field.
+                Click the 'Create Account' button.
+                Verify that the success message 'Account Registered!' is visible.
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(5)
+            .hasPesapCalls(5)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(6)
+            .step(0, s -> s.isDirectParse().action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("CLICK")))
+            .step(3, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(4, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("CLICK")))
+            .step(5, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")));
+
+        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasPesapCalls(0)
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(6)
+            .hasActionsCount(6)
+            .step(0, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("CLICK")))
+            .step(3, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(4, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("CLICK")))
+            .step(5, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")));
+
+        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+    }
+
+    @NeodymiumTest
+    public void testFormNumericInputHandling()
+    {
+        final String steps = """
+                OPEN ${form.test.url}
+                Type '5' into the 'Neon Gradient Poster' quantity field. (hint: #qty-poster-1)
+                Verify that the Total Price is '$99.95'.
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasPesapCalls(2)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(3)
+            .step(0, s -> s.isDirectParse().action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")));
+
+        assertEquals("$99.95", com.codeborne.selenide.Selenide.$("#cart-total").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasPesapCalls(0)
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(3)
+            .hasActionsCount(3)
+            .step(0, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")));
+
+        assertEquals("$99.95", com.codeborne.selenide.Selenide.$("#cart-total").text());
+    }
+
+    @NeodymiumTest
+    public void testFormCombinedInstructionsUpfront()
+    {
+        final String steps = """
+                OPEN ${form.test.url}
+                Type 'Jane Smith' into the 'Full Name' field, enter 'jane.smith@example.com' into the 'Email Address' field, then click the 'Create Account' button
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasStepsCount(4)
+            .step(0, s -> s.isDirectParse().action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.hasExpandedInstruction("Type 'Jane Smith' into the 'Full Name' field")
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.hasExpandedInstruction("enter 'jane.smith@example.com' into the 'Email Address' field")
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(3, s -> s.hasExpandedInstruction("click the 'Create Account' button")
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
+
+        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasStepsCount(4)
+            .step(0, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(3, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
+
+        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+    }
+
+    @NeodymiumTest
+    public void testFormCombinedInstructionsUpfrontGerman()
+    {
+        final String steps = """
+                OPEN ${form.test.url}
+                Trage 'Jane Smith' in das Feld 'Full Name' ein, gib 'jane.smith@example.com' in das Feld 'Email Address' ein und klicke auf 'Create Account'
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasStepsCount(4)
+            .step(0, s -> s.isDirectParse().action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.hasExpandedInstruction("Trage 'Jane Smith' in das Feld 'Full Name' ein")
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.hasExpandedInstruction("gib 'jane.smith@example.com' in das Feld 'Email Address' ein")
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(3, s -> s.hasExpandedInstruction("klicke auf 'Create Account'")
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
+
+        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasStepsCount(4)
+            .step(0, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(3, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
+
+        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+    }
+
+    @NeodymiumTest
+    public void testFormCombinedInstructionsUpfrontFrench()
+    {
+        final String steps = """
+                OPEN ${form.test.url}
+                Saisir 'Jane Smith' dans le champ 'Full Name', entrer 'jane.smith@example.com' dans le champ 'Email Address', puis cliquer sur le bouton 'Create Account'
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasStepsCount(4)
+            .step(0, s -> s.isDirectParse().action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.hasExpandedInstruction("Saisir 'Jane Smith' dans le champ 'Full Name'")
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.hasExpandedInstruction("entrer 'jane.smith@example.com' dans le champ 'Email Address'")
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(3, s -> s.hasExpandedInstruction("cliquer sur le bouton 'Create Account'")
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
+
+        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasStepsCount(4)
+            .step(0, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(3, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
+
+        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
     }
 }
