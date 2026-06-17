@@ -28,6 +28,7 @@ import com.xceptance.neodymium.ai.action.Action;
  * and facilitate test recording and replay modes.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class Playbook
 {

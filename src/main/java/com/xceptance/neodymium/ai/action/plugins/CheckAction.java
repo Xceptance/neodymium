@@ -28,6 +28,7 @@ import com.xceptance.neodymium.ai.action.AiActionPlugin;
  * AI action plugin to check/select checkboxes and radio buttons.
  * 
  * @author AI-generated: Gemini 2.5 Flash (Gemini 3.5 Flash)
+ * @author Xceptance GmbH 2026
  */
 public class CheckAction implements AiActionPlugin
 {
@@ -52,7 +53,7 @@ public class CheckAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "CHECK: Check if an element contains expected text or is in an expected state.";
+        return "CHECK: Check or uncheck a checkbox or radio button (requires tg).";
     }
 
     @Override

@@ -34,7 +34,8 @@ import com.xceptance.neodymium.ai.core.PageAnalyzer;
  * It also records every context level and screenshot title requested by the AI agent to facilitate assertions 
  * on the agent's prompt context escalations (e.g. AXTREE vs LEAN vs VISUAL).
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class MockPageAnalyzer extends PageAnalyzer
 {

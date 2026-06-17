@@ -16,24 +16,18 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Assertions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
-import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.ai.core.ContextLevel;
-import com.xceptance.neodymium.ai.testing.LlmAssert;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
@@ -41,6 +35,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * A freeform test case migrated to neodymium-library to test storefront functionalities
  * like searching, product details, and image content validation.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -68,10 +65,11 @@ public class NavigateTest extends BaseAiTest
     @NeodymiumTest
     public final void test_Open()
     {
-        final AiExecutionResult r1 = runAi("Open ${posters.storefront.url}", VerificationMode.LIVE_LLM);
+        final AiExecutionResult r1 = runAi("OPEN ${posters.storefront.url}", VerificationMode.LIVE_LLM);
         
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasDirectParses(1)
             .hasNoEscalations()
             .hasActionsCount(1)
@@ -83,10 +81,11 @@ public class NavigateTest extends BaseAiTest
         // close it and start replay
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi("Open ${posters.storefront.url}", VerificationMode.REPLAY);
+        final AiExecutionResult r2 = runAi("OPEN ${posters.storefront.url}", VerificationMode.REPLAY);
         
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasDirectParses(0)
             .hasNoEscalations()
             .hasActionsCount(1)
@@ -105,10 +104,11 @@ public class NavigateTest extends BaseAiTest
     @NeodymiumTest
     public final void test_OpenWithPlaybookChange()
     {
-        final AiExecutionResult r1 = runAi("Open ${posters.storefront.url}", VerificationMode.LIVE_LLM);
+        final AiExecutionResult r1 = runAi("OPEN ${posters.storefront.url}", VerificationMode.LIVE_LLM);
         
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -124,6 +124,7 @@ public class NavigateTest extends BaseAiTest
         
         assertThat(r2)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(0)
@@ -147,6 +148,7 @@ public class NavigateTest extends BaseAiTest
         
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasActionsCount(1)
             .hasDirectParses(0)
@@ -169,6 +171,7 @@ public class NavigateTest extends BaseAiTest
         
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasContextLevel(ContextLevel.AXTREE)
             .hasNoEscalations()
             .hasActionsCount(1)
@@ -177,6 +180,4 @@ public class NavigateTest extends BaseAiTest
         // we are now in posters
         assertEquals("Posters Art Store", Selenide.title());
     }
-
 }
-

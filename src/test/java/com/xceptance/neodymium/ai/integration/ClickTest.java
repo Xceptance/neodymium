@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -25,13 +24,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
-import com.xceptance.neodymium.ai.core.StepDetails;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
@@ -39,6 +35,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Integration test verifying AI click commands and their validation flow
  * in both live LLM and replay modes.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -57,16 +56,60 @@ public class ClickTest extends BaseAiTest
     }
 
     /**
-     * Test button clicking with step-by-step verification of status.
+     * Test click
      */
     @NeodymiumTest
     public final void testClick()
     {
-        final String steps = """
-                Open ${click.test.url}
+        testWith("""
+                OPEN ${click.test.url}
                 Click the 'Submit Order' button (hint: #btn-submit)
-            """;
+            """);
+    }
 
+    /**
+     * Test press
+     */
+    @NeodymiumTest
+    public final void testPress()
+    {
+        testWith("""
+                OPEN ${click.test.url}
+                Press the 'Submit Order' link
+            """);
+    }
+
+    /**
+     * Test hit
+     */
+    @NeodymiumTest
+    public final void testHit()
+    {
+        testWith("""
+                OPEN ${click.test.url}
+                Hit 'Submit Order'
+            """);
+    }
+
+    /**
+     * Rather ambiguous command
+     */
+    @NeodymiumTest
+    public final void testAmbiguous()
+    {
+        testWith("""
+                OPEN ${click.test.url}
+                submit the order
+            """);
+    }
+
+    /**
+     * Just to test different styles easily
+     * 
+     * @param steps the steps to run
+     */
+    private void testWith(final String steps)
+    {
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
@@ -74,17 +117,9 @@ public class ClickTest extends BaseAiTest
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
-            .hasActionsCount(2);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertFalse(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertEquals(1, stepDetails1.getLlmCalls().size());
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1));
 
         assertEquals("Order Submitted!", Selenide.$("#result").text());
 
@@ -95,20 +130,13 @@ public class ClickTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
-            .hasActionsCount(2);
-
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep1 = r2.getSteps().get(1);
-        assertFalse(replayStep1.isDirectParse());
-        assertTrue(replayStep1.isReplayed());
-        assertTrue(replayStep1.getLlmCalls().isEmpty());
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
 
         assertEquals("Order Submitted!", Selenide.$("#result").text());
     }

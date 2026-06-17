@@ -16,13 +16,13 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
@@ -36,6 +36,9 @@ import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Integration test class testing visual features of the AI browser.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("sandbox")
@@ -50,7 +53,6 @@ public class VisualInteractionsTest extends BaseAiTest
     @BeforeEach
     public final void setupSandboxUrls()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
         final int httpPort = server.getPort();
         this.baseHttpsUrl = String.format("https://localhost:%d/AuraGlanceTest/shop/sandbox", server.getHttpsPort());
         final String baseHttpUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox", httpPort);
@@ -73,6 +75,7 @@ public class VisualInteractionsTest extends BaseAiTest
                 """, pageUrl), VerificationMode.LIVE_LLM);
 
         assertTrue(result.isSuccess());
+        assertThat(result).hasNoPesapCalls();
         Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
     }
 
@@ -89,6 +92,7 @@ public class VisualInteractionsTest extends BaseAiTest
                 """, pageUrl), VerificationMode.LIVE_LLM);
 
         assertTrue(result.isSuccess());
+        assertThat(result).hasNoPesapCalls();
         Selenide.$("#canvas-status").shouldHave(Condition.text("Red Canvas Clicked"));
     }
 
@@ -106,6 +110,7 @@ public class VisualInteractionsTest extends BaseAiTest
                 """, pageUrl), VerificationMode.LIVE_LLM);
 
         assertTrue(result.isSuccess());
+        assertThat(result).hasNoPesapCalls();
         Selenide.$("#label-status").shouldHave(Condition.text("Floating label transition fixed!"));
     }
 }

@@ -35,13 +35,35 @@ public class WaitAction implements AiActionPlugin {
     public String getActionName() { return "WAIT"; }
 
     @Override
-    public List<Action> parseDirectInstruction(String instruction) { return null; }
+    public List<Action> parseDirectInstruction(final String instruction)
+    {
+        final String normalized = instruction.replaceAll("\\s+", " ").trim();
+        final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+            "^WAIT\\s+(?<value>\\d+(?:\\.\\d+)?)(?<unit>s|ms)?$").matcher(normalized);
+        if (matcher.matches())
+        {
+            final String valStr = matcher.group("value");
+            final String unit = matcher.group("unit");
+            final int ms;
+            if (unit != null && unit.equalsIgnoreCase("s"))
+            {
+                final double seconds = Double.parseDouble(valStr);
+                ms = (int) (seconds * 1000.0);
+            }
+            else
+            {
+                ms = (int) Double.parseDouble(valStr);
+            }
+            return List.of(new Action("WAIT", null, String.valueOf(ms), "Wait for " + ms + " ms"));
+        }
+        return null;
+    }
 
     @Override
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "WAIT: wait for a specified duration or condition (requires value in ms)."; }
+    public String getPromptInstructions() { return "WAIT: wait for a specified duration or condition (requires v in ms)."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

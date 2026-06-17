@@ -62,7 +62,7 @@ Sending an entire HTML page to an LLM on every step consumes vast amounts of pro
 
 #### 4. Perceptual Visual Caching (dHash & Hamming Distance)
 Traditional visual validation frameworks either perform pixel-by-pixel comparisons or require expensive cloud visual testing platform integrations.
-* **Neodymium's Edge:** Visual steps are cached locally using **perceptual hashing (dHash)**. On replay, the live screen's dHash is compared locally using **Hamming distance**. This bypasses all DOM parsing and LLM visual queries entirely, executing visual assertions locally in microseconds.
+* **Neodymium's Edge:** Visual steps are cached locally using **perceptual hashing (dHash)**. On replay, the live screen's dHash is compared locally using **Hamming distance**. This bypasses all DOM parsing and LLM visual queries entirely, executing visual assertions locally in microseconds. **This visual caching also extends to failure states**: when a visual step fails during creation/recording, its defective screenshot dHash and the thrown exception are cached in the playbook. Subsequent replays check the current SUT dHash against the cached failure hash, immediately throwing the cached failure offline if the defect is still present, saving API token overhead.
 *(See [Perceptual Visual Replay Caching](#-perceptual-visual-replay-caching-dhash--hamming-distance) for more details and code examples.)*
 
 #### 5. Known Defect Management via Expected Failures
@@ -192,7 +192,7 @@ To handle this, the `STORE` action accepts an optional parameter: `"adjust": tru
   * **Classification**: It identifies if the text is a number or a price (it must contain digits, may contain standard separators, signs, or currency symbols, and at most one short letter sequence ≤ 3 characters like `USD` or `kr`). 
   * **Exclusions**: Standard text or alphanumeric IDs (such as order numbers like `ORD-12345678`, test labels like `TC-001`, or descriptors like `Page 1 of 5`) are left completely untouched.
   * **US Decimal Conversion**: Valid numbers and prices are normalized into clean, standardized US decimals (e.g., `14,96 €` and `$15.00` are both normalized and stored as `"14.96"` and `"15.00"`).
-* **Downstream Integration**: Once adjusted/normalized, these variables can be cleanly used in standard mathematical calculations (e.g., via `verifyCalculation`) or in the new numeric comparison assertions without formatting mismatches.
+* **Downstream Integration**: Once adjusted/normalized, these variables can be cleanly used in standard mathematical calculations (e.g., via `assertCalculation`) or in the new numeric comparison assertions without formatting mismatches.
 
 ---
 
@@ -212,6 +212,22 @@ The Playbook records the entire logical structure (the condition actions, the th
 Because the LLM pre-compiles this logic during the initial generation phase, the conditionals run dynamically and deterministically during offline CI/CD replays. The `AiAgent` will test the condition natively against the live DOM and route the execution path **without** needing to contact the LLM again!
 
 > **Best Practice:** While branching is fully supported, simple, deterministic data-driven tests are generally preferred over massive "choose your own adventure" scripts. Keep conditionals focused on dismissing dynamic UI elements (like banners or modals).
+
+## ✂️ Dynamic Multi-Action Step Splitting
+
+Multi-action or compound steps (e.g. "Click profile icon and then click Create Account in dropdown") are prone to failure if the second action relies on elements that are not yet visible or present in the current DOM state. 
+
+To solve this, Neodymium AI implements a **dual-layer splitting strategy** to break compound steps into sequential simple steps:
+
+1. **Upfront Splitting (Unified JIT PESAP Call)**: Before capturing the DOM or executing the step, the JIT PESAP static analysis checks the step text. If it is compound, it returns the split parts. The engine replaces the current step in the execution list and inserts the remaining parts as subsequent steps. This saves massive token overhead by avoiding DOM captures for compound steps.
+2. **Runtime Fallback Splitting**: If PESAP is disabled or misses a compound step, the main LLM can emit a `SPLIT` action during execution. This executes any preceding actions, updates the current step, and inserts the remaining instruction text (returned in the `value` field) as a new step in the execution list and playbook.
+
+### Line Number Preservation and Failure Reporting
+All split steps inherit the original instruction's line number, ensuring failure traces accurately map back to the source test file. If a dynamically split virtual step fails, the failure message will explicitly note the relationship, e.g.:
+`Instruction 'Click Create Account' (virtual step split from: 'Click profile icon and then click Create Account in dropdown') failed at line 12 in ...`
+
+### Offline Replay Integration
+During replay, the engine runs an alignment pass (`alignStepsWithPlaybookForReplay`) that pre-splits Java-defined instructions to match the cached split steps in the playbook. This ensures that the cached actions are replayed offline without re-triggering the LLM or falling out of replay mode.
 
 ---
 
@@ -243,15 +259,27 @@ Neodymium ships with a default utility class, `com.xceptance.neodymium.ai.util.A
 | `assertNumberGreaterThanOrEqual(String)` | Asserts that the first number/price is greater than or equal to the second |
 | `assertNumberLessThan(String)` | Asserts that the first number/price is strictly less than the second |
 | `assertNumberLessThanOrEqual(String)` | Asserts that the first number/price is less than or equal to the second |
-| `assertNumberEqual(String)` | Asserts that the first number/price is equal to the second |
-| `verifyCalculation(String)` | Securely validates mathematical equations (e.g. `0,90 € = (14,96 € + 0,00 €) * 6,00%`) programmatically via JDK JShell (locale-agnostic) |
+| `assertNumbersEqual(String)` | Asserts that the first number/price is equal to the second |
+| `assertCalculation(String)` | Securely validates mathematical equations (e.g. `0,90 € = (14,96 € + 0,00 €) * 6,00%`) programmatically via JDK JShell (locale-agnostic) |
 
 These methods are automatically available to the AI in every test class.
+
+### Built-in Utility Methods (Non-Assertion)
+
+In addition to assertion methods, `com.xceptance.neodymium.ai.util.AiAssertions` provides public utility methods for locale-aware numeric parsing, format classification, and normalization. These are useful in custom assertions or for direct invocation:
+
+| Method | Description |
+|--------|-------------|
+| `parseLocalizedBigDecimal(String)` | Parses a localized price or number string into a `BigDecimal` using the current Neodymium locale (e.g., `14,96 €` under `de-DE` parses to `14.96`). |
+| `detectDisplayPrecision(String)` | Returns the display precision (decimal places) of a numeric/price string (e.g., `$0.90` returns `2`). |
+| `isNumericOrPrice(String)` | Classifies whether a text sequence qualifies as a numeric value or price (returns `true` for `zł 150` or `1.234,56`, `false` for `ORD-123`). |
+| `normalizeNumericOrPrice(String)` | Normalizes a localized numeric/price string into a standard US decimal string (e.g., `14,96 €` is normalized to `14.96`). Non-numeric strings are returned unchanged. |
+
 
 > [!NOTE]
 > **Exact Precision via `BigDecimal`**:
 > Under the hood, all numeric assertions use `BigDecimal` for exact mathematical comparisons, avoiding floating-point binary representation errors (e.g. `0.90 - 0.88` yielding `0.020000000000000018`).
-> For mathematical equations, `verifyCalculation` evaluates the right-hand side using JDK JShell, parses the result to `BigDecimal`, scales/rounds it to the left-hand side's detected display precision using `RoundingMode.HALF_UP`, and asserts that the absolute difference does not exceed the allowed tolerance of `0.02`.
+> For mathematical equations, `assertCalculation` evaluates the right-hand side using JDK JShell, parses the result to `BigDecimal`, scales/rounds it to the left-hand side's detected display precision using `RoundingMode.HALF_UP`, and asserts that the absolute difference does not exceed the allowed tolerance of `0.02`.
 
 ### Extending with Custom Utility Classes
 
@@ -386,7 +414,7 @@ To test, debug, and verify complex edge cases in visual parsing, action timing, 
 6. **`hover-chain.html` (Hover Dropdown Chains):** Tests chaining sequential parent hover actions prior to clicking nested children styled with CSS hover rules.
 7. **`table-sorting.html` (AJAX Sorting Settling):** Tests waiting for DOM settling (400ms spinner delay) after clicking table header sorting buttons before running assertions.
 8. **`scroll-list.html` (Scroll Overflow List):** Tests scroll-into-view viewport scrolling on elements hidden at the bottom of overflowing list containers.
-9. **`floating-labels.html` (Floating Label Overlaps):** Tests visual text overlap bug detection (e.g., labels and input text layering directly on top of each other due to programmatic autofill) using the Visual Auditor (`(glance)`).
+9. **`floating-labels.html` (Floating Label Overlaps):** Tests visual text overlap bug detection (e.g., labels and input text layering directly on top of each other due to programmatic autofill) using the Visual Auditor (`(visual)`).
 10. **`cross-origin-iframe.html` (Cross-Origin iFrames):** Tests switching WebDriver window context into an iframe hosted on a different HTTP port (origin) under parent HTTPS.
 11. **`mock-oauth-login.html` (Mock OAuth Redirects):** Tests cross-domain redirect authentication flows, code extraction from query parameters, and redirect window handles.
 
@@ -438,13 +466,11 @@ During step execution, the logs will verify the starting context being optimized
 ---
 
 #### ⚙️ Configuration Properties
-You can fully configure or granularly disable the Pre-Execution Static Analysis Phase (PESAP) and its sub-phases via your `neodymium.properties`, `ai.properties`, or system properties.
+You can configure or disable the PESAP semantic linter via your `neodymium.properties`, `ai.properties`, or system properties. PESAP classification (context level prediction and step splitting) is always active during playbook recording and cannot be disabled.
 
 | Property | Default Value | Description |
 | :--- | :--- | :--- |
-| `neodymium.ai.pesap.enabled` | `true` | **Master Switch**. Enables or disables the entire PESAP phase. If set to `false`, Neodymium skips the remote static query entirely and falls back directly to the local offline linter. |
-| `neodymium.ai.pesap.classify.enabled` | `true` | **Context Classification Sub-Switch**. Controls whether the static starting context level prediction query is run. If set to `false`, steps will start at the default minimum context level (`AXTREE`). |
-| `neodymium.ai.pesap.linter.enabled` | `true` | **Semantic Linter Sub-Switch**. Controls whether the LLM-powered static semantic step linting query is run. If set to `false`, remote semantic warnings are skipped. |
+| `neodymium.ai.pesap.linter.enabled` | `true` | **Semantic Linter Switch**. Controls whether the LLM-powered static semantic step linting query is run. If set to `false`, remote semantic warnings are skipped. |
 | `neodymium.ai.pesap.custom.file` | *(empty)* | **Custom Linter Rules File**. Specifies a path to a custom Markdown (.md) or Text (.txt) rules file to extend the default PESAP semantic linter rules list dynamically. |
 
 ##### 📝 Extending PESAP Linter with Custom Rules
@@ -479,34 +505,28 @@ The rules resolver dynamically evaluates and loads the rules in this exact order
 4. **Default Classpath Fallbacks**: Checks for `ai-prompts/pesap-custom-rules.md` (and then `ai-prompts/pesap-custom-rules.txt`) on the classpath.
 5. **Disabled State**: Proceeds with default standard core linter rules only.
 
-##### Example Configuration (Disable PESAP completely):
+##### Example Configuration (Disable LLM Linter):
 ```properties
-neodymium.ai.pesap.enabled=false
-```
-
-##### Example Configuration (Run Classification but Disable LLM Linter):
-```properties
-neodymium.ai.pesap.classify.enabled=true
 neodymium.ai.pesap.linter.enabled=false
 ```
 
 > [!NOTE]
-> If PESAP is disabled or a remote query fails, Neodymium seamlessly falls back to the **Local Offline Step Linter** and starts execution at the default minimum context level (`AXTREE`), ensuring high reliability under all circumstances.
+> If the remote query fails, Neodymium seamlessly falls back to the **Local Offline Step Linter** and starts execution at the default minimum context level (`AXTREE`), ensuring high reliability under all circumstances.
 
 ##### 🔄 Dynamic YAML and Thread-Local Overrides
 
-For maximum convenience, you can override any PESAP configuration properties (`neodymium.ai.pesap.enabled`, `neodymium.ai.pesap.classify.enabled`, `neodymium.ai.pesap.linter.enabled`) directly inside your YAML playbook files or dynamically in code. Neodymium resolves these overrides with the following precedence order:
+For maximum convenience, you can override any PESAP configuration properties (`neodymium.ai.pesap.linter.enabled`) directly inside your YAML playbook files or dynamically in code. Neodymium resolves these overrides with the following precedence order:
 
 1. **Local (Dataset/Iteration Level) YAML Overrides**: Defined inside a specific dataset under `data:`. This has the highest precedence.
 2. **Global (Root Level) YAML Overrides**: Defined at the root of the playbook YAML file. Automatically propagates to all datasets/iterations unless overridden locally.
-3. **Thread-Local Programmatic Overrides**: Programmatically set via the thread-local context `Neodymium.getData().put("neodymium.ai.pesap.enabled", "false")`.
+3. **Thread-Local Programmatic Overrides**: Programmatically set via the thread-local context `Neodymium.getData().put("neodymium.ai.pesap.linter.enabled", "false")`.
 4. **Static Configuration**: Defined statically in `neodymium.properties`, `ai.properties`, or system properties.
 
 ###### Example: Overriding at Playbook Root Level
-To turn off PESAP completely for all iterations defined in a specific playbook:
+To turn off the PESAP linter for all iterations defined in a specific playbook:
 
 ```yaml
-neodymium.ai.pesap.enabled: false
+neodymium.ai.pesap.linter.enabled: false
 
 steps: |
   Open the homepage.
@@ -795,8 +815,8 @@ To ensure maximum test robustness and eliminate AI execution ambiguity before re
 
 #### Execution Modes
 The linter has two operational modes based on configuration:
-1. **Remote LLM-Powered Linter (PESAP Enabled)**: When `neodymium.ai.pesap.enabled=true` (the default), the semantic linter runs directly as part of the Pre-Execution Static Analysis Phase (PESAP) remote LLM query. In this mode, the LLM analyzes all steps statically for semantic and instruction anti-patterns in whatever language the playbook is written (English, German, etc.), leveraging deep language understanding instead of simple heuristics.
-2. **Local Offline Linter (PESAP Disabled / Fallback)**: If PESAP is disabled or fails, Neodymium falls back to the high-performance local offline `StepLinter` which uses regex and keyword heuristics to inspect steps statically.
+1. **Remote LLM-Powered Linter**: When `neodymium.ai.pesap.linter.enabled=true` (the default) and the playbook is recording, the semantic linter runs directly as part of the Pre-Execution Static Analysis Phase (PESAP) remote LLM query. In this mode, the LLM analyzes all steps statically for semantic and instruction anti-patterns in whatever language the playbook is written (English, German, etc.), leveraging deep language understanding instead of simple heuristics.
+2. **Local Offline Linter (Fallback)**: If remote linting is disabled or fails, Neodymium falls back to the high-performance local offline `StepLinter` which uses regex and keyword heuristics to inspect steps statically.
 
 In both modes, any detected warnings are clearly logged in the developer console with line numbers and filename tags:
 ```text
@@ -924,7 +944,7 @@ Neodymium.expectFailure("APP-1234")
 
 ---
 
-## 🏷️ Explicit Step Control Tags (optional, soft, timeout)
+## 🏷️ Explicit Step Control Tags (optional, soft, timeout, no-replay)
 
 Neodymium supports a set of special, language-agnostic tags that allow developers to explicitly control step execution flow, assertion behaviors, and browser timeouts directly from natural language instructions.
 
@@ -969,6 +989,31 @@ steps: |
 * **Strict Try-Finally Rollback**: Neodymium wraps the execution in a strict `try-finally` block. Under all possible outcomes (successful action, failed action, or unexpected exception), the original global timeout is guaranteed to be restored to its exact original value, ensuring zero side-effects on subsequent steps.
 
 ---
+
+### 3. Forcing Live Evaluation: `(no-replay)`
+
+By default, Neodymium AI optimizes execution by replaying cached playbook actions offline and using perceptual visual caching (dHash) to bypass LLM calls on subsequent runs. However, there are scenarios where you want to force the agent to evaluate a step live via the LLM (or execute plugins/heuristics) every single time, bypassing the playbook replay cache. This is particularly useful when:
+* The visual difference between states is extremely small but critical (e.g. checking for tiny visual shifts or subtle layout issues).
+* The step depends on dynamic runtime data or state that must be analyzed afresh via LLM vision on every execution.
+
+You can enforce live LLM evaluation by appending `(no-replay)` to the natural language instruction.
+
+#### Example
+```yaml
+steps: |
+  Open the homepage.
+  Verify that the dynamic carousel has loaded (no-replay).
+  Click the 'Add to Cart' button.
+```
+
+#### How It Works
+* **Tag Stripping**: The framework automatically parses and strips `(no-replay)` case-insensitively from instructions *before* performing execution logic or prompting the LLM, ensuring the LLM is not confused by the tag.
+* **Bypass Replay Cache**: When `(no-replay)` is present, the agent:
+  - Bypasses any cached visual failure checks on replay.
+  - Bypasses cached playbook actions execution, forcing a live query to the LLM or direct/upfront plugins.
+
+---
+
 
 ## ⚡ Perceptual Visual Replay Caching (dHash & Hamming Distance)
 
@@ -1038,34 +1083,65 @@ If a visual step has a successful visual hash match and contains an empty list o
 > **Playbook Version Control**:
 > Because the `screenshotHash` is recorded inside the playbook JSON file, make sure to commit your updated playbooks to Git. This guarantees that your CI/CD pipelines run completely offline and with extreme speed.
 
+### 🐞 Visual Defect Failure Caching (Offline Replay Optimization)
+
+When a step containing the `(visual)` tag fails during initial recording/creation mode (e.g., due to a layout shift, visual overlap, or failed aesthetic assertion), the framework automatically caches the defect signature to optimize subsequent runs. 
+
+Instead of contacting the LLM again on future executions to re-evaluate the same broken layout, Neodymium saves the defect's visual and programmatic fingerprint to fail **instantly and offline**.
+
+#### How It Works
+
+1. **Recording/Creation Mode**: 
+   When a `(visual)` step throws an exception (e.g., `AssertionError` or `ActionExecutionException`), the agent catches it and:
+   - Captures the current SUT screenshot and computes its **dHash**.
+   - Serializes the exception class name (`expectedErrorType`) and details (`expectedErrorMessage`) alongside the dHash into the step's playbook JSON.
+   
+2. **Replay/CI Mode**:
+   Before executing a visual step, the agent checks if a cached screenshot hash and error message exist. If found:
+   - It captures a live screenshot and calculates the Hamming distance between the live dHash and the cached failure dHash.
+   - **Defect Still Present (Hamming Distance $\le$ 15)**: The agent immediately advances the playbook, increments the replay stats, and throws the cached `AssertionError` offline—**bypassing all LLM calls, DOM parses, and network requests**.
+   - **Defect Resolved or Changed (Hamming Distance $>$ 15)**: If the screen layout has changed (meaning the bug is likely resolved or behaves differently), the agent proceeds with normal execution or self-healing to let the LLM analyze the updated SUT state.
+
+```json
+{
+  "prompt": "Observe page visual consistency (visual)",
+  "actions": [],
+  "screenshotHash": "8f03c73c3f0c3f0c3f0c3c0c3c0c3c0c3c0c3c0c3c0c3f0c3f0c3f0c3c0c3c0c",
+  "expectedErrorType": "java.lang.AssertionError",
+  "expectedErrorMessage": "Instruction 'Observe page visual consistency (visual)' failed at line 14: Visual mismatch detected..."
+}
+```
+
+> [!IMPORTANT]
+> **Visual Defect Caching vs. Unified Expected Failures (`(bug)` tags)**:
+> - **Expected Failures (`(bug)` tags)**: Designed for known bugs where you want the CI pipeline to **pass** as long as the bug is present.
+> - **Visual Defect Caching**: Designed for standard visual validation steps where the test **must fail** when a defect is present. Caching ensures it fails **instantly and offline** without querying the LLM repeatedly.
+
 ---
 
-## 👁️ Aura Glance: Observational Visual Auditing (`(glance)`)
+## 👁️ Aura Glance: Observational Visual Auditing
 
 Traditional visual regression tools can only verify that a page hasn't changed pixel-for-pixel from a baseline, but cannot reason about the *meaning* of visual states. Neodymium AI introduces **Aura Glance: Observational Visual Auditing**, which combines visual screenshot hashes with multimodal LLM visual inspections to identify design defects, layouts, and accessibility shifts on the fly.
 
-### The `(glance)` Tag vs. `(visual)` Tag
+To execute advanced visual auditing, use the powerful `(visual)` tag in your natural language instructions.
 
-To execute advanced visual auditing, Neodymium AI introduces two powerful natural language keywords/tags:
+When the `(visual)` tag is present, the AI agent acts as a visual reviewer. It captures a full screenshot of the page viewport on the very first attempt and activates local **dHash caching** for offline playbacks in under 10ms.
 
-* **`(glance)` — Observational Audit Goal**: Instructs the AI agent to act as a purely observational reviewer. Instead of trying to click, type, or interact with elements, the AI reviews the page visually (via screenshot) to assert layout alignment, contrast, visual design consistency, or dynamic anomalies. **Note:** Specifying `(glance)` implicitly triggers the `(visual)` viewport capture and dHash caching automatically under the hood, simplifying your instructions.
-* **`(visual)` — Viewport Capture Directive**: Directs the underlying automation driver to capture a full screenshot of the page viewport on the very first attempt and activate local **dHash caching** for offline playbacks in under 10ms.
-
-Because `(glance)` implicitly triggers `(visual)` capture, you can run high-speed offline visual assertions with a single clean instruction:
+You can run visual audits or high-speed offline visual assertions using instructions like:
 
 1. **Verify Visual Consistency (Baseline)**:
    ```java
-   Neodymium.ai().execute("Observe page visual consistency (glance)");
+   Neodymium.ai().execute("Observe page visual consistency (visual)");
    ```
 2. **Explicit Layout Overlap Detection**:
    ```java
    // Directs the LLM to inspect visual boxes and assert overlap bugs
-   Neodymium.ai().execute("Observe page visual consistency (glance). Assert that the 'Cancel' button does not overlap with the 'Security Password' field or adjacent form elements.");
+   Neodymium.ai().execute("Observe page visual consistency (visual). Assert that the 'Cancel' button does not overlap with the 'Security Password' field or adjacent form elements.");
    ```
 3. **Accessibility Contrast Warnings**:
-   By adding the case-insensitive `(soft)` tag alongside `(glance)`, visual checks (like contrast shifts or styling inconsistencies) will log warnings in Allure reports and execution logs instead of throwing a blocking error:
+   By adding the case-insensitive `(soft)` tag alongside `(visual)`, visual checks (like contrast shifts or styling inconsistencies) will log warnings in Allure reports and execution logs instead of throwing a blocking error:
    ```java
-   Neodymium.ai().execute("Observe page visual consistency (soft) (glance)");
+   Neodymium.ai().execute("Observe page visual consistency (soft) (visual)");
    ```
 
 ---

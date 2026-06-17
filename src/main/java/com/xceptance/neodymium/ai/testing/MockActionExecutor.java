@@ -33,7 +33,8 @@ import com.xceptance.neodymium.ai.action.ActionExecutor;
  * It also supports simulating specific execution failures (such as missing target elements 
  * or obstructed buttons) to verify the AI agent's self-healing and context escalation behaviors.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class MockActionExecutor extends ActionExecutor
 {

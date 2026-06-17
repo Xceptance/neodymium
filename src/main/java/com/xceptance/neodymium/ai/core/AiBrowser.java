@@ -49,6 +49,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * }</pre>
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public class AiBrowser implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(AiBrowser.class);
@@ -323,7 +324,7 @@ public class AiBrowser implements AutoCloseable {
     @Override
     public void close() {
         // Log cumulative token usage before shutdown
-        if (aiStats.getCallCount() > 0) {
+        if (aiStats.getOverallCallCount() > 0) {
             aiStats.logSummary();
         }
     }

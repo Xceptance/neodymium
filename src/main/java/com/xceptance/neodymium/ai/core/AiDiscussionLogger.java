@@ -28,6 +28,7 @@ import com.xceptance.neodymium.ai.action.Action;
  * with the LLM (including prompts and DOM context) without downloading text files.
   *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
 */
 public class AiDiscussionLogger
 {

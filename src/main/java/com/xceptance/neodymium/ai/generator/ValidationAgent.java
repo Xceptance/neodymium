@@ -27,6 +27,7 @@ import com.xceptance.neodymium.ai.core.LlmClient;
  * Analyzes the SUT page's visual/structural state via the simplified DOM context and dynamically resolves alternatives.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class ValidationAgent
 {

@@ -34,12 +34,15 @@ import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.ai.core.ContextLevel;
 import com.xceptance.neodymium.ai.core.EscalationDetails;
 import com.xceptance.neodymium.ai.testing.AiMockResponse;
+import com.xceptance.neodymium.ai.util.AiExecutionAssert;
+import com.xceptance.neodymium.ai.util.StepDetailsAssert;
 import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Test cases verifying agent self-healing and context level escalation logic.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiContextEscalationTest extends BaseAiOfflineTest
 {
@@ -126,6 +129,22 @@ public final class AiContextEscalationTest extends BaseAiOfflineTest
             // Actions executed successfully on attempt 2
             Assertions.assertEquals(1, executed.size());
             Assertions.assertEquals("#link", executed.get(0).getTarget());
+
+            // Assert step-level escalations
+            Assertions.assertEquals(1, result.getSteps().size());
+            final StepDetails step = result.getSteps().get(0);
+            Assertions.assertEquals(1, step.getEscalations().size());
+            final EscalationDetails stepEscalation = step.getEscalations().get(0);
+            Assertions.assertEquals(ContextLevel.AXTREE, stepEscalation.getFromLevel());
+            Assertions.assertEquals(ContextLevel.LEAN, stepEscalation.getToLevel());
+            Assertions.assertFalse(stepEscalation.isLlmRequested());
+
+            // Assert via fluent helper
+            AiExecutionAssert.assertThat(result)
+                .step(0, (final StepDetailsAssert s) -> 
+                {
+                    s.hasEscalations(1);
+                });
         }
     }
 
@@ -182,6 +201,23 @@ public final class AiContextEscalationTest extends BaseAiOfflineTest
         Assertions.assertEquals(ContextLevel.VISUAL, escalation.getToLevel());
         Assertions.assertTrue(escalation.isLlmRequested());
         Assertions.assertEquals("Need screenshot for verification", escalation.getReason());
+
+        // Assert step-level escalations
+        Assertions.assertEquals(1, result.getSteps().size());
+        final StepDetails step = result.getSteps().get(0);
+        Assertions.assertEquals(1, step.getEscalations().size());
+        final EscalationDetails stepEscalation = step.getEscalations().get(0);
+        Assertions.assertEquals(ContextLevel.AXTREE, stepEscalation.getFromLevel());
+        Assertions.assertEquals(ContextLevel.VISUAL, stepEscalation.getToLevel());
+        Assertions.assertTrue(stepEscalation.isLlmRequested());
+        Assertions.assertEquals("Need screenshot for verification", stepEscalation.getReason());
+
+        // Assert via fluent helper
+        AiExecutionAssert.assertThat(result)
+            .step(0, (final StepDetailsAssert s) -> 
+            {
+                s.hasEscalations(1);
+            });
     }
 
     /**
@@ -226,6 +262,21 @@ public final class AiContextEscalationTest extends BaseAiOfflineTest
         Assertions.assertEquals(1, result.getEscalations().size());
         Assertions.assertTrue(result.getEscalations().get(0).isLlmRequested());
         Assertions.assertTrue(result.getEscalations().get(0).getReason().contains("Elements overlap"));
+
+        // Assert step-level escalations
+        Assertions.assertEquals(1, result.getSteps().size());
+        final StepDetails step = result.getSteps().get(0);
+        Assertions.assertEquals(1, step.getEscalations().size());
+        final EscalationDetails stepEscalation = step.getEscalations().get(0);
+        Assertions.assertTrue(stepEscalation.isLlmRequested());
+        Assertions.assertTrue(stepEscalation.getReason().contains("Elements overlap"));
+
+        // Assert via fluent helper
+        AiExecutionAssert.assertThat(result)
+            .step(0, (final StepDetailsAssert s) -> 
+            {
+                s.hasEscalations(1);
+            });
     }
 
     /**
@@ -265,5 +316,17 @@ public final class AiContextEscalationTest extends BaseAiOfflineTest
         Assertions.assertNotNull(result);
         Assertions.assertEquals(0, result.getEscalationCount());
         Assertions.assertEquals(1, result.getLlmCalls().size());
+
+        // Assert step-level escalations
+        Assertions.assertEquals(1, result.getSteps().size());
+        final StepDetails step = result.getSteps().get(0);
+        Assertions.assertEquals(0, step.getEscalations().size());
+
+        // Assert via fluent helper
+        AiExecutionAssert.assertThat(result)
+            .step(0, (final StepDetailsAssert s) -> 
+            {
+                s.hasNoEscalations();
+            });
     }
 }

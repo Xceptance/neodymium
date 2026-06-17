@@ -50,6 +50,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * while automatically parsing, synchronizing, and saving modifications back to the original YAML test data.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class InteractiveHud
 {

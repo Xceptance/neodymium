@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -24,14 +23,11 @@ import com.xceptance.neodymium.ai.BaseAiTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
-import com.xceptance.neodymium.ai.core.StepDetails;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
@@ -39,6 +35,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Integration test verifying AI forward navigation commands and their validation flow
  * in both live LLM and replay modes.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -66,40 +65,25 @@ public class ForwardTest extends BaseAiTest
     public final void testForward()
     {
         final String steps = """
-                Open ${forward.test.url1}
-                Open ${forward.test.url2}
-                back
-                forward
+                OPEN ${forward.test.url1}
+                OPEN ${forward.test.url2}
+                BACK
+                FORWARD
             """;
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(4)
             .hasReplays(0)
-            .hasActionsCount(4);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertTrue(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertTrue(stepDetails1.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails2 = r1.getSteps().get(2);
-        assertTrue(stepDetails2.isDirectParse());
-        assertFalse(stepDetails2.isReplayed());
-        assertTrue(stepDetails2.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails3 = r1.getSteps().get(3);
-        assertTrue(stepDetails3.isDirectParse());
-        assertFalse(stepDetails3.isReplayed());
-        assertTrue(stepDetails3.getLlmCalls().isEmpty());
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse())
+            .step(2, s -> s.isDirectParse())
+            .step(3, s -> s.isDirectParse());
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
 
@@ -110,30 +94,64 @@ public class ForwardTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(4)
-            .hasActionsCount(4);
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed());
 
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
+        assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
+    }
 
-        final StepDetails replayStep1 = r2.getSteps().get(1);
-        assertFalse(replayStep1.isDirectParse());
-        assertTrue(replayStep1.isReplayed());
-        assertTrue(replayStep1.getLlmCalls().isEmpty());
+    /**
+     * Test forward navigation using lowercase forward (LLM fallback).
+     */
+    @NeodymiumTest
+    public final void testForwardLowercase()
+    {
+        final String steps = """
+                OPEN ${forward.test.url1}
+                OPEN ${forward.test.url2}
+                BACK
+                forward
+            """;
 
-        final StepDetails replayStep2 = r2.getSteps().get(2);
-        assertFalse(replayStep2.isDirectParse());
-        assertTrue(replayStep2.isReplayed());
-        assertTrue(replayStep2.getLlmCalls().isEmpty());
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
-        final StepDetails replayStep3 = r2.getSteps().get(3);
-        assertFalse(replayStep3.isDirectParse());
-        assertTrue(replayStep3.isReplayed());
-        assertTrue(replayStep3.getLlmCalls().isEmpty());
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(3)
+            .hasReplays(0)
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse())
+            .step(2, s -> s.isDirectParse())
+            .step(3, s -> s.hasLlmCalls(1));
+
+        assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(4)
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed());
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
     }
@@ -145,8 +163,8 @@ public class ForwardTest extends BaseAiTest
     public final void testForwardWithLlmFallback()
     {
         final String steps = """
-                Open ${forward.test.url1}
-                Open ${forward.test.url2}
+                OPEN ${forward.test.url1}
+                OPEN ${forward.test.url2}
                 Go to the previous page
                 Navigate to the next page
             """;
@@ -155,30 +173,15 @@ public class ForwardTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasPesapCalls(2)
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
-            .hasActionsCount(4);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertTrue(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertTrue(stepDetails1.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails2 = r1.getSteps().get(2);
-        assertFalse(stepDetails2.isDirectParse());
-        assertFalse(stepDetails2.isReplayed());
-        assertEquals(1, stepDetails2.getLlmCalls().size());
-
-        final StepDetails stepDetails3 = r1.getSteps().get(3);
-        assertFalse(stepDetails3.isDirectParse());
-        assertFalse(stepDetails3.isReplayed());
-        assertEquals(1, stepDetails3.getLlmCalls().size());
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse())
+            .step(2, s -> s.hasLlmCalls(1))
+            .step(3, s -> s.hasLlmCalls(1));
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
 
@@ -189,30 +192,15 @@ public class ForwardTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(4)
-            .hasActionsCount(4);
-
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep1 = r2.getSteps().get(1);
-        assertFalse(replayStep1.isDirectParse());
-        assertTrue(replayStep1.isReplayed());
-        assertTrue(replayStep1.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep2 = r2.getSteps().get(2);
-        assertFalse(replayStep2.isDirectParse());
-        assertTrue(replayStep2.isReplayed());
-        assertTrue(replayStep2.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep3 = r2.getSteps().get(3);
-        assertFalse(replayStep3.isDirectParse());
-        assertTrue(replayStep3.isReplayed());
-        assertTrue(replayStep3.getLlmCalls().isEmpty());
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed());
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
     }

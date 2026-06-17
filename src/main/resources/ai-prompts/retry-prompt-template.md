@@ -1,6 +1,6 @@
 ## Instruction (RETRY)
 {instruction}
-{sutContextBlock}
+{sutContextBlock}{javaMethodsBlock}
 {historyBlock}
 ## Previous Attempt Failed
 The previous attempt failed with this error:
@@ -16,5 +16,3 @@ Depending on the error above, try one of these strategies:
 
 ## Current Page State (DOM)
 {domContext}
-
-Return updated JSON actions that use a DIFFERENT target and avoid the previous error.

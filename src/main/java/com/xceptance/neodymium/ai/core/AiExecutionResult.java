@@ -29,7 +29,8 @@ import com.xceptance.neodymium.ai.action.Action;
 /**
  * Aggregates results of an AI execution run.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiExecutionResult
 {
@@ -53,6 +54,7 @@ public final class AiExecutionResult
     private int escalationCount;
     private int replayCount;
     private int directParseCount;
+    private int pesapCallCount;
 
     private long durationMs;
 
@@ -258,6 +260,16 @@ public final class AiExecutionResult
     public final void setDirectParseCount(final int directParseCount)
     {
         this.directParseCount = directParseCount;
+    }
+
+    public final int getPesapCallCount()
+    {
+        return this.pesapCallCount;
+    }
+
+    public final void setPesapCallCount(final int pesapCallCount)
+    {
+        this.pesapCallCount = pesapCallCount;
     }
 
     public final long getDurationMs()

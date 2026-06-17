@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
  * Tests for the {@link ActionParser} compact key format parsing and validation.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 class ActionParserEscalateTest
 {

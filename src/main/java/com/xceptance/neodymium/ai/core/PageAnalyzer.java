@@ -43,6 +43,7 @@ import com.xceptance.neodymium.common.ScreenshotWriter;
  * single JavaScript execution to minimize WebDriver round-trips for performance.
   *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
 */
 public class PageAnalyzer
 {
@@ -486,6 +487,7 @@ public class PageAnalyzer
                         // Only capture context if it's descriptive (longer than the label itself) but compact (< 300 chars)
                         if (pText.length > lbl.length && pText.length < 300) {
                             parentText = pText;
+                            break;
                         }
                         // Prevent pulling in massive generic containers
                         if (pText.length >= 300) {
@@ -1092,165 +1094,245 @@ public class PageAnalyzer
         final StringBuilder dom = new StringBuilder();
         dom.append("=== Accessibility Tree (AXTree) ===\n");
 
+        final Map<String, Map<String, Object>> nodesById = new HashMap<>();
         for (final Map<String, Object> node : nodes)
         {
-            final boolean ignored = Boolean.TRUE.equals(node.get("ignored"));
-            if (ignored)
+            final Object nodeIdObj = node.get("nodeId");
+            if (nodeIdObj != null)
             {
-                continue;
+                nodesById.put(String.valueOf(nodeIdObj), node);
             }
+        }
 
-            final Object backendDOMNodeIdObj = node.get("backendDOMNodeId");
-            if (backendDOMNodeIdObj == null)
+        final Set<String> childNodeIds = new HashSet<>();
+        for (final Map<String, Object> node : nodes)
+        {
+            final Object childIdsObj = node.get("childIds");
+            if (childIdsObj instanceof final List<?> childIdsList)
             {
-                continue;
-            }
-            final int backendDOMNodeId = ((Number) backendDOMNodeIdObj).intValue();
-
-            // Parse role
-            final Object roleObj = node.get("role");
-            String role = "";
-            if (roleObj instanceof final Map<?, ?> roleMap)
-            {
-                role = String.valueOf(roleMap.get("value"));
-            }
-            else if (roleObj != null)
-            {
-                role = String.valueOf(roleObj);
-            }
-
-            // Filter roles
-            if (!interactiveRoles.contains(role) && !landmarkRoles.contains(role))
-            {
-                continue;
-            }
-
-            // Parse name
-            final Object nameObj = node.get("name");
-            String name = "";
-            if (nameObj instanceof final Map<?, ?> nameMap)
-            {
-                name = String.valueOf(nameMap.get("value"));
-            }
-            else if (nameObj != null)
-            {
-                name = String.valueOf(nameObj);
-            }
-            name = cleanAccessibleText(name);
-
-            // Parse value
-            final Object valueObj = node.get("value");
-            String value = "";
-            if (valueObj instanceof final Map<?, ?> valueMap)
-            {
-                value = String.valueOf(valueMap.get("value"));
-            }
-            else if (valueObj != null)
-            {
-                value = String.valueOf(valueObj);
-            }
-            value = cleanAccessibleText(value);
-
-            // Parse properties
-            final List<Map<String, Object>> properties = (List<Map<String, Object>>) node.get("properties");
-            boolean disabled = false;
-            boolean required = false;
-            boolean readonly = false;
-            boolean checked = false;
-            String autocomplete = "";
-            String placeholder = "";
-
-            if (properties != null)
-            {
-                for (final Map<String, Object> prop : properties)
+                for (final Object childId : childIdsList)
                 {
-                    final String propName = String.valueOf(prop.get("name"));
-                    final Object propValObj = prop.get("value");
-                    String propValue = "";
-                    if (propValObj instanceof final Map<?, ?> propValMap)
-                    {
-                        propValue = String.valueOf(propValMap.get("value"));
-                    }
-                    else if (propValObj != null)
-                    {
-                        propValue = String.valueOf(propValObj);
-                    }
+                    childNodeIds.add(String.valueOf(childId));
+                }
+            }
+        }
 
-                    if ("disabled".equals(propName))
+        final List<Map<String, Object>> rootNodes = new ArrayList<>();
+        for (final Map<String, Object> node : nodes)
+        {
+            final Object nodeIdObj = node.get("nodeId");
+            if (nodeIdObj != null)
+            {
+                final String nodeId = String.valueOf(nodeIdObj);
+                if (!childNodeIds.contains(nodeId))
+                {
+                    rootNodes.add(node);
+                }
+            }
+        }
+
+        if (rootNodes.isEmpty())
+        {
+            rootNodes.addAll(nodes);
+        }
+
+        final Set<String> visitedNodeIds = new HashSet<>();
+        for (final Map<String, Object> rootNode : rootNodes)
+        {
+            serializeAXNode(rootNode, nodesById, visitedNodeIds, dom, 0, interactiveRoles, landmarkRoles, cdpDriver);
+        }
+
+        return dom.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean serializeAXNode(final Map<String, Object> node,
+                                    final Map<String, Map<String, Object>> nodesById,
+                                    final Set<String> visitedNodeIds,
+                                    final StringBuilder dom,
+                                    final int depth,
+                                    final Set<String> interactiveRoles,
+                                    final Set<String> landmarkRoles,
+                                    final HasCdp cdpDriver)
+    {
+        final Object nodeIdObj = node.get("nodeId");
+        final String nodeId = nodeIdObj != null ? String.valueOf(nodeIdObj) : null;
+        final Object backendIdObj = node.get("backendDOMNodeId");
+        final String key = nodeId != null ? nodeId : (backendIdObj != null ? "backend_" + backendIdObj : null);
+        if (key != null)
+        {
+            if (visitedNodeIds.contains(key))
+            {
+                return false;
+            }
+            visitedNodeIds.add(key);
+        }
+
+        final Object roleObj = node.get("role");
+        String role = "";
+        if (roleObj instanceof final Map<?, ?> roleMap)
+        {
+            role = String.valueOf(roleMap.get("value"));
+        }
+        else if (roleObj != null)
+        {
+            role = String.valueOf(roleObj);
+        }
+
+        final boolean isInteractive = interactiveRoles.contains(role);
+        final boolean isLandmark = landmarkRoles.contains(role);
+
+        if (Boolean.TRUE.equals(node.get("ignored")) || (!isInteractive && !isLandmark))
+        {
+            boolean anyChildSerialized = false;
+            final Object childIdsObj = node.get("childIds");
+            if (childIdsObj instanceof final List<?> childIdsList)
+            {
+                for (final Object childIdObj : childIdsList)
+                {
+                    final Map<String, Object> childNode = nodesById.get(String.valueOf(childIdObj));
+                    if (childNode != null)
                     {
-                        disabled = Boolean.parseBoolean(propValue);
-                    }
-                    else if ("required".equals(propName))
-                    {
-                        required = Boolean.parseBoolean(propValue);
-                    }
-                    else if ("readonly".equals(propName))
-                    {
-                        readonly = Boolean.parseBoolean(propValue);
-                    }
-                    else if ("checked".equals(propName))
-                    {
-                        checked = "true".equals(propValue) || "mixed".equals(propValue);
-                    }
-                    else if ("autocomplete".equals(propName))
-                    {
-                        autocomplete = propValue;
-                    }
-                    else if ("placeholder".equals(propName))
-                    {
-                        placeholder = propValue;
+                        if (serializeAXNode(childNode, nodesById, visitedNodeIds, dom, depth, interactiveRoles, landmarkRoles, cdpDriver))
+                        {
+                            anyChildSerialized = true;
+                        }
                     }
                 }
             }
+            return anyChildSerialized;
+        }
 
-            // Stamping data-neo-ref via Runtime.callFunctionOn
-            String refId = "";
-            try
+        final Object backendDOMNodeIdObj = node.get("backendDOMNodeId");
+        if (backendDOMNodeIdObj == null)
+        {
+            return false;
+        }
+        final int backendDOMNodeId = ((Number) backendDOMNodeIdObj).intValue();
+
+        Object nameObj = node.get("name");
+        String name = "";
+        if (nameObj instanceof final Map<?, ?> nameMap)
+        {
+            name = String.valueOf(nameMap.get("value"));
+        }
+        else if (nameObj != null)
+        {
+            name = String.valueOf(nameObj);
+        }
+        name = cleanAccessibleText(name);
+
+        final Object valueObj = node.get("value");
+        String value = "";
+        if (valueObj instanceof final Map<?, ?> valueMap)
+        {
+            value = String.valueOf(valueMap.get("value"));
+        }
+        else if (valueObj != null)
+        {
+            value = String.valueOf(valueObj);
+        }
+        value = cleanAccessibleText(value);
+
+        final List<Map<String, Object>> properties = (List<Map<String, Object>>) node.get("properties");
+        boolean disabled = false;
+        boolean required = false;
+        boolean readonly = false;
+        boolean checked = false;
+        String autocomplete = "";
+        String placeholder = "";
+
+        if (properties != null)
+        {
+            for (final Map<String, Object> prop : properties)
             {
-                final Map<String, Object> resolveParams = Map.of("backendNodeId", backendDOMNodeId);
-                final Map<String, Object> resolvedNode = cdpDriver.executeCdpCommand("DOM.resolveNode", resolveParams);
-                if (resolvedNode != null && resolvedNode.containsKey("object"))
+                final String propName = String.valueOf(prop.get("name"));
+                final Object propValObj = prop.get("value");
+                String propValue = "";
+                if (propValObj instanceof final Map<?, ?> propValMap)
                 {
-                    final Map<String, Object> objectInfo = (Map<String, Object>) resolvedNode.get("object");
-                    final String objectId = (String) objectInfo.get("objectId");
-                    if (objectId != null)
-                    {
-                        final String functionDeclaration = """
-                            function() {
-                                function getFallbackLabel(el) {
-                                    var iconEl = el.querySelector('[class*="bi-"], [class*="fa-"], [class*="icon-"]');
-                                    var elClassStr = typeof el.className === 'string' ? el.className : (el.getAttribute && el.getAttribute('class') || '');
-                                    if (!iconEl && (elClassStr.includes('bi-') || elClassStr.includes('fa-') || elClassStr.includes('icon-'))) {
-                                        iconEl = el;
-                                    }
-                                    if (iconEl) {
-                                        var iconClassStr = typeof iconEl.className === 'string' ? iconEl.className : (iconEl.getAttribute && iconEl.getAttribute('class') || '');
-                                        var classes = iconClassStr.split(/\\s+/);
-                                        for (var i = 0; i < classes.length; i++) {
-                                            var cls = classes[i];
-                                            var match = cls.match(/^(?:bi|fa|icon)-([a-z0-9-]+)$/);
-                                            if (match && match[1]) {
-                                                var iconName = match[1];
-                                                iconName = iconName.replace(/\\d+$/, '');
-                                                iconName = iconName.replace(/-(?:fill|outline|short|large|small)$/, '');
-                                                iconName = iconName.replace(/-/g, ' ');
-                                                return iconName.replace(/\\b\\w/g, function(l) { return l.toUpperCase(); }) + ' Icon';
-                                            }
+                    propValue = String.valueOf(propValMap.get("value"));
+                }
+                else if (propValObj != null)
+                {
+                    propValue = String.valueOf(propValObj);
+                }
+
+                if ("disabled".equals(propName))
+                {
+                    disabled = Boolean.parseBoolean(propValue);
+                }
+                else if ("required".equals(propName))
+                {
+                    required = Boolean.parseBoolean(propValue);
+                }
+                else if ("readonly".equals(propName))
+                {
+                    readonly = Boolean.parseBoolean(propValue);
+                }
+                else if ("checked".equals(propName))
+                {
+                    checked = "true".equals(propValue) || "mixed".equals(propValue);
+                }
+                else if ("autocomplete".equals(propName))
+                {
+                    autocomplete = propValue;
+                }
+                else if ("placeholder".equals(propName))
+                {
+                    placeholder = propValue;
+                }
+            }
+        }
+
+        String refId = "";
+        String domId = "";
+        String domName = "";
+        String domPlaceholder = "";
+
+        try
+        {
+            final Map<String, Object> resolveParams = Map.of("backendNodeId", backendDOMNodeId);
+            final Map<String, Object> resolvedNode = cdpDriver.executeCdpCommand("DOM.resolveNode", resolveParams);
+            if (resolvedNode != null && resolvedNode.containsKey("object"))
+            {
+                final Map<String, Object> objectInfo = (Map<String, Object>) resolvedNode.get("object");
+                final String objectId = (String) objectInfo.get("objectId");
+                if (objectId != null)
+                {
+                    final String functionDeclaration = """
+                        function() {
+                            function getFallbackLabel(el) {
+                                var iconEl = el.querySelector('[class*="bi-"], [class*="fa-"], [class*="icon-"]');
+                                var elClassStr = typeof el.className === 'string' ? el.className : (el.getAttribute && el.getAttribute('class') || '');
+                                if (!iconEl && (elClassStr.includes('bi-') || elClassStr.includes('fa-') || elClassStr.includes('icon-'))) {
+                                    iconEl = el;
+                                }
+                                if (iconEl) {
+                                    var iconClassStr = typeof iconEl.className === 'string' ? iconEl.className : (iconEl.getAttribute && iconEl.getAttribute('class') || '');
+                                    var classes = iconClassStr.split(/\\s+/);
+                                    for (var i = 0; i < classes.length; i++) {
+                                        var cls = classes[i];
+                                        var match = cls.match(/^(?:bi|fa|icon)-([a-z0-9-]+)$/);
+                                        if (match && match[1]) {
+                                            var iconName = match[1];
+                                            iconName = iconName.replace(/\\d+$/, '');
+                                            iconName = iconName.replace(/-(?:fill|outline|short|large|small)$/, '');
+                                            iconName = iconName.replace(/-/g, ' ');
+                                            return iconName.replace(/\\b\\w/g, function(l) { return l.toUpperCase(); }) + ' Icon';
                                         }
                                     }
-                                    var fallback = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || el.getAttribute('alt') || el.getAttribute('name') || el.id || '';
-                                    if (fallback) {
-                                        fallback = fallback.replace(/[-_]/g, ' ').trim();
-                                        return fallback.replace(/\\b\\w/g, function(l) { return l.toUpperCase(); });
-                                    }
-                                    return '';
                                 }
-                                if (this.hasAttribute('data-neo-ref')) {
-                                    return {
-                                        refId: this.getAttribute('data-neo-ref'),
-                                        fallbackLabel: getFallbackLabel(this)
-                                    };
+                                var fallback = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || el.getAttribute('alt') || el.getAttribute('name') || el.id || '';
+                                if (fallback) {
+                                    fallback = fallback.replace(/[-_]/g, ' ').trim();
+                                    return fallback.replace(/\\b\\w/g, function(l) { return l.toUpperCase(); });
                                 }
+                                return '';
+                            }
+                            
+                            var refId = this.getAttribute('data-neo-ref');
+                            if (!refId) {
                                 var usedIds = {};
                                 document.querySelectorAll('[data-neo-ref]').forEach(function(el) {
                                     usedIds[el.getAttribute('data-neo-ref')] = true;
@@ -1282,104 +1364,169 @@ public class PageAnalyzer
                                     candidate = base + '_' + suffix;
                                 }
                                 this.setAttribute('data-neo-ref', candidate);
-                                return {
-                                    refId: candidate,
-                                    fallbackLabel: getFallbackLabel(this)
-                                };
+                                refId = candidate;
                             }
-                            """;
+                            return {
+                                refId: refId,
+                                fallbackLabel: getFallbackLabel(this),
+                                domId: this.id || '',
+                                domName: this.getAttribute('name') || '',
+                                domPlaceholder: this.getAttribute('placeholder') || ''
+                            };
+                        }
+                        """;
 
-                        final Map<String, Object> callParams = Map.of(
-                            "objectId", objectId,
-                            "functionDeclaration", functionDeclaration,
-                            "returnByValue", true
-                        );
+                    final Map<String, Object> callParams = Map.of(
+                        "objectId", objectId,
+                        "functionDeclaration", functionDeclaration,
+                        "returnByValue", true
+                    );
 
-                        final Map<String, Object> callResult = cdpDriver.executeCdpCommand("Runtime.callFunctionOn", callParams);
-                        if (callResult != null && callResult.containsKey("result"))
+                    final Map<String, Object> callResult = cdpDriver.executeCdpCommand("Runtime.callFunctionOn", callParams);
+                    if (callResult != null && callResult.containsKey("result"))
+                    {
+                        final Map<String, Object> resultVal = (Map<String, Object>) callResult.get("result");
+                        if (resultVal != null && resultVal.containsKey("value"))
                         {
-                            final Map<String, Object> resultVal = (Map<String, Object>) callResult.get("result");
-                            if (resultVal != null && resultVal.containsKey("value"))
+                            final Object stampedValueObj = resultVal.get("value");
+                            if (stampedValueObj instanceof final Map<?, ?> resultMap)
                             {
-                                final Object stampedValueObj = resultVal.get("value");
-                                if (stampedValueObj instanceof final Map<?, ?> resultMap)
+                                refId = String.valueOf(resultMap.get("refId"));
+                                final String fallbackLabel = String.valueOf(resultMap.get("fallbackLabel"));
+                                if (fallbackLabel != null && !fallbackLabel.isEmpty() && !"null".equals(fallbackLabel))
                                 {
-                                    refId = String.valueOf(resultMap.get("refId"));
-                                    final String fallbackLabel = String.valueOf(resultMap.get("fallbackLabel"));
-                                    if (fallbackLabel != null && !fallbackLabel.isEmpty() && !"null".equals(fallbackLabel))
+                                    final String cleanName = name == null ? "" : name.replace('\u00a0', ' ').strip().replaceAll("\\s+", " ");
+                                    if (cleanName.isEmpty())
                                     {
-                                        final String cleanName = name == null ? "" : name.replace('\u00a0', ' ').strip().replaceAll("\\s+", " ");
-                                        if (cleanName.isEmpty())
-                                        {
-                                            name = fallbackLabel;
-                                        }
-                                        else if (cleanName.matches("^\\d+$"))
-                                        {
-                                            name = fallbackLabel + ": " + cleanName;
-                                        }
+                                        name = fallbackLabel;
+                                    }
+                                    else if (cleanName.matches("^\\d+$"))
+                                    {
+                                        name = fallbackLabel + ": " + cleanName;
                                     }
                                 }
-                                else if (stampedValueObj != null)
+
+                                final Object domIdVal = resultMap.get("domId");
+                                final Object domNameVal = resultMap.get("domName");
+                                final Object domPlaceholderVal = resultMap.get("domPlaceholder");
+                                if (domIdVal != null)
                                 {
-                                    refId = String.valueOf(stampedValueObj);
+                                    domId = String.valueOf(domIdVal);
                                 }
+                                if (domNameVal != null)
+                                {
+                                    domName = String.valueOf(domNameVal);
+                                }
+                                if (domPlaceholderVal != null)
+                                {
+                                    domPlaceholder = String.valueOf(domPlaceholderVal);
+                                }
+                            }
+                            else if (stampedValueObj != null)
+                            {
+                                refId = String.valueOf(stampedValueObj);
                             }
                         }
                     }
                 }
             }
-            catch (final Exception e)
-            {
-                LOG.debug("Failed to resolve or stamp node with backendNodeId {}: {}", backendDOMNodeId, e.getMessage());
-            }
-
-            name = cleanAccessibleText(name);
-            value = cleanAccessibleText(value);
-
-            final StringBuilder nodeText = new StringBuilder();
-            nodeText.append("<").append(role);
-            if (!refId.isEmpty())
-            {
-                nodeText.append(" data-neo-ref=\"").append(escapeAttributeValue(refId)).append("\"");
-            }
-            if (!name.isEmpty())
-            {
-                nodeText.append(" name=\"").append(escapeAttributeValue(name)).append("\"");
-            }
-            if (!value.isEmpty())
-            {
-                nodeText.append(" value=\"").append(escapeAttributeValue(value)).append("\"");
-            }
-            if (disabled)
-            {
-                nodeText.append(" disabled=\"true\"");
-            }
-            if (checked)
-            {
-                nodeText.append(" checked=\"true\"");
-            }
-            if (required)
-            {
-                nodeText.append(" required=\"true\"");
-            }
-            if (readonly)
-            {
-                nodeText.append(" readonly=\"true\"");
-            }
-            if (!placeholder.isEmpty())
-            {
-                nodeText.append(" placeholder=\"").append(escapeAttributeValue(placeholder)).append("\"");
-            }
-            if (!autocomplete.isEmpty())
-            {
-                nodeText.append(" autocomplete=\"").append(escapeAttributeValue(autocomplete)).append("\"");
-            }
-            nodeText.append("/>\n");
-
-            dom.append(nodeText.toString());
+        }
+        catch (final Exception e)
+        {
+            LOG.debug("Failed to resolve or stamp node with backendNodeId {}: {}", backendDOMNodeId, e.getMessage());
         }
 
-        return dom.toString();
+        name = cleanAccessibleText(name);
+        value = cleanAccessibleText(value);
+
+        dom.append("  ".repeat(depth));
+        dom.append("<").append(role);
+        if (!refId.isEmpty())
+        {
+            dom.append(" data-neo-ref=\"").append(escapeAttributeValue(refId)).append("\"");
+        }
+
+        if (!domId.isEmpty())
+        {
+            dom.append(" id=\"").append(escapeAttributeValue(domId)).append("\"");
+        }
+
+        if (!domName.isEmpty())
+        {
+            dom.append(" name=\"").append(escapeAttributeValue(domName)).append("\"");
+            if (!name.isEmpty())
+            {
+                dom.append(" aria-label=\"").append(escapeAttributeValue(name)).append("\"");
+            }
+        }
+        else if (!name.isEmpty())
+        {
+            dom.append(" aria-label=\"").append(escapeAttributeValue(name)).append("\"");
+        }
+
+        if (!value.isEmpty())
+        {
+            dom.append(" value=\"").append(escapeAttributeValue(value)).append("\"");
+        }
+        if (disabled)
+        {
+            dom.append(" disabled=\"true\"");
+        }
+        if (checked)
+        {
+            dom.append(" checked=\"true\"");
+        }
+        if (required)
+        {
+            dom.append(" required=\"true\"");
+        }
+        if (readonly)
+        {
+            dom.append(" readonly=\"true\"");
+        }
+        if (!domPlaceholder.isEmpty())
+        {
+            dom.append(" placeholder=\"").append(escapeAttributeValue(domPlaceholder)).append("\"");
+        }
+        else if (!placeholder.isEmpty())
+        {
+            dom.append(" placeholder=\"").append(escapeAttributeValue(placeholder)).append("\"");
+        }
+        if (!autocomplete.isEmpty())
+        {
+            dom.append(" autocomplete=\"").append(escapeAttributeValue(autocomplete)).append("\"");
+        }
+
+        final StringBuilder childrenContent = new StringBuilder();
+        boolean hasSerializedChildren = false;
+        final Object childIdsObj = node.get("childIds");
+        if (childIdsObj instanceof final List<?> childIdsList)
+        {
+            for (final Object childIdObj : childIdsList)
+            {
+                final Map<String, Object> childNode = nodesById.get(String.valueOf(childIdObj));
+                if (childNode != null)
+                {
+                    if (serializeAXNode(childNode, nodesById, visitedNodeIds, childrenContent, depth + 1, interactiveRoles, landmarkRoles, cdpDriver))
+                    {
+                        hasSerializedChildren = true;
+                    }
+                }
+            }
+        }
+
+        if (hasSerializedChildren)
+        {
+            dom.append(">\n");
+            dom.append(childrenContent);
+            dom.append("  ".repeat(depth)).append("</").append(role).append(">\n");
+        }
+        else
+        {
+            dom.append("/>\n");
+        }
+
+        return true;
     }
 
     private static String cleanAccessibleText(final String text)

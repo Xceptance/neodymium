@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -29,8 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
+import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
+
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
-import com.xceptance.neodymium.ai.core.StepDetails;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
@@ -39,12 +39,17 @@ import com.xceptance.neodymium.util.Neodymium;
  * Integration test verifying AI java method commands, including direct parsing,
  * indirect discovery via LLM mapping, local instance method calls, dynamic custom utility class
  * registration, and multiple default assertion types.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
 public class JavaMethodTest extends BaseAiTest
 {
     private String url;
+
+    private String storeUrl;
 
     /**
      * Custom utility class to verify dynamic java method registration.
@@ -61,7 +66,20 @@ public class JavaMethodTest extends BaseAiTest
         {
             assertEquals("custom_value", arg);
         }
+
+        /**
+         * Asserts shadowed method.
+         *
+         * @param val the value
+         */
+        public static void assertShadowedMethod(final String val)
+        {
+            throw new AssertionError("Utility class method should not be called: " + val);
+        }
     }
+
+    private static boolean overloadedNoArgsCalled = false;
+    private static boolean overloadedWithArgCalled = false;
 
     /**
      * Local public method to verify local test instance java method execution.
@@ -75,13 +93,76 @@ public class JavaMethodTest extends BaseAiTest
     }
 
     /**
+     * Local method to verify shadowed static method execution.
+     *
+     * @param val the value to validate
+     * @throws AssertionError if the value does not match expected value
+     */
+    public static void assertShadowedMethod(final String val)
+    {
+        assertEquals("shadow_value", val);
+    }
+
+    /**
+     * Private helper method. Should not be visible or callable by JAVA_METHOD.
+     *
+     * @param arg the argument
+     */
+    private static void assertPrivateMethod(final String arg)
+    {
+        // Not reachable
+    }
+
+    /**
+     * Static helper method with Integer parameter. Should be rejected by JAVA_METHOD.
+     *
+     * @param value the integer value
+     */
+    public static void assertWrapperParam(final Integer value)
+    {
+        // Not reachable
+    }
+
+    /**
+     * Public static method that always fails.
+     *
+     * @param arg the argument
+     * @throws AssertionError always
+     */
+    public static void assertFailingMethod(final String arg)
+    {
+        throw new AssertionError("Forced assertion failure: " + arg);
+    }
+
+    /**
+     * Public static method without parameters for testing overloading.
+     */
+    public static void assertOverloaded()
+    {
+        overloadedNoArgsCalled = true;
+    }
+
+    /**
+     * Public static method with a String parameter for testing overloading.
+     *
+     * @param arg the string argument
+     */
+    public static void assertOverloaded(final String arg)
+    {
+        overloadedWithArgCalled = true;
+        assertEquals("test_val", arg);
+    }
+
+    /**
      * Set up storefront url parameter before each test execution.
      */
     @BeforeEach
     public final void setupStorefrontUrl()
     {
         this.url = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        this.storeUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/homepage-normal.html", server.getPort());
         Neodymium.getData().put("javaMethod.test.url", this.url);
+        Neodymium.getData().put("store.url", this.url);
     }
 
     /**
@@ -91,7 +172,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodDirectDefault()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertPriceGreaterThanZero("14.96 €")
             """;
 
@@ -99,20 +180,13 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
-            .hasActionsCount(2);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertTrue(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertTrue(stepDetails1.getLlmCalls().isEmpty());
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse());
 
         this.resetBrowser();
 
@@ -120,10 +194,52 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
-            .hasActionsCount(2);
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
+    }
+
+    /**
+     * Test invoking a default Java method directly using the 'java:' prefix.
+     * Using the paranthesis syntax.
+     */
+    @NeodymiumTest
+    public final void testJavaMethodDirectParanthesis()
+    {
+        final String steps = """
+                OPEN ${javaMethod.test.url}
+                (java: assertPriceGreaterThanZero("14.96 €"))
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(2)
+            .hasReplays(0)
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
     }
 
     /**
@@ -133,7 +249,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodIndirectDiscovery()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 Verify using the java method assertPriceGreaterThanZero that '14.96 €' is greater than zero
             """;
 
@@ -141,18 +257,13 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
-            .hasActionsCount(2);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertFalse(stepDetails1.isDirectParse());
-        assertEquals(1, stepDetails1.getLlmCalls().size());
+            .hasActionsCount(2)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -160,10 +271,13 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
-            .hasActionsCount(2);
+            .hasActionsCount(2)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed());
     }
 
     /**
@@ -173,7 +287,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodLocalInstanceMethod()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: assertLocalMethod("expected_value")
             """;
 
@@ -181,6 +295,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
@@ -192,6 +307,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
@@ -214,7 +330,7 @@ public class JavaMethodTest extends BaseAiTest
             Neodymium.reloadAiConfiguration();
 
             final String steps = """
-                    Open ${javaMethod.test.url}
+                    OPEN ${javaMethod.test.url}
                     java: assertCustomValue("custom_value")
                 """;
 
@@ -222,6 +338,7 @@ public class JavaMethodTest extends BaseAiTest
 
             assertThat(r1)
                 .hasLlmCalls(0)
+                .hasNoPesapCalls()
                 .hasNoEscalations()
                 .hasDirectParses(2)
                 .hasReplays(0)
@@ -233,6 +350,7 @@ public class JavaMethodTest extends BaseAiTest
 
             assertThat(r2)
                 .hasLlmCalls(0)
+                .hasNoPesapCalls()
                 .hasNoEscalations()
                 .hasDirectParses(0)
                 .hasReplays(2)
@@ -259,10 +377,10 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodDefaultAssertions()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
-                java: assertNumberEqual("[\"10.00\", \"10.00\"]")
+                OPEN ${javaMethod.test.url}
+                java: assertNumbersEqual("[\"10.00\", \"10.00\"]")
                 java: assertMatchesRegex("[\"ORD-12345\", \"^ORD-[0-9]{5}$\"]")
-                java: verifyCalculation("0.90 € = (14.96 € + 0.00 €) * 6.00%")
+                java: assertCalculation("0.90 € = (14.96 € + 0.00 €) * 6.00%")
                 java: verifyLessOrEqual("[\"10\", \"15\"]")
                 java: assertNumberGreaterThan("[\"15.00\", \"10.00\"]")
             """;
@@ -271,6 +389,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(6)
             .hasReplays(0)
@@ -282,6 +401,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(6)
@@ -328,7 +448,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodLocalStaticMethodDirect()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 java: verifyWelcomeMessage("Assert Action Test")
             """;
 
@@ -336,6 +456,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
@@ -347,6 +468,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
@@ -360,7 +482,7 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodLocalStaticMethodWithStoredVariable()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
+                OPEN ${javaMethod.test.url}
                 Get the text of 'h1' and store it as 'myWelcomeMsg'
                 Verify the welcome message length is 18 using the java method verifyWelcomeMessageLength with the stored 'myWelcomeMsg' as parameter
             """;
@@ -369,6 +491,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasPesapCalls(2)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -380,6 +503,7 @@ public class JavaMethodTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(3)
@@ -393,8 +517,76 @@ public class JavaMethodTest extends BaseAiTest
     public final void testJavaMethodLocalStaticMethodCombined()
     {
         final String steps = """
-                Open ${javaMethod.test.url}
-                Get the text of 'h1' and verify the welcome message length is 18 using the java method 'verifyWelcomeMessageLength'
+                OPEN ${javaMethod.test.url}
+                Get the text of 'h1' and verify its length is 18 using the java method 'verifyWelcomeMessageLength'
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(3);
+    }
+
+    /**
+     * Local parameterless method for testing inline direct invocation.
+     */
+    public final void assertParameterless()
+    {
+        assertTrue(true);
+    }
+
+    /**
+     * Test direct resolution of inline java: method calls using different conventions.
+     */
+    @NeodymiumTest
+    public final void testJavaMethodInlineConvention()
+    {
+        final String steps = """
+                OPEN ${javaMethod.test.url}
+                Verify the price is correct (java: assertPriceGreaterThanZero("14.96 €"))
+                Run a standalone parenthesized command (java: assertLocalMethod("expected_value"))
+                Call a parameterless method (java: assertParameterless())
+                Call a parameterless method without parens (java: assertParameterless)
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(5)
+            .hasReplays(0)
+            .hasActionsCount(5);
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(5)
+            .hasActionsCount(5);
+    }
+
+    /**
+     * Test variable interpolation inside inline direct calls.
+     */
+    @NeodymiumTest
+    public final void testJavaMethodVariableInterpolation()
+    {
+        final String steps = """
+                OPEN ${javaMethod.test.url}
+                Get the text of 'h1' and store it as 'headerText'
+                java: verifyWelcomeMessageLength("${headerText}")
             """;
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
@@ -402,8 +594,140 @@ public class JavaMethodTest extends BaseAiTest
         assertThat(r1)
             .hasLlmCalls(1)
             .hasNoEscalations()
-            .hasDirectParses(1)
-            .hasReplays(0)
             .hasActionsCount(3);
+    }
+
+    /**
+     * Test that test class static/instance methods shadow registered utility methods.
+     */
+    @NeodymiumTest
+    public final void testJavaMethodShadowingPrecedence()
+    {
+        final String origUtilityClasses = System.getProperty("neodymium.ai.agent.javaMethod.utilityClasses");
+        try
+        {
+            System.setProperty(
+                "neodymium.ai.agent.javaMethod.utilityClasses",
+                CustomAssertions.class.getName()
+            );
+            Neodymium.reloadAiConfiguration();
+
+            final String steps = """
+                    OPEN ${javaMethod.test.url}
+                    java: assertShadowedMethod("shadow_value")
+                """;
+
+            final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+            assertThat(r1)
+                .hasDirectParses(2)
+                .hasActionsCount(2);
+        }
+        finally
+        {
+            if (origUtilityClasses != null)
+            {
+                System.setProperty("neodymium.ai.agent.javaMethod.utilityClasses", origUtilityClasses);
+            }
+            else
+            {
+                System.clearProperty("neodymium.ai.agent.javaMethod.utilityClasses");
+            }
+            Neodymium.reloadAiConfiguration();
+        }
+    }
+
+    private void assertExecutionThrows(final String steps, final Class<? extends Throwable> expectedCause)
+    {
+        final Throwable thrown = org.junit.jupiter.api.Assertions.assertThrows(
+            Throwable.class,
+            () -> runAi(steps, VerificationMode.LIVE_LLM)
+        );
+
+        Throwable cause = thrown;
+        boolean found = false;
+        while (cause != null)
+        {
+            if (expectedCause.isInstance(cause))
+            {
+                found = true;
+                break;
+            }
+            cause = cause.getCause();
+        }
+        assertTrue(found, "Expected " + expectedCause.getSimpleName() + " in cause chain of: " + thrown);
+    }
+
+    /**
+     * Test that invoking a private method throws ActionExecutionException.
+     */
+    @NeodymiumTest
+    public final void testJavaMethodVisibilityError()
+    {
+        final String steps = """
+                OPEN ${javaMethod.test.url}
+                java: assertPrivateMethod("test")
+            """;
+
+        assertExecutionThrows(steps, ActionExecutionException.class);
+    }
+
+    /**
+     * Test that methods with non-String parameter types are rejected.
+     */
+    @NeodymiumTest
+    public final void testJavaMethodWrapperParamError()
+    {
+        final String steps = """
+                OPEN ${javaMethod.test.url}
+                java: assertWrapperParam("123")
+            """;
+
+        assertExecutionThrows(steps, ActionExecutionException.class);
+    }
+
+    /**
+     * Test that AssertionError thrown inside custom methods is propagated correctly.
+     */
+    @NeodymiumTest
+    public final void testJavaMethodAssertionErrorPropagation()
+    {
+        final String steps = """
+                OPEN ${javaMethod.test.url}
+                java: assertFailingMethod("fail")
+            """;
+
+        assertExecutionThrows(steps, AssertionError.class);
+    }
+
+    /**
+     * Test preference of String overload over parameterless overload when argument is passed.
+     */
+    @NeodymiumTest
+    public final void testJavaMethodOverloadingResolution()
+    {
+        overloadedNoArgsCalled = false;
+        overloadedWithArgCalled = false;
+
+        final String stepsArg = """
+                OPEN ${javaMethod.test.url}
+                java: assertOverloaded("test_val")
+            """;
+
+        runAi(stepsArg, VerificationMode.LIVE_LLM);
+        assertTrue(overloadedWithArgCalled);
+        assertFalse(overloadedNoArgsCalled);
+
+        overloadedNoArgsCalled = false;
+        overloadedWithArgCalled = false;
+
+        final String stepsNoArg = """
+                OPEN ${javaMethod.test.url}
+                java: assertOverloaded
+            """;
+
+        runAi(stepsNoArg, VerificationMode.LIVE_LLM);
+        assertTrue(overloadedNoArgsCalled);
+        assertFalse(overloadedWithArgCalled);
     }
 }

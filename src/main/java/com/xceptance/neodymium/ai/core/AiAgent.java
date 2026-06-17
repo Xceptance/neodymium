@@ -24,8 +24,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,6 +43,7 @@ import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException
 import com.xceptance.neodymium.ai.action.ActionParser;
 import com.xceptance.neodymium.ai.action.ActionRegistry;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.ai.action.plugins.JavaMethodAction;
 import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.ai.generator.InteractiveHud;
 import com.xceptance.neodymium.ai.playbook.Playbook;
@@ -55,10 +57,7 @@ import com.xceptance.neodymium.ai.util.CustomRulesLoader;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import io.qameta.allure.Allure;
 
@@ -73,8 +72,9 @@ import io.qameta.allure.Allure;
  * <li>Executes actions via Selenium</li>
  * <li>Retries with error context if actions fail (self-healing)</li>
  * </ol>
- * 
+ *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public class AiAgent {
 
@@ -109,7 +109,7 @@ public class AiAgent {
     private boolean hudPromptChanged = false;
     private boolean hudSaveExit = false;
 
-    // AI-generated: Gemini 2.5 Flash - tracks whether the last LLM response indicated completion
+    // Tracks whether the last LLM response indicated completion
     private boolean lastLlmDone = true;
 
     private static final int NO_ACTIONS_MAX_RETRIES = 15;
@@ -120,15 +120,32 @@ public class AiAgent {
 
     private static final Pattern TIMEOUT_TAG_PATTERN = Pattern.compile("(?i)\\(timeout\\s*:\\s*(\\d+)(ms|s)?\\)");
 
+    private static final Pattern NO_REPLAY_TAG_PATTERN = Pattern.compile("(?i)\\(no-replay\\)");
+
     private static final List<Pattern> STRIP_PATTERNS = List.of(
         BUG_TAG_PATTERN,
         OPTIONAL_TAG_PATTERN,
-        TIMEOUT_TAG_PATTERN
+        TIMEOUT_TAG_PATTERN,
+        NO_REPLAY_TAG_PATTERN
     );
 
-    private final List<ContextLevel> pesapPredictions = new ArrayList<>();
+    /**
+     * Holds the result of a JIT pre-step PESAP analysis for a single step.
+     */
+    record PreStepPesapResult(
+        ContextLevel contextLevel,
+        boolean requiresJavaMethods,
+        List<String> splitSteps
+    ) {}
 
-    // AI-generated: Gemini 2.5 Flash
+
+
+    /**
+     * Execution-scoped reference to the current steps list.
+     * Set once in {@code execute()} and read by {@code runPreStepPesap()}.
+     */
+    private List<String> currentStepsList = null;
+
     public static String stripAllTags(final String step)
     {
         if (step == null)
@@ -142,6 +159,8 @@ public class AiAgent {
         }
         return stripped.replaceAll("\\s+", " ").trim();
     }
+
+
 
     /**
      * Constructs a new AiAgent.
@@ -229,6 +248,7 @@ public class AiAgent {
         final int startEscalation = statsSnapshot.getTotalEscalationCount();
         final int startReplay = statsSnapshot.getReplayCount();
         final int startDirectParse = statsSnapshot.getDirectParseCount();
+        final int startPesapCalls = statsSnapshot.getPesapCallCount();
 
         final long startTimeMs = System.currentTimeMillis();
 
@@ -276,38 +296,27 @@ public class AiAgent {
             }
             Neodymium.initializePlaybook();
             final Playbook playbook = Neodymium.getAiPlaybook();
-            boolean needsPesap = false;
-            if (playbook != null)
+            if (playbook != null && playbook.getSteps() != null)
             {
-                if (playbook.isRecording())
+                for (final PlaybookStep step : playbook.getSteps())
                 {
-                    needsPesap = true;
-                }
-                else
-                {
-                    // In replay mode, do not perform PESAP; fall back to defaults and escalations
-                    needsPesap = false;
+                    step.setFailure(null);
                 }
             }
-            else
-            {
-                needsPesap = true;
-            }
+            alignStepsWithPlaybookForReplay(stepsList, stepLines, result, playbook);
 
-            this.pesapPredictions.clear();
-            boolean pesapEnabledVal = Neodymium.aiConfiguration().pesapEnabled();
-            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.enabled"))
+            // Determine if JIT per-step PESAP should run (only during recording, not replay)
+            final boolean needsPesap = playbook == null || playbook.isRecording();
+            this.currentStepsList = stepsList;
+
+            // Run local offline semantic linter independently (when enabled)
+            boolean linterEnabledVal = Neodymium.aiConfiguration().pesapLinterEnabled();
+            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.linter.enabled"))
             {
-                pesapEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.enabled", pesapEnabledVal);
+                linterEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.linter.enabled", linterEnabledVal);
             }
-            final boolean pesapEnabled = pesapEnabledVal;
-            if (pesapEnabled && needsPesap)
+            if (linterEnabledVal)
             {
-                runPesap(stepsList, stepLines, sourceFileVal, result);
-            }
-            else
-            {
-                // Run local offline semantic linter as fallback
                 final List<String> lintWarnings = StepLinter.lint(stepsList, stepLines, sourceFileVal);
                 if (!lintWarnings.isEmpty())
                 {
@@ -328,6 +337,7 @@ public class AiAgent {
 
             final boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
             final List<String> performedInstructions = new ArrayList<>();
+            final Set<String> alreadySplitSteps = new HashSet<>();
             boolean abortedDueToExpectedFailure = false;
             String abortedBugId = null;
 
@@ -455,6 +465,8 @@ public class AiAgent {
                 // Fully strip ALL registered tags beautifully via stripAllTags static helper
                 final String strippedStep = stripAllTags(step);
 
+                final StepDetails stepDetails = result.getSteps().get(i);
+
                 boolean isReplay = false;
                 final Playbook playbookForCheck = Neodymium.getAiPlaybook();
                 // Check if we have an active, non-recording playbook matching the current step
@@ -500,6 +512,45 @@ public class AiAgent {
                 }
                 LOG.debug("{}", strippedStep);
                 LOG.debug("───────────────────────────────────────────────────────────");
+
+                // We always run PESAP for non-direct instructions to classify context level, check custom java methods, and handle step splitting.
+                if (!isDirectInstruction(strippedStep) && needsPesap && !alreadySplitSteps.contains(strippedStep))
+                {
+                    final Object testInstance = actionExecutor.getTestInstance();
+                    final Class<?> testClass = testInstance != null ? testInstance.getClass() : null;
+                    final PreStepPesapResult pesapResult = runPreStepPesap(i, testClass, stepDetails);
+                    if (pesapResult != null && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
+                    {
+                        LOG.info("✂️ Upfront JIT step split detected: '{}' split into {}", strippedStep, pesapResult.splitSteps());
+                        final List<String> splitList = pesapResult.splitSteps();
+                        final Integer origLine = i < stepLines.size() ? stepLines.get(i) : null;
+
+                        stepsList.set(i, splitList.get(0));
+                        stepDetails.setExpandedInstruction(splitList.get(0));
+                        stepDetails.setOriginalUnsplitInstruction(stepUnresolved);
+
+                        for (int j = 1; j < splitList.size(); j++)
+                        {
+                            final String part = splitList.get(j);
+                            stepsList.add(i + j, part);
+                            if (i + j <= stepLines.size())
+                            {
+                                stepLines.add(i + j, origLine);
+                            }
+                            else
+                            {
+                                stepLines.add(origLine);
+                            }
+                            final StepDetails partDetails = new StepDetails(part);
+                            partDetails.setOriginalUnsplitInstruction(stepUnresolved);
+                            result.getSteps().add(i + j, partDetails);
+                        }
+                        alreadySplitSteps.add(strippedStep);
+                        i--;
+                        continue;
+                    }
+                }
+
                 try
                 {
                     executionLog.startStep(i + 1, stepsList.size(), strippedStep);
@@ -509,12 +560,11 @@ public class AiAgent {
                         futureInstructions.add(stepsList.get(j));
                     }
                     
-                    final StepDetails stepDetails = result.getSteps().get(i);
                     stepDetails.setExpandedInstruction(strippedStep);
                     final long stepStartTime = System.currentTimeMillis();
                     try
                     {
-                        executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs, performedInstructions, stepUnresolved, futureInstructions, currentLineNumber, sourceFileVal, stepDetails, result);
+                        executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs, performedInstructions, stepUnresolved, futureInstructions, currentLineNumber, sourceFileVal, stepDetails, result, stepsList, stepLines);
                     }
                     catch (final HudActionException e)
                     {
@@ -529,7 +579,7 @@ public class AiAgent {
                     {
                         stepDetails.setDurationMs(System.currentTimeMillis() - stepStartTime);
                     }
-                    performedInstructions.add(stepUnresolved);
+                    performedInstructions.add(stepsList.get(i));
                 }
                 catch (final HudActionException e)
                 {
@@ -574,6 +624,7 @@ public class AiAgent {
             result.setEscalationCount(stats.getTotalEscalationCount() - startEscalation);
             result.setReplayCount(stats.getReplayCount() - startReplay);
             result.setDirectParseCount(stats.getDirectParseCount() - startDirectParse);
+            result.setPesapCallCount(stats.getPesapCallCount() - startPesapCalls);
 
             final Playbook playbook = Neodymium.getAiPlaybook();
             if (playbook != null) {
@@ -627,7 +678,9 @@ public class AiAgent {
             final Integer currentLineNumber,
             final String sourceFile,
             final StepDetails stepDetails,
-            final AiExecutionResult result) throws HudActionException
+            final AiExecutionResult result,
+            final List<String> stepsList,
+            final List<Integer> stepLines) throws HudActionException
     {
         int errorCount = 0;
         int playbookReplayAttempts = 0;
@@ -635,11 +688,59 @@ public class AiAgent {
         final Playbook playbook = Neodymium.getAiPlaybook();
         final boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
 
+        final boolean isNoReplay = (unresolvedInstruction != null && unresolvedInstruction.toLowerCase().contains("(no-replay)"))
+                || (stepDetails != null && stepDetails.getOriginalUnsplitInstruction() != null && stepDetails.getOriginalUnsplitInstruction().toLowerCase().contains("(no-replay)"));
+
+        if (playbook != null && !playbook.isRecording() && playbook.getCurrentStep() != null)
+        {
+            final PlaybookStep step = playbook.getCurrentStep();
+            if (step.getScreenshotHash() != null && step.getExpectedErrorMessage() != null && !step.isExpectedFailure() && !isNoReplay)
+            {
+                LOG.info("    🔍 Step has cached visual failure screenshot hash. Verifying if screen is still broken the same way...");
+                try
+                {
+                    final String currentScreenshot = pageAnalyzer.captureScreenshot("Visual Failure Replay: " + instruction);
+                    final String currentHash = ScreenshotHasher.computeHash(currentScreenshot);
+                    final int distance = ScreenshotHasher.getHammingDistance(step.getScreenshotHash(), currentHash);
+                    LOG.info("    📊 Visual Failure Replay Screenshot dHash comparison: Distance = {}, Recorded: {}, Current: {}", distance, step.getScreenshotHash(), currentHash);
+
+                    if (distance <= 15)
+                    {
+                        LOG.info("    ✅ SUT screen matches the recorded defective state (Hamming distance {} <= 15). Immediately throwing recorded failure.", distance);
+                        llmClient.getAiStats().recordReplay();
+                        stepDetails.setReplayed(true);
+                        playbook.nextStep();
+
+                        final String errorType = step.getExpectedErrorType();
+                        final String errorMsg = formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\n" + step.getExpectedErrorMessage());
+                        if (DefinitiveAssertionError.class.getName().equals(errorType))
+                        {
+                            throw new DefinitiveAssertionError(errorMsg);
+                        }
+
+                        throw new AssertionError(errorMsg);
+                    }
+                    else
+                    {
+                        LOG.info("    ⚠️ Visual defect appearance changed (Hamming distance {} > 15). Proceeding with normal execution/healing.", distance);
+                    }
+                }
+                catch (final AssertionError e)
+                {
+                    throw e;
+                }
+                catch (final Exception e)
+                {
+                    LOG.error("    ❌ Error during defective state visual hash comparison", e);
+                }
+            }
+        }
+
         while (true)
         {
             try
             {
-                // AI-generated: Gemini 3.5 Flash - Reset compound step tracking on each attempt
+                // Reset compound step tracking on each attempt
                 final List<Action> accumulatedActions = new ArrayList<>();
                 stepDetails.getActions().clear();
                 this.lastLlmDone = true;
@@ -670,7 +771,7 @@ public class AiAgent {
 
                     // Try to resolve the required actions (from playbook cache, direct plugins, or
                     // LLM)
-                    final List<Action> actions = getStepActions(stepIndex, instruction, playbook, expectedFailure, bugId, accumulatedActions, stepDetails, result);
+                    final List<Action> actions = getStepActions(stepIndex, instruction, unresolvedInstruction, playbook, expectedFailure, bugId, accumulatedActions, stepDetails, result);
 
                     if (isInteractive && !hasApprovedCurrentStep)
                     {
@@ -703,6 +804,100 @@ public class AiAgent {
                         // Block and wait for the user to approve the actions
                         waitForHudAction(true);
                         hasApprovedCurrentStep = true;
+                    }
+
+                    // Check if LLM returned a SPLIT action
+                    int splitActionIndex = -1;
+                    for (int aIdx = 0; aIdx < actions.size(); aIdx++)
+                    {
+                        if ("SPLIT".equals(actions.get(aIdx).getType()))
+                        {
+                            splitActionIndex = aIdx;
+                            break;
+                        }
+                    }
+
+                    if (splitActionIndex != -1)
+                    {
+                        final Action splitAction = actions.get(splitActionIndex);
+                        final String remainingInstruction = splitAction.getValue();
+                        if (remainingInstruction != null && !remainingInstruction.trim().isEmpty())
+                        {
+                            LOG.info("✂️ Runtime SPLIT action detected. Remaining: '{}'", remainingInstruction);
+
+                            // 1. Get preceding actions
+                            final List<Action> precedingActions = new ArrayList<>(actions.subList(0, splitActionIndex));
+
+                            // 2. Execute preceding actions
+                            final long originalTimeout = com.codeborne.selenide.Configuration.timeout;
+                            if (customTimeoutMs != null)
+                            {
+                                com.codeborne.selenide.Configuration.timeout = customTimeoutMs;
+                            }
+                            try
+                            {
+                                actionExecutor.executeAll(precedingActions);
+                            }
+                            finally
+                            {
+                                if (customTimeoutMs != null)
+                                {
+                                    com.codeborne.selenide.Configuration.timeout = originalTimeout;
+                                }
+                            }
+                            accumulatedActions.addAll(precedingActions);
+
+                            // 3. Update current playbook step
+                            final String firstPartPrompt = deriveFirstPartPrompt(instruction, remainingInstruction);
+                            stepDetails.setOriginalUnsplitInstruction(unresolvedInstruction);
+                            if (playbook.isRecording())
+                            {
+                                final PlaybookStep currentPbStep = playbook.getCurrentStep();
+                                currentPbStep.setPromptLine(firstPartPrompt);
+                                currentPbStep.setOriginalUnsplitInstruction(unresolvedInstruction);
+                                currentPbStep.setActions(new ArrayList<>(precedingActions));
+                                playbook.setChanged(true);
+                            }
+
+                            // 4. Insert remaining instruction in stepsList, stepLines, result.getSteps()
+                            final int nextStepIndex = stepIndex + 1;
+                            stepsList.set(stepIndex, firstPartPrompt);
+                            stepsList.add(nextStepIndex, remainingInstruction);
+                            if (nextStepIndex <= stepLines.size())
+                            {
+                                stepLines.add(nextStepIndex, currentLineNumber);
+                            }
+                            else
+                            {
+                                stepLines.add(currentLineNumber);
+                            }
+
+                            final StepDetails nextStepDetails = new StepDetails(remainingInstruction);
+                            nextStepDetails.setOriginalUnsplitInstruction(unresolvedInstruction);
+                            result.getSteps().add(nextStepIndex, nextStepDetails);
+
+                            // 5. Insert remaining step in playbook
+                            if (playbook.isRecording())
+                            {
+                                final PlaybookStep nextPbStep = new PlaybookStep();
+                                nextPbStep.setPromptLine(remainingInstruction);
+                                nextPbStep.setOriginalUnsplitInstruction(unresolvedInstruction);
+                                nextPbStep.setReasoning("Split remainder from: " + instruction);
+                                if (playbook.getSteps().size() > playbook.getCursor() + 1)
+                                {
+                                    playbook.getSteps().add(playbook.getCursor() + 1, nextPbStep);
+                                }
+                                else
+                                {
+                                    playbook.getSteps().add(nextPbStep);
+                                }
+                                playbook.setChanged(true);
+                            }
+
+                            // 6. Advance playbook cursor and return immediately
+                            playbook.nextStep();
+                            return;
+                        }
                     }
 
                     // Execute the approved actions via Selenium/WebDriver, applying timeout isolation
@@ -790,6 +985,15 @@ public class AiAgent {
                     continue;
                 }
 
+                if (isDirectInstruction(instruction))
+                {
+                    final Throwable finalThrowable = e.getCause() != null ? e.getCause() : e;
+                    recordVisualFailureIfRecording(unresolvedInstruction, finalThrowable, playbook);
+                    SelenideAddons.wrapAssertionError(() -> {
+                        throw new AssertionError(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, " (direct shortcut):\n\n") + finalThrowable.getMessage(), finalThrowable);
+                    });
+                }
+
                 // something went wrong, but we can try to retry
                 step.setFailure(e);
 
@@ -808,7 +1012,12 @@ public class AiAgent {
                                 escalated, e.getMessage());
                         executionLog.logInfo("Context escalation: " + currentLevel + " → " + escalated + " (error: "
                                 + e.getMessage() + ")");
-                        result.getEscalations().add(new EscalationDetails(currentLevel, escalated, false, e.getMessage()));
+                        final EscalationDetails escalation = new EscalationDetails(currentLevel, escalated, false, e.getMessage());
+                        result.getEscalations().add(escalation);
+                        if (stepDetails != null)
+                        {
+                            stepDetails.getEscalations().add(escalation);
+                        }
                         llmClient.getAiStats().recordEscalation(false);
                         escalatedOk = true;
                         // Do not increment error count when escalating
@@ -845,8 +1054,9 @@ public class AiAgent {
                     }
                     else
                     {
+                        recordVisualFailureIfRecording(unresolvedInstruction, finalThrowable, playbook);
                         SelenideAddons.wrapAssertionError(() -> {
-                            throw new AssertionError(formatFailureMessage(instruction, currentLineNumber, sourceFile, " (" + (getMaxRetries() + 1)
+                            throw new AssertionError(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, " (" + (getMaxRetries() + 1)
                                     + " tries):\n\n") + finalThrowable.getMessage(), finalThrowable);
                         });
                     }
@@ -897,6 +1107,7 @@ public class AiAgent {
                     {
                         step.setFailure(new ActionExecutionException(e.getMessage(), e));
                     }
+                    recordVisualFailureIfRecording(unresolvedInstruction, e, playbook);
                     throw e;
                 }
                 if (optionalStep)
@@ -942,7 +1153,12 @@ public class AiAgent {
                                 escalated, e.getMessage());
                         executionLog.logInfo("Context escalation: " + currentLevel + " → " + escalated
                                 + " (assertion failed: " + e.getMessage() + ")");
-                        result.getEscalations().add(new EscalationDetails(currentLevel, escalated, false, e.getMessage()));
+                        final EscalationDetails escalation = new EscalationDetails(currentLevel, escalated, false, e.getMessage());
+                        result.getEscalations().add(escalation);
+                        if (stepDetails != null)
+                        {
+                            stepDetails.getEscalations().add(escalation);
+                        }
                         llmClient.getAiStats().recordEscalation(false);
                         escalatedOk = true;
 
@@ -997,7 +1213,8 @@ public class AiAgent {
                 }
                 else
                 {
-                    throw new AssertionError(formatFailureMessage(instruction, currentLineNumber, sourceFile, ":\n" + e.getMessage()), e);
+                    recordVisualFailureIfRecording(unresolvedInstruction, e, playbook);
+                    throw new AssertionError(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\n" + e.getMessage()), e);
                 }
             }
             catch (final Exception e)
@@ -1049,8 +1266,9 @@ public class AiAgent {
                 }
                 else
                 {
+                    recordVisualFailureIfRecording(unresolvedInstruction, e, playbook);
                     SelenideAddons.wrapAssertionError(() -> {
-                        throw new AiAgentException(formatFailureMessage(instruction, currentLineNumber, sourceFile, ":\nUnexpected error executing step: " + instruction), e);
+                        throw new AiAgentException(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\nUnexpected error executing step: " + instruction), e);
                     });
                 }
             }
@@ -1058,16 +1276,21 @@ public class AiAgent {
 
         if (expectedFailure)
         {
-            final String msg = formatFailureMessage(instruction, currentLineNumber, sourceFile, ": Expected step to fail with " + (bugId != null ? "bug: " + bugId : "expected failure") + ", but it succeeded.");
+            final String msg = formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ": Expected step to fail with " + (bugId != null ? "bug: " + bugId : "expected failure") + ", but it succeeded.");
             LOG.error("    ❌ {}", msg);
             throw new AssertionError(msg);
         }
     }
 
-    private static String formatFailureMessage(final String instruction, final Integer lineNumber, final String sourceFile, final String suffix)
+    private static String formatFailureMessage(final String instruction, final String originalUnsplitInstruction, final Integer lineNumber, final String sourceFile, final String suffix)
     {
         final StringBuilder sb = new StringBuilder();
-        sb.append("Instruction '").append(instruction).append("' failed");
+        sb.append("Instruction '").append(instruction).append("'");
+        if (originalUnsplitInstruction != null)
+        {
+            sb.append(" (virtual step split from: '").append(originalUnsplitInstruction).append("')");
+        }
+        sb.append(" failed");
         if (lineNumber != null)
         {
             sb.append(" at line ").append(lineNumber);
@@ -1107,7 +1330,7 @@ public class AiAgent {
     private void handleExpectedFailure(final PlaybookStep step, final String instruction, final String unresolvedInstruction,
             final String bugId, final Throwable t, final Playbook playbook)
     {
-        final boolean isVisual = unresolvedInstruction.toLowerCase().contains("(visual)") || unresolvedInstruction.toLowerCase().contains("(glance)");
+        final boolean isVisual = unresolvedInstruction.toLowerCase().contains("(visual)") || unresolvedInstruction.toLowerCase().contains("(layout)");
         final String errorType = t.getClass().getName();
         final String errorMessage = t.getMessage() != null ? t.getMessage() : "";
 
@@ -1338,7 +1561,7 @@ public class AiAgent {
         Neodymium.getOrCreateInteractiveHud().resetHudAction();
     }
 
-    private List<Action> getStepActions(final int stepIndex, final String instruction, final Playbook playbook,
+    private List<Action> getStepActions(final int stepIndex, final String instruction, final String unresolvedInstruction, final Playbook playbook,
             final boolean expectedFailure, final String bugId, final List<Action> accumulatedActions,
             final StepDetails stepDetails, final AiExecutionResult result)
     {
@@ -1346,8 +1569,11 @@ public class AiAgent {
         PlaybookStep step = playbook.getCurrentStep();
         boolean visualMatchSucceeded = false;
 
+        final boolean isNoReplay = (unresolvedInstruction != null && unresolvedInstruction.toLowerCase().contains("(no-replay)"))
+                || (stepDetails != null && stepDetails.getOriginalUnsplitInstruction() != null && stepDetails.getOriginalUnsplitInstruction().toLowerCase().contains("(no-replay)"));
+
         // 1. Are we replaying a playbook?
-        if (playbook.isRecording() == false || (step.getPromptLine() != null && step.getPromptLine().equals(instruction) && !step.getActions().isEmpty() && !step.failed())) {
+        if (!isNoReplay && (playbook.isRecording() == false || (step.getPromptLine() != null && step.getPromptLine().equals(instruction) && !step.getActions().isEmpty() && !step.failed()))) {
             if (playbook.isRecording() == false && step.isExpectedFailure())
             {
                 llmClient.getAiStats().recordReplay();
@@ -1462,6 +1688,10 @@ public class AiAgent {
                 step.setPromptLine(instruction);
                 step.setReasoning("directly parsed or local validation succeeded");
                 step.setActions(actions);
+                if (stepDetails.getOriginalUnsplitInstruction() != null)
+                {
+                    step.setOriginalUnsplitInstruction(stepDetails.getOriginalUnsplitInstruction());
+                }
                 playbook.setChanged(true);
             }
         }
@@ -1470,287 +1700,209 @@ public class AiAgent {
         return actions;
     }
 
-    // AI-generated: Gemini 3.5 Flash
-    private void runPesap(final List<String> stepsList, final List<Integer> stepLines, final String sourceFileVal, final AiExecutionResult result)
+    /**
+     * Runs a JIT pre-step PESAP call for the given step index.
+     * Uses a 1-previous / current / 2-next flow context window.
+     * Results are cached per step index so retries don't re-trigger the call.
+     *
+     * @param stepIndex   the 0-based step index
+     * @param testClass   the active test class for method scanning, or {@code null}
+     * @param stepDetails the step details to populate with PESAP results
+     * @return the parsed result, or {@code null} if the call failed
+     */
+    private PreStepPesapResult runPreStepPesap(final int stepIndex, final Class<?> testClass,
+            final StepDetails stepDetails)
     {
-        if (stepsList.isEmpty())
+        if (Boolean.getBoolean("neodymium.ai.offline") || this.currentStepsList == null)
         {
-            return;
+            return null;
         }
-
-        if (Boolean.getBoolean("neodymium.ai.offline"))
+        if (stepDetails != null)
         {
-            return;
+            stepDetails.setPesapCalled(true);
         }
-
-        boolean classifyEnabledVal = Neodymium.aiConfiguration().pesapClassifyEnabled();
-        if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.classify.enabled"))
-        {
-            classifyEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.classify.enabled", classifyEnabledVal);
-        }
-        final boolean classifyEnabled = classifyEnabledVal;
-
-        boolean linterEnabledVal = Neodymium.aiConfiguration().pesapLinterEnabled();
-        if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.linter.enabled"))
-        {
-            linterEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.linter.enabled", linterEnabledVal);
-        }
-        final boolean linterEnabled = linterEnabledVal;
-
-        if (!classifyEnabled && !linterEnabled)
-        {
-            return;
-        }
-
-        if (sourceFileVal != null)
-        {
-            LOG.info("🤖 Starting Pre-Execution Static Analysis Phase (PESAP) for {}...", new File(sourceFileVal).getName());
-        }
-        else
-        {
-            LOG.info("🤖 Starting Pre-Execution Static Analysis Phase (PESAP)...");
-        }
-
         try
         {
-            final StringBuilder sb = new StringBuilder();
-            sb.append("## Test Steps\n");
-            for (int i = 0; i < stepsList.size(); i++)
+            // Build 1-previous / current / 2-next flow context
+            final StringBuilder flowContext = new StringBuilder();
+            if (stepIndex > 0)
             {
-                final String resolved = AiBrowser.resolveTestDataToPrompt(stepsList.get(i));
-                sb.append(i + 1).append(": ").append(stripAllTags(resolved)).append("\n");
+                final String prev = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex - 1));
+                flowContext.append("[PREVIOUS] Step ").append(stepIndex).append(": ").append(stripAllTags(prev)).append("\n");
             }
-            final String userPrompt = sb.toString();
-
-            pesapPredictions.clear();
-            for (int i = 0; i < stepsList.size(); i++)
+            final String current = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex));
+            flowContext.append("[CURRENT]  Step ").append(stepIndex + 1).append(": ").append(stripAllTags(current)).append("\n");
+            if (stepIndex + 1 < this.currentStepsList.size())
             {
-                pesapPredictions.add(null);
+                final String next1 = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex + 1));
+                flowContext.append("[NEXT]     Step ").append(stepIndex + 2).append(": ").append(stripAllTags(next1)).append("\n");
             }
-
-            // 1. Context Level Classification Phase
-            if (classifyEnabled)
+            if (stepIndex + 2 < this.currentStepsList.size())
             {
-                LOG.debug("💬 [PESAP Classification] Sending prompt:\n\n=== SYSTEM PROMPT ===\n{}\n\n=== USER PROMPT ===\n{}", 
-                          AiAgentPrompts.PESAP_CLASSIFY_PROMPT, userPrompt);
-                
-                final long startTime = System.currentTimeMillis();
-                final String response = llmClient.chat(LlmMode.PESAP, AiAgentPrompts.PESAP_CLASSIFY_PROMPT, userPrompt);
-                final long duration = System.currentTimeMillis() - startTime;
-                
-                LOG.debug("📊 [PESAP Classification] Call took {} ms", duration);
-                LOG.debug("💬 [PESAP Classification] Response:\n{}", response);
-
-                try
-                {
-                    final JsonObject responseObj = JsonParser.parseString(response).getAsJsonObject();
-                    if (responseObj != null)
-                    {
-                        final JsonElement predictionsElement = responseObj.get("predictions");
-                        if (predictionsElement != null && predictionsElement.isJsonObject())
-                        {
-                            final JsonObject predictionsObj = predictionsElement.getAsJsonObject();
-                            for (final Entry<String, JsonElement> entry : predictionsObj.entrySet())
-                            {
-                                try
-                                {
-                                    final int stepIndex = Integer.parseInt(entry.getKey()) - 1;
-                                    if (stepIndex >= 0 && stepIndex < stepsList.size())
-                                    {
-                                        final String levelStr = entry.getValue().getAsString();
-                                        if (levelStr != null)
-                                        {
-                                            try
-                                            {
-                                                final ContextLevel level = ContextLevel.valueOf(levelStr.toUpperCase().trim());
-                                                pesapPredictions.set(stepIndex, level);
-                                                
-                                                if (stepIndex < result.getSteps().size())
-                                                {
-                                                    result.getSteps().get(stepIndex).setPesapPredictedContextLevel(level);
-                                                }
-
-                                                final Integer lineNum = (stepLines != null && stepIndex < stepLines.size()) ? stepLines.get(stepIndex) : null;
-                                                if (lineNum != null)
-                                                {
-                                                    LOG.debug("   🔮 Step {} (line {}) -> PESAP Predicted ContextLevel: {}", stepIndex + 1, lineNum, level);
-                                                }
-                                                else
-                                                {
-                                                    LOG.debug("   🔮 Step {} -> PESAP Predicted ContextLevel: {}", stepIndex + 1, level);
-                                                }
-                                            }
-                                            catch (final Exception e)
-                                            {
-                                                LOG.warn("   ⚠️ Invalid context level predicted by PESAP: {}", levelStr);
-                                            }
-                                        }
-                                    }
-                                }
-                                catch (final NumberFormatException e)
-                                {
-                                    LOG.warn("   ⚠️ Invalid step index in PESAP predictions: {}", entry.getKey());
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (final Exception e)
-                {
-                    LOG.warn("⚠️ PESAP classification JSON parsing failed (possibly due to LLM response truncation). Attempting regex recovery for partial predictions...");
-                    performRegexRecovery(response, stepsList, stepLines, result);
-                }
+                final String next2 = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex + 2));
+                flowContext.append("[NEXT]     Step ").append(stepIndex + 3).append(": ").append(stripAllTags(next2)).append("\n");
             }
 
-            // 2. Semantic Linting Phase
-            if (linterEnabled)
+            // Build the JIT PESAP prompt
+            final String systemPrompt = AiAgentPrompts.getPesapPreStepPrompt();
+            final String userPrompt = "## Flow Context\n" + flowContext.toString();
+
+            LOG.debug("💬 [Pre-Step PESAP] Step {} — running analysis", stepIndex + 1);
+
+            final long startTime = System.currentTimeMillis();
+            final long pesapInBefore = llmClient.getAiStats().getPesapInputTokens();
+            final long pesapOutBefore = llmClient.getAiStats().getPesapOutputTokens();
+            final long pesapCachedBefore = llmClient.getAiStats().getPesapCachedInputTokens();
+
+            final String response;
+            try
             {
-                final String customRules = CustomRulesLoader.loadCustomRules(Neodymium.aiConfiguration().pesapCustomFile());
-                final String linterPrompt = AiAgentPrompts.getPesapLinterPrompt(customRules);
-
-                LOG.debug("💬 [PESAP Linter] Sending prompt:\n\n=== SYSTEM PROMPT ===\n{}\n\n=== USER PROMPT ===\n{}", 
-                          linterPrompt, userPrompt);
-                
-                final long startTime = System.currentTimeMillis();
-                final String response = llmClient.chat(LlmMode.PESAP, linterPrompt, userPrompt);
-                final long duration = System.currentTimeMillis() - startTime;
-                
-                LOG.debug("📊 [PESAP Linter] Call took {} ms", duration);
-                LOG.debug("💬 [PESAP Linter] Response:\n{}", response);
-
-                try
+                response = llmClient.chat(LlmMode.PESAP, systemPrompt, userPrompt);
+            }
+            catch (final Exception e)
+            {
+                final Integer code = (e instanceof LlmHttpException) ? ((LlmHttpException) e).getStatusCode() : null;
+                if (stepDetails != null)
                 {
-                    final JsonObject responseObj = JsonParser.parseString(response).getAsJsonObject();
-                    if (responseObj != null)
-                    {
-                        final JsonElement warningsElement = responseObj.get("warnings");
-                        if (warningsElement != null && warningsElement.isJsonObject())
-                        {
-                            final List<String> linterWarnings = new ArrayList<>();
-                            final JsonObject warningsObj = warningsElement.getAsJsonObject();
-                            for (final Entry<String, JsonElement> entry : warningsObj.entrySet())
-                            {
-                                try
-                                {
-                                    final int stepIndex = Integer.parseInt(entry.getKey()) - 1;
-                                    if (stepIndex >= 0 && stepIndex < stepsList.size())
-                                    {
-                                        final JsonElement val = entry.getValue();
-                                        if (val != null && val.isJsonArray())
-                                        {
-                                            final String step = stepsList.get(stepIndex);
-                                            final int stepNumber = stepIndex + 1;
-                                            final Integer currentLineNumber = (stepLines != null && stepIndex < stepLines.size()) ? stepLines.get(stepIndex) : null;
-
-                                            final String stepLabel;
-                                            if (currentLineNumber != null)
-                                            {
-                                                stepLabel = "Step " + stepNumber + " (line " + currentLineNumber + ")";
-                                            }
-                                            else
-                                            {
-                                                stepLabel = "Step " + stepNumber;
-                                            }
-
-                                            for (final JsonElement warningElem : val.getAsJsonArray())
-                                            {
-                                                final String warningStr = warningElem.getAsString();
-                                                linterWarnings.add(String.format("%s: \"%s\" - %s", stepLabel, step, warningStr));
-                                                if (stepIndex < result.getSteps().size())
-                                                {
-                                                    result.getSteps().get(stepIndex).addPesapWarning(warningStr);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                catch (final NumberFormatException e)
-                                {
-                                    LOG.warn("   ⚠️ Invalid step index in PESAP warnings: {}", entry.getKey());
-                                }
-                            }
-
-                            if (!linterWarnings.isEmpty())
-                            {
-                                if (sourceFileVal != null)
-                                {
-                                    LOG.warn("⚠️ AI Instructions Semantic Linter Warnings in {}:", new File(sourceFileVal).getName());
-                                }
-                                else
-                                {
-                                    LOG.warn("⚠️ AI Instructions Semantic Linter Warnings");
-                                }
-                                for (final String warning : linterWarnings)
-                                {
-                                    LOG.warn("    - {}", warning);
-                                }
-                            }
-                        }
-                    }
+                    stepDetails.setPesapCall(new LlmCallDetails(
+                            systemPrompt,
+                            userPrompt,
+                            null,
+                            null,
+                            0,
+                            null,
+                            null,
+                            null,
+                            0L,
+                            0L,
+                            0L,
+                            0L,
+                            e.getMessage(),
+                            code,
+                            LlmMode.PESAP
+                    ));
                 }
-                catch (final Exception e)
+                throw e;
+            }
+            final long duration = System.currentTimeMillis() - startTime;
+
+            LOG.debug("📊 [Pre-Step PESAP] Step {} — call took {} ms", stepIndex + 1, duration);
+            LOG.debug("💬 [Pre-Step PESAP] Response:\n{}", response);
+
+            final long pesapInAfter = llmClient.getAiStats().getPesapInputTokens();
+            final long pesapOutAfter = llmClient.getAiStats().getPesapOutputTokens();
+            final long pesapCachedAfter = llmClient.getAiStats().getPesapCachedInputTokens();
+
+            final long callInputTokens = pesapInAfter - pesapInBefore;
+            final long callOutputTokens = pesapOutAfter - pesapOutBefore;
+            final long callCachedTokens = pesapCachedAfter - pesapCachedBefore;
+            final long callTotalTokens = callInputTokens + callOutputTokens;
+
+            String parsedJson = null;
+            try
+            {
+                parsedJson = this.actionParser.extractJson(response);
+            }
+            catch (final Exception e)
+            {
+                // Ignore
+            }
+
+            if (stepDetails != null)
+            {
+                stepDetails.setPesapCall(new LlmCallDetails(
+                        systemPrompt,
+                        userPrompt,
+                        null,
+                        null,
+                        0,
+                        null,
+                        response,
+                        parsedJson,
+                        callInputTokens,
+                        callOutputTokens,
+                        callCachedTokens,
+                        callTotalTokens,
+                        null,
+                        200,
+                        LlmMode.PESAP
+                ));
+            }
+
+            // Parse JSON response
+            final JsonObject responseObj = JsonParser.parseString(response).getAsJsonObject();
+            final String levelStr = responseObj.has("c")
+                    ? responseObj.get("c").getAsString() : null;
+            final ContextLevel level = levelStr != null
+                    ? ContextLevel.valueOf(levelStr.toUpperCase().trim())
+                    : getInitialContextLevel(current);
+
+            final boolean requiresJavaMethods = responseObj.has("jm")
+                    && responseObj.get("jm").getAsBoolean();
+
+            List<String> splitSteps = null;
+            if (responseObj.has("sp") && responseObj.get("sp").isJsonArray())
+            {
+                splitSteps = new ArrayList<>();
+                for (final JsonElement el : responseObj.getAsJsonArray("sp"))
                 {
-                    LOG.warn("⚠️ PESAP linter JSON parsing failed (possibly due to LLM response truncation).");
+                    splitSteps.add(el.getAsString());
                 }
             }
+            else
+            {
+                splitSteps = List.of();
+            }
+
+            final PreStepPesapResult result = new PreStepPesapResult(
+                level, requiresJavaMethods, splitSteps
+            );
+
+            // Populate StepDetails
+            stepDetails.setPesapPredictedContextLevel(level);
+            stepDetails.setPesapRequiresJavaMethods(requiresJavaMethods);
+
+            return result;
         }
         catch (final Exception e)
         {
-            LOG.error("❌ PESAP execution failed", e);
+            LOG.warn("⚠️ Pre-Step PESAP failed for step {} — falling back to defaults: {}", stepIndex + 1, e.getMessage());
+            return null;
         }
     }
 
-    // AI-generated: Gemini 3.5 Flash
-    private void performRegexRecovery(final String response, final List<String> stepsList, final List<Integer> stepLines, final AiExecutionResult result)
+    /**
+     * Dedicated testing entry point for JIT pre-step PESAP analysis using a predefined list of steps.
+     * Sets the currentStepsList context and executes the classification.
+     *
+     * @param steps       the full list of test steps for flow context
+     * @param stepIndex   the active step index to analyze
+     * @param stepDetails the step details instance to populate
+     * @return the JIT pre-step PESAP result, or {@code null} if it failed
+     */
+    PreStepPesapResult runPreStepPesapForTest(final List<String> steps, final int stepIndex,
+            final StepDetails stepDetails)
     {
-        final Pattern regexPattern = Pattern.compile("\"(\\d+)\"\\s*:\\s*\"(?i)(AXTREE|LEAN|STANDARD|VISUAL_LEAN|VISUAL)\"");
-        final Matcher matcher = regexPattern.matcher(response);
-        int recoveredCount = 0;
-        while (matcher.find())
-        {
-            try
-            {
-                final int stepIndex = Integer.parseInt(matcher.group(1)) - 1;
-                if (stepIndex >= 0 && stepIndex < stepsList.size())
-                {
-                    final String levelStr = matcher.group(2);
-                    final ContextLevel level = ContextLevel.valueOf(levelStr.toUpperCase().trim());
-                    pesapPredictions.set(stepIndex, level);
-                    
-                    if (stepIndex < result.getSteps().size())
-                    {
-                        result.getSteps().get(stepIndex).setPesapPredictedContextLevel(level);
-                    }
-
-                    recoveredCount++;
-                    
-                    final Integer lineNum = (stepLines != null && stepIndex < stepLines.size()) ? stepLines.get(stepIndex) : null;
-                    if (lineNum != null)
-                    {
-                        LOG.debug("   🔮 [Recovered] Step {} (line {}) -> PESAP Predicted ContextLevel: {}", stepIndex + 1, lineNum, level);
-                    }
-                    else
-                    {
-                        LOG.debug("   🔮 [Recovered] Step {} -> PESAP Predicted ContextLevel: {}", stepIndex + 1, level);
-                    }
-                }
-            }
-            catch (final Exception ex)
-            {
-                // Ignore any invalid matches during recovery
-            }
-        }
-        
-        if (recoveredCount > 0)
-        {
-            LOG.info("   ✅ Successfully recovered {} PESAP step predictions via regex scanner.", recoveredCount);
-        }
-        else
-        {
-            LOG.warn("   ❌ Failed to recover any predictions via regex scanner. Raw response was:\n{}", response);
-        }
+        this.currentStepsList = steps;
+        return this.runPreStepPesap(stepIndex, null, stepDetails);
     }
 
+    /**
+     * Finds the registered {@link JavaMethodAction} plugin, if present.
+     *
+     * @return the plugin instance, or {@code null} if not registered
+     */
+    private JavaMethodAction findJavaMethodPlugin()
+    {
+        for (final AiActionPlugin plugin : ActionRegistry.getAllPlugins())
+        {
+            if (plugin instanceof JavaMethodAction)
+            {
+                return (JavaMethodAction) plugin;
+            }
+        }
+        return null;
+    }
     /**
      * Determines the initial context level for a given instruction.
      * Case-insensitively checks for "(visual)" to start at VISUAL context level,
@@ -1762,7 +1914,7 @@ public class AiAgent {
     private static final ContextLevel getInitialContextLevel(final String instruction)
     {
         final String lower = instruction.toLowerCase();
-        if (lower.contains("(visual)") || lower.contains("(glance)"))
+        if (lower.contains("(visual)"))
         {
             return ContextLevel.VISUAL_LEAN;
         }
@@ -1818,19 +1970,54 @@ public class AiAgent {
         boolean lastWasNoActions = false;
         boolean isRecoveryAttempt = lastError != null;
 
+        // Resolve test class for method targeting
+        final Object testInstance = actionExecutor.getTestInstance();
+        final Class<?> testClass = testInstance != null ? testInstance.getClass() : null;
+
+        // JIT Pre-Step PESAP: run once on initial attempt only, cache result
+        PreStepPesapResult pesapResult = null;
+        Set<String> targetedMethods = null;
+        boolean includeJavaMethod = true;
+
         ContextLevel contextLevel = playbookStep.getHealedContextLevel();
         if (contextLevel == null)
         {
-            if (stepIndex >= 0 && stepIndex < pesapPredictions.size() && pesapPredictions.get(stepIndex) != null)
+            final ContextLevel baseLevel = getInitialContextLevel(instruction);
+            if (baseLevel == ContextLevel.AXTREE || baseLevel == ContextLevel.HINT)
             {
-                contextLevel = pesapPredictions.get(stepIndex);
-                LOG.info("    🔮 Using PESAP predicted starting ContextLevel: {}", contextLevel);
+                if (stepDetails.isPesapCalled())
+                {
+                    contextLevel = stepDetails.getPesapPredictedContextLevel();
+                    includeJavaMethod = stepDetails.isPesapRequiresJavaMethods();
+                    LOG.info("    🔮 JIT PESAP retrieved cached ContextLevel: {}, requiresJavaMethods: {}", contextLevel, includeJavaMethod);
+                }
+                else if (baseLevel == ContextLevel.AXTREE && !isRecoveryAttempt)
+                {
+                    pesapResult = runPreStepPesap(stepIndex, testClass, stepDetails);
+                    if (pesapResult != null)
+                    {
+                        contextLevel = pesapResult.contextLevel();
+                        includeJavaMethod = pesapResult.requiresJavaMethods();
+                        targetedMethods = null;
+                        LOG.info("    🔮 JIT PESAP predicted ContextLevel: {}, requiresJavaMethods: {}", contextLevel, includeJavaMethod);
+                    }
+                }
             }
             else
             {
-                contextLevel = getInitialContextLevel(instruction);
+                if (stepDetails.isPesapCalled())
+                {
+                    includeJavaMethod = stepDetails.isPesapRequiresJavaMethods();
+                    LOG.info("    🔮 JIT PESAP retrieved cached requiresJavaMethods: {}", includeJavaMethod);
+                }
+            }
+
+            if (contextLevel == null)
+            {
+                contextLevel = baseLevel;
             }
         }
+
         while (true) {
             final String attemptLabel = lastWasNoActions ? "Retry (No Actions) " + noActionsCount
                     : (lastError != null ? "Retry (Error) " + errorCount : "Initial Attempt");
@@ -1868,23 +2055,61 @@ public class AiAgent {
                     historyBlock = sb.toString();
                 }
 
+                // Dynamic Java methods block (static system prompt optimization)
+                final boolean useJavaMethod = isRecoveryAttempt ? true : includeJavaMethod;
+                final Set<String> useMethods = isRecoveryAttempt ? null : targetedMethods;
+
+                final String javaMethodsBlock;
+                if (useJavaMethod && testClass != null)
+                {
+                    final com.xceptance.neodymium.ai.action.plugins.JavaMethodAction jma =
+                        (com.xceptance.neodymium.ai.action.plugins.JavaMethodAction) com.xceptance.neodymium.ai.action.ActionRegistry.getPlugin("JAVA_METHOD");
+                    if (jma != null)
+                    {
+                        final String methodsList = jma.getPromptInstructions(testClass, useMethods);
+                        if (methodsList != null && !methodsList.isBlank())
+                        {
+                            final int idx = methodsList.indexOf("\n  Available methods for this step:");
+                            final String listing = (idx >= 0) ? methodsList.substring(idx).trim() : methodsList.trim();
+                            javaMethodsBlock = "\n### Available Custom Java Methods\n" + listing + "\n";
+                        }
+                        else
+                        {
+                            javaMethodsBlock = "";
+                        }
+                    }
+                    else
+                    {
+                        javaMethodsBlock = "";
+                    }
+                }
+                else
+                {
+                    javaMethodsBlock = "";
+                }
+
                 // 3. Build prompt
                 final String userPrompt;
-                if (lastWasNoActions) {
+                if (lastWasNoActions)
+                {
                     LOG.info("    🔄 Retry attempt (no actions returned) {}/{} for instruction: {}", noActionsCount,
                             NO_ACTIONS_MAX_RETRIES, instruction);
                     userPrompt = AiAgentPrompts.buildNoActionsRetryPrompt(instruction, sutContext, domContext,
-                            historyBlock);
-                } else if (lastError != null) {
+                            historyBlock, javaMethodsBlock);
+                }
+                else if (lastError != null)
+                {
                     LOG.info("    🔄 Retry attempt (error) {}/{} — previous error: {}", errorCount, getMaxRetries(),
                             lastError);
                     userPrompt = AiAgentPrompts.buildRetryPrompt(instruction, sutContext, domContext, lastError,
-                            historyBlock);
-                } else {
-                    userPrompt = AiAgentPrompts.buildUserPrompt(instruction, sutContext, domContext, historyBlock);
+                            historyBlock, javaMethodsBlock);
+                }
+                else
+                {
+                    userPrompt = AiAgentPrompts.buildUserPrompt(instruction, sutContext, domContext, historyBlock, javaMethodsBlock);
                 }
 
-                // 4. Send to LLM with context-level-aware system prompt
+                // 4. Send to LLM with context-level-aware system prompt (100% static)
                 executionLog.logPrompt(userPrompt);
 
                 final String systemPrompt = AiAgentPrompts.getSystemPrompt(contextLevel);
@@ -2001,7 +2226,12 @@ public class AiAgent {
                                 contextLevel, escalated, reasoning);
                         executionLog.logInfo("Context escalation: " + contextLevel + " → " + escalated
                                 + " (LLM requested: " + reasoning + ")");
-                        result.getEscalations().add(new EscalationDetails(contextLevel, escalated, true, reasoning));
+                        final EscalationDetails escalation = new EscalationDetails(contextLevel, escalated, true, reasoning);
+                        result.getEscalations().add(escalation);
+                        if (stepDetails != null)
+                        {
+                            stepDetails.getEscalations().add(escalation);
+                        }
                         contextLevel = escalated;
                         llmClient.getAiStats().recordEscalation(true);
                         // Do NOT increment errorCount — escalation is not a retry
@@ -2097,6 +2327,10 @@ public class AiAgent {
                 playbookStep.setActions(actions);
                 playbookStep.setPromptLine(instruction);
                 playbookStep.setReasoning(reasoning);
+                if (stepDetails.getOriginalUnsplitInstruction() != null)
+                {
+                    playbookStep.setOriginalUnsplitInstruction(stepDetails.getOriginalUnsplitInstruction());
+                }
                 if (accumulatedActions.isEmpty())
                 {
                     final String oldHash = playbookStep.getScreenshotHash();
@@ -2194,7 +2428,13 @@ public class AiAgent {
         return new ArrayList<>();
     }
 
-    private boolean isDirectInstruction(final String instruction)
+    /**
+     * Checks if any registered plugin can directly parse the instruction.
+     *
+     * @param instruction the instruction string
+     * @return true if directly parsed, false otherwise
+     */
+    public static boolean isDirectInstruction(final String instruction)
     {
         for (final AiActionPlugin plugin : ActionRegistry.getAllPlugins())
         {
@@ -2425,6 +2665,164 @@ public class AiAgent {
         }
 
         return -2; // Unhandled or generic break;
+    }
+
+    private void alignStepsWithPlaybookForReplay(
+            final List<String> stepsList,
+            final List<Integer> stepLines,
+            final AiExecutionResult result,
+            final Playbook playbook)
+    {
+        if (playbook == null || playbook.isRecording() || playbook.getSteps() == null)
+        {
+            return;
+        }
+
+        final List<PlaybookStep> playbookSteps = playbook.getSteps();
+        int playbookIdx = 0;
+
+        for (int i = 0; i < stepsList.size(); i++)
+        {
+            if (playbookIdx >= playbookSteps.size())
+            {
+                break;
+            }
+
+            final String currentInstr = stripAllTags(stepsList.get(i));
+            final PlaybookStep pbStep = playbookSteps.get(playbookIdx);
+
+            final String origUnsplit = pbStep.getOriginalUnsplitInstruction();
+            if (origUnsplit != null && stripAllTags(origUnsplit).equals(currentInstr))
+            {
+                final List<PlaybookStep> splitParts = new ArrayList<>();
+                splitParts.add(pbStep);
+
+                int nextPbIdx = playbookIdx + 1;
+                while (nextPbIdx < playbookSteps.size())
+                {
+                    final PlaybookStep nextPbStep = playbookSteps.get(nextPbIdx);
+                    final String nextOrig = nextPbStep.getOriginalUnsplitInstruction();
+                    if (nextOrig != null && stripAllTags(nextOrig).equals(currentInstr))
+                    {
+                        splitParts.add(nextPbStep);
+                        nextPbIdx++;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                if (splitParts.size() > 1)
+                {
+                    final Integer origLine = i < stepLines.size() ? stepLines.get(i) : null;
+
+                    // Replace the first one
+                    stepsList.set(i, splitParts.get(0).getPromptLine());
+                    final StepDetails firstDetails = result.getSteps().get(i);
+                    firstDetails.setExpandedInstruction(splitParts.get(0).getPromptLine());
+                    firstDetails.setOriginalUnsplitInstruction(origUnsplit);
+
+                    // Insert the subsequent parts
+                    for (int j = 1; j < splitParts.size(); j++)
+                    {
+                        final String partPrompt = splitParts.get(j).getPromptLine();
+                        stepsList.add(i + j, partPrompt);
+                        if (i + j <= stepLines.size())
+                        {
+                            stepLines.add(i + j, origLine);
+                        }
+                        else
+                        {
+                            stepLines.add(origLine);
+                        }
+
+                        final StepDetails newDetails = new StepDetails(partPrompt);
+                        newDetails.setOriginalUnsplitInstruction(origUnsplit);
+                        result.getSteps().add(i + j, newDetails);
+                    }
+
+                    // Advance i past the newly inserted steps
+                    i += splitParts.size() - 1;
+                }
+                else
+                {
+                    stepsList.set(i, pbStep.getPromptLine());
+                    final StepDetails details = result.getSteps().get(i);
+                    details.setExpandedInstruction(pbStep.getPromptLine());
+                    details.setOriginalUnsplitInstruction(origUnsplit);
+                }
+
+                playbookIdx = nextPbIdx;
+            }
+            else
+            {
+                playbookIdx++;
+            }
+        }
+    }
+
+    private String deriveFirstPartPrompt(final String original, final String remaining)
+    {
+        if (original == null)
+        {
+            return "";
+        }
+        if (remaining == null || remaining.trim().isEmpty())
+        {
+            return original;
+        }
+
+        final String origLower = original.toLowerCase();
+        final String remLower = remaining.toLowerCase().trim();
+
+        final int idx = origLower.lastIndexOf(remLower);
+        if (idx != -1)
+        {
+            String firstPart = original.substring(0, idx).trim();
+            // Clean up trailing connecting words like "and", "then", ",", "and then", "after that"
+            firstPart = firstPart.replaceAll("(?i)\\b(and|then|and\\s+then|after\\s+that|after|then\\s+click|and\\s+click)\\b\\s*$", "").trim();
+            // Also strip trailing punctuation
+            firstPart = firstPart.replaceAll("[,.;:-]+$", "").trim();
+            if (!firstPart.isEmpty())
+            {
+                return firstPart;
+            }
+        }
+        return "Execute first part of: " + original;
+    }
+
+    private void recordVisualFailureIfRecording(final String unresolvedInstruction, final Throwable t, final Playbook playbook)
+    {
+        if (playbook != null && playbook.isRecording() && unresolvedInstruction != null)
+        {
+            final PlaybookStep step = playbook.getCurrentStep();
+            if (step != null)
+            {
+                final boolean isVisualTag = unresolvedInstruction.toLowerCase().contains("(visual)") || unresolvedInstruction.toLowerCase().contains("(layout)");
+                final boolean wasVisualExecution = step.getHealedContextLevel() != null && step.getHealedContextLevel().includesScreenshot();
+                if (isVisualTag || wasVisualExecution)
+                {
+                    final String errorType = t.getClass().getName();
+                    final String errorMessage = t.getMessage() != null ? t.getMessage() : "";
+                    LOG.info("    🎯 Recording visual failure (Error Type: {}, Message: {})", errorType, errorMessage);
+                    step.setExpectedErrorType(errorType);
+                    step.setExpectedErrorMessage(errorMessage);
+                    try
+                    {
+                        final String screenshot = pageAnalyzer.captureScreenshot("Defective State: " + unresolvedInstruction);
+                        final String dHash = ScreenshotHasher.computeHash(screenshot);
+                        step.setScreenshotHash(dHash);
+                        LOG.info("    📸 Captured visual failure screenshot dHash: {}", dHash);
+                    }
+                    catch (final Exception ex)
+                    {
+                        LOG.warn("    ⚠️ Failed to capture visual failure screenshot: {}", ex.getMessage());
+                    }
+                    playbook.setChanged(true);
+                }
+            }
+        }
     }
 
     private static final class ExpectedFailureAbortException extends RuntimeException

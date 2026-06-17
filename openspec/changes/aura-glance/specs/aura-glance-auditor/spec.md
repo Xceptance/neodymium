@@ -13,7 +13,7 @@ The system SHALL evaluate page screenshots and Aura AST profiles using Gemini's 
 The system SHALL support non-blocking assertions when playbook steps contain the case-insensitive `(soft)` tag. If anomalies are found, they MUST be logged as `status: "WARNING"` in the execution report without raising a test-halting exception.
 
 #### Scenario: Visual warning logged for soft step
-- **WHEN** the playbook executes a step `Observe visual consistency (soft) (glance)` on a page with a clipped paragraph
+- **WHEN** the playbook executes a step `Observe visual consistency (soft) (visual)` on a page with a clipped paragraph
 - **THEN** the system logs the clipped paragraph anomaly as a `WARNING` entry, displays a console warning, and continues executing subsequent steps.
 
 ---
@@ -31,7 +31,7 @@ The system SHALL support silent execution bypassing when playbook steps contain 
 The system SHALL support a local dHash-based Visual Playbook caching engine. The system MUST compute the live viewport screenshot's perceptual dHash and compare it locally to the approved baseline. If the Hamming distance is within the approved limit, the system MUST bypass the LLM visual audit entirely and pass the step instantly and offline.
 
 #### Scenario: Stable UI state bypasses LLM
-- **WHEN** a `(glance)` step is executed and the live screen dHash matches the approved baseline dHash (Hamming distance $\le 2$)
+- **WHEN** a `(visual)` step is executed and the live screen dHash matches the approved baseline dHash (Hamming distance $\le 2$)
 - **THEN** the system bypasses all LLM vision calls and marks the step as passed offline in under 50 microseconds.
 
 ---

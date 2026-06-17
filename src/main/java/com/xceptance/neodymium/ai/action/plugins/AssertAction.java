@@ -99,17 +99,9 @@ public final class AssertAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return """
-               ASSERT: Verify element or page state. Requires "target".
-                 For elements: Provide "target" (locator string, prefer id attribute over `data-neo-ref`, over CSS selector, XPath, or text label). Optional "value" for text content check.
-                   If "value" is provided, assert that the element's text contains the value.
-                   If trying to check if an element is visible use "visible" as value.
-                   If trying to check if an element has keyboard focus use "focused" as value.
-                   If asked to verify a text, choose an element, that contains this text.
-                   If "value" is null, assert that the element exists and is visible.
-                 For URL: Provide "url" or "currentUrl" as "target", and the expected URL as "value".\
-               """;
+        return "ASSERT: Verify element state (tg=locator, v=text check, 'visible', or 'focused') or page URL (tg='url', v=expected URL).";
     }
+
 
     /**
      * Executes the assertion action. Validates either the current page URL or the state of a specific DOM element.
@@ -163,7 +155,28 @@ public final class AssertAction implements AiActionPlugin
         }
 
         // Handle Element assertions
-        final SelenideElement element = executor.findElement(action);
+        final boolean isAbsenceCheck = "hidden".equalsIgnoreCase(expected) || "[hidden]".equalsIgnoreCase(expected)
+                || "absent".equalsIgnoreCase(expected) || "[absent]".equalsIgnoreCase(expected);
+
+        final SelenideElement element;
+        if (isAbsenceCheck)
+        {
+            SelenideElement tempElement = null;
+            try
+            {
+                tempElement = executor.findElement(action);
+            }
+            catch (final Exception e)
+            {
+                LOG.debug("   ✅ Assertion passed (element does not exist/absent): '{}'", expected);
+                return;
+            }
+            element = tempElement;
+        }
+        else
+        {
+            element = executor.findElement(action);
+        }
 
         // If no value is specified, assert that the target element simply exists on the page
         if (expected == null)
@@ -215,6 +228,22 @@ public final class AssertAction implements AiActionPlugin
                 else
                 {
                     element.shouldBe(Condition.visible);
+                }
+            }
+            // Hidden/absence assertion: Verify that the targeted element is hidden or does not exist
+            else if ("hidden".equalsIgnoreCase(expected) || "[hidden]".equalsIgnoreCase(expected)
+                    || "absent".equalsIgnoreCase(expected) || "[absent]".equalsIgnoreCase(expected))
+            {
+                if (action.isSilent())
+                {
+                    if (element.is(Condition.visible))
+                    {
+                        throw new ActionExecutionException("Silent condition not met: Element is visible");
+                    }
+                }
+                else
+                {
+                    element.shouldBe(Condition.hidden);
                 }
             }
             // Content assertions: verify text, regex matching, or attribute contents of the target element

@@ -71,9 +71,9 @@ public final class AiAgentPromptsTest
         final String prompt = AiAgentPrompts.getSystemPrompt(ContextLevel.AXTREE);
 
         Assertions.assertTrue(prompt.contains("Context Level: AXTREE"));
-        Assertions.assertTrue(prompt.contains("## Critical Rules for success/failure"));
+        Assertions.assertTrue(prompt.contains("## Critical Rules"));
         Assertions.assertTrue(prompt.contains("## Rules"));
-        Assertions.assertTrue(prompt.contains("Important Guidelines for Element Selection"));
+        Assertions.assertTrue(prompt.contains("Element Selection & Targeting Rules"));
 
         // Should not contain visual screenshot rules
         Assertions.assertFalse(prompt.contains("## Rules for Visual Analysis"));
@@ -89,9 +89,9 @@ public final class AiAgentPromptsTest
         final String prompt = AiAgentPrompts.getSystemPrompt(ContextLevel.LEAN);
 
         Assertions.assertTrue(prompt.contains("Context Level: LEAN"));
-        Assertions.assertTrue(prompt.contains("## Critical Rules for success/failure"));
+        Assertions.assertTrue(prompt.contains("## Critical Rules"));
         Assertions.assertTrue(prompt.contains("## Rules"));
-        Assertions.assertTrue(prompt.contains("Important Guidelines for Element Selection"));
+        Assertions.assertTrue(prompt.contains("Element Selection & Targeting Rules"));
 
         // Should not contain visual rules
         Assertions.assertFalse(prompt.contains("## Rules for Visual Analysis"));
@@ -106,9 +106,9 @@ public final class AiAgentPromptsTest
         final String prompt = AiAgentPrompts.getSystemPrompt(ContextLevel.VISUAL);
 
         Assertions.assertTrue(prompt.contains("Context Level: VISUAL"));
-        Assertions.assertTrue(prompt.contains("## Critical Rules for success/failure"));
+        Assertions.assertTrue(prompt.contains("## Critical Rules"));
         Assertions.assertTrue(prompt.contains("## Rules"));
-        Assertions.assertTrue(prompt.contains("Important Guidelines for Element Selection"));
+        Assertions.assertTrue(prompt.contains("Element Selection & Targeting Rules"));
         Assertions.assertTrue(prompt.contains("## Rules for Visual Analysis"));
     }
 
@@ -146,5 +146,20 @@ public final class AiAgentPromptsTest
         Assertions.assertTrue(standardPrompt.length() < maxStandardLength, "STANDARD prompt exceeds limit: " + standardPrompt.length());
         Assertions.assertTrue(visualLeanPrompt.length() < maxVisualLeanLength, "VISUAL_LEAN prompt exceeds limit: " + visualLeanPrompt.length());
         Assertions.assertTrue(visualPrompt.length() < maxVisualLength, "VISUAL prompt exceeds limit: " + visualPrompt.length());
+    }
+
+    /**
+     * Verifies that clearCache() works correctly.
+     */
+    @Test
+    public final void testClearCache()
+    {
+        final String firstPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.HINT);
+        Assertions.assertNotNull(firstPrompt);
+
+        AiAgentPrompts.clearCache();
+
+        final String secondPrompt = AiAgentPrompts.getSystemPrompt(ContextLevel.HINT);
+        Assertions.assertEquals(firstPrompt, secondPrompt);
     }
 }

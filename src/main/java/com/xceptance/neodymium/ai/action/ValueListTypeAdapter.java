@@ -32,6 +32,7 @@ import java.util.List;
  * with playbook configurations where a single value was saved as a raw string.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public class ValueListTypeAdapter extends TypeAdapter<List<String>>
 {

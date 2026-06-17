@@ -21,7 +21,8 @@ package com.xceptance.neodymium.ai.core;
 /**
  * Details of a variable lookup resolved during template processing.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class LookupDetails
 {

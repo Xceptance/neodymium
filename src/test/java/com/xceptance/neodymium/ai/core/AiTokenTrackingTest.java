@@ -34,7 +34,8 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Test cases validating LLM token metrics tracking and composite runs results.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiTokenTrackingTest extends BaseAiOfflineTest
 {

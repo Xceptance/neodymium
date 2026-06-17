@@ -34,6 +34,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * and caches them for future executions.
   *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
 */
 public class ActionRegistry {
     private static final Logger LOG = LoggerFactory.getLogger(ActionRegistry.class);
@@ -105,6 +106,7 @@ public class ActionRegistry {
         register(new com.xceptance.neodymium.ai.action.plugins.ForwardAction());
         register(new com.xceptance.neodymium.ai.action.plugins.RefreshAction());
         register(new com.xceptance.neodymium.ai.action.plugins.ClearCookiesAction());
+        register(new com.xceptance.neodymium.ai.action.plugins.SplitAction());
     }
 
     /**

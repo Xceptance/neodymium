@@ -21,7 +21,12 @@ package com.xceptance.neodymium.ai.action.plugins;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,47 +62,41 @@ public class JavaMethodAction implements AiActionPlugin
         return "JAVA_METHOD";
     }
 
+    private static final Pattern JAVA_METHOD_PATTERN = Pattern.compile(
+        "(?i)java:\\s*([a-zA-Z_][a-zA-Z0-9_]*)(?:\\(\\s*(\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'|[^)]*)\\s*\\))?"
+    );
+
     @Override
     public List<Action> parseDirectInstruction(final String instruction)
     {
-        if (instruction.toLowerCase().contains("java"))
+        final Matcher matcher = JAVA_METHOD_PATTERN.matcher(instruction);
+        if (matcher.find())
         {
-            final String stripped = instruction.strip();
-            final int firstParen = stripped.indexOf('(');
-            final int lastParen = stripped.lastIndexOf(')');
-            if (firstParen != -1 && lastParen != -1 && lastParen > firstParen)
+            final String method = matcher.group(1);
+            final String rawParam = matcher.group(2);
+            final String param;
+            if (rawParam != null)
             {
-                final String beforeParen = stripped.substring(0, firstParen).strip();
-                final int lastSpace = beforeParen.lastIndexOf(' ');
-                final int lastColon = beforeParen.lastIndexOf(':');
-                final int startIdx = Math.max(lastSpace, lastColon) + 1;
-                final String method = beforeParen.substring(startIdx).strip();
-                
-                if (method.matches("[a-zA-Z_][a-zA-Z0-9_]*"))
+                final String trimmed = rawParam.strip();
+                if ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) || (trimmed.startsWith("'") && trimmed.endsWith("'")))
                 {
-                    final String rawParam = stripped.substring(firstParen + 1, lastParen);
-                    final String param;
-                    if (rawParam != null)
-                    {
-                        final String trimmed = rawParam.strip();
-                        if ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) || (trimmed.startsWith("'") && trimmed.endsWith("'")))
-                        {
-                            param = trimmed.substring(1, trimmed.length() - 1).strip();
-                        }
-                        else
-                        {
-                            param = trimmed;
-                        }
-                    }
-                    else
-                    {
-                        param = null;
-                    }
-                    LOG.debug("▶️ [EXEC] Direct call Java Method {} with param {}", method, param);
-                    return List.of(new Action("JAVA_METHOD", method, List.of(param),
-                            "Call " + method + " with param " + param));
+                    param = trimmed.substring(1, trimmed.length() - 1);
+                }
+                else
+                {
+                    param = trimmed;
                 }
             }
+            else
+            {
+                param = null;
+            }
+
+            final List<String> values = param != null ? List.of(param) : List.of();
+
+            LOG.debug("▶️ [EXEC] Direct call Java Method {} with param {}", method, param);
+            return List.of(new Action("JAVA_METHOD", method, values,
+                    "Call " + method + " with param " + param));
         }
         return null;
     }
@@ -111,29 +110,11 @@ public class JavaMethodAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        final StringBuilder instructions = new StringBuilder();
-        instructions.append("JAVA_METHOD: Invoke a Java method on the current test instance class via reflection. ")
-                .append("target = the simple method name (no class name or dots). ")
-                .append("value = the single String argument passed to the method.");
-
-        if (cachedUtilityMethodsDescription == null)
-        {
-            synchronized (this)
-            {
-                if (cachedUtilityMethodsDescription == null)
-                {
-                    cachedUtilityMethodsDescription = getUtilityMethodsDescription();
-                }
-            }
-        }
-
-        if (!cachedUtilityMethodsDescription.isEmpty())
-        {
-            instructions.append(cachedUtilityMethodsDescription);
-        }
-
-        return instructions.toString();
+        return "JAVA_METHOD: Invoke a Java method on the current test instance class via reflection. "
+                + "tg = the simple method name (no class name or dots). "
+                + "v = the single String argument passed to the method.";
     }
+
 
     /**
      * Reflectively scans all configured utility classes for public static methods
@@ -150,7 +131,7 @@ public class JavaMethodAction implements AiActionPlugin
         }
 
         final StringBuilder sb = new StringBuilder();
-        sb.append("\n  Available utility methods you can invoke:");
+        sb.append("\nAvailable utility methods you can invoke:");
 
         for (final String className : utilityClassNames)
         {
@@ -175,7 +156,7 @@ public class JavaMethodAction implements AiActionPlugin
                         {
                             final String paramStr = params.length == 0 ? "" : "String";
                             final String desc = getMethodExplanation(method.getName());
-                            sb.append("\n    - ").append(method.getName()).append("(").append(paramStr).append(")");
+                            sb.append("\n- ").append(method.getName()).append("(").append(paramStr).append(")");
                             if (!desc.isEmpty())
                             {
                                 sb.append(": ").append(desc);
@@ -209,11 +190,160 @@ public class JavaMethodAction implements AiActionPlugin
             case "assertNumberGreaterThanOrEqual" -> "Asserts that the first number is greater than or equal to the second. Expects two values.";
             case "assertNumberLessThan" -> "Asserts that the first number is strictly less than the second. Expects two values.";
             case "assertNumberLessThanOrEqual" -> "Asserts that the first number is less than or equal to the second. Expects two values.";
-            case "assertNumberEqual" -> "Asserts that the first number is equal to the second. Expects two values.";
+            case "assertNumbersEqual" -> "Asserts that the first number is equal to the second. Expects two values.";
             case "assertMatchesRegex" -> "Asserts that the provided value matches the given regular expression pattern. Expects two values (e.g. 'ORD-123, ^ORD-[0-9]{3}$' or '[\"ORD-123\", \"^ORD-[0-9]{3}$\"]').";
-            case "verifyCalculation" -> "Verifies that the mathematical equation is correct within an allowed tolerance of 0.02 (e.g. '0,90 € = (14,96 € + 0,00 €) * 6,00%').";
+            case "assertCalculation" -> "Asserts that the mathematical equation is correct within an allowed tolerance of 0.02 (e.g. '0,90 € = (14,96 € + 0,00 €) * 6,00%').";
             default -> "";
         };
+    }
+
+    /**
+     * Compiles a combined map of all available Java methods (from utility classes and optionally
+     * the test class) with their signatures and descriptions. Used by JIT PESAP to present
+     * the full method catalog for analysis.
+     *
+     * @param testClass the active test class to scan for instance methods, or {@code null} to skip
+     * @return a map of method name to formatted signature+description string
+     */
+    public final Map<String, String> getAllAvailableMethods(final Class<?> testClass)
+    {
+        final Map<String, String> methods = new LinkedHashMap<>();
+
+        // Scan utility classes for public static methods
+        final List<String> utilityClassNames = Neodymium.aiConfiguration().aiJavaMethodUtilityClasses();
+        if (utilityClassNames != null)
+        {
+            for (final String className : utilityClassNames)
+            {
+                final String trimmed = className.trim();
+                if (trimmed.isEmpty())
+                {
+                    continue;
+                }
+
+                try
+                {
+                    final Class<?> clazz = Class.forName(trimmed);
+                    collectMethods(clazz, true, methods);
+                }
+                catch (final Exception e)
+                {
+                    // Ignore classpath load issues during prompt construction
+                }
+            }
+        }
+
+        // Scan test class for public instance methods (not inherited from Object)
+        if (testClass != null)
+        {
+            collectMethods(testClass, false, methods);
+        }
+
+        return methods;
+    }
+
+    /**
+     * Collects eligible methods from a class into the provided map.
+     * For utility classes, only {@code public static} methods are collected.
+     * For test classes, {@code public} methods (both static and non-static) declared on the class itself
+     * (not inherited from {@code Object}) are collected.
+     *
+     * @param clazz       the class to scan
+     * @param staticOnly  if {@code true}, only collect static methods
+     * @param methods     the map to populate with method name → description
+     */
+    private void collectMethods(final Class<?> clazz, final boolean staticOnly,
+            final Map<String, String> methods)
+    {
+        final Method[] declaredMethods = staticOnly ? clazz.getMethods() : clazz.getDeclaredMethods();
+        for (final Method method : declaredMethods)
+        {
+            final int modifiers = method.getModifiers();
+            if (!Modifier.isPublic(modifiers))
+            {
+                continue;
+            }
+            if (staticOnly && !Modifier.isStatic(modifiers))
+            {
+                continue;
+            }
+
+            // Skip Object inherited methods for test classes
+            if (!staticOnly && method.getDeclaringClass() == Object.class)
+            {
+                continue;
+            }
+
+            final Class<?>[] params = method.getParameterTypes();
+            if (params.length == 0 || (params.length == 1 && params[0] == String.class))
+            {
+                final String paramStr = params.length == 0 ? "" : "String";
+                final String desc = getMethodExplanation(method.getName());
+                final String formatted = method.getName() + "(" + paramStr + ")"
+                        + (desc.isEmpty() ? "" : ": " + desc);
+                methods.putIfAbsent(method.getName(), formatted);
+            }
+        }
+    }
+
+    /**
+     * Constructs prompt instructions listing only the targeted methods predicted by JIT PESAP.
+     * If {@code targetedMethods} is {@code null} or empty, falls back to listing all methods
+     * (legacy behavior).
+     *
+     * @param testClass       the active test class to scan for instance methods, or {@code null}
+     * @param targetedMethods the set of method names to include, or {@code null}/empty for all
+     * @return the formatted prompt instructions string
+     */
+    public final String getPromptInstructions(final Class<?> testClass, final Set<String> targetedMethods)
+    {
+        final StringBuilder instructions = new StringBuilder();
+        instructions.append("JAVA_METHOD: Invoke a Java method on the current test instance class via reflection. ")
+                .append("tg = the simple method name (no class name or dots). ")
+                .append("v = the single String argument passed to the method.");
+
+        if (testClass == null)
+        {
+            return instructions.toString();
+        }
+
+        final Map<String, String> allMethods = getAllAvailableMethods(testClass);
+
+        if (allMethods.isEmpty())
+        {
+            return instructions.toString();
+        }
+
+
+        // Filter to targeted methods if provided
+        final Map<String, String> methodsToList;
+        if (targetedMethods != null && !targetedMethods.isEmpty())
+        {
+            methodsToList = new LinkedHashMap<>();
+            for (final String name : targetedMethods)
+            {
+                final String desc = allMethods.get(name);
+                if (desc != null)
+                {
+                    methodsToList.put(name, desc);
+                }
+            }
+        }
+        else
+        {
+            methodsToList = allMethods;
+        }
+
+        if (!methodsToList.isEmpty())
+        {
+            instructions.append("\nAvailable methods for this step:");
+            for (final Map.Entry<String, String> entry : methodsToList.entrySet())
+            {
+                instructions.append("\n- ").append(entry.getValue());
+            }
+        }
+
+        return instructions.toString();
     }
 
     @Override
@@ -239,8 +369,10 @@ public class JavaMethodAction implements AiActionPlugin
 
         LOG.debug("JAVA_METHOD: method='{}', param='{}'", methodName, param);
 
+        final int paramCount = param.length;
+
         // Stage 1: Try the test instance class
-        final MethodMatch instanceMatch = findMethod(testInstance.getClass(), methodName);
+        final MethodMatch instanceMatch = findMethod(testInstance.getClass(), methodName, paramCount);
         if (instanceMatch != null)
         {
             invokeMethod(instanceMatch, testInstance, methodName, param);
@@ -260,7 +392,7 @@ public class JavaMethodAction implements AiActionPlugin
             try
             {
                 final Class<?> utilityClass = Class.forName(trimmed);
-                final MethodMatch utilityMatch = findMethod(utilityClass, methodName);
+                final MethodMatch utilityMatch = findMethod(utilityClass, methodName, paramCount);
                 if (utilityMatch != null)
                 {
                     if (!Modifier.isStatic(utilityMatch.method.getModifiers()))
@@ -289,29 +421,54 @@ public class JavaMethodAction implements AiActionPlugin
 
     /**
      * Searches the given class for a public method with the specified name.
-     * Prefers {@code methodName(String)} over {@code methodName()}.
+     * Prefers {@code methodName(String)} over {@code methodName()} if parameters are present,
+     * otherwise prefers {@code methodName()} over {@code methodName(String)}.
      *
      * @param clazz      the class to search
      * @param methodName the method name
+     * @param paramCount the number of parameters passed
      * @return a {@link MethodMatch} if found, or {@code null}
      */
-    private static MethodMatch findMethod(final Class<?> clazz, final String methodName)
+    private static MethodMatch findMethod(final Class<?> clazz, final String methodName, final int paramCount)
     {
-        try
-        {
-            final Method method = clazz.getMethod(methodName, String.class);
-            return new MethodMatch(method, true);
-        }
-        catch (final NoSuchMethodException e)
+        if (paramCount == 0)
         {
             try
             {
                 final Method method = clazz.getMethod(methodName);
                 return new MethodMatch(method, false);
             }
-            catch (final NoSuchMethodException e1)
+            catch (final NoSuchMethodException e)
             {
-                return null;
+                try
+                {
+                    final Method method = clazz.getMethod(methodName, String.class);
+                    return new MethodMatch(method, true);
+                }
+                catch (final NoSuchMethodException ex)
+                {
+                    return null;
+                }
+            }
+        }
+        else
+        {
+            try
+            {
+                final Method method = clazz.getMethod(methodName, String.class);
+                return new MethodMatch(method, true);
+            }
+            catch (final NoSuchMethodException e)
+            {
+                try
+                {
+                    final Method method = clazz.getMethod(methodName);
+                    return new MethodMatch(method, false);
+                }
+                catch (final NoSuchMethodException ex)
+                {
+                    return null;
+                }
             }
         }
     }

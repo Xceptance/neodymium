@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Layout Misalignment Shift
     toggleShift.addEventListener('change', (e) => {
-        const misaligned = document.querySelectorAll('.misaligned-element');
+        const misaligned = document.querySelectorAll('.shift-target');
         misaligned.forEach(el => {
             if (e.target.checked) {
                 el.classList.add('has-layout-shift');

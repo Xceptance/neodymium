@@ -26,6 +26,7 @@ import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException
  * Interface for AI actions that can be plugged into the Neodymium AI engine.
   *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
 */
 public interface AiActionPlugin {
 

@@ -31,7 +31,8 @@ import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException
  * Verifies reflection resolution (Stage 1 & Stage 2), parameter parsing,
  * and exception wrapping behavior.
  * 
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class JavaMethodExecutionTest
 {

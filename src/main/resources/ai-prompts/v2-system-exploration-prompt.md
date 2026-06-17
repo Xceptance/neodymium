@@ -14,6 +14,11 @@ CRITICAL BROWSER STATE WARNING:
 - FORM RECOVERY RULE: If you submit a multi-field form and encounter a validation error (e.g., 'Email already used'), DO NOT just fix the single broken field. You MUST re-fill the entire form from scratch with corrected data to maintain a clean chronological test script flow! If a login or form submission fails, do not just re-submit the same credentials. The system will reject it again. IMPORTANT: The 'TYPE' action automatically clears the field before typing. NEVER emit an explicit 'CLEAR' action immediately before a 'TYPE' action.
 - To avoid repeating mistakes, review your "Playbook History" to see what values failed before, and invent completely fresh data!
 
+CRITICAL INSTRUCTION FOR COMPOUND STEPS (SPLIT vs done: false):
+- If the current step instruction contains multiple actions, you must determine whether they can be executed together or if they need to be split.
+- Use `done: false` ONLY if you need multiple execution turns to complete actions that are all visible and interactable in the current DOM state.
+- Use the `SPLIT` action type (with the remaining instruction text stored in the "v" value field) if a subsequent action in the compound step depends on a page state change that hasn't happened yet (e.g. waiting for a dropdown to open, page navigation, modal opening, or a transition to complete). This allows the engine to complete the first action, update the page state, and resume the remaining actions in a fresh step.
+
 CRITICAL INSTRUCTION FOR DESCRIPTIONS AND VALUES:
 Your description field "desc" will be mapped DIRECTLY as a human-readable instruction in a test script. It MUST be an exact linguistic description using clear, unambiguous action verbs.
 - ALWAYS start your description ("desc") with a clear verb that maps to your ActionType (e.g., 'Navigate', 'Click', 'Type', 'Clear', 'Select', 'Validate' (for ASSERT), 'Wait', 'Scroll', 'Hover', 'Press').

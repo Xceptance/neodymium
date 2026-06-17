@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -36,6 +35,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Integration test verifying browser refresh commands and their verification flow
  * in both live LLM and replay modes.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -63,14 +65,15 @@ public class RefreshTest extends BaseAiTest
     public final void test_Refresh()
     {
         final String steps = """
-                Open ${posters.storefront.url}
-                refresh
+                OPEN ${posters.storefront.url}
+                REFRESH
             """;
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
@@ -85,6 +88,46 @@ public class RefreshTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2);
+
+        assertEquals("Posters Art Store", Selenide.title());
+    }
+
+    /**
+     * Test a multi-step instruction with step-by-step verification of status using lowercase refresh.
+     */
+    @NeodymiumTest
+    public final void test_RefreshLowercase()
+    {
+        final String steps = """
+                OPEN ${posters.storefront.url}
+                refresh
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(2);
+
+        assertEquals("Posters Art Store", Selenide.title());
+
+        // close it and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
@@ -102,13 +145,14 @@ public class RefreshTest extends BaseAiTest
     public final void test_RefreshWithoutDirectResolution()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Refresh the page
             """;
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
@@ -123,6 +167,7 @@ public class RefreshTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(2)
