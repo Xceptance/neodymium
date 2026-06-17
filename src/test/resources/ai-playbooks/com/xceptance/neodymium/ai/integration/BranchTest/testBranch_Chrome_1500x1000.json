@@ -1,0 +1,78 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.BranchTest :: testBranch :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/BranchActionTest/testBranchHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/BranchActionTest/testBranchHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/BranchActionTest/testBranchHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
+      "reasoning": "The instruction requires a conditional click. The \u0027Accept Cookies\u0027 button is present in the DOM, identified by its data-neo-ref attribute, making the condition true. Therefore, the \u0027Accept Cookies\u0027 button will be clicked. The provided ID hints were not found in the DOM, so data-neo-ref was used as the next preferred locator.",
+      "actions": [
+        {
+          "type": "BRANCH",
+          "description": "If the Accept Cookies button is visible, then click it, else click the Main Action Button",
+          "elementContext": {},
+          "replay": "",
+          "condition": [
+            {
+              "type": "ASSERT",
+              "target": "[data-neo-ref\u003d\u0027xc_bymax6\u0027]",
+              "value": [
+                "visible"
+              ],
+              "description": "Verify Accept Cookies button is visible",
+              "elementDetails": "Accept Cookies button",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "then": [
+            {
+              "type": "CLICK",
+              "target": "[data-neo-ref\u003d\u0027xc_bymax6\u0027]",
+              "description": "Click the Accept Cookies button",
+              "elementDetails": "Accept Cookies button",
+              "elementContext": {
+                "text": "Accept Cookies",
+                "id": "btn-accept",
+                "tagName": "button",
+                "type": "submit"
+              },
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "else": [
+            {
+              "type": "CLICK",
+              "target": "[data-neo-ref\u003d\u0027xc_6gg6py\u0027]",
+              "description": "Click the Main Action Button",
+              "elementDetails": "Main Action Button",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

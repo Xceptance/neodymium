@@ -1,0 +1,100 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.KeyPressTest :: testArrowNavigation :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open http://localhost:43377/TypeActionTest/keyPressExtended.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/TypeActionTest/keyPressExtended.html"
+          ],
+          "description": "Navigate to http://localhost:43377/TypeActionTest/keyPressExtended.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the navigation container (hint: #nav-container)",
+      "reasoning": "Clicked the navigation container as instructed.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#nav-container",
+          "description": "Click the navigation container",
+          "elementDetails": "navigation container",
+          "elementContext": {
+            "text": "Item 1\nItem 2\nItem 3",
+            "id": "nav-container",
+            "tagName": "div"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Press ArrowDown",
+      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key, which directly maps to a KEY_PRESS action with \u0027ArrowDown\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "ArrowDown"
+          ],
+          "description": "Press the ArrowDown key",
+          "elementDetails": "ArrowDown key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Press ArrowDown",
+      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key, which directly maps to a KEY_PRESS action with \u0027ArrowDown\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "ArrowDown"
+          ],
+          "description": "Press the ArrowDown key",
+          "elementDetails": "ArrowDown key",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Press ArrowUp",
+      "reasoning": "The instruction is to press the \u0027ArrowUp\u0027 key, which directly maps to a KEY_PRESS action with \u0027ArrowUp\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "ArrowUp"
+          ],
+          "description": "Presses the ArrowUp key",
+          "elementDetails": "ArrowUp",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

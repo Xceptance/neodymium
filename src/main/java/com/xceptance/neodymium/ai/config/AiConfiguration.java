@@ -63,6 +63,10 @@ public interface AiConfiguration extends Mutable
     @DefaultValue("false")
     public boolean pesapLinterEnabled();
 
+    @Key("neodymium.ai.pesap.enabled")
+    @DefaultValue("true")
+    public boolean pesapEnabled();
+
     /**
      * Path to a custom rules file to extend the PESAP semantic linter.
      * The value is resolved first as a classpath resource, then as a filesystem path.

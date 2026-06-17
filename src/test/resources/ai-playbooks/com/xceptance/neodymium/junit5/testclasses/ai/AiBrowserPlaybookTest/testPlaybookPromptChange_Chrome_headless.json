@@ -1,0 +1,13 @@
+{
+  "id": "com.xceptance.neodymium.junit5.testclasses.ai.AiBrowserPlaybookTest :: testPlaybookPromptChange :: Browser Chrome_headless",
+  "steps": [
+    {
+      "actions": [],
+      "screenshotHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "expectedFailure": false,
+      "expectedErrorType": "com.codeborne.selenide.ex.UIAssertionError",
+      "expectedErrorMessage": "java.lang.AssertionError: Instruction \u0027Click differently\u0027 failed (4 tries):\n\n{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"API key not valid. Please pass a valid API key.\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.ErrorInfo\",\n        \"reason\": \"API_KEY_INVALID\",\n        \"domain\": \"googleapis.com\",\n        \"metadata\": {\n          \"service\": \"generativelanguage.googleapis.com\"\n        }\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.LocalizedMessage\",\n        \"locale\": \"en-US\",\n        \"message\": \"API key not valid. Please pass a valid API key.\"\n      }\n    ]\n  }\n}\n\n(Timeout: 0ms)",
+      "healedContextLevel": "VISUAL"
+    }
+  ]
+}

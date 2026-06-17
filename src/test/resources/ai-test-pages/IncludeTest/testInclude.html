@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Include Action Test</title>
+</head>
+<body>
+    <h1>Include Action Test</h1>
+    
+    <div id="element" role="region" aria-label="visible element" tabindex="0" style="padding: 10px; background: #eee;">
+        Visible Element
+    </div>
+    
+    <button id="btnA">Button A</button>
+    <button id="btnB">Button B</button>
+    <button id="btnC">Button C</button>
+    <button id="btnD">Button D</button>
+    
+    <button id="mid">Mid Button</button>
+    <button id="child">Child Button</button>
+    
+    <div id="order-id" tabindex="0">98765</div>
+    <div id="verified">Verified Status</div>
+    
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('hideElement') === 'true') {
+            document.getElementById('element').style.display = 'none';
+        }
+        
+        document.getElementById('btnA').addEventListener('click', () => {
+            document.getElementById('verified').innerText = 'A Clicked';
+        });
+        document.getElementById('btnB').addEventListener('click', () => {
+            document.getElementById('verified').innerText = 'B Clicked';
+        });
+        document.getElementById('btnC').addEventListener('click', () => {
+            document.getElementById('verified').innerText = 'C Clicked';
+        });
+        document.getElementById('btnD').addEventListener('click', () => {
+            document.getElementById('verified').innerText = 'D Clicked';
+        });
+        document.getElementById('mid').addEventListener('click', () => {
+            document.getElementById('verified').innerText = 'Mid Clicked';
+        });
+        document.getElementById('child').addEventListener('click', () => {
+            document.getElementById('verified').innerText = 'Child Clicked';
+        });
+    </script>
+</body>
+</html>

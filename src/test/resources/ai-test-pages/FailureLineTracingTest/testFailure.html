@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title id="page-title">Failure Line Tracing Test Page</title>
+</head>
+<body>
+    <h1 id="title">Welcome to Line Tracing Test</h1>
+    <button id="btn-click">Click Me</button>
+    <div id="status">Ready</div>
+    <script>
+        if (window.location.search.includes('fail=true')) {
+            document.getElementById('page-title').innerText = 'Wrong Title';
+            document.getElementById('title').innerText = 'Wrong Title Header';
+            document.getElementById('btn-click').style.display = 'none';
+        } else {
+            document.getElementById('btn-click').addEventListener('click', function() {
+                document.getElementById('status').innerText = 'Clicked';
+            });
+        }
+    </script>
+</body>
+</html>
