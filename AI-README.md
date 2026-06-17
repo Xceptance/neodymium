@@ -215,6 +215,62 @@ Because the LLM pre-compiles this logic during the initial generation phase, the
 
 ---
 
+## 📦 Reusable Test Blocks (Includes)
+
+To avoid duplicating common automation steps across multiple tests (such as logging in, checking out, or adding a product to the cart), Neodymium AI supports reusable steps files via the `_include` instruction.
+
+### Basic Inclusion
+
+You can include another playbook or steps file directly in your steps:
+```yaml
+steps: |
+  Open https://example.com.
+  _include: fragments/login.steps
+  Verify that you are on the homepage.
+```
+
+An included file (e.g., `fragments/login.steps`) can simply be a plain text file containing one step per line, or a valid YAML file with a `steps` block:
+```yaml
+# fragments/login.steps
+Type 'user@example.com' into the email address field.
+Type 'password123' into the password field.
+Click the Log in button.
+```
+
+### 🔀 Dynamic/Conditional Inclusions (LLM-Delegated Includes)
+
+Includes can also be nested inside conditional logic. The AI agent compiles this into the Abstract Syntax Tree (AST) using a dedicated `INCLUDE` action.
+
+**Example Instruction:**
+> *“If the product is xpdp then _include: fragments/configure-xpdp-product-steps.steps, else _include: fragments/add-simple-product-to-cart.steps”*
+
+#### How it Works:
+1. **Dynamic AST Compilation**: The LLM parses the conditional statement and generates a `BRANCH` action. Within its `then` or `else` blocks, it emits an `INCLUDE` action containing the path of the target steps file.
+2. **One-Time Evaluation**: When the branch is executed, the condition (e.g., checking if the product page is an XPDP page) is evaluated exactly **once**.
+3. **Step Resolution**: The framework resolves the file path dynamically relative to the parent playbook's classpath folder (e.g., `posters_tests/`) or local directory. It loads the included steps and injects them directly into the runtime execution queue.
+   * *Note:* For nested includes (e.g., an include file that itself includes another file), the nested `_include` path **must always be specified relative to the directory of the file that includes it** (e.g., `_include: save-product-info.steps` instead of `fragments/save-product-info.steps` if both are under the `fragments/` subfolder).
+4. **Independent Debugging & Tracing**: Every included step retains its origin trace (e.g., `configure-xpdp-product-steps.steps:3 -> stokkeOrderPayPalTest.yml:6`), ensuring full trace visibility during debugging and in reports.
+
+### 🔄 Mixing Static & Dynamic Includes
+
+You can freely mix and nest static and dynamic includes:
+- Statically include steps files that themselves contain conditional `If/then/else` branching logic.
+- Dynamically route to files that contain further static `_include` directives.
+
+### 🛡️ Circular Loop Detection
+
+To prevent infinite loops and stack overflows, the execution runner tracks the inclusion stack recursively. If a circular inclusion path is detected, the run immediately terminates with a `MalformedPlaybookException` showing the exact dependency chain (e.g., `Circular inclusion detected: a.steps -> b.steps -> a.steps`).
+
+To ensure robust detection, all path arguments are canonicalized (for filesystem-based playbooks) or normalized (for classpath-based playbooks). This prevents bypassing the guard when loop references utilize differing relative path formats (e.g. referencing `fragments/B.steps` and `fragments/./B.steps` or utilizing `..` directories).
+
+### 📊 Dataset & Stored Variable Inheritance
+
+Steps inside included files execute in the exact same context as the main playbook flow. They can natively reference:
+- **Test Data**: Static variables from the YAML `data` list or properties files (e.g., `${locale}`).
+- **Stored Variables**: Variables captured at runtime via `STORE` (e.g., `${extractedOrderNumber}`).
+
+---
+
 ## 🔧 Programmatic Assertions (`JAVA_METHOD`)
 
 While the AI handles most validations natively through the `ASSERT` action (checking text, visibility, URLs), some validations require **programmatic logic** that an LLM should not be trusted to perform—such as numeric comparisons, mathematical calculations, or complex data transformations. For these cases, Neodymium provides the `JAVA_METHOD` action.

@@ -28,20 +28,41 @@ import org.slf4j.LoggerFactory;
 
 import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.ai.action.plugins.NavigateAction;
+import com.xceptance.neodymium.ai.action.plugins.ClickAction;
+import com.xceptance.neodymium.ai.action.plugins.TypeAction;
+import com.xceptance.neodymium.ai.action.plugins.ClearAction;
+import com.xceptance.neodymium.ai.action.plugins.SelectAction;
+import com.xceptance.neodymium.ai.action.plugins.HoverAction;
+import com.xceptance.neodymium.ai.action.plugins.AssertAction;
+import com.xceptance.neodymium.ai.action.plugins.CheckAction;
+import com.xceptance.neodymium.ai.action.plugins.WaitAction;
+import com.xceptance.neodymium.ai.action.plugins.StoreAction;
+import com.xceptance.neodymium.ai.action.plugins.BranchAction;
+import com.xceptance.neodymium.ai.action.plugins.IncludeAction;
+import com.xceptance.neodymium.ai.action.plugins.JavaMethodAction;
+import com.xceptance.neodymium.ai.action.plugins.ScrollAction;
+import com.xceptance.neodymium.ai.action.plugins.KeyPressAction;
+import com.xceptance.neodymium.ai.action.plugins.BackAction;
+import com.xceptance.neodymium.ai.action.plugins.ForwardAction;
+import com.xceptance.neodymium.ai.action.plugins.RefreshAction;
+import com.xceptance.neodymium.ai.action.plugins.ClearCookiesAction;
 
 /**
  * Registry for all available AI Actions. Instantiates plugins once on first use 
  * and caches them for future executions.
-  *
+ *
  * @author AI-generated: Gemini 2.5 Flash
-*/
-public class ActionRegistry {
+ */
+public final class ActionRegistry
+{
     private static final Logger LOG = LoggerFactory.getLogger(ActionRegistry.class);
 
     private static final Map<String, AiActionPlugin> plugins = new LinkedHashMap<>();
     private static boolean initialized = false;
 
-    private ActionRegistry() {
+    private ActionRegistry()
+    {
         // static utility class
     }
 
@@ -49,8 +70,10 @@ public class ActionRegistry {
      * Initializes the registry by loading core plugins and any custom plugins
      * defined in the Neodymium configuration.
      */
-    public static synchronized void init() {
-        if (initialized) {
+    public static synchronized void init()
+    {
+        if (initialized)
+        {
             return;
         }
 
@@ -59,22 +82,33 @@ public class ActionRegistry {
         registerCorePlugins();
 
         // Load Custom Plugins from config
-        AiConfiguration config = Neodymium.aiConfiguration();
-        List<String> pluginClasses = config.aiPlugins();
-        if (pluginClasses != null) {
-            for (String className : pluginClasses) {
-                if (className != null && !className.isBlank()) {
-                    try {
-                        Class<?> clazz = Class.forName(className.trim());
-                        if (AiActionPlugin.class.isAssignableFrom(clazz)) {
-                            AiActionPlugin plugin = (AiActionPlugin) clazz.getDeclaredConstructor().newInstance();
+        final AiConfiguration config = Neodymium.aiConfiguration();
+        final List<String> pluginClasses = config.aiPlugins();
+        if (pluginClasses != null)
+        {
+            for (final String className : pluginClasses)
+            {
+                if (className != null && !className.isBlank())
+                {
+                    try
+                    {
+                        final Class<?> clazz = Class.forName(className.trim());
+                        if (AiActionPlugin.class.isAssignableFrom(clazz))
+                        {
+                            final AiActionPlugin plugin = (AiActionPlugin) clazz.getDeclaredConstructor().newInstance();
                             register(plugin);
-                        } else {
+                        }
+                        else
+                        {
                             throw new RuntimeException("Class " + className + " does not implement AiActionPlugin.");
                         }
-                    } catch (RuntimeException e) {
+                    }
+                    catch (final RuntimeException e)
+                    {
                         throw e;
-                    } catch (Exception e) {
+                    }
+                    catch (final Exception e)
+                    {
                         throw new RuntimeException("Failed to load AI Action plugin: " + className + ". Make sure it exists and has a public no-args constructor.", e);
                     }
                 }
@@ -87,31 +121,34 @@ public class ActionRegistry {
     private static void registerCorePlugins()
     {
         // Register core plugins
-        register(new com.xceptance.neodymium.ai.action.plugins.NavigateAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.ClickAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.TypeAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.ClearAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.SelectAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.HoverAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.AssertAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.CheckAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.WaitAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.StoreAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.BranchAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.JavaMethodAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.ScrollAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.KeyPressAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.BackAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.ForwardAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.RefreshAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.ClearCookiesAction());
+        register(new NavigateAction());
+        register(new ClickAction());
+        register(new TypeAction());
+        register(new ClearAction());
+        register(new SelectAction());
+        register(new HoverAction());
+        register(new AssertAction());
+        register(new CheckAction());
+        register(new WaitAction());
+        register(new StoreAction());
+        register(new BranchAction());
+        register(new IncludeAction());
+        register(new JavaMethodAction());
+        register(new ScrollAction());
+        register(new KeyPressAction());
+        register(new BackAction());
+        register(new ForwardAction());
+        register(new RefreshAction());
+        register(new ClearCookiesAction());
     }
 
     /**
      * Allows registering an action directly. Mostly used internally or by tests.
      */
-    public static void register(AiActionPlugin plugin) {
-        if (plugin == null || plugin.getActionName() == null) {
+    public static void register(final AiActionPlugin plugin)
+    {
+        if (plugin == null || plugin.getActionName() == null)
+        {
             return;
         }
         plugins.put(plugin.getActionName().toUpperCase(), plugin);
@@ -121,11 +158,14 @@ public class ActionRegistry {
     /**
      * Gets a plugin by its action name (case-insensitive).
      */
-    public static AiActionPlugin getPlugin(String actionName) {
-        if (!initialized) {
+    public static AiActionPlugin getPlugin(final String actionName)
+    {
+        if (!initialized)
+        {
             init();
         }
-        if (actionName == null) {
+        if (actionName == null)
+        {
             return null;
         }
         return plugins.get(actionName.toUpperCase());
@@ -134,8 +174,10 @@ public class ActionRegistry {
     /**
      * Returns all registered plugins.
      */
-    public static Collection<AiActionPlugin> getAllPlugins() {
-        if (!initialized) {
+    public static Collection<AiActionPlugin> getAllPlugins()
+    {
+        if (!initialized)
+        {
             init();
         }
         return plugins.values();

@@ -25,8 +25,14 @@ import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 
-public class BranchAction implements AiActionPlugin
+/**
+ * Action plugin that implements conditional branching (if-then-else) for AI playbook execution.
+ */
+public final class BranchAction implements AiActionPlugin
 {
+    /**
+     * The action name identifier.
+     */
     public static final String ACTION_NAME = "BRANCH";
 
     @Override
@@ -48,6 +54,26 @@ public class BranchAction implements AiActionPlugin
     {
         return false;
     }
+    
+    private static final ThreadLocal<Boolean> lastConditionResult = new ThreadLocal<>();
+
+    /**
+     * Gets the last condition execution result of a BranchAction on this thread.
+     *
+     * @return the last condition evaluation result, or null if none
+     */
+    public static Boolean getLastConditionResult()
+    {
+        return lastConditionResult.get();
+    }
+
+    /**
+     * Clears the last condition execution result on this thread.
+     */
+    public static void clearLastConditionResult()
+    {
+        lastConditionResult.remove();
+    }
 
     @Override
     public String getPromptInstructions()
@@ -60,19 +86,23 @@ public class BranchAction implements AiActionPlugin
     {
         if (action.getCondition() != null && !action.getCondition().isEmpty())
         {
-            for (Action condAction : action.getCondition())
+            for (final Action condAction : action.getCondition())
             {
                 condAction.setSilent(true);
             }
-            boolean conditionMet = true;
+            
+            boolean conditionMetValue = true;
             try
             {
                 executor.executeAll(action.getCondition());
             }
             catch (final Exception | AssertionError e)
             {
-                conditionMet = false;
+                conditionMetValue = false;
             }
+
+            final boolean conditionMet = conditionMetValue;
+            lastConditionResult.set(conditionMet);
 
             if (conditionMet)
             {
