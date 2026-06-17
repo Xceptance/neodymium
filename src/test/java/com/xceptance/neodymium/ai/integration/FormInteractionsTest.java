@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
+import static com.codeborne.selenide.Selenide.$;
 
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
@@ -124,7 +125,7 @@ public final class FormInteractionsTest extends BaseAiTest
             .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
             .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")));
 
-        assertEquals("Smith", com.codeborne.selenide.Selenide.$("#reg-username").val());
+        assertEquals("Smith", $("#reg-username").val());
 
         this.resetBrowser();
 
@@ -141,7 +142,7 @@ public final class FormInteractionsTest extends BaseAiTest
             .step(1, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
             .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")));
 
-        assertEquals("Smith", com.codeborne.selenide.Selenide.$("#reg-username").val());
+        assertEquals("Smith", $("#reg-username").val());
     }
 
     @NeodymiumTest
@@ -172,7 +173,7 @@ public final class FormInteractionsTest extends BaseAiTest
             .step(4, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("CLICK")))
             .step(5, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")));
 
-        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+        assertEquals("Account Registered!", $("#reg-status-success").text());
 
         this.resetBrowser();
 
@@ -192,7 +193,7 @@ public final class FormInteractionsTest extends BaseAiTest
             .step(4, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("CLICK")))
             .step(5, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")));
 
-        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+        assertEquals("Account Registered!", $("#reg-status-success").text());
     }
 
     @NeodymiumTest
@@ -217,7 +218,7 @@ public final class FormInteractionsTest extends BaseAiTest
             .step(1, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
             .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")));
 
-        assertEquals("$99.95", com.codeborne.selenide.Selenide.$("#cart-total").text());
+        assertEquals("$99.95", $("#cart-total").text());
 
         this.resetBrowser();
 
@@ -234,7 +235,7 @@ public final class FormInteractionsTest extends BaseAiTest
             .step(1, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
             .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("ASSERT")));
 
-        assertEquals("$99.95", com.codeborne.selenide.Selenide.$("#cart-total").text());
+        assertEquals("$99.95", $("#cart-total").text());
     }
 
     @NeodymiumTest
@@ -250,14 +251,14 @@ public final class FormInteractionsTest extends BaseAiTest
         assertThat(r1)
             .hasStepsCount(4)
             .step(0, s -> s.isDirectParse().action(0, a -> a.hasType("NAVIGATE")))
-            .step(1, s -> s.hasExpandedInstruction("Type 'Jane Smith' into the 'Full Name' field")
+            .step(1, s -> s.hasExpandedInstruction("Type 'Jane Smith' into the 'Full Name' field", true)
                            .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
-            .step(2, s -> s.hasExpandedInstruction("enter 'jane.smith@example.com' into the 'Email Address' field")
+            .step(2, s -> s.hasExpandedInstruction("enter 'jane.smith@example.com' into the 'Email Address' field", true)
                            .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
-            .step(3, s -> s.hasExpandedInstruction("click the 'Create Account' button")
+            .step(3, s -> s.hasExpandedInstruction("click the 'Create Account' button", true)
                            .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
 
-        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+        assertEquals("Account Registered!", $("#reg-status-success").text());
 
         this.resetBrowser();
 
@@ -270,7 +271,7 @@ public final class FormInteractionsTest extends BaseAiTest
             .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
             .step(3, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
 
-        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+        assertEquals("Account Registered!", $("#reg-status-success").text());
     }
 
     @NeodymiumTest
@@ -286,14 +287,14 @@ public final class FormInteractionsTest extends BaseAiTest
         assertThat(r1)
             .hasStepsCount(4)
             .step(0, s -> s.isDirectParse().action(0, a -> a.hasType("NAVIGATE")))
-            .step(1, s -> s.hasExpandedInstruction("Trage 'Jane Smith' in das Feld 'Full Name' ein")
+            .step(1, s -> s.hasExpandedInstruction("Trage 'Jane Smith' in das Feld 'Full Name' ein", true)
                            .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
-            .step(2, s -> s.hasExpandedInstruction("gib 'jane.smith@example.com' in das Feld 'Email Address' ein")
+            .step(2, s -> s.hasExpandedInstruction("gib 'jane.smith@example.com' in das Feld 'Email Address' ein", true)
                            .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
-            .step(3, s -> s.hasExpandedInstruction("klicke auf 'Create Account'")
+            .step(3, s -> s.hasExpandedInstruction("klicke auf 'Create Account'", true)
                            .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
 
-        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+        assertEquals("Account Registered!", $("#reg-status-success").text());
 
         this.resetBrowser();
 
@@ -306,7 +307,43 @@ public final class FormInteractionsTest extends BaseAiTest
             .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
             .step(3, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
 
-        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+        assertEquals("Account Registered!", $("#reg-status-success").text());
+    }
+
+    @NeodymiumTest
+    public void testFormCombinedInstructionsUpfrontGermanCompact()
+    {
+        final String steps = """
+                OPEN ${form.test.url}
+                Trage 'Jane Smith' in das Namesfeld ein, 'jane.smith@example.com' in das E-Mail-Feld und sende das Formular.
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasStepsCount(4)
+            .step(0, s -> s.isDirectParse().action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.hasExpandedInstruction("Trage 'Jane Smith' in das Namesfeld ein", true)
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.hasExpandedInstruction("'jane.smith@example.com' in das E-Mail-Feld ein", true)
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(3, s -> s.hasExpandedInstruction("sende das Formular", true)
+                           .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
+
+        assertEquals("Account Registered!", $("#reg-status-success").text());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasStepsCount(4)
+            .step(0, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("NAVIGATE")))
+            .step(1, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
+            .step(3, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
+
+        assertEquals("Account Registered!", $("#reg-status-success").text());
     }
 
     @NeodymiumTest
@@ -322,14 +359,14 @@ public final class FormInteractionsTest extends BaseAiTest
         assertThat(r1)
             .hasStepsCount(4)
             .step(0, s -> s.isDirectParse().action(0, a -> a.hasType("NAVIGATE")))
-            .step(1, s -> s.hasExpandedInstruction("Saisir 'Jane Smith' dans le champ 'Full Name'")
+            .step(1, s -> s.hasExpandedInstruction("Saisir 'Jane Smith' dans le champ 'Full Name'", true)
                            .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
-            .step(2, s -> s.hasExpandedInstruction("entrer 'jane.smith@example.com' dans le champ 'Email Address'")
+            .step(2, s -> s.hasExpandedInstruction("entrer 'jane.smith@example.com' dans le champ 'Email Address'", true)
                            .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
-            .step(3, s -> s.hasExpandedInstruction("cliquer sur le bouton 'Create Account'")
+            .step(3, s -> s.hasExpandedInstruction("cliquer sur le bouton 'Create Account'", true)
                            .hasLlmCalls(1).hasPesapCall().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
 
-        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+        assertEquals("Account Registered!", $("#reg-status-success").text());
 
         this.resetBrowser();
 
@@ -342,6 +379,6 @@ public final class FormInteractionsTest extends BaseAiTest
             .step(2, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("TYPE")))
             .step(3, s -> s.isReplayed().hasActionsCount(1).action(0, a -> a.hasType("CLICK")));
 
-        assertEquals("Account Registered!", com.codeborne.selenide.Selenide.$("#reg-status-success").text());
+        assertEquals("Account Registered!", $("#reg-status-success").text());
     }
 }

@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.function.Consumer;
 import com.xceptance.neodymium.ai.core.StepDetails;
+import com.xceptance.neodymium.ai.testing.LlmAssert;
 
 /**
  * Fluent assertion helper for validating {@link StepDetails} instances in tests.
@@ -235,7 +236,26 @@ public final class StepDetailsAssert
      */
     public final StepDetailsAssert hasExpandedInstruction(final String expected)
     {
-        assertEquals(expected, step.getExpandedInstruction(), "Step expanded instruction mismatch");
+        return hasExpandedInstruction(expected, false);
+    }
+
+    /**
+     * Asserts the expanded instruction of the step, optionally using semantic LLM verification.
+     *
+     * @param expected      the expected expanded instruction
+     * @param semanticMatch if true, performs semantic equivalence check via LLM; otherwise exact match
+     * @return this assertion helper
+     */
+    public final StepDetailsAssert hasExpandedInstruction(final String expected, final boolean semanticMatch)
+    {
+        if (semanticMatch)
+        {
+            LlmAssert.assertViaLlmSemanticEquivalence(step.getExpandedInstruction(), expected);
+        }
+        else
+        {
+            assertEquals(expected, step.getExpandedInstruction(), "Step expanded instruction mismatch");
+        }
         return this;
     }
 
