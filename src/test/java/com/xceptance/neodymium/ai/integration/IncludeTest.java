@@ -62,16 +62,18 @@ public class IncludeTest extends BaseAiTest
     @NeodymiumTest
     public final void testConditionalIncludeThenBranch() throws Exception
     {
-        testWith("OPEN ${include.test.url}\n" +
-                "If the element (hint: #element) is visible, then _include: fragments/testConditionalIncludeThenBranch_sub.steps else _include: fragments/testConditionalIncludeThenBranch_else.steps",
+        testWith("""
+            OPEN ${include.test.url}
+            If the element (hint: #element) is visible, then _include: fragments/testConditionalIncludeThenBranch_sub.steps else _include: fragments/testConditionalIncludeThenBranch_else.steps""",
                 4, "B Clicked");
     }
 
     @NeodymiumTest
     public final void testConditionalIncludeElseBranch() throws Exception
     {
-        testWith("OPEN ${include.test.url}?hideElement=true\n" +
-                "If the element (hint: #element) is visible, then _include: fragments/testConditionalIncludeElseBranch_sub.steps else _include: fragments/testConditionalIncludeElseBranch_else.steps",
+        testWith("""
+            OPEN ${include.test.url}?hideElement=true
+            If the element (hint: #element) is visible, then _include: fragments/testConditionalIncludeElseBranch_sub.steps else _include: fragments/testConditionalIncludeElseBranch_else.steps""",
                 4, "D Clicked");
     }
 
@@ -79,25 +81,28 @@ public class IncludeTest extends BaseAiTest
     public final void testMixedStaticAndDynamicIncludes() throws Exception
     {
         Neodymium.getData().put("username", "dynamic_nested_user");
-        testWith("OPEN ${include.test.url}\n" +
-                "If the element (hint: #element) is visible, then _include: fragments/testMixedStaticAndDynamicIncludes_parent.steps",
+        testWith("""
+            OPEN ${include.test.url}
+            If the element (hint: #element) is visible, then _include: fragments/testMixedStaticAndDynamicIncludes_parent.steps""",
                 4, "Child Clicked");
     }
 
     @NeodymiumTest
     public final void testStoredVariableResolutionInIncludes() throws Exception
     {
-        testWith("OPEN ${include.test.url}\n" +
-                "Store the order ID value as variable 'myOrder' (hint: #order-id)\n" +
-                "If the element (hint: #element) is visible, then _include: fragments/testStoredVariableResolutionInIncludes_useVar.steps",
+        testWith("""
+            OPEN ${include.test.url}
+            Store the order ID value as variable 'myOrder' (hint: #order-id)
+            If the element (hint: #element) is visible, then _include: fragments/testStoredVariableResolutionInIncludes_useVar.steps""",
                 4, null);
     }
 
     @NeodymiumTest
     public final void testDynamicCircularInclusionGuard() throws Exception
     {
-        final String steps = "OPEN ${include.test.url}\n" +
-                "If the element (hint: #element) is visible, then _include: fragments/testDynamicCircularInclusionGuard_loopA.steps";
+        final String steps = """
+            OPEN ${include.test.url}
+            If the element (hint: #element) is visible, then _include: fragments/testDynamicCircularInclusionGuard_loopA.steps""";
         final Throwable exception = assertThrows(Throwable.class, () ->
         {
             runAi(steps, VerificationMode.LIVE_LLM);
