@@ -19,59 +19,34 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
-      "reasoning": "Performed a conditional check: if the Accept Cookies button is visible, click it; otherwise, click the Main Action Button.",
+      "promptLine": "click the Accept Cookies button (hint: #btn-accept)",
+      "reasoning": "The \u0027Accept Cookies button\u0027 with the locator \u0027#btn-accept\u0027 was not found in the current Accessibility Tree. No action was performed.",
+      "actions": [],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "click the Main Action Button (hint: #btn-main-action)",
+      "reasoning": "Clicked the Main Action Button.",
       "actions": [
         {
-          "type": "BRANCH",
-          "description": "Conditional check for Accept Cookies button visibility",
-          "elementContext": {},
+          "type": "CLICK",
+          "target": "#btn-main-action",
+          "description": "Click the Main Action Button",
+          "elementDetails": "Main Action Button",
+          "elementContext": {
+            "text": "Main Action Button",
+            "id": "btn-main-action",
+            "tagName": "button",
+            "type": "submit"
+          },
           "replay": "",
-          "condition": [
-            {
-              "type": "ASSERT",
-              "target": "#btn-accept",
-              "value": [
-                "visible"
-              ],
-              "description": "Check if Accept Cookies button is visible",
-              "elementDetails": "Accept Cookies button",
-              "elementContext": {},
-              "replay": "",
-              "adjust": false
-            }
-          ],
-          "then": [
-            {
-              "type": "CLICK",
-              "target": "#btn-accept",
-              "description": "Click the Accept Cookies button",
-              "elementDetails": "Accept Cookies button",
-              "elementContext": {},
-              "replay": "",
-              "adjust": false
-            }
-          ],
-          "else": [
-            {
-              "type": "CLICK",
-              "target": "#btn-main-action",
-              "description": "Click the Main Action Button",
-              "elementDetails": "Main Action Button",
-              "elementContext": {
-                "text": "Main Action Button",
-                "id": "btn-main-action",
-                "tagName": "button",
-                "type": "submit"
-              },
-              "replay": "",
-              "adjust": false
-            }
-          ],
           "adjust": false
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "If the Accept Cookies button (hint: #btn-accept) is visible, then click the Accept Cookies button (hint: #btn-accept), else click the Main Action Button (hint: #btn-main-action)",
       "healedContextLevel": "HINT"
     }
   ]

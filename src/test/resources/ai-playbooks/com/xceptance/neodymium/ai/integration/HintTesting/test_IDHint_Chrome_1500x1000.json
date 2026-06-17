@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the featured bear image (hint: #featured-bear-img)",
-      "reasoning": "Clicked the featured bear image as instructed.",
+      "reasoning": "Clicked the featured bear image.",
       "actions": [
         {
           "type": "CLICK",

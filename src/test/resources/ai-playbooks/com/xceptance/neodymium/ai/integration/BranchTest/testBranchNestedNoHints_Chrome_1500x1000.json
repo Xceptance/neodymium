@@ -20,20 +20,88 @@
     },
     {
       "promptLine": "If the Cookie Banner is visible, then (If the Accept Cookies button is visible, then click it, else click the Main Action Button), else click the Main Action Button",
-      "reasoning": "The \u0027Cookie Banner\u0027 was not found in the provided Accessibility Tree, so the \u0027else\u0027 branch of the outer condition was executed, leading to a click on the \u0027Main Action Button\u0027.",
+      "reasoning": "The instruction requires conditional logic based on the visibility of a \u0027Cookie Banner\u0027 and an \u0027Accept Cookies button\u0027. A nested BRANCH action is used to implement this. The outer BRANCH checks for the \u0027Cookie Banner\u0027. If visible, an inner BRANCH checks for the \u0027Accept Cookies button\u0027. If the \u0027Accept Cookies button\u0027 is visible, it\u0027s clicked; otherwise, the \u0027Main Action Button\u0027 is clicked. If the \u0027Cookie Banner\u0027 is not visible, the \u0027Main Action Button\u0027 is clicked directly. Based on the current DOM, neither \u0027Cookie Banner\u0027 nor \u0027Accept Cookies button\u0027 are present, so the \u0027else\u0027 branch of the outer condition will be taken, leading to a click on the \u0027Main Action Button\u0027.",
       "actions": [
         {
-          "type": "CLICK",
-          "target": "#btn-main-action",
-          "description": "Clicking the Main Action Button as the Cookie Banner is not visible.",
-          "elementDetails": "Main Action Button",
-          "elementContext": {
-            "text": "Main Action Button",
-            "id": "btn-main-action",
-            "tagName": "button",
-            "type": "submit"
-          },
+          "type": "BRANCH",
+          "description": "If the Cookie Banner is visible, then (If the Accept Cookies button is visible, then click it, else click the Main Action Button), else click the Main Action Button",
+          "elementContext": {},
           "replay": "",
+          "condition": [
+            {
+              "type": "ASSERT",
+              "target": "Cookie Banner",
+              "value": [
+                "visible"
+              ],
+              "description": "",
+              "elementDetails": "Cookie Banner",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "then": [
+            {
+              "type": "BRANCH",
+              "description": "If the Accept Cookies button is visible, then click it, else click the Main Action Button",
+              "elementContext": {},
+              "replay": "",
+              "condition": [
+                {
+                  "type": "ASSERT",
+                  "target": "Accept Cookies button",
+                  "value": [
+                    "visible"
+                  ],
+                  "description": "",
+                  "elementDetails": "Accept Cookies button",
+                  "elementContext": {},
+                  "replay": "",
+                  "adjust": false
+                }
+              ],
+              "then": [
+                {
+                  "type": "CLICK",
+                  "target": "Accept Cookies button",
+                  "description": "",
+                  "elementDetails": "Accept Cookies button",
+                  "elementContext": {},
+                  "replay": "",
+                  "adjust": false
+                }
+              ],
+              "else": [
+                {
+                  "type": "CLICK",
+                  "target": "#btn-main-action",
+                  "description": "",
+                  "elementDetails": "Main Action Button",
+                  "elementContext": {},
+                  "replay": "",
+                  "adjust": false
+                }
+              ],
+              "adjust": false
+            }
+          ],
+          "else": [
+            {
+              "type": "CLICK",
+              "target": "#btn-main-action",
+              "description": "",
+              "elementDetails": "Main Action Button",
+              "elementContext": {
+                "text": "Main Action Button",
+                "id": "btn-main-action",
+                "tagName": "button",
+                "type": "submit"
+              },
+              "replay": "",
+              "adjust": false
+            }
+          ],
           "adjust": false
         }
       ],

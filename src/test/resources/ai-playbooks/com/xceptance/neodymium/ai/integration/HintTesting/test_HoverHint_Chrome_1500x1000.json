@@ -25,7 +25,7 @@
         {
           "type": "HOVER",
           "target": "#nav-link-tops",
-          "description": "Hover over the Tops navigation link",
+          "description": "Hover over Tops navigation link",
           "elementDetails": "Tops navigation link",
           "elementContext": {
             "classes": "nav-link",

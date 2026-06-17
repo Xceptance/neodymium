@@ -37,11 +37,12 @@
     },
     {
       "promptLine": "Let\u0027s go back",
-      "reasoning": "The instruction \u0027Let\u0027s go back\u0027 directly maps to the \u0027BACK\u0027 action type.",
+      "reasoning": "The instruction \u0027Let\u0027s go back\u0027 directly maps to the \u0027BACK\u0027 action type, which navigates to the previous page in the browser history.",
       "actions": [
         {
           "type": "BACK",
           "description": "Navigate back in browser history",
+          "elementDetails": "Browser back button",
           "elementContext": {},
           "replay": "",
           "adjust": false

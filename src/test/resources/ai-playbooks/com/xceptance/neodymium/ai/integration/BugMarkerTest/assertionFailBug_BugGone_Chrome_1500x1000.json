@@ -20,16 +20,16 @@
     },
     {
       "promptLine": "Verify that the minicart shows 0 items .",
-      "reasoning": "The instruction is to verify the minicart shows \u00270 items\u0027. I found an element with id \u0027minicart\u0027 that contains the exact text \u0027🛒 0 items\u0027. I will use an ASSERT action to verify its text content.",
+      "reasoning": "The instruction is to verify the minicart shows \u00270 items\u0027. The element with id \u0027cart-count\u0027 contains exactly this text, making it the most precise target for the ASSERT action.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "#minicart",
+          "target": "#cart-count",
           "value": [
-            "🛒 0 items"
+            "0 items"
           ],
           "description": "Verify the minicart shows 0 items",
-          "elementDetails": "minicart",
+          "elementDetails": "cart-count",
           "elementContext": {},
           "replay": "",
           "adjust": false

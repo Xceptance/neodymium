@@ -20,13 +20,16 @@
     },
     {
       "promptLine": "Mark the checkbox \u0027Subscribe to newsletter\u0027",
-      "reasoning": "Identified the checkbox by its ID and generated a CHECK action.",
+      "reasoning": "Identified the checkbox by its ID and generated a CHECK action to mark it.",
       "actions": [
         {
           "type": "CHECK",
           "target": "#newsletter",
+          "value": [
+            "true"
+          ],
           "description": "Mark the checkbox \u0027Subscribe to newsletter\u0027",
-          "elementDetails": "Subscribe to newsletter",
+          "elementDetails": "Subscribe to newsletter checkbox",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -37,7 +40,7 @@
     },
     {
       "promptLine": "Toogle the radio button \u0027Phone\u0027",
-      "reasoning": "Identified the radio button \u0027Phone\u0027 by its ID and aria-label in the AXTREE and generated a CHECK action to toggle it.",
+      "reasoning": "Identified the radio button \u0027Phone\u0027 by its ID and aria-label from the AXTREE and generated a CHECK action to toggle it.",
       "actions": [
         {
           "type": "CHECK",
@@ -46,7 +49,7 @@
             "true"
           ],
           "description": "Toggle the radio button \u0027Phone\u0027",
-          "elementDetails": "Radio button \u0027Phone\u0027",
+          "elementDetails": "Phone radio button",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -57,13 +60,13 @@
     },
     {
       "promptLine": "Click the button \u0027Submit Preferences\u0027",
-      "reasoning": "Identified the button by its ID and generated a CLICK action.",
+      "reasoning": "Identified the button with id \u0027btn-submit\u0027 and aria-label \u0027Submit Preferences\u0027 and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#btn-submit",
           "description": "Click the button \u0027Submit Preferences\u0027",
-          "elementDetails": "Submit Preferences button",
+          "elementDetails": "Submit Preferences",
           "elementContext": {
             "text": "Submit Preferences",
             "id": "btn-submit",

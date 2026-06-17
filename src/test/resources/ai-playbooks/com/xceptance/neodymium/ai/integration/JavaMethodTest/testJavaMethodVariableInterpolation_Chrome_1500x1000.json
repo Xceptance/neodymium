@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Get the text of \u0027h1\u0027 and store it as \u0027headerText\u0027",
-      "reasoning": "The instruction is to get the text of the \u0027h1\u0027 element and store it as \u0027headerText\u0027. I have created a STORE action targeting the \u0027h1\u0027 element and assigning its text content to the variable \u0027headerText\u0027.",
+      "reasoning": "The instruction is to get the text of the \u0027h1\u0027 element and store it in a variable named \u0027headerText\u0027. The STORE action is used with \u0027h1\u0027 as the target and \u0027headerText\u0027 as the variable name.",
       "actions": [
         {
           "type": "STORE",
@@ -29,7 +29,7 @@
             "headerText"
           ],
           "description": "Get the text of \u0027h1\u0027 and store it as \u0027headerText\u0027",
-          "elementDetails": "Assert Action Test",
+          "elementDetails": "h1 element",
           "elementContext": {},
           "replay": "",
           "adjust": false

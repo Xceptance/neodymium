@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Trage \u0027Jane Smith\u0027 in das Namesfeld ein",
-      "reasoning": "The instruction asks to type \u0027Jane Smith\u0027 into the \u0027Namesfeld\u0027. I identified the input field with aria-label \u0027Full Name\u0027 and id \u0027reg-username\u0027 as the target for this action.",
+      "reasoning": "The instruction is to enter \u0027Jane Smith\u0027 into the \u0027Namesfeld\u0027. I identified the input field with aria-label \u0027Full Name\u0027 and id \u0027reg-username\u0027 as the target for the name field and generated a TYPE action.",
       "actions": [
         {
           "type": "TYPE",
@@ -74,7 +74,7 @@
     },
     {
       "promptLine": "Sende das Formular",
-      "reasoning": "The instruction \u0027Sende das Formular\u0027 (Submit the form) is best fulfilled by clicking the \u0027Create Account\u0027 button, which is identified by its ID \u0027btn-submit-reg\u0027 and aria-label.",
+      "reasoning": "The instruction is to submit the form. I identified the \u0027Create Account\u0027 button within the \u0027Register Form\u0027 as the submit action and generated a CLICK action for it.",
       "actions": [
         {
           "type": "CLICK",

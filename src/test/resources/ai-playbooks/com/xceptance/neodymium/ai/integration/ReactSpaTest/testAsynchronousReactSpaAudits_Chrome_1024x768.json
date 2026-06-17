@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Verify that the active sessions count \u00271,842\u0027 is visible on the page.",
-      "reasoning": "The instruction is to verify the visibility of the text \u00271,842\u0027. I found an element with id \u0027active-sessions-count\u0027 that contains this exact text, so I used an ASSERT action targeting this element.",
+      "reasoning": "Found the element with id \u0027active-sessions-count\u0027 which contains the text \u00271,842\u0027. Generated an ASSERT action to verify its visibility and text content.",
       "actions": [
         {
           "type": "ASSERT",
@@ -12,7 +12,7 @@
             "1,842"
           ],
           "description": "Verify that the active sessions count \u00271,842\u0027 is visible on the page.",
-          "elementDetails": "active-sessions-count",
+          "elementDetails": "active sessions count",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -23,11 +23,11 @@
     },
     {
       "promptLine": "Click \u0027Live Feeds (AJAX)\u0027.",
-      "reasoning": "Found a button with the name \u0027Live Feeds (AJAX)\u0027 and created a CLICK action for it.",
+      "reasoning": "Found a button with the aria-label \u0027Live Feeds (AJAX)\u0027 and generated a CLICK action for it.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "[name\u003d\u0027Live Feeds (AJAX)\u0027]",
+          "target": "[aria-label\u003d\u0027Live Feeds (AJAX)\u0027]",
           "description": "Click \u0027Live Feeds (AJAX)\u0027 button",
           "elementDetails": "Live Feeds (AJAX) button",
           "elementContext": {
@@ -45,7 +45,7 @@
     },
     {
       "promptLine": "Verify that the live feeds data table displays the HTMX log \u0027Asynchronous partial HTML page swap executed successfully.\u0027.",
-      "reasoning": "Verified the presence of the HTMX log message \u0027Asynchronous partial HTML page swap executed successfully.\u0027 within the live feeds data table using its data-neo-ref attribute.",
+      "reasoning": "Found the text \u0027Asynchronous partial HTML page swap executed successfully.\u0027 within an element and created an ASSERT action to verify its presence.",
       "actions": [
         {
           "type": "ASSERT",
@@ -54,7 +54,7 @@
             "Asynchronous partial HTML page swap executed successfully."
           ],
           "description": "Verify that the live feeds data table displays the HTMX log \u0027Asynchronous partial HTML page swap executed successfully.\u0027",
-          "elementDetails": "HTMX log message",
+          "elementDetails": "Text content \u0027Asynchronous partial HTML page swap executed successfully.\u0027",
           "elementContext": {},
           "replay": "",
           "adjust": false

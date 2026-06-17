@@ -3,7 +3,7 @@
   "steps": [
     {
       "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
-      "reasoning": "Navigating to the provided URL as instructed.",
+      "reasoning": "Navigating to the provided URL.",
       "actions": [
         {
           "type": "NAVIGATE",
@@ -11,7 +11,7 @@
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html"
           ],
           "description": "Open the specified URL",
-          "elementDetails": "URL: https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -22,7 +22,7 @@
     },
     {
       "promptLine": "Type \u0027admin\u0027 into the username input inside the shadow root.",
-      "reasoning": "The instruction asks to type \u0027admin\u0027 into the username input. The AXTree provides a textbox with id \u0027shadow-username\u0027 which is suitable for targeting.",
+      "reasoning": "The instruction asks to type \u0027admin\u0027 into the username input. The AXTree shows a textbox with id \u0027shadow-username\u0027 and aria-label \u0027Username\u0027, which is the correct target. I have created a TYPE action for this element.",
       "actions": [
         {
           "type": "TYPE",
@@ -31,7 +31,7 @@
             "admin"
           ],
           "description": "Type \u0027admin\u0027 into the username input field.",
-          "elementDetails": "Username input",
+          "elementDetails": "Username textbox",
           "elementContext": {
             "id": "shadow-username",
             "placeholder": "Username",
@@ -47,7 +47,7 @@
     },
     {
       "promptLine": "Type \u0027secret\u0027 into the password input inside the shadow root.",
-      "reasoning": "Identified the password input field by its ID \u0027#shadow-password\u0027 and generated a TYPE action to enter \u0027secret\u0027.",
+      "reasoning": "The instruction is to type \u0027secret\u0027 into the password input. I identified the password input by its ID \u0027#shadow-password\u0027 from the Accessibility Tree and generated a TYPE action.",
       "actions": [
         {
           "type": "TYPE",
@@ -55,7 +55,7 @@
           "value": [
             "secret"
           ],
-          "description": "Type \u0027secret\u0027 into the password input field.",
+          "description": "Type \u0027secret\u0027 into the password input field",
           "elementDetails": "Password input",
           "elementContext": {
             "id": "shadow-password",
@@ -72,7 +72,7 @@
     },
     {
       "promptLine": "Click the login button inside the shadow root.",
-      "reasoning": "The \u0027Login\u0027 button was found in the Accessibility Tree with ID \u0027shadow-submit\u0027 and targeted for a click action.",
+      "reasoning": "The accessibility tree shows a button with \u0027Login\u0027 as its aria-label and \u0027shadow-submit\u0027 as its ID. This is the most appropriate target for the \u0027login button\u0027 instruction, even if it\u0027s conceptually inside a shadow root, as the AXTREE flattens it.",
       "actions": [
         {
           "type": "CLICK",
