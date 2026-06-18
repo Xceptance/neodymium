@@ -30,6 +30,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
+
 import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
@@ -106,6 +108,7 @@ public abstract class BaseAiTest extends BaseLlmTest
      * This ensures orphaned browsers from resetBrowser() calls are properly closed.
      */
     @AfterEach
+    @SuppressBrowsers
     public final void cleanUpActiveBrowser()
     {
         if (Neodymium.getWebDriverStateContainer() != null)
