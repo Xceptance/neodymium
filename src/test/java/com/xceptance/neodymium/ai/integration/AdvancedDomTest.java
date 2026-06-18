@@ -41,7 +41,6 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1500x1000")
 @Tag("sandbox")
-@AiTestVerification({ VerificationMode.LIVE_LLM })
 public class AdvancedDomTest extends BaseAiTest
 {
     private String baseHttpsUrl;
@@ -52,6 +51,7 @@ public class AdvancedDomTest extends BaseAiTest
     @BeforeEach
     public final void setupSandboxUrls()
     {
+        useTempPlaybookDirectory();
         final int httpPort = server.getPort();
         this.baseHttpsUrl = String.format("https://localhost:%d/AuraGlanceTest/shop/sandbox", server.getHttpsPort());
         final String baseHttpUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox", httpPort);
@@ -68,14 +68,21 @@ public class AdvancedDomTest extends BaseAiTest
     public final void testShadowDom()
     {
         final String pageUrl = this.baseHttpsUrl + "/shadow-dom.html";
-        final AiExecutionResult result = runAi(String.format("""
+        final String steps = String.format("""
                 Open %s
                 Type 'admin' into the username input inside the shadow root.
                 Type 'secret' into the password input inside the shadow root.
                 Click the login button inside the shadow root.
-                """, pageUrl), VerificationMode.LIVE_LLM);
+                """, pageUrl);
 
-        assertTrue(result.isSuccess());
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        assertTrue(r1.isSuccess());
+        Selenide.$("#shadow-status").shouldHave(Condition.text("Login successful for: admin"));
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertTrue(r2.isSuccess());
         Selenide.$("#shadow-status").shouldHave(Condition.text("Login successful for: admin"));
     }
 
@@ -86,14 +93,21 @@ public class AdvancedDomTest extends BaseAiTest
     public final void testHoverChain()
     {
         final String pageUrl = this.baseHttpsUrl + "/hover-chain.html";
-        final AiExecutionResult result = runAi(String.format("""
+        final String steps = String.format("""
                 Open %s
                 Hover over 'Products'.
                 Hover over 'Electronics'.
                 Click the 'Laptops' link.
-                """, pageUrl), VerificationMode.LIVE_LLM);
+                """, pageUrl);
 
-        assertTrue(result.isSuccess());
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        assertTrue(r1.isSuccess());
+        Selenide.$("#hover-status").shouldHave(Condition.text("Laptops selected successfully!"));
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertTrue(r2.isSuccess());
         Selenide.$("#hover-status").shouldHave(Condition.text("Laptops selected successfully!"));
     }
 
@@ -104,13 +118,20 @@ public class AdvancedDomTest extends BaseAiTest
     public final void testScrollList()
     {
         final String pageUrl = this.baseHttpsUrl + "/scroll-list.html";
-        final AiExecutionResult result = runAi(String.format("""
+        final String steps = String.format("""
                 Open %s
                 Scroll down the container list viewport.
                 Click the 'Unlock Achievement' button.
-                """, pageUrl), VerificationMode.LIVE_LLM);
+                """, pageUrl);
 
-        assertTrue(result.isSuccess());
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        assertTrue(r1.isSuccess());
+        Selenide.$("#scroll-status").shouldHave(Condition.text("Achievement Unlocked!"));
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertTrue(r2.isSuccess());
         Selenide.$("#scroll-status").shouldHave(Condition.text("Achievement Unlocked!"));
     }
 }
