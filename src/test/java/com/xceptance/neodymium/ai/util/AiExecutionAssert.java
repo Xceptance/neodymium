@@ -124,30 +124,22 @@ public final class AiExecutionAssert
     }
 
     /**
-     * Asserts the ContextLevel used for the first LLM call.
+     * Asserts the ContextLevel used for the first LLM call of a specific step.
      *
-     * @param expected the expected context level
-     * @return this assertion helper
-     */
-    public final AiExecutionAssert hasContextLevel(final ContextLevel expected)
-    {
-        return hasContextLevel(0, expected);
-    }
-
-    /**
-     * Asserts the ContextLevel used for a specific LLM call.
-     *
-     * @param callIndex the index of the LLM call
+     * @param stepIndex the index of the step
      * @param expected  the expected context level
      * @return this assertion helper
      */
-    public final AiExecutionAssert hasContextLevel(final int callIndex, final ContextLevel expected)
+    public final AiExecutionAssert hasContextLevel(final int stepIndex, final ContextLevel expected)
     {
-        assertTrue(result.getLlmCalls().size() > callIndex, "No LLM call found at index " + callIndex);
-        assertEquals(expected, result.getLlmCalls().get(callIndex).getContextLevel(), 
-                "Context level mismatch on LLM call " + callIndex);
+        assertTrue(result.getSteps().size() > stepIndex, "No step found at index " + stepIndex);
+        final var step = result.getSteps().get(stepIndex);
+        assertFalse(step.getLlmCalls().isEmpty(), "Expected step at index " + stepIndex + " to have at least one LLM call");
+        assertEquals(expected, step.getLlmCalls().get(0).getContextLevel(), 
+                "Context level mismatch on first LLM call of step " + stepIndex);
         return this;
     }
+
 
     /**
      * Asserts the total number of actions returned.

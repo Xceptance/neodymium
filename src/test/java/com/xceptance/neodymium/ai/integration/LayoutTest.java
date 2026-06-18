@@ -73,7 +73,7 @@ public final class LayoutTest extends BaseAiTest
             .hasLlmCalls(1)
             .hasPesapCalls(1)
             .hasNoEscalations()
-            .hasContextLevel(0, ContextLevel.VISUAL)
+            .hasContextLevel(1, ContextLevel.VISUAL)
             .step(0, step -> step.isDirectParse())
             .step(1, step -> step.hasLlmCalls(1));
 
