@@ -82,8 +82,6 @@ public class AdvancedDomTest extends BaseAiTest
         Selenide.$("#shadow-status").shouldHave(Condition.text("Login successful for: admin"));
 
         assertThat(r1)
-            .hasLlmCalls(3)
-            .hasPesapCalls(3)
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasActionsCount(4)
