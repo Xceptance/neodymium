@@ -193,7 +193,7 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class,
+            List.class, String.class, List.class, String.class, String.class,
             StepDetails.class, AiExecutionResult.class,
             List.class, List.class
         );
@@ -249,7 +249,7 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class,
+            List.class, String.class, List.class, String.class, String.class,
             StepDetails.class, AiExecutionResult.class,
             List.class, List.class
         );
@@ -308,7 +308,7 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class,
+            List.class, String.class, List.class, String.class, String.class,
             StepDetails.class, AiExecutionResult.class,
             List.class, List.class
         );
@@ -358,7 +358,7 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class,
+            List.class, String.class, List.class, String.class, String.class,
             StepDetails.class, AiExecutionResult.class,
             List.class, List.class
         );
@@ -407,7 +407,7 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class,
+            List.class, String.class, List.class, String.class, String.class,
             StepDetails.class, AiExecutionResult.class,
             List.class, List.class
         );

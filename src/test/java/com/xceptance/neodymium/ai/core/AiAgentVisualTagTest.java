@@ -82,7 +82,7 @@ final class AiAgentVisualTagTest
             "formatFailureMessage",
             String.class,
             String.class,
-            Integer.class,
+            String.class,
             String.class,
             String.class
         );
@@ -93,7 +93,7 @@ final class AiAgentVisualTagTest
             null,
             "Click button",
             null,
-            42,
+            "42",
             "test.yaml",
             ": click failed"
         );
@@ -104,7 +104,7 @@ final class AiAgentVisualTagTest
             null,
             "Click button",
             null,
-            42,
+            "42",
             null,
             ": click failed"
         );
@@ -137,7 +137,7 @@ final class AiAgentVisualTagTest
             null,
             "Click button",
             "Click button and verify text",
-            42,
+            "42",
             "test.yaml",
             ": click failed"
         );
@@ -149,17 +149,17 @@ final class AiAgentVisualTagTest
     {
         final Method formatFailureLogContextMethod = AiAgent.class.getDeclaredMethod(
             "formatFailureLogContext",
-            Integer.class,
+            String.class,
             String.class
         );
         formatFailureLogContextMethod.setAccessible(true);
 
         // Case 1: both present
-        final String res1 = (String) formatFailureLogContextMethod.invoke(null, 42, "path/to/test.yaml");
+        final String res1 = (String) formatFailureLogContextMethod.invoke(null, "42", "path/to/test.yaml");
         assertEquals(" (test.yaml:42)", res1);
 
         // Case 2: only line number
-        final String res2 = (String) formatFailureLogContextMethod.invoke(null, 42, null);
+        final String res2 = (String) formatFailureLogContextMethod.invoke(null, "42", null);
         assertEquals(" (line 42)", res2);
 
         // Case 3: only source file
