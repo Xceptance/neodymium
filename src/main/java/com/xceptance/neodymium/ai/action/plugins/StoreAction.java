@@ -61,7 +61,7 @@ public final class StoreAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "STORE: Capture element text or store a literal. tg=locator, v=variable name (or JSON array ['var', 'literal']). Set 'ad': true for numeric/price calculations. Stored values can be used as ${variableName}.";
+        return "STORE: Capture element text or store a literal value. Set 'tg' to the locator (or omit for literals) and 'v' to the variable name (or to a JSON array [\"variableName\", \"literalValue\"] to store a literal). Set 'ad' to true to normalize numeric or price calculations. Stored values can be used as ${variableName} in subsequent steps.";
     }
 
 

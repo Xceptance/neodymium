@@ -47,7 +47,7 @@ public class BackAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "BACK: navigate back in browser history."; }
+    public String getPromptInstructions() { return "BACK: Navigate back to the previous page in the browser history."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

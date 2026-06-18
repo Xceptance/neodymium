@@ -47,7 +47,7 @@ public class ForwardAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "FORWARD: navigate forward in browser history."; }
+    public String getPromptInstructions() { return "FORWARD: Navigate forward to the next page in the browser history."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

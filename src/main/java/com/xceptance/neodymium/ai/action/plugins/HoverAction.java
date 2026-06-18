@@ -62,7 +62,7 @@ public class HoverAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "HOVER: hover over an element (requires tg)."; }
+    public String getPromptInstructions() { return "HOVER: Hover the mouse pointer over a target element (requires 'tg')."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

@@ -47,7 +47,7 @@ public class ClearCookiesAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "CLEAR_COOKIES: clear browser cookies and local storage."; }
+    public String getPromptInstructions() { return "CLEAR_COOKIES: Clear all browser cookies and local storage."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

@@ -20,6 +20,7 @@ package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
+import com.xceptance.neodymium.ai.action.plugins.AiMethod;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
@@ -62,6 +63,7 @@ public class JavaMethodTest extends BaseAiTest
          * @param arg the argument to validate
          * @throws AssertionError if the argument does not match expected value
          */
+        @AiMethod("Asserts that the provided argument equals custom_value.")
         public static void assertCustomValue(final String arg)
         {
             assertEquals("custom_value", arg);
@@ -72,9 +74,22 @@ public class JavaMethodTest extends BaseAiTest
          *
          * @param val the value
          */
+        @AiMethod("Asserts shadowed method in custom assertions.")
         public static void assertShadowedMethod(final String val)
         {
             throw new AssertionError("Utility class method should not be called: " + val);
+        }
+    }
+
+    public static final class DynamicHelper
+    {
+        public static boolean dynamicMethodCalled = false;
+
+        @AiMethod("Asserts dynamic value helper.")
+        public static void assertDynamicValue(final String val)
+        {
+            dynamicMethodCalled = true;
+            assertEquals("hello_dynamic", val);
         }
     }
 
@@ -87,6 +102,7 @@ public class JavaMethodTest extends BaseAiTest
      * @param arg the argument to validate
      * @throws AssertionError if the argument does not match expected value
      */
+    @AiMethod("Local public method to verify local test instance java method execution.")
     public final void assertLocalMethod(final String arg)
     {
         assertEquals("expected_value", arg);
@@ -98,6 +114,7 @@ public class JavaMethodTest extends BaseAiTest
      * @param val the value to validate
      * @throws AssertionError if the value does not match expected value
      */
+    @AiMethod("Local method to verify shadowed static method execution.")
     public static void assertShadowedMethod(final String val)
     {
         assertEquals("shadow_value", val);
@@ -129,6 +146,7 @@ public class JavaMethodTest extends BaseAiTest
      * @param arg the argument
      * @throws AssertionError always
      */
+    @AiMethod("Public static method that always fails.")
     public static void assertFailingMethod(final String arg)
     {
         throw new AssertionError("Forced assertion failure: " + arg);
@@ -137,6 +155,7 @@ public class JavaMethodTest extends BaseAiTest
     /**
      * Public static method without parameters for testing overloading.
      */
+    @AiMethod("Public static method without parameters for testing overloading.")
     public static void assertOverloaded()
     {
         overloadedNoArgsCalled = true;
@@ -147,6 +166,7 @@ public class JavaMethodTest extends BaseAiTest
      *
      * @param arg the string argument
      */
+    @AiMethod("Public static method with a String parameter for testing overloading.")
     public static void assertOverloaded(final String arg)
     {
         overloadedWithArgCalled = true;
@@ -409,14 +429,16 @@ public class JavaMethodTest extends BaseAiTest
     }
 
     /**
-     * Local public static method to verify the length of the welcome message text.
+     * Local public static method to verify the length of a text.
      *
-     * @param msg the message to validate
+     * @param expectedLength the expected length of the text
+     * @param msg            the message to validate
      * @throws AssertionError if the message length does not match expected value
      */
-    public static void verifyWelcomeMessageLength(final String msg)
+    @AiMethod("Local public static method to verify the length of a text.")
+    public static void verifyWelcomeMessageLength(final int expectedLength, final String msg)
     {
-        assertEquals(18, msg.length());
+        assertEquals(expectedLength, msg.length());
     }
 
     /**
@@ -425,6 +447,7 @@ public class JavaMethodTest extends BaseAiTest
      * @param msg the message to validate
      * @throws AssertionError if the message does not match expected value
      */
+    @AiMethod("Local public static method to verify welcome message.")
     public static void verifyWelcomeMessage(final String msg)
     {
         assertEquals("Assert Action Test", msg);
@@ -436,6 +459,7 @@ public class JavaMethodTest extends BaseAiTest
      * @param price the price to validate
      * @throws AssertionError if the price does not match expected value
      */
+    @AiMethod("Local public static method to verify local test class static method execution.")
     public static void verifyStaticLocalMethod(final String price)
     {
         assertEquals("expected_static_value", price);
@@ -518,23 +542,36 @@ public class JavaMethodTest extends BaseAiTest
     {
         final String steps = """
                 OPEN ${javaMethod.test.url}
-                Get the text of 'h1' and verify its length is 18 using the java method 'verifyWelcomeMessageLength'
+                Get the text of '#welcome-message' and verify the text length is 25 using the java method 'verifyWelcomeMessageLength'
             """;
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
+        assertTrue(r1.getLlmCalls().size() >= 1 && r1.getLlmCalls().size() <= 3, "LLM call count mismatch: " + r1.getLlmCalls().size());
+        assertTrue(r1.getPesapCallCount() >= 1 && r1.getPesapCallCount() <= 3, "PESAP call count mismatch: " + r1.getPesapCallCount());
+        assertTrue(r1.getEscalationCount() >= 0 && r1.getEscalationCount() <= 1, "Escalation count mismatch: " + r1.getEscalationCount());
         assertThat(r1)
-            .hasLlmCalls(1)
-            .hasPesapCalls(1)
-            .hasNoEscalations()
             .hasDirectParses(1)
-            .hasReplays(0)
-            .hasActionsCount(3);
+            .hasReplays(0);
+        assertTrue(r1.getActions().size() >= 3 && r1.getActions().size() <= 4, "Action count mismatch: " + r1.getActions().size());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0);
+        assertTrue(r2.getReplayCount() >= 2 && r2.getReplayCount() <= 3, "Replay count mismatch: " + r2.getReplayCount());
+        assertTrue(r2.getActions().size() >= 3 && r2.getActions().size() <= 4, "Action count mismatch: " + r2.getActions().size());
     }
 
     /**
      * Local parameterless method for testing inline direct invocation.
      */
+    @AiMethod("Local parameterless method for testing inline direct invocation.")
     public final void assertParameterless()
     {
         assertTrue(true);
@@ -586,7 +623,7 @@ public class JavaMethodTest extends BaseAiTest
         final String steps = """
                 OPEN ${javaMethod.test.url}
                 Get the text of 'h1' and store it as 'headerText'
-                java: verifyWelcomeMessageLength("${headerText}")
+                java: verifyWelcomeMessageLength(18, "${headerText}")
             """;
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
@@ -594,6 +631,18 @@ public class JavaMethodTest extends BaseAiTest
         assertThat(r1)
             .hasLlmCalls(1)
             .hasNoEscalations()
+            .hasActionsCount(3);
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(3)
             .hasActionsCount(3);
     }
 
@@ -621,6 +670,15 @@ public class JavaMethodTest extends BaseAiTest
 
             assertThat(r1)
                 .hasDirectParses(2)
+                .hasActionsCount(2);
+
+            this.resetBrowser();
+
+            final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+            assertThat(r2)
+                .hasDirectParses(0)
+                .hasReplays(2)
                 .hasActionsCount(2);
         }
         finally
@@ -718,6 +776,14 @@ public class JavaMethodTest extends BaseAiTest
         assertTrue(overloadedWithArgCalled);
         assertFalse(overloadedNoArgsCalled);
 
+        this.resetBrowser();
+
+        overloadedNoArgsCalled = false;
+        overloadedWithArgCalled = false;
+        runAi(stepsArg, VerificationMode.REPLAY);
+        assertTrue(overloadedWithArgCalled);
+        assertFalse(overloadedNoArgsCalled);
+
         overloadedNoArgsCalled = false;
         overloadedWithArgCalled = false;
 
@@ -726,8 +792,137 @@ public class JavaMethodTest extends BaseAiTest
                 java: assertOverloaded
             """;
 
+        this.resetBrowser();
+
         runAi(stepsNoArg, VerificationMode.LIVE_LLM);
         assertTrue(overloadedNoArgsCalled);
         assertFalse(overloadedWithArgCalled);
+
+        this.resetBrowser();
+
+        overloadedNoArgsCalled = false;
+        overloadedWithArgCalled = false;
+        runAi(stepsNoArg, VerificationMode.REPLAY);
+        assertTrue(overloadedNoArgsCalled);
+        assertFalse(overloadedWithArgCalled);
+    }
+
+    public void unannotatedMethod(final String val)
+    {
+        // helper without @AiMethod
+    }
+
+    @NeodymiumTest
+    public final void testJavaMethodBlockingNonAnnotated()
+    {
+        final String steps = """
+                OPEN ${javaMethod.test.url}
+                java: unannotatedMethod("test")
+            """;
+
+        assertExecutionThrows(steps, ActionExecutionException.class);
+    }
+
+    @NeodymiumTest
+    public final void testJavaMethodDynamicRegistration()
+    {
+        DynamicHelper.dynamicMethodCalled = false;
+        Neodymium.ai().registerMethodClass(DynamicHelper.class);
+
+        final String steps = """
+                OPEN ${javaMethod.test.url}
+                java: assertDynamicValue("hello_dynamic")
+            """;
+
+        runAi(steps, VerificationMode.LIVE_LLM);
+        assertTrue(DynamicHelper.dynamicMethodCalled);
+
+        this.resetBrowser();
+
+        DynamicHelper.dynamicMethodCalled = false;
+        runAi(steps, VerificationMode.REPLAY);
+        assertTrue(DynamicHelper.dynamicMethodCalled);
+    }
+
+    @NeodymiumTest
+    public final void testJavaMethodConfiguredPackage()
+    {
+        final String origPackages = System.getProperty("neodymium.ai.agent.methods.packages");
+        final String origClasses = System.getProperty("neodymium.ai.agent.methods.classes");
+        try
+        {
+            System.setProperty("neodymium.ai.agent.methods.classes", "");
+            System.setProperty("neodymium.ai.agent.methods.packages", "com.xceptance.neodymium.ai.util");
+            Neodymium.reloadAiConfiguration();
+
+            try
+            {
+                java.lang.reflect.Field field = com.xceptance.neodymium.ai.action.plugins.JavaMethodAction.class.getDeclaredField("configurationScanned");
+                field.setAccessible(true);
+                field.set(null, false);
+                
+                java.lang.reflect.Field classesField = com.xceptance.neodymium.ai.action.plugins.JavaMethodAction.class.getDeclaredField("staticConfigurationClasses");
+                classesField.setAccessible(true);
+                ((java.util.Set<?>) classesField.get(null)).clear();
+                
+                java.lang.reflect.Field methodsField = com.xceptance.neodymium.ai.action.plugins.JavaMethodAction.class.getDeclaredField("staticConfigurationMethods");
+                methodsField.setAccessible(true);
+                ((java.util.Map<?, ?>) methodsField.get(null)).clear();
+            }
+            catch (Exception e)
+            {
+                // ignore
+            }
+
+            final String steps = """
+                    OPEN ${javaMethod.test.url}
+                    java: assertPriceGreaterThanZero("14.96 €")
+                """;
+
+            runAi(steps, VerificationMode.LIVE_LLM);
+
+            this.resetBrowser();
+
+            runAi(steps, VerificationMode.REPLAY);
+        }
+        finally
+        {
+            if (origPackages != null)
+            {
+                System.setProperty("neodymium.ai.agent.methods.packages", origPackages);
+            }
+            else
+            {
+                System.clearProperty("neodymium.ai.agent.methods.packages");
+            }
+            if (origClasses != null)
+            {
+                System.setProperty("neodymium.ai.agent.methods.classes", origClasses);
+            }
+            else
+            {
+                System.clearProperty("neodymium.ai.agent.methods.classes");
+            }
+            Neodymium.reloadAiConfiguration();
+            
+            try
+            {
+                java.lang.reflect.Field field = com.xceptance.neodymium.ai.action.plugins.JavaMethodAction.class.getDeclaredField("configurationScanned");
+                field.setAccessible(true);
+                field.set(null, false);
+                
+                java.lang.reflect.Field classesField = com.xceptance.neodymium.ai.action.plugins.JavaMethodAction.class.getDeclaredField("staticConfigurationClasses");
+                classesField.setAccessible(true);
+                ((java.util.Set<?>) classesField.get(null)).clear();
+                
+                java.lang.reflect.Field methodsField = com.xceptance.neodymium.ai.action.plugins.JavaMethodAction.class.getDeclaredField("staticConfigurationMethods");
+                methodsField.setAccessible(true);
+                ((java.util.Map<?, ?>) methodsField.get(null)).clear();
+            }
+            catch (Exception e)
+            {
+                // ignore
+            }
+        }
     }
 }

@@ -41,7 +41,7 @@ public final class JavaMethodActionTest
         Assertions.assertNotNull(instructions);
         
         // Assert basic capability description
-        Assertions.assertTrue(instructions.contains("JAVA_METHOD: Invoke a Java method"));
+        Assertions.assertTrue(instructions.contains("JAVA_METHOD: Invoke a public Java method"));
         
         // Assert reflected methods from AiAssertions are present
         Assertions.assertTrue(instructions.contains("assertPriceGreaterThanZero(String)"));

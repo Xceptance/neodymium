@@ -80,7 +80,7 @@ public final class SplitAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "SPLIT: Split a compound, multi-stage instruction into two sequential steps when the second part cannot be reliably executed or identified yet (v=remaining instruction text).";
+        return "SPLIT: Split a compound, multi-stage instruction into two sequential steps when the second part cannot be reliably executed or identified yet (set 'v' to the remaining instruction text).";
     }
 
     /**

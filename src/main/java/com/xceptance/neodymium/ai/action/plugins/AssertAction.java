@@ -99,7 +99,7 @@ public final class AssertAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "ASSERT: Verify element state (tg=locator, v=text check, 'visible', or 'focused') or page URL (tg='url', v=expected URL).";
+        return "ASSERT: Verify element state (set 'tg' to the locator, and 'v' to 'visible', 'focused', 'hidden'/'absent', or expected text content) or verify the current page URL (set 'tg' to 'url', and 'v' to the expected URL substring).";
     }
 
 

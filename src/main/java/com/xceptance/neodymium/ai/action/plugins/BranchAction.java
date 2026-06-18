@@ -81,7 +81,7 @@ public final class BranchAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "BRANCH: Used for conditional logic. Requires 'condition' (array of actions to test, usually ASSERT), 'then' (array of actions to execute if condition is met), and optionally 'else' (array of actions to execute if condition fails).";
+        return "BRANCH: Perform conditional branching. Requires 'condition' (an array of actions to test, usually ASSERT), 'then' (an array of actions to execute if the condition is met), and optionally 'else' (an array of actions to execute if the condition fails).";
     }
 
     @Override
