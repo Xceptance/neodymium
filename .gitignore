@@ -48,3 +48,7 @@ tmp/
 
 # Antigravity CLI
 .antigravitycli/
+
+# Neodymium AI playbooks
+/src/test/resources/ai-playbooks/
+
