@@ -674,7 +674,9 @@ public class AiPromptGenerator {
 
                         boolean shouldExecute = true;
                         boolean hudRewind = false;
+                        boolean hudReordered = false;
                         String hudAddInstruction = null;
+                        String hudAppendInstruction = null;
                         String hudEditInstruction = null;
                         boolean hudSaveExit = false;
 
@@ -756,6 +758,31 @@ public class AiPromptGenerator {
                                             shouldExecute = false; // Don't execute the old action
                                             handled = true;
                                             break;
+                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.APPEND == actionType) {
+                                            hudAppendInstruction = actionObj.get("instruction").getAsString();
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                    .resetHudAction();
+                                            handled = true;
+                                            break;
+                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.REORDER == actionType) {
+                                            int fromIdx = actionObj.get("from").getAsInt();
+                                            int toIdx = actionObj.get("to").getAsInt();
+                                            if (fromIdx >= 0 && fromIdx < playbook.getSteps().size() && toIdx >= 0 && toIdx < playbook.getSteps().size()) {
+                                                com.xceptance.neodymium.ai.playbook.PlaybookStep stepToMove = playbook.getSteps().remove(fromIdx);
+                                                playbook.getSteps().add(toIdx, stepToMove);
+                                                Action actToMove = actionsForLogging.remove(fromIdx);
+                                                actionsForLogging.add(toIdx, actToMove);
+                                                playbook.setChanged(true);
+                                            }
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                                            hudReordered = true;
+                                            handled = true;
+                                            break;
+                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.SETTINGS == actionType) {
+                                            String payload = actionObj.has("payload") ? actionObj.get("payload").toString() : "{}";
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().saveSettings(payload);
+                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                                            continue;
                                         } else if (com.xceptance.neodymium.ai.core.HudActionType.SAVE_EXIT == actionType) {
                                             com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
                                                     .resetHudAction();
@@ -785,8 +812,13 @@ public class AiPromptGenerator {
                             entireGoalAchieved = true;
                             break;
                         }
-                        if (hudAddInstruction != null || hudEditInstruction != null) {
-                            String manualInstr = hudAddInstruction != null ? hudAddInstruction : hudEditInstruction;
+                        if (hudReordered) {
+                            statusMessage = "Reordered execution steps.";
+                            failedAttempts = 0;
+                            break;
+                        }
+                        if (hudAddInstruction != null || hudEditInstruction != null || hudAppendInstruction != null) {
+                            String manualInstr = hudAddInstruction != null ? hudAddInstruction : (hudAppendInstruction != null ? hudAppendInstruction : hudEditInstruction);
                             LOG.info("User requested manual instruction: {}", manualInstr);
                             String fallbackPrompt = "The user manually requested this action: '" + manualInstr + "'. " +
                                     "Return exactly ONE action JSON object matching this instruction, adhering to your system ActionType rules. "

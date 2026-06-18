@@ -216,6 +216,11 @@ public class AiAgent {
         this.hudPromptChanged = false;
         this.hudSaveExit = false;
 
+        if (Neodymium.aiConfiguration().aiInteractive())
+        {
+            Neodymium.getOrCreateInteractiveHud().resetHudAction();
+        }
+
         final AiStats statsSnapshot = llmClient.getAiStats();
         final long startStandardIn = statsSnapshot.getInputTokens();
         final long startStandardOut = statsSnapshot.getOutputTokens();
@@ -339,6 +344,7 @@ public class AiAgent {
                 }
                 if (isInteractive)
                 {
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     final Boolean currentAutoSkipStatus = Neodymium.getOrCreateInteractiveHud()
                             .checkAutoSkipStatus();
                     if (currentAutoSkipStatus != null)
@@ -723,6 +729,11 @@ public class AiAgent {
                         }
                     }
 
+                    // Give the browser a tiny moment to initiate a navigation (if the action triggered one).
+                    // This prevents the HUD from explicitly maximizing on the old page right before it's destroyed,
+                    // which causes the "opens, closes, opens again" flicker.
+                    try { Thread.sleep(250); } catch (InterruptedException e) {}
+
                     // Accumulate executed actions
                     accumulatedActions.addAll(actions);
 
@@ -897,7 +908,28 @@ public class AiAgent {
                     {
                         step.setFailure(new ActionExecutionException(e.getMessage(), e));
                     }
-                    throw e;
+                    if (isInteractive)
+                    {
+                        final List<String> plannedStrs = new ArrayList<>();
+                        plannedStrs.add("⚠️ " + instruction);
+                        if (futureInstructions != null)
+                        {
+                            plannedStrs.addAll(futureInstructions);
+                        }
+                        if (this.autoSkip)
+                        {
+                            logPauseReason("Assertion Failed: " + e.getMessage());
+                        }
+                        this.autoSkip = false;
+                        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                                "Assertion Failed: " + e.getMessage(), false);
+                        waitForHudAction(false); // Never auto-skip errors
+                    }
+                    else
+                    {
+                        throw e;
+                    }
                 }
                 if (optionalStep)
                 {
@@ -1281,6 +1313,20 @@ public class AiAgent {
                     }
                     Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.EDIT, instructionEdit, eIdx, bindingsMap);
+                } else if (typeEnum == HudActionType.APPEND) {
+                    final String instructionAppend = actionObj.get("instruction").getAsString();
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    throw new HudActionException(HudActionType.APPEND, instructionAppend, 0);
+                } else if (typeEnum == HudActionType.REORDER) {
+                    final int fromIdx = actionObj.get("from").getAsInt();
+                    final int toIdx = actionObj.get("to").getAsInt();
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    throw new HudActionException(HudActionType.REORDER, null, fromIdx, toIdx, null, null);
+                } else if (typeEnum == HudActionType.SETTINGS) {
+                    final String settingsPayload = actionObj.get("payload").getAsString();
+                    Neodymium.getOrCreateInteractiveHud().saveSettings(settingsPayload);
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    continue; // Settings handled internally, keep waiting
                 } else if (typeEnum == HudActionType.SAVE_EXIT) {
                     Neodymium.getOrCreateInteractiveHud().resetHudAction();
                     throw new HudActionException(HudActionType.SAVE_EXIT, null, 0);
@@ -2398,6 +2444,80 @@ public class AiAgent {
 
             this.hudPromptChanged = true;
             LOG.info("Edited current action to: {}", editInstr);
+            return i - 1;
+        }
+        else if (HudActionType.APPEND == e.actionType)
+        {
+            final String newInstr = e.instruction;
+            stepsList.add(newInstr);
+            stepLines.add(null);
+            
+            if (result != null)
+            {
+                result.getSteps().add(new StepDetails(newInstr));
+            }
+
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null)
+            {
+                final PlaybookStep emptyStep = new PlaybookStep();
+                emptyStep.setPromptLine(newInstr);
+                emptyStep.setReasoning("Manually appended by user via HUD");
+                playbook.getSteps().add(emptyStep);
+                playbook.setRecording(true);
+                playbook.setChanged(true);
+            }
+
+            this.hudPromptChanged = true;
+            LOG.info("Appended new action to end: {}", newInstr);
+            return i - 1;
+        }
+        else if (HudActionType.REORDER == e.actionType)
+        {
+            final int fromIdx = e.index;
+            final int toIdx = e.indexTo;
+            
+            if (fromIdx >= 0 && fromIdx < stepsList.size() && toIdx >= 0 && toIdx < stepsList.size())
+            {
+                String stepToMove = stepsList.remove(fromIdx);
+                stepsList.add(toIdx, stepToMove);
+                
+                if (fromIdx < stepLines.size())
+                {
+                    Integer lineToMove = stepLines.remove(fromIdx);
+                    if (toIdx < stepLines.size()) {
+                        stepLines.add(toIdx, lineToMove);
+                    } else {
+                        stepLines.add(lineToMove);
+                    }
+                }
+                
+                if (result != null && fromIdx < result.getSteps().size())
+                {
+                    StepDetails detailToMove = result.getSteps().remove(fromIdx);
+                    if (toIdx < result.getSteps().size()) {
+                        result.getSteps().add(toIdx, detailToMove);
+                    } else {
+                        result.getSteps().add(detailToMove);
+                    }
+                }
+                
+                final Playbook playbook = Neodymium.getAiPlaybook();
+                if (playbook != null && fromIdx < playbook.getSteps().size())
+                {
+                    PlaybookStep pbToMove = playbook.getSteps().remove(fromIdx);
+                    if (toIdx < playbook.getSteps().size()) {
+                        playbook.getSteps().add(toIdx, pbToMove);
+                    } else {
+                        playbook.getSteps().add(pbToMove);
+                    }
+                    playbook.setRecording(true);
+                    playbook.setChanged(true);
+                }
+                
+                this.hudPromptChanged = true;
+                LOG.info("Reordered step from {} to {}", fromIdx, toIdx);
+            }
             return i - 1;
         }
         else if (HudActionType.SKIP == e.actionType)

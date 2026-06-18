@@ -213,12 +213,28 @@ public final class InteractiveHud
         try
         {
             Selenide.executeJavaScript(HUD_JS, HUD_HTML, planned, performed, autoSkip,
-                    hudPromptChanged, isFinished, this.canEdit, currentUnresolvedStep, this.dataBindings, configMap, reasoning, isReplay, this.lastFullPromptOpen, this.lastBreakpointsStr, this.lastHelpShown);
+                    hudPromptChanged, isFinished, this.canEdit, currentUnresolvedStep, this.dataBindings, configMap, reasoning, isReplay, this.lastFullPromptOpen, this.lastBreakpointsStr, this.lastHelpShown, readSettings());
         }
         catch (final Exception e)
         {
             LOG.warn("Failed to inject AI Generation HUD: {}", e.getMessage());
         }
+    }
+
+    private String readSettings() {
+        try {
+            java.io.File f = new java.io.File(".ai-hud-settings.json");
+            if (f.exists()) {
+                return new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {}
+        return null;
+    }
+
+    public void saveSettings(String jsonPayload) {
+        try {
+            java.nio.file.Files.write(java.nio.file.Paths.get(".ai-hud-settings.json"), jsonPayload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception e) {}
     }
 
     /**
@@ -247,6 +263,12 @@ public final class InteractiveHud
     {
         try
         {
+            final String readyState = Selenide.executeJavaScript("return document.readyState;");
+            if (!"complete".equals(readyState) && !"interactive".equals(readyState))
+            {
+                return null;
+            }
+
             final Boolean hudExists = Selenide.executeJavaScript("return document.getElementById('neo-ai-hud') !== null;");
             if (Boolean.FALSE.equals(hudExists) && this.lastPlanned != null)
             {

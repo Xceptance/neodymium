@@ -1,4 +1,4 @@
-(function(hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen, lastBreakpointsStr, lastHelpShown) {
+(function(hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen, lastBreakpointsStr, lastHelpShown, settingsJson) {
     window.neoCurrentUnresolvedStep = currentUnresolvedStep;
     window.neoDataBindings = dataBindings;
     window.neoConfigMap = configMap;
@@ -50,7 +50,7 @@
         window.neoHudAction = null;
         window.neoSubmitAction = function(actionObj) {
             window.neoHudAction = JSON.stringify(actionObj);
-            if (window.neoMinimizeHud) window.neoMinimizeHud();
+            if (window.neoMinimizeHud && actionObj.action !== 'SETTINGS') window.neoMinimizeHud();
         };
         window.neoHudAutoSkip = autoSkip;
         
@@ -327,6 +327,8 @@
         }
 
         editInput.addEventListener('input', validateEditInput);
+        editInput.addEventListener('keyup', validateEditInput);
+        editInput.addEventListener('change', validateEditInput);
 
         document.getElementById('neo-edit-btn').addEventListener('click', function() {
             if (!this.disabled) {
@@ -493,6 +495,64 @@
                 }
             });
         }
+
+        var settingsOverlay = document.getElementById('neo-settings-overlay');
+        var settingsBtn = document.getElementById('neo-settings-btn');
+        if (settingsBtn && settingsOverlay) {
+            settingsBtn.addEventListener('click', function() {
+                settingsOverlay.style.display = 'flex';
+            });
+        }
+        
+        var settingsCancelBtn = document.getElementById('neo-settings-cancel-btn');
+        if (settingsCancelBtn && settingsOverlay) {
+            settingsCancelBtn.addEventListener('click', function() {
+                settingsOverlay.style.display = 'none';
+            });
+        }
+        
+        var settingsSubmitBtn = document.getElementById('neo-settings-submit-btn');
+        if (settingsSubmitBtn && settingsOverlay) {
+            settingsSubmitBtn.addEventListener('click', function() {
+                var theme = document.getElementById('neo-theme-select').value;
+                var zoom = parseInt(document.getElementById('neo-zoom-input').value, 10);
+                if (isNaN(zoom)) zoom = 100;
+                
+                var settingsPayload = {
+                    theme: theme,
+                    zoomFactor: zoom
+                };
+                
+                window.neoApplySettings(settingsPayload);
+                
+                window.neoSubmitAction({ action: 'SETTINGS', payload: JSON.stringify(settingsPayload) });
+                settingsOverlay.style.display = 'none';
+            });
+        }
+        
+        window.neoApplySettings = function(settingsObj) {
+            if (!settingsObj) return;
+            var container = document.getElementById('neodymium-ai-hud-container');
+            if (!container) return;
+            
+            if (settingsObj.zoomFactor) {
+                var zoomDec = settingsObj.zoomFactor / 100.0;
+                container.style.zoom = zoomDec;
+            }
+            if (settingsObj.theme) {
+                if (settingsObj.theme === 'light') {
+                    container.style.setProperty('--bg-main', 'rgba(255, 255, 255, 0.95)');
+                    container.style.setProperty('--text-primary', '#333');
+                    container.style.setProperty('--text-secondary', '#666');
+                    container.style.setProperty('--border-color', 'rgba(0,0,0,0.1)');
+                } else {
+                    container.style.setProperty('--bg-main', 'rgba(30, 30, 30, 0.95)');
+                    container.style.setProperty('--text-primary', '#e0e0e0');
+                    container.style.setProperty('--text-secondary', '#aaa');
+                    container.style.setProperty('--border-color', '#333');
+                }
+            }
+        };
 
 
 
@@ -901,4 +961,21 @@
         }
     }
 
-})(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11], arguments[12], arguments[13], arguments[14]);
+    if (isFinished && window.neoMaximizeHud) {
+        window.neoMaximizeHud();
+    }
+
+    if (settingsJson) {
+        try {
+            var loadedSettings = JSON.parse(settingsJson);
+            if (window.neoApplySettings) {
+                window.neoApplySettings(loadedSettings);
+            }
+            var zInput = document.getElementById('neo-zoom-input');
+            var tSelect = document.getElementById('neo-theme-select');
+            if (zInput && loadedSettings.zoomFactor) zInput.value = loadedSettings.zoomFactor;
+            if (tSelect && loadedSettings.theme) tSelect.value = loadedSettings.theme;
+        } catch(e) {}
+    }
+
+})(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11], arguments[12], arguments[13], arguments[14], arguments[15]);

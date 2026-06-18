@@ -1,5 +1,4 @@
 /*
- * GNU Affero General Public License (AGPLv3)
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -19,25 +18,24 @@
 // AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
-import com.xceptance.neodymium.ai.AiTestVerification;
-import com.xceptance.neodymium.ai.VerificationMode;
-import com.xceptance.neodymium.ai.action.Action;
-import com.xceptance.neodymium.ai.core.AiExecutionResult;
-import com.xceptance.neodymium.ai.BaseAiTest;
-import com.xceptance.neodymium.ai.core.AiAgent.DefinitiveAssertionError;
-import com.xceptance.neodymium.ai.core.ContextLevel;
-import com.xceptance.neodymium.ai.testing.LlmAssert;
+import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
-
+import com.xceptance.neodymium.ai.AiTestVerification;
+import com.xceptance.neodymium.ai.BaseAiTest;
+import com.xceptance.neodymium.ai.VerificationMode;
+import com.xceptance.neodymium.ai.action.Action;
+import com.xceptance.neodymium.ai.core.AiAgent.DefinitiveAssertionError;
+import com.xceptance.neodymium.ai.core.AiExecutionResult;
+import com.xceptance.neodymium.ai.core.ContextLevel;
+import com.xceptance.neodymium.ai.testing.LlmAssert;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
