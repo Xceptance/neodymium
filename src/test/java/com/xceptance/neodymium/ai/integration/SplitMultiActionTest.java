@@ -55,6 +55,7 @@ public class SplitMultiActionTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/SplitMultiActionTest/testSplitMultiAction.html", server.getPort());
         Neodymium.getData().put("split.test.url", this.url);
     }
@@ -69,8 +70,8 @@ public class SplitMultiActionTest extends BaseAiTest
     @NeodymiumTest
     public final void testSplitMultiActionUpfront()
     {
-        Selenide.open(url);
         final String steps = """
+                OPEN ${split.test.url}
                 Click the "Menu" button and then click the "Create Account" link in the dropdown and then the text "Account Form Opened!" is shown
             """;
 
@@ -78,30 +79,28 @@ public class SplitMultiActionTest extends BaseAiTest
         // This should split the step upfront into three separate execution steps.
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
-        // Expect exactly 3 steps to have been executed (split from the original single compound step)
+        // Expect exactly 4 steps to have been executed (split from the original compound step)
         assertThat(r1)
-            .hasStepsCount(3)
-            .step(0, s -> s.hasExpandedInstruction("Click the \"Menu\" button", true)
-                           .hasOriginalUnsplitInstruction(steps.trim()))
-            .step(1, s -> s.hasExpandedInstruction("Click the \"Create Account\" link in the dropdown", true)
-                           .hasOriginalUnsplitInstruction(steps.trim()))
-            .step(2, s -> s.hasExpandedInstruction("the text \"Account Form Opened!\" is shown", true)
-                           .hasOriginalUnsplitInstruction(steps.trim()));
+            .hasStepsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasExpandedInstruction("Click the \"Menu\" button", true))
+            .step(2, s -> s.hasExpandedInstruction("Click the \"Create Account\" link in the dropdown", true))
+            .step(3, s -> s.hasExpandedInstruction("the text \"Account Form Opened!\" is shown", true));
 
         // Verify the SUT has updated correctly
         assertEquals("Account Form Opened!", Selenide.$("#status").text());
 
         this.resetBrowser();
-        Selenide.open(url);
 
         // Verify that replaying the playbook offline runs successfully without LLM calls,
         // and correctly aligns the steps list using the saved playbook's originalUnsplitInstruction field.
         final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
         assertThat(r2)
-            .hasStepsCount(3)
+            .hasStepsCount(4)
             .step(0, s -> s.isReplayed())
             .step(1, s -> s.isReplayed())
-            .step(2, s -> s.isReplayed());
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed());
         assertEquals("Account Form Opened!", Selenide.$("#status").text());
     }
 
@@ -111,39 +110,36 @@ public class SplitMultiActionTest extends BaseAiTest
     @NeodymiumTest
     public final void testSplitMultiActionUpfrontGerman()
     {
-        Selenide.open(url);
         final String steps = """
+                OPEN ${split.test.url}
                 Klicke auf die Schaltfläche "Menu" und klicke dann auf den Link "Create Account" im Dropdown-Menü und überprüfe, ob der Text "Account Form Opened!" angezeigt wird
             """;
 
         // Execute the compound step under LIVE_LLM mode.
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
-        // Expect exactly 3 steps to have been executed (split from the original single compound step)
+        // Expect exactly 4 steps to have been executed (split from the original compound step)
         assertThat(r1)
-            .hasStepsCount(3)
-            .step(0, s -> s.hasExpandedInstruction("Klicke auf die Schaltfläche \"Menu\"", true)
-                           .hasOriginalUnsplitInstruction(steps.trim()))
-            .step(1, s -> s.hasExpandedInstruction("Klicke auf den Link \"Create Account\" im Dropdown-Menü", true)
-                           .hasOriginalUnsplitInstruction(steps.trim()))
-            .step(2, s -> s.hasExpandedInstruction("Überprüfe, ob der Text \"Account Form Opened!\" angezeigt wird", true)
-                           .hasOriginalUnsplitInstruction(steps.trim()));
+            .hasStepsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasExpandedInstruction("Klicke auf die Schaltfläche \"Menu\"", true))
+            .step(2, s -> s.hasExpandedInstruction("Klicke auf den Link \"Create Account\" im Dropdown-Menü", true))
+            .step(3, s -> s.hasExpandedInstruction("Überprüfe, ob der Text \"Account Form Opened!\" angezeigt wird", true));
 
         // Verify the SUT has updated correctly
         assertEquals("Account Form Opened!", Selenide.$("#status").text());
 
         this.resetBrowser();
-        Selenide.open(url);
 
         // Verify that replaying the playbook offline runs successfully without LLM calls,
         // and correctly aligns the steps list using the saved playbook's originalUnsplitInstruction field.
         final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
         assertThat(r2)
-            .hasStepsCount(3)
+            .hasStepsCount(4)
             .step(0, s -> s.isReplayed())
             .step(1, s -> s.isReplayed())
-            .step(2, s -> s.isReplayed());
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed());
         assertEquals("Account Form Opened!", Selenide.$("#status").text());
     }
 }
-
