@@ -53,7 +53,7 @@ public class CheckAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "CHECK: Check or uncheck a checkbox or radio button (requires tg).";
+        return "CHECK: Check or uncheck a checkbox or radio button element (requires 'tg').";
     }
 
     @Override

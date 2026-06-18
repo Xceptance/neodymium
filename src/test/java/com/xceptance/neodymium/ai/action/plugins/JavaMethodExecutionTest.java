@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
+import com.xceptance.neodymium.ai.action.plugins.AiMethod;
 
 /**
  * Runtime execution tests for the {@link JavaMethodAction} plugin.
@@ -42,6 +43,7 @@ public final class JavaMethodExecutionTest
     /**
      * Public method to be invoked on test instance via Stage 1 reflection (no params).
      */
+    @AiMethod("test method no param")
     public void myTestInstanceMethod()
     {
         this.methodCalledNoParam = true;
@@ -52,6 +54,7 @@ public final class JavaMethodExecutionTest
      * 
      * @param value the string parameter
      */
+    @AiMethod("test method with param")
     public void myTestInstanceMethodWithParam(final String value)
     {
         this.passedParam = value;
@@ -60,6 +63,7 @@ public final class JavaMethodExecutionTest
     /**
      * Public method that throws a checked or unchecked exception to test wrapping.
      */
+    @AiMethod("throwing method")
     public void myThrowingMethod()
     {
         throw new IllegalArgumentException("Target exception message");

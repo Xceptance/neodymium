@@ -50,7 +50,8 @@ public final class ClickActionTest extends BaseAiTest
         open(currentTestUrl);
 
         // Expect an exception because the element is hidden and cannot be clicked
-        Assertions.assertThrows(AssertionError.class, () -> {
+        Assertions.assertThrows(AssertionError.class, () -> 
+        {
             Neodymium.ai().execute("Click the Secret Admin Button.");
         });
     }
@@ -61,7 +62,8 @@ public final class ClickActionTest extends BaseAiTest
         open(currentTestUrl);
 
         // Expect an exception because the button is disabled
-        Assertions.assertThrows(AssertionError.class, () -> {
+        Assertions.assertThrows(AssertionError.class, () -> 
+        {
             Neodymium.ai().execute("Click the Disabled Order Button.");
         });
     }

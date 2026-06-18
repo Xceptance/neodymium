@@ -131,7 +131,7 @@ public final class NavigateAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "NAVIGATE: Go to URL. Set v to the URL. For basic auth, set tg to the URL and v to ['user', 'pass'].";
+        return "NAVIGATE: Navigate to a URL. Set 'v' to the URL. For Basic Authentication, set 'tg' to the URL and 'v' to a JSON array containing the username and password (e.g. [\"user\", \"pass\"]).";
     }
 
     /**

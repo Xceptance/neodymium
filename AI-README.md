@@ -289,12 +289,27 @@ When the AI encounters an instruction like *"Verify the price is greater than 0"
 
 ### Method Resolution Strategy
 
-The framework uses a **two-stage fallback** to locate the target method:
+To prevent unauthorized reflection and execution of arbitrary code, **only methods explicitly annotated with `@AiMethod`** (providing a description value string) are allowed to be invoked by the AI.
+
+```java
+@AiMethod("Asserts that the price string represents a value strictly greater than zero.")
+public static void assertPriceGreaterThanZero(final String price) { ... }
+```
+Unannotated methods will be ignored and result in an execution failure.
+
+For annotated methods, the framework uses a **multi-stage fallback** to locate the target:
 
 1. **Stage 1 — Test Instance**: The framework first searches the active test class for a matching `public` method (instance or static).
-2. **Stage 2 — Registered Utility Classes**: If the method is not found on the test class, the framework scans all classes listed in the `neodymium.ai.agent.javaMethod.utilityClasses` configuration property for a matching `public static` method.
+2. **Stage 2 — Dynamically Registered Classes**: Searches any classes registered dynamically on the fly on the active thread's `AiBrowser` instance.
+3. **Stage 3 — Registered Utility Classes & Packages**: If the method is not found, the framework scans all classes listed in the `neodymium.ai.agent.methods.classes` configuration property (with fallback to `neodymium.ai.agent.javaMethod.utilityClasses`), and all classes within packages configured in `neodymium.ai.agent.methods.packages` for a matching `public static` method.
 
-This means common assertions work out-of-the-box across all your tests without any boilerplate.
+### Dynamic Class Registration
+
+If your test case needs to register a custom helper class dynamically on the fly before running the steps:
+```java
+Neodymium.ai().registerMethodClass(MyCustomHelper.class);
+```
+Dynamically registered classes are isolated to the active execution thread.
 
 ### Built-in Assertions
 
@@ -333,14 +348,17 @@ In addition to assertion methods, `com.xceptance.neodymium.ai.util.AiAssertions`
 
 To add your own project-specific assertion methods:
 
-1. **Create a utility class** with `public static` methods:
+1. **Create a utility class** with `public static` methods decorated with `@AiMethod`:
    ```java
    package com.myproject.test.util;
+
+   import com.xceptance.neodymium.ai.action.plugins.AiMethod;
 
    public final class MyProjectAssertions
    {
        private MyProjectAssertions() {}
 
+       @AiMethod("Asserts that a discount was successfully applied to the displayed price.")
        public static void assertDiscountApplied(final String price)
        {
            // your custom validation logic
@@ -351,7 +369,10 @@ To add your own project-specific assertion methods:
 2. **Register it** in your `ai.properties` (or `neodymium.properties`):
    ```properties
    # Append your class after the built-in one (comma-separated)
-   neodymium.ai.agent.javaMethod.utilityClasses=com.xceptance.neodymium.ai.util.AiAssertions,com.myproject.test.util.MyProjectAssertions
+   neodymium.ai.agent.methods.classes=com.xceptance.neodymium.ai.util.AiAssertions,com.myproject.test.util.MyProjectAssertions
+
+   # Or, configure packages to automatically scan all classes inside them:
+   neodymium.ai.agent.methods.packages=com.myproject.test.util
    ```
 
 3. **Use it naturally** in your YAML steps:
@@ -361,7 +382,7 @@ To add your own project-specific assertion methods:
    ```
    The AI will emit `JAVA_METHOD: assertDiscountApplied`, and the framework will automatically find it in your registered utility class.
 
-> **Note:** Methods on the test instance always take priority over utility classes. If your test class defines a method with the same name, it will be invoked instead of the utility version. Utility class methods **must** be `public static`.
+> **Note:** Methods on the test instance always take priority over utility classes. If your test class defines a method with the same name, it will be invoked instead of the utility version. Utility class methods **must** be `public static`, and all exposed methods must be annotated with `@AiMethod`.
 
 ---
 

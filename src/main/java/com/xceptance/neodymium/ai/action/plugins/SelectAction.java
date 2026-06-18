@@ -73,7 +73,7 @@ public class SelectAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "SELECT: select an option from a dropdown (requires tg and v)."; }
+    public String getPromptInstructions() { return "SELECT: Select an option from a target dropdown element (requires 'tg' and 'v')."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

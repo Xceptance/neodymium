@@ -65,7 +65,7 @@ public class TypeAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "TYPE: type text into an input field (requires tg and v). clears the field first."; }
+    public String getPromptInstructions() { return "TYPE: Type text into a target input field (requires 'tg' and 'v'). Automatically clears the field first."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {
