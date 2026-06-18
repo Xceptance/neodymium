@@ -21,7 +21,7 @@
     },
     {
       "promptLine": "Open http://127.0.0.1:18150 in the browser",
-      "reasoning": "The instruction is to open a specific URL. I will use the NAVIGATE action to achieve this.",
+      "reasoning": "The instruction is to navigate to a URL. I am using the NAVIGATE action with the provided URL.",
       "actions": [
         {
           "type": "NAVIGATE",
@@ -40,13 +40,13 @@
     },
     {
       "promptLine": "Click the \"Create New Test\" button",
-      "reasoning": "Found the button with name \u0027+ Create New Test\u0027 and clicked it using its data-neo-ref.",
+      "reasoning": "Found the button with name \u0027+ Create New Test\u0027 and data-neo-ref \u0027xc_og12ec\u0027 and created a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_og12ec",
-          "description": "Click the \"Create New Test\" button",
-          "elementDetails": "+ Create New Test",
+          "target": "[data-neo-ref\u003d\u0027xc_og12ec\u0027]",
+          "description": "Click the \u0027Create New Test\u0027 button",
+          "elementDetails": "Create New Test",
           "elementContext": {
             "classes": "btn-edit",
             "text": "Create New Test",
@@ -63,7 +63,7 @@
     },
     {
       "promptLine": "Wait for the Create Test Modal to appear",
-      "reasoning": "The instruction is to wait for the \u0027Create Test Modal\u0027 to appear. I identified elements that are likely part of this modal, specifically the \u0027Create Test\u0027 button ([data-neo-ref\u003d\u0027xc_95c94x\u0027]), and confirmed its presence in the current AXTREE. Therefore, I\u0027m asserting its visibility to confirm the modal has appeared.",
+      "reasoning": "The instruction is to wait for the \u0027Create Test Modal\u0027 to appear. Based on the provided AXTree, elements like \u0027Create Test\u0027 button and \u0027e.g. Add Product to Basket\u0027 textbox are already present, which strongly suggests the modal is already visible. Therefore, an ASSERT action is used to verify the visibility of the \u0027Create Test\u0027 button, confirming the modal\u0027s presence.",
       "actions": [
         {
           "type": "ASSERT",
@@ -83,7 +83,7 @@
     },
     {
       "promptLine": "Enter \"Automated Workspace Test\" into the test name input field",
-      "reasoning": "Identified the input field by its data-neo-ref attribute and typed the specified text into it.",
+      "reasoning": "Identified the input field by its data-neo-ref attribute and typed the specified text.",
       "actions": [
         {
           "type": "TYPE",
@@ -91,7 +91,7 @@
           "value": [
             "Automated Workspace Test"
           ],
-          "description": "Enter \"Automated Workspace Test\" into the test name input field",
+          "description": "Enter \u0027Automated Workspace Test\u0027 into the test name input field",
           "elementDetails": "e.g. Add Product to Basket",
           "elementContext": {
             "classes": "modal-input",
@@ -109,13 +109,13 @@
     },
     {
       "promptLine": "Click the \"Create Test\" submit button",
-      "reasoning": "Found the button with name \u0027Create Test\u0027 and data-neo-ref \u0027xc_95c94x\u0027 and generated a CLICK action.",
+      "reasoning": "Found the \u0027Create Test\u0027 button using its data-neo-ref attribute and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_95c94x",
-          "description": "Click the \"Create Test\" submit button",
-          "elementDetails": "Create Test",
+          "target": "[data-neo-ref\u003d\u0027xc_95c94x\u0027]",
+          "description": "Click the \u0027Create Test\u0027 submit button",
+          "elementDetails": "Create Test button",
           "elementContext": {
             "classes": "btn-primary",
             "text": "Create Test",
@@ -132,7 +132,7 @@
     },
     {
       "promptLine": "Verify the file \"automated-workspace-test.yaml\" appears in the file selection list",
-      "reasoning": "The instruction is to verify the presence of \u0027automated-workspace-test.yaml\u0027. I found an element with id \u0027editorFileName\u0027 and data-neo-ref \u0027xc_zbobip\u0027 that contains this text, so I used it for the ASSERT action.",
+      "reasoning": "The file \u0027automated-workspace-test.yaml\u0027 was found in the \u0027editorFileName\u0027 element, confirming its presence in the file selection list.",
       "actions": [
         {
           "type": "ASSERT",
@@ -144,7 +144,7 @@
           "elementDetails": "automated-workspace-test.yaml",
           "elementContext": {},
           "replay": "",
-          "frameId": "BE146080D75EC579B2B04E19BDECED65:main",
+          "frameId": "6606ADF4392A1142DB9CCD3AF61BD7B5:main",
           "adjust": false
         }
       ],

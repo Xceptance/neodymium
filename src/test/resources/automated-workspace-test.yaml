@@ -1,5 +1,0 @@
-# Neodymium YAML Test Data File
-steps: |
-  Open browser
-data:
-  - testId: "Automated Workspace Test"

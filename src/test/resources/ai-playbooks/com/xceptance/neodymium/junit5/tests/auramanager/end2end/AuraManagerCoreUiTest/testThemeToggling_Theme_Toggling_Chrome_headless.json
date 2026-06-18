@@ -25,7 +25,6 @@
       "actions": [
         {
           "type": "NAVIGATE",
-          "target": "",
           "value": [
             "http://127.0.0.1:18120"
           ],
@@ -41,7 +40,7 @@
     },
     {
       "promptLine": "Verify the page title is \"Neodymium Aura Manager\"",
-      "reasoning": "The page title \u0027Neodymium Aura Manager\u0027 was successfully verified.",
+      "reasoning": "The page title \u0027Neodymium Aura Manager\u0027 was successfully verified against the expected value.",
       "actions": [
         {
           "type": "ASSERT",
@@ -75,7 +74,7 @@
             "type": "submit"
           },
           "replay": "",
-          "frameId": "4EBAD26BAD11579E33874D80E89B1028:main",
+          "frameId": "98B790529D9C9D287EB37A12E4D06413:main",
           "adjust": false
         }
       ],
@@ -84,24 +83,24 @@
     },
     {
       "promptLine": "Verify the root element has the \"force-dark\" class",
-      "reasoning": "The instruction is to verify that the root element has the \u0027force-dark\u0027 class. I am assuming \u0027body\u0027 is the root element and asserting that it contains the class \u0027force-dark\u0027.",
+      "reasoning": "The instruction is to verify a class on the root element. I\u0027ve chosen \u0027html\u0027 as the target for the root element and \u0027force-dark\u0027 as the value to assert its presence as a class.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "body",
+          "target": "html",
           "value": [
             "force-dark"
           ],
-          "description": "Verify the root element has the \u0027force-dark\u0027 class",
-          "elementDetails": "body",
+          "description": "Verify the root element has the \"force-dark\" class",
+          "elementDetails": "root html element",
           "elementContext": {},
           "replay": "",
-          "frameId": "4EBAD26BAD11579E33874D80E89B1028:main",
           "adjust": false
         }
       ],
+      "screenshotHash": "000280008000b000b020b020b000b0009805b000b000b000b010b00080208000",
       "expectedFailure": false,
-      "healedContextLevel": "STANDARD"
+      "healedContextLevel": "VISUAL"
     },
     {
       "promptLine": "Click the Light Mode button",
@@ -119,7 +118,7 @@
             "type": "submit"
           },
           "replay": "",
-          "frameId": "4EBAD26BAD11579E33874D80E89B1028:main",
+          "frameId": "98B790529D9C9D287EB37A12E4D06413:main",
           "adjust": false
         }
       ],
@@ -128,7 +127,7 @@
     },
     {
       "promptLine": "Verify the root element has the \"force-light\" class",
-      "reasoning": "The instruction is to verify that the root element has the \u0027force-light\u0027 class. I will use an ASSERT action targeting the \u0027body\u0027 element and checking for the presence of \u0027force-light\u0027 in its class attribute.",
+      "reasoning": "The instruction is to verify that the root element has the \u0027force-light\u0027 class. I will use an ASSERT action targeting the \u0027body\u0027 element and checking for the \u0027force-light\u0027 class as its value.",
       "actions": [
         {
           "type": "ASSERT",
@@ -136,14 +135,14 @@
           "value": [
             "force-light"
           ],
-          "description": "Verify the root element has the \"force-light\" class",
-          "elementDetails": "body",
+          "description": "Verify the root element has the \u0027force-light\u0027 class",
+          "elementDetails": "root element",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "screenshotHash": "00038000800040004020402040004000403a4000400040004020400000200000",
+      "screenshotHash": "00038000800040004020402040004000603a4000400040004020400000200000",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     },

@@ -86,6 +86,7 @@ public final class NeodymiumAuraManager
     private static final Gson gson = new Gson();
     
     private static final Map<String, Long> activeClients = new ConcurrentHashMap<>();
+    private static final Map<HttpServer, HttpsServer> httpsServers = new ConcurrentHashMap<>();
     private static final CopyOnWriteArrayList<String> currentRunLogs = new CopyOnWriteArrayList<>();
     private static final CopyOnWriteArrayList<Map<String, Object>> currentRunEvents = new CopyOnWriteArrayList<>();
     private static final AtomicReference<Process> activeProcess = new AtomicReference<>(null);
@@ -93,6 +94,7 @@ public final class NeodymiumAuraManager
     private static final AtomicInteger globalPassed = new AtomicInteger(0);
     private static final AtomicInteger globalFailed = new AtomicInteger(0);
     private static final AtomicBoolean runningQueue = new AtomicBoolean(false);
+    private static final AtomicBoolean manuallyStopped = new AtomicBoolean(false);
     private static final AtomicReference<String> activeFile = new AtomicReference<>("");
 
     private static final ScheduledExecutorService shutdownScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -132,20 +134,39 @@ public final class NeodymiumAuraManager
 
     public static HttpServer startServer(final int startPort) throws IOException
     {
+        return startServer(startPort, false);
+    }
+
+    public static HttpServer startServer(final int startPort, final boolean enforcePort) throws IOException
+    {
         validateEnvironment();
         
         int port = startPort;
         HttpServer server = null;
-        while (port < startPort + 100)
+        if (enforcePort)
         {
             try
             {
                 server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
-                break;
             }
             catch (final IOException e)
             {
-                port++;
+                throw new IOException("Failed to start Neodymium Aura Manager: Port " + port + " is already in use.", e);
+            }
+        }
+        else
+        {
+            while (port < startPort + 100)
+            {
+                try
+                {
+                    server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
+                    break;
+                }
+                catch (final IOException e)
+                {
+                    port++;
+                }
             }
         }
         
@@ -179,16 +200,30 @@ public final class NeodymiumAuraManager
 
                     int httpsPort = port + 1;
                     HttpsServer httpsServer = null;
-                    while (httpsPort < port + 100)
+                    if (enforcePort)
                     {
                         try
                         {
                             httpsServer = HttpsServer.create(new InetSocketAddress("0.0.0.0", httpsPort), 0);
-                            break;
                         }
                         catch (final IOException e)
                         {
-                            httpsPort++;
+                            throw new IOException("Failed to start Neodymium Aura Manager secure server: Port " + httpsPort + " is already in use.", e);
+                        }
+                    }
+                    else
+                    {
+                        while (httpsPort < port + 100)
+                        {
+                            try
+                            {
+                                httpsServer = HttpsServer.create(new InetSocketAddress("0.0.0.0", httpsPort), 0);
+                                break;
+                            }
+                            catch (final IOException e)
+                            {
+                                httpsPort++;
+                            }
                         }
                     }
 
@@ -199,6 +234,7 @@ public final class NeodymiumAuraManager
                         httpsServer.setExecutor(server.getExecutor());
                         httpsServer.start();
                         LOGGER.info("[Aura Server] HTTPS secure server started on https://localhost:{}", httpsPort);
+                        httpsServers.put(server, httpsServer);
                     }
                 }
             }
@@ -206,6 +242,11 @@ public final class NeodymiumAuraManager
         catch (final Exception e)
         {
             LOGGER.warn("[Aura Server] Failed to initialize secure HttpsServer: {}", e.getMessage());
+            if (enforcePort && e instanceof IOException)
+            {
+                stopServer(server);
+                throw (IOException) e;
+            }
         }
 
         return server;
@@ -216,6 +257,11 @@ public final class NeodymiumAuraManager
         if (server != null)
         {
             server.stop(0);
+            final HttpsServer httpsServer = httpsServers.remove(server);
+            if (httpsServer != null)
+            {
+                httpsServer.stop(0);
+            }
         }
     }
 
@@ -810,7 +856,7 @@ public final class NeodymiumAuraManager
             }
 
             LOGGER.info("[Aura Server] Spawning thread to compile Allure report...");
-            final Thread thread = new Thread(() -> generateAllureReport(List.of()));
+            final Thread thread = new Thread(() -> generateAllureReport(List.of(), true));
             thread.setName("NeodymiumAuraManualAllureCompiler");
             thread.start();
 
@@ -869,6 +915,7 @@ public final class NeodymiumAuraManager
         private void handleStopProcess(final HttpExchange exchange) throws IOException
         {
             LOGGER.info("[Aura Server] User requested to stop active execution subprocess");
+            manuallyStopped.set(true);
             final Process p = activeProcess.get();
             if (p != null && p.isAlive())
             {
@@ -1079,6 +1126,7 @@ public final class NeodymiumAuraManager
                 globalTestsRun.set(0);
                 globalPassed.set(0);
                 globalFailed.set(0);
+                manuallyStopped.set(false);
                 currentRunLogs.clear();
                 currentRunEvents.clear();
 
@@ -1093,16 +1141,27 @@ public final class NeodymiumAuraManager
                     broadcastStatus(true);
 
                     final StringBuilder idFilterBuilder = new StringBuilder();
-                    idFilterBuilder.append("^(");
+                    boolean hasIds = false;
                     for (int j = 0; j < ids.size(); j++)
                     {
-                        if (j > 0)
+                        if (ids.get(j) != null)
                         {
-                            idFilterBuilder.append("|");
+                            if (hasIds)
+                            {
+                                idFilterBuilder.append("|");
+                            }
+                            else
+                            {
+                                idFilterBuilder.append("^(");
+                            }
+                            idFilterBuilder.append(Pattern.quote(ids.get(j)));
+                            hasIds = true;
                         }
-                        idFilterBuilder.append(Pattern.quote(ids.get(j)));
                     }
-                    idFilterBuilder.append(")$");
+                    if (hasIds)
+                    {
+                        idFilterBuilder.append(")$");
+                    }
 
                     broadcastLog("\n[INFO] Spawning Maven Subprocess for YAML test: " + file + " [Datasets: " + ids + "]...");
 
@@ -1125,7 +1184,10 @@ public final class NeodymiumAuraManager
                     command.add("test");
                     command.add("-Dtest=com.xceptance.neodymium.aura.AuraYamlRunnerTest");
                     command.add("-Dneodymium.testFileFilter=" + file.replace(".", "\\."));
-                    command.add("-Dneodymium.testIdFilter=" + idFilterBuilder.toString());
+                    if (hasIds)
+                    {
+                        command.add("-Dneodymium.testIdFilter=" + idFilterBuilder.toString());
+                    }
                     command.add("-Dbrowserprofile.Default.headless=" + req.headless);
                     command.add("-Dselenide.headless=" + req.headless);
                     command.add("-Dneodymium.ai.interactive=" + req.interactive);
@@ -1205,6 +1267,13 @@ public final class NeodymiumAuraManager
 
                     LOGGER.info("[Aura Server] Subprocess for {} completed with exit code: {}", file, exitCode);
 
+                    if (manuallyStopped.get())
+                    {
+                        broadcastLog("[WARN] Process execution aborted by user.");
+                        activeProcess.set(null);
+                        break;
+                    }
+
                     if (fileTestsRun.get() > 0)
                     {
                         globalTestsRun.addAndGet(fileTestsRun.get());
@@ -1229,11 +1298,11 @@ public final class NeodymiumAuraManager
                     activeProcess.set(null);
                 }
 
-                if (req.allure)
+                if (!manuallyStopped.get() && (req.allure || req.history))
                 {
                     LOGGER.info("[Aura Server] Auto-generating Allure report as requested.");
                     final List<String> uniqueFiles = new ArrayList<>(datasetsByFile.keySet());
-                    generateAllureReport(uniqueFiles);
+                    generateAllureReport(uniqueFiles, req.history);
                 }
 
                 LOGGER.info("[Aura Server] Queue execution completed. Total: {}, Passed: {}, Failed: {}", globalTestsRun.get(), globalPassed.get(), globalFailed.get());
@@ -1274,7 +1343,7 @@ public final class NeodymiumAuraManager
         thread.start();
     }
 
-    private static void generateAllureReport(final List<String> files)
+    private static void generateAllureReport(final List<String> files, final boolean addToHistory)
     {
         broadcastLog("\n[INFO] Compiling Allure report...");
         final List<String> command = new ArrayList<>();
@@ -1316,7 +1385,10 @@ public final class NeodymiumAuraManager
             {
                 LOGGER.info("[Aura Server] Allure report successfully compiled.");
                 broadcastLog("[INFO] Allure report successfully compiled.");
-                copyAllureReportToHistory(files);
+                if (addToHistory)
+                {
+                    copyAllureReportToHistory(files);
+                }
             }
             else
             {
@@ -1360,7 +1432,7 @@ public final class NeodymiumAuraManager
 
             // Write metadata.json
             final File metadataFile = new File(destDir, "metadata.json");
-            final String status = globalFailed.get() == 0 ? "Passed" : "Failed";
+            final String status = manuallyStopped.get() ? "Aborted" : (globalFailed.get() == 0 ? "Passed" : "Failed");
             final String metadataContent = String.format("{\n  \"status\": \"%s\",\n  \"timestamp\": \"%s\",\n  \"total\": %d,\n  \"passed\": %d,\n  \"failed\": %d\n}", 
                 status, timestamp, globalTestsRun.get(), globalPassed.get(), globalFailed.get());
             Files.writeString(metadataFile.toPath(), metadataContent, StandardCharsets.UTF_8);
@@ -2038,6 +2110,7 @@ public final class NeodymiumAuraManager
         boolean headless;
         boolean interactive;
         boolean allure;
+        boolean history;
         boolean video;
         boolean keepOpen;
     }

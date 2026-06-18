@@ -274,7 +274,7 @@
         .config-panel { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
         .config-row { display: flex; justify-content: space-between; align-items: center; }
         .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
-        .switch input { opacity: 0; width: 0; height: 0; }
+        .switch input { opacity: 0; width: 100%; height: 100%; position: absolute; top: 0; left: 0; cursor: pointer; z-index: 2; margin: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; border-radius: 20px; transition: .2s; }
         @media (prefers-color-scheme: dark) { .slider { background-color: #475569; } }
         :root.force-dark .slider { background-color: #475569; }
@@ -369,9 +369,56 @@
         .delete-report-btn:hover {
             color: var(--danger);
         }
+        
+        /* Toast Notification Styles */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            padding: 12px 20px;
+            border-radius: 8px;
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #f8fafc;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: auto;
+            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1), fadeOut 0.3s ease-in 2.7s forwards;
+            min-width: 250px;
+            max-width: 400px;
+        }
+        .toast.success {
+            border-left: 4px solid #10b981;
+        }
+        .toast.error {
+            border-left: 4px solid #ef4444;
+        }
+        .toast.info {
+            border-left: 4px solid #3b82f6;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%) translateY(-10px); opacity: 0; }
+            to { transform: translateX(0) translateY(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateY(-10px); }
+        }
     </style>
 </head>
 <body>
+    <div id="toastContainer" class="toast-container"></div>
 
     <div class="sidebar">
         <div class="logo"><i class="fa-solid fa-atom"></i></div>
@@ -495,6 +542,9 @@
                         <div class="api-key-banner" id="apiKeyBanner" style="display: none; padding: 10px; background: rgba(239, 68, 68, 0.1); border-bottom: 1px solid var(--danger); color: var(--danger); font-size: 11px;">
                             <i class="fa-solid fa-triangle-exclamation"></i> <span id="apiKeyBannerText"></span>
                         </div>
+                        <div class="api-key-banner" id="warningBanner" style="display: none; padding: 10px; background: rgba(245, 158, 11, 0.1); border-bottom: 1px solid #f59e0b; color: #f59e0b; font-size: 11px;">
+                            <i class="fa-solid fa-triangle-exclamation"></i> <span id="warningBannerText"></span>
+                        </div>
                         <div class="chat-messages" id="chatMessages"></div>
                         <input type="text" class="chat-input" id="chatInput" placeholder="Ask Aura...">
                     </div>
@@ -543,7 +593,16 @@
                                 <span style="font-size: 11px; color: var(--text-secondary);">Compiles and opens the visual test report after execution completes.</span>
                             </div>
 
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Save to History</span>
+                                    <label class="switch" for="optHistory"><input type="checkbox" id="optHistory" checked><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Archives execution logs and reports in the history tab.</span>
+                            </div>
+
                             <button class="btn-primary" id="runQueueBtn" onclick="runQueue()"><i class="fa-solid fa-play"></i> Run Queue</button>
+                            <button class="btn-primary" id="runCurrentTestBtn" onclick="runCurrentFile()" style="display:none; background: var(--success);"><i class="fa-solid fa-play"></i> Run Open Test</button>
                             <button class="btn-danger" id="stopQueueBtn" onclick="stopQueue()" style="display:none;"><i class="fa-solid fa-stop"></i> Stop Execution</button>
                         </div>
                     </div>
@@ -598,7 +657,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-editor" id="closeModalBtn">Cancel</button>
-                <button class="btn-primary" style="margin-top:0;" onclick="submitCreateTest()">Create Test</button>
+                <button class="btn-primary" style="margin-top:0;" id="submitCreateTestBtn" onclick="submitCreateTest()">Create Test</button>
             </div>
         </div>
     </div>
@@ -620,6 +679,21 @@
     </div>
 
     <script>
+        // Toast Notification System
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            let iconClass = 'fa-info-circle';
+            if (type === 'success') iconClass = 'fa-check-circle';
+            else if (type === 'error') iconClass = 'fa-exclamation-circle';
+            toast.innerHTML = `<i class="fa-solid ${iconClass}"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
 
         // Theme Logic
         function initTheme() {
@@ -787,15 +861,30 @@
             // Enforce mutual exclusivity: Headless Mode vs Interactive HUD
             const optHeadless = document.getElementById('optHeadless');
             const optInteractive = document.getElementById('optInteractive');
+            
+            function showWarning(msg) {
+                const banner = document.getElementById('warningBanner');
+                const bannerText = document.getElementById('warningBannerText');
+                if (banner && bannerText) {
+                    bannerText.innerHTML = msg;
+                    banner.style.display = 'block';
+                    setTimeout(() => {
+                        banner.style.display = 'none';
+                    }, 5000);
+                }
+            }
+            
             if (optHeadless && optInteractive) {
                 optHeadless.addEventListener('change', () => {
-                    if (optHeadless.checked) {
+                    if (optHeadless.checked && optInteractive.checked) {
                         optInteractive.checked = false;
+                        showWarning("Interactive mode automatically disabled because Headless mode was enabled.");
                     }
                 });
                 optInteractive.addEventListener('change', () => {
-                    if (optInteractive.checked) {
+                    if (optInteractive.checked && optHeadless.checked) {
                         optHeadless.checked = false;
+                        showWarning("Headless mode automatically disabled because Interactive mode requires a visible browser.");
                     }
                 });
             }
@@ -1031,10 +1120,10 @@
                         loadHistory();
                         updateCenterLayout();
                     } else {
-                        alert("Error deleting report: " + data.error);
+                        showToast("Error deleting report: " + data.error, "error");
                     }
                 } catch (e) {
-                    alert("Error deleting report: " + e.message);
+                    showToast("Error deleting report: " + e.message, "error");
                 }
             }
         }
@@ -1108,6 +1197,7 @@
                     runQueueBtn.disabled = false;
                 }
             }
+            updateRunButtons();
         }
 
         function moveQueueItem(index, direction) {
@@ -1247,7 +1337,7 @@
 
         function deleteCurrentChatSession() {
             if (chatSessions.length <= 1) {
-                alert("Cannot delete the only chat session.");
+                showToast("Cannot delete the only chat session.", "error");
                 return;
             }
             const session = chatSessions.find(s => s.id === currentSessionId);
@@ -1271,7 +1361,7 @@
                 });
                 const data = await res.json();
                 if (data.error) {
-                    alert("Error: " + data.error);
+                    showToast("Error: " + data.error, "error");
                 } else {
                     createTestModal.style.display = 'none';
                     await loadFiles();
@@ -1320,7 +1410,7 @@
                 
                 if (hasConsole) {
                     consoleResizer.style.display = 'block';
-                    consolePanel.style.display = 'flex'; setTimeout(() => consolePanel.style.height = '150px', 10);
+                    consolePanel.style.display = 'flex';
                     consolePanel.style.flexGrow = '0';
                     consolePanel.style.height = consoleExpanded ? '400px' : '200px';
                 } else {
@@ -1333,13 +1423,45 @@
                 
                 if (hasConsole) {
                     consoleResizer.style.display = 'block';
-                    consolePanel.style.display = 'flex'; setTimeout(() => consolePanel.style.height = '150px', 10);
+                    consolePanel.style.display = 'flex';
                     consolePanel.style.flexGrow = '0';
                     consolePanel.style.height = consoleExpanded ? '550px' : '280px';
                 } else {
                     consoleResizer.style.display = 'none';
                     consolePanel.style.height = '0px'; setTimeout(() => { if (!consoleOpened && !isRunning) consolePanel.style.display = 'none'; }, 300);
                 }
+            }
+            updateRunButtons();
+        }
+
+        function updateRunButtons() {
+            const runQueueBtn = document.getElementById('runQueueBtn');
+            const runCurrentTestBtn = document.getElementById('runCurrentTestBtn');
+            const stopQueueBtn = document.getElementById('stopQueueBtn');
+            if (!runQueueBtn || !runCurrentTestBtn || !stopQueueBtn) return;
+            
+            const queueCount = selectedDatasets ? selectedDatasets.length : 0;
+            runQueueBtn.innerHTML = `<i class="fa-solid fa-play"></i> Run Queue (${queueCount})`;
+            
+            if (isRunning) {
+                runQueueBtn.style.display = 'none';
+                runCurrentTestBtn.style.display = 'none';
+                stopQueueBtn.style.display = 'flex';
+                return;
+            }
+            
+            stopQueueBtn.style.display = 'none';
+            runQueueBtn.style.display = 'flex';
+            
+            if (activeEditingFile) {
+                runCurrentTestBtn.style.display = 'flex';
+                runCurrentTestBtn.disabled = false;
+                runQueueBtn.style.filter = 'saturate(50%) opacity(0.7)';
+                runQueueBtn.disabled = true;
+            } else {
+                runCurrentTestBtn.style.display = 'none';
+                runQueueBtn.style.filter = 'none';
+                runQueueBtn.disabled = queueCount === 0;
             }
         }
 
@@ -1481,7 +1603,7 @@
                 editorContent.value = data.content || '';
                 updateCenterLayout();
             } catch (e) {
-                alert("Failed to load file content: " + e.message);
+                showToast("Failed to load file content: " + e.message, "error");
             }
         }
 
@@ -1495,12 +1617,12 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    alert(`💾 ${activeEditingFile} successfully saved to disk!`);
+                    showToast(`💾 ${activeEditingFile} successfully saved to disk!`, "success");
                 } else {
-                    alert("Error saving: " + data.error);
+                    showToast("Error saving: " + data.error, "error");
                 }
             } catch (e) {
-                alert("Error saving file: " + e.message);
+                showToast("Error saving file: " + e.message, "error");
             }
         }
 
@@ -1519,10 +1641,10 @@
                         closeEditor();
                         loadFiles();
                     } else {
-                        alert("Error deleting: " + data.error);
+                        showToast("Error deleting: " + data.error, "error");
                     }
                 } catch (e) {
-                    alert("Error deleting file: " + e.message);
+                    showToast("Error deleting file: " + e.message, "error");
                 }
             }
         }
@@ -1546,6 +1668,61 @@
             reportIframe.src = 'about:blank';
         }
 
+        async function runCurrentFile() {
+            if (!activeEditingFile) return;
+            
+            await saveYamlFile();
+            
+            const fileDatasets = [{ file: activeEditingFile, id: null }];
+            
+            const headless = document.getElementById('optHeadless').checked;
+            const video = document.getElementById('optVideo').checked;
+            const keepOpen = document.getElementById('optKeepOpen').checked;
+            const interactive = document.getElementById('optInteractive').checked;
+            const allure = document.getElementById('optAllure').checked;
+            const history = document.getElementById('optHistory').checked;
+            
+            isRunning = true;
+            consoleOpened = true;
+            
+            activeRunStats.running = true;
+            activeRunStats.startTime = new Date();
+            activeRunStats.total = 0;
+            activeRunStats.passed = 0;
+            activeRunStats.failed = 0;
+            renderHistoryTable();
+
+            runSpinner.style.display = 'inline-block';
+            updateCenterLayout();
+            runSpinner.style.display = 'inline-block';
+            terminalConsole.innerHTML = 'Connecting to run stream...\n';
+            hasShownStartMessage = false;
+            
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ datasets: fileDatasets, headless, video, keepOpen, interactive, allure, history })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    showToast("Execution failed to start: " + data.error, "error");
+                    isRunning = false;
+                    activeRunStats.running = false;
+                    renderHistoryTable();
+                    consoleOpened = false;
+                    updateCenterLayout();
+                }
+            } catch (e) {
+                showToast("Failed to start run for current file: " + e.message, "error");
+                isRunning = false;
+                activeRunStats.running = false;
+                renderHistoryTable();
+                consoleOpened = false;
+                updateCenterLayout();
+            }
+        }
+
         async function runQueue() {
             if (selectedDatasets.length === 0) return;
             
@@ -1565,11 +1742,8 @@
             activeRunStats.failed = 0;
             renderHistoryTable();
 
+            runSpinner.style.display = 'inline-block';
             updateCenterLayout();
-            
-            runQueueBtn.disabled = true;
-            runQueueBtn.style.display = 'none';
-            stopQueueBtn.style.display = 'flex';
             runSpinner.style.display = 'inline-block';
             terminalConsole.innerHTML = 'Connecting to run stream...\n';
             hasShownStartMessage = false;
@@ -1578,11 +1752,11 @@
                 const res = await fetch('/api/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ datasets: selectedDatasets, headless, video, keepOpen, interactive, allure })
+                    body: JSON.stringify({ datasets: selectedDatasets, headless, video, keepOpen, interactive, allure, history })
                 });
                 const data = await res.json();
                 if (data.error) {
-                    alert("Execution failed to start: " + data.error);
+                    showToast("Execution failed to start: " + data.error, "error");
                     isRunning = false;
                     activeRunStats.running = false;
                     renderHistoryTable();
@@ -1590,7 +1764,7 @@
                     updateCenterLayout();
                 }
             } catch (e) {
-                alert("Failed to start run queue: " + e.message);
+                showToast("Failed to start run queue: " + e.message, "error");
                 isRunning = false;
                 activeRunStats.running = false;
                 renderHistoryTable();
@@ -1779,24 +1953,23 @@
                         if (statusData.running && !activeRunStats.startTime) {
                             activeRunStats.startTime = new Date();
                         }
-                        renderHistoryTable();
+                        const currentStatsStr = `${activeRunStats.running}:${activeRunStats.total}:${activeRunStats.passed}:${activeRunStats.failed}:${historyCached.length}`;
+                        if (window._lastStatsStr !== currentStatsStr) {
+                            renderHistoryTable();
+                            window._lastStatsStr = currentStatsStr;
+                        }
                         
                         try {
                             isRunning = statusData.running;
                             if (isRunning) {
-                                runQueueBtn.disabled = true;
-                                runQueueBtn.style.display = 'none';
-                                stopQueueBtn.style.display = 'flex';
                                 if (runSpinner) runSpinner.style.display = 'inline-block';
                                 const sidebarBadge = document.getElementById('sidebarRunBadge');
                                 if (sidebarBadge) {
                                     sidebarBadge.style.display = 'flex';
                                     sidebarBadge.innerHTML = `<i class="fa-solid fa-circle-notch spinner"></i> ${statusData.passed + statusData.failed + 1}/${statusData.total}`;
                                 }
+                                updateRunButtons();
                             } else {
-                                runQueueBtn.disabled = selectedDatasets.length === 0;
-                                runQueueBtn.style.display = 'flex';
-                                stopQueueBtn.style.display = 'none';
                                 if (runSpinner) runSpinner.style.display = 'none';
                                 const sidebarBadge = document.getElementById('sidebarRunBadge');
                                 if (sidebarBadge) sidebarBadge.style.display = 'none';
@@ -1810,11 +1983,27 @@
                             console.error('Error updating UI state from status:', err);
                         }
                     }
+                    const apiKeyBanner = document.getElementById('apiKeyBanner');
+                    if (apiKeyBanner && apiKeyBanner.style.display === 'block' && document.getElementById('apiKeyBannerText').innerHTML.includes('offline')) {
+                        apiKeyBanner.style.display = 'none';
+                    }
                 } else {
                     console.error("Polling response error:", response.status);
+                    const apiKeyBanner = document.getElementById('apiKeyBanner');
+                    const apiKeyBannerText = document.getElementById('apiKeyBannerText');
+                    if (apiKeyBanner && apiKeyBannerText) {
+                        apiKeyBanner.style.display = 'block';
+                        apiKeyBannerText.innerHTML = "Server is offline or unreachable.";
+                    }
                 }
             } catch (err) {
                 console.error("Polling fetch error:", err);
+                const apiKeyBanner = document.getElementById('apiKeyBanner');
+                const apiKeyBannerText = document.getElementById('apiKeyBannerText');
+                if (apiKeyBanner && apiKeyBannerText) {
+                    apiKeyBanner.style.display = 'block';
+                    apiKeyBannerText.innerHTML = "Server is offline or unreachable.";
+                }
             } finally {
                 if (!disconnected) {
                     pollingIntervalId = setTimeout(pollStatus, 2000);
