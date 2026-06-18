@@ -21,6 +21,7 @@ import com.xceptance.neodymium.ai.AiTestVerification;
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
 
+import org.junit.jupiter.api.Tag;
 import static com.codeborne.selenide.Selenide.open;
 
 

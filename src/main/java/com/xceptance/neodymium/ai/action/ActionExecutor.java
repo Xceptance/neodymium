@@ -18,9 +18,6 @@
  */
 package com.xceptance.neodymium.ai.action;
 
-import static com.codeborne.selenide.Selenide.$;
-import static com.codeborne.selenide.Selenide.$x;
-
 import java.time.Duration;
 import com.xceptance.neodymium.util.Neodymium;
 import java.util.ArrayList;
@@ -647,18 +644,6 @@ public class ActionExecutor {
             return Selectors.shadowCss(shadowTarget, shadowHosts);
         }
         return By.cssSelector(target);
-    }
-
-    private boolean isValidCssSelector(String target) {
-        if (target == null || target.isBlank())
-            return false;
-        try {
-            return Selenide.executeJavaScript(
-                    "try { document.querySelector(arguments[0]); return true; } catch(e) { return false; }",
-                    target);
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     private boolean isValidXPath(String target) {
