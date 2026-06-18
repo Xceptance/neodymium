@@ -1273,6 +1273,57 @@ public final void testDynamicFlow()
 
 ---
 
+## 📂 Playbook Directory Configuration
+
+By default, recorded playbooks are loaded from and saved to the global directory `src/test/resources/ai-playbooks/`. Neodymium AI supports dynamic, hierarchical overrides for this directory based on the active test method, class, package, or a global fallback.
+
+You can configure these directory paths dynamically inside your Java tests on the fly (via `Neodymium.getData()`), as JVM System properties, or statically in your `ai.properties` or `neodymium.properties` configuration files.
+
+### 🔍 Resolution Precedence Hierarchy
+
+For a given test case / playbook ID (e.g. `com.example.tests.MyTestClass :: myTestMethod`), the directory is resolved using the following order of precedence:
+
+1. **Method level override**:
+   - `playbook.directory.method.<className>::<methodName>` (e.g. `playbook.directory.method.com.example.tests.MyTestClass::myTestMethod` or `playbook.directory.method.com.example.tests.MyTestClass :: myTestMethod`)
+   - `playbook.directory.class.<className>::<methodName>` (supported for compatibility/flexibility)
+2. **Class level override**:
+   - `playbook.directory.class.<className>` (e.g. `playbook.directory.class.com.example.tests.MyTestClass`)
+3. **Package level override** (traverses up package segments):
+   - `playbook.directory.package.<package>` (e.g. `playbook.directory.package.com.example.tests`)
+   - `playbook.directory.package.<parentPackage>` (e.g. `playbook.directory.package.com.example`)
+   - `playbook.directory.package.<rootPackage>` (e.g. `playbook.directory.package.com`)
+4. **Global configuration property**:
+   - `playbook.directory.global`
+5. **Fallback Default**:
+   - `src/test/resources/ai-playbooks/`
+
+
+### 💡 Examples
+
+#### 1. Programmatically on the fly in a Test Method
+Configure a custom playbook folder for a specific test execution run:
+```java
+@NeodymiumTest
+public final void testWithCustomPlaybookDir()
+{
+    Neodymium.getData().put("playbook.directory.method.com.xceptance.neodymium.ai.integration.HintTesting::test_MatchingHint", "target/custom-playbooks-dir");
+    // Steps executed here will load and save playbooks inside target/custom-playbooks-dir/
+    Neodymium.ai().execute("Click the button");
+}
+```
+
+#### 2. Statically via `ai.properties`
+Define a package-wide playbook directory for a namespace:
+```properties
+# Global fallback
+playbook.directory.global = src/test/resources/ai-playbooks/
+
+# Save all playbooks for tests in the checkout package to a dedicated directory
+playbook.directory.package.com.xceptance.neodymium.ai.integration.checkout = src/test/resources/checkout-playbooks/
+```
+
+---
+
 ## 🛠️ Prompt Overriding
 
 To provide maximum flexibility and allow testing strategies to be customized per project, the core LLM instructions and prompt templates have been externalized. By default, the framework loads its prompt templates from the `neodymium.jar` classpath at `ai-prompts/`. 

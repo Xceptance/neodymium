@@ -23,11 +23,13 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Properties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.PropertiesUtil;
 
 /**
  * Manages the persistence lifecycle of execution {@link Playbook}s.
@@ -40,7 +42,6 @@ import com.xceptance.neodymium.util.Neodymium;
 public final class PlaybookManager
 {
     private static final Logger LOG = LoggerFactory.getLogger(PlaybookManager.class);
-    private static final String PLAYBOOK_DIR = "src/test/resources/ai-playbooks/";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private PlaybookManager()
@@ -167,15 +168,155 @@ public final class PlaybookManager
         // Convert path: replace package dots with filesystem directory slashes
         final String directoryPath = pathPart.replace('.', '/');
 
+        // Resolve playbook directory dynamically
+        final String playbookDir = getPlaybookDirectory(playbookId);
+
         // Build file references pointing to the persistence root
         final String fileName = sanitizedFilePart + ".json";
         if (!directoryPath.isEmpty())
         {
-            return new File(new File(PLAYBOOK_DIR, directoryPath), fileName);
+            return new File(new File(playbookDir, directoryPath), fileName);
         }
         else
         {
-            return new File(PLAYBOOK_DIR, fileName);
+            return new File(playbookDir, fileName);
         }
     }
+
+    private static String getPlaybookDirectory(final String playbookId)
+    {
+        if (playbookId == null)
+        {
+            return getPlaybookDirectoryProperty("playbook.directory.global", Neodymium.aiConfiguration().playbookDirectoryGlobal());
+        }
+
+        final String cleanIdWithSpaces = playbookId.trim();
+        final String cleanIdNoSpaces = cleanIdWithSpaces.replace(" :: ", "::");
+
+        // Try method level key
+        String dir = getPlaybookDirectoryProperty("playbook.directory.method." + cleanIdNoSpaces, null);
+        if (dir != null)
+        {
+            return dir;
+        }
+        dir = getPlaybookDirectoryProperty("playbook.directory.method." + cleanIdWithSpaces, null);
+        if (dir != null)
+        {
+            return dir;
+        }
+
+        // Try class key with method suffix for backwards-compatibility/flexibility
+        dir = getPlaybookDirectoryProperty("playbook.directory.class." + cleanIdNoSpaces, null);
+        if (dir != null)
+        {
+            return dir;
+        }
+        dir = getPlaybookDirectoryProperty("playbook.directory.class." + cleanIdWithSpaces, null);
+        if (dir != null)
+        {
+            return dir;
+        }
+
+        // Extract class name
+        String className = null;
+        final int separatorIndex = cleanIdWithSpaces.indexOf(" :: ");
+        if (separatorIndex != -1)
+        {
+            className = cleanIdWithSpaces.substring(0, separatorIndex).trim();
+        }
+        else
+        {
+            final int lastDot = cleanIdWithSpaces.lastIndexOf('.');
+            if (lastDot != -1)
+            {
+                className = cleanIdWithSpaces.substring(0, lastDot).trim();
+            }
+        }
+
+        // Try class keys
+        if (className != null)
+        {
+            dir = getPlaybookDirectoryProperty("playbook.directory.class." + className, null);
+            if (dir != null)
+            {
+                return dir;
+            }
+        }
+
+        // Try package keys (traversing up package segments)
+        if (className != null)
+        {
+            final int lastDotOfClass = className.lastIndexOf('.');
+            if (lastDotOfClass != -1)
+            {
+                String packageName = className.substring(0, lastDotOfClass);
+                while (packageName != null && !packageName.isEmpty())
+                {
+                    dir = getPlaybookDirectoryProperty("playbook.directory.package." + packageName, null);
+                    if (dir != null)
+                    {
+                        return dir;
+                    }
+
+                    final int dotIdx = packageName.lastIndexOf('.');
+                    if (dotIdx != -1)
+                    {
+                        packageName = packageName.substring(0, dotIdx);
+                    }
+                    else
+                    {
+                        packageName = null;
+                    }
+                }
+            }
+        }
+
+        // Fallback to global
+        return getPlaybookDirectoryProperty("playbook.directory.global", Neodymium.aiConfiguration().playbookDirectoryGlobal());
+    }
+
+    private static String getPlaybookDirectoryProperty(final String key, final String defaultValue)
+    {
+        // 1. Check thread-local test data
+        if (Neodymium.getData().exists(key))
+        {
+            final String val = Neodymium.getData().get(key);
+            if (val != null && !val.trim().isEmpty())
+            {
+                return val.endsWith("/") ? val : val + "/";
+            }
+        }
+
+        // 2. Check System properties
+        final String systemProp = System.getProperty(key);
+        if (systemProp != null && !systemProp.trim().isEmpty())
+        {
+            return systemProp.endsWith("/") ? systemProp : systemProp + "/";
+        }
+
+        // 3. Check loaded properties in config/ai.properties
+        final Properties aiProps = PropertiesUtil.loadPropertiesFromFile("config/ai.properties");
+        if (aiProps.containsKey(key))
+        {
+            final String val = aiProps.getProperty(key);
+            if (val != null && !val.trim().isEmpty())
+            {
+                return val.endsWith("/") ? val : val + "/";
+            }
+        }
+
+        // 4. Check loaded properties in config/neodymium.properties
+        final Properties neoProps = PropertiesUtil.loadPropertiesFromFile("config/neodymium.properties");
+        if (neoProps.containsKey(key))
+        {
+            final String val = neoProps.getProperty(key);
+            if (val != null && !val.trim().isEmpty())
+            {
+                return val.endsWith("/") ? val : val + "/";
+            }
+        }
+
+        return defaultValue == null ? null : (defaultValue.endsWith("/") ? defaultValue : defaultValue + "/");
+    }
 }
+
