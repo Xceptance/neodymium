@@ -152,7 +152,7 @@ public class NavigateTest extends BaseAiTest
             .hasNoEscalations()
             .hasActionsCount(1)
             .hasDirectParses(0)
-            .hasContextLevel(ContextLevel.AXTREE)
+            .hasContextLevel(0, ContextLevel.AXTREE)
             .hasAction(0, "NAVIGATE");
         assertEquals(this.url, r1.getActions().get(0).getValue());
         assertEquals("Posters Art Store", Selenide.title());
@@ -165,17 +165,18 @@ public class NavigateTest extends BaseAiTest
     @NeodymiumTest
     public final void test_Open_ParserDoesNotWorkWithGerman()
     {
-
+ 
         // Step 1: Open SUT homepage, no LLM, no parser match due to Gehe zu
         final AiExecutionResult r1 = runAi("Gehe zu ${posters.storefront.url}", VerificationMode.LIVE_LLM);
         
         assertThat(r1)
             .hasLlmCalls(1)
             .hasPesapCalls(1)
-            .hasContextLevel(ContextLevel.AXTREE)
+            .hasContextLevel(0, ContextLevel.AXTREE)
             .hasNoEscalations()
             .hasActionsCount(1)
             .hasAction(0, "NAVIGATE");
+
 
         // we are now in posters
         assertEquals("Posters Art Store", Selenide.title());
