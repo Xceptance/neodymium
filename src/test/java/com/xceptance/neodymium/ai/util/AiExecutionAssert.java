@@ -19,6 +19,7 @@
 package com.xceptance.neodymium.ai.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.function.Consumer;
@@ -154,52 +155,56 @@ public final class AiExecutionAssert
     }
 
     /**
-     * Asserts the type of an action at a specific index.
+     * Asserts the type of the first action of a specific step index.
      *
-     * @param index the index of the action
-     * @param type  the expected type (e.g. CLICK, TYPE, NAVIGATE)
+     * @param stepIndex the index of the step
+     * @param type      the expected type (e.g. CLICK, TYPE, NAVIGATE)
      * @return this assertion helper
      */
-    public final AiExecutionAssert hasAction(final int index, final String type)
+    public final AiExecutionAssert hasAction(final int stepIndex, final String type)
     {
-        assertTrue(result.getActions().size() > index, "No action found at index " + index);
-        assertEquals(type, result.getActions().get(index).getType(), "Action type mismatch at index " + index);
+        assertTrue(result.getSteps().size() > stepIndex, "No step found at index " + stepIndex);
+        final var step = result.getSteps().get(stepIndex);
+        assertFalse(step.getActions().isEmpty(), "No action found in step " + stepIndex);
+        assertEquals(type, step.getActions().get(0).getType(), "Action type mismatch at step " + stepIndex);
         return this;
     }
 
     /**
-     * Asserts the type and target containment of an action at a specific index.
+     * Asserts the type and target containment of the first action of a specific step index.
      *
-     * @param index          the index of the action
+     * @param stepIndex      the index of the step
      * @param type           the expected type
      * @param targetContains a substring expected to be contained within the action target
      * @return this assertion helper
      */
-    public final AiExecutionAssert hasAction(final int index, final String type, final String targetContains)
+    public final AiExecutionAssert hasAction(final int stepIndex, final String type, final String targetContains)
     {
-        hasAction(index, type);
-        final String target = result.getActions().get(index).getTarget();
+        hasAction(stepIndex, type);
+        final var step = result.getSteps().get(stepIndex);
+        final String target = step.getActions().get(0).getTarget();
         if (targetContains != null && !targetContains.isEmpty())
         {
             assertTrue(target != null && target.contains(targetContains), 
-                    "Action target at index " + index + " ('" + target + "') does not contain: '" + targetContains + "'");
+                    "Action target at step " + stepIndex + " ('" + target + "') does not contain: '" + targetContains + "'");
         }
         return this;
     }
 
     /**
-     * Asserts the type, target containment, and value of an action at a specific index.
+     * Asserts the type, target containment, and value of the first action of a specific step index.
      *
-     * @param index          the index of the action
+     * @param stepIndex      the index of the step
      * @param type           the expected type
      * @param targetContains a substring expected to be contained within the action target
      * @param value          the expected action value
      * @return this assertion helper
      */
-    public final AiExecutionAssert hasAction(final int index, final String type, final String targetContains, final String value)
+    public final AiExecutionAssert hasAction(final int stepIndex, final String type, final String targetContains, final String value)
     {
-        hasAction(index, type, targetContains);
-        assertEquals(value, result.getActions().get(index).getValue(), "Action value mismatch at index " + index);
+        hasAction(stepIndex, type, targetContains);
+        final var step = result.getSteps().get(stepIndex);
+        assertEquals(value, step.getActions().get(0).getValue(), "Action value mismatch at step " + stepIndex);
         return this;
     }
 

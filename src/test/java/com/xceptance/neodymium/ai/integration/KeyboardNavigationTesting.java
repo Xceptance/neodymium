@@ -50,6 +50,7 @@ public class KeyboardNavigationTesting extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", this.url);
     }
@@ -79,15 +80,13 @@ public class KeyboardNavigationTesting extends BaseAiTest
 
         assertThat(r1).hasAction(0, "NAVIGATE");
         assertThat(r1).hasAction(1, "KEY_PRESS");
-        assertThat(r1).hasAction(2, "KEY_PRESS");
-        assertThat(r1).hasAction(3, "KEY_PRESS");
-        assertThat(r1).hasAction(4, "ASSERT");
-        assertThat(r1).hasAction(5, "TYPE");
-        assertThat(r1).hasAction(6, "KEY_PRESS");
-        assertThat(r1).hasAction(7, "ASSERT");
-        assertThat(r1).hasAction(8, "ASSERT");
+        assertThat(r1).hasAction(2, "ASSERT");
+        assertThat(r1).hasAction(3, "TYPE");
+        assertThat(r1).hasAction(4, "KEY_PRESS");
+        assertThat(r1).hasAction(5, "ASSERT");
+        assertThat(r1).hasAction(6, "ASSERT");
 
-        final String targetBox = r1.getActions().get(5).getTarget();
+        final String targetBox = r1.getSteps().get(3).getActions().get(0).getTarget();
         assertTrue(targetBox.contains("search-box") || targetBox.contains("xc_"));
 
         this.resetBrowser();

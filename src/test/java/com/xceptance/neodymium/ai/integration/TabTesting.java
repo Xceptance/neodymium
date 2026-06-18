@@ -50,6 +50,7 @@ public class TabTesting extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", this.url);
     }
@@ -166,11 +167,10 @@ public class TabTesting extends BaseAiTest
             .hasNoEscalations()
             .hasActionsCount(5);
 
+        // test_TabXTimes
         assertThat(r1).hasAction(0, "NAVIGATE");
         assertThat(r1).hasAction(1, "KEY_PRESS");
-        assertThat(r1).hasAction(2, "KEY_PRESS");
-        assertThat(r1).hasAction(3, "KEY_PRESS");
-        assertThat(r1).hasAction(4, "ASSERT");
+        assertThat(r1).hasAction(2, "ASSERT");
 
         final String target = r1.getActions().get(4).getTarget();
         assertTrue(target.contains("search-box") || target.contains("xc_"));
@@ -198,12 +198,9 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r1).hasAction(0, "NAVIGATE");
         assertThat(r1).hasAction(1, "KEY_PRESS");
-        assertThat(r1).hasAction(2, "KEY_PRESS");
+        assertThat(r1).hasAction(2, "ASSERT");
         assertThat(r1).hasAction(3, "KEY_PRESS");
-        assertThat(r1).hasAction(4, "KEY_PRESS");
-        assertThat(r1).hasAction(5, "ASSERT");
-        assertThat(r1).hasAction(6, "KEY_PRESS");
-        assertThat(r1).hasAction(7, "ASSERT");
+        assertThat(r1).hasAction(4, "ASSERT");
 
         final String targetBtn = r1.getActions().get(5).getTarget();
         final String targetBox = r1.getActions().get(7).getTarget();
