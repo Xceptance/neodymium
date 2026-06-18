@@ -49,6 +49,8 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1500x1000")
 @Tag("featuretest")
+@Tag("integration")
+@Tag("llm")
 public class BugMarkerTest extends BaseAiTest
 {
     private String url;

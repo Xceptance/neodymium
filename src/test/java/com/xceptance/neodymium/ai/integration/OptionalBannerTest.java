@@ -36,6 +36,8 @@ import com.xceptance.neodymium.util.Neodymium;
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1024x768")
+@Tag("integration")
+@Tag("llm")
 public final class OptionalBannerTest extends BaseAiTest
 {
     @NeodymiumTest

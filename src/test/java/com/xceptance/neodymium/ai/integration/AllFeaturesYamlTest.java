@@ -47,6 +47,8 @@ import com.xceptance.neodymium.util.Neodymium;
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })
+@Tag("integration")
+@Tag("llm")
 public final class AllFeaturesYamlTest extends BaseAiTest
 {
     /**

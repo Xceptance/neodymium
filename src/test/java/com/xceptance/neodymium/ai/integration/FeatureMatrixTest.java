@@ -56,6 +56,8 @@ import com.xceptance.neodymium.ai.playbook.Playbook;
  * @author AI-generated: Gemini 2.5 Flash
  * @author Xceptance GmbH 2026
  */
+@Tag("integration")
+@Tag("llm")
 public final class FeatureMatrixTest extends BaseAiTest
 {
     private String httpShopUrl;

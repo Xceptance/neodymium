@@ -41,6 +41,7 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1500x1000")
 @Tag("integration")
+@Tag("llm")
 public final class LayoutTest extends BaseAiTest
 {
     private String url;

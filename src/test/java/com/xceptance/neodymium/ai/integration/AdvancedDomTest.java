@@ -41,6 +41,8 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1500x1000")
 @Tag("sandbox")
+@Tag("integration")
+@Tag("llm")
 public class AdvancedDomTest extends BaseAiTest
 {
     private String baseHttpsUrl;

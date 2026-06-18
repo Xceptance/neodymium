@@ -40,6 +40,7 @@ import com.xceptance.neodymium.util.Neodymium;
 @Browser("Chrome_1500x1000")
 @Tag("back")
 @Tag("llm")
+@Tag("integration")
 public class BackTest extends BaseAiTest
 {
     private String url1;

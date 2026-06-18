@@ -40,7 +40,8 @@ import com.xceptance.neodymium.util.Neodymium;
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@Tag("freeform")
+@Tag("integration")
+@Tag("llm")
 public class RefreshTest extends BaseAiTest
 {
     // the test url
