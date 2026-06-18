@@ -1,0 +1,140 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.FormInteractionsTest :: testReplayWithDismissedBanner :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop/forms.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop/forms.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop/forms.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Type \u0027Jane\u0027 into the \u0027Full Name\u0027 field.",
+      "reasoning": "Identified the \u0027Full Name\u0027 input field by its ID \u0027reg-username\u0027 and generated a TYPE action to enter \u0027Jane\u0027.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#reg-username",
+          "value": [
+            "Jane"
+          ],
+          "description": "Type \u0027Jane\u0027 into the \u0027Full Name\u0027 field",
+          "elementDetails": "Full Name textbox",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-username",
+            "placeholder": "Enter your full name",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the \u0027Close Banner\u0027 button (hint: #promo-close-btn)",
+      "reasoning": "Clicked the \u0027Close Banner\u0027 button.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#promo-close-close-btn",
+          "description": "Click the \u0027Close Banner\u0027 button",
+          "elementDetails": "\u0027Close Banner\u0027 button",
+          "elementContext": {
+            "classes": "promo-close",
+            "text": "Close Banner",
+            "id": "promo-close-btn",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Type \u0027jane@doe.com\u0027 into the \u0027Email Address\u0027 field.",
+      "reasoning": "Identified the \u0027Email Address\u0027 textbox by its ID \u0027reg-email\u0027 and generated a TYPE action to input the specified email address.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#reg-email",
+          "value": [
+            "jane@doe.com"
+          ],
+          "description": "Type \u0027jane@doe.com\u0027 into the \u0027Email Address\u0027 field",
+          "elementDetails": "Email Address textbox",
+          "elementContext": {
+            "classes": "form-control",
+            "id": "reg-email",
+            "placeholder": "name@domain.com",
+            "tagName": "input",
+            "type": "email"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the \u0027Create Account\u0027 button.",
+      "reasoning": "Found the \u0027Create Account\u0027 button by its aria-label and ID, and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit-reg",
+          "description": "Click the \u0027Create Account\u0027 button",
+          "elementDetails": "Create Account button",
+          "elementContext": {
+            "classes": "btn-primary",
+            "text": "Create Account",
+            "id": "btn-submit-reg",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the success message \u0027Account Registered!\u0027 is visible.",
+      "reasoning": "Verified the visibility and text content of the success message \u0027Account Registered!\u0027 using its ID.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#reg-status-success",
+          "value": [
+            "Account Registered!"
+          ],
+          "description": "Verify that the success message \u0027Account Registered!\u0027 is visible.",
+          "elementDetails": "Account Registered! success message",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

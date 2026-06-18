@@ -3,29 +3,31 @@
   "steps": [
     {
       "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/click-intercept.html",
-      "reasoning": "directly parsed or local validation succeeded",
+      "reasoning": "Navigating to the specified URL.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/click-intercept.html"
           ],
-          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/click-intercept.html",
+          "description": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/click-intercept.html",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/click-intercept.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Click the red text box containing \u0027Blocking Overlay Active\u0027 to dismiss the overlay.",
-      "reasoning": "The instruction asks to click the \u0027Blocking Overlay Active\u0027 text box. I identified the element with id \u0027blocking-overlay\u0027 which contains this text and is clickable.",
+      "reasoning": "The instruction asks to click the \u0027red text box containing \u0027Blocking Overlay Active\u0027\u0027. Based on the DOM, the element with id \u0027blocking-overlay\u0027 and text \u0027Blocking Overlay Active (Click here to dismiss)\u0027 is the most appropriate target for this action.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#blocking-overlay",
-          "description": "Click the red text box containing \u0027Blocking Overlay Active\u0027 to dismiss the overlay.",
+          "description": "Click the blocking overlay to dismiss it",
           "elementDetails": "Blocking Overlay Active (Click here to dismiss)",
           "elementContext": {
             "text": "Blocking Overlay Active (Click here to dismiss)",
@@ -41,13 +43,13 @@
     },
     {
       "promptLine": "Click the \u0027Submit Transaction\u0027 button.",
-      "reasoning": "Found the \u0027Submit Transaction\u0027 button by its data-neo-ref attribute and created a CLICK action.",
+      "reasoning": "Identified the \u0027Submit Transaction\u0027 button by its ID and aria-label in the Accessibility Tree and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_3poa6a",
+          "target": "#intercepted-btn",
           "description": "Click the \u0027Submit Transaction\u0027 button",
-          "elementDetails": "Submit Transaction",
+          "elementDetails": "Submit Transaction button",
           "elementContext": {
             "classes": "aura-btn",
             "text": "Submit Transaction",

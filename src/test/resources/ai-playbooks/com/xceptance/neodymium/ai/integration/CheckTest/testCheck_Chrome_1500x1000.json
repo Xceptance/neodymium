@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.CheckTest :: testCheck :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/CheckActionTest/testCheckHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/CheckActionTest/testCheckHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -40,14 +40,11 @@
     },
     {
       "promptLine": "Check the radio button \u0027Phone\u0027 (hint: #contact-phone)",
-      "reasoning": "Checked the radio button \u0027Phone\u0027.",
+      "reasoning": "",
       "actions": [
         {
           "type": "CHECK",
           "target": "#contact-phone",
-          "value": [
-            "true"
-          ],
           "description": "Check the radio button \u0027Phone\u0027",
           "elementDetails": "radio button \u0027Phone\u0027",
           "elementContext": {},
@@ -60,12 +57,12 @@
     },
     {
       "promptLine": "Click the button \u0027Submit Preferences\u0027 (hint: #btn-submit)",
-      "reasoning": "Clicked the \u0027Submit Preferences\u0027 button.",
+      "reasoning": "",
       "actions": [
         {
           "type": "CLICK",
           "target": "#btn-submit",
-          "description": "Click the \u0027Submit Preferences\u0027 button",
+          "description": "Click the button \u0027Submit Preferences\u0027",
           "elementDetails": "button \u0027Submit Preferences\u0027",
           "elementContext": {
             "text": "Submit Preferences",

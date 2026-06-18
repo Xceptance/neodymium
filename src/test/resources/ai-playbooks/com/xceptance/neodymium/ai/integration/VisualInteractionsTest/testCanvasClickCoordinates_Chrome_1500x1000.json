@@ -3,24 +3,26 @@
   "steps": [
     {
       "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/canvas-click.html",
-      "reasoning": "directly parsed or local validation succeeded",
+      "reasoning": "The instruction is to navigate to a URL. A NAVIGATE action is generated with the provided URL.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/canvas-click.html"
           ],
-          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/canvas-click.html",
+          "description": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/canvas-click.html",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/canvas-click.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Click the canvas showing the red text (visual).",
-      "reasoning": "Identified the \u0027red-canvas\u0027 element visually from the screenshot and mapped it to the corresponding DOM element with id \u0027red-canvas\u0027 for the click action.",
+      "reasoning": "The instruction asks to click the canvas showing \u0027RED\u0027 text. Visually inspecting the screenshot, the left canvas displays \u0027RED\u0027 text. The DOM provides an element with `id\u003d\u0027red-canvas\u0027` which corresponds to this visual element. Therefore, a CLICK action targeting `#red-canvas` is generated.",
       "actions": [
         {
           "type": "CLICK",

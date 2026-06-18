@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.SearchAndSubmitTest :: testSearchAndSubmitEnglish :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -19,12 +19,12 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Type \u0027bear\u0027 into the search box and submit the search",
-      "reasoning": "Typed \u0027bear\u0027 into the search box and clicked the search button.",
+      "promptLine": "Type \u0027bear\u0027 into the search box",
+      "reasoning": "Identified the search box by its ID \u0027search-box\u0027 and generated a TYPE action to input \u0027bear\u0027.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_7cjiuo",
+          "target": "#search-box",
           "value": [
             "bear"
           ],
@@ -40,12 +40,21 @@
           },
           "replay": "",
           "adjust": false
-        },
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Type \u0027bear\u0027 into the search box and submit the search",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "submit the search",
+      "reasoning": "The instruction is to \u0027submit the search\u0027. I identified a button with id \u0027search-button\u0027 and aria-label \u0027Search\u0027 within a form, which is the appropriate element to click to submit the search.",
+      "actions": [
         {
           "type": "CLICK",
-          "target": "xc_r9bvv1",
-          "description": "Click the search button",
-          "elementDetails": "Search",
+          "target": "#search-button",
+          "description": "Clicking the search button to submit the search",
+          "elementDetails": "Search button",
           "elementContext": {
             "classes": "btn-search",
             "text": "Search",
@@ -58,15 +67,16 @@
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "Type \u0027bear\u0027 into the search box and submit the search",
       "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Verify that the search results title contains \u0027bear\u0027",
-      "reasoning": "The instruction is to verify that the search results title contains \u0027bear\u0027. I found a heading element with the name \u0027Search Results for \u0027bear\u0027\u0027 which matches the criteria. An ASSERT action is used to check its content.",
+      "reasoning": "The instruction is to verify that the search results title contains \u0027bear\u0027. I identified the search results title element by its ID \u0027search-title\u0027 and created an ASSERT action to check if its text content includes \u0027bear\u0027.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "xc_ph80bd",
+          "target": "#search-title",
           "value": [
             "bear"
           ],
@@ -78,11 +88,11 @@
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "AXTREE"
+      "healedContextLevel": "STANDARD"
     },
     {
       "promptLine": "Verify that the page displays \u00273 results found.\u0027",
-      "reasoning": "Verified that the element with id \u0027search-subtitle\u0027 contains the text \u00273 results found.\u0027.",
+      "reasoning": "The instruction is to verify that the page displays \u00273 results found.\u0027. I found an element with id \u0027search-subtitle\u0027 that contains this exact text. An ASSERT action is used to verify its content.",
       "actions": [
         {
           "type": "ASSERT",
@@ -90,8 +100,8 @@
           "value": [
             "3 results found."
           ],
-          "description": "Verify that the page displays \u00273 results found.\u0027.",
-          "elementDetails": "3 results found.",
+          "description": "Verify that the page displays \u00273 results found.\u0027",
+          "elementDetails": "search-subtitle",
           "elementContext": {},
           "replay": "",
           "adjust": false

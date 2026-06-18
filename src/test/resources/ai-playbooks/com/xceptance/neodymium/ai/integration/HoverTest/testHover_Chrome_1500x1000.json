@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.HoverTest :: testHover :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/HoverActionTest/testHoverDropdown.html",
+      "promptLine": "OPEN http://localhost:43377/HoverActionTest/testHoverDropdown.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -20,13 +20,13 @@
     },
     {
       "promptLine": "Hover over the button \u0027Hover Me\u0027",
-      "reasoning": "Hovered over the button \u0027Hover Me\u0027 using its data-neo-ref attribute.",
+      "reasoning": "Identified the button \u0027Hover Me\u0027 by its ID and generated a HOVER action.",
       "actions": [
         {
           "type": "HOVER",
-          "target": "[data-neo-ref\u003d\u0027xc_jlp3e0\u0027]",
+          "target": "#menu-btn",
           "description": "Hover over the button \u0027Hover Me\u0027",
-          "elementDetails": "Hover Me",
+          "elementDetails": "Hover Me button",
           "elementContext": {
             "text": "Hover Me",
             "id": "menu-btn",
@@ -42,13 +42,13 @@
     },
     {
       "promptLine": "Click the \u0027Sub Item 1\u0027 link",
-      "reasoning": "Clicked the \u0027Sub Item 1\u0027 link using its data-neo-ref attribute.",
+      "reasoning": "The \u0027Sub Item 1\u0027 link was identified by its ID and a CLICK action was generated.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "[data-neo-ref\u003d\u0027xc_eairzn\u0027]",
+          "target": "#menu-item-1",
           "description": "Click the \u0027Sub Item 1\u0027 link",
-          "elementDetails": "Sub Item 1",
+          "elementDetails": "Sub Item 1 link",
           "elementContext": {
             "classes": "dropdown-item",
             "text": "Sub Item 1",

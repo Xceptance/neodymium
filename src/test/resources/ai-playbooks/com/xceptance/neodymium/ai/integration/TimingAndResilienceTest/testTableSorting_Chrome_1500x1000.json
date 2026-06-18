@@ -3,30 +3,32 @@
   "steps": [
     {
       "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html",
-      "reasoning": "directly parsed or local validation succeeded",
+      "reasoning": "Navigating to the specified URL.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html"
           ],
-          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html",
+          "description": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/table-sorting.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Click the \u0027Price\u0027 header column link to sort.",
-      "reasoning": "Clicked the \u0027Price\u0027 link as requested.",
+      "reasoning": "The instruction is to click the \u0027Price\u0027 header column link. I found a link with id \u0027sort-price\u0027 and aria-label \u0027Price ▾\u0027 which matches the description. I will use a CLICK action targeting this element.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_lkfgoz",
-          "description": "Click the \u0027Price\u0027 header column link to sort.",
-          "elementDetails": "Price ▾",
+          "target": "#sort-price",
+          "description": "Click the \u0027Price\u0027 header column link to sort",
+          "elementDetails": "Price header column link",
           "elementContext": {
             "text": "Price ▾",
             "id": "sort-price",
@@ -42,7 +44,7 @@
     },
     {
       "promptLine": "Verify that the price in the first table row displays $4.99.",
-      "reasoning": "Verified the price in the first table row using its data-neo-ref attribute.",
+      "reasoning": "The instruction asks to verify the price in the first table row. Based on the provided DOM, the text \u0027$4.99\u0027 is clearly visible and associated with the first product listed. An ASSERT action is used to verify its content.",
       "actions": [
         {
           "type": "ASSERT",
@@ -50,7 +52,7 @@
           "value": [
             "$4.99"
           ],
-          "description": "Verify that the price in the first table row displays $4.99.",
+          "description": "Verify the price in the first table row displays $4.99",
           "elementDetails": "$4.99",
           "elementContext": {},
           "replay": "",

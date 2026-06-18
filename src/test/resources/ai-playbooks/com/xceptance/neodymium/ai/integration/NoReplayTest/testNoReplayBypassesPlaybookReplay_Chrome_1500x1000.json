@@ -1,0 +1,64 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.NoReplayTest :: testNoReplayBypassesPlaybookReplay :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/ClickActionTest/testClickStandardButton.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/ClickActionTest/testClickStandardButton.html"
+          ],
+          "description": "Navigate to http://localhost:43377/ClickActionTest/testClickStandardButton.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the \u0027Submit Order\u0027 button",
+      "reasoning": "Found the \u0027Submit Order\u0027 button by its ID and aria-label in the AXTree and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit",
+          "description": "Click the \u0027Submit Order\u0027 button",
+          "elementDetails": "Submit Order button",
+          "elementContext": {
+            "text": "Submit Order",
+            "id": "btn-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the result contains \"Order Submitted!\"",
+      "reasoning": "Verified that the element with id \u0027result\u0027 contains the text \u0027Order Submitted!\u0027.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#result",
+          "value": [
+            "Order Submitted!"
+          ],
+          "description": "Verify that the result contains \"Order Submitted!\"",
+          "elementDetails": "result",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

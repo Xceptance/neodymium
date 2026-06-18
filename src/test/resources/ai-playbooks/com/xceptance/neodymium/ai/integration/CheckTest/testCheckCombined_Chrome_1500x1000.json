@@ -1,0 +1,86 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.CheckTest :: testCheckCombined :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/CheckActionTest/testCheckHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/CheckActionTest/testCheckHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/CheckActionTest/testCheckHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the checkbox \u0027Subscribe to newsletter\u0027",
+      "reasoning": "Identified the checkbox by its \u0027id\u0027 attribute and generated a CHECK action to click it.",
+      "actions": [
+        {
+          "type": "CHECK",
+          "target": "#newsletter",
+          "value": [
+            "true"
+          ],
+          "description": "Click the checkbox \u0027Subscribe to newsletter\u0027",
+          "elementDetails": "Subscribe to newsletter checkbox",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the checkbox \u0027Subscribe to newsletter\u0027 and toogle the radio button \u0027Phone\u0027",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "toogle the radio button \u0027Phone\u0027",
+      "reasoning": "The instruction \u0027toggle the radio button Phone\u0027 is interpreted as selecting the \u0027Phone\u0027 radio button. The CHECK action is used to ensure it is checked.",
+      "actions": [
+        {
+          "type": "CHECK",
+          "target": "#contact-phone",
+          "value": [
+            "true"
+          ],
+          "description": "Toggle the radio button \u0027Phone\u0027 by checking it",
+          "elementDetails": "Phone radio button",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the checkbox \u0027Subscribe to newsletter\u0027 and toogle the radio button \u0027Phone\u0027",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the button \u0027Submit Preferences\u0027",
+      "reasoning": "Identified the button with \u0027Submit Preferences\u0027 label and clicked it using its ID.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit",
+          "description": "Click the button \u0027Submit Preferences\u0027",
+          "elementDetails": "Submit Preferences button",
+          "elementContext": {
+            "text": "Submit Preferences",
+            "id": "btn-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

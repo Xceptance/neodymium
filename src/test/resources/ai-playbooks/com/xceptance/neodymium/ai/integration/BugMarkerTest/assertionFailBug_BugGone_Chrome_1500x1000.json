@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.BugMarkerTest :: assertionFailBug_BugGone :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -20,16 +20,16 @@
     },
     {
       "promptLine": "Verify that the minicart shows 0 items .",
-      "reasoning": "Verified that the minicart element with id \u0027minicart\u0027 contains the text \u00270 items\u0027.",
+      "reasoning": "The instruction is to verify the minicart shows \u00270 items\u0027. I found an element with id \u0027cart-count\u0027 that contains exactly \u00270 items\u0027, which is the most precise target for this assertion.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "#minicart",
+          "target": "#cart-count",
           "value": [
             "0 items"
           ],
-          "description": "Verify that the minicart shows 0 items",
-          "elementDetails": "🛒 0 items",
+          "description": "Verify minicart shows 0 items",
+          "elementDetails": "minicart count",
           "elementContext": {},
           "replay": "",
           "adjust": false

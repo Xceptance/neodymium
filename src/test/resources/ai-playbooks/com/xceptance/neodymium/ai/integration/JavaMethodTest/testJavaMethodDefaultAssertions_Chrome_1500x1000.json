@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.JavaMethodTest :: testJavaMethodDefaultAssertions :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -19,16 +19,16 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "java: assertNumberEqual(\"[\"10.00\", \"10.00\"]\")",
+      "promptLine": "java: assertNumbersEqual(\"[\"10.00\", \"10.00\"]\")",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "JAVA_METHOD",
-          "target": "assertNumberEqual",
+          "target": "assertNumbersEqual",
           "value": [
             "[\"10.00\", \"10.00\"]"
           ],
-          "description": "Call assertNumberEqual with param [\"10.00\", \"10.00\"]",
+          "description": "Call assertNumbersEqual with param [\"10.00\", \"10.00\"]",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -55,16 +55,16 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "java: verifyCalculation(\"0.90 € \u003d (14.96 € + 0.00 €) * 6.00%\")",
+      "promptLine": "java: assertCalculation(\"0.90 € \u003d (14.96 € + 0.00 €) * 6.00%\")",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "JAVA_METHOD",
-          "target": "verifyCalculation",
+          "target": "assertCalculation",
           "value": [
             "0.90 € \u003d (14.96 € + 0.00 €) * 6.00%"
           ],
-          "description": "Call verifyCalculation with param 0.90 € \u003d (14.96 € + 0.00 €) * 6.00%",
+          "description": "Call assertCalculation with param 0.90 € \u003d (14.96 € + 0.00 €) * 6.00%",
           "elementContext": {},
           "replay": "",
           "adjust": false

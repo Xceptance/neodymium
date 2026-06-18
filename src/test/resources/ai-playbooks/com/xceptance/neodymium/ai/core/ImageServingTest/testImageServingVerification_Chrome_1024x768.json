@@ -1,0 +1,13 @@
+{
+  "id": "com.xceptance.neodymium.ai.core.ImageServingTest :: testImageServingVerification :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Verify that the \u0027Aura Neon Gradient Poster\u0027 card contains a visible image element.",
+      "reasoning": "Visual analysis of the screenshot confirms that the \u0027Aura Neon Gradient Poster\u0027 card, which is the first product card displayed, contains a visible image element. The image is clearly rendered within the card\u0027s boundaries.",
+      "actions": [],
+      "screenshotHash": "5c0000008400000000007d810c817e015f817f01000008019a4398c318c71ac3",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    }
+  ]
+}

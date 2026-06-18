@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.KeyPressTest :: testArrowNavigation :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/TypeActionTest/keyPressExtended.html",
+      "promptLine": "OPEN http://localhost:43377/TypeActionTest/keyPressExtended.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the navigation container (hint: #nav-container)",
-      "reasoning": "Clicked the navigation container as instructed.",
+      "reasoning": "Clicked the navigation container.",
       "actions": [
         {
           "type": "CLICK",
@@ -41,14 +41,14 @@
     },
     {
       "promptLine": "Press ArrowDown",
-      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key, which directly maps to a KEY_PRESS action with \u0027ArrowDown\u0027 as the value.",
+      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key. The KEY_PRESS action with \u0027ARROW_DOWN\u0027 as the value is appropriate for this.",
       "actions": [
         {
           "type": "KEY_PRESS",
           "value": [
-            "ArrowDown"
+            "ARROW_DOWN"
           ],
-          "description": "Press the ArrowDown key",
+          "description": "Presses the ArrowDown key",
           "elementDetails": "ArrowDown key",
           "elementContext": {},
           "replay": "",
@@ -60,14 +60,14 @@
     },
     {
       "promptLine": "Press ArrowDown",
-      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key, which directly maps to a KEY_PRESS action with \u0027ArrowDown\u0027 as the value.",
+      "reasoning": "The instruction is to press the \u0027ArrowDown\u0027 key. The KEY_PRESS action with \u0027ARROW_DOWN\u0027 as the value is appropriate for this.",
       "actions": [
         {
           "type": "KEY_PRESS",
           "value": [
-            "ArrowDown"
+            "ARROW_DOWN"
           ],
-          "description": "Press the ArrowDown key",
+          "description": "Presses the ArrowDown key",
           "elementDetails": "ArrowDown key",
           "elementContext": {},
           "replay": "",
@@ -79,7 +79,7 @@
     },
     {
       "promptLine": "Press ArrowUp",
-      "reasoning": "The instruction is to press the \u0027ArrowUp\u0027 key, which directly maps to a KEY_PRESS action with \u0027ArrowUp\u0027 as the value.",
+      "reasoning": "The instruction is to press the \u0027ArrowUp\u0027 key. The KEY_PRESS action with \u0027v\u0027 set to \u0027ArrowUp\u0027 is the appropriate action.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -87,7 +87,7 @@
             "ArrowUp"
           ],
           "description": "Presses the ArrowUp key",
-          "elementDetails": "ArrowUp",
+          "elementDetails": "ArrowUp key",
           "elementContext": {},
           "replay": "",
           "adjust": false

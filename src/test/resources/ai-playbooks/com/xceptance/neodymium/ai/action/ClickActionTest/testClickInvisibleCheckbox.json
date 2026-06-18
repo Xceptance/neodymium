@@ -1,0 +1,26 @@
+{
+  "id": "com.xceptance.neodymium.ai.action.ClickActionTest :: testClickInvisibleCheckbox",
+  "steps": [
+    {
+      "promptLine": "Click the Accept Terms checkbox.",
+      "reasoning": "The instruction is to click the \u0027Accept Terms checkbox\u0027. Based on the DOM, the element with id \u0027checkbox-custom-trigger\u0027 is the most appropriate target for this action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#checkbox-custom-trigger",
+          "description": "Click the Accept Terms checkbox",
+          "elementDetails": "checkbox-custom-trigger",
+          "elementContext": {
+            "classes": "custom-checkbox",
+            "id": "checkbox-custom-trigger",
+            "tagName": "span"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

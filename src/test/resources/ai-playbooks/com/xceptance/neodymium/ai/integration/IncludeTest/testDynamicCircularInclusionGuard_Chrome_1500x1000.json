@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "If the element (hint: #element) is visible, then _include: fragments/testDynamicCircularInclusionGuard_loopA.steps",
-      "reasoning": "",
+      "reasoning": "Conditional include action generated.",
       "actions": [
         {
           "type": "BRANCH",
@@ -46,7 +46,7 @@
               "value": [
                 "fragments/testDynamicCircularInclusionGuard_loopA.steps"
               ],
-              "description": "Include steps from fragments/testDynamicCircularInclusionGuard_loopA.steps",
+              "description": "Include fragments/testDynamicCircularInclusionGuard_loopA.steps",
               "elementContext": {},
               "replay": "",
               "adjust": false
@@ -66,7 +66,7 @@
           "value": [
             "fragments/testDynamicCircularInclusionGuard_loopA.steps"
           ],
-          "description": "Include steps from fragments/testDynamicCircularInclusionGuard_loopA.steps",
+          "description": "Include fragments/testDynamicCircularInclusionGuard_loopA.steps",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -76,11 +76,11 @@
     },
     {
       "promptLine": "If the element (hint: #element) is visible, then _include: fragments/testDynamicCircularInclusionGuard_loopB.steps",
-      "reasoning": "Conditional inclusion of steps based on element visibility.",
+      "reasoning": "Conditional branch to include a step file if an element is visible.",
       "actions": [
         {
           "type": "BRANCH",
-          "description": "Conditional check for element visibility",
+          "description": "If the element is visible, then include fragments/testDynamicCircularInclusionGuard_loopB.steps",
           "elementContext": {},
           "replay": "",
           "condition": [
@@ -91,6 +91,7 @@
                 "visible"
               ],
               "description": "Assert element is visible",
+              "elementDetails": "element",
               "elementContext": {},
               "replay": "",
               "adjust": false
@@ -102,7 +103,7 @@
               "value": [
                 "fragments/testDynamicCircularInclusionGuard_loopB.steps"
               ],
-              "description": "Include steps from fragments/testDynamicCircularInclusionGuard_loopB.steps",
+              "description": "Include fragments/testDynamicCircularInclusionGuard_loopB.steps",
               "elementContext": {},
               "replay": "",
               "adjust": false
@@ -121,7 +122,7 @@
           "value": [
             "fragments/testDynamicCircularInclusionGuard_loopB.steps"
           ],
-          "description": "Include steps from fragments/testDynamicCircularInclusionGuard_loopB.steps",
+          "description": "Include fragments/testDynamicCircularInclusionGuard_loopB.steps",
           "elementContext": {},
           "replay": "",
           "adjust": false

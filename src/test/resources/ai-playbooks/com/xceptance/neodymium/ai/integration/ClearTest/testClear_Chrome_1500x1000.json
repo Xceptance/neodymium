@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.ClearTest :: testClear :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Type \u0027Alice\u0027 into the \u0027First Name:\u0027 field (hint: #first-name)",
-      "reasoning": "Typed \u0027Alice\u0027 into the \u0027First Name:\u0027 field.",
+      "reasoning": "",
       "actions": [
         {
           "type": "TYPE",
@@ -29,7 +29,7 @@
             "Alice"
           ],
           "description": "Type \u0027Alice\u0027 into the \u0027First Name:\u0027 field",
-          "elementDetails": "First Name: field",
+          "elementDetails": "\u0027First Name:\u0027 field",
           "elementContext": {
             "id": "first-name",
             "placeholder": "Enter first name",
@@ -67,7 +67,7 @@
     },
     {
       "promptLine": "Click the \u0027Submit Details\u0027 button (hint: #btn-submit)",
-      "reasoning": "Clicked the \u0027Submit Details\u0027 button.",
+      "reasoning": "",
       "actions": [
         {
           "type": "CLICK",

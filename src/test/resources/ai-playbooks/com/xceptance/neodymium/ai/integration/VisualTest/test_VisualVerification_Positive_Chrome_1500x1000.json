@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.VisualTest :: test_VisualVerification_Positive :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "A bear is shown on the right side (visual)",
-      "reasoning": "The screenshot clearly shows a \u0027Featured Poster\u0027 section on the right side of the page, which contains an image of a brown bear and the text \u0027Majestic Brown Bear\u0027 below it. This confirms that a bear is shown on the right side.",
+      "reasoning": "The screenshot clearly shows a \u0027Featured Poster\u0027 section on the right side of the page. Within this section, there is an image of a brown bear, confirming that a bear is shown on the right side as per the instruction.",
       "actions": [],
       "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
       "expectedFailure": false,
