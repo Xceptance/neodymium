@@ -1,0 +1,151 @@
+{
+  "id": "com.xceptance.neodymium.junit5.tests.auramanager.end2end.AuraManagerHistoryTest :: testHistoryList :: History_List :: Browser Chrome_headless",
+  "steps": [
+    {
+      "promptLine": "java startManager()",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "startManager",
+          "value": [
+            ""
+          ],
+          "description": "Call startManager with param ",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Open http://127.0.0.1:18140 in the browser",
+      "reasoning": "The instruction is to navigate to a specific URL. I have created a NAVIGATE action with the provided URL.",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://127.0.0.1:18140"
+          ],
+          "description": "Open http://127.0.0.1:18140 in the browser",
+          "elementDetails": "http://127.0.0.1:18140",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click on the \"History \u0026 Reports\" navigation item",
+      "reasoning": "Found the clickable element with id \u0027navReports\u0027 and title \u0027History \u0026 Reports\u0027 and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#navReports",
+          "description": "Click on the \"History \u0026 Reports\" navigation item",
+          "elementDetails": "History \u0026 Reports",
+          "elementContext": {
+            "classes": "nav-item",
+            "id": "navReports",
+            "tagName": "div"
+          },
+          "replay": "",
+          "frameId": "B8589BC1AC3FAA315A8CBEFE5AC1CD81:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Verify that the History view is displayed",
+      "reasoning": "The instruction is to verify the \u0027History view\u0027 is displayed. I found a heading element with the text \u0027Run History\u0027 which confirms the view is present.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "[data-neo-ref\u003d\u0027xc_ycdgoi\u0027]",
+          "value": [
+            "Run History"
+          ],
+          "description": "Verify that the \u0027Run History\u0027 heading is displayed, indicating the History view.",
+          "elementDetails": "Run History heading",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "B8589BC1AC3FAA315A8CBEFE5AC1CD81:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Verify that the history list contains the expected column headers like \"Status\", \"Date \u0026 Time\", and \"Report\"",
+      "reasoning": "The instruction asks to verify the presence of specific column headers. Since no direct data-neo-ref or id was available for these headers, I used the \u0027body\u0027 as the target and asserted that the page body contains the expected text for each header: \u0027Status\u0027, \u0027Date \u0026 Time\u0027, and \u0027Report\u0027. The screenshot confirms these headers are visible on the page.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "Status"
+          ],
+          "description": "Verify that the history list contains the column header \u0027Status\u0027",
+          "elementDetails": "Page body",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "B8589BC1AC3FAA315A8CBEFE5AC1CD81:main",
+          "adjust": false
+        },
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "Date \u0026 Time"
+          ],
+          "description": "Verify that the history list contains the column header \u0027Date \u0026 Time\u0027",
+          "elementDetails": "Page body",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "B8589BC1AC3FAA315A8CBEFE5AC1CD81:main",
+          "adjust": false
+        },
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "Report"
+          ],
+          "description": "Verify that the history list contains the column header \u0027Report\u0027",
+          "elementDetails": "Page body",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "B8589BC1AC3FAA315A8CBEFE5AC1CD81:main",
+          "adjust": false
+        }
+      ],
+      "screenshotHash": "0003800000000000400051004000000000000000000000000000400050000000",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    },
+    {
+      "promptLine": "java stopManager()",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "stopManager",
+          "value": [
+            ""
+          ],
+          "description": "Call stopManager with param ",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

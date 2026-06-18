@@ -1,0 +1,169 @@
+{
+  "id": "com.xceptance.neodymium.junit5.tests.auramanager.end2end.AuraManagerCoreUiTest :: testThemeToggling :: Theme_Toggling :: Browser Chrome_headless",
+  "steps": [
+    {
+      "promptLine": "java startManager()",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "startManager",
+          "value": [
+            ""
+          ],
+          "description": "Call startManager with param ",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Open http://127.0.0.1:18120 in the browser",
+      "reasoning": "The instruction is to navigate to a URL, so a NAVIGATE action is used with the provided URL.",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "target": "",
+          "value": [
+            "http://127.0.0.1:18120"
+          ],
+          "description": "Open http://127.0.0.1:18120 in the browser",
+          "elementDetails": "http://127.0.0.1:18120",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify the page title is \"Neodymium Aura Manager\"",
+      "reasoning": "The page title \u0027Neodymium Aura Manager\u0027 was successfully verified.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "pageTitle",
+          "value": [
+            "Neodymium Aura Manager"
+          ],
+          "description": "Verify the page title is \u0027Neodymium Aura Manager\u0027",
+          "elementDetails": "Page Title",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Click the Dark Mode button",
+      "reasoning": "Clicked the \u0027Dark Mode\u0027 button using its ID.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#themeDark",
+          "description": "Click the Dark Mode button",
+          "elementDetails": "Dark Mode button",
+          "elementContext": {
+            "classes": "btn-edit",
+            "id": "themeDark",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "frameId": "4EBAD26BAD11579E33874D80E89B1028:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Verify the root element has the \"force-dark\" class",
+      "reasoning": "The instruction is to verify that the root element has the \u0027force-dark\u0027 class. I am assuming \u0027body\u0027 is the root element and asserting that it contains the class \u0027force-dark\u0027.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "force-dark"
+          ],
+          "description": "Verify the root element has the \u0027force-dark\u0027 class",
+          "elementDetails": "body",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "4EBAD26BAD11579E33874D80E89B1028:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Click the Light Mode button",
+      "reasoning": "Clicked the \u0027Light Mode\u0027 button using its ID.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#themeLight",
+          "description": "Click the Light Mode button",
+          "elementDetails": "Light Mode button",
+          "elementContext": {
+            "classes": "btn-edit",
+            "id": "themeLight",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "frameId": "4EBAD26BAD11579E33874D80E89B1028:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Verify the root element has the \"force-light\" class",
+      "reasoning": "The instruction is to verify that the root element has the \u0027force-light\u0027 class. I will use an ASSERT action targeting the \u0027body\u0027 element and checking for the presence of \u0027force-light\u0027 in its class attribute.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "force-light"
+          ],
+          "description": "Verify the root element has the \"force-light\" class",
+          "elementDetails": "body",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "screenshotHash": "00038000800040004020402040004000403a4000400040004020400000200000",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    },
+    {
+      "promptLine": "java stopManager()",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "stopManager",
+          "value": [
+            ""
+          ],
+          "description": "Call stopManager with param ",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

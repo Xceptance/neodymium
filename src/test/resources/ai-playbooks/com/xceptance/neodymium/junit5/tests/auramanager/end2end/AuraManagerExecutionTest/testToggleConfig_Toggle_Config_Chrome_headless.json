@@ -1,0 +1,138 @@
+{
+  "id": "com.xceptance.neodymium.junit5.tests.auramanager.end2end.AuraManagerExecutionTest :: testToggleConfig :: Toggle_Config :: Browser Chrome_headless",
+  "steps": [
+    {
+      "promptLine": "java startManager()",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "startManager",
+          "value": [
+            ""
+          ],
+          "description": "Call startManager with param ",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Open http://127.0.0.1:18130 in the browser",
+      "reasoning": "The instruction is to navigate to a URL, so a NAVIGATE action is appropriate.",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://127.0.0.1:18130"
+          ],
+          "description": "Open http://127.0.0.1:18130 in the browser",
+          "elementDetails": "http://127.0.0.1:18130",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Toggle the \"Headless Mode\" switch",
+      "reasoning": "Identified the \u0027Headless Mode\u0027 switch by its data-neo-ref attribute and generated a CLICK action to toggle it.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "[data-neo-ref\u003d\u0027xc_d1063k\u0027]",
+          "description": "Toggle the \u0027Headless Mode\u0027 switch",
+          "elementDetails": "OptHeadless checkbox",
+          "elementContext": {
+            "id": "optHeadless",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "java verifyCheckboxUnchecked(#optHeadless)",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "verifyCheckboxUnchecked",
+          "value": [
+            "#optHeadless"
+          ],
+          "description": "Call verifyCheckboxUnchecked with param #optHeadless",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Toggle the \"Record Video\" switch",
+      "reasoning": "Identified the \u0027Record Video\u0027 switch as a checkbox with name \u0027OptVideo\u0027 and data-neo-ref \u0027xc_ry86y6\u0027 and generated a CLICK action to toggle it.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "xc_ry86y6",
+          "description": "Toggle the \u0027Record Video\u0027 switch",
+          "elementDetails": "OptVideo checkbox",
+          "elementContext": {
+            "id": "optVideo",
+            "tagName": "input",
+            "type": "checkbox"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "java verifyCheckboxChecked(#optVideo)",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "verifyCheckboxChecked",
+          "value": [
+            "#optVideo"
+          ],
+          "description": "Call verifyCheckboxChecked with param #optVideo",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java stopManager()",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "stopManager",
+          "value": [
+            ""
+          ],
+          "description": "Call stopManager with param ",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

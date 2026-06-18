@@ -1,0 +1,115 @@
+{
+  "id": "com.xceptance.neodymium.junit5.tests.auramanager.end2end.AuraManagerChatTest :: testChatMessage :: Chat_Message :: Browser Chrome_headless",
+  "steps": [
+    {
+      "promptLine": "java startManager()",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "startManager",
+          "value": [
+            ""
+          ],
+          "description": "Call startManager with param ",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Open http://127.0.0.1:18100 in the browser",
+      "reasoning": "The browser is already at the specified URL, so no navigation action is required.",
+      "actions": [],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Enter \"Hello Aura\" in the chat input field",
+      "reasoning": "Identified the chat input field by its \u0027data-neo-ref\u0027 and \u0027name\u0027 attribute and generated a TYPE action to enter the specified text.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "xc_ugrpoy",
+          "value": [
+            "Hello Aura"
+          ],
+          "description": "Enter \"Hello Aura\" in the chat input field",
+          "elementDetails": "Ask Aura...",
+          "elementContext": {
+            "classes": "chat-input",
+            "id": "chatInput",
+            "placeholder": "Ask Aura...",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Press the Enter key in the chat input field",
+      "reasoning": "Identified the chat input field by its data-neo-ref attribute and applied the KEY_PRESS action with \u0027ENTER\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "target": "[data-neo-ref\u003d\u0027xc_ugrpoy\u0027]",
+          "value": [
+            "ENTER"
+          ],
+          "description": "Press the Enter key in the chat input field",
+          "elementDetails": "Ask Aura... (chat input field)",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that \"Hello Aura\" appears as a user message in the chat container",
+      "reasoning": "Found a text element with \u0027data-neo-ref\u003d\"xc_3vvj0z\"\u0027 and selector \u0027div.chat-message.message-user:nth-of-type(1)\u0027 which contains the text \u0027Hello Aura\u0027, confirming it\u0027s a user message in the chat.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "[data-neo-ref\u003d\u0027xc_3vvj0z\u0027]",
+          "value": [
+            "Hello Aura"
+          ],
+          "description": "Verify that \u0027Hello Aura\u0027 appears as a user message in the chat container",
+          "elementDetails": "Hello Aura",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "6B1019150EFE84246F0554277118128B:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "java stopManager()",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "stopManager",
+          "value": [
+            ""
+          ],
+          "description": "Call stopManager with param ",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}
