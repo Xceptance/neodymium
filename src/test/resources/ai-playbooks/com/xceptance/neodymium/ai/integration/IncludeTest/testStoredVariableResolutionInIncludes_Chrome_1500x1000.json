@@ -28,8 +28,8 @@
           "value": [
             "myOrder"
           ],
-          "description": "Store order ID value",
-          "elementDetails": "order ID element",
+          "description": "Store order ID value as \u0027myOrder\u0027",
+          "elementDetails": "order ID value",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -40,11 +40,11 @@
     },
     {
       "promptLine": "If the element (hint: #element) is visible, then _include: fragments/testStoredVariableResolutionInIncludes_useVar.steps",
-      "reasoning": "Conditional include action generated.",
+      "reasoning": "",
       "actions": [
         {
           "type": "BRANCH",
-          "description": "Conditionally include steps based on element visibility",
+          "description": "Conditional include based on element visibility",
           "elementContext": {},
           "replay": "",
           "condition": [
@@ -96,7 +96,7 @@
     },
     {
       "promptLine": "Verify order is 98765",
-      "reasoning": "The instruction is to verify the order ID is \u002798765\u0027. I found an element with id \u0027order-id\u0027 and its text content is \u002798765\u0027. I will use an ASSERT action to verify this text.",
+      "reasoning": "The instruction is to verify the order is \u002798765\u0027. I found an element with id \u0027order-id\u0027 and its text content is \u002798765\u0027. I will use an ASSERT action to verify its text content.",
       "actions": [
         {
           "type": "ASSERT",
@@ -104,7 +104,7 @@
           "value": [
             "98765"
           ],
-          "description": "Verify the text content of the order ID element is 98765",
+          "description": "Verify the order ID is 98765",
           "elementDetails": "order-id",
           "elementContext": {},
           "replay": "",

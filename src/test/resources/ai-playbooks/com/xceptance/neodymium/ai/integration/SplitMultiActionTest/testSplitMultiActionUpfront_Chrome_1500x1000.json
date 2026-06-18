@@ -1,0 +1,72 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.SplitMultiActionTest :: testSplitMultiActionUpfront :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Click the \"Menu\" button",
+      "reasoning": "Identified the \u0027Menu\u0027 button by its ID and aria-label and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#menu-btn",
+          "description": "Click the \u0027Menu\u0027 button",
+          "elementDetails": "Menu button",
+          "elementContext": {
+            "text": "Menu",
+            "id": "menu-btn",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the \"Menu\" button and then click the \"Create Account\" link in the dropdown and then the text \"Account Form Opened!\" is shown",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "click the \"Create Account\" link in the dropdown",
+      "reasoning": "The \u0027Create Account\u0027 link was found and targeted using its ID.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#create-account-link",
+          "description": "Click the \u0027Create Account\u0027 link",
+          "elementDetails": "Create Account link",
+          "elementContext": {
+            "text": "Create Account",
+            "id": "create-account-link",
+            "href": "http://localhost:43377/SplitMultiActionTest/testSplitMultiAction.html#",
+            "tagName": "a"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the \"Menu\" button and then click the \"Create Account\" link in the dropdown and then the text \"Account Form Opened!\" is shown",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "the text \"Account Form Opened!\" is shown",
+      "reasoning": "The instruction asks to verify if the text \u0027Account Form Opened!\u0027 is shown. I found an element with id \u0027status\u0027 containing this text and created an ASSERT action to verify its content.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#status",
+          "value": [
+            "Account Form Opened!"
+          ],
+          "description": "Verify that the text \u0027Account Form Opened!\u0027 is shown",
+          "elementDetails": "Account Form Opened!",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the \"Menu\" button and then click the \"Create Account\" link in the dropdown and then the text \"Account Form Opened!\" is shown",
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

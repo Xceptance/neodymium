@@ -1,0 +1,9 @@
+{
+  "id": "com.xceptance.neodymium.ai.action.ClickActionTest :: testClickDisabledButton",
+  "steps": [
+    {
+      "actions": [],
+      "expectedFailure": false
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.JavaMethodTest :: testJavaMethodOverloadingResolution :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AssertActionTest/testAssertHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertOverloaded",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertOverloaded",
+          "value": [],
+          "description": "Call assertOverloaded with param null",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

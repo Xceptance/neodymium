@@ -2,17 +2,34 @@
   "id": "com.xceptance.neodymium.ai.integration.FormInteractionsTest :: testFormInteractionsAndVerifications :: Browser Chrome_1024x768",
   "steps": [
     {
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop/forms.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop/forms.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop/forms.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
       "promptLine": "Type \u0027Jane Smith\u0027 into the \u0027Full Name\u0027 field.",
-      "reasoning": "Typed \u0027Jane Smith\u0027 into the \u0027Full Name\u0027 textbox identified by its data-neo-ref attribute.",
+      "reasoning": "Identified the \u0027Full Name\u0027 input field by its ID \u0027reg-username\u0027 and generated a TYPE action to enter \u0027Jane Smith\u0027.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_u90fde",
+          "target": "#reg-username",
           "value": [
             "Jane Smith"
           ],
-          "description": "Type \u0027Jane Smith\u0027 into the \u0027Full Name\u0027 field.",
-          "elementDetails": "Full Name",
+          "description": "Type \u0027Jane Smith\u0027 into the \u0027Full Name\u0027 field",
+          "elementDetails": "Full Name textbox",
           "elementContext": {
             "classes": "form-control",
             "id": "reg-username",
@@ -29,16 +46,16 @@
     },
     {
       "promptLine": "Type \u0027invalidemail\u0027 into the \u0027Email Address\u0027 field.",
-      "reasoning": "Typed \u0027invalidemail\u0027 into the \u0027Email Address\u0027 field using its data-neo-ref.",
+      "reasoning": "Successfully identified the \u0027Email Address\u0027 field by its ID \u0027#reg-email\u0027 and generated a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_f0d4sd",
+          "target": "#reg-email",
           "value": [
             "invalidemail"
           ],
-          "description": "Type \u0027invalidemail\u0027 into the \u0027Email Address\u0027 field.",
-          "elementDetails": "Email Address",
+          "description": "Type \u0027invalidemail\u0027 into the \u0027Email Address\u0027 field",
+          "elementDetails": "Email Address textbox",
           "elementContext": {
             "classes": "form-control",
             "id": "reg-email",
@@ -55,13 +72,13 @@
     },
     {
       "promptLine": "Click the \u0027Create Account\u0027 button.",
-      "reasoning": "Found the \u0027Create Account\u0027 button by its name and data-neo-ref attribute and generated a CLICK action.",
+      "reasoning": "Found the \u0027Create Account\u0027 button by its ID and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_t6pll2",
+          "target": "#btn-submit-reg",
           "description": "Click the \u0027Create Account\u0027 button",
-          "elementDetails": "Create Account",
+          "elementDetails": "Create Account button",
           "elementContext": {
             "classes": "btn-primary",
             "text": "Create Account",
@@ -78,7 +95,7 @@
     },
     {
       "promptLine": "Verify that the email format invalid warning \u0027This email format is invalid.\u0027 is visible.",
-      "reasoning": "Verified the visibility of the email format invalid warning by asserting the text content of the element with id \u0027email-error\u0027.",
+      "reasoning": "The instruction is to verify the visibility and content of the email format invalid warning. I found an element with id \u0027email-error\u0027 that contains the specified text, so I generated an ASSERT action targeting it.",
       "actions": [
         {
           "type": "ASSERT",
@@ -87,7 +104,7 @@
             "This email format is invalid."
           ],
           "description": "Verify that the email format invalid warning \u0027This email format is invalid.\u0027 is visible.",
-          "elementDetails": "⚠ This email format is invalid.",
+          "elementDetails": "email-error",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -98,7 +115,7 @@
     },
     {
       "promptLine": "Type \u00272\u0027 into the \u0027Neon Gradient Poster\u0027 quantity field. (hint: #qty-poster-1)",
-      "reasoning": "Typed \u00272\u0027 into the \u0027Neon Gradient Poster\u0027 quantity field.",
+      "reasoning": "Typed \u00272\u0027 into the specified quantity field.",
       "actions": [
         {
           "type": "TYPE",
@@ -106,8 +123,8 @@
           "value": [
             "2"
           ],
-          "description": "Type \u00272\u0027",
-          "elementDetails": "\u0027Neon Gradient Poster\u0027 quantity field",
+          "description": "Type \u00272\u0027 into the \u0027Neon Gradient Poster\u0027 quantity field.",
+          "elementDetails": "Neon Gradient Poster quantity field",
           "elementContext": {
             "classes": "form-control",
             "id": "qty-poster-1",
@@ -123,7 +140,7 @@
     },
     {
       "promptLine": "Verify that the Total Price is \u0027$39.98\u0027.",
-      "reasoning": "Verified the text content of the element with id \u0027cart-total\u0027 to match the expected total price.",
+      "reasoning": "The instruction is to verify the total price. I found the element with id \u0027cart-total\u0027 which displays the total price and asserted its text content to be \u0027$39.98\u0027.",
       "actions": [
         {
           "type": "ASSERT",
@@ -131,8 +148,8 @@
           "value": [
             "$39.98"
           ],
-          "description": "Verify that the Total Price is \u0027$39.98\u0027.",
-          "elementDetails": "$39.98",
+          "description": "Verify that the Total Price is \u0027$39.98\u0027",
+          "elementDetails": "cart-total",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -140,52 +157,6 @@
       ],
       "expectedFailure": false,
       "healedContextLevel": "STANDARD"
-    },
-    {
-      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
-      "reasoning": "Clicked on the \u0027Aura Defect Controls\u0027 trigger button.",
-      "actions": [
-        {
-          "type": "CLICK",
-          "target": "#aura-trigger",
-          "description": "Click on \u0027Aura Defect Controls\u0027 trigger button.",
-          "elementDetails": "Aura Defect Controls\u0027 trigger button",
-          "elementContext": {
-            "classes": "aura-controls-trigger",
-            "id": "aura-trigger",
-            "tagName": "div"
-          },
-          "replay": "",
-          "adjust": false
-        }
-      ],
-      "expectedFailure": false,
-      "healedContextLevel": "HINT"
-    },
-    {
-      "promptLine": "Click the \u0027Inject Element Overlap\u0027 toggle. (hint: label[for\u003d\u0027toggle-overlap\u0027])",
-      "reasoning": "Clicked the \u0027Inject Element Overlap\u0027 toggle.",
-      "actions": [
-        {
-          "type": "CLICK",
-          "target": "label[for\u003d\u0027toggle-overlap\u0027]",
-          "description": "Click \u0027Inject Element Overlap\u0027 toggle",
-          "elementDetails": "\u0027Inject Element Overlap\u0027 toggle",
-          "elementContext": {
-            "classes": "control-label",
-            "text": "Inject Element Overlap\nPositions key controls directly over headings.",
-            "tagName": "label"
-          },
-          "replay": "",
-          "adjust": false
-        }
-      ],
-      "expectedFailure": false,
-      "healedContextLevel": "HINT"
-    },
-    {
-      "actions": [],
-      "expectedFailure": false
     }
   ]
 }

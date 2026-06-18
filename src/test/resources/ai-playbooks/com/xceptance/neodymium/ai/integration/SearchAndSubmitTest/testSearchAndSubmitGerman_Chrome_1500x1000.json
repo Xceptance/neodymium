@@ -2,29 +2,31 @@
   "id": "com.xceptance.neodymium.ai.integration.SearchAndSubmitTest :: testSearchAndSubmitGerman :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Öffne http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
-      "reasoning": "directly parsed or local validation succeeded",
+      "promptLine": "Beginne mit der URL http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "Navigating to the provided URL as instructed.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
           ],
-          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "description": "Navigate to the specified URL",
+          "elementDetails": "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Gib \u0027bear\u0027 in das Suchfeld ein und sende die Suche ab",
-      "reasoning": "Typed \u0027bear\u0027 into the search textbox and clicked the \u0027Search\u0027 button as instructed.",
+      "promptLine": "Gib \u0027bear\u0027 in das Suchfeld ein",
+      "reasoning": "Identified the search input field by its ID \u0027search-box\u0027 and generated a TYPE action to enter \u0027bear\u0027.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_7cjiuo\u0027]",
+          "target": "#search-box",
           "value": [
             "bear"
           ],
@@ -40,12 +42,21 @@
           },
           "replay": "",
           "adjust": false
-        },
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Gib \u0027bear\u0027 in das Suchfeld ein und sende die Suche ab",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "sende die Suche ab",
+      "reasoning": "The instruction \u0027sende die Suche ab\u0027 translates to submitting the search. I identified the search button by its ID \u0027search-button\u0027 and generated a CLICK action for it.",
+      "actions": [
         {
           "type": "CLICK",
-          "target": "[data-neo-ref\u003d\u0027xc_r9bvv1\u0027]",
+          "target": "#search-button",
           "description": "Click the search button",
-          "elementDetails": "Search",
+          "elementDetails": "Search button",
           "elementContext": {
             "classes": "btn-search",
             "text": "Search",
@@ -58,15 +69,16 @@
         }
       ],
       "expectedFailure": false,
+      "originalUnsplitInstruction": "Gib \u0027bear\u0027 in das Suchfeld ein und sende die Suche ab",
       "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Überprüfe, dass der Titel der Suchergebnisse \u0027bear\u0027 enthält",
-      "reasoning": "Verified that the heading \u0027Search Results for \u0027bear\u0027\u0027 contains the text \u0027bear\u0027.",
+      "reasoning": "The instruction asks to verify that the search results title contains \u0027bear\u0027. I identified the element with id \u0027search-title\u0027 as the search results title and created an ASSERT action to check its text content for \u0027bear\u0027.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "[data-neo-ref\u003d\u0027xc_ph80bd\u0027]",
+          "target": "#search-title",
           "value": [
             "bear"
           ],
@@ -78,11 +90,11 @@
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "AXTREE"
+      "healedContextLevel": "STANDARD"
     },
     {
       "promptLine": "Überprüfe, dass auf der Seite \u00273 results found.\u0027 angezeigt wird",
-      "reasoning": "Verified that the element with id \u0027search-subtitle\u0027 contains the text \u00273 results found.\u0027.",
+      "reasoning": "The instruction is to verify the presence of specific text. I found an element with the ID \u0027search-subtitle\u0027 that contains the exact text \u00273 results found.\u0027 and created an ASSERT action to verify its content.",
       "actions": [
         {
           "type": "ASSERT",
@@ -91,7 +103,7 @@
             "3 results found."
           ],
           "description": "Verify that \u00273 results found.\u0027 is displayed on the page",
-          "elementDetails": "3 results found.",
+          "elementDetails": "search-subtitle",
           "elementContext": {},
           "replay": "",
           "adjust": false

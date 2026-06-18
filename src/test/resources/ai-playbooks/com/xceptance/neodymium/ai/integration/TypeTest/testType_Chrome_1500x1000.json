@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.TypeTest :: testType :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Type \u0027Bob\u0027 into the \u0027First Name:\u0027 field (hint: #first-name)",
-      "reasoning": "Typed \u0027Bob\u0027 into the \u0027First Name:\u0027 field.",
+      "reasoning": "",
       "actions": [
         {
           "type": "TYPE",
@@ -29,7 +29,7 @@
             "Bob"
           ],
           "description": "Type \u0027Bob\u0027 into the \u0027First Name:\u0027 field",
-          "elementDetails": "First Name: field",
+          "elementDetails": "\u0027First Name:\u0027 field",
           "elementContext": {
             "id": "first-name",
             "placeholder": "Enter first name",
@@ -53,7 +53,7 @@
           "value": [
             "Hello AI"
           ],
-          "description": "Type \u0027Hello AI\u0027 into the \u0027Comments:\u0027 textarea",
+          "description": "Type \"Hello AI\" into the \"Comments:\" textarea",
           "elementDetails": "Comments: textarea",
           "elementContext": {
             "id": "comments",
@@ -75,7 +75,7 @@
         {
           "type": "CLICK",
           "target": "#btn-submit",
-          "description": "Click \u0027Submit Details\u0027 button",
+          "description": "Click the \u0027Submit Details\u0027 button",
           "elementDetails": "\u0027Submit Details\u0027 button",
           "elementContext": {
             "text": "Submit Details",

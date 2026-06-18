@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.WaitTest :: testWait :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/WaitActionTest/testWaitHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/WaitActionTest/testWaitHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -25,7 +25,7 @@
         {
           "type": "CLICK",
           "target": "#btn-start",
-          "description": "Click \u0027Start Process\u0027 button",
+          "description": "Click the \u0027Start Process\u0027 button",
           "elementDetails": "\u0027Start Process\u0027 button",
           "elementContext": {
             "text": "Start Process",
@@ -42,7 +42,7 @@
     },
     {
       "promptLine": "Wait for the success indicator to be visible (hint: #success)",
-      "reasoning": "Successfully created actions to wait for the success indicator to be visible.",
+      "reasoning": "",
       "actions": [
         {
           "type": "ASSERT",
@@ -50,7 +50,7 @@
           "value": [
             "visible"
           ],
-          "description": "Wait for success indicator to be visible",
+          "description": "Wait for the success indicator to be visible",
           "elementDetails": "success indicator",
           "elementContext": {},
           "replay": "",

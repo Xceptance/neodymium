@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.JavaMethodTest :: testJavaMethodLocalStaticMethodCombined :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -19,36 +19,46 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "Get the text of \u0027h1\u0027 and verify the welcome message length is 18 using the java method \u0027verifyWelcomeMessageLength\u0027",
-      "reasoning": "Captured the text from the heading element and then invoked the specified Java method to verify its length.",
+      "promptLine": "Get the text of \u0027#welcome-message\u0027",
+      "reasoning": "The instruction asks to get the text of the element with id \u0027welcome-message\u0027. I will use the STORE action to capture its text into a variable named \u0027welcomeMessageText\u0027.",
       "actions": [
         {
           "type": "STORE",
-          "target": "[data-neo-ref\u003d\u0027xc_dliptk\u0027]",
+          "target": "#welcome-message",
           "value": [
-            "welcomeMessage"
+            "welcomeMessageText"
           ],
-          "description": "Get the text of \u0027h1\u0027",
-          "elementDetails": "Assert Action Test",
-          "elementContext": {},
-          "replay": "",
-          "adjust": false
-        },
-        {
-          "type": "JAVA_METHOD",
-          "target": "verifyWelcomeMessageLength",
-          "value": [
-            "Assert Action Test"
-          ],
-          "description": "Verify the welcome message length is 18 using the java method \u0027verifyWelcomeMessageLength\u0027",
-          "elementDetails": "Verify welcome message length",
+          "description": "Get the text of \u0027#welcome-message\u0027",
+          "elementDetails": "welcome-message",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "AXTREE"
+      "originalUnsplitInstruction": "Get the text of \u0027#welcome-message\u0027 and verify the text length is 25 using the java method \u0027verifyWelcomeMessageLength\u0027",
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "verify the text length is 25 using the java method \u0027verifyWelcomeMessageLength\u0027",
+      "reasoning": "The instruction requires invoking a Java method to verify the length of the \u0027welcome-message\u0027 text. The \u0027verifyWelcomeMessageLength\u0027 method is available and takes the expected length (25) and the text content (\u0027Welcome to our web store!\u0027) as arguments. The action is constructed accordingly.",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "verifyWelcomeMessageLength",
+          "value": [
+            "[\"25\", \"Welcome to our web store!\"]"
+          ],
+          "description": "Verify the text length is 25 using the java method \u0027verifyWelcomeMessageLength\u0027",
+          "elementDetails": "welcome-message",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Get the text of \u0027#welcome-message\u0027 and verify the text length is 25 using the java method \u0027verifyWelcomeMessageLength\u0027",
+      "healedContextLevel": "STANDARD"
     }
   ]
 }

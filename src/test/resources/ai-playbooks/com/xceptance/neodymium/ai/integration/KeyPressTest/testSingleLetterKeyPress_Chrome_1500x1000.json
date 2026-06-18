@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.KeyPressTest :: testSingleLetterKeyPress :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/TypeActionTest/keyPressExtended.html",
+      "promptLine": "OPEN http://localhost:43377/TypeActionTest/keyPressExtended.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Click the single character input field (hint: #char-input)",
-      "reasoning": "Clicked the single character input field.",
+      "reasoning": "",
       "actions": [
         {
           "type": "CLICK",
@@ -42,7 +42,7 @@
     },
     {
       "promptLine": "Press key \u0027a\u0027",
-      "reasoning": "The instruction is to press the key \u0027a\u0027, which directly maps to a KEY_PRESS action with \u0027a\u0027 as the value.",
+      "reasoning": "The instruction is to press the key \u0027a\u0027. The KEY_PRESS action is used with \u0027v\u0027 set to \u0027a\u0027.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -50,7 +50,7 @@
             "a"
           ],
           "description": "Press key \u0027a\u0027",
-          "elementDetails": "Keyboard key \u0027a\u0027",
+          "elementDetails": "key \u0027a\u0027",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -61,7 +61,7 @@
     },
     {
       "promptLine": "Type key \u0027b\u0027",
-      "reasoning": "The instruction is to type a key, so a KEY_PRESS action with the value \u0027b\u0027 is appropriate.",
+      "reasoning": "The instruction is to type the key \u0027b\u0027. The KEY_PRESS action is used with \u0027v\u0027 set to \u0027b\u0027.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -80,15 +80,15 @@
     },
     {
       "promptLine": "Press \u0027c\u0027",
-      "reasoning": "The instruction is to press the \u0027c\u0027 key, which directly maps to a KEY_PRESS action with \u0027c\u0027 as the value.",
+      "reasoning": "The instruction is to press the \u0027c\u0027 key. The KEY_PRESS action is used with \u0027c\u0027 as the value.",
       "actions": [
         {
           "type": "KEY_PRESS",
           "value": [
             "c"
           ],
-          "description": "Presses the \u0027c\u0027 key",
-          "elementDetails": "Keyboard key \u0027c\u0027",
+          "description": "Press the \u0027c\u0027 key",
+          "elementDetails": "Keyboard",
           "elementContext": {},
           "replay": "",
           "adjust": false

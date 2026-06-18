@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.VisualTest :: test_VisualVerification_Negative :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -20,7 +20,10 @@
     },
     {
       "actions": [],
-      "expectedFailure": false
+      "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
+      "expectedFailure": false,
+      "expectedErrorType": "com.xceptance.neodymium.ai.core.AiAgent$DefinitiveAssertionError",
+      "expectedErrorMessage": "Verification failed: Visual verification failed: The screenshot does not show a lion dancing on the moon. It displays a \u0027Majestic Brown Bear\u0027 poster, an \u0027Aura Neon Gradient Poster\u0027 with a color palette icon, and a \u0027Glassmorphic Sphere Poster\u0027 with a globe icon."
     }
   ]
 }

@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.VisualTest :: test_VisualVerification_IndirectPositive :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "promptLine": "OPEN http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -19,12 +19,22 @@
       "expectedFailure": false
     },
     {
-      "promptLine": "There is no fox visible (visual) and there is no red button either",
-      "reasoning": "Visual analysis confirms that there is no fox visible in the screenshot; the featured animal is a brown bear. Additionally, there are no red buttons present on the page; the \u0027Search\u0027 button is blue and the \u00270 items\u0027 button is light blue/grey.",
+      "promptLine": "There is no fox visible (visual)",
+      "reasoning": "Visual analysis of the screenshot confirms that there is no image or text depicting a fox. The visible images are a \u0027Majestic Brown Bear\u0027 poster, an \u0027Aura Neon Gradient Poster\u0027 (abstract color palette), and a \u0027Glassmorphic Sphere Poster\u0027 (abstract globe).",
       "actions": [],
       "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
       "expectedFailure": false,
+      "originalUnsplitInstruction": "There is no fox visible (visual) and there is no red button either",
       "healedContextLevel": "VISUAL_LEAN"
+    },
+    {
+      "promptLine": "there is no red button either",
+      "reasoning": "Visual analysis of the screenshot confirms that there are no red buttons present on the page. The \u0027Search\u0027 button is blue, and other interactive elements like \u0027Storefront\u0027 and the cart icon are also not red buttons.",
+      "actions": [],
+      "screenshotHash": "000a0000002000080008880a880ccc0c88080008000000000000000000000000",
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "There is no fox visible (visual) and there is no red button either",
+      "healedContextLevel": "VISUAL"
     }
   ]
 }

@@ -1,0 +1,81 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.CheckTest :: testCheckAlternativePhrases :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/CheckActionTest/testCheckHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/CheckActionTest/testCheckHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/CheckActionTest/testCheckHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Mark the checkbox \u0027Subscribe to newsletter\u0027",
+      "reasoning": "Identified the checkbox by its ID and generated a CHECK action to mark it.",
+      "actions": [
+        {
+          "type": "CHECK",
+          "target": "#newsletter",
+          "description": "Mark the checkbox \u0027Subscribe to newsletter\u0027",
+          "elementDetails": "Subscribe to newsletter checkbox",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Toogle the radio button \u0027Phone\u0027",
+      "reasoning": "The instruction is to \u0027Toggle the radio button Phone\u0027. Based on the Accessibility Tree, the \u0027Phone\u0027 radio button (id\u003d\u0027contact-phone\u0027) does not have a \u0027checked\u0027 attribute, indicating it is currently unchecked. Therefore, \u0027toggle\u0027 means to check it. The CHECK action with \u0027v: true\u0027 will select the radio button.",
+      "actions": [
+        {
+          "type": "CHECK",
+          "target": "#contact-phone",
+          "value": [
+            "true"
+          ],
+          "description": "Check the \u0027Phone\u0027 radio button",
+          "elementDetails": "Phone radio button",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the button \u0027Submit Preferences\u0027",
+      "reasoning": "Identified the button with \u0027Submit Preferences\u0027 label and clicked it using its ID.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit",
+          "description": "Click the button \u0027Submit Preferences\u0027",
+          "elementDetails": "Submit Preferences button",
+          "elementContext": {
+            "text": "Submit Preferences",
+            "id": "btn-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

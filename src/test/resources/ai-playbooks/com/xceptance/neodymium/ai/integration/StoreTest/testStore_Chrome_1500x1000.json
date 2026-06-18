@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.StoreTest :: testStore :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/StoreActionTest/testStoreHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/StoreActionTest/testStoreHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -20,7 +20,7 @@
     },
     {
       "promptLine": "Store the order ID value into a variable named \u0027orderId\u0027 (hint: #order-id)",
-      "reasoning": "Stored the text content of the element with id \u0027order-id\u0027 into the variable \u0027orderId\u0027.",
+      "reasoning": "Stored the order ID value into a variable named \u0027orderId\u0027.",
       "actions": [
         {
           "type": "STORE",
@@ -29,18 +29,18 @@
             "orderId"
           ],
           "description": "Store the order ID value into a variable named \u0027orderId\u0027",
-          "elementDetails": "ORD-987654",
+          "elementDetails": "order ID value",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "STANDARD"
+      "healedContextLevel": "HINT"
     },
     {
       "promptLine": "Type \u0027ORD-987654\u0027 into the verification field (hint: #input-target)",
-      "reasoning": "Typed \u0027ORD-987654\u0027 into the verification field.",
+      "reasoning": "",
       "actions": [
         {
           "type": "TYPE",
@@ -64,13 +64,13 @@
     },
     {
       "promptLine": "Click the \u0027Verify\u0027 button (hint: #btn-verify)",
-      "reasoning": "Clicked the \u0027Verify\u0027 button.",
+      "reasoning": "",
       "actions": [
         {
           "type": "CLICK",
           "target": "#btn-verify",
-          "description": "Click the \u0027Verify\u0027 button",
-          "elementDetails": "\u0027Verify\u0027 button",
+          "description": "Click \u0027Verify\u0027 button",
+          "elementDetails": "Verify button",
           "elementContext": {
             "text": "Verify",
             "id": "btn-verify",

@@ -3,33 +3,35 @@
   "steps": [
     {
       "promptLine": "Open http://localhost:43377/AuraGlanceTest/shop/sandbox/mock-oauth-login.html?redirect_uri\u003dhttps://localhost:39389/AuraGlanceTest/shop/sandbox/index.html",
-      "reasoning": "directly parsed or local validation succeeded",
+      "reasoning": "Navigating to the provided URL as instructed.",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "http://localhost:43377/AuraGlanceTest/shop/sandbox/mock-oauth-login.html?redirect_uri\u003dhttps://localhost:39389/AuraGlanceTest/shop/sandbox/index.html"
           ],
-          "description": "Navigate to http://localhost:43377/AuraGlanceTest/shop/sandbox/mock-oauth-login.html?redirect_uri\u003dhttps://localhost:39389/AuraGlanceTest/shop/sandbox/index.html",
+          "description": "Open the specified URL",
+          "elementDetails": "http://localhost:43377/AuraGlanceTest/shop/sandbox/mock-oauth-login.html?redirect_uri\u003dhttps://localhost:39389/AuraGlanceTest/shop/sandbox/index.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Type \u0027user@neodymium.com\u0027 into the email input.",
-      "reasoning": "Identified the email input by its \u0027name\u0027 attribute and \u0027data-neo-ref\u0027 and created a TYPE action to enter the specified email address.",
+      "reasoning": "Identified the email input field by its ID and generated a TYPE action to enter the specified email address.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_8ddz5q\u0027]",
+          "target": "#oauth-email",
           "value": [
             "user@neodymium.com"
           ],
-          "description": "Type \u0027user@neodymium.com\u0027 into the email input.",
-          "elementDetails": "Email Address",
+          "description": "Type \u0027user@neodymium.com\u0027 into the email input field",
+          "elementDetails": "Email Address textbox",
           "elementContext": {
             "id": "oauth-email",
             "placeholder": "Email Address",
@@ -45,16 +47,16 @@
     },
     {
       "promptLine": "Type \u0027password123\u0027 into the password input.",
-      "reasoning": "Identified the password input by its \u0027data-neo-ref\u0027 attribute and generated a TYPE action to enter the specified password.",
+      "reasoning": "Identified the password input field by its ID \u0027oauth-password\u0027 and generated a TYPE action to enter \u0027password123\u0027.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_sigcs4\u0027]",
+          "target": "#oauth-password",
           "value": [
             "password123"
           ],
-          "description": "Type \u0027password123\u0027 into the password input",
-          "elementDetails": "Password textbox",
+          "description": "Type \u0027password123\u0027 into the password input field",
+          "elementDetails": "Password input",
           "elementContext": {
             "id": "oauth-password",
             "placeholder": "Password",
@@ -70,12 +72,12 @@
     },
     {
       "promptLine": "Click the \u0027Authorize \u0026 Sign In\u0027 button.",
-      "reasoning": "Clicked the \u0027Authorize \u0026 Sign In\u0027 button using its data-neo-ref attribute.",
+      "reasoning": "Identified the \u0027Authorize \u0026 Sign In\u0027 button by its ID and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_jjqt9c",
-          "description": "Click the \u0027Authorize \u0026 Sign In\u0027 button.",
+          "target": "#oauth-signin",
+          "description": "Click the \u0027Authorize \u0026 Sign In\u0027 button",
           "elementDetails": "Authorize \u0026 Sign In button",
           "elementContext": {
             "classes": "aura-btn",

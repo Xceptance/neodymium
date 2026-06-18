@@ -2,7 +2,7 @@
   "id": "com.xceptance.neodymium.ai.integration.KeyPressTest :: testKeyPress :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
@@ -45,7 +45,7 @@
     },
     {
       "promptLine": "Press the TAB key on the active element",
-      "reasoning": "The instruction is to press the TAB key, which maps directly to the KEY_PRESS action with \u0027TAB\u0027 as the value.",
+      "reasoning": "The instruction is to press the TAB key on the active element. The KEY_PRESS action with \u0027TAB\u0027 as the value is appropriate for this.",
       "actions": [
         {
           "type": "KEY_PRESS",
@@ -53,7 +53,7 @@
             "TAB"
           ],
           "description": "Press the TAB key on the active element",
-          "elementDetails": "TAB key",
+          "elementDetails": "active element",
           "elementContext": {},
           "replay": "",
           "adjust": false
@@ -64,16 +64,16 @@
     },
     {
       "promptLine": "Type \u0027KeyPress works!\u0027 into the comment box",
-      "reasoning": "Identified the comment box by its accessibility name and data-neo-ref attribute, then generated a TYPE action to input the specified text.",
+      "reasoning": "Identified the comment box by its ID and generated a TYPE action to input the specified text.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_z2satb",
+          "target": "#comments",
           "value": [
             "KeyPress works!"
           ],
           "description": "Type \u0027KeyPress works!\u0027 into the comment box",
-          "elementDetails": "Comments:",
+          "elementDetails": "Comments: textbox",
           "elementContext": {
             "id": "comments",
             "placeholder": "Enter comments",
@@ -89,16 +89,16 @@
     },
     {
       "promptLine": "Type \u0027Robert\u0027 into the \u0027First Name:\u0027 field",
-      "reasoning": "Typed \u0027Robert\u0027 into the \u0027First Name:\u0027 field using its data-neo-ref.",
+      "reasoning": "Identified the \u0027First Name:\u0027 textbox by its ID and generated a TYPE action to input \u0027Robert\u0027.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "xc_g7bs6",
+          "target": "#first-name",
           "value": [
             "Robert"
           ],
           "description": "Type \u0027Robert\u0027 into the \u0027First Name:\u0027 field",
-          "elementDetails": "First Name:",
+          "elementDetails": "First Name: textbox",
           "elementContext": {
             "id": "first-name",
             "placeholder": "Enter first name",
@@ -123,7 +123,6 @@
             "Enter"
           ],
           "description": "Press the ENTER key",
-          "elementDetails": "#btn-submit",
           "elementContext": {},
           "replay": "",
           "adjust": false
