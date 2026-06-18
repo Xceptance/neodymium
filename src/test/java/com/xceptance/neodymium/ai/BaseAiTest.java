@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -61,6 +62,8 @@ public abstract class BaseAiTest extends BaseLlmTest
     protected static EmbeddedHtmlServer server;
     protected String currentTestUrl;
     private TestInfo testInfo;
+    private String tempPlaybookDirPropertyKey;
+    private File tempPlaybookDir;
 
     /**
      * Starts the embedded server before any tests in the class are run.
@@ -809,5 +812,59 @@ public abstract class BaseAiTest extends BaseLlmTest
         return frameId;
     }
 
-}
+    /**
+     * Overrides the playbook directory for the current test method to point to an isolated,
+     * empty temporary directory in 'target/temp-playbooks/'.
+     */
+    protected final void useTempPlaybookDirectory()
+    {
+        final String testName = Neodymium.getTestName();
+        if (testName != null)
+        {
+            tempPlaybookDirPropertyKey = "playbook.directory.method." + testName.trim().replace(" :: ", "::");
+            final String cleanTestName = testName.replaceAll("[^_a-zA-Z0-9.-]", "_").replaceAll("_+", "_");
+            tempPlaybookDir = new File("target/temp-playbooks/" + cleanTestName);
+            
+            // Activate the override to start clean
+            Neodymium.getData().put(tempPlaybookDirPropertyKey, tempPlaybookDir.getAbsolutePath());
+        }
+    }
 
+    /**
+     * Automatically cleans up the temporary playbook directory and resets the override property key.
+     */
+    @AfterEach
+    public final void cleanupTempPlaybookDirectory()
+    {
+        if (tempPlaybookDirPropertyKey != null)
+        {
+            Neodymium.getData().remove(tempPlaybookDirPropertyKey);
+            tempPlaybookDirPropertyKey = null;
+        }
+        if (tempPlaybookDir != null && tempPlaybookDir.exists())
+        {
+            deleteDirectory(tempPlaybookDir);
+            tempPlaybookDir = null;
+        }
+    }
+
+    private void deleteDirectory(final File directory)
+    {
+        final File[] files = directory.listFiles();
+        if (files != null)
+        {
+            for (final File file : files)
+            {
+                if (file.isDirectory())
+                {
+                    deleteDirectory(file);
+                }
+                else
+                {
+                    file.delete();
+                }
+            }
+        }
+        directory.delete();
+    }
+}
