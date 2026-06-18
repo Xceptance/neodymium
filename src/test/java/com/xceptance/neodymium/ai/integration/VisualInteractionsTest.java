@@ -91,7 +91,7 @@ public class VisualInteractionsTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
 
@@ -136,7 +136,7 @@ public class VisualInteractionsTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#canvas-status").shouldHave(Condition.text("Red Canvas Clicked"));
 
@@ -184,7 +184,7 @@ public class VisualInteractionsTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#label-status").shouldHave(Condition.text("Floating label transition fixed!"));
 

@@ -91,7 +91,7 @@ public class VisualTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertThat(r2)
             .hasLlmCalls(0)
             .hasNoPesapCalls()
@@ -133,7 +133,7 @@ public class VisualTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertThat(r2)
             .hasLlmCalls(0)
             .hasNoPesapCalls()
@@ -187,7 +187,7 @@ public class VisualTest extends BaseAiTest
 
         Assertions.assertThrows(AssertionError.class, () ->
         {
-            runAi(steps, VerificationMode.OFFLINE_REPLAY);
+            runAi(steps, VerificationMode.REPLAY);
         });
     }
 
@@ -225,7 +225,7 @@ public class VisualTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertThat(r2)
             .hasLlmCalls(0)
             .hasNoPesapCalls()

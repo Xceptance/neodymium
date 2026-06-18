@@ -43,7 +43,7 @@ import com.xceptance.neodymium.util.Neodymium;
 @DataFolder("com/xceptance/neodymium/ai/AllFeaturesYamlTest")
 @AiTestVerification({
     VerificationMode.LIVE_LLM,
-    VerificationMode.OFFLINE_REPLAY,
+    VerificationMode.REPLAY,
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })

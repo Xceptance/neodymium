@@ -96,7 +96,7 @@ public class AdvancedDomTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#shadow-status").shouldHave(Condition.text("Login successful for: admin"));
 
@@ -151,7 +151,7 @@ public class AdvancedDomTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#hover-status").shouldHave(Condition.text("Laptops selected successfully!"));
 
@@ -203,7 +203,7 @@ public class AdvancedDomTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#scroll-status").shouldHave(Condition.text("Achievement Unlocked!"));
 

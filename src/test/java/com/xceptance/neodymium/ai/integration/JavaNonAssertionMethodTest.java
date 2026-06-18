@@ -184,7 +184,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
         this.resetBrowser();
 
         Neodymium.getData().put("locale", "de-DE");
-        final AiExecutionResult r1Replay = runAi(successSteps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r1Replay = runAi(successSteps, VerificationMode.REPLAY);
         assertThat(r1Replay)
             .hasDirectParses(0)
             .hasReplays(2)
@@ -223,7 +223,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult rReplay = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult rReplay = runAi(steps, VerificationMode.REPLAY);
         assertThat(rReplay)
             .hasDirectParses(0)
             .hasReplays(7)
@@ -250,7 +250,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
         this.resetBrowser();
 
         Neodymium.getData().put("locale", "de-DE");
-        final AiExecutionResult rGermanReplay = runAi(germanSteps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult rGermanReplay = runAi(germanSteps, VerificationMode.REPLAY);
         assertThat(rGermanReplay)
             .hasDirectParses(0)
             .hasReplays(2)
@@ -272,7 +272,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
         this.resetBrowser();
 
         Neodymium.getData().put("locale", "en-US");
-        final AiExecutionResult rUsReplay = runAi(usSteps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult rUsReplay = runAi(usSteps, VerificationMode.REPLAY);
         assertThat(rUsReplay)
             .hasDirectParses(0)
             .hasReplays(2)

@@ -95,7 +95,7 @@ public class TimingAndResilienceTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#intercept-status").shouldHave(Condition.text("Transaction Successful!"));
 
@@ -148,7 +148,7 @@ public class TimingAndResilienceTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#promo-status").shouldHave(Condition.text("Coupon DISCOUNT applied successfully!"));
 
@@ -200,7 +200,7 @@ public class TimingAndResilienceTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#sort-status").shouldHave(Condition.text("Sorted by price: Low to High"));
 

@@ -37,7 +37,7 @@ import com.xceptance.neodymium.util.Neodymium;
 @Browser("Chrome_1024x768")
 @AiTestVerification({
     VerificationMode.LIVE_LLM,
-    VerificationMode.OFFLINE_REPLAY,
+    VerificationMode.REPLAY,
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })

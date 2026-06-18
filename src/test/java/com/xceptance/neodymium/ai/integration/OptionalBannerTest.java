@@ -73,7 +73,7 @@ public final class OptionalBannerTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertThat(r2)
             .hasNoPesapCalls();
     }
