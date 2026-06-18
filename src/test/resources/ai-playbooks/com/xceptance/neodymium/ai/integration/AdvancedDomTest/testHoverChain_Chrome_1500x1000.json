@@ -1,0 +1,88 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.AdvancedDomTest :: testHoverChain :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html",
+      "reasoning": "Navigating to the specified URL.",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html"
+          ],
+          "description": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Hover over \u0027Products\u0027.",
+      "reasoning": "Hovering over the \u0027Products\u0027 link as instructed.",
+      "actions": [
+        {
+          "type": "HOVER",
+          "target": "[data-neo-ref\u003d\u0027xc_bubl4z\u0027]",
+          "description": "Hover over \u0027Products\u0027",
+          "elementDetails": "Products link",
+          "elementContext": {
+            "text": "Products ▾",
+            "href": "https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html#",
+            "tagName": "a"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Hover over \u0027Electronics\u0027.",
+      "reasoning": "Hovering over the \u0027Electronics\u0027 link using its data-neo-ref attribute.",
+      "actions": [
+        {
+          "type": "HOVER",
+          "target": "[data-neo-ref\u003d\u0027xc_ymu3zq\u0027]",
+          "description": "Hover over the \u0027Electronics\u0027 link",
+          "elementDetails": "Electronics",
+          "elementContext": {
+            "text": "Electronics ▸",
+            "href": "https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html#",
+            "tagName": "a"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the \u0027Laptops\u0027 link.",
+      "reasoning": "The \u0027Laptops\u0027 link was identified by its unique ID and a CLICK action was generated.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#link-laptops",
+          "description": "Click the \u0027Laptops\u0027 link",
+          "elementDetails": "Laptops link",
+          "elementContext": {
+            "text": "Laptops",
+            "id": "link-laptops",
+            "href": "https://localhost:39389/AuraGlanceTest/shop/sandbox/hover-chain.html#",
+            "tagName": "a"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

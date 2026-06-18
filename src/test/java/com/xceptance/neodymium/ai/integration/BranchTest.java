@@ -335,7 +335,8 @@ public class BranchTest extends BaseAiTest
             .hasDirectParses(1)
             .hasReplays(0)
             .hasActionsCount(2)
-            .step(0, s -> s.isDirectParse());
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall());
 
         assertEquals("Main Action Triggered!", 
             Selenide.$("#result").shouldBe(Condition.visible).text());

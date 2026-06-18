@@ -29,4 +29,7 @@ Return ONLY minified JSON:
 3. Set "jm" to true ONLY if a custom Java method name (e.g., assertCalculation, validateShippingCost, runPriceCheck) is explicitly identified in the step. Do NOT set to true for natural language descriptions like "verify the calculation" or "check the total".
 4. Step Splitting: If the step is compound/multi-stage (i.e., contains multiple actions, regardless of the language of the step or conjunctions/punctuation used to join them), split it into simple, individual steps in "sp" (one step per action). This allows the execution engine to run, retry, and heal each action independently.
    - If no split is needed, omit "sp".
-
+   - CRITICAL: Do NOT split the conditional branch itself (e.g., the block from "If" / "When" to the end of the conditional logic). The conditional branch block must remain as a single, unsplit step to preserve its logical structure for the BRANCH action processor. Any sequential actions *outside* the conditional branch block (before or after it) *must* be split off into their own separate steps.
+     * Example of splitting a sequence containing a branch:
+       Input: "Click the Menu button, and then if the Accept Cookies button is visible, click it, else click the Main Action button, and then verify the success message"
+       Split: ["Click the Menu button", "if the Accept Cookies button is visible, click it, else click the Main Action button", "verify the success message"]

@@ -1,0 +1,112 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.JavaMethodTest :: testJavaMethodDefaultAssertions :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AssertActionTest/testAssertHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertNumbersEqual(\"[\"10.00\", \"10.00\"]\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertNumbersEqual",
+          "value": [
+            "[\"10.00\", \"10.00\"]"
+          ],
+          "description": "Call assertNumbersEqual with param [\"10.00\", \"10.00\"]",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertMatchesRegex(\"[\"ORD-12345\", \"^ORD-[0-9]{5}$\"]\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertMatchesRegex",
+          "value": [
+            "[\"ORD-12345\", \"^ORD-[0-9]{5}$\"]"
+          ],
+          "description": "Call assertMatchesRegex with param [\"ORD-12345\", \"^ORD-[0-9]{5}$\"]",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertCalculation(\"0.90 € \u003d (14.96 € + 0.00 €) * 6.00%\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertCalculation",
+          "value": [
+            "0.90 € \u003d (14.96 € + 0.00 €) * 6.00%"
+          ],
+          "description": "Call assertCalculation with param 0.90 € \u003d (14.96 € + 0.00 €) * 6.00%",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: verifyLessOrEqual(\"[\"10\", \"15\"]\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "verifyLessOrEqual",
+          "value": [
+            "[\"10\", \"15\"]"
+          ],
+          "description": "Call verifyLessOrEqual with param [\"10\", \"15\"]",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertNumberGreaterThan(\"[\"15.00\", \"10.00\"]\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertNumberGreaterThan",
+          "value": [
+            "[\"15.00\", \"10.00\"]"
+          ],
+          "description": "Call assertNumberGreaterThan with param [\"15.00\", \"10.00\"]",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Splittable Branch Test</title>
+</head>
+<body>
+    <h1>Splittable Branch Test</h1>
+    
+    <button id="menu-btn">Menu</button>
+    
+    <div id="container" style="display: none; margin-top: 10px;">
+        <div id="cookie-banner" style="background-color: yellow; padding: 10px; margin-bottom: 10px;">
+            <span>We use cookies!</span>
+            <button id="btn-accept">Accept Cookies</button>
+        </div>
+        <button id="btn-main-action">Main Action Button</button>
+        <div id="result"></div>
+    </div>
+    
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('noCookies') === 'true') {
+            document.getElementById('cookie-banner').style.display = 'none';
+        }
+        
+        document.getElementById('menu-btn').addEventListener('click', function() {
+            document.getElementById('container').style.display = 'block';
+        });
+        
+        document.getElementById('btn-accept').addEventListener('click', function() {
+            document.getElementById('cookie-banner').style.display = 'none';
+            document.getElementById('result').innerText = 'Cookies Accepted!';
+        });
+        
+        document.getElementById('btn-main-action').addEventListener('click', function() {
+            document.getElementById('result').innerText = 'Main Action Triggered!';
+        });
+    </script>
+</body>
+</html>

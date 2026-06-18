@@ -1,0 +1,123 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.SplittableBranchTest :: testSplittableBranchElsePath :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/SplittableBranchTest/testSplittableBranch.html?noCookies\u003dtrue",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/SplittableBranchTest/testSplittableBranch.html?noCookies\u003dtrue"
+          ],
+          "description": "Navigate to http://localhost:43377/SplittableBranchTest/testSplittableBranch.html?noCookies\u003dtrue",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the Menu button",
+      "reasoning": "The \u0027Menu\u0027 button was identified by its ID \u0027#menu-btn\u0027 and a CLICK action was generated.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#menu-btn",
+          "description": "Click the Menu button",
+          "elementDetails": "Menu button",
+          "elementContext": {
+            "text": "Menu",
+            "id": "menu-btn",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the Menu button, and then if the Accept Cookies button is visible, then click the Accept Cookies button, else click the Main Action Button, and then verify the text \u0027Main Action Triggered!\u0027 is shown",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "if the Accept Cookies button is visible, then click the Accept Cookies button, else click the Main Action Button",
+      "reasoning": "The instruction requires a conditional click. I\u0027ve created a BRANCH action to first assert the visibility of the \u0027Accept Cookies button\u0027. If it\u0027s visible, it will click it. Otherwise, it will click the \u0027Main Action Button\u0027 as specified in the \u0027else\u0027 clause.",
+      "actions": [
+        {
+          "type": "BRANCH",
+          "description": "Conditionally click Accept Cookies or Main Action Button",
+          "elementContext": {},
+          "replay": "",
+          "condition": [
+            {
+              "type": "ASSERT",
+              "target": "Accept Cookies button",
+              "value": [
+                "visible"
+              ],
+              "description": "Check if Accept Cookies button is visible",
+              "elementDetails": "Accept Cookies button",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "then": [
+            {
+              "type": "CLICK",
+              "target": "Accept Cookies button",
+              "description": "Click the Accept Cookies button",
+              "elementDetails": "Accept Cookies button",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "else": [
+            {
+              "type": "CLICK",
+              "target": "#btn-main-action",
+              "description": "Click the Main Action Button",
+              "elementDetails": "Main Action Button",
+              "elementContext": {
+                "text": "Main Action Button",
+                "id": "btn-main-action",
+                "tagName": "button",
+                "type": "submit"
+              },
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the Menu button, and then if the Accept Cookies button is visible, then click the Accept Cookies button, else click the Main Action Button, and then verify the text \u0027Main Action Triggered!\u0027 is shown",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "verify the text \u0027Main Action Triggered!\u0027 is shown",
+      "reasoning": "The instruction is to verify the text \u0027Main Action Triggered!\u0027 is shown. The DOM shows an element with id \u0027result\u0027 containing this text. An ASSERT action targeting this element with the expected text is generated.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#result",
+          "value": [
+            "Main Action Triggered!"
+          ],
+          "description": "Verify the text \u0027Main Action Triggered!\u0027 is shown in the result element",
+          "elementDetails": "result",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the Menu button, and then if the Accept Cookies button is visible, then click the Accept Cookies button, else click the Main Action Button, and then verify the text \u0027Main Action Triggered!\u0027 is shown",
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

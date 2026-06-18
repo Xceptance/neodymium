@@ -1,0 +1,112 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.SplittableBranchTest :: testSplittableBranchWhenNoOtherwise :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/SplittableBranchTest/testSplittableBranch.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/SplittableBranchTest/testSplittableBranch.html"
+          ],
+          "description": "Navigate to http://localhost:43377/SplittableBranchTest/testSplittableBranch.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the Menu button",
+      "reasoning": "Identified the \u0027Menu\u0027 button by its ID and aria-label and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#menu-btn",
+          "description": "Click the Menu button",
+          "elementDetails": "Menu button",
+          "elementContext": {
+            "text": "Menu",
+            "id": "menu-btn",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the Menu button, and then when the Accept Cookies button is visible and contains the text \"Accept Cookies\", click the Accept Cookies button, and then verify the text \u0027Cookies Accepted!\u0027 is shown",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "when the Accept Cookies button is visible and contains the text \"Accept Cookies\", click the Accept Cookies button",
+      "reasoning": "The instruction requires a conditional click. I\u0027ve created a BRANCH action. The condition asserts that the \u0027Accept Cookies\u0027 button is visible and contains the specified text. If true, the \u0027then\u0027 block will execute a CLICK action on the button.",
+      "actions": [
+        {
+          "type": "BRANCH",
+          "description": "Conditionally click the \u0027Accept Cookies\u0027 button if visible and contains the text \u0027Accept Cookies\u0027",
+          "elementContext": {},
+          "replay": "",
+          "condition": [
+            {
+              "type": "ASSERT",
+              "target": "#btn-accept",
+              "value": [
+                "Accept Cookies"
+              ],
+              "description": "Verify \u0027Accept Cookies\u0027 button is visible and contains the text \u0027Accept Cookies\u0027",
+              "elementDetails": "Accept Cookies button",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "then": [
+            {
+              "type": "CLICK",
+              "target": "#btn-accept",
+              "description": "Click the \u0027Accept Cookies\u0027 button",
+              "elementDetails": "Accept Cookies button",
+              "elementContext": {
+                "text": "Accept Cookies",
+                "id": "btn-accept",
+                "tagName": "button",
+                "type": "submit"
+              },
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the Menu button, and then when the Accept Cookies button is visible and contains the text \"Accept Cookies\", click the Accept Cookies button, and then verify the text \u0027Cookies Accepted!\u0027 is shown",
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "verify the text \u0027Cookies Accepted!\u0027 is shown",
+      "reasoning": "The instruction is to verify the text \u0027Cookies Accepted!\u0027 is shown. I found an element with id \u0027result\u0027 that contains this exact text. I am using an ASSERT action to verify its content.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#result",
+          "value": [
+            "Cookies Accepted!"
+          ],
+          "description": "Verify \u0027Cookies Accepted!\u0027 text is shown",
+          "elementDetails": "Cookies Accepted!",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Click the Menu button, and then when the Accept Cookies button is visible and contains the text \"Accept Cookies\", click the Accept Cookies button, and then verify the text \u0027Cookies Accepted!\u0027 is shown",
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

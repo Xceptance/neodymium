@@ -1,0 +1,97 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.AllFeaturesYamlTest :: testAllFeaturesViaYaml :: Data set 2 / 2 :: Browser Chrome_1024x768",
+  "steps": [
+    {
+      "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/index.html?controls\u003dtrue",
+      "reasoning": "Navigating to the provided URL as instructed.",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "https://localhost:39389/AuraGlanceTest/shop/index.html?controls\u003dtrue"
+          ],
+          "description": "Open the specified URL",
+          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/index.html?controls\u003dtrue",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click on the \u0027Aura Defect Controls\u0027 trigger button. (hint: #aura-trigger)",
+      "reasoning": "",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-trigger",
+          "description": "Click on the \u0027Aura Defect Controls\u0027 trigger button.",
+          "elementDetails": "\u0027Aura Defect Controls\u0027 trigger button",
+          "elementContext": {
+            "classes": "aura-controls-trigger",
+            "id": "aura-trigger",
+            "tagName": "div"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Click the \u0027Show Promo Banner\u0027 toggle to hide it. (hint: label[for\u003d\u0027toggle-banner\u0027])",
+      "reasoning": "Clicked the \u0027Show Promo Banner\u0027 toggle.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "label[for\u003d\u0027toggle-banner\u0027]",
+          "description": "Click the \u0027Show Promo Banner\u0027 toggle to hide it.",
+          "elementDetails": "\u0027Show Promo Banner\u0027 toggle",
+          "elementContext": {
+            "classes": "control-label",
+            "text": "Show Promo Banner\nToggles optional marketing header.",
+            "tagName": "label"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Click \u0027Close Banner\u0027",
+      "reasoning": "The instruction \u0027Click Close Banner\u0027 refers to closing the \u0027Aura Chaos Controls\u0027 drawer. The button with id \u0027aura-close\u0027 and text \u0027×\u0027 is the appropriate element to click for this action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#aura-close",
+          "description": "Click \u0027Close Banner\u0027",
+          "elementDetails": "Close button for Aura Chaos Controls",
+          "elementContext": {
+            "classes": "drawer-close",
+            "text": "×",
+            "id": "aura-close",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Observe page visual consistency (visual)",
+      "reasoning": "The page appears visually consistent based on the provided screenshot. The header navigation, main banner, and product cards all maintain a consistent layout, styling, and alignment. No visual anomalies or inconsistencies were observed.",
+      "actions": [],
+      "screenshotHash": "00018401000100017f015d817f017f817f01841108011ac390c318c798c33086",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL_LEAN"
+    }
+  ]
+}

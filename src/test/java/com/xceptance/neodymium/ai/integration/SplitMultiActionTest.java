@@ -81,11 +81,11 @@ public class SplitMultiActionTest extends BaseAiTest
         // Expect exactly 3 steps to have been executed (split from the original single compound step)
         assertThat(r1)
             .hasStepsCount(3)
-            .step(0, s -> s.hasExpandedInstruction("Click the \"Menu\" button")
+            .step(0, s -> s.hasExpandedInstruction("Click the \"Menu\" button", true)
                            .hasOriginalUnsplitInstruction(steps.trim()))
-            .step(1, s -> s.hasExpandedInstruction("Click the \"Create Account\" link in the dropdown")
+            .step(1, s -> s.hasExpandedInstruction("Click the \"Create Account\" link in the dropdown", true)
                            .hasOriginalUnsplitInstruction(steps.trim()))
-            .step(2, s -> s.hasExpandedInstruction("Verify the text \"Account Form Opened!\" is shown")
+            .step(2, s -> s.hasExpandedInstruction("the text \"Account Form Opened!\" is shown", true)
                            .hasOriginalUnsplitInstruction(steps.trim()));
 
         // Verify the SUT has updated correctly
@@ -122,11 +122,11 @@ public class SplitMultiActionTest extends BaseAiTest
         // Expect exactly 3 steps to have been executed (split from the original single compound step)
         assertThat(r1)
             .hasStepsCount(3)
-            .step(0, s -> s.hasExpandedInstruction("Klicke auf die Schaltfläche \"Menu\"")
+            .step(0, s -> s.hasExpandedInstruction("Klicke auf die Schaltfläche \"Menu\"", true)
                            .hasOriginalUnsplitInstruction(steps.trim()))
-            .step(1, s -> s.hasExpandedInstruction("Klicke auf den Link \"Create Account\" im Dropdown-Menü")
+            .step(1, s -> s.hasExpandedInstruction("Klicke auf den Link \"Create Account\" im Dropdown-Menü", true)
                            .hasOriginalUnsplitInstruction(steps.trim()))
-            .step(2, s -> s.hasExpandedInstruction("Überprüfe, ob der Text \"Account Form Opened!\" angezeigt wird")
+            .step(2, s -> s.hasExpandedInstruction("Überprüfe, ob der Text \"Account Form Opened!\" angezeigt wird", true)
                            .hasOriginalUnsplitInstruction(steps.trim()));
 
         // Verify the SUT has updated correctly

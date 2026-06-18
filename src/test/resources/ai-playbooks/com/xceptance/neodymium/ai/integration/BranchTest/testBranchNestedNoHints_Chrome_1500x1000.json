@@ -1,0 +1,112 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.BranchTest :: testBranchNestedNoHints :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/BranchActionTest/testBranchHappyPath.html?acceptHidden\u003dtrue",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/BranchActionTest/testBranchHappyPath.html?acceptHidden\u003dtrue"
+          ],
+          "description": "Navigate to http://localhost:43377/BranchActionTest/testBranchHappyPath.html?acceptHidden\u003dtrue",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "If the Cookie Banner is visible, then (If the Accept Cookies button is visible, then click it, else click the Main Action Button), else click the Main Action Button",
+      "reasoning": "The instruction specifies a nested conditional action. I\u0027ve created a BRANCH action to check for the \u0027Cookie Banner\u0027. If it\u0027s visible, it proceeds to another BRANCH to check for the \u0027Accept Cookies button\u0027. If the \u0027Accept Cookies button\u0027 is visible, it clicks it; otherwise, it clicks the \u0027Main Action Button\u0027. If the \u0027Cookie Banner\u0027 is not visible, it directly clicks the \u0027Main Action Button\u0027.",
+      "actions": [
+        {
+          "type": "BRANCH",
+          "description": "Conditional logic based on Cookie Banner visibility",
+          "elementContext": {},
+          "replay": "",
+          "condition": [
+            {
+              "type": "ASSERT",
+              "target": "Cookie Banner",
+              "value": [
+                "visible"
+              ],
+              "description": "Check if Cookie Banner is visible",
+              "elementDetails": "Cookie Banner",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "then": [
+            {
+              "type": "BRANCH",
+              "description": "Conditional logic based on Accept Cookies button visibility",
+              "elementContext": {},
+              "replay": "",
+              "condition": [
+                {
+                  "type": "ASSERT",
+                  "target": "Accept Cookies button",
+                  "value": [
+                    "visible"
+                  ],
+                  "description": "Check if Accept Cookies button is visible",
+                  "elementDetails": "Accept Cookies button",
+                  "elementContext": {},
+                  "replay": "",
+                  "adjust": false
+                }
+              ],
+              "then": [
+                {
+                  "type": "CLICK",
+                  "target": "Accept Cookies button",
+                  "description": "Click the Accept Cookies button",
+                  "elementDetails": "Accept Cookies button",
+                  "elementContext": {},
+                  "replay": "",
+                  "adjust": false
+                }
+              ],
+              "else": [
+                {
+                  "type": "CLICK",
+                  "target": "#btn-main-action",
+                  "description": "Click the Main Action Button",
+                  "elementDetails": "Main Action Button",
+                  "elementContext": {},
+                  "replay": "",
+                  "adjust": false
+                }
+              ],
+              "adjust": false
+            }
+          ],
+          "else": [
+            {
+              "type": "CLICK",
+              "target": "#btn-main-action",
+              "description": "Click the Main Action Button",
+              "elementDetails": "Main Action Button",
+              "elementContext": {
+                "text": "Main Action Button",
+                "id": "btn-main-action",
+                "tagName": "button",
+                "type": "submit"
+              },
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

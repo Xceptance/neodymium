@@ -1,0 +1,18 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.ClearCookiesTest :: testClearCookiesDirect :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "CLEAR_COOKIES",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "CLEAR_COOKIES",
+          "description": "Clear cookies",
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

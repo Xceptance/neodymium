@@ -1,0 +1,55 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.BackTest :: testGoBackWithLLMForcedCall :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AssertActionTest/testAssertHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "OPEN http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/TypeActionTest/testTypeHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/TypeActionTest/testTypeHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Let\u0027s go back",
+      "reasoning": "The user wants to navigate back, so the BACK action is appropriate.",
+      "actions": [
+        {
+          "type": "BACK",
+          "description": "Navigate back to the previous page",
+          "elementDetails": "Previous page",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

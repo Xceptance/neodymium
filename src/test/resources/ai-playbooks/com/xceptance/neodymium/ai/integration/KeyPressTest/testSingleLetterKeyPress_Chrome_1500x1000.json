@@ -1,0 +1,101 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.KeyPressTest :: testSingleLetterKeyPress :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/TypeActionTest/keyPressExtended.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/TypeActionTest/keyPressExtended.html"
+          ],
+          "description": "Navigate to http://localhost:43377/TypeActionTest/keyPressExtended.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the single character input field (hint: #char-input)",
+      "reasoning": "",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#char-input",
+          "description": "Click the single character input field",
+          "elementDetails": "single character input field",
+          "elementContext": {
+            "id": "char-input",
+            "placeholder": "Type single letters here",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "Press key \u0027a\u0027",
+      "reasoning": "The instruction is to press the key \u0027a\u0027. The KEY_PRESS action is used with \u0027v\u0027 set to \u0027a\u0027.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "a"
+          ],
+          "description": "Press key \u0027a\u0027",
+          "elementDetails": "key \u0027a\u0027",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Type key \u0027b\u0027",
+      "reasoning": "The instruction is to type the key \u0027b\u0027. The KEY_PRESS action is used with \u0027v\u0027 set to \u0027b\u0027.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "b"
+          ],
+          "description": "Type key \u0027b\u0027",
+          "elementDetails": "key \u0027b\u0027",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Press \u0027c\u0027",
+      "reasoning": "The instruction is to press the \u0027c\u0027 key. The KEY_PRESS action is used with \u0027c\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "c"
+          ],
+          "description": "Press the \u0027c\u0027 key",
+          "elementDetails": "Keyboard",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}
