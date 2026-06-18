@@ -22,11 +22,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.BaseAiTest;
-import com.xceptance.neodymium.ai.AiTestVerification;
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.common.browser.Browser;
@@ -79,11 +79,41 @@ public class AdvancedDomTest extends BaseAiTest
         assertTrue(r1.isSuccess());
         Selenide.$("#shadow-status").shouldHave(Condition.text("Login successful for: admin"));
 
+        assertThat(r1)
+            .hasLlmCalls(3)
+            .hasPesapCalls(3)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasActionsCount(4)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE")
+            .hasAction(2, "TYPE")
+            .hasAction(3, "CLICK")
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(3, s -> s.hasLlmCalls(1).hasPesapCall());
+
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#shadow-status").shouldHave(Condition.text("Login successful for: admin"));
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(4)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE")
+            .hasAction(2, "TYPE")
+            .hasAction(3, "CLICK")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true)
+            .hasStepReplayed(2, true)
+            .hasStepReplayed(3, true);
     }
 
     /**
@@ -104,11 +134,41 @@ public class AdvancedDomTest extends BaseAiTest
         assertTrue(r1.isSuccess());
         Selenide.$("#hover-status").shouldHave(Condition.text("Laptops selected successfully!"));
 
+        assertThat(r1)
+            .hasLlmCalls(3)
+            .hasPesapCalls(3)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasActionsCount(4)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "HOVER")
+            .hasAction(2, "HOVER")
+            .hasAction(3, "CLICK")
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(3, s -> s.hasLlmCalls(1).hasPesapCall());
+
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#hover-status").shouldHave(Condition.text("Laptops selected successfully!"));
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(4)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "HOVER")
+            .hasAction(2, "HOVER")
+            .hasAction(3, "CLICK")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true)
+            .hasStepReplayed(2, true)
+            .hasStepReplayed(3, true);
     }
 
     /**
@@ -128,10 +188,36 @@ public class AdvancedDomTest extends BaseAiTest
         assertTrue(r1.isSuccess());
         Selenide.$("#scroll-status").shouldHave(Condition.text("Achievement Unlocked!"));
 
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasPesapCalls(2)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "SCROLL")
+            .hasAction(2, "CLICK")
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall());
+
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
         assertTrue(r2.isSuccess());
         Selenide.$("#scroll-status").shouldHave(Condition.text("Achievement Unlocked!"));
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "SCROLL")
+            .hasAction(2, "CLICK")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true)
+            .hasStepReplayed(2, true);
     }
 }
