@@ -23,6 +23,7 @@ import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.ai.util.AiAssertions;
 import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.ai.action.plugins.AiMethod;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 import java.math.BigDecimal;
@@ -81,6 +82,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
      *
      * @param args the input and expected values
      */
+    @AiMethod("Local test helper to verify parseLocalizedBigDecimal.")
     public static void assertParsedBigDecimal(final String args)
     {
         final String[] parsed = parseArgs(args);
@@ -95,6 +97,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
      *
      * @param args the input and expected values
      */
+    @AiMethod("Local test helper to verify detectDisplayPrecision.")
     public static void assertDisplayPrecision(final String args)
     {
         final String[] parsed = parseArgs(args);
@@ -109,6 +112,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
      *
      * @param args the input and expected values
      */
+    @AiMethod("Local test helper to verify isNumericOrPrice.")
     public static void assertIsNumericOrPrice(final String args)
     {
         final String[] parsed = parseArgs(args);
@@ -123,6 +127,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
      *
      * @param args the input and expected values
      */
+    @AiMethod("Local test helper to verify normalizeNumericOrPrice.")
     public static void assertNormalizeNumericOrPrice(final String args)
     {
         final String[] parsed = parseArgs(args);

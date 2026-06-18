@@ -47,7 +47,7 @@ public class RefreshAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "REFRESH: refresh the current page."; }
+    public String getPromptInstructions() { return "REFRESH: Refresh the current page."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

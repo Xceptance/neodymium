@@ -63,7 +63,7 @@ public class WaitAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "WAIT: wait for a specified duration or condition (requires v in ms)."; }
+    public String getPromptInstructions() { return "WAIT: Wait for a specified duration in milliseconds or for a specific condition (requires 'v' in ms)."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

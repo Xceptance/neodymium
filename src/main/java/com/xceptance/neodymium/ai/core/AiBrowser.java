@@ -20,6 +20,7 @@ package com.xceptance.neodymium.ai.core;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -63,6 +64,21 @@ public class AiBrowser implements AutoCloseable {
 
     private AiExecutionResult lastExecutionResult;
     private AiTestRunResult lastTestRunResult;
+
+    private final List<Class<?>> dynamicallyRegisteredClasses = new CopyOnWriteArrayList<>();
+
+    public final void registerMethodClass(final Class<?> clazz)
+    {
+        if (clazz != null && !dynamicallyRegisteredClasses.contains(clazz))
+        {
+            dynamicallyRegisteredClasses.add(clazz);
+        }
+    }
+
+    public final List<Class<?>> getDynamicallyRegisteredClasses()
+    {
+        return this.dynamicallyRegisteredClasses;
+    }
 
     /**
      * Creates a new AiBrowser with default configuration.

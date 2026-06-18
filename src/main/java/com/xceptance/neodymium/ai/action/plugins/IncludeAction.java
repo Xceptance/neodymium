@@ -65,7 +65,7 @@ public final class IncludeAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "INCLUDE: Used to execute steps from an external file. Requires target ('tg') set to the path of the file (e.g. 'fragments/login.steps'). Use this action type whenever the instruction asks to '_include' a file path.";
+        return "INCLUDE: Execute test steps from an external file. Requires 'tg' set to the file path (e.g., 'fragments/login.steps'). Use this action type whenever the instruction asks to '_include' a file path.";
     }
 
     @Override

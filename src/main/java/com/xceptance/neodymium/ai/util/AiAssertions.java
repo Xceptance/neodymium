@@ -32,6 +32,7 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xceptance.neodymium.ai.action.plugins.AiMethod;
 import com.xceptance.neodymium.util.Neodymium;
 import jdk.jshell.JShell;
 import jdk.jshell.Snippet;
@@ -48,6 +49,8 @@ import jdk.jshell.SnippetEvent;
  * <p>
  * All methods must be {@code public static} with a single {@code String} parameter (or no
  * parameters) to be callable by the framework's reflection-based invocation.
+ * @author AI-generated: Antigravity
+ * @author Xceptance GmbH 2026
  *
  * @see com.xceptance.neodymium.ai.action.plugins.JavaMethodAction
  */
@@ -72,6 +75,7 @@ public final class AiAssertions
      * @param price the price string to validate (e.g. "$17.99", "€ 12,50")
      * @throws AssertionError if the price is null, empty, contains no digits, or is zero
      */
+    @AiMethod("Asserts that the price string (any locale/currency, e.g. '$17.99', '12,50 €') represents a value strictly greater than zero.")
     public static void assertPriceGreaterThanZero(final String price)
     {
         if (price == null || price.trim().isEmpty())
@@ -110,6 +114,7 @@ public final class AiAssertions
      * @param value the numeric/price string to validate (e.g. "$17.99", "12.50")
      * @throws AssertionError if the value is null, empty, contains no digits, or is zero
      */
+    @AiMethod("Asserts that the numeric/price string represents a value strictly greater than zero.")
     public static void assertGreaterThanZero(final String value)
     {
         assertPriceGreaterThanZero(value);
@@ -121,6 +126,7 @@ public final class AiAssertions
      * 
      * @param jsonArrayStr a JSON array string containing two values (e.g. "[\"Results (10)\", \"Results (15)\"]")
      */
+    @AiMethod("Verifies that the first extracted number is less than or equal to the second. Expects a JSON array with exactly two values (e.g. '[\"10\", \"15\"]').")
     public static void verifyLessOrEqual(final String jsonArrayStr)
     {
         try
@@ -170,6 +176,7 @@ public final class AiAssertions
      * @throws IllegalArgumentException if the input text is null or empty
      * @throws NumberFormatException if the number cannot be resolved
      */
+    @AiMethod("Parses a localized number string using the active Neodymium locale configuration.")
     public static BigDecimal parseLocalizedBigDecimal(final String text)
     {
         String localeStr = null;
@@ -431,6 +438,7 @@ public final class AiAssertions
      *
      * @param args arguments string (e.g. "14,96 €, 0.00" or "[\"15.00\", \"10.00\"]")
      */
+    @AiMethod("Asserts that the first number is strictly greater than the second. Expects a comma-separated string or a JSON array of two values (e.g. '15.00, 10.00' or '[\"15.00\", \"10.00\"]').")
     public static void assertNumberGreaterThan(final String args)
     {
         final String[] parsedArgs = parseTwoArguments(args, "assertNumberGreaterThan");
@@ -449,6 +457,7 @@ public final class AiAssertions
      *
      * @param args arguments string (e.g. "14,96 €, 14.00" or "[\"15.00\", \"15.00\"]")
      */
+    @AiMethod("Asserts that the first number is greater than or equal to the second. Expects a comma-separated string or a JSON array of two values (e.g. '15.00, 15.00' or '[\"15.00\", \"15.00\"]').")
     public static void assertNumberGreaterThanOrEqual(final String args)
     {
         final String[] parsedArgs = parseTwoArguments(args, "assertNumberGreaterThanOrEqual");
@@ -467,6 +476,7 @@ public final class AiAssertions
      *
      * @param args arguments string (e.g. "14,96 €, 20.00" or "[\"5.00\", \"10.00\"]")
      */
+    @AiMethod("Asserts that the first number is strictly less than the second. Expects a comma-separated string or a JSON array of two values (e.g. '10.00, 15.00' or '[\"10.00\", \"15.00\"]').")
     public static void assertNumberLessThan(final String args)
     {
         final String[] parsedArgs = parseTwoArguments(args, "assertNumberLessThan");
@@ -485,6 +495,7 @@ public final class AiAssertions
      *
      * @param args arguments string (e.g. "14,96 €, 15.00" or "[\"10.00\", \"10.00\"]")
      */
+    @AiMethod("Asserts that the first number is less than or equal to the second. Expects two values.")
     public static void assertNumberLessThanOrEqual(final String args)
     {
         final String[] parsedArgs = parseTwoArguments(args, "assertNumberLessThanOrEqual");
@@ -503,6 +514,7 @@ public final class AiAssertions
      *
      * @param args arguments string (e.g. "14,96 €, 14.96" or "[\"10.00\", \"10.00\"]")
      */
+    @AiMethod("Asserts that the first number is equal to the second. Expects two values.")
     public static void assertNumbersEqual(final String args)
     {
         final String[] parsedArgs = parseTwoArguments(args, "assertNumbersEqual");
@@ -571,6 +583,7 @@ public final class AiAssertions
      * @param args arguments string (e.g. "ORD-12345, ^ORD-[0-9]{5}$" or "[\"ORD-12345\", \"^ORD-[0-9]{5}$\"]")
      * @throws AssertionError if the arguments are invalid, the regex pattern is malformed, or the value does not match the pattern
      */
+    @AiMethod("Asserts that the provided value matches the given regular expression pattern. Expects two values (e.g. 'ORD-123, ^ORD-[0-9]').")
     public static void assertMatchesRegex(final String args)
     {
         final String[] parsedArgs = parseRegexArguments(args, "assertMatchesRegex");
@@ -603,6 +616,7 @@ public final class AiAssertions
      *                        fails to parse, or is mathematically inconsistent
      * @throws SecurityException if the equation fails the safety guardrail check
      */
+    @AiMethod("Asserts that the provided mathematical equation is correct within an allowed tolerance of 0.02. Expects an equation (e.g. '0,90 € = (14,96 € + 0,00 €) * 6,00%').")
     public static void assertCalculation(final String equation)
     {
         if (equation == null || equation.trim().isEmpty())
@@ -672,6 +686,7 @@ public final class AiAssertions
      * @param text the side of the equation to inspect
      * @return the number of decimal places detected (0 for integers)
      */
+    @AiMethod("Detects the precision (number of decimal places) from the displayed numeric value on the LHS.")
     public static int detectDisplayPrecision(final String text)
     {
         if (text == null)
@@ -890,6 +905,7 @@ public final class AiAssertions
      * @param text the input string to evaluate
      * @return {@code true} if the text represents a numeric or price value; {@code false} otherwise
      */
+    @AiMethod("Generically determines whether the provided text represents a numeric or price value.")
     public static boolean isNumericOrPrice(final String text)
     {
         if (text == null)
@@ -1002,6 +1018,7 @@ public final class AiAssertions
      * @param text the input string to normalize
      * @return the normalized US decimal string, or the original text if not a number/price
      */
+    @AiMethod("Generically normalizes a localized numeric or price string to standard US decimal format.")
     public static String normalizeNumericOrPrice(final String text)
     {
         if (!isNumericOrPrice(text))
