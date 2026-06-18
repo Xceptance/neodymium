@@ -51,6 +51,7 @@ public class CheckTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/CheckActionTest/testCheckHappyPath.html", server.getPort());
         Neodymium.getData().put("check.test.url", this.url);
     }

@@ -49,6 +49,7 @@ public final class FormInteractionsTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.formsUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/forms.html", server.getPort());
         Neodymium.getData().put("form.test.url", this.formsUrl);
     }

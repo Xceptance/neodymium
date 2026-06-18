@@ -51,6 +51,7 @@ public class TypeTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
         Neodymium.getData().put("type.test.url", this.url);
     }

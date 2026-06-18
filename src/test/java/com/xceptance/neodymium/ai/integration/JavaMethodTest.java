@@ -179,6 +179,7 @@ public class JavaMethodTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
         this.storeUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/homepage-normal.html", server.getPort());
         Neodymium.getData().put("javaMethod.test.url", this.url);

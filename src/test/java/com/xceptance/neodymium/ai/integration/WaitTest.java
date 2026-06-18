@@ -51,6 +51,7 @@ public class WaitTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/WaitActionTest/testWaitHappyPath.html", server.getPort());
         Neodymium.getData().put("wait.test.url", this.url);
     }

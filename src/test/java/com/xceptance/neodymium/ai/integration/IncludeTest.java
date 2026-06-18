@@ -54,6 +54,7 @@ public class IncludeTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         final String url = String.format("http://localhost:%d/IncludeTest/testInclude.html", server.getPort());
         Neodymium.getData().put("include.test.url", url);
         Neodymium.getData().put("neodymium.classpathResourcePath", "com/xceptance/neodymium/ai/integration/IncludeTest.yaml");

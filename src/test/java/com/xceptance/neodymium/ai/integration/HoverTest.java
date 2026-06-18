@@ -51,6 +51,7 @@ public class HoverTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/HoverActionTest/testHoverDropdown.html", server.getPort());
         Neodymium.getData().put("hover.test.url", this.url);
     }

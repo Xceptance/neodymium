@@ -51,6 +51,7 @@ public class ClearTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
         Neodymium.getData().put("clear.test.url", this.url);
     }

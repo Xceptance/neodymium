@@ -51,6 +51,7 @@ public class ClickTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/ClickActionTest/testClickStandardButton.html", server.getPort());
         Neodymium.getData().put("click.test.url", this.url);
     }

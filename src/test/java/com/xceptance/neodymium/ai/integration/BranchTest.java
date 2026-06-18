@@ -50,6 +50,7 @@ public class BranchTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         final String url = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
         Neodymium.getData().put("branch.test.url", url);
     }

@@ -52,6 +52,7 @@ public class SplittableBranchTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/SplittableBranchTest/testSplittableBranch.html", server.getPort());
         Neodymium.getData().put("splittable.branch.url", this.url);
     }

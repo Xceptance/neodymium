@@ -52,6 +52,7 @@ public class PositionalChallengesTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/PositionalChallengesTest/testPositionalChallenges.html", server.getPort());
         Neodymium.getData().put("positional.test.url", this.url);
     }
