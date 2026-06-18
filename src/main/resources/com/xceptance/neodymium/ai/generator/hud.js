@@ -50,7 +50,11 @@
         window.neoHudAction = null;
         window.neoSubmitAction = function(actionObj) {
             window.neoHudAction = JSON.stringify(actionObj);
-            if (window.neoMinimizeHud && actionObj.action !== 'SETTINGS') window.neoMinimizeHud();
+            if (window.neoMinimizeHud) {
+                var shouldMinimize = false;
+                if (window.neoHudAutoSkip && actionObj.action === 'APPROVE') shouldMinimize = true;
+                if (shouldMinimize) window.neoMinimizeHud();
+            }
         };
         window.neoHudAutoSkip = autoSkip;
         
@@ -62,11 +66,17 @@
             if (window.neoHudAutoSkip) {
                 if (autoSkipIcon) autoSkipIcon.innerText = '⏸️';
                 if (autoSkipText) autoSkipText.innerText = 'Pause';
-                if (autoSkipBtn) autoSkipBtn.style.background = '#FF9800';
+                if (autoSkipBtn) {
+                    autoSkipBtn.classList.add('neo-btn-warning');
+                    autoSkipBtn.style.background = '';
+                }
             } else {
                 if (autoSkipIcon) autoSkipIcon.innerText = '⏩';
                 if (autoSkipText) autoSkipText.innerText = 'Fast-Forward';
-                if (autoSkipBtn) autoSkipBtn.style.background = '#4CAF50';
+                if (autoSkipBtn) {
+                    autoSkipBtn.classList.remove('neo-btn-warning');
+                    autoSkipBtn.style.background = '';
+                }
             }
         };
         window.updateAutoSkipBtn();
@@ -193,10 +203,10 @@
                 
                 var w = moveTargets[0].offsetWidth || 40;
                 var h = moveTargets[0].offsetHeight || 40;
-                if (newRight < 0) newRight = 0;
-                if (newBottom < 0) newBottom = 0;
-                if (newRight + w > window.innerWidth) newRight = window.innerWidth - w;
-                if (newBottom + h > window.innerHeight) newBottom = window.innerHeight - h;
+                if (newRight < 20) newRight = 20;
+                if (newBottom < 20) newBottom = 20;
+                if (newRight + w > window.innerWidth - 20) newRight = window.innerWidth - w - 20;
+                if (newBottom + h > window.innerHeight - 20) newBottom = window.innerHeight - h - 20;
                 
                 moveTargets.forEach(function(target) {
                     target.style.right = newRight + 'px';
@@ -204,6 +214,17 @@
                     target.style.left = 'auto';
                     target.style.top = 'auto';
                 });
+                
+                var helpOverlay = document.getElementById('neo-help-overlay');
+                if (helpOverlay) {
+                    helpOverlay.style.right = (newRight + 405) + 'px';
+                    helpOverlay.style.bottom = newBottom + 'px';
+                }
+                var bindingsDrawer = document.getElementById('bindingsDrawer');
+                if (bindingsDrawer) {
+                    bindingsDrawer.style.right = (newRight + 405) + 'px';
+                    bindingsDrawer.style.bottom = newBottom + 'px';
+                }
                 
                 setSessionStorage('neoHudPosRight', newRight + 'px');
                 setSessionStorage('neoHudPosBottom', newBottom + 'px');
@@ -366,7 +387,7 @@
                                 valHtml = '<span style="color:#888;">' + resolveValue(window.neoDataBindings[key]) + '</span>';
                             } else {
                                 var safeVal = window.neoDataBindings[key] ? window.neoDataBindings[key].replace(/"/g, '&quot;') : '';
-                                valHtml = '<input type="text" class="neo-binding-input" data-key="' + key + '" value="' + safeVal + '" style="width:100%; box-sizing:border-box; background:#333; color:#fff; border:1px solid #555; padding:2px; border-radius:2px;">';
+                                valHtml = '<input type="text" class="neo-binding-input neo-input" data-key="' + key + '" value="' + safeVal + '" style="width:100%; box-sizing:border-box; background:var(--input-bg); color:var(--text-primary); border:1px solid var(--border-color); padding:4px 6px; border-radius:4px;">';
                             }
                             tr.innerHTML = '<td style="padding:4px 5px; font-weight:bold; width:30%;">' + key + '</td><td style="padding:4px 5px; width:70%;">' + valHtml + '</td>';
                             bindingsTbody.appendChild(tr);
@@ -400,10 +421,12 @@
                 
                 renderTable();
                 
-                // Allow table to grow up to a large height and expand HUD top dynamically
-                document.getElementById('neo-ai-hud').style.width = '600px';
+                // Allow table to grow up to a large height
                 document.getElementById('neo-bindings-container').style.maxHeight = 'none';
-                document.getElementById('neo-hud-content').style.maxHeight = 'none';
+                
+                document.getElementById('bindingsDrawer').style.display = 'flex';
+                document.getElementById('neo-toolbar-controls').style.display = 'none';
+                document.getElementById('neo-edit-toolbar').style.display = 'flex';
                 
                 editOverlay.style.display = 'flex';
                 editInput.focus();
@@ -411,9 +434,11 @@
         });
 
         document.getElementById('neo-edit-cancel-btn').addEventListener('click', function() {
-            document.getElementById('neo-ai-hud').style.width = '350px';
+            document.getElementById('bindingsDrawer').style.display = 'none';
+            document.getElementById('neo-toolbar-controls').style.display = 'flex';
+            document.getElementById('neo-edit-toolbar').style.display = 'none';
+            
             document.getElementById('neo-bindings-container').style.maxHeight = '100px';
-            document.getElementById('neo-hud-content').style.maxHeight = '400px';
             editOverlay.style.display = 'none';
         });
 
@@ -429,14 +454,16 @@
                 var pIdx = (performed && performed.length > 0) ? performed.length : 0;
                 window.neoSubmitAction({ action: "EDIT", instruction: newInstr.trim(), index: pIdx, bindings: updatedBindings });
                 
-                document.getElementById('neo-ai-hud').style.width = '350px';
+                document.getElementById('bindingsDrawer').style.display = 'none';
+                document.getElementById('neo-toolbar-controls').style.display = 'flex';
+                document.getElementById('neo-edit-toolbar').style.display = 'none';
                 document.getElementById('neo-bindings-container').style.maxHeight = '100px';
-                document.getElementById('neo-hud-content').style.maxHeight = '400px';
                 editOverlay.style.display = 'none';
             } else {
-                document.getElementById('neo-ai-hud').style.width = '350px';
+                document.getElementById('bindingsDrawer').style.display = 'none';
+                document.getElementById('neo-toolbar-controls').style.display = 'flex';
+                document.getElementById('neo-edit-toolbar').style.display = 'none';
                 document.getElementById('neo-bindings-container').style.maxHeight = '100px';
-                document.getElementById('neo-hud-content').style.maxHeight = '400px';
                 editOverlay.style.display = 'none';
             }
         });
@@ -541,15 +568,9 @@
             }
             if (settingsObj.theme) {
                 if (settingsObj.theme === 'light') {
-                    container.style.setProperty('--bg-main', 'rgba(255, 255, 255, 0.95)');
-                    container.style.setProperty('--text-primary', '#333');
-                    container.style.setProperty('--text-secondary', '#666');
-                    container.style.setProperty('--border-color', 'rgba(0,0,0,0.1)');
+                    container.classList.add('light-theme');
                 } else {
-                    container.style.setProperty('--bg-main', 'rgba(30, 30, 30, 0.95)');
-                    container.style.setProperty('--text-primary', '#e0e0e0');
-                    container.style.setProperty('--text-secondary', '#aaa');
-                    container.style.setProperty('--border-color', '#333');
+                    container.classList.remove('light-theme');
                 }
             }
         };
@@ -615,18 +636,54 @@
                 }
             }
         }, true);
+        window.neoDragStart = function(e, idx) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', idx);
+            e.target.style.opacity = '0.4';
+            window.neoDraggedItem = e.target;
+        };
+        window.neoDragOver = function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        };
+        window.neoDragEnter = function(e) {
+            e.preventDefault();
+            var target = e.target.closest('.neo-step-item');
+            if (target && target !== window.neoDraggedItem) target.classList.add('drag-over');
+        };
+        window.neoDragLeave = function(e) {
+            var target = e.target.closest('.neo-step-item');
+            if (target) target.classList.remove('drag-over');
+        };
+        window.neoDrop = function(e, targetIdx) {
+            e.stopPropagation();
+            var target = e.target.closest('.neo-step-item');
+            if (target) target.classList.remove('drag-over');
+            var sourceIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+            if (sourceIdx !== targetIdx && !isNaN(sourceIdx)) {
+                window.neoSubmitAction({ action: "REORDER", from: sourceIdx, to: targetIdx });
+            }
+            return false;
+        };
+        window.neoDragEnd = function(e) {
+            e.target.style.opacity = '1';
+            var items = document.querySelectorAll('.neo-step-item');
+            for(var i = 0; i < items.length; i++) items[i].classList.remove('drag-over');
+        };
 
         window.neoRenderFullPrompt = function() {
-            var table = document.getElementById('neo-full-prompt-table');
-            if (!table) return;
+            var historyContainer = document.getElementById('neo-history-table');
+            var futureContainer = document.getElementById('neo-future-table');
+            if (!historyContainer || !futureContainer) return;
             
             window.neoCurrentRenderedSteps = [];
             
             if (!window.neoBpListenerAttached) {
-                table.addEventListener('click', function(e) {
-                    var td = e.target.closest('td.neo-bp-col');
-                    if (td) {
-                        var idxInList = parseInt(td.getAttribute('data-idx'));
+                var handler = function(e) {
+                    var marker = e.target.closest('.neo-bp-marker');
+                    if (marker) {
+                        var idxInList = parseInt(marker.getAttribute('data-idx'));
                         if (!isNaN(idxInList)) {
                             if (!window.neoBreakpoints) window.neoBreakpoints = [];
                             var bpIdx = window.neoBreakpoints.indexOf(idxInList);
@@ -639,20 +696,14 @@
                             window.neoRenderFullPrompt();
                         }
                     }
-                });
+                };
+                historyContainer.addEventListener('click', handler);
+                futureContainer.addEventListener('click', handler);
                 window.neoBpListenerAttached = true;
             }
 
-            var html = '';
             var pList = window.neoPerformedList || [];
             var aList = window.neoPlannedList || [];
-
-            function getStatusIcon(statusStr) {
-                if (statusStr === 'error') return '<span style="color:#f44336; font-size:14px; font-weight:bold;">✕</span>';
-                if (statusStr === 'pending') return '<span style="color:#2196F3; font-size:14px; font-weight:bold;">➔</span>';
-                if (statusStr === 'done') return '<span style="color:#4CAF50; font-size:14px; font-weight:bold;">✓</span>';
-                return '';
-            }
 
             function escapeHtml(unsafe) {
                 return (unsafe || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -662,85 +713,154 @@
                 return text ? text.replace(/^⚠️\s*/, '') : '';
             }
 
-            function genRow(stepText, statusStr, isCurrent) {
+            function genItem(stepText, statusStr) {
                 var cleanText = getCleanStepText(stepText);
                 var stepIdx = window.neoCurrentRenderedSteps.length;
                 window.neoCurrentRenderedSteps.push(cleanText);
                 
                 var isBp = window.neoBreakpoints && window.neoBreakpoints.indexOf(stepIdx) !== -1;
-                var bpDisplay = isBp ? '🛑' : '<span style="opacity:0.2;">⚪</span>';
+                var bpDisplay = isBp ? '🛑' : '⚪';
+                var bpOpacity = isBp ? '1' : '0.15';
                 
-                var rowStyle = 'border-bottom:1px solid #333;';
-                if (isCurrent) {
-                    rowStyle += ' background:#333; border-left:3px solid #2196F3; font-weight:bold;';
-                } else if (statusStr === 'done') {
-                    rowStyle += ' color:#888; border-left:2px solid #555;';
-                } else {
-                    rowStyle += ' color:#aaa; border-left:2px solid #444;';
+                var classNames = 'neo-step-item';
+                if (statusStr === 'done') {
+                    classNames += ' completed';
                 }
-
-                return '<tr style="' + rowStyle + '">' +
-                       '<td class="neo-bp-col" data-idx="' + stepIdx + '" style="width:25px; text-align:center; padding:6px; cursor:pointer;" title="Click to toggle breakpoint">' + bpDisplay + '</td>' +
-                       '<td style="padding:6px; word-break:break-word;">' + escapeHtml(stepText) + '</td>' +
-                       '<td style="width:25px; text-align:center; padding:6px;">' + getStatusIcon(statusStr) + '</td>' +
-                       '</tr>';
+                if (stepText.indexOf('// [SKIPPED]') !== -1) {
+                    classNames += ' skipped';
+                    cleanText = cleanText.replace('// [SKIPPED] ', '');
+                    stepText = stepText.replace('// [SKIPPED] ', '');
+                }
+                
+                return '<div class="' + classNames + '" style="margin-bottom: 8px;" draggable="true" ondragstart="window.neoDragStart(event, ' + stepIdx + ')" ondragover="window.neoDragOver(event)" ondragenter="window.neoDragEnter(event)" ondragleave="window.neoDragLeave(event)" ondrop="window.neoDrop(event, ' + stepIdx + ')" ondragend="window.neoDragEnd(event)">' +
+                       '<div style="display: flex; align-items: center;">' +
+                       '<div class="neo-step-drag-handle" style="cursor: grab; margin-right: 8px; opacity: 0.3;" title="Drag to reorder">☰</div>' +
+                       '<span class="neo-bp-marker" data-idx="' + stepIdx + '" style="opacity: ' + bpOpacity + '; cursor: pointer; font-size: 13px; font-weight: bold; margin-right: 8px; user-select: none;" title="Toggle breakpoint">' + bpDisplay + '</span>' +
+                       '<div class="neo-step-indicator">' + (stepIdx + 1) + '</div>' +
+                       '<div class="neo-step-content">' + escapeHtml(stepText) + '</div>' +
+                       '</div></div>';
             }
 
+            var histHtml = '';
             if (pList && pList.length > 0) {
-                pList.forEach(function(step) {
-                    html += genRow(step, 'done', false);
-                });
+                for (var i = 0; i < pList.length; i++) {
+                    histHtml += genItem(pList[i], 'done');
+                }
             }
-            
+            historyContainer.innerHTML = histHtml;
+
+            var futHtml = '';
             if (aList && aList.length > 0) {
-                var currentStep = aList[0];
-                var status = currentStep.startsWith('⚠️') ? 'error' : 'pending';
-                html += genRow(currentStep, status, true);
+                var activeIdx = window.neoCurrentRenderedSteps.length;
+                window.neoCurrentRenderedSteps.push(getCleanStepText(aList[0])); // increment index for the active step so future steps have correct numbers
+                
+                var activeElem = document.querySelector('.neo-step-item.active');
+                if (activeElem) {
+                    activeElem.setAttribute('draggable', 'true');
+                    activeElem.setAttribute('ondragstart', 'window.neoDragStart(event, ' + activeIdx + ')');
+                    activeElem.setAttribute('ondragover', 'window.neoDragOver(event)');
+                    activeElem.setAttribute('ondragenter', 'window.neoDragEnter(event)');
+                    activeElem.setAttribute('ondragleave', 'window.neoDragLeave(event)');
+                    activeElem.setAttribute('ondrop', 'window.neoDrop(event, ' + activeIdx + ')');
+                    activeElem.setAttribute('ondragend', 'window.neoDragEnd(event)');
+                    
+                    if (!activeElem.querySelector('.neo-step-drag-handle')) {
+                        var normalView = document.getElementById('neo-active-step-normal-view');
+                        if (normalView) {
+                            var dragHandle = document.createElement('div');
+                            dragHandle.className = 'neo-step-drag-handle';
+                            dragHandle.style.cssText = 'cursor: grab; margin-right: 8px; opacity: 0.3;';
+                            dragHandle.title = 'Drag to reorder';
+                            dragHandle.innerText = '☰';
+                            normalView.insertBefore(dragHandle, normalView.firstChild);
+                        }
+                    }
+                }
                 
                 if (aList.length > 1) {
-                    aList.slice(1).forEach(function(step) {
-                        html += genRow(step, '', false);
-                    });
+                    for (var j = 1; j < aList.length; j++) {
+                        futHtml += genItem(aList[j], 'pending');
+                    }
                 }
             }
-            table.innerHTML = html;
+            futureContainer.innerHTML = futHtml;
         };
 
         window.neoToggleFullPrompt = function() {
-            var overlay = document.getElementById('neo-full-prompt-overlay');
+            var historyOverlay = document.getElementById('neo-history-overlay');
+            var futureOverlay = document.getElementById('neo-future-overlay');
             var btn = document.getElementById('neo-full-prompt-btn');
+            var plannedContainer = document.getElementById('neo-planned-actions');
             
             if (window.neoFullPromptOpen) {
-                overlay.style.display = 'none';
+                historyOverlay.style.display = 'none';
+                futureOverlay.style.display = 'none';
+                if (plannedContainer) plannedContainer.style.display = 'block';
+                btn.classList.remove('neo-btn-primary');
+                document.getElementById('neo-ai-hud').classList.remove('expanded');
                 btn.innerHTML = '▲ Show Full Prompt ▲';
                 window.neoFullPromptOpen = false;
-                setSessionStorage('neoFullPromptOpen', 'false');
             } else {
                 window.neoRenderFullPrompt();
-                overlay.style.display = 'flex';
+                historyOverlay.style.display = 'flex';
+                futureOverlay.style.display = 'flex';
+                // we leave plannedContainer visible so it's sandwiched between history and future
+                btn.classList.add('neo-btn-primary');
+                document.getElementById('neo-ai-hud').classList.add('expanded');
                 btn.innerHTML = '▼ Hide Full Prompt ▼';
                 window.neoFullPromptOpen = true;
-                setSessionStorage('neoFullPromptOpen', 'true');
             }
-            
             setTimeout(function() {
-                var hud = document.getElementById('neo-ai-hud');
-                if (!hud) return;
-                var rect = hud.getBoundingClientRect();
-                var currentBottom = parseFloat(hud.style.bottom) || 20;
-                
-                if (currentBottom + rect.height > window.innerHeight) {
-                    var newBottom = window.innerHeight - rect.height;
-                    if (newBottom < 0) newBottom = 0;
-                    hud.style.bottom = newBottom + 'px';
-                    setSessionStorage('neoHudPosBottom', newBottom + 'px');
-                    var minCircle = document.getElementById('neo-min-circle');
-                    if (minCircle) minCircle.style.bottom = newBottom + 'px';
-                }
+                if (window.neoClampHudViewport) window.neoClampHudViewport();
             }, 10);
         };
 
+        window.neoClampHudViewport = function() {
+            var hud = document.getElementById('neo-ai-hud');
+            if (hud && hud.style.display !== 'none') {
+                var rect = hud.getBoundingClientRect();
+                var currentRight = parseFloat(hud.style.right) || 20;
+                var currentBottom = parseFloat(hud.style.bottom) || 20;
+                
+                var maxRight = window.innerWidth - rect.width - 20;
+                var maxBottom = window.innerHeight - rect.height - 20;
+                
+                var newRight = currentRight;
+                var newBottom = currentBottom;
+                
+                if (newRight > maxRight) newRight = maxRight;
+                if (newRight < 20) newRight = 20;
+                if (newBottom > maxBottom) newBottom = maxBottom;
+                if (newBottom < 20) newBottom = 20;
+                
+                if (newRight !== currentRight || newBottom !== currentBottom) {
+                    hud.style.right = newRight + 'px';
+                    hud.style.bottom = newBottom + 'px';
+                    setSessionStorage('neoHudPosRight', newRight + 'px');
+                    setSessionStorage('neoHudPosBottom', newBottom + 'px');
+                    
+                    var minCircle = document.getElementById('neo-min-circle');
+                    if (minCircle) {
+                        minCircle.style.right = newRight + 'px';
+                        minCircle.style.bottom = newBottom + 'px';
+                    }
+                    var helpOverlay = document.getElementById('neo-help-overlay');
+                    if (helpOverlay) {
+                        helpOverlay.style.right = (newRight + 405) + 'px';
+                        helpOverlay.style.bottom = newBottom + 'px';
+                    }
+                    var bindingsDrawer = document.getElementById('bindingsDrawer');
+                    if (bindingsDrawer) {
+                        bindingsDrawer.style.right = (newRight + 405) + 'px';
+                        bindingsDrawer.style.bottom = newBottom + 'px';
+                    }
+                }
+            }
+        };
+
         document.getElementById('neo-full-prompt-btn').addEventListener('click', window.neoToggleFullPrompt);
+        
+        window.addEventListener('resize', window.neoClampHudViewport);
     }
 
     window.neoPerformedList = performed;
@@ -765,6 +885,10 @@
         var b = getSessionStorage('neoHudPosBottom');
         if (currentHud) { currentHud.style.right = r; currentHud.style.bottom = b; currentHud.style.left = 'auto'; currentHud.style.top = 'auto'; }
         if (minCircle) { minCircle.style.right = r; minCircle.style.bottom = b; minCircle.style.left = 'auto'; minCircle.style.top = 'auto'; }
+        var hOverlay = document.getElementById('neo-help-overlay');
+        var bDrawer = document.getElementById('bindingsDrawer');
+        if (hOverlay) { hOverlay.style.right = (parseFloat(r) + 405) + 'px'; hOverlay.style.bottom = b; }
+        if (bDrawer) { bDrawer.style.right = (parseFloat(r) + 385) + 'px'; bDrawer.style.bottom = b; }
     }
 
     var currentNextAction = (window.neoPlannedList && window.neoPlannedList.length > 0) ? window.neoPlannedList[0] : '';
@@ -796,10 +920,17 @@
 
     if (window.neoFullPromptOpen && window.neoRenderFullPrompt) {
         window.neoRenderFullPrompt();
-        var overlay = document.getElementById('neo-full-prompt-overlay');
+        var historyOverlay = document.getElementById('neo-history-overlay');
+        var futureOverlay = document.getElementById('neo-future-overlay');
         var btn = document.getElementById('neo-full-prompt-btn');
-        if (overlay) overlay.style.display = 'flex';
-        if (btn) btn.innerHTML = '▼ Hide Full Prompt ▼';
+        var rHud = document.getElementById('neo-ai-hud');
+        if (historyOverlay) historyOverlay.style.display = 'flex';
+        if (futureOverlay) futureOverlay.style.display = 'flex';
+        if (rHud) rHud.classList.add('expanded');
+        if (btn) {
+            btn.classList.add('neo-btn-primary');
+            btn.innerHTML = '▼ Hide Full Prompt ▼';
+        }
     }
 
 
@@ -860,14 +991,16 @@
         }
 
         if (isFinished) {
-            approveBtn.innerHTML = '💾';
+            approveBtn.innerHTML = '<i class="fa-solid fa-save"></i> Save & Exit';
             approveBtn.title = 'Save & Exit';
-            approveBtn.style.background = '#2196F3';
+            approveBtn.classList.add('neo-btn-primary');
+            approveBtn.style.background = ''; // remove any inline
             approveBtn.dataset.isFinished = 'true';
         } else {
-            approveBtn.innerHTML = '✓';
-            approveBtn.title = 'Approve [Ctrl+Enter or Alt+A]';
-            approveBtn.style.background = '#4CAF50';
+            approveBtn.innerHTML = '<i class="fa-solid fa-play"></i> Run';
+            approveBtn.title = 'Run current active step only and pause';
+            approveBtn.classList.remove('neo-btn-primary');
+            approveBtn.style.background = ''; // use CSS styling
             approveBtn.dataset.isFinished = 'false';
         }
 

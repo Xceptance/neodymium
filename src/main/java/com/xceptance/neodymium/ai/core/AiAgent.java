@@ -2386,23 +2386,20 @@ public class AiAgent {
         else if (HudActionType.ADD == e.actionType)
         {
             final String newInstr = e.instruction;
-            stepsList.add(i, newInstr);
-            if (i >= 0 && i <= stepLines.size())
+            stepsList.add(newInstr);
+            stepLines.add(null);
+            if (result != null)
             {
-                stepLines.add(i, null);
-            }
-            if (result != null && result.getSteps().size() >= i)
-            {
-                result.getSteps().add(i, new StepDetails(newInstr));
+                result.getSteps().add(new StepDetails(newInstr));
             }
 
             final Playbook playbook = Neodymium.getAiPlaybook();
-            if (playbook != null && playbook.getSteps().size() >= i)
+            if (playbook != null)
             {
                 final PlaybookStep emptyStep = new PlaybookStep();
                 emptyStep.setPromptLine(newInstr);
                 emptyStep.setReasoning("Manually added by user via HUD");
-                playbook.getSteps().add(i, emptyStep);
+                playbook.getSteps().add(emptyStep);
                 playbook.setRecording(true);
                 playbook.setChanged(true);
             }
@@ -2541,6 +2538,7 @@ public class AiAgent {
             {
                 result.getSteps().remove(i);
             }
+            performedInstructions.add("// [SKIPPED] " + step);
             return i - 1;
         }
 
