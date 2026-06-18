@@ -40,7 +40,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@Tag("sandbox")
+@Tag("dom")
 @Tag("integration")
 @Tag("llm")
 public class AdvancedDomTest extends BaseAiTest
