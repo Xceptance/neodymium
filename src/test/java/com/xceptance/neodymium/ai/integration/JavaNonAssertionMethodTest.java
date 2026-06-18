@@ -181,6 +181,17 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
             .hasDirectParses(2)
             .hasActionsCount(2);
 
+        this.resetBrowser();
+
+        Neodymium.getData().put("locale", "de-DE");
+        final AiExecutionResult r1Replay = runAi(successSteps, VerificationMode.OFFLINE_REPLAY);
+        assertThat(r1Replay)
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2);
+
+        this.resetBrowser();
+
         final String failingSteps = """
                 OPEN ${javaMethod.test.url}
                 java: parseLocalizedBigDecimal("abc")
@@ -209,6 +220,14 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
         assertThat(r)
             .hasDirectParses(7)
             .hasActionsCount(7);
+
+        this.resetBrowser();
+
+        final AiExecutionResult rReplay = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertThat(rReplay)
+            .hasDirectParses(0)
+            .hasReplays(7)
+            .hasActionsCount(7);
     }
 
     /**
@@ -223,7 +242,19 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
                 OPEN ${javaMethod.test.url}
                 java: assertParsedBigDecimal("1.234,56, 1234.56")
             """;
-        runAi(germanSteps, VerificationMode.LIVE_LLM);
+        final AiExecutionResult rGerman = runAi(germanSteps, VerificationMode.LIVE_LLM);
+        assertThat(rGerman)
+            .hasDirectParses(2)
+            .hasActionsCount(2);
+
+        this.resetBrowser();
+
+        Neodymium.getData().put("locale", "de-DE");
+        final AiExecutionResult rGermanReplay = runAi(germanSteps, VerificationMode.OFFLINE_REPLAY);
+        assertThat(rGermanReplay)
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2);
 
         this.resetBrowser();
 
@@ -233,6 +264,18 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
                 OPEN ${javaMethod.test.url}
                 java: assertParsedBigDecimal("1,234.56, 1234.56")
             """;
-        runAi(usSteps, VerificationMode.LIVE_LLM);
+        final AiExecutionResult rUs = runAi(usSteps, VerificationMode.LIVE_LLM);
+        assertThat(rUs)
+            .hasDirectParses(2)
+            .hasActionsCount(2);
+
+        this.resetBrowser();
+
+        Neodymium.getData().put("locale", "en-US");
+        final AiExecutionResult rUsReplay = runAi(usSteps, VerificationMode.OFFLINE_REPLAY);
+        assertThat(rUsReplay)
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2);
     }
 }

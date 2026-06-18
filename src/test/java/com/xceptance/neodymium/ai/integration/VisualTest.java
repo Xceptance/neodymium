@@ -68,10 +68,11 @@ public class VisualTest extends BaseAiTest
     @NeodymiumTest
     public final void test_VisualVerification_Positive()
     {
-        final AiExecutionResult r1 = runAi("""
+        final String steps = """
                 OPEN ${posters.storefront.url}
                 A bear is shown on the right side (visual)
-            """, VerificationMode.LIVE_LLM);
+            """;
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasPesapCalls(1)
@@ -87,6 +88,19 @@ public class VisualTest extends BaseAiTest
 
         // no actions, LLM identified things on its own
         assertEquals(0, s.getActions().size());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(1)
+            .hasAction(0, "NAVIGATE")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true);
     }
 
 
@@ -96,10 +110,11 @@ public class VisualTest extends BaseAiTest
     @NeodymiumTest
     public final void test_VisualVerification_IndirectPositive()
     {
-        final AiExecutionResult r1 = runAi("""
+        final String steps = """
                 OPEN ${posters.storefront.url}
                 There is no fox visible (visual) and there is no red button either
-            """, VerificationMode.LIVE_LLM);
+            """;
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasPesapCalls(1)
@@ -115,6 +130,19 @@ public class VisualTest extends BaseAiTest
 
         // no actions, LLM identified things on its own
         assertEquals(0, s.getActions().size());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(1)
+            .hasAction(0, "NAVIGATE")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true);
     }
 
     /**
@@ -124,12 +152,13 @@ public class VisualTest extends BaseAiTest
     @NeodymiumTest
     public final void test_VisualVerification_Negative()
     {
+        final String steps = """
+                OPEN ${posters.storefront.url}
+                A lion dancing (visual) on the moon is shown
+            """;
         final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () ->
         {
-            runAi("""
-                    OPEN ${posters.storefront.url}
-                    A lion dancing (visual) on the moon is shown
-                """, VerificationMode.LIVE_LLM);
+            runAi(steps, VerificationMode.LIVE_LLM);
         });
 
         assertTrue(thrown.getMessage().contains("Verification failed: Visual verification failed:"));
@@ -153,6 +182,13 @@ public class VisualTest extends BaseAiTest
 
         // no actions, LLM identified things on its own
         assertEquals(0, s.getActions().size());
+
+        this.resetBrowser();
+
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        });
     }
 
     /**
@@ -161,14 +197,15 @@ public class VisualTest extends BaseAiTest
     @NeodymiumTest
     public final void test04_SearchAndVerify()
     {
-        final AiExecutionResult r = runAi("""
+        final String steps = """
                 OPEN ${posters.storefront.url}
                 Type 'bear' into the search box.
                 Click the blue button next to the input box (visual).
                 Store the color of the animal shown on the second result image in the variable 'animalColor' (visual).
-                """, VerificationMode.LIVE_LLM);
+                """;
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
-        assertThat(r)
+        assertThat(r1)
             .hasLlmCalls(3)
             .hasPesapCalls(3)
             .hasNoEscalations()
@@ -185,5 +222,25 @@ public class VisualTest extends BaseAiTest
 
         final String animalColor = Neodymium.getData().asString("animalColor");
         assertEquals("green", animalColor);
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(4)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "CLICK")
+            .hasAction(3, "STORE", "", "animalColor")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true)
+            .hasStepReplayed(2, true)
+            .hasStepReplayed(3, true);
+
+        assertEquals("green", Neodymium.getData().asString("animalColor"));
     }
 }

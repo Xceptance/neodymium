@@ -22,11 +22,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.BaseAiTest;
-import com.xceptance.neodymium.ai.AiTestVerification;
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.common.browser.Browser;
@@ -41,7 +41,6 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1500x1000")
 @Tag("sandbox")
-@AiTestVerification({ VerificationMode.LIVE_LLM })
 public class TimingAndResilienceTest extends BaseAiTest
 {
     private String baseHttpsUrl;
@@ -52,6 +51,7 @@ public class TimingAndResilienceTest extends BaseAiTest
     @BeforeEach
     public final void setupSandboxUrls()
     {
+        useTempPlaybookDirectory();
         final int httpPort = server.getPort();
         this.baseHttpsUrl = String.format("https://localhost:%d/AuraGlanceTest/shop/sandbox", server.getHttpsPort());
         final String baseHttpUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox", httpPort);
@@ -70,14 +70,47 @@ public class TimingAndResilienceTest extends BaseAiTest
         final String pageUrl = this.baseHttpsUrl + "/click-intercept.html";
         
         // Instruct the agent to dismiss the overlay and submit the transaction
-        final AiExecutionResult result = runAi(String.format("""
+        final String steps = String.format("""
                 Open %s
                 Click the red text box containing 'Blocking Overlay Active' to dismiss the overlay.
                 Click the 'Submit Transaction' button.
-                """, pageUrl), VerificationMode.LIVE_LLM);
+                """, pageUrl);
 
-        assertTrue(result.isSuccess());
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        assertTrue(r1.isSuccess());
         Selenide.$("#intercept-status").shouldHave(Condition.text("Transaction Successful!"));
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasPesapCalls(2)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasAction(2, "CLICK")
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertTrue(r2.isSuccess());
+        Selenide.$("#intercept-status").shouldHave(Condition.text("Transaction Successful!"));
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasAction(2, "CLICK")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true)
+            .hasStepReplayed(2, true);
     }
 
     /**
@@ -87,15 +120,52 @@ public class TimingAndResilienceTest extends BaseAiTest
     public final void testDynamicReveal()
     {
         final String pageUrl = this.baseHttpsUrl + "/dynamic-reveal.html";
-        final AiExecutionResult result = runAi(String.format("""
+        final String steps = String.format("""
                 Open %s
                 Click the 'Have a promo code?' link.
                 Type 'DISCOUNT' into the promo input field.
                 Click the Apply button next to it.
-                """, pageUrl), VerificationMode.LIVE_LLM);
+                """, pageUrl);
 
-        assertTrue(result.isSuccess());
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        assertTrue(r1.isSuccess());
         Selenide.$("#promo-status").shouldHave(Condition.text("Coupon DISCOUNT applied successfully!"));
+
+        assertThat(r1)
+            .hasLlmCalls(3)
+            .hasPesapCalls(3)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasActionsCount(4)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasAction(2, "TYPE")
+            .hasAction(3, "CLICK")
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(3, s -> s.hasLlmCalls(1).hasPesapCall());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertTrue(r2.isSuccess());
+        Selenide.$("#promo-status").shouldHave(Condition.text("Coupon DISCOUNT applied successfully!"));
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(4)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasAction(2, "TYPE")
+            .hasAction(3, "CLICK")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true)
+            .hasStepReplayed(2, true)
+            .hasStepReplayed(3, true);
     }
 
     /**
@@ -105,13 +175,46 @@ public class TimingAndResilienceTest extends BaseAiTest
     public final void testTableSorting()
     {
         final String pageUrl = this.baseHttpsUrl + "/table-sorting.html";
-        final AiExecutionResult result = runAi(String.format("""
+        final String steps = String.format("""
                 Open %s
                 Click the 'Price' header column link to sort.
                 Verify that the price in the first table row displays $4.99.
-                """, pageUrl), VerificationMode.LIVE_LLM);
+                """, pageUrl);
 
-        assertTrue(result.isSuccess());
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        assertTrue(r1.isSuccess());
         Selenide.$("#sort-status").shouldHave(Condition.text("Sorted by price: Low to High"));
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasPesapCalls(2)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasAction(2, "ASSERT")
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        assertTrue(r2.isSuccess());
+        Selenide.$("#sort-status").shouldHave(Condition.text("Sorted by price: Low to High"));
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasAction(2, "ASSERT")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true)
+            .hasStepReplayed(2, true);
     }
 }
