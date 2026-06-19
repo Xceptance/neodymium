@@ -14,17 +14,65 @@
     <div id="success" style="display:none; color: green; font-weight: bold;">Process Completed Successfully!</div>
     
     <script>
+        var urlParams = new URLSearchParams(window.location.search);
+        var scenario = urlParams.get('scenario') || '1';
+
+        // Prepare initial DOM based on scenario
+        if (scenario === '3') {
+            var success = document.getElementById('success');
+            success.innerText = 'Processing...';
+            success.style.display = 'block'; // starts visible but content is different
+        }
+
         document.getElementById('btn-start').addEventListener('click', function() {
             var loader = document.getElementById('loader');
             var success = document.getElementById('success');
             
-            loader.style.display = 'block';
-            success.style.display = 'none';
+            if (scenario === '1') {
+                loader.style.display = 'block';
+                success.style.display = 'none';
+            } else if (scenario === '2') {
+                loader.style.display = 'block';
+                // Remove success element if it's there
+                if (success) {
+                    success.remove();
+                }
+            } else if (scenario === '3') {
+                // In scenario 3, it's already visible but shows "Processing..."
+            }
+            
+            var waitParam = urlParams.get('param1');
+            var delay = 800;
+            if (waitParam === 'random') {
+                delay = Math.floor(Math.random() * 1000) + 500;
+            } else if (waitParam !== null) {
+                delay = parseInt(waitParam, 16);
+            } else {
+                waitParam = urlParams.get('wait');
+                if (waitParam === 'random') {
+                    delay = Math.floor(Math.random() * 1000) + 500;
+                } else if (waitParam !== null) {
+                    delay = parseInt(waitParam, 10);
+                }
+            }
             
             setTimeout(function() {
                 loader.style.display = 'none';
-                success.style.display = 'block';
-            }, 800);
+                if (scenario === '1') {
+                    success.style.display = 'block';
+                } else if (scenario === '2') {
+                    // Create and insert element
+                    var newSuccess = document.createElement('div');
+                    newSuccess.id = 'success';
+                    newSuccess.style.color = 'green';
+                    newSuccess.style.fontWeight = 'bold';
+                    newSuccess.innerText = 'Process Completed Successfully!';
+                    document.body.appendChild(newSuccess);
+                } else if (scenario === '3') {
+                    // Change existing content
+                    success.innerText = 'Process Completed Successfully!';
+                }
+            }, delay);
         });
     </script>
 </body>
