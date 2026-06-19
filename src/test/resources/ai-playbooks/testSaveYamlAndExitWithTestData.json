@@ -1,0 +1,26 @@
+{
+  "id": "testSaveYamlAndExitWithTestData",
+  "steps": [
+    {
+      "promptLine": "Click button 2",
+      "reasoning": "Click button 2",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn2",
+          "description": "Click button 2",
+          "elementContext": {
+            "text": "Button 2",
+            "id": "btn2",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

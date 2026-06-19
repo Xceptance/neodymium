@@ -779,6 +779,8 @@
                 };
                 historyContainer.addEventListener('click', handler);
                 futureContainer.addEventListener('click', handler);
+                var plannedContainer = document.getElementById('neo-planned-actions');
+                if (plannedContainer) plannedContainer.addEventListener('click', handler);
                 window.neoBpListenerAttached = true;
             }
 
@@ -864,6 +866,15 @@
                     activeElem.setAttribute('ondrop', 'window.neoDrop(event, ' + activeIdx + ')');
                     activeElem.setAttribute('ondragend', 'window.neoDragEnd(event)');
                     
+                    var activeBp = activeElem.querySelector('.neo-bp-col') || activeElem.querySelector('.neo-bp-marker');
+                    if (activeBp) {
+                        activeBp.className = 'neo-bp-marker';
+                        activeBp.setAttribute('data-idx', activeIdx);
+                        var isBp = window.neoBreakpoints && window.neoBreakpoints.indexOf(activeIdx) !== -1;
+                        activeBp.innerText = isBp ? '🛑' : '⚪';
+                        activeBp.style.opacity = isBp ? '1' : '0.15';
+                    }
+
                     if (!activeElem.querySelector('.neo-step-drag-handle')) {
                         var normalView = document.getElementById('neo-active-step-normal-view');
                         if (normalView) {
@@ -901,6 +912,7 @@
                 document.getElementById('neo-ai-hud').classList.remove('expanded');
                 btn.innerHTML = '▲ Show Full Prompt ▲';
                 window.neoFullPromptOpen = false;
+                setSessionStorage('neoFullPromptOpen', 'false');
             } else {
                 window.neoRenderFullPrompt();
                 historyOverlay.style.display = 'flex';
@@ -910,6 +922,7 @@
                 document.getElementById('neo-ai-hud').classList.add('expanded');
                 btn.innerHTML = '▼ Hide Full Prompt ▼';
                 window.neoFullPromptOpen = true;
+                setSessionStorage('neoFullPromptOpen', 'true');
             }
             setTimeout(function() {
                 if (window.neoClampHudViewport) window.neoClampHudViewport();

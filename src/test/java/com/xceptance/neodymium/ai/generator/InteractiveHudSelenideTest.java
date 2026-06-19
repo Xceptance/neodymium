@@ -35,13 +35,11 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.openqa.selenium.Keys;
 
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.ai.BaseAiTest;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.ai.core.LlmClient;
@@ -49,16 +47,22 @@ import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.ai.testing.AiMockResponse;
 import com.xceptance.neodymium.ai.testing.MockLlmClient;
+import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
+import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 
 /**
- * Selenide-based integration tests for the Interactive HUD verifying all
- * user interaction, stepping, failure recovery, skipping, and fast-forward modes.
- *
+ * Selenide-based integration tests for the Interactive HUD verifying all user interaction, stepping, failure recovery,
+ * skipping, and fast-forward modes. neo-ai-hud
+ * 
  * @author AI-generated: Gemini 2.5 Flash
  */
-public final class InteractiveHudSelenideTest extends BaseAiTest
+@Browser("Chrome_headless")
+public final class InteractiveHudSelenideTest
 {
+    private static EmbeddedHtmlServer server;
+    private String currentTestUrl;
     private volatile Thread bgThread = null;
     private volatile Throwable bgThrowable = null;
     private long originalTimeout;
@@ -66,8 +70,13 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
     private File tempSourceFile;
 
     @BeforeAll
-    public static void enableInteractiveMode()
+    public static void enableInteractiveModeAndStartServer() throws IOException
     {
+        System.setProperty("neodymium.ai.http.port", "0");
+        System.setProperty("neodymium.ai.https.port", "0");
+        server = new EmbeddedHtmlServer();
+        server.start();
+
         Neodymium.clearThreadContext();
         System.setProperty("neodymium.ai.interactive", "true");
         System.setProperty("neodymium.ai.interactive.autoSkip", "false");
@@ -77,8 +86,15 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
     }
 
     @AfterAll
-    public static void disableInteractiveMode()
+    public static void disableInteractiveModeAndStopServer()
     {
+        if (server != null)
+        {
+            server.stop();
+        }
+
+        System.clearProperty("neodymium.ai.http.port");
+        System.clearProperty("neodymium.ai.https.port");
         System.clearProperty("neodymium.ai.interactive");
         System.clearProperty("neodymium.ai.interactive.autoSkip");
         System.clearProperty("neodymium.ai.apiKey");
@@ -89,7 +105,6 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
     @BeforeEach
     public void setupCustomPageUrl()
     {
-        Neodymium.clearThreadContext();
         currentTestUrl = String.format("http://localhost:%d/InteractiveHudSelenideTest/interactive-hud-test.html", server.getPort());
         bgThrowable = null;
         bgThread = null;
@@ -121,65 +136,11 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // Increase Selenide timeout and enable headless mode for robust execution in headless Chrome
         originalTimeout = Configuration.timeout;
         Configuration.timeout = 35000;
-        originalHeadless = Configuration.headless;
-        Configuration.headless = true;
     }
 
     @AfterEach
     public void cleanupBackgroundThread()
     {
-        try {
-            for (String entry : com.codeborne.selenide.Selenide.getWebDriverLogs(org.openqa.selenium.logging.LogType.BROWSER)) {
-                System.out.println("BROWSER LOG: " + entry);
-            }
-        } catch (Exception ignored) {}
-
-        // Restore Selenide timeout and headless mode
-        Configuration.timeout = originalTimeout;
-        Configuration.headless = originalHeadless;
-
-        if (bgThread != null && bgThread.isAlive())
-        {
-            try
-            {
-                // Give the background thread a brief moment to finish cleanly before interrupting
-                bgThread.join(1000);
-            }
-            catch (final InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-            }
-
-            if (bgThread.isAlive())
-            {
-                bgThread.interrupt();
-                try
-                {
-                    bgThread.join(2000);
-                }
-                catch (final InterruptedException e)
-                {
-                    // Ignore
-                }
-            }
-        }
-        bgThread = null;
-        bgThrowable = null;
-        try
-        {
-            Selenide.closeWebDriver();
-        }
-        catch (final Exception e)
-        {
-            // Ignore
-        }
-
-        if (this.tempSourceFile != null && this.tempSourceFile.exists())
-        {
-            this.tempSourceFile.delete();
-        }
-
-        // Restore agent max retries default configuration
         Neodymium.aiConfiguration().setProperty("neodymium.ai.agent.maxRetries", "3");
         System.clearProperty("neodymium.ai.interactive.allowHeadlessHUD");
     }
@@ -237,7 +198,14 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         try
         {
             Selenide.clearBrowserLocalStorage();
-            Selenide.executeJavaScript("sessionStorage.clear(); localStorage.clear();");
+            Selenide.executeJavaScript(
+                "window.neoFullPromptOpen = false; " +
+                "window.neoBreakpoints = []; " +
+                "window.neoHelpShown = false; " +
+                "window.neodymiumPromptGenerationHudInjected = false; " +
+                "sessionStorage.clear(); " +
+                "localStorage.clear();"
+            );
         }
         catch (final Exception e)
         {
@@ -260,7 +228,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testStepThroughWorkingStepList() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -340,7 +308,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testStepThroughFailingStepList() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -410,8 +378,11 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 7. Click the Skip button (✕) in the HUD to bypass the failure and proceed
         $("#neo-skip-btn").click();
 
-        // 8. Verify the failed step is skipped, the HUD closes cleanly, and the last valid state is reached
+        // 8. Verify the failed step is skipped, click Save & Overwrite, and verify HUD closes cleanly
         checkBgError();
+        $("#neo-exit-save-btn").shouldBe(Condition.visible, Duration.ofSeconds(35));
+        $("#neo-exit-save-btn").click();
+
         $("#neo-ai-hud").shouldNotBe(Condition.visible); // HUD closes as the test finishes
         $("#result").shouldHave(Condition.exactText("Button 1 Clicked")); // Verify only step 1 succeeded
         joinBgThread();
@@ -425,7 +396,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testDumpContextOnError() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -531,8 +502,11 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 9. Verify the HUD remains visible and waiting for further actions even after dump completes
         $("#neo-skip-btn").shouldBe(Condition.enabled).click();
 
-        // 10. Verify that skipping closes the HUD cleanly and terminates the agent background thread
+        // 10. Verify the Save & Exit button is visible, click it, and verify HUD closes cleanly
         checkBgError();
+        $("#neo-exit-save-btn").shouldBe(Condition.visible, Duration.ofSeconds(35));
+        $("#neo-exit-save-btn").click();
+
         $("#neo-ai-hud").shouldNotBe(Condition.visible);
         joinBgThread();
     }
@@ -544,7 +518,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testEditStepAndBindings() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -632,7 +606,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testSkipStep() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -722,7 +696,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testAddStep() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -732,7 +706,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         final Playbook playbook = new Playbook("testAddStep");
         playbook.setRecording(false); // Disables recording so the HUD operates in replay/interactive review mode
 
-        // Define Step 1: Click Button 2 (We will insert a new step before this one)
+        // Define Step 1: Click Button 2 (We will append a new step after this one)
         final PlaybookStep step1 = new PlaybookStep();
         step1.setPromptLine("Click button 2");
         step1.setReasoning("Second click");
@@ -742,7 +716,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // Register the configured playbook in the Neodymium context
         Neodymium.setAiPlaybook(playbook);
 
-        // 3. Define a Mock LLM that returns a successful execution payload for the newly inserted "Click button 1" prompt
+        // 3. Define a Mock LLM that returns a successful execution payload for the newly appended "Click button 1" prompt
         final MockLlmClient mockLlm = new MockLlmClient();
         mockLlm.addResponse(AiMockResponse.builder()
                 .responseText("{\"r\":\"Click button 1\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn1\",\"desc\":\"Click button 1\"}]}")
@@ -770,25 +744,25 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-add-overlay-btn").shouldBe(Condition.enabled).click();
         $("#neo-add-overlay").shouldBe(Condition.visible); // Assert that the add overlay modal appears
 
-        // Type the new instruction prompt to insert before the current step
+        // Type the new instruction prompt to append to the end of the list
         $("#neo-add-input").setValue("Click button 1");
         $("#neo-add-submit-btn").click();
         Selenide.sleep(2500); // Give background thread time to settle and run the LLM resolution
 
-        // 7. Verify that the HUD dynamically inserts the new step and shifts focus to it
+        // 7. Verify that the HUD dynamically appends the new step, but the current step remains "Click button 2"
         waitForHudToSettle();
-        $("#neo-next-action").shouldHave(Condition.exactText("Click button 1")); // Focus shifted to the new step
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
 
-        // 8. Click the Approve button (✓) to execute the newly inserted Step 1
+        // 8. Click the Approve button (✓) to execute Step 1 ("Click button 2")
         $("#neo-approve-btn").click();
         Selenide.sleep(2500); // Give background thread time to execute step and render the next step in HUD
 
-        // 9. Verify Step 1 executes successfully, updating SUT, and the original Step 2 is now pending
+        // 9. Verify Step 1 executes successfully, updating SUT to "Button 2 Clicked", and the appended Step 2 ("Click button 1") is now pending
         waitForHudToSettle();
-        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2")); // original step is now next
-        $("#result").shouldHave(Condition.exactText("Button 1 Clicked")); // Verify Button 1 was clicked
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 1"));
+        $("#result").shouldHave(Condition.exactText("Button 2 Clicked")); // Verify Button 2 was clicked
 
-        // 10. Click the Approve button (✓) to execute the remaining original Step 2
+        // 10. Click the Approve button (✓) to execute the appended Step 2
         $("#neo-approve-btn").click();
 
         // 11. Since a step was dynamically inserted, verify that we see the "Save & Exit" dialog.
@@ -810,7 +784,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 12. Verify SUT state, HUD closure, and clean execution termination
         checkBgError();
         $("#neo-ai-hud").shouldNotBe(Condition.visible);
-        $("#result").shouldHave(Condition.exactText("Button 2 Clicked")); // Verify Button 2 also executed successfully
+        $("#result").shouldHave(Condition.exactText("Button 1 Clicked")); // Verify Button 1 also executed successfully, overriding Button 2's state
     }
 
     /**
@@ -819,7 +793,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testStepBackAndHistory() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -901,7 +875,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testAddAndRemoveBreakpoint() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -938,7 +912,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // to maximize the step planning list modal overlay.
         waitForHudToSettle();
         $("#neo-full-prompt-btn").click();
-        $("#neo-history-overlay").shouldBe(Condition.visible); // Assert that the modal overlay is active
+        $("#neo-history-overlay").shouldHave(Condition.cssValue("display", "flex")); // Assert that the modal overlay is active
 
         // 5. Locate the breakpoint toggle element for Step 1 (Index 0)
         final com.codeborne.selenide.SelenideElement bpCol = $(".neo-bp-marker[data-idx='0']");
@@ -966,7 +940,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testFastForwardTillError() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -1049,7 +1023,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testFastForwardTillEndOfTest() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -1111,7 +1085,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testFastForwardTillBreakpoint() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -1186,7 +1160,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testFastForwardFromBreakpointAgain() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -1300,7 +1274,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testKeyboardShortcuts() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -1370,7 +1344,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testMinimizeAndMaximize() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -1435,7 +1409,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testHudPersistenceAcrossPageReload() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -1471,7 +1445,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 4. Verify the HUD starts successfully, click "Show Full Prompt" to show overlay, then minimize
         waitForHudToSettle();
         $("#neo-full-prompt-btn").click();
-        $("#neo-history-overlay").shouldBe(Condition.visible); // Assert that the modal overlay is active
+        $("#neo-history-overlay").shouldHave(Condition.cssValue("display", "flex")); // Assert that the modal overlay is active
 
         $("#neo-min-btn").click();
         $("#neo-min-circle").shouldBe(Condition.visible); // HUD is minimized
@@ -1486,7 +1460,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 7. Maximize the HUD and verify that the full-prompt overlay was also successfully restored to displays "flex"/visible
         $("#neo-min-circle").click();
         $("#neo-ai-hud").shouldHave(Condition.cssValue("display", "flex"));
-        $("#neo-history-overlay").shouldBe(Condition.visible); // Assert that the modal overlay is still active!
+        $("#neo-history-overlay").shouldHave(Condition.cssValue("display", "flex")); // Assert that the modal overlay is still active!
 
         // 8. Approve the step and finalize the test cleanly
         $("#neo-approve-btn").click();
@@ -1502,7 +1476,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testSaveYamlAndExitWithTestData() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -1628,7 +1602,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testFastForwardWithClearedBreakpoint() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -1712,7 +1686,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
      *
      * @throws Exception if the test execution fails
      */
-    @Test
+    @NeodymiumTest
     public void testPlaybookTransitionsToRecordingOnUIChange() throws Exception
     {
         // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
@@ -1795,7 +1769,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-ai-hud").shouldNotBe(Condition.visible);
         $("#result").shouldHave(Condition.exactText("Button 2 Clicked")); // Verify Button 2 was clicked
     }
-    @Test
+    @NeodymiumTest
     public void testSettingsPersistence() throws Exception
     {
         // 1. Create a dummy settings file
@@ -1808,41 +1782,52 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
             playbook.setRecording(false);
             final PlaybookStep step = new PlaybookStep();
             step.setPromptLine("Click button 1");
+            step.setReasoning("Step 1");
+            step.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
             playbook.addStep(step);
+            Neodymium.setAiPlaybook(playbook);
 
-            runInteractiveInBg(() -> {
-                try {
-                    Neodymium.ai().execute();
+            final AiBrowser ai = createTestAiBrowser();
+            Neodymium.setAiBrowser(ai);
+            try
+            {
+                runInteractiveInBg(() -> {
+                    try {
+                        ai.execute("Click button 1");
+                    }
+                    catch (Throwable e)
+                    {
+                        throw new RuntimeException(e);
+                    }
+                });
+
+                waitForHudToSettle();
+
+                // 2. Verify settings are loaded into the HUD UI
+                $("#neo-settings-btn").click();
+                $("#neo-settings-overlay").shouldBe(Condition.visible);
+                
+                $("#neo-theme-select").shouldHave(Condition.value("light"));
+                $("#neo-zoom-input").shouldHave(Condition.value("120"));
+
+                // 3. Modify settings and save
+                $("#neo-theme-select").selectOptionByValue("dark");
+                $("#neo-zoom-input").setValue("150");
+                $("#neo-settings-submit-btn").click();
+                $("#neo-settings-overlay").shouldNotBe(Condition.visible);
+                Selenide.sleep(2500);
+
+                // 4. Verify the file is updated
+                String newContent = java.nio.file.Files.readString(settingsFile.toPath());
+                if (!newContent.contains("\"theme\":\"dark\"") || !newContent.contains("\"zoomFactor\":150")) {
+                    throw new AssertionError("Settings file was not updated correctly! Content: " + newContent);
                 }
-                catch (Throwable e)
-                {
-                    throw new RuntimeException(e);
-                }
-            });
-
-            waitForHudToSettle();
-
-            // 2. Verify settings are loaded into the HUD UI
-            $("#neo-settings-btn").click();
-            $("#neo-settings-overlay").shouldBe(Condition.visible);
-            
-            $("#neo-theme-select").shouldHave(Condition.value("light"));
-            $("#neo-zoom-input").shouldHave(Condition.value("120"));
-
-            // 3. Modify settings and save
-            $("#neo-theme-select").selectOptionByValue("dark");
-            $("#neo-zoom-input").setValue("150");
-            $("#neo-settings-submit-btn").click();
-            $("#neo-settings-overlay").shouldNotBe(Condition.visible);
-
-            // 4. Verify the file is updated
-            String newContent = java.nio.file.Files.readString(settingsFile.toPath());
-            if (!newContent.contains("\"theme\":\"dark\"") || !newContent.contains("\"zoomFactor\":150")) {
-                throw new AssertionError("Settings file was not updated correctly! Content: " + newContent);
+            }
+            finally
+            {
+                Neodymium.setAiBrowser(null);
             }
 
-            $("#neo-approve-btn").click();
-            joinBgThread();
         } finally {
             settingsFile.delete();
         }

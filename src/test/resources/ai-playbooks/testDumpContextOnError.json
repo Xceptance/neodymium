@@ -1,0 +1,25 @@
+{
+  "id": "testDumpContextOnError",
+  "steps": [
+    {
+      "promptLine": "Click button 1",
+      "reasoning": "Success step",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn1",
+          "description": "Click button 1",
+          "elementContext": {
+            "text": "Button 1",
+            "id": "btn1",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

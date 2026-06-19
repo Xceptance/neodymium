@@ -1,0 +1,45 @@
+{
+  "id": "testStepThroughWorkingStepList",
+  "steps": [
+    {
+      "promptLine": "Click button 1",
+      "reasoning": "First click reasoning",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn1",
+          "description": "Click button 1",
+          "elementContext": {
+            "text": "Button 1",
+            "id": "btn1",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click button 2",
+      "reasoning": "Second click reasoning",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn2",
+          "description": "Click button 2",
+          "elementContext": {
+            "text": "Button 2",
+            "id": "btn2",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}
