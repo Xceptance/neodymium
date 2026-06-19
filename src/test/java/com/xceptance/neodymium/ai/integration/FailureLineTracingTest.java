@@ -108,7 +108,7 @@ public final class FailureLineTracingTest extends BaseAiTest
         assertNotNull(msg);
         assertTrue(msg.contains("Verify that the title contains \"NonExistentTitle\""));
         assertTrue(msg.contains("main.yaml"));
-        assertTrue(msg.contains("line 2") || msg.contains("main.yaml:2"));
+        assertTrue(msg.contains("line 3") || msg.contains("main.yaml:3"));
     }
 
     /**
@@ -145,7 +145,7 @@ public final class FailureLineTracingTest extends BaseAiTest
         // 3. REPLAY run - must fail at step 2 (Click button)
         final Throwable error = assertThrows(Throwable.class, () ->
         {
-            runAi(VerificationMode.REPLAY);
+            runAi(VerificationMode.OFFLINE_REPLAY);
         });
 
         final String msg = error.getMessage() != null && error.getMessage().contains("Instruction")
@@ -154,7 +154,7 @@ public final class FailureLineTracingTest extends BaseAiTest
         assertNotNull(msg);
         assertTrue(msg.contains("Click on the 'Click Me' button"));
         assertTrue(msg.contains("main.yaml"));
-        assertTrue(msg.contains("line 2") || msg.contains("main.yaml:2"));
+        assertTrue(msg.contains("line 3") || msg.contains("main.yaml:3"));
     }
 
     /**
@@ -229,7 +229,7 @@ public final class FailureLineTracingTest extends BaseAiTest
         // 3. REPLAY run - must fail at the included step
         final Throwable error = assertThrows(Throwable.class, () ->
         {
-            runAi(VerificationMode.REPLAY);
+            runAi(VerificationMode.OFFLINE_REPLAY);
         });
 
         final String msg = error.getMessage() != null && error.getMessage().contains("Instruction")

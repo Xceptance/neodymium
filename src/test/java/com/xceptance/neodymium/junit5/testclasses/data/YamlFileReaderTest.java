@@ -12,6 +12,8 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 
 public class YamlFileReaderTest
@@ -110,18 +112,18 @@ public class YamlFileReaderTest
         // Check global step line numbers (Case 1)
         final String globalStepLinesJson = data.get(0).get("neodymium.stepLineNumbers");
         assertNotNull(globalStepLinesJson);
-        final List<Double> globalStepLines = new com.google.gson.Gson().fromJson(globalStepLinesJson, new com.google.gson.reflect.TypeToken<List<Double>>(){}.getType());
+        final List<String> globalStepLines = new Gson().fromJson(globalStepLinesJson, new TypeToken<List<String>>(){}.getType());
         assertEquals(2, globalStepLines.size());
-        assertEquals(3, globalStepLines.get(0).intValue());
-        assertEquals(5, globalStepLines.get(1).intValue());
+        assertEquals("inline:3", globalStepLines.get(0));
+        assertEquals("inline:5", globalStepLines.get(1));
 
         // Check local step line numbers (Case 2)
         final String localStepLinesJson = data.get(1).get("neodymium.stepLineNumbers");
         assertNotNull(localStepLinesJson);
-        final List<Double> localStepLines = new com.google.gson.Gson().fromJson(localStepLinesJson, new com.google.gson.reflect.TypeToken<List<Double>>(){}.getType());
+        final List<String> localStepLines = new Gson().fromJson(localStepLinesJson, new TypeToken<List<String>>(){}.getType());
         assertEquals(2, localStepLines.size());
-        assertEquals(10, localStepLines.get(0).intValue());
-        assertEquals(11, localStepLines.get(1).intValue());
+        assertEquals("inline:10", localStepLines.get(0));
+        assertEquals("inline:11", localStepLines.get(1));
     }
 
     @Test

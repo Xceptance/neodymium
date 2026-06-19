@@ -1185,7 +1185,7 @@ public class AiAgent {
                         step.setFailure(new ActionExecutionException(e.getMessage(), e));
                     }
                     recordVisualFailureIfRecording(unresolvedInstruction, e, playbook);
-                    throw e;
+                    throw new DefinitiveAssertionError(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\n" + e.getMessage()), e);
                 }
                 if (optionalStep)
                 {
@@ -1381,7 +1381,11 @@ public class AiAgent {
         }
         if (sourceFile != null && !Objects.equals(lineNumber, sourceFile))
         {
-            sb.append(" in ").append(sourceFile);
+            final String sourceFileName = new File(sourceFile).getName();
+            if (lineNumber == null || (!lineNumber.equals(sourceFileName) && !lineNumber.contains(sourceFileName + ":")))
+            {
+                sb.append(" in ").append(sourceFile);
+            }
         }
         sb.append(suffix);
         return sb.toString();
@@ -2619,6 +2623,11 @@ public class AiAgent {
         public DefinitiveAssertionError(final String message)
         {
             super(message);
+        }
+
+        public DefinitiveAssertionError(final String message, final Throwable cause)
+        {
+            super(message, cause);
         }
     }
 

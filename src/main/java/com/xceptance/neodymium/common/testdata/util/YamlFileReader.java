@@ -195,6 +195,23 @@ public final class YamlFileReader
             {
                 final Map<String, Object> variables = new LinkedHashMap<>(row);
 
+                if (rootMap != null)
+                {
+                    Object skipReplay = rootMap.get("skipReplay");
+                    if (skipReplay == null)
+                    {
+                        skipReplay = rootMap.get("_skipReplay");
+                    }
+                    if (skipReplay == null)
+                    {
+                        skipReplay = rootMap.get("neodymium.ai.skipReplay");
+                    }
+                    if (skipReplay != null && !variables.containsKey("skipReplay") && !variables.containsKey("neodymium.ai.skipReplay"))
+                    {
+                        variables.put("skipReplay", skipReplay);
+                    }
+                }
+
                 for (final Map.Entry<String, Object> entry : metaMap.entrySet())
                 {
                     if (!variables.containsKey(entry.getKey()))
@@ -665,7 +682,7 @@ public final class YamlFileReader
             for (final String line : linesArr)
             {
                 final String trimmed = line.trim();
-                if (!trimmed.isEmpty())
+                if (!trimmed.isEmpty() && !trimmed.startsWith("#") && !trimmed.startsWith("//"))
                 {
                     final int lineNum = findLineNumber(trimmed, lines, searchFromLine);
                     searchFromLine = Math.max(searchFromLine, lineNum);
