@@ -302,29 +302,29 @@ public final class AiExecutionResult
     /**
      * Logs the cumulative AI execution statistics.
      *
-     * @return this execution result instance
+     * @return the stats logger helper instance
      */
-    public final AiExecutionResult logAiStats()
+    public final AiStatsLogger logAiStats()
     {
         if (this.aiBrowser != null && this.aiBrowser.getStats() != null)
         {
             this.aiBrowser.getStats().logSummary();
         }
-        return this;
+        return new AiStatsLogger(this.aiBrowser);
     }
 
     /**
      * Logs the step-by-step trace statistics for this execution.
      *
-     * @return this execution result instance
+     * @return the step stats logger helper instance
      */
-    public final AiExecutionResult logAiStepStats()
+    public final AiStepStatsLogger logAiStepStats()
     {
         if (this.aiBrowser != null)
         {
             this.aiBrowser.logStepSummary(this);
         }
-        return this;
+        return new AiStepStatsLogger(this.aiBrowser);
     }
 
     /**
@@ -343,5 +343,47 @@ public final class AiExecutionResult
             this.aiBrowser.clearExecutionResults();
         }
         return this;
+    }
+
+    /**
+     * Resetter helper for AI execution statistics.
+     */
+    public static class AiStatsLogger
+    {
+        private final AiBrowser browser;
+
+        public AiStatsLogger(final AiBrowser browser)
+        {
+            this.browser = browser;
+        }
+
+        public final void reset()
+        {
+            if (this.browser != null && this.browser.getStats() != null)
+            {
+                this.browser.getStats().reset();
+            }
+        }
+    }
+
+    /**
+     * Resetter helper for step-by-step statistics.
+     */
+    public static class AiStepStatsLogger
+    {
+        private final AiBrowser browser;
+
+        public AiStepStatsLogger(final AiBrowser browser)
+        {
+            this.browser = browser;
+        }
+
+        public final void reset()
+        {
+            if (this.browser != null)
+            {
+                this.browser.clearExecutionResults();
+            }
+        }
     }
 }
