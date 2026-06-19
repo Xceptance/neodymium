@@ -68,6 +68,16 @@ public final class AiExecutionResult
         this.aiBrowser = aiBrowser;
     }
 
+    /**
+     * Backward-compatible constructor for initializing execution results without a browser reference.
+     *
+     * @param testDataSnapshot the map containing current test dataset bindings
+     */
+    public AiExecutionResult(final Map<String, String> testDataSnapshot)
+    {
+        this(testDataSnapshot, null);
+    }
+
     public final List<StepDetails> getSteps()
     {
         return this.steps;

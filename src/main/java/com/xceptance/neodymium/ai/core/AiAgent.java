@@ -218,7 +218,7 @@ public class AiAgent {
      */
     public void execute(final String instructions)
     {
-        execute(instructions, new AiExecutionResult(Neodymium.getData()));
+        execute(instructions, new AiExecutionResult(Neodymium.getData(), Neodymium.ai()));
     }
 
     public void execute(final String instructions, final AiExecutionResult result)
@@ -586,6 +586,7 @@ public class AiAgent {
                     if (pesapResult != null && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
                     {
                         LOG.info("✂️ Upfront JIT step split detected: '{}' split into {}", strippedStep, pesapResult.splitSteps());
+                        final StepDetails originalStepDetails = stepDetails;
                         final List<String> splitList = pesapResult.splitSteps();
                         final String origLine = i < stepLines.size() ? stepLines.get(i) : null;
 
@@ -607,6 +608,9 @@ public class AiAgent {
                             }
                             final StepDetails partDetails = new StepDetails(part);
                             partDetails.setOriginalUnsplitInstruction(stepUnresolved);
+                            // Ensure the other split parts reference the original PESAP call too
+                            partDetails.setPesapCall(originalStepDetails.getPesapCall());
+                            partDetails.setPesapCalled(true);
                             result.getSteps().add(i + j, partDetails);
                         }
                         alreadySplitSteps.add(strippedStep);
@@ -1267,8 +1271,11 @@ public class AiAgent {
                     }
                 }
 
-                LOG.warn("    ⚠️ Assertion failed: {}{}", e.getMessage(), formatFailureLogContext(currentLineNumber, sourceFile));
-                executionLog.logError("Assertion failed: " + e.getMessage());
+                if (!escalatedOk)
+                {
+                    LOG.warn("    ⚠️ Assertion failed: {}{}. Retrying step.", e.getMessage(), formatFailureLogContext(currentLineNumber, sourceFile));
+                    executionLog.logError("Assertion failed: " + e.getMessage() + ". Retrying step.");
+                }
 
                 if (isInteractive)
                 {
