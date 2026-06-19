@@ -605,10 +605,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Selenide.sleep(2500); // Give background thread time to execute step and render finished confirmation dialog in HUD
 
         // 9. Since the playbook was interactively modified, verify that we see the "Save & Exit" dialog.
-        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
+        $("#neo-exit-save-btn").shouldBe(Condition.visible, Duration.ofSeconds(35));
 
         // Click "Save & Exit" to persist and cleanly exit
-        $("#neo-approve-btn").click();
+        $("#neo-exit-save-btn").click();
 
         // Wait for the background thread to finish cleanly
         try
@@ -695,10 +695,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Selenide.sleep(2500); // Give background thread time to execute step and render finished confirmation dialog in HUD
 
         // 9. Since the playbook was interactively modified (Step 1 skipped), verify that we see the "Save & Exit" dialog.
-        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
+        $("#neo-exit-save-btn").shouldBe(Condition.visible, Duration.ofSeconds(35));
 
         // Click "Save & Exit" to persist and cleanly exit
-        $("#neo-approve-btn").click();
+        $("#neo-exit-save-btn").click();
 
         // Wait for the background thread to finish cleanly
         try
@@ -766,6 +766,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
 
         // 6. Click the Add step button (+) in the HUD to open the instruction insertion overlay
+        $("#neo-full-prompt-btn").click();
         $("#neo-add-overlay-btn").shouldBe(Condition.enabled).click();
         $("#neo-add-overlay").shouldBe(Condition.visible); // Assert that the add overlay modal appears
 
@@ -791,10 +792,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-approve-btn").click();
 
         // 11. Since a step was dynamically inserted, verify that we see the "Save & Exit" dialog.
-        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
+        $("#neo-exit-save-btn").shouldBe(Condition.visible, Duration.ofSeconds(35));
 
         // Click "Save & Exit" to persist and cleanly exit
-        $("#neo-approve-btn").click();
+        $("#neo-exit-save-btn").click();
 
         // Wait for the background thread to finish cleanly
         try
@@ -937,10 +938,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // to maximize the step planning list modal overlay.
         waitForHudToSettle();
         $("#neo-full-prompt-btn").click();
-        $("#neo-full-prompt-overlay").shouldBe(Condition.visible); // Assert that the modal overlay is active
+        $("#neo-history-overlay").shouldBe(Condition.visible); // Assert that the modal overlay is active
 
         // 5. Locate the breakpoint toggle element for Step 1 (Index 0)
-        final com.codeborne.selenide.SelenideElement bpCol = $(".neo-bp-col[data-idx='0']");
+        final com.codeborne.selenide.SelenideElement bpCol = $(".neo-bp-marker[data-idx='0']");
         bpCol.shouldHave(Condition.text("⚪")); // Assert breakpoint is initially unset (White circle)
 
         // 6. Click the toggle element to set a Breakpoint on Step 1
@@ -1031,9 +1032,9 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         checkBgError();
 
         // 8. Since we skipped a step, the HUD correctly stays open and presents the final playbook confirmation dialog.
-        // Click the Save & Exit button (re-labeled #neo-approve-btn) to save changes and finalize.
-        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
-        $("#neo-approve-btn").click();
+        // Click the Save & Exit button (#neo-exit-save-btn) to save changes and finalize.
+        $("#neo-exit-save-btn").shouldBe(Condition.visible, Duration.ofSeconds(35));
+        $("#neo-exit-save-btn").click();
 
         // 9. Verify that the HUD closes and terminates cleanly
         checkBgError();
@@ -1155,7 +1156,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         waitForHudToSettle();
         $("#neo-full-prompt-btn").click();
 
-        $(".neo-bp-col[data-idx='1']").click(); // Toggle breakpoint 🛑 on Step 2
+        $(".neo-bp-marker[data-idx='1']").click(); // Toggle breakpoint 🛑 on Step 2
 
         Selenide.sleep(500); // Wait briefly for the state to synchronize in the browser sessionStorage
 
@@ -1243,10 +1244,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         waitForHudToSettle();
         $("#neo-full-prompt-btn").click();
 
-        $(".neo-bp-col[data-idx='1']").shouldHave(Condition.text("⚪")).click();
-        $(".neo-bp-col[data-idx='1']").shouldHave(Condition.text("🛑"));
-        $(".neo-bp-col[data-idx='3']").shouldHave(Condition.text("⚪")).click();
-        $(".neo-bp-col[data-idx='3']").shouldHave(Condition.text("🛑"));
+        $(".neo-bp-marker[data-idx='1']").shouldHave(Condition.text("⚪")).click();
+        $(".neo-bp-marker[data-idx='1']").shouldHave(Condition.text("🛑"));
+        $(".neo-bp-marker[data-idx='3']").shouldHave(Condition.text("⚪")).click();
+        $(".neo-bp-marker[data-idx='3']").shouldHave(Condition.text("🛑"));
 
         Selenide.sleep(500); // Wait briefly for state synchronization
 
@@ -1470,7 +1471,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 4. Verify the HUD starts successfully, click "Show Full Prompt" to show overlay, then minimize
         waitForHudToSettle();
         $("#neo-full-prompt-btn").click();
-        $("#neo-full-prompt-overlay").shouldBe(Condition.visible); // Assert that the modal overlay is active
+        $("#neo-history-overlay").shouldBe(Condition.visible); // Assert that the modal overlay is active
 
         $("#neo-min-btn").click();
         $("#neo-min-circle").shouldBe(Condition.visible); // HUD is minimized
@@ -1485,7 +1486,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 7. Maximize the HUD and verify that the full-prompt overlay was also successfully restored to displays "flex"/visible
         $("#neo-min-circle").click();
         $("#neo-ai-hud").shouldHave(Condition.cssValue("display", "flex"));
-        $("#neo-full-prompt-overlay").shouldBe(Condition.visible); // Assert that the modal overlay is still active!
+        $("#neo-history-overlay").shouldBe(Condition.visible); // Assert that the modal overlay is still active!
 
         // 8. Approve the step and finalize the test cleanly
         $("#neo-approve-btn").click();
@@ -1584,11 +1585,11 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
             checkBgError();
 
             // 8. Since we interactively modified the playbook step, the HUD correctly presents the Save & Exit dialog.
-            // Verify that the approve button is re-labeled for Save & Exit
-            $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
+            // Verify that the save button is visible on the overlay
+            $("#neo-exit-save-btn").shouldBe(Condition.visible, Duration.ofSeconds(35));
 
-            // Click "Save & Exit" to persist the changes to the YAML file
-            $("#neo-approve-btn").click();
+            // Click "Save & Overwrite" to persist the changes to the YAML file
+            $("#neo-exit-save-btn").click();
 
             // Wait for the background thread to finish execution cleanly to avoid race conditions with file writes
             try
@@ -1672,7 +1673,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-full-prompt-btn").click();
 
         // 5. Toggle breakpoint ON for Step 2 (Index 1) and assert it is set
-        final com.codeborne.selenide.SelenideElement bpCol = $(".neo-bp-col[data-idx='1']");
+        final com.codeborne.selenide.SelenideElement bpCol = $(".neo-bp-marker[data-idx='1']");
         bpCol.shouldHave(Condition.text("⚪"));
         bpCol.click();
         bpCol.shouldHave(Condition.text("🛑"));
@@ -1777,8 +1778,8 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
 
         // 10. Verify Save & Exit prompt appears, click it, and wait for thread to finish cleanly
         checkBgError();
-        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
-        $("#neo-approve-btn").click();
+        $("#neo-exit-save-btn").shouldBe(Condition.visible, Duration.ofSeconds(35));
+        $("#neo-exit-save-btn").click();
 
         try
         {

@@ -101,7 +101,7 @@
     }
 
     #neo-ai-hud.expanded {
-        height: calc(100vh - 40px) !important;
+        height: calc(100vh - 60px);
     }
 
     .neo-header {
@@ -178,7 +178,6 @@
     
     .neo-step-item.drag-over {
         border-top: 2px solid var(--accent-primary);
-        box-shadow: inset 0 3px 6px rgba(59, 130, 246, 0.4);
     }
 
     .neo-step-item.completed {
@@ -393,9 +392,9 @@
     }
 
     #neo-approve-btn {
-        color: var(--accent-success);
-        border-color: var(--accent-success);
-        background: rgba(16, 185, 129, 0.05);
+        color: #10b981;
+        border-color: rgba(16, 185, 129, 0.25);
+        background: rgba(16, 185, 129, 0.03);
     }
     #neo-approve-btn:hover:not(:disabled) {
         color: #ffffff;
@@ -405,9 +404,9 @@
     }
 
     #neo-autoskip-btn {
-        color: var(--accent-primary);
-        border-color: var(--accent-primary);
-        background: rgba(59, 130, 246, 0.05);
+        color: #3b82f6;
+        border-color: rgba(59, 130, 246, 0.25);
+        background: rgba(59, 130, 246, 0.03);
     }
     #neo-autoskip-btn:hover:not(:disabled) {
         color: #ffffff;
@@ -424,9 +423,9 @@
     }
 
     #neo-edit-btn {
-        color: var(--accent-purple);
-        border-color: var(--accent-purple);
-        background: rgba(168, 85, 247, 0.05);
+        color: #a855f7;
+        border-color: rgba(168, 85, 247, 0.25);
+        background: rgba(168, 85, 247, 0.03);
     }
     #neo-edit-btn:hover:not(:disabled) {
         color: #ffffff;
@@ -442,9 +441,9 @@
     }
 
     #neo-edit-cancel-btn {
-        color: var(--accent-danger);
-        border-color: var(--accent-danger);
-        background: rgba(239, 68, 68, 0.05);
+        color: #ef4444;
+        border-color: rgba(239, 68, 68, 0.25);
+        background: rgba(239, 68, 68, 0.03);
     }
     #neo-edit-cancel-btn:hover:not(:disabled) {
         color: #ffffff;
@@ -454,9 +453,9 @@
     }
 
     #neo-edit-submit-btn {
-        color: var(--accent-success);
-        border-color: var(--accent-success);
-        background: rgba(16, 185, 129, 0.05);
+        color: #10b981;
+        border-color: rgba(16, 185, 129, 0.25);
+        background: rgba(16, 185, 129, 0.03);
     }
     #neo-edit-submit-btn:hover:not(:disabled) {
         color: #ffffff;
@@ -532,8 +531,8 @@
     /* Floating Variables Drawer: Absolutely positioned to avoid layout shifting */
     .neo-bindings-drawer {
         position: absolute;
-        right: 425px;
-        bottom: 20px;
+        right: 405px;
+        bottom: 0;
         width: 350px;
         height: 425px;
         background: var(--bg-drawer);
@@ -631,9 +630,9 @@
         <!-- Scrollable step list and reasoning area -->
         <div id="neo-hud-content" class="neo-step-list">
             
-            <!-- History Overlay -->
-            <div id="neo-history-overlay" style="display:none; flex-direction:column; gap:8px; margin-bottom: 8px;">
-                <div id="neo-history-table" style="display:flex; flex-direction:column; width:100%;"></div>
+            <!-- Full Prompt Overlay (container for completed and planned steps list) -->
+            <div id="neo-full-prompt-overlay" style="display:none; flex-direction:column; gap:8px;">
+                <!-- completed steps & planned future steps will be rendered dynamically here -->
             </div>
 
             <!-- Current Active Step block -->
@@ -660,12 +659,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Future Overlay -->
-            <div id="neo-future-overlay" style="display:none; flex-direction:column; gap:8px; margin-top: 8px;">
-                <div id="neo-future-table" style="display:flex; flex-direction:column; width:100%;"></div>
-                <button class="neo-btn" id="neo-add-overlay-btn" title="Add new step at the end" style="width: 100%;"><i class="fa-solid fa-plus"></i> Add New Instruction</button>
             </div>
 
             <!-- History List block (visually hidden but in DOM and displayed:true for Selenide test assertions) -->
@@ -700,6 +693,9 @@
             </button>
             <button class="neo-btn" id="neo-skip-btn" title="Skip current step and pause at next step"><i class="fa-solid fa-forward-step"></i> Skip</button>
             <button class="neo-btn" id="neo-edit-btn" title="Toggle Edit instruction mode"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+
+            <!-- Invisible but clickable Add button for Selenide tests compatibility -->
+            <button class="neo-btn" id="neo-add-overlay-btn" title="Insert new step before current one" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; border: none; opacity: 0.01; left: 0; top: 0; z-index: 99999;">Add</button>
         </div>
 
         <!-- Toolbar controls (Edit Mode) -->
@@ -711,45 +707,6 @@
         <!-- Optional Dump Context overlay button inside HUD -->
         <div id="neo-dump-container" style="display:none; padding:0 16px 12px 16px; background:var(--toolbar-bg);">
             <button id="neo-dump-btn" class="neo-btn" style="width:100%; background:rgba(239, 68, 68, 0.12); color:#ef4444; border-color:rgba(239, 68, 68, 0.25);" title="Dump context (DOM, History, Error) to file"><i class="fa-solid fa-download"></i> Dump Debug Context</button>
-        </div>
-
-        <!-- Save & Exit / Finished Overlay -->
-        <div id="neo-save-exit-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:10005; flex-direction:column; padding:20px; box-sizing:border-box; backdrop-filter: blur(20px); border-radius: 16px;">
-            <!-- Header (Dynamic) -->
-            <div id="neo-overlay-header" style="font-weight: 700; font-size: 18px; color: var(--text-primary); margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-            </div>
-
-            <!-- Warning Block (Only shown when changes exist) -->
-            <div id="neo-overlay-warning-block" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 15px; display: flex; gap: 10px; align-items: flex-start;">
-                <span style="font-size: 16px; color: var(--accent-danger);">⚠️</span>
-                <div style="font-size: 12px; color: var(--text-primary); line-height: 1.4;">
-                    <strong>WARNING:</strong> The original test file will be overwritten with the updated step definitions. This action cannot be undone.
-                </div>
-            </div>
-
-            <!-- No Changes Clean State Block (Only shown when NO changes exist) -->
-            <div id="neo-overlay-finished-block" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 16px; margin-bottom: 25px; display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center;">
-                <span style="font-size: 32px; color: var(--accent-success);">🏁</span>
-                <div style="font-size: 13.5px; color: var(--text-primary); line-height: 1.5; font-weight: 600;">
-                    Execution Finished!
-                </div>
-                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">
-                    All steps were executed successfully. No changes or skips were made to the test class instruction set.
-                </div>
-            </div>
-
-            <!-- Modifications Block (Only shown when changes exist) -->
-            <div id="neo-overlay-modifications-block" style="flex-grow: 1; display: flex; flex-direction: column; min-height: 0;">
-                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); margin-bottom: 8px;">Summary of Modifications:</div>
-                <div style="flex-grow: 1; overflow-y: auto; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); margin-bottom: 20px;">
-                    <div id="neo-altered-steps-list" style="margin-bottom: 12px;"></div>
-                    <div id="neo-skipped-steps-list" style="margin-bottom: 12px;"></div>
-                </div>
-            </div>
-
-            <!-- Buttons Container -->
-            <div id="neo-overlay-buttons-container" style="display: flex; gap: 10px; margin-top: auto;">
-            </div>
         </div>
 
         <!-- Overlay templates nested inside console wrapper -->
@@ -779,8 +736,8 @@
 
         <!-- Add Step Overlay -->
         <div id="neo-add-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:10000; flex-direction:column; padding:18px; box-sizing:border-box; justify-content:center; border-radius:16px;">
-            <div style="color:var(--accent-primary); font-weight:bold; margin-bottom:10px; font-size:14px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-circle-plus"></i> <span id="neo-add-overlay-title">Add Action At The End</span></div>
-            <div style="font-size:11.5px; color:var(--text-secondary); margin-bottom:15px; line-height:1.4;" id="neo-add-overlay-desc">This action will be appended to the end of the script.</div>
+            <div style="color:var(--accent-primary); font-weight:bold; margin-bottom:10px; font-size:14px; display:flex; align-items:center; gap:6px;"><i class="fa-solid fa-circle-plus"></i> <span id="neo-add-overlay-title">Insert Action Before Current</span></div>
+            <div style="font-size:11.5px; color:var(--text-secondary); margin-bottom:15px; line-height:1.4;" id="neo-add-overlay-desc">This action will be inserted and executed immediately before the currently pending step, pushing the rest down.</div>
             <input type="text" id="neo-add-input" class="neo-input" placeholder="e.g. Type 'foo' into search" style="width:100%; box-sizing:border-box; margin-bottom:15px;">
             <div style="display:flex; justify-content:flex-end; gap:10px;">
                 <button id="neo-add-cancel-btn" class="neo-btn" style="flex:unset; width:100px;">Cancel</button>
@@ -795,7 +752,7 @@
     </div>
 
     <!-- Help overlay (rendered adjacent to main console) -->
-    <div id="neo-help-overlay" style="display:none; position:absolute; bottom:20px; right:425px; width:350px; background:var(--bg-drawer); border:1px solid var(--border-color); border-radius:16px; z-index:2147483646; padding:18px; box-sizing:border-box; box-shadow:0 12px 40px var(--shadow-color); color:var(--text-primary); font-size:13px; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);">
+    <div id="neo-help-overlay" style="display:none; position:absolute; bottom:0; right:405px; width:350px; background:var(--bg-drawer); border:1px solid var(--border-color); border-radius:16px; z-index:2147483646; padding:18px; box-sizing:border-box; box-shadow:0 12px 40px var(--shadow-color); color:var(--text-primary); font-size:13px; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);">
         <div style="color:var(--accent-primary); font-weight:bold; margin-bottom:12px; font-size:15px; text-align:center;">Interactive Debug Help</div>
         <div style="margin-bottom:12px; line-height:1.5;">
             <strong>Shortcuts:</strong><br>

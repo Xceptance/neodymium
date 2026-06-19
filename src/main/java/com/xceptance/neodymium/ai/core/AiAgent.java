@@ -381,21 +381,17 @@ public class AiAgent {
                 // If we've reached the end of the predefined steps list
                 if (i == stepsList.size()) {
                     if (isInteractive) {
-                        // Check if any steps were modified or added via the HUD
-                        if (!hudPromptChanged) {
-                            LOG.info(
-                                    "Execution complete. No interactive modifications were made, skipping Save & Exit prompt.");
-                            break;
-                        }
-
                         try {
+                            if (!this.hudPromptChanged) {
+                                break;
+                            }
                             // Show a final confirmation dialog to save the interactive session changes
                             final List<String> finishedStrs = new ArrayList<>();
                             finishedStrs.add("🎉 Execution Complete! Click Save & Exit to store changes.");
                             if (this.autoSkip) { logPauseReason("Execution Complete Dialog reached"); }
                             this.autoSkip = false;
                             Neodymium.getOrCreateInteractiveHud()
-                                    .injectOrUpdateHud(finishedStrs, performedInstructions, this.autoSkip, true, true,
+                                    .injectOrUpdateHud(finishedStrs, performedInstructions, this.autoSkip, this.hudPromptChanged, true,
                                             "");
                             // Block execution until the user responds to the prompt
                             waitForHudAction(false);
@@ -729,10 +725,17 @@ public class AiAgent {
                         }
                     }
 
-                    // Give the browser a tiny moment to initiate a navigation (if the action triggered one).
-                    // This prevents the HUD from explicitly maximizing on the old page right before it's destroyed,
-                    // which causes the "opens, closes, opens again" flicker.
-                    try { Thread.sleep(250); } catch (InterruptedException e) {}
+                    // Give the browser a moment to initiate and complete a navigation (if the action triggered one).
+                    // A higher delay (1000ms) is needed here to prevent flickering because a screenshot is taken
+                    // on the next step right after page load, and we want to ensure the page load/screenshot is ready
+                    // and the HUD state has fully transitioned.
+                    try
+                    {
+                        Thread.sleep(1000);
+                    }
+                    catch (final InterruptedException e)
+                    {
+                    }
 
                     // Accumulate executed actions
                     accumulatedActions.addAll(actions);
@@ -2411,6 +2414,11 @@ public class AiAgent {
         else if (HudActionType.EDIT == e.actionType)
         {
             final String editInstr = e.instruction;
+            int editIdx = i;
+            if (e.index >= 0 && e.index < stepsList.size()) {
+                editIdx = e.index;
+            }
+
             final Map<String, String> updatedBindings = e.bindings;
             if (updatedBindings != null && !updatedBindings.isEmpty())
             {
@@ -2419,28 +2427,28 @@ public class AiAgent {
                         new HashMap<>(Neodymium.getData()));
             }
 
-            stepsList.set(i, editInstr);
-            if (i >= 0 && i < stepLines.size())
+            stepsList.set(editIdx, editInstr);
+            if (editIdx >= 0 && editIdx < stepLines.size())
             {
-                stepLines.set(i, null);
+                stepLines.set(editIdx, null);
             }
-            if (result != null && result.getSteps().size() > i)
+            if (result != null && result.getSteps().size() > editIdx)
             {
-                result.getSteps().set(i, new StepDetails(editInstr));
+                result.getSteps().set(editIdx, new StepDetails(editInstr));
             }
 
             final Playbook playbook = Neodymium.getAiPlaybook();
-            if (playbook != null && playbook.getSteps().size() > i)
+            if (playbook != null && playbook.getSteps().size() > editIdx)
             {
-                playbook.getSteps().get(i).setPromptLine(editInstr);
-                playbook.getSteps().get(i).setReasoning("Manually edited by user via HUD");
-                playbook.getSteps().get(i).setActions(new ArrayList<>());
+                playbook.getSteps().get(editIdx).setPromptLine(editInstr);
+                playbook.getSteps().get(editIdx).setReasoning("Manually edited by user via HUD");
+                playbook.getSteps().get(editIdx).setActions(new ArrayList<>());
                 playbook.setRecording(true);
                 playbook.setChanged(true);
             }
 
             this.hudPromptChanged = true;
-            LOG.info("Edited current action to: {}", editInstr);
+            LOG.info("Edited action at index {} to: {}", editIdx, editInstr);
             return i - 1;
         }
         else if (HudActionType.APPEND == e.actionType)
@@ -2539,6 +2547,16 @@ public class AiAgent {
                 result.getSteps().remove(i);
             }
             performedInstructions.add("// [SKIPPED] " + step);
+            // A higher delay (1000ms) is needed here to prevent flickering because a screenshot is taken
+            // on the next step right after skip transition, and we want to ensure the browser and HUD state
+            // have fully stabilized.
+            try
+            {
+                Thread.sleep(1000);
+            }
+            catch (final InterruptedException ignored)
+            {
+            }
             return i - 1;
         }
 
