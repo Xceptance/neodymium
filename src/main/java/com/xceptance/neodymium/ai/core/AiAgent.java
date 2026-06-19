@@ -980,20 +980,53 @@ public class AiAgent {
 
                     // Execute the approved actions via Selenium/WebDriver, applying timeout isolation
                     final long originalTimeout = com.codeborne.selenide.Configuration.timeout;
+                    final long stepTimeoutMs;
                     if (customTimeoutMs != null)
                     {
-                        com.codeborne.selenide.Configuration.timeout = customTimeoutMs;
+                        stepTimeoutMs = customTimeoutMs;
                     }
+                    else
+                    {
+                        long detectedTimeout = originalTimeout;
+                        // Check if there is a WAIT action in the list to dynamically adjust Selenide timeout
+                        for (final Action act : actions)
+                        {
+                            if ("WAIT".equals(act.getType()))
+                            {
+                                long waitTimeout = 10000;
+                                final String val = act.getValue();
+                                if (val != null && !val.isBlank())
+                                {
+                                    try
+                                    {
+                                        waitTimeout = Long.parseLong(val);
+                                    }
+                                    catch (final NumberFormatException ignored)
+                                    {
+                                    }
+                                }
+                                // If the step previously failed and has a target element, extend the timeout to 20000 ms
+                                final PlaybookStep pbStep = playbook != null ? playbook.getCurrentStep() : null;
+                                if (pbStep != null && pbStep.failed() && act.getTarget() != null && !act.getTarget().isBlank())
+                                {
+                                    waitTimeout = 20000;
+                                    // Also update the action's value so it's recorded correctly in the playbook
+                                    act.setValue(List.of("20000"));
+                                }
+                                detectedTimeout = Math.max(detectedTimeout, waitTimeout);
+                            }
+                        }
+                        stepTimeoutMs = detectedTimeout;
+                    }
+
+                    com.codeborne.selenide.Configuration.timeout = stepTimeoutMs;
                     try
                     {
                         actionExecutor.executeAll(actions);
                     }
                     finally
                     {
-                        if (customTimeoutMs != null)
-                        {
-                            com.codeborne.selenide.Configuration.timeout = originalTimeout;
-                        }
+                        com.codeborne.selenide.Configuration.timeout = originalTimeout;
                     }
 
                     // Accumulate executed actions
@@ -1207,6 +1240,18 @@ public class AiAgent {
                 }
 
                 final PlaybookStep step = playbook.getCurrentStep();
+                if (!playbook.isRecording() && step.getPromptLine() != null
+                        && step.getPromptLine().equals(instruction) && !step.failed()
+                        && playbookReplayAttempts < 1)
+                {
+                    playbookReplayAttempts++;
+                    LOG.info(
+                            "    🔄 Playbook replay action failed due to transient/timing issue. Retrying recorded actions first (Attempt {})...",
+                            playbookReplayAttempts);
+                    executionLog.logWarning("Playbook replay action failed. Retrying recorded actions first...");
+                    continue;
+                }
+
                 if (expectedFailure)
                 {
                     if (isInteractive)

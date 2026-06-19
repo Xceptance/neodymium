@@ -71,7 +71,7 @@ public class AdvancedDomTest extends BaseAiTest
     {
         final String pageUrl = this.baseHttpsUrl + "/shadow-dom.html";
         final String steps = String.format("""
-                Open %s
+                OPEN %s
                 Type 'admin' into the username input inside the shadow root.
                 Type 'secret' into the password input inside the shadow root.
                 Click the login button inside the shadow root.

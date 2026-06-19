@@ -37,7 +37,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * Integration test verifying AI wait commands and their validation flow
  * in both live LLM and replay modes.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 2.5 Pro
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
@@ -100,14 +100,14 @@ public class WaitTest extends BaseAiTest
 
 
     /**
-     * Test wait with different values
+     * Test wait with different values targeting Section 1 (Hidden Element)
      */
     public final void testWait(final int waitingTime)
     {
         final String steps = String.format("""
                 OPEN ${wait.test.url}?%s
-                Click the 'Start Process' button (hint: #btn-start)
-                Wait for the success indicator to be visible (hint: #success)
+                Click the 'Start Process 1' button (hint: #btn-start-1)
+                Wait for the success indicator to be visible (hint: #success-1)
             """, "param1=" + Integer.toHexString(waitingTime));
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
@@ -123,7 +123,7 @@ public class WaitTest extends BaseAiTest
             .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
             .step(2, s -> s.hasLlmCalls(1).hasPesapCall());
 
-        assertTrue(Selenide.$("#success").isDisplayed());
+        assertTrue(Selenide.$("#success-1").isDisplayed());
 
         // close browser and start replay
         this.resetBrowser();
@@ -142,7 +142,7 @@ public class WaitTest extends BaseAiTest
             .step(1, s -> s.isReplayed())
             .step(2, s -> s.isReplayed());
 
-        assertTrue(Selenide.$("#success").isDisplayed());
+        assertTrue(Selenide.$("#success-1").isDisplayed());
     }
 
     /**
@@ -154,8 +154,8 @@ public class WaitTest extends BaseAiTest
     {
         final String steps = String.format("""
                 OPEN ${wait.test.url}?%s
-                Click the 'Start Process' button (hint: #btn-start)
-                Wait for the success indicator to be visible (hint: #success)
+                Click the 'Start Process 1' button (hint: #btn-start-1)
+                Wait for the success indicator to be visible (hint: #success-1)
             """, "param1=" + Integer.toHexString(15000));
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
@@ -171,7 +171,153 @@ public class WaitTest extends BaseAiTest
             .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
             .step(2, s -> s.hasLlmCalls(2).hasPesapCall().hasAction(0, "WAIT").hasRetries(0));
 
-        assertTrue(Selenide.$("#success").isDisplayed());
+        assertTrue(Selenide.$("#success-1").isDisplayed());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+        r2.logAiStepStats().reset();
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(4)
+            .hasActionsCount(3)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed());
+
+        assertTrue(Selenide.$("#success-1").isDisplayed());
+    }
+
+
+    /**
+     * Test wait with a wait hint and store step targeting Section 1 (Hidden Element).
+     */
+    @NeodymiumTest
+    public final void testWithAWaitHint()
+    {
+        final String steps = String.format("""
+                OPEN ${wait.test.url}?%s
+                Click 'Start Process 1'
+                Wait up to 10 seconds for the success indicator (hint: #success-1) and store the text of success indicator in variable 'completedText'
+            """, "param1=" + Integer.toHexString(6500));
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall()
+                .hasAction(0, "WAIT")
+                .hasAction(1, "STORE"));
+
+        assertTrue(Selenide.$("#success-1").isDisplayed());
+        assertEquals("Process Completed Successfully!", Neodymium.dataValue("completedText"));
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(3)
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed());
+
+        assertTrue(Selenide.$("#success-1").isDisplayed());
+        assertEquals("Process Completed Successfully!", Neodymium.dataValue("completedText"));
+    }
+
+    /**
+     * Test wait without a explicit wait hint in step wording targeting Section 1 (Hidden Element).
+     */
+    @NeodymiumTest
+    public final void testWithoutWaitHint()
+    {
+        final String steps = String.format("""
+                OPEN ${wait.test.url}?%s
+                Click 'Start Process 1'
+                Wait for the success indicator (hint: #success-1) and store the text of success indicator in variable 'completedText'
+            """, "param1=" + Integer.toHexString(6500));
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall()
+                .hasAction(0, "WAIT")
+                .hasAction(1, "STORE"));
+
+        assertTrue(Selenide.$("#success-1").isDisplayed());
+        assertEquals("Process Completed Successfully!", Neodymium.dataValue("completedText"));
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(3)
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed());
+
+        assertTrue(Selenide.$("#success-1").isDisplayed());
+        assertEquals("Process Completed Successfully!", Neodymium.dataValue("completedText"));
+    }
+
+    /**
+     * Test wait where the target element starts non-existent in the DOM and is dynamically inserted later (Section 2).
+     */
+    @NeodymiumTest
+    public final void testWaitPopIn()
+    {
+        final String steps = String.format("""
+                OPEN ${wait.test.url}?%s
+                Click the 'Start Process 2' button (hint: #btn-start-2)
+                Wait for the success indicator to be visible (hint: #success-2)
+            """, "param1=" + Integer.toHexString(1500));
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        r1.logAiStepStats().reset();
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(3)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall());
+
+        assertTrue(Selenide.$("#success-2").isDisplayed());
 
         // close browser and start replay
         this.resetBrowser();
@@ -190,151 +336,36 @@ public class WaitTest extends BaseAiTest
             .step(1, s -> s.isReplayed())
             .step(2, s -> s.isReplayed());
 
-        assertTrue(Selenide.$("#success").isDisplayed());
-    }
-
-
-    /**
-     * Test wait without the hint and very sharp step wording
-     */
-    @NeodymiumTest
-    public final void testWithAWaitHint()
-    {
-        final String steps = String.format("""
-                OPEN ${wait.test.url}?%s
-                Click 'Start Process'
-                Wait up to 10 seconds for the success indicator and store the text of success indicator in variable 'completedText'
-            """, "param1=" + Integer.toHexString(6500));
-
-        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
-
-        assertThat(r1)
-            .hasLlmCalls(4)
-            .hasDirectParses(1)
-            .hasReplays(0)
-            .hasActionsCount(4)
-            .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
-            .step(2, s -> s.hasLlmCalls(2).hasEscalations(1)
-                .hasPesapCall()
-                .hasAction(0, "WAIT")
-                .hasAction(1, "STORE"));
-
-        assertTrue(Selenide.$("#success").isDisplayed());
-        assertEquals("Process Completed Successfully!", Neodymium.dataValue("completedText"));
-
-        // close browser and start replay
-        this.resetBrowser();
-
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
-
-        assertThat(r2)
-            .hasLlmCalls(0)
-            .hasNoPesapCalls()
-            .hasNoEscalations()
-            .hasDirectParses(0)
-            .hasReplays(3)
-            .hasActionsCount(4)
-            .step(0, s -> s.isReplayed())
-            .step(1, s -> s.isReplayed())
-            .step(2, s -> s.isReplayed());
-
-        assertTrue(Selenide.$("#success").isDisplayed());
-        assertEquals("Process Completed Successfully!", Neodymium.dataValue("completedText"));
+        assertTrue(Selenide.$("#success-2").isDisplayed());
     }
 
     /**
-     * No wait hinting
-     */
-    @NeodymiumTest
-    public final void testWithoutWaitHint()
-    {
-        final String steps = String.format("""
-                OPEN ${wait.test.url}?%s
-                Click 'Start Process'
-                Wait for the success indicator and store the text of success indicator in variable 'completedText'
-            """, "param1=" + Integer.toHexString(6500));
-
-        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
-
-        assertThat(r1)
-            .hasLlmCalls(3)
-            .hasDirectParses(1)
-            .hasReplays(0)
-            .hasActionsCount(4)
-            .step(0, s -> s.isDirectParse())
-            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
-            .step(2, s -> s.hasLlmCalls(2).hasEscalations(1)
-                .hasPesapCall()
-                .hasAction(0, "WAIT")
-                .hasAction(1, "STORE"));
-
-        assertTrue(Selenide.$("#success").isDisplayed());
-        assertEquals("Process Completed Successfully!", Neodymium.dataValue("completedText"));
-
-        // close browser and start replay
-        this.resetBrowser();
-
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
-
-        assertThat(r2)
-            .hasLlmCalls(0)
-            .hasNoPesapCalls()
-            .hasNoEscalations()
-            .hasDirectParses(0)
-            .hasReplays(3)
-            .hasActionsCount(4)
-            .step(0, s -> s.isReplayed())
-            .step(1, s -> s.isReplayed())
-            .step(2, s -> s.isReplayed());
-
-        assertTrue(Selenide.$("#success").isDisplayed());
-        assertEquals("Process Completed Successfully!", Neodymium.dataValue("completedText"));
-    }
-
-    /**
-     * Test wait where the target element starts non-existent in the DOM and is dynamically inserted later.
-     */
-    @NeodymiumTest
-    public final void testWaitPopIn()
-    {
-        final String steps = String.format("""
-                OPEN ${wait.test.url}?scenario=2&%s
-                Click the 'Start Process' button (hint: #btn-start)
-                Wait for the success indicator to be visible (hint: #success)
-            """, "param1=" + Integer.toHexString(1500));
-
-        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
-        r1.logAiStepStats().reset();
-
-        assertTrue(Selenide.$("#success").isDisplayed());
-
-        // close browser and start replay
-        this.resetBrowser();
-
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
-        r2.logAiStepStats().reset();
-
-        assertTrue(Selenide.$("#success").isDisplayed());
-    }
-
-    /**
-     * Test wait where the target element already exists but its content changes to the expected value later.
+     * Test wait where the target element already exists but its content changes to the expected value later (Section 3).
      */
     @NeodymiumTest
     public final void testWaitContentChange()
     {
         final String steps = String.format("""
-                OPEN ${wait.test.url}?scenario=3&%s
-                Click the 'Start Process' button (hint: #btn-start)
-                Wait for the success indicator to be visible (hint: #success) and assert that its text is 'Process Completed Successfully!'
+                OPEN ${wait.test.url}?%s
+                Click the 'Start Process 3' button
+                Wait for the success indicator to be visible and assert that its text is 'Process Completed Successfully!'
             """, "param1=" + Integer.toHexString(1500));
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
         r1.logAiStepStats().reset();
 
-        assertTrue(Selenide.$("#success").isDisplayed());
-        assertEquals("Process Completed Successfully!", Selenide.$("#success").getText());
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(2, s -> s.hasLlmCalls(1).hasPesapCall().hasAction(0, "WAIT").hasAction(1, "ASSERT"));
+
+        assertTrue(Selenide.$("#success-3").isDisplayed());
+        assertEquals("Process Completed Successfully!", Selenide.$("#success-3").getText());
 
         // close browser and start replay
         this.resetBrowser();
@@ -342,7 +373,68 @@ public class WaitTest extends BaseAiTest
         final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         r2.logAiStepStats().reset();
 
-        assertTrue(Selenide.$("#success").isDisplayed());
-        assertEquals("Process Completed Successfully!", Selenide.$("#success").getText());
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(3)
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed());
+
+        assertTrue(Selenide.$("#success-3").isDisplayed());
+        assertEquals("Process Completed Successfully!", Selenide.$("#success-3").getText());
+    }
+
+    /**
+     * Test wait where the target element already exists but its content changes to the expected value later (Section 3).
+     */
+    @NeodymiumTest
+    public final void testWaitContentChangeWithHint()
+    {
+        final String steps = String.format("""
+                OPEN ${wait.test.url}?%s
+                Click the 'Start Process 3' button (hint: #btn-start-3)
+                Wait for the success indicator (hint: #success-3) to be visible and assert that its text is 'Process Completed Successfully!'
+            """, "param1=" + Integer.toHexString(15900));
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        r1.logAiStepStats().reset();
+
+        assertThat(r1)
+            .hasLlmCalls(3)
+            .hasEscalations(1)
+            .hasDirectParses(1)
+            .hasReplays(0)
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall())
+            .step(2, s -> s.hasLlmCalls(2).hasEscalations(1).hasPesapCall().hasAction(0, "WAIT").hasAction(1, "ASSERT"));
+
+        // check outside the LLM
+        assertTrue(Selenide.$("#success-3").isDisplayed());
+        assertEquals("Process Completed Successfully!", Selenide.$("#success-3").getText());
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+        r2.logAiStepStats().reset();
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(4)
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed());
+
+        assertTrue(Selenide.$("#success-3").isDisplayed());
+        assertEquals("Process Completed Successfully!", Selenide.$("#success-3").getText());
     }
 }

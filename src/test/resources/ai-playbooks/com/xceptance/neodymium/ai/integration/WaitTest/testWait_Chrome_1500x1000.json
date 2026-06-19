@@ -2,15 +2,15 @@
   "id": "com.xceptance.neodymium.ai.integration.WaitTest :: testWait :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "OPEN http://localhost:43377/WaitActionTest/testWaitHappyPath.html",
+      "promptLine": "OPEN http://localhost:43377/WaitActionTest/testWaitHappyPath.html?param1\u003drandom",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
-            "http://localhost:43377/WaitActionTest/testWaitHappyPath.html"
+            "http://localhost:43377/WaitActionTest/testWaitHappyPath.html?param1\u003drandom"
           ],
-          "description": "Navigate to http://localhost:43377/WaitActionTest/testWaitHappyPath.html",
+          "description": "Navigate to http://localhost:43377/WaitActionTest/testWaitHappyPath.html?param1\u003drandom",
           "elementContext": {},
           "replay": "",
           "adjust": false

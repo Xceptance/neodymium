@@ -42,6 +42,7 @@ import com.xceptance.neodymium.util.Neodymium;
 @Browser("Chrome_1500x1000")
 @Tag("integration")
 @Tag("llm")
+@Tag("navigate")
 public class NavigateTest extends BaseAiTest
 {
     // the test url

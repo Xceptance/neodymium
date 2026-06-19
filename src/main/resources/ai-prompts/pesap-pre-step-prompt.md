@@ -12,7 +12,7 @@ Return ONLY minified JSON:
 {
   "c": "HINT|AXTREE|STANDARD|VISUAL_LEAN|VISUAL",
   "jm": true|false,
-  "sp": ["First step text", "Second step text"]
+  "sp": ["First step text", "Second step text"] // Omit this field or set to [] if the step does not require splitting
 }
 
 ## Rules
@@ -27,8 +27,17 @@ Return ONLY minified JSON:
        * "The error text 'Invalid email' appears below the input"
 2. Analyze the `[CURRENT]` step exclusively. `[PREVIOUS]`/`[NEXT]` are for context only.
 3. Set "jm" to true ONLY if a custom Java method name (e.g., assertCalculation, validateShippingCost, runPriceCheck) is explicitly identified in the step. Do NOT set to true for natural language descriptions like "verify the calculation" or "check the total".
-4. Step Splitting: If the step is compound/multi-stage (i.e., contains multiple actions, regardless of the language of the step or conjunctions/punctuation used to join them), split it into simple, individual steps in "sp" (one step per action). This allows the execution engine to run, retry, and heal each action independently.
-   - If no split is needed, omit "sp".
+4. Step Splitting: Only split a step into "sp" if it contains multiple mutually independent interaction flows.
+   - If the step is not split, omit the "sp" field entirely or set it to an empty array `[]`.
+   - DO NOT split when one part of the step is a prerequisite or direct preparation for the next part of the same action flow (e.g., waiting for an element, hovering to reveal, focusing an input before entering text, or storing/asserting on a target element). These must remain as a single step.
+     * Examples of UNSPLIT:
+       + "Wait for success and store the text" (Wait is preparation for Store)
+       + "Hover over menu and click Profile" (Hover is preparation for Click)
+       + "Focus input and type admin" (Focus is preparation for Type)
+   - DO split if the step contains a sequence of state-changing interactions or unrelated operations.
+     * Examples of SPLIT:
+       + "Type admin in username, type secret in password, and click Login" -> ["Type admin in username", "type secret in password", "click Login"]
+       + "Click Submit and check that the table has 5 rows" -> ["Click Submit", "check that the table has 5 rows"]
    - CRITICAL: Do NOT split the conditional branch itself (e.g., the block from "If" / "When" to the end of the conditional logic). The conditional branch block must remain as a single, unsplit step to preserve its logical structure for the BRANCH action processor. Any sequential actions *outside* the conditional branch block (before or after it) *must* be split off into their own separate steps.
      * Example of splitting a sequence containing a branch:
        Input: "Click the Menu button, and then if the Accept Cookies button is visible, click it, else click the Main Action button, and then verify the success message"

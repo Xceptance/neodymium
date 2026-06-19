@@ -2,27 +2,25 @@
   "id": "com.xceptance.neodymium.ai.integration.AdvancedDomTest :: testShadowDom :: Browser Chrome_1500x1000",
   "steps": [
     {
-      "promptLine": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
-      "reasoning": "Navigating to the specified URL.",
+      "promptLine": "OPEN https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
+      "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "NAVIGATE",
           "value": [
             "https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html"
           ],
-          "description": "Open https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
-          "elementDetails": "https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
+          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
           "elementContext": {},
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false,
-      "healedContextLevel": "AXTREE"
+      "expectedFailure": false
     },
     {
       "promptLine": "Type \u0027admin\u0027 into the username input inside the shadow root.",
-      "reasoning": "The instruction asks to type \u0027admin\u0027 into the username input. The AXTree shows a textbox with id \u0027shadow-username\u0027 and aria-label \u0027Username\u0027, which is the correct target. I\u0027ve created a TYPE action for this element.",
+      "reasoning": "Identified the username input by its ID and generated a TYPE action to enter \u0027admin\u0027.",
       "actions": [
         {
           "type": "TYPE",
@@ -30,7 +28,7 @@
           "value": [
             "admin"
           ],
-          "description": "Type \u0027admin\u0027 into the username input field",
+          "description": "Type \u0027admin\u0027 into the username input",
           "elementDetails": "Username textbox",
           "elementContext": {
             "id": "shadow-username",

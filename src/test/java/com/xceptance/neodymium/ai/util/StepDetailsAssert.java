@@ -321,4 +321,18 @@ public final class StepDetailsAssert
         assertEquals(expected, step.getLlmCalls().get(lastIndex).getContextLevel(), "End ContextLevel mismatch at last LLM call");
         return this;
     }
+
+    /**
+     * Asserts the number of retries that occurred during this step.
+     *
+     * @param expected the expected number of retries
+     * @return this assertion helper
+     */
+    public final StepDetailsAssert hasRetries(final int expected)
+    {
+        final int calls = step.getLlmCalls().size();
+        final int retries = calls > 0 ? (calls - 1 - step.getEscalations().size()) : 0;
+        assertEquals(expected, Math.max(0, retries), "Step retry count mismatch");
+        return this;
+    }
 }
