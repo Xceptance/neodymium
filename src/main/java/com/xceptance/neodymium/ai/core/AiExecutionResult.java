@@ -339,8 +339,10 @@ public final class AiExecutionResult
             if (this.aiBrowser.getStats() != null)
             {
                 this.aiBrowser.getStats().reset();
+                this.aiBrowser.setGlobalStatsLogged(false);
             }
             this.aiBrowser.clearExecutionResults();
+            this.aiBrowser.setStepStatsLogged(false);
         }
         return this;
     }
@@ -359,9 +361,13 @@ public final class AiExecutionResult
 
         public final void reset()
         {
-            if (this.browser != null && this.browser.getStats() != null)
+            if (this.browser != null)
             {
-                this.browser.getStats().reset();
+                if (this.browser.getStats() != null)
+                {
+                    this.browser.getStats().reset();
+                }
+                this.browser.setGlobalStatsLogged(false);
             }
         }
     }
@@ -383,6 +389,7 @@ public final class AiExecutionResult
             if (this.browser != null)
             {
                 this.browser.clearExecutionResults();
+                this.browser.setStepStatsLogged(false);
             }
         }
     }

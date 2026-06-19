@@ -85,6 +85,16 @@ public class AiBrowser implements AutoCloseable {
         return this.dynamicallyRegisteredClasses;
     }
 
+    public final void setGlobalStatsLogged(final boolean globalStatsLogged)
+    {
+        this.globalStatsLogged = globalStatsLogged;
+    }
+
+    public final void setStepStatsLogged(final boolean stepStatsLogged)
+    {
+        this.stepStatsLogged = stepStatsLogged;
+    }
+
     /**
      * Creates a new AiBrowser with default configuration.
      */
