@@ -635,17 +635,6 @@ public abstract class BaseAiTest extends BaseLlmTest
                     runSteps.run();
                 }
             }
-            try
-            {
-                if (Neodymium.ai() != null)
-                {
-                    Neodymium.ai().logStatsAndStepSummary();
-                }
-            }
-            catch (final Throwable t)
-            {
-                // Safety fallback to ignore log issues
-            }
             return Neodymium.getLastAiExecutionResult();
         }
         finally

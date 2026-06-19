@@ -208,7 +208,7 @@ public class AiBrowser implements AutoCloseable {
             }
         }
 
-        final AiExecutionResult result = new AiExecutionResult(Neodymium.getData());
+        final AiExecutionResult result = new AiExecutionResult(Neodymium.getData(), this);
         this.lastExecutionResult = result;
         this.executionResults.add(result);
 
@@ -374,92 +374,125 @@ public class AiBrowser implements AutoCloseable {
             {
                 for (final StepDetails step : result.getSteps())
                 {
-                    LOG.trace("  Step {}: {}", stepIndex++, step.getRawInstruction());
-                    final String mode;
-                    if (step.isReplayed())
-                    {
-                        mode = "REPLAY";
-                    }
-                    else if (step.isDirectParse())
-                    {
-                        mode = "DIRECT_PARSE";
-                    }
-                    else
-                    {
-                        mode = "LLM";
-                    }
-                    LOG.trace("    Mode:           {}", mode);
-                    LOG.trace("    Duration:       {} ms", step.getDurationMs());
-
-                    final List<Action> actions = step.getActions();
-                    if (actions != null && !actions.isEmpty())
-                    {
-                        final String actionTypes = actions.stream()
-                                .map(Action::getType)
-                                .collect(Collectors.joining(", "));
-                        LOG.trace("    Actions:        {} ({})", actions.size(), actionTypes);
-                    }
-                    else
-                    {
-                        LOG.trace("    Actions:        0");
-                    }
-
-                    long standardIn = 0;
-                    long standardOut = 0;
-                    long standardCached = 0;
-                    int standardCalls = 0;
-
-                    long pesapIn = 0;
-                    long pesapOut = 0;
-                    long pesapCached = 0;
-                    int pesapCalls = 0;
-
-                    if (step.getPesapCall() != null)
-                    {
-                        final LlmCallDetails pc = step.getPesapCall();
-                        pesapIn += pc.getInputTokens();
-                        pesapOut += pc.getOutputTokens();
-                        pesapCached += pc.getCachedTokens();
-                        pesapCalls = 1;
-                    }
-
-                    for (final LlmCallDetails call : step.getLlmCalls())
-                    {
-                        if (call.getCallMode() == LlmMode.PESAP)
-                        {
-                            pesapIn += call.getInputTokens();
-                            pesapOut += call.getOutputTokens();
-                            pesapCached += call.getCachedTokens();
-                            pesapCalls++;
-                        }
-                        else
-                        {
-                            standardIn += call.getInputTokens();
-                            standardOut += call.getOutputTokens();
-                            standardCached += call.getCachedTokens();
-                            standardCalls++;
-                        }
-                    }
-
-                    if (standardCalls > 0)
-                    {
-                        LOG.trace("    Standard Calls: {} (Tokens: {} in ({} cached) → {} out)",
-                                  standardCalls, standardIn, standardCached, standardOut);
-                    }
-                    if (pesapCalls > 0)
-                    {
-                        LOG.trace("    PESAP Calls:    {} (Tokens: {} in ({} cached) → {} out)",
-                                  pesapCalls, pesapIn, pesapCached, pesapOut);
-                    }
-
-                    if (step.getFailureReason() != null)
-                    {
-                        LOG.trace("    Failure:        {}", step.getFailureReason());
-                    }
+                    logSingleStep(step, stepIndex++);
                 }
             }
         }
         LOG.trace("=================================================");
+    }
+
+    /**
+     * Logs the step-by-step trace statistics for a specific execution result.
+     *
+     * @param result the execution result to log
+     */
+    public final void logStepSummary(final AiExecutionResult result)
+    {
+        LOG.trace("======== 📊 AI Step Execution Statistics ========");
+        int stepIndex = 1;
+        synchronized (result.getSteps())
+        {
+            for (final StepDetails step : result.getSteps())
+            {
+                logSingleStep(step, stepIndex++);
+            }
+        }
+        LOG.trace("=================================================");
+        this.statsLogged = true;
+    }
+
+    /**
+     * Clears the accumulated execution results list.
+     */
+    public final void clearExecutionResults()
+    {
+        this.executionResults.clear();
+    }
+
+    private void logSingleStep(final StepDetails step, final int stepIndex)
+    {
+        LOG.trace("  Step {}: {}", stepIndex, step.getRawInstruction());
+        final String mode;
+        if (step.isReplayed())
+        {
+            mode = "REPLAY";
+        }
+        else if (step.isDirectParse())
+        {
+            mode = "DIRECT_PARSE";
+        }
+        else
+        {
+            mode = "LLM";
+        }
+        LOG.trace("    Mode:           {}", mode);
+        LOG.trace("    Duration:       {} ms", step.getDurationMs());
+
+        final List<Action> actions = step.getActions();
+        if (actions != null && !actions.isEmpty())
+        {
+            final String actionTypes = actions.stream()
+                    .map(Action::getType)
+                    .collect(Collectors.joining(", "));
+            LOG.trace("    Actions:        {} ({})", actions.size(), actionTypes);
+        }
+        else
+        {
+            LOG.trace("    Actions:        0");
+        }
+
+        long standardIn = 0;
+        long standardOut = 0;
+        long standardCached = 0;
+        int standardCalls = 0;
+
+        long pesapIn = 0;
+        long pesapOut = 0;
+        long pesapCached = 0;
+        int pesapCalls = 0;
+
+        if (step.getPesapCall() != null)
+        {
+            final LlmCallDetails pc = step.getPesapCall();
+            pesapIn += pc.getInputTokens();
+            pesapOut += pc.getOutputTokens();
+            pesapCached += pc.getCachedTokens();
+            pesapCalls = 1;
+        }
+
+        for (final LlmCallDetails call : step.getLlmCalls())
+        {
+            if (call.getCallMode() == LlmMode.PESAP)
+            {
+                pesapIn += call.getInputTokens();
+                pesapOut += call.getOutputTokens();
+                pesapCached += call.getCachedTokens();
+                pesapCalls++;
+            }
+            else
+            {
+                standardIn += call.getInputTokens();
+                standardOut += call.getOutputTokens();
+                standardCached += call.getCachedTokens();
+                standardCalls++;
+            }
+        }
+
+        if (standardCalls > 0)
+        {
+            LOG.trace("    Standard Calls: {} (Tokens: {} in ({} cached) → {} out)",
+                      standardCalls, standardIn, standardCached, standardOut);
+        }
+        if (pesapCalls > 0)
+        {
+            LOG.trace("    PESAP Calls:    {} (Tokens: {} in ({} cached) → {} out)",
+                      pesapCalls, pesapIn, pesapCached, pesapOut);
+        }
+
+        if (step.getFailureReason() != null)
+        {
+            LOG.trace("    Failure:        {}", step.getFailureReason());
+        }
     }
 
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\$\\{([^}]+)\\}", Pattern.CASE_INSENSITIVE);

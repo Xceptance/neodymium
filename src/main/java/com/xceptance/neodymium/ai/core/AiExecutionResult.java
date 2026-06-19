@@ -38,8 +38,9 @@ public final class AiExecutionResult
     private final List<LookupDetails> lookups;
     private final List<EscalationDetails> escalations;
     private final Map<String, String> testDataSnapshot;
+    private final transient AiBrowser aiBrowser;
 
-    // cumulative token/metric delta values
+    // cumulative token/metric deltas
     private long inputTokens;
     private long outputTokens;
     private long cachedTokens;
@@ -58,12 +59,13 @@ public final class AiExecutionResult
 
     private long durationMs;
 
-    public AiExecutionResult(final Map<String, String> testDataSnapshot)
+    public AiExecutionResult(final Map<String, String> testDataSnapshot, final AiBrowser aiBrowser)
     {
         this.steps = Collections.synchronizedList(new ArrayList<>());
         this.lookups = Collections.synchronizedList(new ArrayList<>());
         this.escalations = Collections.synchronizedList(new ArrayList<>());
         this.testDataSnapshot = Collections.unmodifiableMap(new HashMap<>(testDataSnapshot));
+        this.aiBrowser = aiBrowser;
     }
 
     public final List<StepDetails> getSteps()
@@ -295,5 +297,51 @@ public final class AiExecutionResult
             }
         }
         return true;
+    }
+
+    /**
+     * Logs the cumulative AI execution statistics.
+     *
+     * @return this execution result instance
+     */
+    public final AiExecutionResult logAiStats()
+    {
+        if (this.aiBrowser != null && this.aiBrowser.getStats() != null)
+        {
+            this.aiBrowser.getStats().logSummary();
+        }
+        return this;
+    }
+
+    /**
+     * Logs the step-by-step trace statistics for this execution.
+     *
+     * @return this execution result instance
+     */
+    public final AiExecutionResult logAiStepStats()
+    {
+        if (this.aiBrowser != null)
+        {
+            this.aiBrowser.logStepSummary(this);
+        }
+        return this;
+    }
+
+    /**
+     * Resets the cumulative statistics and clears the execution steps.
+     *
+     * @return this execution result instance
+     */
+    public final AiExecutionResult reset()
+    {
+        if (this.aiBrowser != null)
+        {
+            if (this.aiBrowser.getStats() != null)
+            {
+                this.aiBrowser.getStats().reset();
+            }
+            this.aiBrowser.clearExecutionResults();
+        }
+        return this;
     }
 }
