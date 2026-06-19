@@ -1,11 +1,16 @@
+before:
+  - java startManager()
+
+after:
+  - java stopManager()
+
+steps: |
+  Open ${auraManagerUrl} in the browser
+  Verify the page title is "Neodymium Aura Manager"
+  Enter "Hello Aura, what can you do?" into the chat input field
+  Press the Enter key
+  Verify the chat messages list contains "Hello Aura, what can you do?"
+  Wait until the last chat message is from the AI
+  
 data:
   - testId: "Chat_Message"
-    before:
-      - java startManager()
-    steps: |
-      Open ${auraManagerUrl} in the browser
-      Enter "Hello Aura" in the chat input field
-      Press the Enter key in the chat input field
-      Verify that "Hello Aura" appears as a user message in the chat container
-    after:
-      - java stopManager()

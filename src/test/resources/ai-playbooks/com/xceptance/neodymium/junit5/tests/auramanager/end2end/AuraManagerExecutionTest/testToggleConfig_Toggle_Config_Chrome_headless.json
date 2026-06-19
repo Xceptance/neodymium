@@ -21,10 +21,11 @@
     },
     {
       "promptLine": "Open http://127.0.0.1:18130 in the browser",
-      "reasoning": "The instruction is to navigate to a URL. I have created a NAVIGATE action with the provided URL.",
+      "reasoning": "The instruction is to open a specific URL. A NAVIGATE action is generated to fulfill this request.",
       "actions": [
         {
           "type": "NAVIGATE",
+          "target": "",
           "value": [
             "http://127.0.0.1:18130"
           ],
@@ -40,12 +41,12 @@
     },
     {
       "promptLine": "Toggle the \"Headless Mode\" switch",
-      "reasoning": "Identified the \u0027Headless Mode\u0027 switch by its data-neo-ref attribute and generated a click action to toggle it.",
+      "reasoning": "Identified the \u0027Headless Mode\u0027 switch by its accessibility name \u0027OptHeadless\u0027 and data-neo-ref \u0027xc_d1063k\u0027 and generated a CLICK action to toggle it.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "[data-neo-ref\u003d\u0027xc_d1063k\u0027]",
-          "description": "Toggle the \u0027Headless Mode\u0027 switch",
+          "target": "#xc_d1063k",
+          "description": "Toggle the \"Headless Mode\" switch",
           "elementDetails": "OptHeadless checkbox",
           "elementContext": {
             "id": "optHeadless",
@@ -83,7 +84,7 @@
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_ry86y6",
+          "target": "#xc_ry86y6",
           "description": "Toggle the \u0027Record Video\u0027 switch",
           "elementDetails": "OptVideo checkbox",
           "elementContext": {

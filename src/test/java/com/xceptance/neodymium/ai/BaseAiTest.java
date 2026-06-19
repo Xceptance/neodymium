@@ -432,9 +432,9 @@ public abstract class BaseAiTest
      */
     private String normalizeTarget(final String target)
     {
-        if (target == null)
+        if (target == null || target.equals("null"))
         {
-            return null;
+            return "";
         }
         String cleaned = target.trim();
         if (cleaned.startsWith("#xc_"))

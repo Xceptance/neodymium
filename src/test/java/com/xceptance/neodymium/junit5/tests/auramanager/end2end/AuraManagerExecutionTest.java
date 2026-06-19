@@ -3,6 +3,7 @@ package com.xceptance.neodymium.junit5.tests.auramanager.end2end;
 import com.xceptance.neodymium.common.testdata.DataFile;
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
+import com.xceptance.neodymium.util.Neodymium;
 
 @DataFile("ai-test-pages/aura-manager-execution-test.yaml")
 public class AuraManagerExecutionTest extends BaseAuraManagerUiTest
@@ -13,8 +14,8 @@ public class AuraManagerExecutionTest extends BaseAuraManagerUiTest
     }
     @NeodymiumTest
     @DataSet(id = "Toggle_Config")
-    public void testToggleConfig()
+    public void testToggleConfig() throws Throwable
     {
-        assertMultiPhaseExecution();
+        Neodymium.ai().execute();
     }
 }

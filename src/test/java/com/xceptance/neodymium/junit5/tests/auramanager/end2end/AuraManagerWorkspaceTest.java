@@ -21,14 +21,9 @@ package com.xceptance.neodymium.junit5.tests.auramanager.end2end;
 import com.xceptance.neodymium.common.testdata.DataFile;
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import org.junit.jupiter.api.BeforeEach;
+import com.xceptance.neodymium.util.Neodymium;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.TestMethodOrder;
 
 /**
@@ -45,45 +40,19 @@ public class AuraManagerWorkspaceTest extends BaseAuraManagerUiTest
         super(18150);
     }
 
-    @BeforeEach
-    public void prepareWorkspaceState(final TestInfo testInfo) throws IOException
-    {
-        final String methodName = testInfo.getTestMethod().get().getName();
-        final File targetFile = new File("src/test/resources/automated-workspace-test.yaml").getAbsoluteFile();
-        if ("testCreateTest".equals(methodName))
-        {
-            if (targetFile.exists())
-            {
-                Files.delete(targetFile.toPath());
-            }
-        }
-        else if ("testDeleteTest".equals(methodName))
-        {
-            if (!targetFile.exists())
-            {
-                final String boilerplate = "# Neodymium YAML Test Data File\n" +
-                                           "steps: |\n" +
-                                           "  Open browser\n" +
-                                           "data:\n" +
-                                           "  - testId: \"Automated Workspace Test\"\n";
-                Files.writeString(targetFile.toPath(), boilerplate, StandardCharsets.UTF_8);
-            }
-        }
-    }
-
     @NeodymiumTest
     @DataSet(id = "Create_Test")
     @Order(1)
-    public void testCreateTest()
+    public void testCreateTest() throws Throwable
     {
-        assertMultiPhaseExecution();
+        Neodymium.ai().execute();
     }
 
     @NeodymiumTest
     @DataSet(id = "Delete_Test")
     @Order(2)
-    public void testDeleteTest()
+    public void testDeleteTest() throws Throwable
     {
-        assertMultiPhaseExecution();
+        Neodymium.ai().execute();
     }
 }

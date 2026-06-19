@@ -662,6 +662,20 @@
         </div>
     </div>
 
+    <!-- DELETE CONFIRMATION MODAL -->
+    <div class="modal-overlay" id="deleteTestModal">
+        <div class="modal-card">
+            <div class="modal-header">Delete Test Case</div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <span id="deleteFileNameDisplay" style="font-weight: 600;"></span>?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-editor" onclick="document.getElementById('deleteTestModal').style.display='none'">Cancel</button>
+                <button class="btn-danger" style="margin-top:0;" onclick="submitDeleteTest()">Confirm Delete</button>
+            </div>
+        </div>
+    </div>
+
     <!-- VIEW LOG MODAL -->
     <div class="modal-overlay" id="logModal" style="z-index: 200;">
         <div class="modal-card" style="width: 80%; height: 80%; max-width: 1200px; max-height: 90vh;">
@@ -1628,24 +1642,29 @@
 
         async function deleteYamlFile() {
             if (!activeEditingFile) return;
-            if (confirm(`Are you sure you want to delete "${activeEditingFile}"?`)) {
-                try {
-                    const res = await fetch('/api/delete', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ file: activeEditingFile })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        selectedDatasets = selectedDatasets.filter(d => d.file !== activeEditingFile);
-                        closeEditor();
-                        loadFiles();
-                    } else {
-                        showToast("Error deleting: " + data.error, "error");
-                    }
-                } catch (e) {
-                    showToast("Error deleting file: " + e.message, "error");
+            document.getElementById('deleteFileNameDisplay').textContent = activeEditingFile;
+            document.getElementById('deleteTestModal').style.display = 'flex';
+        }
+
+        async function submitDeleteTest() {
+            if (!activeEditingFile) return;
+            document.getElementById('deleteTestModal').style.display = 'none';
+            try {
+                const res = await fetch('/api/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: activeEditingFile })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    selectedDatasets = selectedDatasets.filter(d => d.file !== activeEditingFile);
+                    closeEditor();
+                    loadFiles();
+                } else {
+                    showToast("Error deleting: " + data.error, "error");
                 }
+            } catch (e) {
+                showToast("Error deleting file: " + e.message, "error");
             }
         }
 

@@ -1517,13 +1517,19 @@ public final class NeodymiumAuraManager
             {
                 if (pendingShutdown == null || pendingShutdown.isDone())
                 {
-                    LOGGER.info("[Aura Server] No active clients. Scheduling server shutdown in 5 seconds...");
+                    int shutdownDelay = Neodymium.aiConfiguration().auraManagerShutdownDelay();
+                    if (shutdownDelay < 0)
+                    {
+                        LOGGER.info("[Aura Server] Shutdown delay is disabled by configuration.");
+                        return;
+                    }
+                    LOGGER.info("[Aura Server] No active clients. Scheduling server shutdown in {} seconds...", shutdownDelay);
                     pendingShutdown = shutdownScheduler.schedule(() -> {
                         synchronized (activeClients)
                         {
                             if (activeClients.isEmpty())
                             {
-                                LOGGER.info("[Aura Server] No active clients for 5 seconds. Shutting down...");
+                                LOGGER.info("[Aura Server] No active clients for {} seconds. Shutting down...", shutdownDelay);
                                 
                                 final Process p = activeProcess.get();
                                 if (p != null)
@@ -1541,7 +1547,7 @@ public final class NeodymiumAuraManager
                                 }
                             }
                         }
-                    }, 5, TimeUnit.SECONDS);
+                    }, shutdownDelay, TimeUnit.SECONDS);
                 }
             }
         }

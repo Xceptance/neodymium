@@ -2,6 +2,24 @@
   "id": "com.xceptance.neodymium.junit5.tests.auramanager.end2end.AuraManagerWorkspaceTest :: testDeleteTest :: Delete_Test :: Browser Chrome_headless",
   "steps": [
     {
+      "promptLine": "java createWorkspaceTestFile()",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "createWorkspaceTestFile",
+          "value": [
+            ""
+          ],
+          "description": "Call createWorkspaceTestFile with param ",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
       "promptLine": "java startManager()",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
@@ -21,7 +39,7 @@
     },
     {
       "promptLine": "Open http://127.0.0.1:18150 in the browser",
-      "reasoning": "The instruction is to navigate to a URL. I am using the NAVIGATE action with the provided URL.",
+      "reasoning": "The instruction is to open a specific URL. Although the current URL is similar, a NAVIGATE action is issued to ensure the page is loaded as requested.",
       "actions": [
         {
           "type": "NAVIGATE",
@@ -40,12 +58,12 @@
     },
     {
       "promptLine": "Select the file \"automated-workspace-test.yaml\" from the file selection list",
-      "reasoning": "The instruction asks to select a file. Based on the AXTree, files are represented by buttons with \u0027Edit YAML Steps for [filename]\u0027 as their name. I found the button corresponding to \u0027automated-workspace-test.yaml\u0027 and generated a CLICK action for it.",
+      "reasoning": "Identified the button corresponding to \u0027automated-workspace-test.yaml\u0027 by its name and data-neo-ref attribute and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
           "target": "[data-neo-ref\u003d\u0027xc_2f2h7a\u0027]",
-          "description": "Select the file \"automated-workspace-test.yaml\" by clicking its associated button.",
+          "description": "Select the file \"automated-workspace-test.yaml\" from the file selection list",
           "elementDetails": "Edit YAML Steps for automated-workspace-test.yaml",
           "elementContext": {
             "classes": "edit-icon-btn",
@@ -61,13 +79,13 @@
     },
     {
       "promptLine": "Click the \"Delete\" button in the editor panel",
-      "reasoning": "",
+      "reasoning": "Found the \u0027Delete\u0027 button by its data-neo-ref attribute and name, and created a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
           "target": "[data-neo-ref\u003d\u0027xc_m06owx\u0027]",
           "description": "Click the \"Delete\" button in the editor panel",
-          "elementDetails": "Delete button",
+          "elementDetails": "Delete",
           "elementContext": {
             "classes": "btn-editor delete",
             "text": "Delete",
@@ -83,34 +101,59 @@
       "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "java acceptAlert()",
-      "reasoning": "directly parsed or local validation succeeded",
+      "promptLine": "Wait for the \"Delete Test Case\" modal to appear",
+      "reasoning": "The \u0027Delete Test Case\u0027 modal is identified by its ID \u0027deleteTestModal\u0027 and is currently visible in the DOM. An ASSERT action is used to confirm its appearance.",
       "actions": [
         {
-          "type": "JAVA_METHOD",
-          "target": "acceptAlert",
+          "type": "ASSERT",
+          "target": "#deleteTestModal",
           "value": [
-            ""
+            "visible"
           ],
-          "description": "Call acceptAlert with param ",
+          "description": "Wait for the \u0027Delete Test Case\u0027 modal to appear",
+          "elementDetails": "Delete Test Case modal",
           "elementContext": {},
+          "replay": "",
+          "frameId": "29558F507B7937EA29D94B13C5E4AE0E:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Click the \"Confirm Delete\" button",
+      "reasoning": "Found the button with name \"Confirm Delete\" and data-neo-ref \"xc_qg8rsf\" and created a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "xc_qg8rsf",
+          "description": "Click the \"Confirm Delete\" button",
+          "elementDetails": "Confirm Delete",
+          "elementContext": {
+            "classes": "btn-danger",
+            "text": "Confirm Delete",
+            "tagName": "button",
+            "type": "submit"
+          },
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "java verifyTextNotPresentInFileList(\"automated-workspace-test.yaml\")",
+      "promptLine": "java verifyAutomatedWorkspaceTestNotPresent()",
       "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "JAVA_METHOD",
-          "target": "verifyTextNotPresentInFileList",
+          "target": "verifyAutomatedWorkspaceTestNotPresent",
           "value": [
-            "\"automated-workspace-test.yaml\""
+            ""
           ],
-          "description": "Call verifyTextNotPresentInFileList with param \"automated-workspace-test.yaml\"",
+          "description": "Call verifyAutomatedWorkspaceTestNotPresent with param ",
           "elementContext": {},
           "replay": "",
           "adjust": false

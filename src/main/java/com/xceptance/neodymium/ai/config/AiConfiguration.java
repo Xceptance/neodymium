@@ -156,4 +156,8 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.agent.javaMethod.utilityClasses")
     @DefaultValue("com.xceptance.neodymium.ai.util.AiAssertions")
     public List<String> aiJavaMethodUtilityClasses();
+
+    @Key("neodymium.ai.aura.manager.shutdownDelay")
+    @DefaultValue("5")
+    public int auraManagerShutdownDelay();
 }

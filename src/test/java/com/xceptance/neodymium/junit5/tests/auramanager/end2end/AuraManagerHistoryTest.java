@@ -3,6 +3,7 @@ package com.xceptance.neodymium.junit5.tests.auramanager.end2end;
 import com.xceptance.neodymium.common.testdata.DataFile;
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
+import com.xceptance.neodymium.util.Neodymium;
 
 @DataFile("ai-test-pages/aura-manager-history-test.yaml")
 public class AuraManagerHistoryTest extends BaseAuraManagerUiTest
@@ -13,8 +14,8 @@ public class AuraManagerHistoryTest extends BaseAuraManagerUiTest
     }
     @NeodymiumTest
     @DataSet(id = "History_List")
-    public void testHistoryList()
+    public void testHistoryList() throws Throwable
     {
-        assertMultiPhaseExecution();
+        Neodymium.ai().execute();
     }
 }
