@@ -688,6 +688,11 @@
             <div class="neo-reasoning-body" id="neo-playbook-reasoning"></div>
         </div>
 
+        <!-- Optional Dump Context overlay button inside HUD -->
+        <div id="neo-dump-container" style="display:none; padding:12px 16px 0 16px; background:var(--toolbar-bg);">
+            <button id="neo-dump-btn" class="neo-btn" style="width:100%; background:rgba(239, 68, 68, 0.12); color:#ef4444; border-color:rgba(239, 68, 68, 0.25);" title="Dump context (DOM, History, Error) to file"><i class="fa-solid fa-download"></i> Dump Debug Context</button>
+        </div>
+
         <!-- Toolbar controls (Standard Mode) -->
         <div class="neo-toolbar" id="neo-toolbar-controls" style="display: flex;">
             <button class="neo-btn" id="neo-rewind-btn" title="Rewind 1 step back"><i class="fa-solid fa-backward-step"></i> Back</button>
@@ -706,11 +711,6 @@
         <div class="neo-toolbar" id="neo-edit-toolbar" style="display: none;">
             <button class="neo-btn" id="neo-edit-cancel-btn" title="Cancel step editing"><i class="fa-solid fa-xmark"></i> Cancel</button>
             <button class="neo-btn" id="neo-edit-submit-btn" title="Save changes and regenerate actions"><i class="fa-solid fa-check"></i> Save</button>
-        </div>
-
-        <!-- Optional Dump Context overlay button inside HUD -->
-        <div id="neo-dump-container" style="display:none; padding:0 16px 12px 16px; background:var(--toolbar-bg);">
-            <button id="neo-dump-btn" class="neo-btn" style="width:100%; background:rgba(239, 68, 68, 0.12); color:#ef4444; border-color:rgba(239, 68, 68, 0.25);" title="Dump context (DOM, History, Error) to file"><i class="fa-solid fa-download"></i> Dump Debug Context</button>
         </div>
 
         <!-- Save & Exit / Finished Overlay -->

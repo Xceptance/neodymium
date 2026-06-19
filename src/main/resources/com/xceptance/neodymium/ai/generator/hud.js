@@ -459,9 +459,14 @@
             
             // Move edit overlay to the step item container being edited
             var stepItemEl = null;
-            var editIconEl = document.querySelector('.neo-edit-step-icon[data-idx="' + idx + '"]');
-            if (editIconEl) {
-                stepItemEl = editIconEl.closest('.neo-step-item');
+            if (idx === (performed && performed.length > 0 ? performed.length : 0)) {
+                // Active step
+                stepItemEl = document.querySelector('.neo-step-item.active');
+            } else {
+                var editIconEl = document.querySelector('.neo-edit-step-icon[data-idx="' + idx + '"]');
+                if (editIconEl) {
+                    stepItemEl = editIconEl.closest('.neo-step-item');
+                }
             }
             if (!stepItemEl) {
                 // Fallback to active step card
@@ -1227,15 +1232,9 @@
                 modificationsBlock.style.display = 'none'; 
                 
                 buttonsContainer.innerHTML = `
-                    <button class="neo-btn" id="neo-exit-discard-btn" style="flex: 1; color: #ef4444; border-color: rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.03);"><i class="fa-solid fa-backward-step"></i> Back</button>
-                    <button class="neo-btn" id="neo-exit-close-btn" style="flex: 1.5; color: #ef4444; border-color: rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.03);"><i class="fa-solid fa-xmark"></i> Cancel & Close</button>
-                    <button class="neo-btn" id="neo-exit-save-btn" style="flex: 2; color: #ffffff; background: var(--accent-success); border-color: var(--accent-success);"><i class="fa-solid fa-check"></i> Save & Overwrite</button>
+                    <button class="neo-btn" id="neo-exit-close-btn" style="flex: 1; color: #ef4444; border-color: rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.03);"><i class="fa-solid fa-xmark"></i> Cancel & Close</button>
+                    <button class="neo-btn" id="neo-exit-save-btn" style="flex: 1.5; color: #ffffff; background: var(--accent-success); border-color: var(--accent-success);"><i class="fa-solid fa-check"></i> Save & Overwrite</button>
                 `;
-                
-                document.getElementById('neo-exit-discard-btn').addEventListener('click', function() {
-                    var rewindIdx = Math.max(0, window.neoPerformedList.length - 1);
-                    window.neoSubmitAction({ action: "REWIND", index: rewindIdx });
-                });
                 
                 document.getElementById('neo-exit-close-btn').addEventListener('click', function() {
                     window.neoSubmitAction({ action: "APPROVE" });
@@ -1251,14 +1250,8 @@
                 modificationsBlock.style.display = 'none';
                 
                 buttonsContainer.innerHTML = `
-                    <button class="neo-btn" id="neo-exit-discard-btn" style="flex: 1; color: #ef4444; border-color: rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.03);"><i class="fa-solid fa-backward-step"></i> Back</button>
-                    <button class="neo-btn" id="neo-overlay-close-btn" style="flex: 2; color: #ffffff; background: var(--accent-primary); border-color: var(--accent-primary);"><i class="fa-solid fa-check"></i> Close Test</button>
+                    <button class="neo-btn" id="neo-overlay-close-btn" style="width: 100%; color: #ffffff; background: var(--accent-primary); border-color: var(--accent-primary);"><i class="fa-solid fa-check"></i> Close Test</button>
                 `;
-                
-                document.getElementById('neo-exit-discard-btn').addEventListener('click', function() {
-                    var rewindIdx = Math.max(0, window.neoPerformedList.length - 1);
-                    window.neoSubmitAction({ action: "REWIND", index: rewindIdx });
-                });
                 
                 document.getElementById('neo-overlay-close-btn').addEventListener('click', function() {
                     window.neoSubmitAction({ action: "APPROVE" });

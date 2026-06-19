@@ -26,22 +26,21 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import org.aeonbits.owner.Accessible;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
+
 import com.codeborne.selenide.Selenide;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
-import com.xceptance.neodymium.ai.core.HudActionException;
-import com.xceptance.neodymium.ai.core.HudActionType;
 import com.xceptance.neodymium.util.Neodymium;
 
 /**
@@ -216,7 +215,7 @@ public final class InteractiveHud
         final Map<String, String> configMap = new HashMap<>();
         if (Neodymium.configuration() instanceof Accessible)
         {
-            final Accessible AccessibleConf = (Accessible) Neodymium.configuration();
+            final Accessible AccessibleConf = Neodymium.configuration();
             final Set<String> props = AccessibleConf.propertyNames();
             if (props != null)
             {
@@ -279,7 +278,7 @@ public final class InteractiveHud
     {
         try
         {
-            final String readyState = Selenide.executeJavaScript("console.log('[Neodymium Server Call] checkHudAction starting'); return document.readyState;");
+            final String readyState = Selenide.executeJavaScript("return document.readyState;");
             System.err.println("[Neodymium HUD Java Debug] checkHudAction: readyState = " + readyState);
             if (!"complete".equals(readyState) && !"interactive".equals(readyState))
             {
@@ -343,7 +342,7 @@ public final class InteractiveHud
     {
         try
         {
-            final Object status = Selenide.executeJavaScript("console.log('[Neodymium Server Call] checkAutoSkipStatus starting'); return window.neoHudAutoSkip;");
+            final Object status = Selenide.executeJavaScript("return window.neoHudAutoSkip;");
             if (status == null)
             {
                 return null;
