@@ -1273,6 +1273,52 @@ public final void testDynamicFlow()
 
 ---
 
+## 🔀 Multi-Window Testing, Focus Recovery & Interactive Debugger Sync
+
+In complex web applications, user workflows frequently navigate across multiple browser windows or tabs (such as checkout flows launching OAuth logins or PayPal popups). Neodymium AI natively supports multi-window execution, dynamic focus transitions, and self-healing debugger synchronization.
+
+### 1. Switching Window Action (`SWITCH_WINDOW`)
+
+Neodymium AI supports the `SWITCH_WINDOW` action type. It allows the AI agent to dynamically switch focus between different browser windows or tabs.
+
+* **Target Formats**:
+  * **Window Index**: E.g., `win_0` for the first window, `win_1` for the second window.
+  * **Title / Name**: Matches the window handle name or page title (contains/ignore-case).
+  * **Default / Newest**: If no target or value is provided, it automatically switches to the newest/other open window.
+
+#### Example Playbook Step:
+```yaml
+steps: |
+  Switch to the newest window.
+  Verify that the page title is "PayPal Checkout".
+  Click "Approve".
+  Switch back to window index "win_0".
+```
+
+---
+
+### 2. Interactive HUD Cross-Window Synchronization
+
+When in interactive debugger mode, the agent injects a client-side Heads-Up Display (HUD) into the active browser page to show planned/performed steps, reasoning, and controls.
+
+In multi-window flows, focus shifts back and forth. To ensure the HUD remains responsive and always displays the current execution state:
+1. **State Signature Tracking**: The framework calculates a unique state signature hash representing the current execution context (the instruction queue, auto-skip, current unresolved step, reasoning, and test data source).
+2. **DOM Signature Binding**: This signature is set as a `data-hud-state-sig` attribute on the top-level `#neodymium-ai-hud-container` element in the browser.
+3. **Self-Healing Sync (`ensureHudInSync`)**: Before checking user interactions or auto-skip statuses, the runner queries the active window's HUD container signature. If the signature is missing (e.g. from page reload, browser navigation) or out of sync (e.g. switching back to a window containing an older step), Neodymium automatically refreshes and re-injects the correct HUD state.
+
+---
+
+### 3. Self-Closing Window Recovery
+
+Many popup flows (like payment gateways) close themselves automatically once their step is successfully processed. When a window closes itself, the WebDriver's active focus handle is left referencing a closed, invalid window context. 
+
+Neodymium AI automatically recovers from this state:
+* **Detection**: During its periodic interaction loop, the runner checks the validity of the current window handle. If a `NoSuchWindowException` is thrown or the handle is no longer present in the open handles list, the runner identifies the active window as closed.
+* **Auto-Recovery**: It automatically switches focus back to the first available remaining open window (typically the main merchant window).
+* **HUD Sync**: Once focused on the remaining window, the self-healing synchronization detects the out-of-sync or missing HUD signature and immediately updates it to show the current test step, allowing the user flow to continue without interruption.
+
+---
+
 ## 🛠️ Prompt Overriding
 
 To provide maximum flexibility and allow testing strategies to be customized per project, the core LLM instructions and prompt templates have been externalized. By default, the framework loads its prompt templates from the `neodymium.jar` classpath at `ai-prompts/`. 

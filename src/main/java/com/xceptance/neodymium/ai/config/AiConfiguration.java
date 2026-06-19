@@ -58,10 +58,10 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.pesap.enabled")
     @DefaultValue("true")
     public boolean pesapEnabled();
+
     @Key("neodymium.ai.pesap.classify.enabled")
     @DefaultValue("true")
     public boolean pesapClassifyEnabled();
-
 
     @Key("neodymium.ai.pesap.linter.enabled")
     @DefaultValue("false")
