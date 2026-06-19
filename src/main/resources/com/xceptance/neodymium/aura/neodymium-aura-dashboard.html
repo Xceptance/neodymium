@@ -703,10 +703,15 @@
             if (type === 'success') iconClass = 'fa-check-circle';
             else if (type === 'error') iconClass = 'fa-exclamation-circle';
             toast.innerHTML = `<i class="fa-solid ${iconClass}"></i> <span>${message}</span>`;
+            toast.style.cursor = 'pointer';
+            toast.onclick = () => toast.remove();
             container.appendChild(toast);
+            const duration = type === 'error' ? 10000 : 3000;
             setTimeout(() => {
-                toast.remove();
-            }, 3000);
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, duration);
         }
 
         // Theme Logic
@@ -1750,6 +1755,7 @@
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
             const allure = document.getElementById('optAllure').checked;
+            const history = document.getElementById('optHistory').checked;
             
             isRunning = true;
             consoleOpened = true;

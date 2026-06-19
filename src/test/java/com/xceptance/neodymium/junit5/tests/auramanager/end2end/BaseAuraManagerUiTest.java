@@ -29,7 +29,6 @@ public abstract class BaseAuraManagerUiTest extends BaseAiTest
     public void setupHelper()
     {
         AuraManagerTestHelper.setStartPort(this.startPort);
-        Neodymium.ai().registerMethodClass(AuraManagerTestHelper.class);
     }
 
     @AfterEach

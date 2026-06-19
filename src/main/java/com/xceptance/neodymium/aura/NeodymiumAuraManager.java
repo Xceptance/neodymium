@@ -422,6 +422,7 @@ public final class NeodymiumAuraManager
             }
             catch (final Exception e)
             {
+                LOGGER.error("[Aura Server] Error processing request on path {}: {}", path, e.getMessage(), e);
                 sendError(exchange, 500, "Internal Server Error: " + e.getMessage());
             }
         }
