@@ -12,6 +12,7 @@ import com.xceptance.neodymium.common.browser.Browser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.parallel.ResourceLock;
+import com.xceptance.neodymium.ai.action.plugins.AiMethod;
 
 @Browser("Chrome_headless")
 @ResourceLock("NeodymiumAuraManager")
@@ -27,6 +28,7 @@ public abstract class BaseAuraManagerUiTest extends BaseAiTest
         System.setProperty("neodymium.ai.aura.manager.shutdownDelay", "-1");
     }
 
+    @AiMethod("Starts the Aura Manager HTTP and HTTPS servers on dynamically configured ports")
     public void startManager() throws IOException
     {
         if (auraServer != null) {
@@ -72,11 +74,13 @@ public abstract class BaseAuraManagerUiTest extends BaseAiTest
         }
     }
 
+    @AiMethod("No-op placeholder method to prevent stopping the manager server prematurely")
     public void stopManager()
     {
         // No-op for AI Playbook. Server must stay alive across phases.
     }
 
+    @AiMethod("Forcefully shuts down the running Aura Manager server")
     public void forceStopManager()
     {
         if (auraServer != null)
@@ -101,31 +105,37 @@ public abstract class BaseAuraManagerUiTest extends BaseAiTest
         forceStopManager();
     }
 
+    @AiMethod("Confirms and accepts any active browser alert prompt")
     public void acceptAlert()
     {
         Selenide.confirm();
     }
 
+    @AiMethod("Verifies that the checkbox element targeted by the selector is checked")
     public void verifyCheckboxChecked(final String selector)
     {
         Assertions.assertTrue(Selenide.$(selector).isSelected());
     }
 
+    @AiMethod("Verifies that the checkbox element targeted by the selector is unchecked")
     public void verifyCheckboxUnchecked(final String selector)
     {
         Assertions.assertFalse(Selenide.$(selector).isSelected());
     }
 
+    @AiMethod("Verifies that the automated-workspace-test.yaml file is present in the workspace file list")
     public void verifyAutomatedWorkspaceTestPresent()
     {
         Selenide.$("#yamlFileList").shouldHave(Condition.text("automated-workspace-test.yaml"));
     }
 
+    @AiMethod("Verifies that the automated-workspace-test.yaml file is not present in the workspace file list")
     public void verifyAutomatedWorkspaceTestNotPresent()
     {
         Selenide.$("#yamlFileList").shouldNot(Condition.text("automated-workspace-test.yaml"));
     }
 
+    @AiMethod("Deletes the automated-workspace-test.yaml file from the workspace directory")
     public void deleteWorkspaceTestFile() throws IOException
     {
         final File targetFile = new File("src/test/resources/automated-workspace-test.yaml").getAbsoluteFile();
@@ -135,6 +145,7 @@ public abstract class BaseAuraManagerUiTest extends BaseAiTest
         }
     }
 
+    @AiMethod("Creates the automated-workspace-test.yaml file in the workspace directory with template data")
     public void createWorkspaceTestFile() throws IOException
     {
         final File targetFile = new File("src/test/resources/automated-workspace-test.yaml").getAbsoluteFile();
