@@ -1,0 +1,12 @@
+data:
+  - testId: "Toggle_Config"
+    before:
+      - java startManager()
+    steps: |
+      Open ${auraManagerUrl} in the browser
+      Toggle the "Headless Mode" switch
+      java verifyCheckboxUnchecked(#optHeadless)
+      Toggle the "Record Video" switch
+      java verifyCheckboxChecked(#optVideo)
+    after:
+      - java stopManager()

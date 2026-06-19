@@ -1,0 +1,25 @@
+data:
+  - testId: "Theme_Toggling"
+    before:
+      - java startManager()
+    steps: |
+      Open ${auraManagerUrl} in the browser
+      Verify the page title is "Neodymium Aura Manager"
+      Click the Dark Mode button
+      Verify the root element has the "force-dark" class
+      Click the Light Mode button
+      Verify the root element has the "force-light" class
+    after:
+      - java stopManager()
+
+  - testId: "View_Switching"
+    before:
+      - java startManager()
+    steps: |
+      Open ${auraManagerUrl} in the browser
+      Click on the "History & Reports" navigation item
+      Verify the History view is displayed
+      Click on the "Workspace" navigation item
+      Verify the Workspace view is displayed
+    after:
+      - java stopManager()

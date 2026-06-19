@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.Statement;
@@ -77,34 +78,42 @@ public class TestdataStatement extends StatementBuilder<TestdataContainer>
     }
 
     @Override
-    public String getCategoryName(Object data)
+    public String getCategoryName(final Object data)
     {
-        TestdataContainer parameter = (TestdataContainer) data;
-        Map<String, String> testData = new HashMap<>();
+        final TestdataContainer parameter = (TestdataContainer) data;
+        final Map<String, String> testData = new HashMap<>();
         testData.putAll(parameter.getPackageTestData());
         testData.putAll(parameter.getDataSet());
 
-        String testname;
         if (parameter.getIndex() >= 0)
         {
-            // data sets and (maybe) package data
             String testDatasetId = testData.get(TEST_ID);
             if (StringUtils.isBlank(testDatasetId))
             {
-                testDatasetId = "Data set";
+                testDatasetId = testData.get("TEST_ID");
             }
 
-            // replace parenthesis because https://bugs.eclipse.org/bugs/show_bug.cgi?id=102512
-            // "Any text in parentheses is assumed to be the name of the class in which the test is defined."
-            testDatasetId = testDatasetId.replaceAll("\\(", "[").replaceAll("\\)", "]");
-
-            testname = String.format("%s %d / %d", testDatasetId, (parameter.getIndex() + 1), parameter.getSize());
+            if (StringUtils.isNotBlank(testDatasetId))
+            {
+                return testDatasetId.replaceAll("\\(", "[").replaceAll("\\)", "]");
+            }
+            else
+            {
+                final String sourceFile = testData.get("neodymium.sourceFile");
+                if (parameter.isFromDataFolder() && StringUtils.isNotBlank(sourceFile))
+                {
+                    final String baseName = FilenameUtils.getBaseName(sourceFile);
+                    return String.format("%s - Data set %d / %d", baseName, (parameter.getIndex() + 1), parameter.getSize());
+                }
+                else
+                {
+                    return String.format("Data set %d / %d", (parameter.getIndex() + 1), parameter.getSize());
+                }
+            }
         }
         else
         {
-            // only package data
-            testname = "TestData";
+            return "TestData";
         }
-        return testname;
     }
 }

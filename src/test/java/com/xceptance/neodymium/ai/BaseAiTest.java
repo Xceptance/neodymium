@@ -755,7 +755,7 @@ public abstract class BaseAiTest extends BaseLlmTest
      */
     private String normalizeTarget(final String target)
     {
-        if (target == null || target.trim().isEmpty())
+        if (target == null || target.trim().isEmpty() || target.equals("null"))
         {
             return "";
         }

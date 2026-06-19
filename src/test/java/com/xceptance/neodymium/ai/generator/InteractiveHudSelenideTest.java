@@ -111,7 +111,6 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
             throw new RuntimeException("Failed to copy master dummy-test.yml", e);
         }
 
-        Neodymium.setTestdataSourceFile(this.tempSourceFile.getAbsolutePath());
         Neodymium.getData().put("neodymium.sourceFile", this.tempSourceFile.getAbsolutePath());
 
         // Force config properties to prevent caching issues across test classes

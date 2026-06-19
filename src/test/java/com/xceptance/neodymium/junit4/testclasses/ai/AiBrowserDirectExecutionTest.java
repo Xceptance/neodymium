@@ -108,6 +108,19 @@ public class AiBrowserDirectExecutionTest
     }
 
     @Test
+    public void testPromptWithComments()
+    {
+        Neodymium.ai().execute("OPEN https://xceptance.com\n" +
+                               "# This is a comment\n" +
+                               "// This is also a comment\n" +
+                               "OPEN https://www.xceptance.com/de/");
+
+        WebDriver webDriver = Neodymium.getDriver();
+        Assert.assertTrue("The current URL should be xceptance.de since comments should be ignored.",
+                          webDriver.getCurrentUrl().contains("xceptance.com/de/"));
+    }
+
+    @Test
     public void testDirectCommandFailFastUnknownCommand()
     {
         Assert.assertThrows(AssertionError.class, () ->

@@ -1,0 +1,2106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neodymium Aura Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-main: #f3f4f6;
+            --bg-sidebar: #ffffff;
+            --bg-card: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border: #e5e7eb;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --sidebar-active: #eff6ff;
+            --sidebar-active-text: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --font-main: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --transition: all 0.2s ease;
+        }
+
+        
+        :root.force-dark {
+            --bg-main: #0e1015;
+            --bg-sidebar: #131620;
+            --bg-card: rgba(255, 255, 255, 0.02);
+            --border: rgba(255, 255, 255, 0.05);
+            --border-hover: rgba(255, 255, 255, 0.12);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+            --sidebar-active: rgba(59, 130, 246, 0.08);
+            --sidebar-active-text: #60a5fa;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-main: #0e1015;
+                --bg-sidebar: #131620;
+                --bg-card: rgba(255, 255, 255, 0.02);
+                --border: rgba(255, 255, 255, 0.05);
+                --border-hover: rgba(255, 255, 255, 0.12);
+                --text-primary: #f3f4f6;
+                --text-secondary: #9ca3af;
+                --accent: #3b82f6;
+                --accent-hover: #60a5fa;
+                --sidebar-active: rgba(59, 130, 246, 0.08);
+                --sidebar-active-text: #60a5fa;
+            }
+        }
+
+        
+        
+        
+        :root.force-light {
+            --bg-main: #f3f4f6;
+            --bg-sidebar: #ffffff;
+            --bg-card: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border: #e5e7eb;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --sidebar-active: #eff6ff;
+            --sidebar-active-text: #2563eb;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            font-size: 13px;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 70px;
+            background-color: var(--bg-sidebar);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+            z-index: 10;
+            flex-shrink: 0;
+        }
+
+        .logo { font-size: 24px; color: var(--accent); margin-bottom: 40px; }
+
+        .nav-item {
+            width: 44px; height: 44px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 8px; color: var(--text-secondary);
+            font-size: 18px; margin-bottom: 12px; cursor: pointer;
+            position: relative;
+        }
+        .nav-item:hover { color: var(--text-primary); background-color: var(--bg-main); }
+        .nav-item.active { color: var(--sidebar-active-text); background-color: var(--sidebar-active); }
+
+        .nav-badge {
+            position: absolute;
+            top: -5px; right: -5px;
+            background: var(--accent);
+            color: white;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 10px;
+            border: 2px solid var(--bg-sidebar);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .spinner { animation: spin 1s linear infinite; }
+
+        /* Main Container */
+        .main-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        .top-navbar {
+            height: 48px;
+            background: var(--bg-sidebar);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            flex-shrink: 0;
+        }
+
+        /* Workspace Layout */
+        .workspace-layout {
+            display: flex;
+            padding: 16px;
+            gap: 16px;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 12px 16px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-main);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: var(--text-primary);
+        }
+
+        /* Left Area */
+        .left-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-width: 300px;
+            resize: horizontal;
+            overflow: hidden;
+            max-width: calc(100vw - 380px);
+        }
+
+        .view-state {
+            flex-grow: 1;
+            display: none;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .view-state.active {
+            display: flex;
+        }
+
+        /* State: Selection + Queue */
+        .selection-queue-grid {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            min-height: 0;
+        }
+
+        .content-scroll {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        /* Test List / File Container (mapping to old classes) */
+        .file-container { margin-bottom: 6px; }
+        .list-item { padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+        .list-item:hover { background: var(--bg-main); }
+        .dataset-list { padding: 4px 12px 4px 24px; background: var(--bg-card); }
+        .dataset-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+        .dataset-item:last-child { border-bottom: none; }
+        
+        .edit-icon-btn, .btn-edit {
+            background: var(--bg-main);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .edit-icon-btn:hover, .btn-edit:hover { background: var(--border); }
+
+        /* Queue View */
+        .queue-list { display: flex; flex-direction: column; gap: 8px; }
+        .queue-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg-main); border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px; }
+        .queue-item.running { border-left: 3px solid var(--accent); }
+        
+        /* Editor */
+        .editor-container { flex-grow: 1; display: flex; flex-direction: column; min-height: 0; }
+        .editor-actions { display: flex; gap: 8px; }
+        .btn-editor { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+        .btn-editor:hover { background: var(--bg-main); }
+        .btn-editor.save { color: var(--success); border-color: rgba(16, 185, 129, 0.3); }
+        .btn-editor.delete { color: var(--danger); border-color: rgba(239, 68, 68, 0.3); }
+        .editor-textarea { font-family: var(--font-mono); font-size: 13px; line-height: 1.6; color: var(--text-primary); padding: 16px; flex-grow: 1; outline: none; border: none; background: transparent; resize: none; }
+
+        /* Terminal Logs */
+        .terminal-panel { height: 100%; width: 100%; max-width: 100%; box-sizing: border-box; background: #1e1e1e; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: var(--font-mono); font-size: 12px; color: #d4d4d4; overflow-y: auto; overflow-x: hidden; flex-shrink: 0; display: flex; flex-direction: column; }
+        #terminalConsole { flex-grow: 1; overflow-y: auto; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+        .log-line { white-space: pre-wrap; word-break: break-all; word-wrap: break-word; margin: 0; padding: 0; }
+        .log-error { color: #ef4444; }
+        .log-info { color: #d4d4d4; }
+
+        /* Right Area */
+        .right-area { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; }
+
+        .chat-container { flex-grow: 1; display: flex; flex-direction: column; min-height: 0; }
+        .chat-messages { flex-grow: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .chat-message { display: flex; flex-direction: column; gap: 4px; max-width: 90%; padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.4; }
+        .message-ai { background: var(--bg-main); border: 1px solid var(--border); align-self: flex-start; border-bottom-left-radius: 2px; }
+        .message-user { background: var(--accent); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .chat-input { margin: 12px; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text-primary); font-family: inherit; outline: none; }
+        
+        .thinking-details { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; font-size: 11px; color: var(--text-secondary); }
+        .thinking-content { background-color: rgba(0,0,0,0.1); padding: 8px; margin-top: 6px; font-family: var(--font-mono); white-space: pre-wrap; max-height: 150px; overflow-y: auto; border-radius: 4px; }
+
+        /* Config Panel */
+        .config-container { flex-shrink: 0; }
+        .config-panel { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .config-row { display: flex; justify-content: space-between; align-items: center; }
+        .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
+        .switch input { opacity: 0; width: 100%; height: 100%; position: absolute; top: 0; left: 0; cursor: pointer; z-index: 2; margin: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; border-radius: 20px; transition: .2s; }
+        @media (prefers-color-scheme: dark) { .slider { background-color: #475569; } }
+        :root.force-dark .slider { background-color: #475569; }
+        .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(16px); }
+
+        .btn-primary { background: var(--accent); color: white; border: none; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px; }
+        .btn-primary:disabled { background: var(--bg-main); color: var(--text-secondary); border: 1px solid var(--border); cursor: not-allowed; }
+        .btn-danger { background: var(--danger); color: white; border: none; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px; }
+
+        /* Iframe view */
+        .iframe-view-pane { display: none; flex-direction: column; height: 100vh; }
+        .neo-report-header { background: var(--bg-card); padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .report-iframe { flex-grow: 1; border: none; width: 100%; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+        .modal-card { background: var(--bg-card); width: 400px; border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; }
+        .modal-header { padding: 16px; border-bottom: 1px solid var(--border); font-weight: 600; }
+        .modal-body { padding: 16px; }
+        .modal-input { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main); color: var(--text-primary); }
+        .modal-footer { padding: 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+        
+        /* Resizers */
+        .resizer-h {
+            width: 8px;
+            cursor: ew-resize;
+            background: transparent;
+            flex-shrink: 0;
+            z-index: 10;
+            margin: 0 -4px;
+        }
+        .resizer-h:hover { background: var(--border); }
+        .resizer-v {
+            height: 8px;
+            cursor: ns-resize;
+            background: transparent;
+            flex-shrink: 0;
+            z-index: 10;
+            margin: -4px 0;
+        }
+        .resizer-v:hover { background: var(--border); }
+        
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .history-table th {
+            padding: 10px 12px;
+            font-weight: 600;
+            border-bottom: 2px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: left;
+        }
+        .history-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-primary);
+            vertical-align: middle;
+        }
+        .history-row {
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .history-row:hover {
+            background: var(--bg-main);
+        }
+        .report-link-active {
+            color: var(--accent);
+            font-size: 14px;
+        }
+        .report-link-inactive {
+            color: var(--text-secondary);
+            opacity: 0.4;
+            font-size: 14px;
+        }
+        .badge-success { background: rgba(16,185,129,0.1); color: var(--success); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .badge-failed { background: rgba(239,68,68,0.1); color: var(--danger); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .delete-report-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 4px;
+            transition: color 0.15s ease;
+        }
+        .delete-report-btn:hover {
+            color: var(--danger);
+        }
+        
+        /* Toast Notification Styles */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            padding: 12px 20px;
+            border-radius: 8px;
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #f8fafc;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: auto;
+            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1), fadeOut 0.3s ease-in 2.7s forwards;
+            min-width: 250px;
+            max-width: 400px;
+        }
+        .toast.success {
+            border-left: 4px solid #10b981;
+        }
+        .toast.error {
+            border-left: 4px solid #ef4444;
+        }
+        .toast.info {
+            border-left: 4px solid #3b82f6;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%) translateY(-10px); opacity: 0; }
+            to { transform: translateX(0) translateY(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+    <div id="toastContainer" class="toast-container"></div>
+
+    <div class="sidebar">
+        <div class="logo"><i class="fa-solid fa-atom"></i></div>
+        <div class="nav-item active" id="navWorkspace" title="Workspace" onclick="showView('dashboardView')">
+            <i class="fa-solid fa-laptop-code"></i>
+            <div class="nav-badge" id="sidebarRunBadge" style="display:none;"><i class="fa-solid fa-circle-notch spinner"></i></div>
+        </div>
+        <div class="nav-item" id="navReports" title="History & Reports" onclick="showView('reportViewContainer')">
+            <i class="fa-solid fa-chart-bar"></i>
+        </div>
+    </div>
+
+    <div class="main-container">
+        
+        <div class="top-navbar">
+            <div style="font-weight: 500;">Neodymium Aura Dashboard</div>
+            <div style="display:flex; gap: 16px; align-items:center;">
+                
+                <div style="display:flex; gap: 8px; background: var(--bg-main); padding: 4px; border-radius: 6px; border: 1px solid var(--border);">
+                    <button class="btn-edit" id="themeLight" onclick="changeTheme('light')" style="padding: 4px 8px; border:none;" title="Light Mode"><i class="fa-solid fa-sun"></i></button>
+                    <button class="btn-edit" id="themeDark" onclick="changeTheme('dark')" style="padding: 4px 8px; border:none;" title="Dark Mode"><i class="fa-solid fa-moon"></i></button>
+                    <button class="btn-edit" id="themeSystem" onclick="changeTheme('system')" style="padding: 4px 8px; border:none;" title="System Theme"><i class="fa-solid fa-desktop"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD VIEW -->
+        <div id="dashboardView" style="display: flex; flex-grow: 1; min-height: 0;">
+            <div class="workspace-layout">
+                
+                <!-- LEFT AREA -->
+                <div class="left-area" id="leftArea" style="resize: none;">
+                    
+                    <!-- STATE: Selection & Queue -->
+                    <div id="state-selection" class="view-state active">
+                        <div class="selection-queue-grid">
+                            
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <span>Test Selection</span>
+                                    <button class="btn-edit" onclick="loadFiles()" style="padding: 2px 6px; font-size: 10px;" title="Refresh Files"><i class="fa-solid fa-rotate-right"></i></button>
+                                </div>
+                                <div class="content-scroll" id="yamlFileList">
+                                    <!-- Populated by JS -->
+                                </div>
+                                <div style="padding: 12px; border-top: 1px solid var(--border);"><button id="openModalBtn" class="btn-edit" style="width: 100%; justify-content: center;" onclick="document.getElementById('createTestModal').style.display='flex'; document.getElementById('newTestName').focus();"><i class="fa-solid fa-plus"></i> Create New Test</button></div>
+                            </div>
+
+                            <div class="panel">
+                                <div class="panel-header">Run Queue</div>
+                                <div class="content-scroll">
+                                    <div class="queue-list" id="queueListContainer">
+                                        <!-- Populated by JS -->
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- STATE: Editor -->
+                    <div id="state-editor" class="view-state">
+                        <div class="panel editor-container" id="editorPanel">
+                            <div class="panel-header">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fa-solid fa-file-lines" style="color:var(--text-secondary);"></i> 
+                                    <span id="editorFileName">test.yaml</span>
+                                </div>
+                                <div class="editor-actions">
+                                    <button class="btn-editor save" onclick="saveYamlFile()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                                    <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><i class="fa-solid fa-trash"></i> Delete</button>
+                                    <button class="btn-editor" onclick="closeEditor()"><i class="fa-solid fa-xmark"></i> Close</button>
+                                </div>
+                            </div>
+                            <textarea class="editor-textarea" id="editorContent" spellcheck="false"></textarea>
+                        </div>
+                    </div>
+
+                    
+                    <div class="panel" id="statsPanel" style="display: none; flex-shrink: 0; padding: 12px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; font-weight: 600;">
+                            <div>Total Run: <span id="statsTotalExecution" style="color:var(--accent);">0</span></div>
+                            <div>Passed: <span id="statsPassed" style="color:var(--success);">0</span></div>
+                            <div>Failed: <span id="statsFailed" style="color:var(--danger);">0</span></div>
+                        </div>
+                    </div>
+                    <!-- Terminal Panel -->
+
+                    <div class="resizer-v" id="consoleResizer" style="display:none;"></div>
+                    <div class="panel" id="consolePanel" style="display:none; flex-shrink: 0; border:none; width: 100%; max-width: 100%; box-sizing: border-box;">
+                        <div class="terminal-panel">
+                            <div style="font-size:11px; margin-bottom:8px; opacity: 0.7; display:flex; justify-content:space-between;">
+                                <span>TERMINAL OUTPUT <span id="runSpinner" style="display:none;"><i class="fa-solid fa-circle-notch spinner" style="margin-left:8px;"></i></span></span>
+                                <div style="display: flex; gap: 12px; align-items: center;">
+                                    <input type="checkbox" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" checked> <label for="aiOnlyCb">AI Only</label>
+                                    <input type="checkbox" id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)"> <label for="errorsOnlyCb">Errors Only</label>
+                                </div>
+                            </div>
+                            <div id="terminalConsole">Console idle.</div>
+                        </div>
+                    </div>
+                    
+                </div>
+                
+                <!-- HORIZONTAL RESIZER -->
+                <div class="resizer-h" id="sidebarResizer"></div>
+
+                <!-- RIGHT AREA -->
+                <div class="right-area" id="rightArea">
+                    
+                    <div class="panel chat-container">
+                        <div class="panel-header" style="display:flex; justify-content:space-between;">
+                            <div><i class="fa-solid fa-sparkles" style="color:var(--accent);"></i> Aura Assistant</div>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <select id="chatSessionSelect" onchange="switchChatSession()" style="width: 110px; max-width: 110px; background:var(--bg-main); color:var(--text-primary); border:1px solid var(--border); font-size:11px; border-radius:4px; padding:2px; box-sizing: border-box; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"></select>
+                                <button class="btn-edit" onclick="createNewChatSession()" style="padding: 2px 6px; font-size: 10px;" title="New Chat"><i class="fa-solid fa-plus"></i></button>
+                                <button class="btn-edit" onclick="renameCurrentChatSession()" style="padding: 2px 6px; font-size: 10px;" title="Rename Chat"><i class="fa-solid fa-pen"></i></button>
+                                <button class="btn-edit" onclick="deleteCurrentChatSession()" style="padding: 2px 6px; font-size: 10px; color: var(--danger);" title="Delete Chat"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="api-key-banner" id="apiKeyBanner" style="display: none; padding: 10px; background: rgba(239, 68, 68, 0.1); border-bottom: 1px solid var(--danger); color: var(--danger); font-size: 11px;">
+                            <i class="fa-solid fa-triangle-exclamation"></i> <span id="apiKeyBannerText"></span>
+                        </div>
+                        <div class="api-key-banner" id="warningBanner" style="display: none; padding: 10px; background: rgba(245, 158, 11, 0.1); border-bottom: 1px solid #f59e0b; color: #f59e0b; font-size: 11px;">
+                            <i class="fa-solid fa-triangle-exclamation"></i> <span id="warningBannerText"></span>
+                        </div>
+                        <div class="chat-messages" id="chatMessages"></div>
+                        <input type="text" class="chat-input" id="chatInput" placeholder="Ask Aura...">
+                    </div>
+
+                    <div class="panel config-container">
+                        <div class="panel-header">Run Configuration</div>
+                        <div class="config-panel" style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                            
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Headless Mode</span>
+                                    <label class="switch" for="optHeadless"><input type="checkbox" id="optHeadless" checked><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Runs the browser in the background without a GUI.</span>
+                            </div>
+                            
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Record Video</span>
+                                    <label class="switch" for="optVideo"><input type="checkbox" id="optVideo"><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Records execution video and attaches it to the Allure report.</span>
+                            </div>
+
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Keep Browser Open</span>
+                                    <label class="switch" for="optKeepOpen"><input type="checkbox" id="optKeepOpen"><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Leaves the browser window open after execution finishes.</span>
+                            </div>
+
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Interactive HUD</span>
+                                    <label class="switch" for="optInteractive"><input type="checkbox" id="optInteractive"><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Enables interactive AI elements in the browser during execution.</span>
+                            </div>
+
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Allure Report</span>
+                                    <label class="switch" for="optAllure"><input type="checkbox" id="optAllure" checked><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Compiles and opens the visual test report after execution completes.</span>
+                            </div>
+
+                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 500;">Save to History</span>
+                                    <label class="switch" for="optHistory"><input type="checkbox" id="optHistory" checked><span class="slider"></span></label>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Archives execution logs and reports in the history tab.</span>
+                            </div>
+
+                            <button class="btn-primary" id="runQueueBtn" onclick="runQueue()"><i class="fa-solid fa-play"></i> Run Queue</button>
+                            <button class="btn-primary" id="runCurrentTestBtn" onclick="runCurrentFile()" style="display:none; background: var(--success);"><i class="fa-solid fa-play"></i> Run Open Test</button>
+                            <button class="btn-danger" id="stopQueueBtn" onclick="stopQueue()" style="display:none;"><i class="fa-solid fa-stop"></i> Stop Execution</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- HISTORY & REPORTS VIEW -->
+        <div id="reportViewContainer" style="display: none; flex-direction: column; flex-grow: 1; padding: 16px; overflow: hidden; gap: 16px; height: 100%;">
+            <div class="panel" style="flex-grow: 1; padding: 16px; display: flex; flex-direction: column; min-height: 0;">
+                <h3 style="margin-bottom: 12px; color: var(--text-primary);">Run History</h3>
+                <div style="flex-grow: 1; overflow-y: auto;">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Date & Time</th>
+                                <th style="text-align: center;">Total</th>
+                                <th style="text-align: center; color: var(--success);">Passed</th>
+                                <th style="text-align: center; color: var(--danger);">Failed</th>
+                                <th style="text-align: center;">Report</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allureHistoryList">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- REPORT IFRAME VIEW (Hidden until report opened) -->
+        <div id="reportView" class="iframe-view-pane">
+            <div class="neo-report-header">
+                <div style="font-weight: 600;"><i class="fa-solid fa-chart-column" style="color: var(--success);"></i> Allure Report: <span id="reportDisplayName"></span></div>
+                <button class="btn-edit" onclick="closeReportView()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+            </div>
+            <iframe class="report-iframe" id="reportIframe" src="about:blank"></iframe>
+        </div>
+
+    </div>
+
+    <!-- CREATE TEST MODAL -->
+    <div class="modal-overlay" id="createTestModal">
+        <div class="modal-card">
+            <div class="modal-header" id="modalTitle">Create New Test Case</div>
+            <div class="modal-body">
+                <label style="display:block; margin-bottom:8px; font-weight:500;">Test Case Name</label>
+                <input type="text" class="modal-input" id="newTestName" placeholder="e.g. Add Product to Basket">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-editor" id="closeModalBtn">Cancel</button>
+                <button class="btn-primary" style="margin-top:0;" id="submitCreateTestBtn" onclick="submitCreateTest()">Create Test</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DELETE CONFIRMATION MODAL -->
+    <div class="modal-overlay" id="deleteTestModal">
+        <div class="modal-card">
+            <div class="modal-header">Delete Test Case</div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <span id="deleteFileNameDisplay" style="font-weight: 600;"></span>?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-editor" onclick="document.getElementById('deleteTestModal').style.display='none'">Cancel</button>
+                <button class="btn-danger" style="margin-top:0;" onclick="submitDeleteTest()">Confirm Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW LOG MODAL -->
+    <div class="modal-overlay" id="logModal" style="z-index: 200;">
+        <div class="modal-card" style="width: 80%; height: 80%; max-width: 1200px; max-height: 90vh;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>Execution Log</span>
+                <button class="btn-editor" id="downloadLogBtn" style="margin:0;"><i class="fa-solid fa-download"></i> Download</button>
+            </div>
+            <div class="modal-body" style="flex-grow: 1; overflow-y: auto; padding: 0; background: #1e1e1e;">
+                <pre id="logModalContent" style="margin: 0; padding: 16px; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; word-wrap: break-word; color: #d4d4d4;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" style="margin:0;" onclick="closeLogModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Toast Notification System
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            let iconClass = 'fa-info-circle';
+            if (type === 'success') iconClass = 'fa-check-circle';
+            else if (type === 'error') iconClass = 'fa-exclamation-circle';
+            toast.innerHTML = `<i class="fa-solid ${iconClass}"></i> <span>${message}</span>`;
+            toast.style.cursor = 'pointer';
+            toast.onclick = () => toast.remove();
+            container.appendChild(toast);
+            const duration = type === 'error' ? 10000 : 3000;
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, duration);
+        }
+
+        // Theme Logic
+        function initTheme() {
+            const savedTheme = localStorage.getItem('aura_theme') || 'system';
+            applyTheme(savedTheme);
+            
+        }
+
+        
+        function applyTheme(theme) {
+            const root = document.documentElement;
+            if (theme === 'dark') {
+                root.classList.add('force-dark');
+                root.classList.remove('force-light');
+            } else if (theme === 'light') {
+                root.classList.add('force-light');
+                root.classList.remove('force-dark');
+            } else {
+                root.classList.remove('force-dark', 'force-light');
+            }
+            
+            localStorage.setItem('aura_theme', theme);
+        }
+
+        // Layout Resizers
+        let isResizingH = false;
+        let isResizingV = false;
+
+        document.getElementById('sidebarResizer').addEventListener('mousedown', function(e) {
+            isResizingH = true;
+            document.body.style.cursor = 'ew-resize';
+            e.preventDefault();
+        });
+
+        document.getElementById('consoleResizer').addEventListener('mousedown', function(e) {
+            isResizingV = true;
+            document.body.style.cursor = 'ns-resize';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (isResizingH) {
+                const workspace = document.querySelector('.workspace-layout');
+                const workspaceRect = workspace.getBoundingClientRect();
+                // calculate right area width
+                const newWidth = workspaceRect.right - e.clientX - 16; 
+                if (newWidth > 200 && newWidth < workspaceRect.width * 0.6) {
+                    document.getElementById('rightArea').style.width = newWidth + 'px';
+                }
+            }
+            if (isResizingV) {
+                const consolePanel = document.getElementById('consolePanel');
+                if (consolePanel.style.display !== 'none') {
+                    const workspace = document.querySelector('.workspace-layout');
+                    const workspaceRect = workspace.getBoundingClientRect();
+                    const newHeight = workspaceRect.bottom - e.clientY - 16;
+                    if (newHeight > 100 && newHeight < workspaceRect.height * 0.8) {
+                        consolePanel.style.height = newHeight + 'px';
+                    }
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', function(e) {
+            if (isResizingH || isResizingV) {
+                isResizingH = false;
+                isResizingV = false;
+                document.body.style.cursor = 'default';
+            }
+        });
+
+
+        function changeTheme(theme) {
+            localStorage.setItem('aura_theme', theme);
+            applyTheme(theme);
+        }
+
+        function switchState(stateName) {
+            document.querySelectorAll('.view-state').forEach(el => el.classList.remove('active'));
+            document.getElementById('state-' + stateName).classList.add('active');
+        }
+
+        function showView(viewId) {
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('reportViewContainer').style.display = 'none';
+            document.getElementById('reportView').style.display = 'none';
+            document.getElementById(viewId).style.display = 'flex';
+
+            if (viewId !== 'reportView') {
+                lastActiveView = viewId;
+            }
+
+            const navWorkspace = document.getElementById('navWorkspace');
+            const navReports = document.getElementById('navReports');
+            
+            if (viewId === 'dashboardView') {
+                if (navWorkspace) navWorkspace.classList.add('active');
+                if (navReports) navReports.classList.remove('active');
+            } else if (viewId === 'reportViewContainer') {
+                if (navWorkspace) navWorkspace.classList.remove('active');
+                if (navReports) navReports.classList.add('active');
+            } else if (viewId === 'reportView') {
+                if (lastActiveView === 'reportViewContainer') {
+                    if (navWorkspace) navWorkspace.classList.remove('active');
+                    if (navReports) navReports.classList.add('active');
+                } else {
+                    if (navWorkspace) navWorkspace.classList.add('active');
+                    if (navReports) navReports.classList.remove('active');
+                }
+            }
+        }
+
+        // DOM Elements
+        const dashboardView = document.getElementById('dashboardView');
+        const reportView = document.getElementById('reportView');
+        
+        const editorFileName = document.getElementById('editorFileName');
+        const editorContent = document.getElementById('editorContent');
+        const reportDisplayName = document.getElementById('reportDisplayName');
+        const reportIframe = document.getElementById('reportIframe');
+        
+        const createTestModal = document.getElementById('createTestModal');
+        const openModalBtn = document.getElementById('openModalBtn');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const newTestName = document.getElementById('newTestName');
+        
+        const runQueueBtn = document.getElementById('runQueueBtn');
+        const stopQueueBtn = document.getElementById('stopQueueBtn');
+        const queueListContainer = document.getElementById('queueListContainer');
+        let isRunning = false;
+        let logFilterErrorsOnly = false;
+        let logFilterAiOnly = true;
+        let hasShownStartMessage = false;
+        const terminalConsole = document.getElementById('terminalConsole');
+        const runSpinner = document.getElementById('runSpinner');
+        const yamlFileList = document.getElementById('yamlFileList');
+        const allureHistoryList = document.getElementById('allureHistoryList');
+        
+        // State variables
+        const clientId = 'c-' + Math.random().toString(36).substring(2) + '-' + Date.now().toString(36);
+        let disconnected = false;
+        let selectedDatasets = []; // [{ file, id }]
+        let expandedFiles = {};
+        let currentFilesListCached = [];
+        let chatSessions = [];
+        let currentSessionId = null;
+        let activeEditingFile = null;
+        let consoleOpened = false;
+        let conversationHistory = [];
+        let lastActiveView = 'dashboardView';
+
+        function init() {
+            loadSessions();
+            loadFiles();
+            loadHistory();
+            startPolling();
+
+            document.getElementById('chatInput').addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    sendChatMessage();
+                }
+            });
+
+            // Enforce mutual exclusivity: Headless Mode vs Interactive HUD
+            const optHeadless = document.getElementById('optHeadless');
+            const optInteractive = document.getElementById('optInteractive');
+            
+            function showWarning(msg) {
+                const banner = document.getElementById('warningBanner');
+                const bannerText = document.getElementById('warningBannerText');
+                if (banner && bannerText) {
+                    bannerText.innerHTML = msg;
+                    banner.style.display = 'block';
+                    setTimeout(() => {
+                        banner.style.display = 'none';
+                    }, 5000);
+                }
+            }
+            
+            if (optHeadless && optInteractive) {
+                optHeadless.addEventListener('change', () => {
+                    if (optHeadless.checked && optInteractive.checked) {
+                        optInteractive.checked = false;
+                        showWarning("Interactive mode automatically disabled because Headless mode was enabled.");
+                    }
+                });
+                optInteractive.addEventListener('change', () => {
+                    if (optInteractive.checked && optHeadless.checked) {
+                        optHeadless.checked = false;
+                        showWarning("Headless mode automatically disabled because Interactive mode requires a visible browser.");
+                    }
+                });
+            }
+        }
+
+        // Modal Controls
+        openModalBtn.onclick = () => {
+            createTestModal.style.display = 'flex';
+            newTestName.value = '';
+            newTestName.focus();
+        };
+        closeModalBtn.onclick = () => {
+            createTestModal.style.display = 'none';
+        };
+        newTestName.onkeydown = (event) => {
+            if (event.key === 'Enter') {
+                submitCreateTest();
+            }
+        };
+
+
+        function isDatasetSelected(file, id) {
+            return selectedDatasets.some(d => d.file === file && d.id === id);
+        }
+
+        function isAllDatasetsChecked(fileDto) {
+            if (!fileDto.datasets || fileDto.datasets.length === 0) return false;
+            return fileDto.datasets.every(d => isDatasetSelected(fileDto.file, d.id));
+        }
+
+        function toggleSelectDataset(file, id, checked) {
+            if (checked) {
+                if (!isDatasetSelected(file, id)) {
+                    selectedDatasets.push({ file, id });
+                }
+            } else {
+                selectedDatasets = selectedDatasets.filter(d => !(d.file === file && d.id === id));
+            }
+            loadFilesList(currentFilesListCached);
+        }
+
+        function toggleSelectAllDatasets(file, checked) {
+            const fileDto = currentFilesListCached.find(f => f.file === file);
+            if (!fileDto) return;
+            
+            fileDto.datasets.forEach(d => {
+                if (checked) {
+                    if (!isDatasetSelected(file, d.id)) {
+                        selectedDatasets.push({ file, id: d.id });
+                    }
+                } else {
+                    selectedDatasets = selectedDatasets.filter(ds => !(ds.file === file && ds.id === d.id));
+                }
+            });
+            loadFilesList(currentFilesListCached);
+        }
+
+        function toggleExpandFile(file) {
+            expandedFiles[file] = !expandedFiles[file];
+            loadFilesList(currentFilesListCached);
+        }
+
+        async function loadFiles() {
+            try {
+                const res = await fetch('/api/files');
+                currentFilesListCached = await res.json();
+                loadFilesList(currentFilesListCached);
+            } catch (e) {
+                console.error("Failed to load files", e);
+            }
+        }
+
+        function loadFilesList(files) {
+            if (!Array.isArray(files)) {
+                yamlFileList.innerHTML = `<div style="padding: 12px; color: var(--danger); font-size: 12px;">Failed to load files. Response was not an array.</div>`;
+                return;
+            }
+            if (files.length === 0) {
+                yamlFileList.innerHTML = `<div style="padding: 12px; color: var(--text-secondary); font-size: 12px; font-style: italic; text-align: center;">No YAML test files found in src/test/resources.</div>`;
+                return;
+            }
+            yamlFileList.innerHTML = files.map(item => {
+                const isExpanded = !!expandedFiles[item.file];
+                const allChecked = isAllDatasetsChecked(item);
+                
+                return `
+                    <div class="file-container" style="display: flex; flex-direction: column; margin-bottom: 6px;">
+                        <div class="list-item" style="position: relative; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0" onclick="toggleExpandFile('${item.file}')">
+                            <div class="item-main" style="min-width: 0; overflow: hidden; display: flex; align-items: center; flex-grow: 1;">
+                                <i class="fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}" 
+                                   style="margin-right: 8px; color: var(--text-secondary); font-size: 10px; width: 12px; text-align: center;"></i>
+                                <input type="checkbox" class="file-select-cb" data-file="${item.file}" 
+                                       style="margin-right: 8px; cursor: pointer;" 
+                                       ${allChecked ? 'checked' : ''} 
+                                       onclick="event.stopPropagation(); toggleSelectAllDatasets('${item.file}', this.checked)">
+                                <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.file}</span>
+                            </div>
+                            <button class="edit-icon-btn" onclick="event.stopPropagation(); openYamlEditor('${item.file}')" 
+                                    style="padding: 4px 8px; color: var(--text-secondary);" 
+                                    title="Edit YAML Steps" alt="Edit YAML Steps for ${item.file}" aria-label="Edit YAML Steps for ${item.file}">
+                                <i class="fa-solid fa-pen" style="font-size: 11px;" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="dataset-list" id="datasets-${item.file}" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; padding-left: 24px; margin-top: 4px; gap: 4px;">
+                            ${item.datasets.map(dataset => {
+                                const isChecked = isDatasetSelected(item.file, dataset.id);
+                                return `
+                                    <div class="dataset-item" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); justify-content: space-between; cursor: pointer;" onclick="const cb = this.querySelector('.dataset-select-cb'); cb.checked = !cb.checked; toggleSelectDataset('${item.file}', '${dataset.id}', cb.checked);">
+                                        <div style="display: flex; align-items: center; min-width: 0; overflow: hidden;">
+                                            <input type="checkbox" class="dataset-select-cb" data-file="${item.file}" data-id="${dataset.id}" 
+                                                   style="margin-right: 8px; cursor: pointer;" 
+                                                   ${isChecked ? 'checked' : ''} 
+                                                   onclick="event.stopPropagation(); toggleSelectDataset('${item.file}', '${dataset.id}', this.checked)">
+                                            <i class="fa-solid fa-database" style="margin-right: 6px; color: var(--accent-primary); opacity: 0.7; flex-shrink: 0;"></i>
+                                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 4px;">${dataset.label}</span>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            updateQueueList();
+        }
+
+        let historyCached = [];
+        let activeRunStats = { total: 0, passed: 0, failed: 0, running: false, startTime: null };
+
+        function formatHistoryTimestamp(ts) {
+            if (!ts || ts.length < 15) return ts;
+            try {
+                const year = parseInt(ts.substring(0, 4));
+                const month = parseInt(ts.substring(4, 6)) - 1;
+                const day = parseInt(ts.substring(6, 8));
+                const hour = parseInt(ts.substring(9, 11));
+                const minute = parseInt(ts.substring(11, 13));
+                const second = parseInt(ts.substring(13, 15));
+                
+                const date = new Date(year, month, day, hour, minute, second);
+                if (!isNaN(date.getTime())) {
+                    return date.toLocaleString();
+                }
+            } catch (e) {
+                // fallback
+            }
+            return ts;
+        }
+
+        async function loadHistory() {
+            try {
+                const res = await fetch('/api/allure/history');
+                historyCached = await res.json();
+                renderHistoryTable();
+            } catch (e) {
+                console.error("Failed to load allure history", e);
+            }
+        }
+
+        function renderHistoryTable() {
+            let rowsHtml = '';
+            
+            if (activeRunStats.running) {
+                const statusBadge = `<span style="background: rgba(59,130,246,0.1); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;"><i class="fa-solid fa-circle-notch spinner" style="margin-right: 4px;"></i> Running</span>`;
+                const formattedTime = activeRunStats.startTime ? activeRunStats.startTime.toLocaleString() : new Date().toLocaleString();
+                const reportIcon = `<i class="fa-solid fa-ban report-link-inactive" title="Running - No Report Yet"></i>`;
+                const logIcon = `<i class="fa-solid fa-ban report-link-inactive" title="Running - No Log Yet"></i>`;
+                
+                rowsHtml += `
+                    <tr class="history-row" style="cursor: default; border-left: 3px solid var(--accent);">
+                        <td style="padding: 10px 12px;">${statusBadge}</td>
+                        <td style="padding: 10px 12px; font-weight: 500;">${formattedTime}</td>
+                        <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono);">${activeRunStats.total}</td>
+                        <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--success);">${activeRunStats.passed}</td>
+                        <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--danger);">${activeRunStats.failed}</td>
+                        <td style="padding: 10px 12px; text-align: center;">${reportIcon} &nbsp; ${logIcon}</td>
+                        <td style="padding: 10px 12px; text-align: right;"></td>
+                    </tr>
+                `;
+            }
+            
+            if (historyCached.length === 0 && !activeRunStats.running) {
+                rowsHtml += `<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No historical reports.</td></tr>`;
+            } else {
+                rowsHtml += historyCached.map(item => {
+                    const isSuccess = item.status === 'Passed';
+                    const statusBadge = isSuccess 
+                        ? `<span class="badge-success">Passed</span>` 
+                        : `<span class="badge-failed">Failed</span>`;
+                    
+                    const formattedTime = formatHistoryTimestamp(item.timestamp || item.id.substring(0, 15));
+                    const hasReport = item.hasReport === 'true';
+                    
+                    const reportIcon = hasReport 
+                        ? `<i class="fa-solid fa-chart-column report-link-active" title="Open Report" onclick="openReportView('${item.id}')"></i>` 
+                        : `<i class="fa-solid fa-ban report-link-inactive" title="No Report Available"></i>`;
+                    
+                    const logIcon = hasReport 
+                        ? `<i class="fa-solid fa-file-lines report-link-active" title="Open Execution Log" onclick="openLogModal('${item.id}')"></i>` 
+                        : `<i class="fa-solid fa-ban report-link-inactive" title="No Log Available"></i>`;
+                    
+                    return `
+                        <tr class="history-row" style="cursor: default;">
+                            <td style="padding: 10px 12px;">${statusBadge}</td>
+                            <td style="padding: 10px 12px; font-weight: 500;">${formattedTime}</td>
+                            <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono);">${item.total || '-'}</td>
+                            <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--success);">${item.passed || '-'}</td>
+                            <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--danger);">${item.failed || '-'}</td>
+                            <td style="padding: 10px 12px; text-align: center;">${reportIcon} &nbsp; ${logIcon}</td>
+                            <td style="padding: 10px 12px; text-align: right;" onclick="event.stopPropagation();">
+                                <button class="delete-report-btn" onclick="deleteReport('${item.id}')" title="Delete Report">
+                                    <i class="fa-solid fa-trash-can" style="font-size: 12px;"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+            allureHistoryList.innerHTML = rowsHtml;
+        }
+
+        async function deleteReport(reportId) {
+            if (confirm(`Are you sure you want to delete Allure report "${reportId}"?`)) {
+                try {
+                    const res = await fetch('/api/allure/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: reportId })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        loadHistory();
+                        updateCenterLayout();
+                    } else {
+                        showToast("Error deleting report: " + data.error, "error");
+                    }
+                } catch (e) {
+                    showToast("Error deleting report: " + e.message, "error");
+                }
+            }
+        }
+
+        async function openLogModal(reportId) {
+            const modal = document.getElementById('logModal');
+            const content = document.getElementById('logModalContent');
+            const downloadBtn = document.getElementById('downloadLogBtn');
+            content.innerText = 'Loading...';
+            modal.style.display = 'flex';
+            try {
+                const res = await fetch(`/api/allure/report/${reportId}/execution.log`);
+                if (res.ok) {
+                    const text = await res.text();
+                    content.innerText = text;
+                    downloadBtn.onclick = () => {
+                        const blob = new Blob([text], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${reportId}_execution.log`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    };
+                    downloadBtn.style.display = 'flex';
+                } else {
+                    content.innerText = 'Log file not found or empty.';
+                    downloadBtn.style.display = 'none';
+                }
+            } catch (e) {
+                content.innerText = 'Failed to load log.';
+                downloadBtn.style.display = 'none';
+            }
+        }
+
+        function closeLogModal() {
+            document.getElementById('logModal').style.display = 'none';
+        }
+
+        function updateQueueList() {
+            const statsQueueCount = document.getElementById('statsQueueCount');
+            if (statsQueueCount) {
+                statsQueueCount.innerText = `${selectedDatasets.length} Dataset${selectedDatasets.length === 1 ? '' : 's'}`;
+            }
+            
+            if (selectedDatasets.length === 0) {
+                queueListContainer.innerHTML = `
+                    <div style="font-size: 13px; color: var(--text-secondary); font-style: italic; padding: 15px; border: 1px dashed var(--border-hover); border-radius: 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-arrow-left" style="font-size: 16px; color: var(--accent-primary);"></i>
+                        <span>No tests selected. Please check one or more YAML test cases in the sidebar explorer.</span>
+                    </div>
+                `;
+                runQueueBtn.disabled = true;
+            } else {
+                queueListContainer.innerHTML = selectedDatasets.map((ds, index) => `
+                    <div class="queue-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; margin-bottom: 4px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); border-radius: 6px;">
+                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; padding-right: 5px; font-size: 12.5px;">
+                            ${index + 1}. <strong>${ds.file}</strong> (Dataset: ${ds.id})
+                        </span>
+                        <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
+                            <button onclick="moveQueueItem(${index}, -1)" class="editor-btn" style="padding: 2px 6px; font-size: 10px; border-radius: 4px;" title="Move Up" ${index === 0 ? 'disabled' : ''}>
+                                <i class="fa-solid fa-arrow-up"></i>
+                            </button>
+                            <button onclick="moveQueueItem(${index}, 1)" class="editor-btn" style="padding: 2px 6px; font-size: 10px; border-radius: 4px;" title="Move Down" ${index === selectedDatasets.length - 1 ? 'disabled' : ''}>
+                                <i class="fa-solid fa-arrow-down"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                if (!isRunning) {
+                    runQueueBtn.disabled = false;
+                }
+            }
+            updateRunButtons();
+        }
+
+        function moveQueueItem(index, direction) {
+            const newIndex = index + direction;
+            if (newIndex >= 0 && newIndex < selectedDatasets.length) {
+                const temp = selectedDatasets[index];
+                selectedDatasets[index] = selectedDatasets[newIndex];
+                selectedDatasets[newIndex] = temp;
+                updateQueueList();
+            }
+        }
+
+        function loadSessions() {
+            try {
+                const stored = localStorage.getItem('aura_chat_sessions');
+                if (stored) {
+                    chatSessions = JSON.parse(stored);
+                }
+            } catch (e) {
+                console.error("Failed to parse chat sessions", e);
+            }
+            
+            if (!chatSessions || chatSessions.length === 0) {
+                const defaultSession = {
+                    id: 's-' + Math.random().toString(36).substring(2) + '-' + Date.now().toString(36),
+                    name: 'Default Chat',
+                    history: []
+                };
+                chatSessions = [defaultSession];
+                currentSessionId = defaultSession.id;
+                saveSessions();
+            } else {
+                currentSessionId = localStorage.getItem('aura_active_session_id');
+                if (!currentSessionId || !chatSessions.some(s => s.id === currentSessionId)) {
+                    currentSessionId = chatSessions[0].id;
+                }
+            }
+            
+            updateSessionDropdown();
+            loadCurrentSessionHistory();
+        }
+
+        function saveSessions() {
+            localStorage.setItem('aura_chat_sessions', JSON.stringify(chatSessions));
+            localStorage.setItem('aura_active_session_id', currentSessionId);
+        }
+
+        function updateSessionDropdown() {
+            const select = document.getElementById('chatSessionSelect');
+            if (select) {
+                select.innerHTML = chatSessions.map(session => `
+                    <option value="${session.id}" ${session.id === currentSessionId ? 'selected' : ''}>${escapeHtml(session.name)}</option>
+                `).join('');
+            }
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function loadCurrentSessionHistory() {
+            const session = chatSessions.find(s => s.id === currentSessionId);
+            conversationHistory = session ? session.history : [];
+            
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+                chatMessages.innerHTML = '';
+                
+                if (conversationHistory.length === 0) {
+                    appendGreeting();
+                } else {
+                    conversationHistory.forEach(msg => {
+                        const bubble = appendChatMessage(msg.role, msg.content);
+                        if (msg.thinking) {
+                            const details = document.createElement('details');
+                            details.className = 'thinking-details';
+                            
+                            const summary = document.createElement('summary');
+                            summary.innerHTML = '<i class="fa-solid fa-brain" aria-hidden="true"></i> AI Reasoning & Escalations';
+                            details.appendChild(summary);
+                            
+                            const content = document.createElement('pre');
+                            content.className = 'thinking-content';
+                            content.innerText = msg.thinking;
+                            details.appendChild(content);
+                            
+                            bubble.appendChild(details);
+                        }
+                    });
+                }
+            }
+        }
+
+        function appendGreeting() {
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+                chatMessages.innerHTML = `
+                    <div class="chat-message message-ai">
+                        <span>Hello! I am Aura, your test automation assistant. How can I help you today? You can ask me to select/run test suites or create/modify tests!</span>
+                    </div>
+                `;
+            }
+        }
+
+        function switchChatSession() {
+            const select = document.getElementById('chatSessionSelect');
+            if (select) {
+                currentSessionId = select.value;
+                saveSessions();
+                loadCurrentSessionHistory();
+            }
+        }
+
+        function createNewChatSession(name = 'New Chat') {
+            const newSession = {
+                id: 's-' + Math.random().toString(36).substring(2) + '-' + Date.now().toString(36),
+                name: name,
+                history: []
+            };
+            chatSessions.push(newSession);
+            currentSessionId = newSession.id;
+            saveSessions();
+            updateSessionDropdown();
+            loadCurrentSessionHistory();
+        }
+
+        function renameCurrentChatSession() {
+            const session = chatSessions.find(s => s.id === currentSessionId);
+            if (!session) return;
+            const newName = prompt('Rename Chat Session:', session.name);
+            if (newName && newName.trim().length > 0) {
+                session.name = newName.trim();
+                saveSessions();
+                updateSessionDropdown();
+            }
+        }
+
+        function deleteCurrentChatSession() {
+            if (chatSessions.length <= 1) {
+                showToast("Cannot delete the only chat session.", "error");
+                return;
+            }
+            const session = chatSessions.find(s => s.id === currentSessionId);
+            if (confirm(`Are you sure you want to delete session "${session.name}"?`)) {
+                chatSessions = chatSessions.filter(s => s.id !== currentSessionId);
+                currentSessionId = chatSessions[0].id;
+                saveSessions();
+                updateSessionDropdown();
+                loadCurrentSessionHistory();
+            }
+        }
+
+        async function submitCreateTest() {
+            const name = newTestName.value.trim();
+            if (!name) return;
+            try {
+                const res = await fetch('/api/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    showToast("Error: " + data.error, "error");
+                } else {
+                    createTestModal.style.display = 'none';
+                    await loadFiles();
+                    openYamlEditor(data.file);
+                }
+            } catch (e) {
+                console.error("Failed to create test", e);
+            }
+        }
+
+
+
+        let consoleExpanded = false;
+
+        function toggleConsoleSize() {
+            consoleExpanded = !consoleExpanded;
+            const icon = document.getElementById('consoleSizeIcon');
+            const btn = document.getElementById('toggleConsoleSizeBtn');
+            if (consoleExpanded) {
+                icon.className = 'fa-solid fa-chevron-down';
+                btn.innerHTML = '<i class="fa-solid fa-chevron-down" id="consoleSizeIcon" aria-hidden="true"></i> Shrink';
+            } else {
+                icon.className = 'fa-solid fa-chevron-up';
+                btn.innerHTML = '<i class="fa-solid fa-chevron-up" id="consoleSizeIcon" aria-hidden="true"></i> Expand';
+            }
+            updateCenterLayout();
+        }
+
+        function updateCenterLayout() {
+            const hasEdit = (activeEditingFile !== null);
+            const hasConsole = consoleOpened || isRunning;
+            
+            const chatPanel = document.getElementById('chatPanel');
+            const editorPanel = document.getElementById('editorPanel');
+            const consolePanel = document.getElementById('consolePanel');
+            const consoleResizer = document.getElementById('consoleResizer');
+            const closeConsoleBtn = document.getElementById('closeConsoleBtn');
+            
+            if (closeConsoleBtn) {
+                closeConsoleBtn.style.display = isRunning ? 'none' : 'inline-block';
+            }
+            
+            if (hasEdit) {
+                document.body.classList.add('workspace-split-mode');
+                switchState('editor');
+                
+                if (hasConsole) {
+                    consoleResizer.style.display = 'block';
+                    consolePanel.style.display = 'flex';
+                    consolePanel.style.flexGrow = '0';
+                    consolePanel.style.height = consoleExpanded ? '400px' : '200px';
+                } else {
+                    consoleResizer.style.display = 'none';
+                    consolePanel.style.height = '0px'; setTimeout(() => { if (!consoleOpened && !isRunning) consolePanel.style.display = 'none'; }, 300);
+                }
+            } else {
+                document.body.classList.remove('workspace-split-mode');
+                switchState('selection');
+                
+                if (hasConsole) {
+                    consoleResizer.style.display = 'block';
+                    consolePanel.style.display = 'flex';
+                    consolePanel.style.flexGrow = '0';
+                    consolePanel.style.height = consoleExpanded ? '550px' : '280px';
+                } else {
+                    consoleResizer.style.display = 'none';
+                    consolePanel.style.height = '0px'; setTimeout(() => { if (!consoleOpened && !isRunning) consolePanel.style.display = 'none'; }, 300);
+                }
+            }
+            updateRunButtons();
+        }
+
+        function updateRunButtons() {
+            const runQueueBtn = document.getElementById('runQueueBtn');
+            const runCurrentTestBtn = document.getElementById('runCurrentTestBtn');
+            const stopQueueBtn = document.getElementById('stopQueueBtn');
+            if (!runQueueBtn || !runCurrentTestBtn || !stopQueueBtn) return;
+            
+            const queueCount = selectedDatasets ? selectedDatasets.length : 0;
+            runQueueBtn.innerHTML = `<i class="fa-solid fa-play"></i> Run Queue (${queueCount})`;
+            
+            if (isRunning) {
+                runQueueBtn.style.display = 'none';
+                runCurrentTestBtn.style.display = 'none';
+                stopQueueBtn.style.display = 'flex';
+                return;
+            }
+            
+            stopQueueBtn.style.display = 'none';
+            runQueueBtn.style.display = 'flex';
+            
+            if (activeEditingFile) {
+                runCurrentTestBtn.style.display = 'flex';
+                runCurrentTestBtn.disabled = false;
+                runQueueBtn.style.filter = 'saturate(50%) opacity(0.7)';
+                runQueueBtn.disabled = true;
+            } else {
+                runCurrentTestBtn.style.display = 'none';
+                runQueueBtn.style.filter = 'none';
+                runQueueBtn.disabled = queueCount === 0;
+            }
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const prompt = input.value.trim();
+            if (!prompt) return;
+
+            input.value = '';
+            appendChatMessage('user', prompt);
+
+            const thinkingBubble = appendChatMessage('ai', 'Thinking...', true);
+            const apiKeyBanner = document.getElementById('apiKeyBanner');
+            apiKeyBanner.style.display = 'none';
+
+            // Clone history before pushing user message
+            const payloadHistory = [...conversationHistory];
+            conversationHistory.push({ role: 'user', content: prompt });
+            
+            // Auto-rename session on first message
+            const session = chatSessions.find(s => s.id === currentSessionId);
+            if (session && (session.name === 'New Chat' || session.name === 'Default Chat' || session.history.length === 1)) {
+                session.name = prompt.substring(0, 25) + (prompt.length > 25 ? '...' : '');
+                updateSessionDropdown();
+            }
+            saveSessions();
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        activeFile: activeEditingFile,
+                        history: payloadHistory
+                      })
+                });
+
+                const data = await response.json();
+                thinkingBubble.remove();
+
+                if (data.error) {
+                    if (data.error.includes("API Key") || data.error.includes("LLM Client Error")) {
+                        const apiKeyBannerText = document.getElementById('apiKeyBannerText');
+                        apiKeyBannerText.innerHTML = data.error;
+                        apiKeyBanner.style.display = 'flex';
+                    }
+                    appendChatMessage('ai', "Error: " + data.error);
+                    return;
+                }
+
+                const aiBubble = appendChatMessage('ai', data.message);
+                
+                const msgObj = { role: 'assistant', content: data.message };
+                if (data.thinking) {
+                    msgObj.thinking = data.thinking;
+                }
+                conversationHistory.push(msgObj);
+                saveSessions();
+
+                if (data.thinking) {
+                    const details = document.createElement('details');
+                    details.className = 'thinking-details';
+                    
+                    const summary = document.createElement('summary');
+                    summary.innerHTML = '<i class="fa-solid fa-brain" aria-hidden="true"></i> AI Reasoning & Escalations';
+                    details.appendChild(summary);
+                    
+                    const content = document.createElement('pre');
+                    content.className = 'thinking-content';
+                    content.innerText = data.thinking;
+                    details.appendChild(content);
+                    
+                    aiBubble.appendChild(details);
+                }
+
+                if (data.action === 'select_tests') {
+                    if (data.selectedDatasets) {
+                        selectedDatasets = data.selectedDatasets;
+                    } else if (data.files) {
+                        selectedDatasets = [];
+                        data.files.forEach(file => {
+                            const fileDto = currentFilesListCached.find(f => f.file === file);
+                            if (fileDto && fileDto.datasets) {
+                                fileDto.datasets.forEach(d => {
+                                    selectedDatasets.push({ file, id: d.id });
+                                });
+                            }
+                        });
+                    }
+                    await loadFiles();
+                } else if (data.action === 'edit_or_create_test' && data.filename && data.content) {
+                    await loadFiles();
+                    activeEditingFile = data.filename;
+                    editorFileName.innerText = data.filename;
+                    editorContent.value = data.content;
+                    updateCenterLayout();
+                    editorContent.focus();
+                }
+
+            } catch (e) {
+                thinkingBubble.remove();
+                appendChatMessage('ai', "Error connecting to AI Server: " + e.message);
+            }
+        }
+
+        function appendChatMessage(sender, text, isThinking = false) {
+            const chatMessages = document.getElementById('chatMessages');
+            const bubble = document.createElement('div');
+            bubble.className = `chat-message message-${sender}`;
+            
+            const contentSpan = document.createElement('span');
+            contentSpan.innerText = text;
+            bubble.appendChild(contentSpan);
+            
+            if (isThinking) {
+                const indicator = document.createElement('div');
+                indicator.className = 'typing-indicator';
+                indicator.innerHTML = '<span></span><span></span><span></span>';
+                bubble.appendChild(indicator);
+            }
+            
+            chatMessages.appendChild(bubble);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return bubble;
+        }
+
+        function closeConsole() {
+            consoleOpened = false;
+            updateCenterLayout();
+        }
+
+        async function openYamlEditor(filename) {
+            activeEditingFile = filename;
+            editorFileName.innerText = filename;
+            try {
+                const res = await fetch(`/api/read?file=${encodeURIComponent(filename)}`);
+                const data = await res.json();
+                editorContent.value = data.content || '';
+                updateCenterLayout();
+            } catch (e) {
+                showToast("Failed to load file content: " + e.message, "error");
+            }
+        }
+
+        async function saveYamlFile() {
+            if (!activeEditingFile) return;
+            try {
+                const res = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: activeEditingFile, content: editorContent.value })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`💾 ${activeEditingFile} successfully saved to disk!`, "success");
+                } else {
+                    showToast("Error saving: " + data.error, "error");
+                }
+            } catch (e) {
+                showToast("Error saving file: " + e.message, "error");
+            }
+        }
+
+        async function deleteYamlFile() {
+            if (!activeEditingFile) return;
+            document.getElementById('deleteFileNameDisplay').textContent = activeEditingFile;
+            document.getElementById('deleteTestModal').style.display = 'flex';
+        }
+
+        async function submitDeleteTest() {
+            if (!activeEditingFile) return;
+            document.getElementById('deleteTestModal').style.display = 'none';
+            try {
+                const res = await fetch('/api/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: activeEditingFile })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    selectedDatasets = selectedDatasets.filter(d => d.file !== activeEditingFile);
+                    closeEditor();
+                    loadFiles();
+                } else {
+                    showToast("Error deleting: " + data.error, "error");
+                }
+            } catch (e) {
+                showToast("Error deleting file: " + e.message, "error");
+            }
+        }
+
+        function closeEditor() {
+            activeEditingFile = null;
+            updateCenterLayout();
+        }
+
+        function openReportView(reportId) {
+            reportDisplayName.innerText = reportId;
+            reportIframe.src = `/api/allure/report/${reportId}/index.html`;
+            
+            document.body.classList.add('report-active');
+            showView('reportView');
+        }
+
+        function closeReportView() {
+            document.body.classList.remove('report-active');
+            showView(lastActiveView || 'dashboardView');
+            reportIframe.src = 'about:blank';
+        }
+
+        async function runCurrentFile() {
+            if (!activeEditingFile) return;
+            
+            await saveYamlFile();
+            
+            const fileDatasets = [{ file: activeEditingFile, id: null }];
+            
+            const headless = document.getElementById('optHeadless').checked;
+            const video = document.getElementById('optVideo').checked;
+            const keepOpen = document.getElementById('optKeepOpen').checked;
+            const interactive = document.getElementById('optInteractive').checked;
+            const allure = document.getElementById('optAllure').checked;
+            const history = document.getElementById('optHistory').checked;
+            
+            isRunning = true;
+            consoleOpened = true;
+            
+            activeRunStats.running = true;
+            activeRunStats.startTime = new Date();
+            activeRunStats.total = 0;
+            activeRunStats.passed = 0;
+            activeRunStats.failed = 0;
+            renderHistoryTable();
+
+            runSpinner.style.display = 'inline-block';
+            updateCenterLayout();
+            runSpinner.style.display = 'inline-block';
+            terminalConsole.innerHTML = 'Connecting to run stream...\n';
+            hasShownStartMessage = false;
+            
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ datasets: fileDatasets, headless, video, keepOpen, interactive, allure, history })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    showToast("Execution failed to start: " + data.error, "error");
+                    isRunning = false;
+                    activeRunStats.running = false;
+                    renderHistoryTable();
+                    consoleOpened = false;
+                    updateCenterLayout();
+                }
+            } catch (e) {
+                showToast("Failed to start run for current file: " + e.message, "error");
+                isRunning = false;
+                activeRunStats.running = false;
+                renderHistoryTable();
+                consoleOpened = false;
+                updateCenterLayout();
+            }
+        }
+
+        async function runQueue() {
+            if (selectedDatasets.length === 0) return;
+            
+            const headless = document.getElementById('optHeadless').checked;
+            const video = document.getElementById('optVideo').checked;
+            const keepOpen = document.getElementById('optKeepOpen').checked;
+            const interactive = document.getElementById('optInteractive').checked;
+            const allure = document.getElementById('optAllure').checked;
+            const history = document.getElementById('optHistory').checked;
+            
+            isRunning = true;
+            consoleOpened = true;
+            
+            activeRunStats.running = true;
+            activeRunStats.startTime = new Date();
+            activeRunStats.total = 0;
+            activeRunStats.passed = 0;
+            activeRunStats.failed = 0;
+            renderHistoryTable();
+
+            runSpinner.style.display = 'inline-block';
+            updateCenterLayout();
+            runSpinner.style.display = 'inline-block';
+            terminalConsole.innerHTML = 'Connecting to run stream...\n';
+            hasShownStartMessage = false;
+            
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ datasets: selectedDatasets, headless, video, keepOpen, interactive, allure, history })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    showToast("Execution failed to start: " + data.error, "error");
+                    isRunning = false;
+                    activeRunStats.running = false;
+                    renderHistoryTable();
+                    consoleOpened = false;
+                    updateCenterLayout();
+                }
+            } catch (e) {
+                showToast("Failed to start run queue: " + e.message, "error");
+                isRunning = false;
+                activeRunStats.running = false;
+                renderHistoryTable();
+                consoleOpened = false;
+                updateCenterLayout();
+            }
+        }
+
+        async function stopQueue() {
+            try {
+                await fetch('/api/stop', { method: 'POST' });
+            } catch (e) {
+                console.error("Failed to stop queue", e);
+            }
+        }
+
+        function isAiLogLine(line) {
+            if (!line) return false;
+            
+            const lower = line.toLowerCase();
+            
+            // Filter out Maven execution boilerplate
+            const isMavenLog = lower.includes('[info] command: mvn') ||
+                               lower.includes('[info] --<') ||
+                               lower.includes('[info] building ') ||
+                               lower.includes('[info] --- maven-') ||
+                               lower.includes('[info] skip non existing resource') ||
+                               lower.includes('[info] deleting ');
+            if (isMavenLog) return false;
+            
+            // Check if the line contains standard AI emojis or box drawing chars
+            const emojiPattern = /[🤖🧠👣🔮⚙️✨🔍║│├└─═▶✅❌\?]/u;
+            if (emojiPattern.test(line)) {
+                return true;
+            }
+            
+            // Check if the line contains AI keywords
+            const aiKeywords = [
+                'aura',
+                'pesap',
+                'playbook',
+                'llmclient',
+                'aiagent',
+                'actionexecutor',
+                'aibrowser',
+                'aiassertion',
+                'reasoning',
+                'token usage',
+                'execution statistics',
+                'llm calls',
+                'input tokens',
+                'output tokens',
+                'total tokens',
+                'context levels',
+                'escalations',
+                'direct parses',
+                'step',
+                'open http',
+                'navigating to',
+                'capturing',
+                'sending prompt',
+                'sending multimodal',
+                'sending chat message',
+                'tokens:',
+                'llm response',
+                'llm reasoning',
+                'parsed',
+                'llm proposed actions',
+                'action{type=',
+                '[exec]',
+                'executing action',
+                'resolved using strategy',
+                'assertion passed',
+                'all steps completed successfully',
+                'playbook saved',
+                'navigating to:',
+                'simplified dom size'
+            ];
+            
+            if (aiKeywords.some(keyword => lower.includes(keyword))) {
+                return true;
+            }
+            
+            return false;
+        }
+
+        function toggleAiOnly(checked) {
+            logFilterAiOnly = checked;
+            refreshLogFiltering();
+        }
+
+        function toggleErrorsOnly(checked) {
+            logFilterErrorsOnly = checked;
+            refreshLogFiltering();
+        }
+
+        function refreshLogFiltering() {
+            const logLines = terminalConsole.querySelectorAll('.log-line');
+            logLines.forEach(line => {
+                const text = line.innerText;
+                const isErrorOrWarn = text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]');
+                
+                const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
+                const matchesAiFilter = !logFilterAiOnly || isAiLogLine(text);
+                
+                if (matchesErrorFilter && matchesAiFilter) {
+                    line.style.display = 'block';
+                } else {
+                    line.style.display = 'none';
+                }
+            });
+        }
+
+        function appendLog(line) {
+            if (terminalConsole.innerHTML.includes('Console idle.') || terminalConsole.innerHTML.includes('Connecting to run stream...')) {
+                terminalConsole.innerHTML = '';
+                if (logFilterAiOnly && !hasShownStartMessage) {
+                    hasShownStartMessage = true;
+                    const startLine = '🤖 Test runner started. Compiling and initializing AI tests (this may take a few seconds)...';
+                    terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line log-info" style="display: block; margin: 0; padding: 0;">${startLine}</div>`);
+                }
+            }
+            const isErrorOrWarn = line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[FATAL]');
+            
+            const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
+            const matchesAiFilter = !logFilterAiOnly || isAiLogLine(line);
+            
+            const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
+            const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
+            
+            terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`);
+            terminalConsole.scrollTop = terminalConsole.scrollHeight;
+        }
+
+        let pollingIntervalId = null;
+        let lastLogIndex = 0;
+        let lastEventIndex = 0;
+
+        function startPolling() {
+            if (pollingIntervalId) {
+                clearTimeout(pollingIntervalId);
+            }
+            pollStatus();
+        }
+
+        async function pollStatus() {
+            try {
+                const response = await fetch('/api/status?clientId=' + encodeURIComponent(clientId) + '&lastIndex=' + lastLogIndex + '&lastEventIndex=' + lastEventIndex);
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.logs && data.logs.length > 0) {
+                        data.logs.forEach(log => appendLog(log));
+                    }
+                    if (data.newIndex !== undefined) {
+                        lastLogIndex = data.newIndex;
+                    }
+                    
+                    if (data.events && data.events.length > 0) {
+                        data.events.forEach(event => {
+                            if (event.type === 'reportReady') {
+                                openReportView(event.reportId);
+                            }
+                        });
+                    }
+                    if (data.newEventIndex !== undefined) {
+                        lastEventIndex = data.newEventIndex;
+                    }
+
+                    if (data.status) {
+                        const statusData = data.status;
+                        const statsPanel = document.getElementById('statsPanel');
+                        if (statsPanel) {
+                            statsPanel.style.display = (statusData.running || statusData.total > 0) ? 'block' : 'none';
+                        }
+
+                        document.getElementById('statsTotalExecution').innerText = `${statusData.total} Test${statusData.total === 1 ? '' : 's'}`;
+                        document.getElementById('statsPassed').innerText = statusData.passed;
+                        document.getElementById('statsFailed').innerText = statusData.failed;
+                        
+                        activeRunStats.running = statusData.running;
+                        activeRunStats.total = statusData.total;
+                        activeRunStats.passed = statusData.passed;
+                        activeRunStats.failed = statusData.failed;
+                        if (statusData.running && !activeRunStats.startTime) {
+                            activeRunStats.startTime = new Date();
+                        }
+                        const currentStatsStr = `${activeRunStats.running}:${activeRunStats.total}:${activeRunStats.passed}:${activeRunStats.failed}:${historyCached.length}`;
+                        if (window._lastStatsStr !== currentStatsStr) {
+                            renderHistoryTable();
+                            window._lastStatsStr = currentStatsStr;
+                        }
+                        
+                        try {
+                            isRunning = statusData.running;
+                            if (isRunning) {
+                                if (runSpinner) runSpinner.style.display = 'inline-block';
+                                const sidebarBadge = document.getElementById('sidebarRunBadge');
+                                if (sidebarBadge) {
+                                    sidebarBadge.style.display = 'flex';
+                                    sidebarBadge.innerHTML = `<i class="fa-solid fa-circle-notch spinner"></i> ${statusData.passed + statusData.failed + 1}/${statusData.total}`;
+                                }
+                                updateRunButtons();
+                            } else {
+                                if (runSpinner) runSpinner.style.display = 'none';
+                                const sidebarBadge = document.getElementById('sidebarRunBadge');
+                                if (sidebarBadge) sidebarBadge.style.display = 'none';
+                                
+                                activeRunStats.running = false;
+                                activeRunStats.startTime = null;
+                                loadHistory();
+                                updateCenterLayout();
+                            }
+                        } catch (err) {
+                            console.error('Error updating UI state from status:', err);
+                        }
+                    }
+                    const apiKeyBanner = document.getElementById('apiKeyBanner');
+                    if (apiKeyBanner && apiKeyBanner.style.display === 'block' && document.getElementById('apiKeyBannerText').innerHTML.includes('offline')) {
+                        apiKeyBanner.style.display = 'none';
+                    }
+                } else {
+                    console.error("Polling response error:", response.status);
+                    const apiKeyBanner = document.getElementById('apiKeyBanner');
+                    const apiKeyBannerText = document.getElementById('apiKeyBannerText');
+                    if (apiKeyBanner && apiKeyBannerText) {
+                        apiKeyBanner.style.display = 'block';
+                        apiKeyBannerText.innerHTML = "Server is offline or unreachable.";
+                    }
+                }
+            } catch (err) {
+                console.error("Polling fetch error:", err);
+                const apiKeyBanner = document.getElementById('apiKeyBanner');
+                const apiKeyBannerText = document.getElementById('apiKeyBannerText');
+                if (apiKeyBanner && apiKeyBannerText) {
+                    apiKeyBanner.style.display = 'block';
+                    apiKeyBannerText.innerHTML = "Server is offline or unreachable.";
+                }
+            } finally {
+                if (!disconnected) {
+                    pollingIntervalId = setTimeout(pollStatus, 2000);
+                }
+            }
+        }
+
+
+
+        // Tab lifecycle warning and disconnect notification
+        window.addEventListener('beforeunload', (event) => {
+            if (isRunning) {
+                event.preventDefault();
+                event.returnValue = 'A test queue is currently running. If you close this tab, the server will shut down and the test execution will be terminated.';
+                return event.returnValue;
+            }
+        });
+
+        function sendDisconnect() {
+            if (!disconnected) {
+                disconnected = true;
+                navigator.sendBeacon('/api/disconnect?clientId=' + encodeURIComponent(clientId));
+            }
+        }
+        window.addEventListener('pagehide', sendDisconnect);
+        window.addEventListener('unload', sendDisconnect);
+
+        // Keyboard Shortcuts (capturing phase to guarantee execution and prevent browser defaults)
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                if (createTestModal.style.display === 'flex') {
+                    event.preventDefault();
+                    createTestModal.style.display = 'none';
+                } else if (activeEditingFile) {
+                    event.preventDefault();
+                    closeEditor();
+                }
+            }
+            if ((event.ctrlKey || event.metaKey) && (event.key === 's' || event.key === 'S')) {
+                if (activeEditingFile) {
+                    event.preventDefault();
+                    saveYamlFile();
+                }
+            }
+        }, true);
+
+        // Keyboard activation of focused list items
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                const focused = document.activeElement;
+                if (focused && focused.classList.contains('list-item')) {
+                    event.preventDefault();
+                    focused.click();
+                }
+            }
+        });
+
+        window.onload = () => {
+            init();
+            updateCenterLayout();
+        };
+    
+        // Initialize Theme
+        initTheme();
+        
+        // Ensure Enter works on chat input since we decoupled the original listener
+        document.getElementById('chatInput').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                sendChatMessage();
+            }
+        });
+    </script>
+</body>
+</html>

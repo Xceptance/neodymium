@@ -55,17 +55,17 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.agent.screenshotBeforeAction")
     @DefaultValue("false")
     public boolean agentScreenshotBeforeAction();
+    @Key("neodymium.ai.pesap.enabled")
+    @DefaultValue("true")
+    public boolean pesapEnabled();
 
-
-
+    @Key("neodymium.ai.pesap.classify.enabled")
+    @DefaultValue("true")
+    public boolean pesapClassifyEnabled();
 
     @Key("neodymium.ai.pesap.linter.enabled")
     @DefaultValue("false")
     public boolean pesapLinterEnabled();
-
-    @Key("neodymium.ai.pesap.enabled")
-    @DefaultValue("true")
-    public boolean pesapEnabled();
 
     /**
      * Path to a custom rules file to extend the PESAP semantic linter.
@@ -155,6 +155,10 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.agent.javaMethod.utilityClasses")
     @DefaultValue("com.xceptance.neodymium.ai.util.AiAssertions")
     public List<String> aiJavaMethodUtilityClasses();
+
+    @Key("neodymium.ai.aura.manager.shutdownDelay")
+    @DefaultValue("5")
+    public int auraManagerShutdownDelay();
 
     @Key("neodymium.ai.agent.methods.classes")
     @DefaultValue("com.xceptance.neodymium.ai.util.AiAssertions")
