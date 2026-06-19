@@ -202,9 +202,6 @@ public final class InteractiveHud
             {
                 return;
             }
-            // A higher delay (500ms) is needed here to prevent flickering since a screenshot is taken
-            // right after injection, ensuring the browser has stabilized.
-            Thread.sleep(500);
         }
         catch (final Exception e)
         {
@@ -279,17 +276,17 @@ public final class InteractiveHud
         try
         {
             final String readyState = Selenide.executeJavaScript("return document.readyState;");
-            System.err.println("[Neodymium HUD Java Debug] checkHudAction: readyState = " + readyState);
+
             if (!"complete".equals(readyState) && !"interactive".equals(readyState))
             {
                 return null;
             }
 
             final Boolean hudExists = Selenide.executeJavaScript("return document.getElementById('neo-ai-hud') !== null;");
-            System.err.println("[Neodymium HUD Java Debug] checkHudAction: hudExists = " + hudExists);
+
             if (Boolean.FALSE.equals(hudExists) && this.lastPlanned != null)
             {
-                System.err.println("[Neodymium HUD Java Debug] checkHudAction: HUD missing, triggering silent reinjection!");
+
                 // The HUD was removed (e.g. page navigation), reinject it silently.
                 injectOrUpdateHud(this.lastPlanned, this.lastPerformed, this.lastAutoSkip, this.lastHudPromptChanged, this.lastIsFinished, this.lastCurrentUnresolvedStep, this.lastReasoning, this.lastIsReplay);
             }
@@ -389,7 +386,7 @@ public final class InteractiveHud
     {
         try
         {
-            Selenide.executeJavaScript("console.log('[Neodymium Server Call] resetHudAction starting'); window.neoHudAction = null;");
+            Selenide.executeJavaScript("window.neoHudAction = null;");
         }
         catch (final Exception e)
         {
