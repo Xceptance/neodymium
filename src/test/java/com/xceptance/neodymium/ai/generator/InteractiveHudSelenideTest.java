@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -1811,5 +1812,261 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-ai-hud").shouldNotBe(Condition.visible);
         $("#result").shouldHave(Condition.exactText("Button 2 Clicked")); // Verify Button 2 was clicked
     }
+
+    /**
+     * Verifies that the HUD debugger remains fully interactive and clickable even when
+     * the SUT page has an overlay that blocks pointer interactions.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testHudInteractionWithBlockingOverlay() throws Exception
+    {
+        // 1. Open the SUT HTML test page and ensure localStorage/sessionStorage are fully reset
+        openTestUrl();
+
+        // 2. Initialize the Playbook with a clean 1-step sequence
+        final Playbook playbook = new Playbook("testHudInteractionWithBlockingOverlay");
+        playbook.setRecording(false);
+
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setReasoning("Test step with overlay");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Launch the AI agent in a background execution thread
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Verify HUD starts successfully and is visible
+        checkBgError();
+        $("#neo-ai-hud").shouldBe(Condition.visible);
+
+        // 5. Inject a dynamic full-screen blocking overlay to the SUT page via JS
+        Selenide.executeJavaScript(
+            "var overlay = document.createElement('div');" +
+            "overlay.id = 'test-blocking-overlay';" +
+            "overlay.style.position = 'fixed';" +
+            "overlay.style.top = '0';" +
+            "overlay.style.left = '0';" +
+            "overlay.style.width = '100%';" +
+            "overlay.style.height = '100%';" +
+            "overlay.style.zIndex = '1000000';" +
+            "overlay.style.background = 'rgba(0,0,0,0.5)';" +
+            "overlay.style.pointerEvents = 'auto';" +
+            "document.body.appendChild(overlay);"
+        );
+
+        // 6. Click the Skip button (✕) in the HUD.
+        // It must not be blocked by the full-screen blocking overlay we just injected.
+        $("#neo-skip-btn").click();
+        Selenide.sleep(2500);
+
+        // 7. Since the playbook was modified (skipped), wait for the Save & Exit button to appear and click it
+        checkBgError();
+        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
+        $("#neo-approve-btn").click();
+
+        // 8. Verify the step was skipped, SUT state remains initial, and HUD closed cleanly
+        checkBgError();
+        $("#neo-ai-hud").shouldNotBe(Condition.visible);
+        $("#result").shouldHave(Condition.exactText("Initial State"));
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that when the agent switches window focus, the HUD debugger on the newly
+     * active window is dynamically updated/synchronized to reflect the current test step.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testHudSyncAcrossWindowSwitch() throws Exception
+    {
+        // 1. Open the SUT HTML test page
+        openTestUrl();
+
+        // 2. Initialize Playbook with a 2-step sequence
+        final Playbook playbook = new Playbook("testHudSyncAcrossWindowSwitch");
+        playbook.setRecording(false);
+
+        // Step 1: Click button 1
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setReasoning("First step");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        // Step 2: Click button 2
+        final PlaybookStep step2 = new PlaybookStep();
+        step2.setPromptLine("Click button 2");
+        step2.setReasoning("Second step");
+        step2.setActions(List.of(new Action("CLICK", "#btn2", "Click button 2")));
+        playbook.addStep(step2);
+
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Launch AI agent in background
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1\nClick button 2");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Verify HUD starts successfully on main window showing Step 1
+        checkBgError();
+        $("#neo-ai-hud").shouldBe(Condition.visible);
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 1"));
+
+        // 5. Simulate opening a popup window in the browser
+        final String mainWindow = Selenide.webdriver().driver().getWebDriver().getWindowHandle();
+        Selenide.executeJavaScript("window.open('about:blank', 'popup-win');");
+        
+        // Switch WebDriver focus to popup window
+        final Set<String> handles = Selenide.webdriver().driver().getWebDriver().getWindowHandles();
+        final String popupWindow = handles.stream().filter(h -> !h.equals(mainWindow)).findFirst().orElseThrow();
+        Selenide.switchTo().window(popupWindow);
+
+        // 6. Approve Step 1 from the popup window context (where the HUD will be auto-injected on demand)
+        checkBgError();
+        $("#neo-ai-hud").shouldBe(Condition.visible);
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2500);
+
+        // 7. Verify Step 2 is now pending in the popup window HUD
+        checkBgError();
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
+
+        // 8. Switch WebDriver focus back to the main window
+        Selenide.switchTo().window(mainWindow);
+
+        // 9. Verify that the HUD on the main window is dynamically updated to display Step 2
+        checkBgError();
+        $("#neo-ai-hud").shouldBe(Condition.visible);
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
+
+        // 10. Skip Step 2 and cleanly Save & Exit
+        $("#neo-skip-btn").click();
+        Selenide.sleep(2500);
+
+        checkBgError();
+        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
+        $("#neo-approve-btn").click();
+
+        checkBgError();
+        $("#neo-ai-hud").shouldNotBe(Condition.visible);
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that when a popup window closes itself (simulated via closeWindow()),
+     * the HUD debugger automatically recovers and switches focus back to the original
+     * main window, synchronizing the HUD state.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testHudSyncAcrossSelfClosingWindow() throws Exception
+    {
+        // 1. Open the SUT HTML test page
+        openTestUrl();
+
+        // 2. Initialize Playbook with a 2-step sequence
+        final Playbook playbook = new Playbook("testHudSyncAcrossSelfClosingWindow");
+        playbook.setRecording(false);
+
+        // Step 1: Click button 1
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setReasoning("First step");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        // Step 2: Click button 2
+        final PlaybookStep step2 = new PlaybookStep();
+        step2.setPromptLine("Click button 2");
+        step2.setReasoning("Second step");
+        step2.setActions(List.of(new Action("CLICK", "#btn2", "Click button 2")));
+        playbook.addStep(step2);
+
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Launch AI agent in background
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1\nClick button 2");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Verify HUD starts successfully on main window showing Step 1
+        checkBgError();
+        $("#neo-ai-hud").shouldBe(Condition.visible);
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 1"));
+
+        // 5. Simulate opening a popup window in the browser
+        final String mainWindow = Selenide.webdriver().driver().getWebDriver().getWindowHandle();
+        Selenide.executeJavaScript("window.open('about:blank', 'popup-win');");
+
+        // Switch WebDriver focus to popup window
+        final Set<String> handles = Selenide.webdriver().driver().getWebDriver().getWindowHandles();
+        final String popupWindow = handles.stream().filter(h -> !h.equals(mainWindow)).findFirst().orElseThrow();
+        Selenide.switchTo().window(popupWindow);
+
+        // 6. Approve Step 1 from the popup window context (where the HUD will be auto-injected on demand)
+        checkBgError();
+        $("#neo-ai-hud").shouldBe(Condition.visible);
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2500);
+
+        // 7. Verify Step 2 is now pending in the popup window HUD
+        checkBgError();
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
+
+        // 8. Close the popup window (simulating self-closing popup) while focus is still theoretically on it
+        Selenide.closeWindow();
+        Selenide.sleep(2500);
+
+        // 9. Verify that the HUD auto-recovers back to the main window and is dynamically updated to display Step 2
+        checkBgError();
+        $("#neo-ai-hud").shouldBe(Condition.visible);
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
+
+        // 10. Skip Step 2 and cleanly Save & Exit
+        $("#neo-skip-btn").click();
+        Selenide.sleep(2500);
+
+        checkBgError();
+        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
+        $("#neo-approve-btn").click();
+
+        checkBgError();
+        $("#neo-ai-hud").shouldNotBe(Condition.visible);
+        joinBgThread();
+    }
 }
+
 
