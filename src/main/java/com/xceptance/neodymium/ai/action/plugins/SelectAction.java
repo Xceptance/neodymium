@@ -27,12 +27,31 @@ import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 
+import com.xceptance.neodymium.ai.action.SelectorParser;
+
 public class SelectAction implements AiActionPlugin {
     @Override
     public String getActionName() { return "SELECT"; }
 
     @Override
-    public List<Action> parseDirectInstruction(String instruction) { return null; }
+    public List<Action> parseDirectInstruction(final String instruction)
+    {
+        final String normalized = instruction.replaceAll("\\s+", " ").trim();
+        final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+            "^SELECT\\s+(?:\"([^\"]*)\"|([^\"]+?))\\s+(?i)in\\s+(.+)$").matcher(normalized);
+        if (matcher.matches())
+        {
+            final String rawValue = matcher.group(1) != null ? matcher.group(1) : matcher.group(2).trim();
+            final String target = matcher.group(3).trim();
+            if (target.isEmpty())
+            {
+                throw new IllegalArgumentException("Selector target for SELECT command cannot be empty");
+            }
+            final SelectorParser.ParsedSelector parsed = SelectorParser.parse(target);
+            return List.of(new Action("SELECT", parsed.getExpression(), List.of(rawValue), "Select '" + rawValue + "' in " + parsed.getExpression()));
+        }
+        return null;
+    }
 
     @Override
     public void preCheck(Action action, ActionExecutor executor) {
@@ -54,7 +73,7 @@ public class SelectAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "SELECT: select an option from a dropdown (requires target and value)."; }
+    public String getPromptInstructions() { return "SELECT: Select an option from a target dropdown element (requires 'tg' and 'v')."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

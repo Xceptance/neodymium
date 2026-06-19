@@ -19,6 +19,8 @@
 package com.xceptance.neodymium.ai.action.plugins;
 
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -29,92 +31,143 @@ import com.codeborne.selenide.BasicAuthCredentials;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
+import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 import com.xceptance.neodymium.util.Neodymium;
 
-public class NavigateAction implements AiActionPlugin {
+/**
+ * Action plugin that parses and executes direct browser navigation steps, 
+ * including optional support for basic HTTP authentication.
+ * 
+ * This plugin matches natural language instructions such as "open http://example.com"
+ * or "visit http://example.com with basic auth username 'user' and password 'pass'"
+ * and translates them into executable Selenium/Selenide actions.
+ */
+public final class NavigateAction implements AiActionPlugin
+{
+    /**
+     * Logger instance for debug and tracing purposes.
+     */
     private static final Logger LOG = LoggerFactory.getLogger(NavigateAction.class);
 
+    /**
+     * Returns the unique identifying name of this action plugin.
+     *
+     * @return the name "NAVIGATE"
+     */
     @Override
-    public String getActionName() { return "NAVIGATE"; }
+    public String getActionName()
+    {
+        return "NAVIGATE";
+    }
 
+    /**
+     * Parses the instruction statically to determine if it is a direct navigation command.
+     * Uses regular expressions to match navigation phrases (e.g., "open", "visit", "go to")
+     * followed by a URL and optional basic authentication parameters.
+     *
+     * @param instruction the natural language instruction to parse
+     * @return a list containing the parsed navigation {@link Action}, or null if the instruction
+     *         does not represent a direct navigation command
+     */
     @Override
-    public List<Action> parseDirectInstruction(String instruction) {
-        String authPatternStr = com.xceptance.neodymium.util.Neodymium.configuration().getProperty("neodymium.ai.agent.pattern.urlWithBasicAuth", "(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(?:\\s+.*?\\b(?:with|using)?\\s*basic\\s+auth\\s+(?:username|user)\\s+['\"](?<username>.*?)['\"]\\s+(?:and\\s+)?(?:password|pass)\\s+['\"](?<password>.*?)['\"]).*$");
-        java.util.regex.Matcher authMatcher = java.util.regex.Pattern.compile(authPatternStr).matcher(instruction.strip());
-        String urlPatternStr = com.xceptance.neodymium.util.Neodymium.configuration()
-            .getProperty("neodymium.ai.agent.pattern.url",
-                "(?i)^(?:open|go\\s+to|navigate\\s+to|visit|[Öö]ffne|browse\\s+to)\\s+(https?:\\/\\/\\S+?)(?=[.,!?;]?(?:\\s|$))(\\.)*$");
-        java.util.regex.Matcher urlMatcher = java.util.regex.Pattern.compile(urlPatternStr).matcher(instruction.strip());
-
-        // Call find() once per matcher and store the boolean results to avoid
-        // consuming the match state by calling find() multiple times on the same instance.
-        final boolean authFound = authMatcher.find();
-        final boolean urlFound = urlMatcher.find();
-
-        // let's check if our prompt needs this or if we have it inside our config
-        if (authFound || (urlFound && Neodymium.configuration().basicAuthUsername() != null))
+    public List<Action> parseDirectInstruction(final String instruction)
+    {
+        final String normalized = instruction.replaceAll("\\s+", " ").trim();
+        if (normalized.startsWith("OPEN ") || normalized.startsWith("NAVIGATE "))
         {
-            if (authFound)
+            final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "^(?:OPEN|NAVIGATE)\\s+(?<url>\\S+?)(?:\\s+(?i)with\\s+basic\\s+auth\\s+user\\s+\"(?<username>[^\"]*)\"\\s+password\\s+\"(?<password>[^\"]*)\")?$")
+                .matcher(normalized);
+            if (matcher.matches())
             {
-                final String url = authMatcher.group(1);
-                final String username = authMatcher.group("username");
-                final String password = authMatcher.group("password");
+                final String url = matcher.group("url");
+                final String username = matcher.group("username");
+                final String password = matcher.group("password");
+
                 if (username != null && password != null)
                 {
                     LOG.debug("▶️ [EXEC] Direct navigation to: {}", url);
-                    return List.of(new Action("NAVIGATE", url, List.of(username, password), "Navigate to " + url + " with basic auth (user: " + username
-                                                                                            + ", pass: " + password + ")"));
+                    return List.of(new Action("NAVIGATE", url, List.of(username, password),
+                        "Navigate to " + url + " with basic auth (user: " + username + ", pass: " + password + ")"));
                 }
-            }
-            else
-            {
-                final String url = urlMatcher.group(1);
-                final String username = Neodymium.configuration().basicAuthUsername();
-                final String password = Neodymium.configuration().basicAuthPassword();
-                if (username != null && password != null)
+                else if (Neodymium.configuration().basicAuthUsername() != null)
+                {
+                    final String configUser = Neodymium.configuration().basicAuthUsername();
+                    final String configPass = Neodymium.configuration().basicAuthPassword();
+                    LOG.debug("▶️ [EXEC] Direct navigation to: {}", url);
+                    return List.of(new Action("NAVIGATE", url, List.of(configUser, configPass),
+                        "Navigate to " + url + " with basic auth (user: " + configUser + ", pass: " + configPass + ")"));
+                }
+                else
                 {
                     LOG.debug("▶️ [EXEC] Direct navigation to: {}", url);
-                    return List.of(new Action("NAVIGATE", url, List.of(username, password), "Navigate to " + url + " with basic auth (user: " + username
-                                                                                            + ", pass: " + password + ")"));
+                    return List.of(new Action("NAVIGATE", null, url, "Navigate to " + url));
                 }
             }
         }
-
-        if (urlFound)
-        {
-            final String url = urlMatcher.group(1);
-            LOG.debug("▶️ [EXEC] Direct navigation to: {}", url);
-            return List.of(new Action("NAVIGATE", null, url, "Navigate to " + url));
-        }
-
         return null;
     }
 
+    /**
+     * Returns whether execution of the parsed action requires remote LLM assistance.
+     * Direct navigation actions are executed entirely locally.
+     *
+     * @param action the action to inspect
+     * @return false
+     */
     @Override
-    public boolean requiresLlm(Action action) { return false; }
-
-    @Override
-    public String getPromptInstructions() {
-        return "NAVIGATE: navigate to a specified URL (target must be empty, value must be the URL). If basic auth is needed, set target to the URL, and value to a JSON array with username and password, e.g. [\"user\", \"pass\"].";
+    public boolean requiresLlm(final Action action)
+    {
+        return false;
     }
 
+    /**
+     * Returns prompt formatting instructions for LLM prompt generation to teach the model
+     * the syntax format of this NAVIGATE action.
+     *
+     * @return instruction syntax string
+     */
     @Override
-    public void execute(Action action, Object testInstance, ActionExecutor executor) {
+    public String getPromptInstructions()
+    {
+        return "NAVIGATE: Navigate to a URL. Set 'v' to the URL. For Basic Authentication, set 'tg' to the URL and 'v' to a JSON array containing the username and password (e.g. [\"user\", \"pass\"]).";
+    }
+
+    /**
+     * Executes the navigation action inside the active browser using Selenide.
+     *
+     * @param action       the action containing the target URL and optional credentials
+     * @param testInstance the test class instance context
+     * @param executor     the execution orchestrator
+     * @throws ActionExecutionException if the navigation URL is missing or empty
+     */
+    @Override
+    public void execute(final Action action, final Object testInstance, final ActionExecutor executor)
+    {
         String url = action.getValue();
-        if (url == null || url.isBlank()) {
-            throw new ActionExecutor.ActionExecutionException("NAVIGATE action requires a 'value' (URL)");
+        if (url == null || url.isBlank())
+        {
+            throw new ActionExecutionException("NAVIGATE action requires a 'value' (URL)");
         }
-        if (StringUtils.isNotBlank(action.getTarget()) && action.getValues().size() > 1) {
+        
+        // If target URL is set and we have at least two values (username and password),
+        // execute navigation with HTTP basic authentication using Selenide's credentials API.
+        if (StringUtils.isNotBlank(action.getTarget()) && action.getValues().size() > 1)
+        {
             url = action.getTarget();
-            String username = action.getValues().get(0);
-            String password = action.getValues().get(1);
+            final String username = action.getValues().get(0);
+            final String password = action.getValues().get(1);
             LOG.debug("Navigating to: {} with basic auth {}/{}", url, username, password);
             Selenide.open(url, AuthenticationType.BASIC, new BasicAuthCredentials(username, password));
-        } else {
+        }
+        else
+        {
             LOG.debug("Navigating to: {}", url);
             Selenide.open(url);
         }
+        
+        // Wait until the browser reports that the document load lifecycle state is fully complete.
         Selenide.Wait().until(d -> Selenide.executeJavaScript("return document.readyState").equals("complete"));
     }
 }

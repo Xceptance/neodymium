@@ -25,7 +25,8 @@ import java.util.List;
 /**
  * Composite result representing the before, steps, and after execution results of an AI test run.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiTestRunResult
 {

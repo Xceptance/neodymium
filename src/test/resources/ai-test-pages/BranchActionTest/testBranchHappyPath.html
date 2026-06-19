@@ -16,6 +16,18 @@
     <div id="result"></div>
     
     <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('noCookies') === 'true') {
+            document.getElementById('cookie-banner').style.display = 'none';
+        }
+        if (urlParams.get('acceptHidden') === 'true') {
+            document.getElementById('btn-accept').style.display = 'none';
+        }
+        const acceptText = urlParams.get('acceptText');
+        if (acceptText) {
+            document.getElementById('btn-accept').innerText = acceptText;
+        }
+
         document.getElementById('btn-accept').addEventListener('click', function() {
             document.getElementById('cookie-banner').style.display = 'none';
             document.getElementById('result').innerText = 'Cookies Accepted!';

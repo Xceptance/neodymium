@@ -1,4 +1,4 @@
-(function(hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen, lastBreakpointsStr, lastHelpShown, settingsJson) {
+(function(hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen, lastBreakpointsStr, lastHelpShown, settingsJson, stateSignature) {
     if (!window.neoPollingMonitorActive) {
         window.neoPollingMonitorActive = true;
         setInterval(function() {
@@ -18,7 +18,6 @@
     }
 
     var existingHud = document.getElementById('neodymium-ai-hud-container');
-
     window.neoCurrentUnresolvedStep = currentUnresolvedStep;
     window.neoDataBindings = dataBindings;
     window.neoConfigMap = configMap;
@@ -1181,10 +1180,16 @@
     // Hide HUD container permanently if auto-skip is enabled
     var hudContainer = document.getElementById('neodymium-ai-hud-container');
     if (hudContainer) {
+        hudContainer.setAttribute('data-hud-state-sig', stateSignature);
         if (autoSkip) {
             hudContainer.style.display = 'none';
         } else {
             hudContainer.style.display = '';
+        }
+        // Ensure the HUD container is always the last child of document.body
+        // to render on top of any dynamically added overlays/modals.
+        if (document.body && document.body.lastChild !== hudContainer) {
+            document.body.appendChild(hudContainer);
         }
     }
 
@@ -1257,4 +1262,4 @@
         } catch(e) {}
     }
 
-})(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11], arguments[12], arguments[13], arguments[14], arguments[15]);
+})(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11], arguments[12], arguments[13], arguments[14], arguments[15], arguments[16]);

@@ -27,7 +27,8 @@ import com.xceptance.neodymium.ai.action.Action;
 /**
  * Details of a single instruction step executed by the AI.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class StepDetails
 {
@@ -35,12 +36,17 @@ public final class StepDetails
     private String expandedInstruction;
     private final List<Action> actions;
     private final List<LlmCallDetails> llmCalls;
+    private final List<EscalationDetails> escalations;
+    private LlmCallDetails pesapCall;
     private long durationMs;
     private String failureReason;
     private ContextLevel pesapPredictedContextLevel;
     private final List<String> pesapWarnings;
+
+    private boolean pesapRequiresJavaMethods;
     private boolean replayed;
     private boolean directParse;
+    private boolean pesapCalled;
 
     public StepDetails(final String rawInstruction)
     {
@@ -48,8 +54,36 @@ public final class StepDetails
         this.expandedInstruction = rawInstruction;
         this.actions = Collections.synchronizedList(new ArrayList<>());
         this.llmCalls = Collections.synchronizedList(new ArrayList<>());
+        this.escalations = Collections.synchronizedList(new ArrayList<>());
         this.pesapWarnings = Collections.synchronizedList(new ArrayList<>());
+        this.pesapCalled = false;
     }
+
+    public final List<EscalationDetails> getEscalations()
+    {
+        return this.escalations;
+    }
+
+    public final LlmCallDetails getPesapCall()
+    {
+        return this.pesapCall;
+    }
+
+    public final void setPesapCall(final LlmCallDetails pesapCall)
+    {
+        this.pesapCall = pesapCall;
+    }
+
+    public final boolean isPesapCalled()
+    {
+        return this.pesapCalled;
+    }
+
+    public final void setPesapCalled(final boolean pesapCalled)
+    {
+        this.pesapCalled = pesapCalled;
+    }
+
 
     public final String getRawInstruction()
     {
@@ -116,6 +150,8 @@ public final class StepDetails
         this.pesapWarnings.add(warning);
     }
 
+
+
     /**
      * Checks if this step was replayed from a playbook.
      *
@@ -156,6 +192,28 @@ public final class StepDetails
         this.directParse = directParse;
     }
 
+
+
+    /**
+     * Checks if PESAP predicted that this step requires custom Java methods.
+     *
+     * @return true if custom Java methods are predicted, false otherwise
+     */
+    public final boolean isPesapRequiresJavaMethods()
+    {
+        return this.pesapRequiresJavaMethods;
+    }
+
+    /**
+     * Sets whether PESAP predicted that this step requires custom Java methods.
+     *
+     * @param pesapRequiresJavaMethods the custom Java methods prediction
+     */
+    public final void setPesapRequiresJavaMethods(final boolean pesapRequiresJavaMethods)
+    {
+        this.pesapRequiresJavaMethods = pesapRequiresJavaMethods;
+    }
+
     /**
      * Extracts and returns the reasoning from the first LLM call of this step, if present.
      *
@@ -168,5 +226,27 @@ public final class StepDetails
             return "";
         }
         return this.llmCalls.get(0).getReasoning();
+    }
+
+    private String originalUnsplitInstruction;
+
+    /**
+     * Gets the original unsplit instruction if this is a split virtual step.
+     *
+     * @return the original compound instruction, or {@code null}
+     */
+    public final String getOriginalUnsplitInstruction()
+    {
+        return this.originalUnsplitInstruction;
+    }
+
+    /**
+     * Sets the original unsplit instruction if this is a split virtual step.
+     *
+     * @param originalUnsplitInstruction the original compound instruction
+     */
+    public final void setOriginalUnsplitInstruction(final String originalUnsplitInstruction)
+    {
+        this.originalUnsplitInstruction = originalUnsplitInstruction;
     }
 }

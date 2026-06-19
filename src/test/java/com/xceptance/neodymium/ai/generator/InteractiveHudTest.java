@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
  * Unit tests for the {@link InteractiveHud} class, verifying the breakpoint parsing logic.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 final class InteractiveHudTest
 {
@@ -74,10 +75,39 @@ final class InteractiveHudTest
         assertTrue(breakpoints.isEmpty());
     }
 
+    @Test
+    void calculateStateSignature_updatesOnStateChanges() throws Exception
+    {
+        final InteractiveHud hud = new InteractiveHud();
+        
+        final String sig1 = getPrivateField(hud, "lastStateSignature").toString();
+        assertEquals("", sig1);
+
+        hud.injectOrUpdateHud(List.of("Step 1"), List.of(), false, false, false, "Step 1", "Reason 1", false);
+        final String sig2 = getPrivateField(hud, "lastStateSignature").toString();
+        assertTrue(!sig2.isEmpty());
+
+        hud.injectOrUpdateHud(List.of("Step 2"), List.of(), false, false, false, "Step 2", "Reason 1", false);
+        final String sig3 = getPrivateField(hud, "lastStateSignature").toString();
+        assertTrue(!sig3.isEmpty());
+        assertTrue(!sig2.equals(sig3));
+
+        hud.injectOrUpdateHud(List.of("Step 2"), List.of(), false, false, false, "Step 2", "Reason 2", false);
+        final String sig4 = getPrivateField(hud, "lastStateSignature").toString();
+        assertTrue(!sig4.equals(sig3));
+    }
+
     private void setPrivateField(final Object obj, final String fieldName, final Object value) throws Exception
     {
         final Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(obj, value);
+    }
+
+    private Object getPrivateField(final Object obj, final String fieldName) throws Exception
+    {
+        final Field field = obj.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return field.get(obj);
     }
 }

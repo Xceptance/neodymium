@@ -41,6 +41,7 @@ import com.sun.net.httpserver.HttpsConfigurator;
  * It serves static files from the 'src/test/resources/ai-test-pages/' classpath directory.
  * 
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class EmbeddedHtmlServer
 {

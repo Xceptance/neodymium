@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Positional Challenges Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .btn-list, .item-list {
+            margin-bottom: 20px;
+        }
+        .positional-btn {
+            padding: 8px 12px;
+            margin-right: 5px;
+        }
+        .delete-btn {
+            margin-left: 10px;
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <button class="positional-btn">Click Me</button>
+    <button class="positional-btn">Click Me</button>
+    <button class="positional-btn">Click Me</button>
+    <button class="positional-btn">Click Me</button>
+
+    <div id="click-result">No click yet</div>
+
+    <ul id="item-list">
+        <li class="item">Item A <button class="delete-btn">Delete</button></li>
+        <li class="item">Item B <button class="delete-btn">Delete</button></li>
+        <li class="item">Item C <button class="delete-btn">Delete</button></li>
+        <li class="item">Item D <button class="delete-btn">Delete</button></li>
+    </ul>
+
+    <script>
+        // Set up positional click listeners (anonymous buttons, position-independent labels)
+        const buttons = document.querySelectorAll('.positional-btn');
+        buttons.forEach((btn, index) => {
+            btn.addEventListener('click', function() {
+                document.getElementById('click-result').innerText = 'Clicked: ' + (index + 1);
+            });
+        });
+
+        // Set up list removal listeners
+        document.getElementById('item-list').addEventListener('click', function(event) {
+            if (event.target && event.target.classList.contains('delete-btn')) {
+                const li = event.target.closest('li');
+                if (li) {
+                    li.remove();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

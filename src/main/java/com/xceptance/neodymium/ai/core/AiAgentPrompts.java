@@ -18,32 +18,52 @@
  */
 package com.xceptance.neodymium.ai.core;
 
+
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.xceptance.neodymium.ai.action.ActionRegistry;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.ai.action.plugins.JavaMethodAction;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 
 /**
  * Contains the system prompt templates for the AI agent.
  * Separated into its own class for easy tuning and experimentation.
- * Prompts are loaded from the classpath at 'ai-prompts/' to allow 
- * external projects to easily override them.
+ * Prompts are loaded dynamically from the classpath at 'ai-prompts/' and cached
+ * in a ConcurrentHashMap to allow runtime reloading.
  *
- * @author AI-generated: Gemini 2.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiAgentPrompts
 {
+    private static final ConcurrentHashMap<String, String> PROMPT_CACHE = new ConcurrentHashMap<>();
+
     private AiAgentPrompts()
     {
         // utility class
+    }
+
+    /**
+     * Clears the cached prompt contents, forcing them to be reloaded on the next access.
+     */
+    public static void clearCache()
+    {
+        PROMPT_CACHE.clear();
+    }
+
+    private static String getPrompt(final String filename)
+    {
+        return PROMPT_CACHE.computeIfAbsent(filename, AiAgentPrompts::loadPrompt);
     }
 
     private static String loadPrompt(final String filename)
@@ -68,100 +88,139 @@ public final class AiAgentPrompts
 
     /**
      * System prompt for standard exploration.
+     * 
+     * @param includeValidations whether to include assertion rules
+     * @return the formatted prompt
      */
-    public static final String SYSTEM_EXPLORATION_PROMPT = loadPrompt("system-exploration-prompt.md");
+    public static String getSystemExplorationPrompt(final boolean includeValidations)
+    {
+        final String systemExplorationPrompt = getPrompt("system-exploration-prompt.md");
+        if (includeValidations)
+        {
+            final String assertionsBlock = getPrompt("assertions-instruction-v1.md");
+            return systemExplorationPrompt.replace("{assertionsInstruction}", assertionsBlock);
+        }
+        return systemExplorationPrompt.replace("{assertionsInstruction}", "");
+    }
 
     /**
      * Template for standard exploration steps.
+     * 
+     * @return the prompt template
      */
-    public static final String EXPLORATION_PROMPT_TEMPLATE = loadPrompt("exploration-prompt-template.md");
+    public static String getExplorationPromptTemplate()
+    {
+        return getPrompt("exploration-prompt-template.md");
+    }
 
     /**
      * Template for v2 exploration steps.
+     * 
+     * @return the prompt template
      */
-    public static final String V2_EXPLORATION_PROMPT_TEMPLATE = loadPrompt("v2-exploration-prompt-template.md");
+    public static String getV2ExplorationPromptTemplate()
+    {
+        return getPrompt("v2-exploration-prompt-template.md");
+    }
 
     /**
      * System prompt for v2 exploration.
+     * 
+     * @param includeValidations whether to include assertion rules
+     * @return the formatted prompt
      */
-    public static final String V2_SYSTEM_EXPLORATION_PROMPT = loadPrompt("v2-system-exploration-prompt.md");
+    public static String getV2SystemExplorationPrompt(final boolean includeValidations)
+    {
+        final String v2SystemExplorationPrompt = getPrompt("v2-system-exploration-prompt.md");
+        if (includeValidations)
+        {
+            final String assertionsBlock = getPrompt("assertions-instruction-v2.md");
+            return v2SystemExplorationPrompt.replace("{assertionsInstruction}", assertionsBlock);
+        }
+        return v2SystemExplorationPrompt.replace("{assertionsInstruction}", "");
+    }
 
     /**
      * System prompt for v2 extraction.
+     * 
+     * @return the prompt
      */
-    public static final String V2_EXTRACTION_PROMPT = loadPrompt("v2-extraction-prompt.md");
+    public static String getV2ExtractionPrompt()
+    {
+        return getPrompt("v2-extraction-prompt.md");
+    }
 
     /**
      * System prompt for v2 extraction retry.
+     * 
+     * @return the prompt
      */
-    public static final String V2_EXTRACTION_RETRY_PROMPT = loadPrompt("v2-extraction-retry-prompt.md");
-
-    /**
-     * Snippets for modular system prompt construction.
-     */
-    public static final String SNIPPET_ROLE = loadPrompt("snippet-role.md");
-    public static final String SNIPPET_CAPABILITIES = loadPrompt("snippet-capabilities.md");
-    public static final String SNIPPET_RESPONSE_FORMAT = loadPrompt("snippet-response-format.md");
-    public static final String SNIPPET_RULES_SUCCESS_FAILURE = loadPrompt("snippet-rules-success-failure.md");
-    public static final String SNIPPET_RULES_GENERAL = loadPrompt("snippet-rules-general.md");
-    public static final String SNIPPET_RULES_DOM_ANALYSIS = loadPrompt("snippet-rules-dom-analysis.md");
-    public static final String SNIPPET_RULES_ELEMENT_SELECTION = loadPrompt("snippet-rules-element-selection.md");
-    public static final String SNIPPET_RULES_VISUAL = loadPrompt("snippet-rules-visual.md");
-    public static final String SYSTEM_HEALING_INSTRUCTION = loadPrompt("system-healing-instruction.md");
-
-    /**
-     * Base system prompt.
-     */
-    public static final String SYSTEM_PROMPT = SNIPPET_ROLE + "\n\n"
-            + SNIPPET_CAPABILITIES + "\n\n"
-            + SNIPPET_RESPONSE_FORMAT + "\n\n"
-            + SNIPPET_RULES_SUCCESS_FAILURE + "\n\n"
-            + SNIPPET_RULES_GENERAL + "\n\n"
-            + SNIPPET_RULES_DOM_ANALYSIS + "\n\n"
-            + SNIPPET_RULES_ELEMENT_SELECTION + "\n\n"
-            + SNIPPET_RULES_VISUAL;
+    public static String getV2ExtractionRetryPrompt()
+    {
+        return getPrompt("v2-extraction-retry-prompt.md");
+    }
 
     /**
      * Standard user prompt template.
+     * 
+     * @return the prompt template
      */
-    public static final String USER_PROMPT_TEMPLATE = loadPrompt("user-prompt-template.md");
+    public static String getUserPromptTemplate()
+    {
+        return getPrompt("user-prompt-template.md");
+    }
 
     /**
      * Prompt template for when an action fails and needs a retry.
+     * 
+     * @return the prompt template
      */
-    public static final String RETRY_PROMPT_TEMPLATE = loadPrompt("retry-prompt-template.md");
+    public static String getRetryPromptTemplate()
+    {
+        return getPrompt("retry-prompt-template.md");
+    }
 
     /**
      * Prompt template for when no actions were generated and a retry is needed.
+     * 
+     * @return the prompt template
      */
-    public static final String NO_ACTIONS_RETRY_PROMPT_TEMPLATE = loadPrompt("no-actions-retry-prompt-template.md");
+    public static String getNoActionsRetryPromptTemplate()
+    {
+        return getPrompt("no-actions-retry-prompt-template.md");
+    }
 
     /**
-     * System prompt for playbook healing.
+     * Prompt template for playbook healing.
+     * 
+     * @return the prompt template
      */
-    public static final String SYSTEM_HEALING_PROMPT = SNIPPET_ROLE + "\n\n"
-            + SNIPPET_CAPABILITIES + "\n\n"
-            + SNIPPET_RESPONSE_FORMAT + "\n\n"
-            + SNIPPET_RULES_SUCCESS_FAILURE + "\n\n"
-            + SNIPPET_RULES_GENERAL + "\n\n"
-            + SNIPPET_RULES_DOM_ANALYSIS + "\n\n"
-            + SNIPPET_RULES_ELEMENT_SELECTION + "\n\n"
-            + SYSTEM_HEALING_INSTRUCTION;
+    public static String getHealingPromptTemplate()
+    {
+        return getPrompt("healing-prompt-template.md");
+    }
 
     /**
-     * System prompt for PESAP (Pre-Execution Static Analysis Phase) classification.
+     * Loads the JIT pre-step PESAP prompt template.
+     * The returned prompt is ready to be sent as a system prompt with the flow context
+     * injected as the user prompt.
+     *
+     * @return the fully prepared pre-step PESAP system prompt
      */
-    public static final String PESAP_SYSTEM_PROMPT = loadPrompt("pesap-system-prompt.md");
+    public static String getPesapPreStepPrompt()
+    {
+        return getPrompt("pesap-pre-step-prompt.md");
+    }
 
     /**
-     * System prompt for PESAP (Pre-Execution Static Analysis Phase) classification phase only.
+     * System prompt for PESAP semantic linter phase only.
+     * 
+     * @return the prompt
      */
-    public static final String PESAP_CLASSIFY_PROMPT = loadPrompt("pesap-classify-prompt.md");
-
-    /**
-     * System prompt for PESAP (Pre-Execution Static Analysis Phase) semantic linter phase only.
-     */
-    public static final String PESAP_LINTER_PROMPT = loadPrompt("pesap-linter-prompt.md");
+    public static String getPesapLinterPrompt()
+    {
+        return getPrompt("pesap-linter-prompt.md");
+    }
 
     /**
      * Gets the system linter prompt, dynamically appending custom rules if present.
@@ -171,17 +230,53 @@ public final class AiAgentPrompts
      */
     public static String getPesapLinterPrompt(final String customRules)
     {
+        final String linterPrompt = getPesapLinterPrompt();
         if (customRules == null || customRules.trim().isEmpty())
         {
-            return PESAP_LINTER_PROMPT;
+            return linterPrompt;
         }
-        return PESAP_LINTER_PROMPT + "\n\n### Custom Semantic Linting Rules\n\nAdditional custom linting rules defined for this project/environment:\n\n" + customRules.trim();
+        return linterPrompt + "\n\n### Custom Semantic Linting Rules\n\nAdditional custom linting rules defined for this project/environment:\n\n" + customRules.trim();
     }
 
     /**
-     * Prompt template for playbook healing.
+     * Base system prompt.
+     * 
+     * @return the base prompt
      */
-    public static final String HEALING_PROMPT_TEMPLATE = loadPrompt("healing-prompt-template.md");
+    public static String getSystemPromptBase()
+    {
+        final String snippetRole = getPrompt("snippet-role.md");
+        final String snippetCapabilities = getPrompt("snippet-capabilities.md");
+        final String snippetResponseFormat = getPrompt("snippet-response-format.md");
+        final String systemPromptRules = getPrompt("system-prompt-rules.md");
+        final String rulesVisual = getPrompt("rules-visual.md");
+
+        return snippetRole + "\n\n"
+                + snippetCapabilities + "\n\n"
+                + snippetResponseFormat + "\n\n"
+                + systemPromptRules + "\n\n"
+                + rulesVisual;
+    }
+
+    /**
+     * System prompt for playbook healing.
+     * 
+     * @return the healing system prompt
+     */
+    public static String getSystemHealingPrompt()
+    {
+        final String snippetRole = getPrompt("snippet-role.md");
+        final String snippetCapabilities = getPrompt("snippet-capabilities.md");
+        final String snippetResponseFormat = getPrompt("snippet-response-format.md");
+        final String systemPromptRules = getPrompt("system-prompt-rules.md");
+        final String systemHealingInstruction = getPrompt("system-healing-instruction.md");
+
+        return snippetRole + "\n\n"
+                + snippetCapabilities + "\n\n"
+                + snippetResponseFormat + "\n\n"
+                + systemPromptRules + "\n\n"
+                + systemHealingInstruction;
+    }
 
     /**
      * Builds the exploration prompt.
@@ -215,7 +310,7 @@ public final class AiAgentPrompts
             knownBindingsBlock = "\n## Known Data Bindings\n" + sb.toString();
         }
         
-        return EXPLORATION_PROMPT_TEMPLATE
+        return getExplorationPromptTemplate()
             .replace("{intent}", intent)
             .replace("{sutContextBlock}", sutContextBlock == null || sutContextBlock.trim().isEmpty() ? "None" : sutContextBlock)
             .replace("{subgoal}", subgoal != null && !subgoal.isEmpty() ? subgoal : "None (Starting First Phase)")
@@ -257,7 +352,7 @@ public final class AiAgentPrompts
             knownBindingsBlock = "\n## Known Data Bindings\n" + sb.toString();
         }
         
-        return V2_EXPLORATION_PROMPT_TEMPLATE
+        return getV2ExplorationPromptTemplate()
             .replace("{intent}", intent)
             .replace("{sutContextBlock}", sutContextBlock)
             .replace("{subgoal}", subgoal != null && !subgoal.isEmpty() ? subgoal : "None (Starting First Phase)")
@@ -268,49 +363,133 @@ public final class AiAgentPrompts
     }
 
     /**
-     * Gets the system exploration prompt, optionally injecting the assertion instructions.
+     * Retrieves the base system prompt with all plugins dynamically injected.
+     * Uses {@link ContextLevel#STANDARD} for backward compatibility.
      *
-     * @param includeValidations whether to include the validation instructions
-     * @return the formatted system exploration prompt
+     * @return the fully prepared system prompt
      */
-    public static String getSystemExplorationPrompt(final boolean includeValidations)
+    public static String getSystemPrompt()
     {
-        if (includeValidations)
+        return getSystemPrompt(ContextLevel.STANDARD);
+    }
+
+
+
+    /**
+     * Retrieves the system prompt tailored to the given context level.
+     * Injects plugin metadata and appends context-level-specific instructions
+     * that tell the LLM what data it is receiving and when to request escalation.
+     *
+     * @param level the current context level
+     * @return the fully prepared system prompt with context-level guidance
+     */
+    public static String getSystemPrompt(final ContextLevel level)
+    {
+        final String snippetRole = getPrompt("snippet-role.md");
+        final StringBuilder sb = new StringBuilder();
+        sb.append(snippetRole).append("\n\n");
+
+        if (level == ContextLevel.HINT)
         {
-            final String assertionsBlock = """
-          CRITICAL INSTRUCTION FOR Assertions:
-          You MUST systematically inject ASSERT actions. Target elements that are functionally and visually interactable to the user (e.g., "Validate the Login button is visible") or structurally important text on the page.
-          Whenever you land on a new page or new modal, your FIRST actions in your array MUST be multiple `ASSERT` actions to validate the new state.
-          Make sure to check for IMPORTANT information that matches the page's purpose (e.g. check if the expected text matches the page context). We don't need to check that text is character-perfect, so DO NOT include a "value" field for `ASSERT` actions unless absolutely necessary. Simply providing the `target` and a `description` will check if the element is visible on the page, which is sufficient for structural validation.
-          - NEVER use structural terms like "heading" or "page headline" in your assertion descriptions. Just refer to the text itself (e.g., use "Validate the text North Boston is visible" instead of "Validate the 'North Boston' heading is visible").
-    """;
-            return SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", assertionsBlock);
+            sb.append("## Your Capabilities\n")
+              .append("You can perform these action types targeting the element: CLICK | TYPE | CLEAR | SELECT | HOVER | ASSERT | CHECK | SCROLL | KEY_PRESS | BRANCH | INCLUDE | STORE\n\n");
+
+            final String minResponseFormat = """
+                ## Response Format
+                Return raw minified single-line JSON without markdown code blocks:
+                {
+                  "s": true/false,
+                  "a": [
+                    {
+                      "t": "ACTION_TYPE",
+                      "tg": "locator string from hint",
+                      "v": "value if required",
+                      "desc": "brief action description",
+                      "ed": "short description of target element",
+                      "c": [ "... nested actions for BRANCH type (optional) ..." ],
+                      "th": [ "... nested actions for BRANCH type (optional) ..." ],
+                      "el": [ "... nested actions for BRANCH type (optional) ..." ]
+                    }
+                  ],
+                  "d": true/false,
+                  "e": "error message if s is false",
+                  "r": "brief explanation"
+                }""";
+            sb.append(minResponseFormat).append("\n\n");
+
+            sb.append("## Rules\n")
+              .append("1. Set \"d\" to true when all instructions for this step are complete.\n")
+              .append("2. Keep descriptions (\"desc\") concise.\n")
+              .append("3. Map instructions to actions: CLICK (click/press), TYPE (type/enter), CLEAR (clear), SELECT (dropdown), HOVER (hover), ASSERT (verify/check), CHECK (checkbox/radio), SCROLL (scroll), KEY_PRESS (press keys or single letters e.g., Enter, Tab, a, b), BRANCH (conditional logic), INCLUDE (execute steps from external file), STORE (store element value/text or literal value in variable).\n")
+              .append("4. LOCATOR HINTS: If an inline hint is provided (e.g., \"(hint: selector)\"), you MUST extract the selector value and set it as the \"tg\" field of the action (including for KEY_PRESS).\n")
+              .append("5. For single character keyboard inputs (e.g. 'a', 'b', 'c'), use KEY_PRESS instead of CLICK or TYPE when instructing to press/type a single letter key.\n\n");
         }
-        return SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", "");
+        else
+        {
+            final String snippetCapabilities = getPrompt("snippet-capabilities.md");
+            sb.append(injectPluginMetadata(snippetCapabilities, level)).append("\n\n");
+
+            final String snippetResponseFormat = getPrompt("snippet-response-format.md");
+            sb.append(snippetResponseFormat).append("\n\n");
+
+            final String systemPromptRules = getPrompt("system-prompt-rules.md");
+            sb.append(systemPromptRules).append("\n\n");
+        }
+
+        switch (level)
+        {
+            case HINT:
+            {
+                break;
+            }
+
+            case AXTREE:
+            case LEAN:
+            case STANDARD:
+            {
+                break;
+            }
+
+            case VISUAL_LEAN:
+            case VISUAL:
+            {
+                final String rulesVisual = getPrompt("rules-visual.md");
+                sb.append(rulesVisual).append("\n\n");
+                break;
+            }
+
+            default:
+            {
+                break;
+            }
+        }
+
+        sb.append(getContextLevelGuidance(level));
+        return sb.toString();
     }
 
     /**
-     * Gets the V2 system exploration prompt, optionally injecting the assertion instructions.
+     * Returns context-level-specific instructions to append to the system prompt.
      *
-     * @param includeValidations whether to include the validation instructions
-     * @return the formatted V2 system exploration prompt
+     * @param level the current context level
+     * @return the context guidance text to append
      */
-    public static String getV2SystemExplorationPrompt(final boolean includeValidations)
+    private static String getContextLevelGuidance(final ContextLevel level)
     {
-        if (includeValidations)
+        return switch (level)
         {
-            final String assertionsBlock = """
-          CRITICAL INSTRUCTION FOR Assertions:
-          You MUST systematically inject ASSERT actions. Target elements that are functionally and visually interactable to the user (e.g., "Validate the Login button is visible") or structurally important text on the page...
-    """;
-            return V2_SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", assertionsBlock);
-        }
-        return V2_SYSTEM_EXPLORATION_PROMPT.replace("{assertionsInstruction}", "");
+            case HINT -> getPrompt("guidance-hint.md");
+            case AXTREE -> getPrompt("guidance-axtree.md");
+            case LEAN -> getPrompt("guidance-lean.md");
+            case STANDARD -> getPrompt("guidance-standard.md");
+            case VISUAL_LEAN -> getPrompt("guidance-visual-lean.md");
+            case VISUAL -> getPrompt("guidance-visual.md");
+        };
     }
 
     /**
      * Builds the user prompt with the instruction and DOM context.
-     * No step history is included (used for first-attempt happy path).
+     * No step history is included.
      *
      * @param instruction the task instruction
      * @param sutContext  application specific instructions
@@ -324,8 +503,6 @@ public final class AiAgentPrompts
 
     /**
      * Builds the user prompt with the instruction, DOM context, and optional step history.
-     * Step history provides the LLM with context about previously completed steps,
-     * which is useful during context escalation to help disambiguate elements.
      *
      * @param instruction  the task instruction
      * @param sutContext   application specific instructions
@@ -336,21 +513,37 @@ public final class AiAgentPrompts
     public static String buildUserPrompt(final String instruction, final String sutContext, final String domContext,
         final String historyBlock)
     {
+        return buildUserPrompt(instruction, sutContext, domContext, historyBlock, "");
+    }
+
+    /**
+     * Builds the user prompt with the instruction, DOM context, optional step history, and optional Java methods block.
+     *
+     * @param instruction      the task instruction
+     * @param sutContext       application specific instructions
+     * @param domContext       current DOM representation
+     * @param historyBlock     pre-formatted step history block, or empty string if none
+     * @param javaMethodsBlock pre-formatted custom Java methods block, or empty string if none
+     * @return the formatted user prompt
+     */
+    public static String buildUserPrompt(final String instruction, final String sutContext, final String domContext,
+        final String historyBlock, final String javaMethodsBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
             sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
-        return USER_PROMPT_TEMPLATE
+        return getUserPromptTemplate()
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{javaMethodsBlock}", javaMethodsBlock != null ? javaMethodsBlock : "")
             .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext);
     }
 
     /**
      * Builds a retry prompt with error context.
-     * No step history is included.
      *
      * @param instruction the task instruction
      * @param sutContext  application specific instructions
@@ -366,7 +559,6 @@ public final class AiAgentPrompts
 
     /**
      * Builds a retry prompt with error context and optional step history.
-     * Step history helps the LLM reason about expected page state when recovering from errors.
      *
      * @param instruction  the task instruction
      * @param sutContext   application specific instructions
@@ -378,14 +570,32 @@ public final class AiAgentPrompts
     public static String buildRetryPrompt(final String instruction, final String sutContext, final String domContext,
         final String error, final String historyBlock)
     {
+        return buildRetryPrompt(instruction, sutContext, domContext, error, historyBlock, "");
+    }
+
+    /**
+     * Builds a retry prompt with error context, optional step history, and optional Java methods block.
+     *
+     * @param instruction      the task instruction
+     * @param sutContext       application specific instructions
+     * @param domContext       current DOM representation
+     * @param error            the error that caused the previous failure
+     * @param historyBlock     pre-formatted step history block, or empty string if none
+     * @param javaMethodsBlock pre-formatted custom Java methods block, or empty string if none
+     * @return the formatted retry prompt
+     */
+    public static String buildRetryPrompt(final String instruction, final String sutContext, final String domContext,
+        final String error, final String historyBlock, final String javaMethodsBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
             sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
-        return RETRY_PROMPT_TEMPLATE
+        return getRetryPromptTemplate()
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{javaMethodsBlock}", javaMethodsBlock != null ? javaMethodsBlock : "")
             .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext)
             .replace("{error}", error);
@@ -393,7 +603,6 @@ public final class AiAgentPrompts
 
     /**
      * Builds a retry prompt for when no actions were returned.
-     * No step history is included.
      *
      * @param instruction the task instruction
      * @param sutContext  application specific instructions
@@ -407,8 +616,6 @@ public final class AiAgentPrompts
 
     /**
      * Builds a retry prompt for when no actions were returned, with optional step history.
-     * Step history helps the LLM understand the broader test flow context when it
-     * failed to produce actions on a previous attempt.
      *
      * @param instruction  the task instruction
      * @param sutContext   application specific instructions
@@ -419,27 +626,37 @@ public final class AiAgentPrompts
     public static String buildNoActionsRetryPrompt(final String instruction, final String sutContext,
         final String domContext, final String historyBlock)
     {
+        return buildNoActionsRetryPrompt(instruction, sutContext, domContext, historyBlock, "");
+    }
+
+    /**
+     * Builds a retry prompt for when no actions were returned, with optional step history and optional Java methods block.
+     *
+     * @param instruction      the task instruction
+     * @param sutContext       application specific instructions
+     * @param domContext       current DOM representation
+     * @param historyBlock     pre-formatted step history block, or empty string if none
+     * @param javaMethodsBlock pre-formatted custom Java methods block, or empty string if none
+     * @return the formatted prompt
+     */
+    public static String buildNoActionsRetryPrompt(final String instruction, final String sutContext,
+        final String domContext, final String historyBlock, final String javaMethodsBlock)
+    {
         String sutContextBlock = "";
         if (sutContext != null && !sutContext.trim().isEmpty())
         {
             sutContextBlock = "\n### SUT Specific Instructions (Application Context)\n" + sutContext + "\n";
         }
-        return NO_ACTIONS_RETRY_PROMPT_TEMPLATE
+        return getNoActionsRetryPromptTemplate()
             .replace("{instruction}", instruction)
             .replace("{sutContextBlock}", sutContextBlock)
+            .replace("{javaMethodsBlock}", javaMethodsBlock != null ? javaMethodsBlock : "")
             .replace("{historyBlock}", historyBlock != null ? historyBlock : "")
             .replace("{domContext}", domContext);
     }
 
     /**
      * Builds a compact step history block from completed playbook steps.
-     * Returns a formatted markdown section listing all steps that have been
-     * successfully executed before the current one, giving the LLM context
-     * about the test flow leading to this point.
-     * <p>
-     * Only includes steps with a non-null, non-blank {@code promptLine}.
-     * Returns an empty string if no completed steps exist, ensuring the
-     * {@code {historyBlock}} placeholder is cleanly removed from the template.
      *
      * @param playbook the current playbook (may be {@code null})
      * @return the formatted history block, or empty string if no history
@@ -474,7 +691,6 @@ public final class AiAgentPrompts
             }
         }
 
-        // If all steps had null/blank promptLines, return empty
         if (lineNum == 1)
         {
             return "";
@@ -507,7 +723,7 @@ public final class AiAgentPrompts
             }
         }
 
-        return HEALING_PROMPT_TEMPLATE
+        return getHealingPromptTemplate()
             .replace("{instruction}", instruction)
             .replace("{originalReasoning}", originalReasoning != null ? originalReasoning : "None")
             .replace("{elementContext}", elemCtx)
@@ -536,6 +752,24 @@ public final class AiAgentPrompts
      */
     public static String injectPluginMetadata(final String promptTemplate, final ContextLevel level)
     {
+        return injectPluginMetadata(promptTemplate, level, true, null, null);
+    }
+
+    /**
+     * Injects the dynamic plugin metadata with targeted Java method support.
+     * When {@code includeJavaMethod} is {@code true} and {@code targetedMethods} is non-empty,
+     * only the predicted methods are included in the JAVA_METHOD plugin description.
+     *
+     * @param promptTemplate  the raw template containing {actionTypes} and {actionDescriptions} placeholders
+     * @param level           the context level determining descriptions granularity
+     * @param includeJavaMethod whether to include JAVA_METHOD plugin instructions at all
+     * @param testClass       the active test class for method scanning, or {@code null}
+     * @param targetedMethods the set of method names to include, or {@code null}/empty for all
+     * @return the final prompt with plugins injected
+     */
+    public static String injectPluginMetadata(final String promptTemplate, final ContextLevel level,
+            final boolean includeJavaMethod, final Class<?> testClass, final Set<String> targetedMethods)
+    {
         if (promptTemplate == null)
         {
             return null;
@@ -551,10 +785,27 @@ public final class AiAgentPrompts
             typeNames.add(plugin.getActionName());
             if (level != ContextLevel.HINT)
             {
-                final String desc = plugin.getPromptInstructions();
-                if (desc != null && !desc.isBlank())
+                // For JAVA_METHOD plugin, use targeted instructions when available
+                if (plugin instanceof JavaMethodAction && includeJavaMethod)
                 {
-                    descriptions.append("- ").append(desc).append("\n");
+                    final JavaMethodAction jma = (JavaMethodAction) plugin;
+                    final String desc = jma.getPromptInstructions(testClass, targetedMethods);
+                    if (desc != null && !desc.isBlank())
+                    {
+                        descriptions.append("- ").append(desc).append("\n");
+                    }
+                }
+                else if (plugin instanceof JavaMethodAction && !includeJavaMethod)
+                {
+                    // Skip JAVA_METHOD entirely when not needed for this step
+                }
+                else
+                {
+                    final String desc = plugin.getPromptInstructions();
+                    if (desc != null && !desc.isBlank())
+                    {
+                        descriptions.append("- ").append(desc).append("\n");
+                    }
                 }
             }
         }
@@ -568,212 +819,5 @@ public final class AiAgentPrompts
 
         return promptTemplate.replace("{actionTypes}", typesStr)
             .replace("{actionDescriptions}", descriptions.toString());
-    }
-
-    /**
-     * Retrieves the base system prompt with all plugins dynamically injected.
-     * Uses {@link ContextLevel#STANDARD} for backward compatibility.
-     *
-     * @return the fully prepared system prompt
-     */
-    public static String getSystemPrompt()
-    {
-        return getSystemPrompt(ContextLevel.STANDARD);
-    }
-
-    /**
-     * Retrieves the system prompt tailored to the given context level.
-     * Injects plugin metadata and appends context-level-specific instructions
-     * that tell the LLM what data it is receiving and when to request escalation.
-     *
-     * @param level the current context level
-     * @return the fully prepared system prompt with context-level guidance
-     *
-     * @author AI-generated: Gemini 2.5 Pro
-     */
-    public static String getSystemPrompt(final ContextLevel level)
-    {
-        final StringBuilder sb = new StringBuilder();
-        sb.append(SNIPPET_ROLE).append("\n\n");
-
-        if (level == ContextLevel.HINT)
-        {
-            sb.append("## Your Capabilities\n")
-              .append("You can perform these action types targeting the element: CLICK | TYPE | CLEAR | SELECT | HOVER | ASSERT | CHECK | SCROLL | KEY_PRESS\n\n");
-
-            final String minResponseFormat = """
-                ## Response Format
-                Return raw minified single-line JSON without markdown code blocks:
-                {
-                  "s": true/false,
-                  "a": [
-                    {
-                      "t": "ACTION_TYPE",
-                      "tg": "locator string from hint",
-                      "v": "value if required",
-                      "desc": "brief action description",
-                      "ed": "short description of target element"
-                    }
-                  ],
-                  "d": true/false,
-                  "e": "error message if s is false",
-                  "r": "brief explanation"
-                }""";
-            sb.append(minResponseFormat).append("\n\n");
-
-            sb.append("## Rules\n")
-              .append("1. Set \"d\" to true when all instructions for this step are complete.\n")
-              .append("2. Keep descriptions (\"desc\") concise.\n")
-              .append("3. Map instructions to actions: CLICK (click/press), TYPE (type/enter), CLEAR (clear), SELECT (dropdown), HOVER (hover), ASSERT (verify/check), CHECK (checkbox/radio), SCROLL (scroll), KEY_PRESS (press keys or single letters e.g., Enter, Tab, a, b).\n")
-              .append("4. LOCATOR HINTS: If an inline hint is provided (e.g., \"(hint: selector)\"), you MUST extract the selector value and set it as the \"tg\" field of the action (including for KEY_PRESS).\n")
-              .append("5. For single character keyboard inputs (e.g. 'a', 'b', 'c'), use KEY_PRESS instead of CLICK or TYPE when instructing to press/type a single letter key.\n\n");
-        }
-        else
-        {
-            sb.append(injectPluginMetadata(SNIPPET_CAPABILITIES, level)).append("\n\n");
-            sb.append(SNIPPET_RESPONSE_FORMAT).append("\n\n");
-            sb.append(SNIPPET_RULES_GENERAL).append("\n\n");
-        }
-
-        switch (level)
-        {
-            case HINT:
-            {
-                break;
-            }
-
-            case AXTREE:
-            {
-                sb.append(SNIPPET_RULES_SUCCESS_FAILURE).append("\n\n");
-                sb.append(SNIPPET_RULES_DOM_ANALYSIS).append("\n\n");
-                sb.append(SNIPPET_RULES_ELEMENT_SELECTION).append("\n\n");
-                break;
-            }
-
-            case LEAN:
-            case STANDARD:
-            {
-                sb.append(SNIPPET_RULES_SUCCESS_FAILURE).append("\n\n");
-                sb.append(SNIPPET_RULES_DOM_ANALYSIS).append("\n\n");
-                sb.append(SNIPPET_RULES_ELEMENT_SELECTION).append("\n\n");
-                break;
-            }
-
-            case VISUAL_LEAN:
-            case VISUAL:
-            {
-                sb.append(SNIPPET_RULES_SUCCESS_FAILURE).append("\n\n");
-                sb.append(SNIPPET_RULES_DOM_ANALYSIS).append("\n\n");
-                sb.append(SNIPPET_RULES_ELEMENT_SELECTION).append("\n\n");
-                sb.append(SNIPPET_RULES_VISUAL).append("\n\n");
-                break;
-            }
-
-            default:
-            {
-                break;
-            }
-        }
-
-        sb.append(getContextLevelGuidance(level));
-        return sb.toString();
-    }
-
-    /**
-     * Returns context-level-specific instructions to append to the system prompt.
-     * These instructions make the LLM a conscious participant in the escalation
-     * protocol by telling it exactly what data it is receiving and when to
-     * respond with {@code "status": "ESCALATE"} instead of guessing.
-     *
-     * @param level the current context level
-     * @return the context guidance text to append
-     */
-    private static String getContextLevelGuidance(final ContextLevel level)
-    {
-        return switch (level)
-        {
-            case HINT -> """
-
-                ## Context Level: HINT
-                No DOM is provided. Translate the hint to the action JSON. If you cannot fulfill the instruction from the hint alone, respond with:
-                {"s": false, "st": "ESCALATE", "tc": "AXTREE", "r": "I need the DOM", "a": []}
-                """;
-            case AXTREE -> """
-
-                ## Context Level: AXTREE
-                You are receiving a native Accessibility Tree (AXTree) context representing the semantic, interactive structure of the page.
-                This contains links, buttons, inputs, headings, forms, and landmark sections with their resolved accessibility names and states.
-
-                CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you cannot find the requested element, or if you need full plain text content (like paragraph bodies, table cells, or static list item texts) to disambiguate between multiple elements, you MUST immediately respond with:
-                {"s": false, "st": "ESCALATE", "tc": "STANDARD", "r": "This step requires standard text context which is not available in AXTREE context", "a": []}
-                (Set tc to LEAN, STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
-
-                Do NOT guess. Do NOT pick an arbitrary element when multiple matches exist. Request escalation instead.
-                """;
-            case LEAN -> """
-
-                ## Context Level: LEAN
-                You are receiving a LEAN context that only includes interactive elements \
-                (buttons, links, inputs, selects, textareas), clickable elements, and headings. \
-                Text content like paragraphs, spans, table cells, and list items is NOT included.
-
-                CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you cannot find the requested element, or if you need text content \
-                to disambiguate between multiple similar elements (e.g. multiple 'View Details' links), \
-                or if the instruction requires reading text that is not shown, you MUST immediately respond with:
-                {"s": false, "st": "ESCALATE", "tc": "STANDARD", "r": "This step requires visual validation or additional text context which is not available in LEAN context", "a": []}
-                (Set tc to STANDARD, VISUAL_LEAN, or VISUAL depending on what context you need).
-
-                Do NOT guess. Do NOT pick an arbitrary element when multiple matches exist. \
-                Request escalation instead.
-                """;
-
-            case STANDARD -> """
-
-                ## Context Level: STANDARD
-                You are receiving a STANDARD context that includes all interactive elements \
-                AND all visible text content (paragraphs, spans, list items, table cells, divs).
-
-                CRITICAL: If the instruction requires visual analysis (e.g., verifying colors, visual design, layout positioning, images, icons, or logos), or if you still cannot find the target element or fulfill the instruction, \
-                you MUST immediately respond with:
-                {"s": false, "st": "ESCALATE", "tc": "VISUAL", "r": "This step requires visual validation which is not available in STANDARD context", "a": []}
-                to request visual context (a screenshot will be provided on the next attempt).
-
-                Do NOT guess if you are uncertain about which element to target.
-                """;
-
-            case VISUAL_LEAN -> """
-
-                ## Context Level: VISUAL_LEAN
-                You are receiving a LEAN text context (interactive elements and headings only, NO paragraphs or list items) PLUS a screenshot of the current page. \
-                Use the screenshot to visually identify target elements, then map them to the \
-                closest element in the text context using their `data-neo-ref` identifier.
-
-                CRITICAL - VISUAL-ONLY VALIDATION:
-                If the instruction is a visual-only check (e.g. verifying colors, layout, styling, font, visual design, logo details, alignment, or image content), you MUST act as the validator yourself by inspecting the screenshot.
-                Since no browser/driver interaction is required to verify visual attributes, you do NOT need to return any browser actions. Instead, return:
-                - {"s": true, "d": true, "a": [], "r": "Detailed visual analysis explaining how the screenshot matches the instruction (e.g. explaining the colors, layouts, or visual elements you see)"} if the visual condition is met.
-                - {"s": false, "d": true, "a": [], "e": "Visual verification failed: <explanation of what did not match>", "r": "Detailed analysis of why the screenshot does not match the instruction"} if the visual condition is not met.
-
-                This is the maximum available context for this initial tagged step. If you cannot fulfill the instruction (for example, if you need full text context of paragraphs or list items to complete the validation), \
-                respond with {"s": false, "st": "ESCALATE", "tc": "VISUAL", "r": "This step requires full text context which is not available in VISUAL_LEAN", "a": []} to escalate to VISUAL.
-                """;
-
-            case VISUAL -> """
-
-                ## Context Level: VISUAL
-                You are receiving the FULL standard text context (interactive elements, headings, paragraphs, list items, tables, spans, divs, etc.) PLUS a page screenshot. \
-                Use the screenshot to visually identify target elements, and leverage the full text content to understand their meaning and verify copy. Map them using their `data-neo-ref` identifier.
-
-                CRITICAL - VISUAL-ONLY VALIDATION:
-                If the instruction is a visual-only check (e.g. verifying colors, layout, styling, font, visual design, logo details, alignment, or image content), you MUST act as the validator yourself by inspecting the screenshot.
-                Since no browser/driver interaction is required to verify visual attributes, you do NOT need to return any browser actions. Instead, return:
-                - {"s": true, "d": true, "a": [], "r": "Detailed visual analysis explaining how the screenshot matches the instruction (e.g. explaining the colors, layouts, or visual elements you see)"} if the visual condition is met.
-                - {"s": false, "d": true, "a": [], "e": "Visual verification failed: <explanation of what did not match>", "r": "Detailed analysis of why the screenshot does not match the instruction"} if the visual condition is not met.
-
-                This is the maximum available context. If you cannot fulfill the instruction, \
-                respond with {"s": false, "e": "explain what failed", "a": []}. \
-                Do not request escalation — there is no higher level.
-                """;
-        };
     }
 }

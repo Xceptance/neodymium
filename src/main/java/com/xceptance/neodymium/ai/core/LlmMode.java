@@ -30,6 +30,7 @@ package com.xceptance.neodymium.ai.core;
  * </ul>
   *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
 */
 public enum LlmMode
 {

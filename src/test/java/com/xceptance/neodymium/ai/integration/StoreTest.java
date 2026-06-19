@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -25,13 +24,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
-import com.xceptance.neodymium.ai.core.StepDetails;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
@@ -39,6 +35,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Integration test verifying AI variable storage commands and their validation flow
  * in both live LLM and replay modes.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -63,7 +62,7 @@ public class StoreTest extends BaseAiTest
     public final void testStore()
     {
         final String steps = """
-                Open ${store.test.url}
+                OPEN ${store.test.url}
                 Store the order ID value into a variable named 'orderId' (hint: #order-id)
                 Type '${orderId}' into the verification field (hint: #input-target)
                 Click the 'Verify' button (hint: #btn-verify)
@@ -73,30 +72,15 @@ public class StoreTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(3)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
-            .hasActionsCount(4);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertFalse(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertEquals(1, stepDetails1.getLlmCalls().size());
-
-        final StepDetails stepDetails2 = r1.getSteps().get(2);
-        assertFalse(stepDetails2.isDirectParse());
-        assertFalse(stepDetails2.isReplayed());
-        assertEquals(1, stepDetails2.getLlmCalls().size());
-
-        final StepDetails stepDetails3 = r1.getSteps().get(3);
-        assertFalse(stepDetails3.isDirectParse());
-        assertFalse(stepDetails3.isReplayed());
-        assertEquals(1, stepDetails3.getLlmCalls().size());
+            .hasActionsCount(4)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1))
+            .step(2, s -> s.hasLlmCalls(1))
+            .step(3, s -> s.hasLlmCalls(1));
 
         assertEquals("Verified successfully!", Selenide.$("#result").text());
 
@@ -107,30 +91,15 @@ public class StoreTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(4)
-            .hasActionsCount(4);
-
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep1 = r2.getSteps().get(1);
-        assertFalse(replayStep1.isDirectParse());
-        assertTrue(replayStep1.isReplayed());
-        assertTrue(replayStep1.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep2 = r2.getSteps().get(2);
-        assertFalse(replayStep2.isDirectParse());
-        assertTrue(replayStep2.isReplayed());
-        assertTrue(replayStep2.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep3 = r2.getSteps().get(3);
-        assertFalse(replayStep3.isDirectParse());
-        assertTrue(replayStep3.isReplayed());
-        assertTrue(replayStep3.getLlmCalls().isEmpty());
+            .hasActionsCount(4)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed());
 
         assertEquals("Verified successfully!", Selenide.$("#result").text());
     }

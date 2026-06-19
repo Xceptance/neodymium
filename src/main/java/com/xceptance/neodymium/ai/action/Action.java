@@ -27,6 +27,7 @@ import com.google.gson.annotations.JsonAdapter;
  * interaction.
   *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public class Action
 {

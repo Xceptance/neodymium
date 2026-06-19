@@ -20,10 +20,15 @@ package com.xceptance.neodymium.ai.testing;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
+import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.ai.action.ActionRegistry;
 
 /**
  * A mock implementation of {@link ActionExecutor} designed for browserless, offline execution testing.
@@ -47,6 +52,10 @@ public final class MockActionExecutor extends ActionExecutor
      */
     private ActionExecutionException exceptionToThrow;
 
+    private Consumer<Action> beforeExecuteHook;
+    
+    private final Map<String, String> mockElementValues = new HashMap<>();
+
     /**
      * Constructs a new MockActionExecutor with a null test class context to prevent any 
      * Selenide or browser initialization.
@@ -68,6 +77,27 @@ public final class MockActionExecutor extends ActionExecutor
     }
 
     /**
+     * Configures a hook callback to run before any action execution.
+     *
+     * @param beforeExecuteHook the hook callback
+     */
+    public final void setBeforeExecuteHook(final Consumer<Action> beforeExecuteHook)
+    {
+        this.beforeExecuteHook = beforeExecuteHook;
+    }
+
+    /**
+     * Mocks a text value for a selector to simulate STORE action element capture offline.
+     *
+     * @param selector the CSS/XPath selector
+     * @param value the mock value to return
+     */
+    public final void mockElementValue(final String selector, final String value)
+    {
+        this.mockElementValues.put(selector, value);
+    }
+
+    /**
      * Intercepts a single proposed browser action. Logs the action in memory or throws a 
      * pre-configured exception if set.
      *
@@ -77,6 +107,10 @@ public final class MockActionExecutor extends ActionExecutor
     @Override
     public final void execute(final Action action)
     {
+        if (this.beforeExecuteHook != null && action != null)
+        {
+            this.beforeExecuteHook.accept(action);
+        }
         if (this.exceptionToThrow != null)
         {
             throw this.exceptionToThrow;
@@ -84,6 +118,35 @@ public final class MockActionExecutor extends ActionExecutor
         if (action != null)
         {
             this.executedActions.add(action);
+            if ("STORE".equals(action.getType()))
+            {
+                final String varName = action.getValue();
+                final String selector = action.getTarget();
+                String value = this.mockElementValues.get(selector);
+                if (value == null && "#order-id".equals(selector))
+                {
+                    value = "98765";
+                }
+                if (value != null)
+                {
+                    setVariable(varName, value);
+                }
+            }
+            else if ("BRANCH".equals(action.getType()) || "INCLUDE".equals(action.getType()))
+            {
+                final AiActionPlugin plugin = ActionRegistry.getPlugin(action.getType());
+                if (plugin != null)
+                {
+                    try
+                    {
+                        plugin.execute(action, null, this);
+                    }
+                    catch (final Exception e)
+                    {
+                        throw new ActionExecutionException(e.getMessage(), e);
+                    }
+                }
+            }
         }
     }
 
@@ -97,13 +160,12 @@ public final class MockActionExecutor extends ActionExecutor
     @Override
     public final void executeAll(final List<Action> actions)
     {
-        if (this.exceptionToThrow != null)
-        {
-            throw this.exceptionToThrow;
-        }
         if (actions != null)
         {
-            this.executedActions.addAll(actions);
+            for (final Action action : actions)
+            {
+                execute(action);
+            }
         }
     }
 

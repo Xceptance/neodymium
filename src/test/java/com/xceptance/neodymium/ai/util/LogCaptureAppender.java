@@ -31,10 +31,12 @@ import org.apache.logging.log4j.core.config.Configuration;
 import org.apache.logging.log4j.core.config.LoggerConfig;
 
 /**
- * @author AI-generated: Gemini 2.5 Flash
  * 
  * Custom thread-safe Log4j2 Appender that captures log lines in parallel,
  * allowing test suites to verify framework logs (such as token metrics or linter alerts).
+ *
+ * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class LogCaptureAppender extends AbstractAppender
 {

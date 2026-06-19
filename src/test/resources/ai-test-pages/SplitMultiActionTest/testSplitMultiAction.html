@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Split Multi Action Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #dropdown {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            width: 150px;
+        }
+        #create-account-link {
+            color: blue;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Split Multi Action Test</h1>
+    
+    <button id="menu-btn">Menu</button>
+    
+    <div id="dropdown">
+        <a href="#" id="create-account-link">Create Account</a>
+    </div>
+    
+    <div id="status" style="margin-top: 20px; font-weight: bold;"></div>
+    
+    <script>
+        document.getElementById('menu-btn').addEventListener('click', function() {
+            document.getElementById('dropdown').style.display = 'block';
+        });
+        document.getElementById('create-account-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('status').innerText = 'Account Form Opened!';
+        });
+    </script>
+</body>
+</html>

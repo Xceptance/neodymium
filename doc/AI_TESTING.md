@@ -79,8 +79,8 @@ Before running a browserless mock test, you **must** configure these system prop
 // Sets a dummy mock key to satisfy the API key guard
 System.setProperty("neodymium.ai.apiKey", "mock-offline-key");
 
-// Disables default PESAP static analysis LLM calls
-System.setProperty("neodymium.ai.pesap.enabled", "false");
+// Optionally disables the PESAP semantic linter
+System.setProperty("neodymium.ai.pesap.linter.enabled", "false");
 ```
 
 Alternatively, you can call the convenience helper `MockLlmClient.configureForOffline()` which sets these system properties automatically.
@@ -417,6 +417,100 @@ public final class AiTestDataVariableTest
 }
 ```
 
+### Recipe 5: Asserting Dynamic Step Splitting
+
+Validate that compound steps are correctly split dynamically at runtime by checking the updated steps list, StepDetails, and playbook step alignment.
+
+```java
+// AI-generated: Gemini 3.5 Flash
+// GNU AGPLv3 License
+package com.xceptance.neodymium.ai;
+
+import java.util.List;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import com.xceptance.neodymium.ai.core.AiBrowser;
+import com.xceptance.neodymium.ai.core.AiExecutionResult;
+import com.xceptance.neodymium.ai.core.StepDetails;
+import com.xceptance.neodymium.ai.playbook.Playbook;
+import com.xceptance.neodymium.ai.playbook.PlaybookStep;
+import com.xceptance.neodymium.ai.testing.AiMockResponse;
+import com.xceptance.neodymium.ai.testing.MockActionExecutor;
+import com.xceptance.neodymium.ai.testing.MockLlmClient;
+import com.xceptance.neodymium.ai.testing.MockPageAnalyzer;
+import com.xceptance.neodymium.util.Neodymium;
+
+public final class AiStepSplittingTest
+{
+    @Test
+    public final void testRuntimeFallbackStepSplitting()
+    {
+        MockLlmClient.configureForOffline();
+
+        final MockLlmClient llmClient = new MockLlmClient();
+        // The first call returns a SPLIT action instructing the runner to split and execute the rest later
+        llmClient.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Must click profile first before creating account",
+                      "a": [
+                        {"t": "CLICK", "tg": "#profile-icon", "desc": "Click profile icon"},
+                        {"t": "SPLIT", "tg": "none", "v": "Click Create Account", "desc": "Split step"}
+                      ],
+                      "d": false
+                    }
+                    """)
+                .build());
+
+        // The second call executes the remaining part
+        llmClient.addResponse(AiMockResponse.builder()
+                .responseText(
+                    """
+                    {
+                      "s": true,
+                      "r": "Now click create account inside dropdown",
+                      "a": [{"t": "CLICK", "tg": "#create-account", "desc": "Click Create Account"}],
+                      "d": true
+                    }
+                    """)
+                .build());
+
+        final MockPageAnalyzer pageAnalyzer = new MockPageAnalyzer();
+        final MockActionExecutor actionExecutor = new MockActionExecutor();
+
+        try (final AiBrowser mockBrowser = new AiBrowser(Neodymium.aiConfiguration(), this, llmClient, pageAnalyzer, actionExecutor))
+        {
+            Neodymium.setAiBrowser(mockBrowser);
+
+            // Execute the compound step
+            final AiExecutionResult result = mockBrowser.execute("Click profile icon and click Create Account");
+
+            Assertions.assertTrue(result.isSuccess());
+            
+            // Verify that the execution result contains two steps now (split dynamically)
+            final List<StepDetails> steps = result.getSteps();
+            Assertions.assertEquals(2, steps.size());
+            Assertions.assertEquals("Click profile icon", steps.get(0).getExpandedInstruction());
+            Assertions.assertEquals("Click Create Account", steps.get(1).getExpandedInstruction());
+            
+            // Verify that both steps point back to the same original compound instruction
+            Assertions.assertEquals("Click profile icon and click Create Account", steps.get(0).getOriginalUnsplitInstruction());
+            Assertions.assertEquals("Click profile icon and click Create Account", steps.get(1).getOriginalUnsplitInstruction());
+            
+            // Verify that the playbook contains both split steps
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            Assertions.assertNotNull(playbook);
+            final List<PlaybookStep> pbSteps = playbook.getSteps();
+            Assertions.assertEquals(2, pbSteps.size());
+            Assertions.assertEquals("Click profile icon", pbSteps.get(0).getPromptLine());
+            Assertions.assertEquals("Click Create Account", pbSteps.get(1).getPromptLine());
+        }
+    }
+}
+```
+
 ---
 
 ## 5. Local Real-Browser Sandbox Testing
@@ -447,7 +541,7 @@ To run the automated visual regression and parameterization suites locally:
 # 1. Compile all test cases
 mvn test-compile
 
-# 2. Run all local visual matrix and glance tests
+# 2. Run all local visual matrix and visual integration tests
 mvn test -Pjunit-5 -Dtest=com.xceptance.neodymium.ai.Aura*Test
 ```
 

@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -35,6 +34,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Storefront integration tests validating complete user keyboard-driven scenarios:
  * navigation via tabbing, inputting text, and form submission via ENTER key.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -48,8 +50,6 @@ public class KeyboardNavigationTesting extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
-
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", this.url);
     }
@@ -62,7 +62,7 @@ public class KeyboardNavigationTesting extends BaseAiTest
     public final void test_TabAndTypeAndSubmit()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key 3 times
                 Verify that the search box has focus
                 Type "bear"
@@ -73,6 +73,7 @@ public class KeyboardNavigationTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(7)
+            .hasNoPesapCalls()
             .hasEscalations(1)
             .hasActionsCount(9);
 
@@ -92,7 +93,7 @@ public class KeyboardNavigationTesting extends BaseAiTest
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key 3 times
                 Verify that the search box has focus
                 Type "bear"
@@ -103,6 +104,7 @@ public class KeyboardNavigationTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(9);
     }

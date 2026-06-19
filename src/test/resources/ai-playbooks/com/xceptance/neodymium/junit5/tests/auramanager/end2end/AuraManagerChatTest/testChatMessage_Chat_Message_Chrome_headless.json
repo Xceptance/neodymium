@@ -1,0 +1,168 @@
+{
+  "id": "com.xceptance.neodymium.junit5.tests.auramanager.end2end.AuraManagerChatTest :: testChatMessage :: Chat_Message :: Browser Chrome_headless",
+  "steps": [
+    {
+      "promptLine": "java startManager()",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "startManager",
+          "value": [
+            ""
+          ],
+          "description": "Call startManager with param ",
+          "elementContext": {},
+          "replay": "(Replay)",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Open http://127.0.0.1:18100 in the browser",
+      "reasoning": "The instruction is to open a specific URL. I have created a NAVIGATE action with the provided URL.",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "target": "",
+          "value": [
+            "http://127.0.0.1:18100"
+          ],
+          "description": "Open http://127.0.0.1:18100 in the browser",
+          "elementDetails": "http://127.0.0.1:18100",
+          "elementContext": {},
+          "replay": "(Replay)",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify the page title is \"Neodymium Aura Manager\"",
+      "reasoning": "The page title \u0027Neodymium Aura Manager\u0027 was successfully verified.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "pageTitle",
+          "value": [
+            "Neodymium Aura Manager"
+          ],
+          "description": "Verify the page title is \u0027Neodymium Aura Manager\u0027",
+          "elementDetails": "Page Title",
+          "elementContext": {},
+          "replay": "(Replay)",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Enter \"Hello Aura, what can you do?\" into the chat input field",
+      "reasoning": "Identified the chat input field by its data-neo-ref attribute and name, then created a TYPE action to enter the specified text.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "[data-neo-ref\u003d\u0027xc_ugrpoy\u0027]",
+          "value": [
+            "Hello Aura, what can you do?"
+          ],
+          "description": "Enter \u0027Hello Aura, what can you do?\u0027 into the chat input field",
+          "elementDetails": "Ask Aura...",
+          "elementContext": {
+            "classes": "chat-input",
+            "id": "chatInput",
+            "placeholder": "Ask Aura...",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "(Replay)",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Press the Enter key",
+      "reasoning": "The instruction is to press the Enter key, which directly translates to a KEY_PRESS action with \u0027ENTER\u0027 as the value.",
+      "actions": [
+        {
+          "type": "KEY_PRESS",
+          "value": [
+            "ENTER"
+          ],
+          "description": "Press the Enter key",
+          "elementDetails": "Enter key",
+          "elementContext": {},
+          "replay": "(Replay)",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify the chat messages list contains \"Hello Aura, what can you do?\"",
+      "reasoning": "Found the text \u0027Hello Aura, what can you do?\u0027 within an element with data-neo-ref \u0027xc_fslkv\u0027 and created an ASSERT action.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "[data-neo-ref\u003d\u0027xc_fslkv\u0027]",
+          "value": [
+            "Hello Aura, what can you do?"
+          ],
+          "description": "Verify the chat messages list contains \u0027Hello Aura, what can you do?\u0027",
+          "elementDetails": "Hello Aura, what can you do?",
+          "elementContext": {},
+          "replay": "(Replay)",
+          "frameId": "A1BB6F7927E5459034027436B8D86439:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Wait until the last chat message is from the AI",
+      "reasoning": "The instruction is to wait until the last chat message is from the AI. I\u0027ve created an ASSERT action targeting the last div with classes \u0027chat-message\u0027 and \u0027message-ai\u0027, and asserting its visibility. This will implicitly wait for the AI\u0027s response to appear as the last message.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "div.chat-message.message-ai:last-of-type",
+          "value": [
+            "visible"
+          ],
+          "description": "Wait until the last chat message is from the AI",
+          "elementDetails": "Last chat message from AI",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "AC145C3FF13C0A1414C7DBBFE2C6A9D1:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "java stopManager()",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "stopManager",
+          "value": [
+            ""
+          ],
+          "description": "Call stopManager with param ",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

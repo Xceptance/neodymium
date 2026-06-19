@@ -12,8 +12,8 @@ Under the **Neodymium Aura AI** suite, **Aura Glance** provides this observation
 
 - **Background Aura Glance Capture**: Integrate a lightweight layout/style collector that runs silently in the background of Neo AI runs (via `AuraCaptureListener`), capturing viewport screenshots and a lightweight Aura AST representation of visible elements.
 - **Multimodal AI Visual Auditing**: During critical checkpoints or at the end of runs, the system sends screenshots and page layout profiles to Gemini. The LLM acts as an expert visual auditor, observing the page for overlapping text blocks, clipped elements, alignment drift, contrast anomalies, or general layout breakage.
-- **Playbook (glance) Tag Integration**: Support a case-insensitive `(glance)` tag in natural language playbook steps (e.g. `Observe page visual consistency (glance)`). Steps with this tag route directly to `ContextLevel.VISUAL` to ensure the agent has full visual context on the very first turn.
-- **Non-Blocking Soft Warning Gates**: Support case-insensitive `(soft)` tags (e.g., `Observe page visual consistency (soft) (glance)`). By default, critical visual anomalies detected by Gemini throw an `AssertionError` to fail the build. When tagged with `(soft)`, any anomalies are instead logged as non-blocking `WARNING` steps in the Aura execution report, allowing the suite to continue uninterrupted.
+- **Playbook (visual) Tag Integration**: Support a case-insensitive `(visual)` tag in natural language playbook steps (e.g. `Observe page visual consistency (visual)`). Steps with this tag route directly to `ContextLevel.VISUAL` to ensure the agent has full visual context on the very first turn.
+- **Non-Blocking Soft Warning Gates**: Support case-insensitive `(soft)` tags (e.g., `Observe page visual consistency (soft) (visual)`). By default, critical visual anomalies detected by Gemini throw an `AssertionError` to fail the build. When tagged with `(soft)`, any anomalies are instead logged as non-blocking `WARNING` steps in the Aura execution report, allowing the suite to continue uninterrupted.
 - **Visual Playbook Cache (dHash)**: Implement local dHash visual baseline matching. If the live viewport screenshot has a perceptual hash matching the cached baseline, Neodymium bypasses all LLM visual queries entirely and succeeds instantly and offline.
 - **Interactive Aura Glance Report**: Display captured visual anomalies with bounding boxes layered directly over screenshots in the Aura Server Trace Viewer dashboard, complete with Gemini's text-based design reasoning and manual baseline approval.
 
@@ -24,7 +24,7 @@ Under the **Neodymium Aura AI** suite, **Aura Glance** provides this observation
 - `aura-glance-auditor`: Multimodal AI-driven linter that analyzes screens, checks guidelines, and raises visual anomalies.
 
 ### Modified Capabilities
-- `ai-core-routing`: Recognize the new `(glance)` tag and route it directly to `ContextLevel.VISUAL`.
+- `ai-core-routing`: Recognize the new `(visual)` tag and route it directly to `ContextLevel.VISUAL`.
 - `ai-agent-decoupling`: Decouple `(optional)` (silent skip) from `(soft)` (non-blocking warning logging) execution behaviors.
 
 ## Impact

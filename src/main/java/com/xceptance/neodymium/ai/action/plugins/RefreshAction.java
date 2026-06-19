@@ -33,9 +33,11 @@ public class RefreshAction implements AiActionPlugin {
     public String getActionName() { return "REFRESH"; }
 
     @Override
-    public List<Action> parseDirectInstruction(String instruction) {
-        String patternStr = com.xceptance.neodymium.util.Neodymium.configuration().getProperty("neodymium.ai.agent.pattern.refresh", "(?i)^(?:refresh|reload)(?:\\s+page)?$");
-        if (java.util.regex.Pattern.compile(patternStr).matcher(instruction.strip()).find()) {
+    public List<Action> parseDirectInstruction(final String instruction)
+    {
+        final String normalized = instruction.replaceAll("\\s+", " ").trim();
+        if ("REFRESH".equals(normalized))
+        {
             return List.of(new Action("REFRESH", null, "Refresh page"));
         }
         return null;
@@ -45,7 +47,7 @@ public class RefreshAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "REFRESH: refresh the current page."; }
+    public String getPromptInstructions() { return "REFRESH: Refresh the current page."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {

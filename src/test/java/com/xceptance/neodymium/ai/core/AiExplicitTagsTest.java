@@ -29,8 +29,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -54,6 +52,9 @@ import com.xceptance.neodymium.ai.core.LlmClient;
  * - Tag parsing & clean tag stripping architecture.
  * - Soft/Optional step execution failure bypassing.
  * - Timeout isolation under all outcomes.
+ * 
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiExplicitTagsTest
 {
@@ -97,7 +98,6 @@ public final class AiExplicitTagsTest
         // Prevent dirty state leaking between tests
         Neodymium.setAiPlaybook(null);
         Neodymium.initializePlaybook();
-        config.setProperty("neodymium.ai.pesap.classify.enabled", "true");
         config.setProperty("neodymium.ai.pesap.linter.enabled", "true");
     }
 
@@ -156,6 +156,7 @@ public final class AiExplicitTagsTest
         assertEquals("Wait for element to load", AiAgent.stripAllTags("Wait for element to load (timeout: 500ms)"));
         assertEquals("Check dashboard visibility", AiAgent.stripAllTags("Check dashboard visibility (timeout: 2s) (optional)"));
         assertEquals("Verify text in field", AiAgent.stripAllTags("Verify text in field (OPTIONAL) (TIMEOUT: 100)"));
+        assertEquals("Observe visual consistency", AiAgent.stripAllTags("Observe visual consistency (no-replay)"));
     }
 
     /**
@@ -192,17 +193,20 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class,
-            StepDetails.class, AiExecutionResult.class
+            List.class, String.class, List.class, String.class, String.class,
+            StepDetails.class, AiExecutionResult.class,
+            List.class, List.class
         );
         executeStepMethod.setAccessible(true);
 
+        final String stepText = "Click element";
         executeStepMethod.invoke(
             agent,
-            0, "Click element", false, null,
+            0, stepText, false, null,
             false, 500L,
             new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
-            new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
+            new StepDetails(stepText), new AiExecutionResult(new HashMap<>()),
+            new ArrayList<String>(), new ArrayList<Integer>()
         );
 
         assertEquals(1, recordedTimeouts.size());
@@ -245,19 +249,22 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class,
-            StepDetails.class, AiExecutionResult.class
+            List.class, String.class, List.class, String.class, String.class,
+            StepDetails.class, AiExecutionResult.class,
+            List.class, List.class
         );
         executeStepMethod.setAccessible(true);
 
+        final String stepText = "Click element";
         try
         {
             executeStepMethod.invoke(
                 agent,
-                0, "Click element", false, null,
+                0, stepText, false, null,
                 false, 2000L,
                 new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
-                new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
+                new StepDetails(stepText), new AiExecutionResult(new HashMap<>()),
+                new ArrayList<String>(), new ArrayList<Integer>()
             );
         }
         catch (final Exception e)
@@ -301,18 +308,21 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class,
-            StepDetails.class, AiExecutionResult.class
+            List.class, String.class, List.class, String.class, String.class,
+            StepDetails.class, AiExecutionResult.class,
+            List.class, List.class
         );
         executeStepMethod.setAccessible(true);
 
+        final String stepText = "Click element";
         // This invocation should complete cleanly without throwing an exception!
         executeStepMethod.invoke(
             agent,
-            0, "Click element", false, null,
+            0, stepText, false, null,
             true, null,
             new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
-            new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
+            new StepDetails(stepText), new AiExecutionResult(new HashMap<>()),
+            new ArrayList<String>(), new ArrayList<Integer>()
         );
 
         // Verify the step was handled as optional and saved to playbook step
@@ -348,18 +358,21 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class,
-            StepDetails.class, AiExecutionResult.class
+            List.class, String.class, List.class, String.class, String.class,
+            StepDetails.class, AiExecutionResult.class,
+            List.class, List.class
         );
         executeStepMethod.setAccessible(true);
 
+        final String stepText = "Verify text";
         // This invocation should complete cleanly without throwing an exception!
         executeStepMethod.invoke(
             agent,
-            0, "Verify text", false, null,
+            0, stepText, false, null,
             true, null,
             new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
-            new StepDetails("Verify text"), new AiExecutionResult(new HashMap<>())
+            new StepDetails(stepText), new AiExecutionResult(new HashMap<>()),
+            new ArrayList<String>(), new ArrayList<Integer>()
         );
 
         assertEquals("Verify text", pbStep.getPromptLine(), "Expected prompt line to be 'Verify text', but got: '" + pbStep.getPromptLine() + "'");
@@ -394,18 +407,21 @@ public final class AiExplicitTagsTest
             "executeStep",
             int.class, String.class, boolean.class, String.class,
             boolean.class, Long.class,
-            List.class, String.class, List.class, Integer.class, String.class,
-            StepDetails.class, AiExecutionResult.class
+            List.class, String.class, List.class, String.class, String.class,
+            StepDetails.class, AiExecutionResult.class,
+            List.class, List.class
         );
         executeStepMethod.setAccessible(true);
 
+        final String stepText = "Click element";
         // This invocation should complete cleanly without throwing an exception!
         executeStepMethod.invoke(
             agent,
-            0, "Click element", false, null,
+            0, stepText, false, null,
             true, null,
             new ArrayList<String>(), prompt, new ArrayList<String>(), null, null,
-            new StepDetails("Click element"), new AiExecutionResult(new HashMap<>())
+            new StepDetails(stepText), new AiExecutionResult(new HashMap<>()),
+            new ArrayList<String>(), new ArrayList<Integer>()
         );
 
         assertEquals("Click element", pbStep.getPromptLine(), "Expected prompt line to be 'Click element', but got: '" + pbStep.getPromptLine() + "'");
@@ -413,372 +429,162 @@ public final class AiExplicitTagsTest
     }
 
     /**
-     * Verifies that PESAP successfully parses a JSON response with LEAN predicted level.
+     * Verifies that JIT pre-step PESAP successfully parses a JSON response
+     * and populates the cache and StepDetails.
      *
      * @throws Exception if reflection fails
      */
     @Test
-    public void testPesapPredictionWithLean() throws Exception
+    public void testJitPreStepPesapPrediction() throws Exception
     {
         final LlmClient mockLlm = new LlmClient(config, new AiStats())
         {
             @Override
+            public String chat(final LlmMode mode, final String systemPrompt, final String userPrompt)
+            {
+                return "{\"c\": \"STANDARD\", \"jm\": false, \"sp\": []}";
+            }
+
+            @Override
             public String chat(final String systemPrompt, final String userPrompt)
             {
-                if (systemPrompt.equals(AiAgentPrompts.PESAP_CLASSIFY_PROMPT))
-                {
-                    return "{\"predictions\": {\"1\": \"LEAN\"}}";
-                }
-                if (systemPrompt.equals(AiAgentPrompts.PESAP_LINTER_PROMPT))
-                {
-                    return "{\"warnings\": {\"1\": [\"Lacks element targeting\"]}}";
-                }
-                return "{}";
+                return chat(LlmMode.PESAP, systemPrompt, userPrompt);
             }
         };
 
-        final AiAgent agent = new AiAgent(mockLlm, dummyAnalyzer, null, config);
+        final ActionExecutor dummyExecutor = new ActionExecutor(null);
+        final AiAgent agent = new AiAgent(mockLlm, dummyAnalyzer, dummyExecutor, config);
         setExecutionLog(agent);
 
-        final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
-            "runPesap",
-            List.class, List.class, String.class, AiExecutionResult.class
+        // Set the currentStepsList field via reflection
+        final Field stepsField = AiAgent.class.getDeclaredField("currentStepsList");
+        stepsField.setAccessible(true);
+        final StepDetails stepDetails = new StepDetails("Verify the price is greater than zero");
+        stepsField.set(agent, List.of("Open the homepage", stepDetails.getRawInstruction(), "Click checkout"));
+
+        // Invoke runPreStepPesap via reflection
+        final Method runPreStepPesapMethod = AiAgent.class.getDeclaredMethod(
+            "runPreStepPesap",
+            int.class, Class.class, StepDetails.class
         );
-        runPesapMethod.setAccessible(true);
+        runPreStepPesapMethod.setAccessible(true);
 
-        final List<String> steps = List.of("Click button");
-        final List<Integer> lines = List.of(10);
+        final Object result = runPreStepPesapMethod.invoke(agent, 1, null, stepDetails);
 
-        // This should run successfully and set predictions.get(0) to ContextLevel.LEAN
-        runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
+        assertNotNull(result, "Expected JIT PESAP to return a non-null result");
+        assertEquals(ContextLevel.STANDARD, stepDetails.getPesapPredictedContextLevel());
 
-        final Field pesapPredictionsField = AiAgent.class.getDeclaredField("pesapPredictions");
-        pesapPredictionsField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        final List<ContextLevel> predictions = (List<ContextLevel>) pesapPredictionsField.get(agent);
-
-        assertNotNull(predictions);
-        assertEquals(1, predictions.size());
-        assertEquals(ContextLevel.LEAN, predictions.get(0));
+        // Verify the cache is populated
+        assertTrue(stepDetails.isPesapCalled(), "Expected JIT PESAP call flag to be true");
     }
 
     /**
-     * Verifies that PESAP handles and logs a malformed JSON response without crashing the test run.
+     * Verifies that JIT pre-step PESAP gracefully handles malformed JSON
+     * and returns null without crashing.
      *
      * @throws Exception if reflection fails
      */
     @Test
-    public void testPesapPredictionMalformedJson() throws Exception
+    public void testJitPreStepPesapMalformedJson() throws Exception
     {
         final LlmClient mockLlm = new LlmClient(config, new AiStats())
         {
             @Override
-            public String chat(final String systemPrompt, final String userPrompt)
+            public String chat(final LlmMode mode, final String systemPrompt, final String userPrompt)
             {
-                return "{\"predictions\": \"malformed_garbage_value\"";
+                return "{\"c\": \"malformed_garbage_value\"";
             }
-        };
 
-        final AiAgent agent = new AiAgent(mockLlm, dummyAnalyzer, null, config);
-        setExecutionLog(agent);
-
-        final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
-            "runPesap",
-            List.class, List.class, String.class, AiExecutionResult.class
-        );
-        runPesapMethod.setAccessible(true);
-
-        final List<String> steps = List.of("Click button");
-        final List<Integer> lines = List.of(10);
-
-        // This should not crash, it should just log the error and proceed (bypassing PESAP predictions)
-        runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
-
-        final Field pesapPredictionsField = AiAgent.class.getDeclaredField("pesapPredictions");
-        pesapPredictionsField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        final List<ContextLevel> predictions = (List<ContextLevel>) pesapPredictionsField.get(agent);
-
-        assertNotNull(predictions);
-        assertEquals(1, predictions.size());
-        assertNull(predictions.get(0)); // Should remain null due to parsing failure
-    }
-
-    /**
-     * Verifies that PESAP successfully recovers partial predictions from a truncated JSON response using the regex scanner fallback.
-     *
-     * @throws Exception if reflection fails
-     */
-    @Test
-    public void testPesapPredictionRegexRecovery() throws Exception
-    {
-        final LlmClient mockLlm = new LlmClient(config, new AiStats())
-        {
             @Override
             public String chat(final String systemPrompt, final String userPrompt)
             {
-                // Truncated JSON response
-                return "{\"predictions\": {\"1\": \"LEAN\", \"2\": \"STANDARD\", \"3\": \"AXT";
+                return chat(LlmMode.PESAP, systemPrompt, userPrompt);
             }
         };
 
-        final AiAgent agent = new AiAgent(mockLlm, dummyAnalyzer, null, config);
+        final ActionExecutor dummyExecutor = new ActionExecutor(null);
+        final AiAgent agent = new AiAgent(mockLlm, dummyAnalyzer, dummyExecutor, config);
         setExecutionLog(agent);
 
-        final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
-            "runPesap",
-            List.class, List.class, String.class, AiExecutionResult.class
+        final Field stepsField = AiAgent.class.getDeclaredField("currentStepsList");
+        stepsField.setAccessible(true);
+        final StepDetails stepDetails = new StepDetails("Click button");
+        stepsField.set(agent, List.of(stepDetails.getRawInstruction()));
+
+        final Method runPreStepPesapMethod = AiAgent.class.getDeclaredMethod(
+            "runPreStepPesap",
+            int.class, Class.class, StepDetails.class
         );
-        runPesapMethod.setAccessible(true);
+        runPreStepPesapMethod.setAccessible(true);
 
-        final List<String> steps = List.of("Click button", "Verify text", "Hover element");
-        final List<Integer> lines = List.of(10, 11, 12);
+        final Object result = runPreStepPesapMethod.invoke(agent, 0, null, stepDetails);
 
-        // This should recover the first two predictions using regex fallback
-        runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
-
-        final Field pesapPredictionsField = AiAgent.class.getDeclaredField("pesapPredictions");
-        pesapPredictionsField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        final List<ContextLevel> predictions = (List<ContextLevel>) pesapPredictionsField.get(agent);
-
-        assertNotNull(predictions);
-        assertEquals(3, predictions.size());
-        assertEquals(ContextLevel.LEAN, predictions.get(0));
-        assertEquals(ContextLevel.STANDARD, predictions.get(1));
-        assertNull(predictions.get(2)); // The truncated one should remain null
+        // Should return null on failure (graceful fallback)
+        assertNull(result, "Expected JIT PESAP to return null on malformed JSON");
     }
 
     /**
-     * Verifies that when only classification is enabled, only classification is called.
+     * Verifies that the JIT pre-step PESAP builds the correct flow context window
+     * format: 1 previous / current / 2 next.
      *
      * @throws Exception if reflection fails
      */
     @Test
-    public void testPesapWithOnlyClassificationEnabled() throws Exception
-    {
-        config.setProperty("neodymium.ai.pesap.classify.enabled", "true");
-        config.setProperty("neodymium.ai.pesap.linter.enabled", "false");
-
-        final AtomicInteger classifyCallCount = new AtomicInteger(0);
-        final AtomicInteger linterCallCount = new AtomicInteger(0);
-
-        try
-        {
-            final LlmClient mockLlm = new LlmClient(config, new AiStats())
-            {
-                @Override
-                public String chat(final String systemPrompt, final String userPrompt)
-                {
-                    if (systemPrompt.equals(AiAgentPrompts.PESAP_CLASSIFY_PROMPT))
-                    {
-                        classifyCallCount.incrementAndGet();
-                        return "{\"predictions\": {\"1\": \"LEAN\"}}";
-                    }
-                    if (systemPrompt.equals(AiAgentPrompts.PESAP_LINTER_PROMPT))
-                    {
-                        linterCallCount.incrementAndGet();
-                        return "{\"warnings\": {\"1\": [\"Lacks element targeting\"]}}";
-                    }
-                    return "{}";
-                }
-            };
-
-            final AiAgent agent = new AiAgent(mockLlm, dummyAnalyzer, null, config);
-            setExecutionLog(agent);
-
-            final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
-                "runPesap",
-                List.class, List.class, String.class, AiExecutionResult.class
-            );
-            runPesapMethod.setAccessible(true);
-
-            final List<String> steps = List.of("Click button");
-            final List<Integer> lines = List.of(10);
-
-            runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
-
-            final Field pesapPredictionsField = AiAgent.class.getDeclaredField("pesapPredictions");
-            pesapPredictionsField.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            final List<ContextLevel> predictions = (List<ContextLevel>) pesapPredictionsField.get(agent);
-
-            assertNotNull(predictions);
-            assertEquals(1, predictions.size());
-            assertEquals(ContextLevel.LEAN, predictions.get(0));
-
-            assertEquals(1, classifyCallCount.get());
-            assertEquals(0, linterCallCount.get());
-        }
-        finally
-        {
-            config.removeProperty("neodymium.ai.pesap.classify.enabled");
-            config.removeProperty("neodymium.ai.pesap.linter.enabled");
-        }
-    }
-
-    /**
-     * Verifies that when only linter is enabled, only linter is called.
-     *
-     * @throws Exception if reflection fails
-     */
-    @Test
-    public void testPesapWithOnlyLinterEnabled() throws Exception
-    {
-        config.setProperty("neodymium.ai.pesap.classify.enabled", "false");
-        config.setProperty("neodymium.ai.pesap.linter.enabled", "true");
-
-        final AtomicInteger classifyCallCount = new AtomicInteger(0);
-        final AtomicInteger linterCallCount = new AtomicInteger(0);
-
-        try
-        {
-            final LlmClient mockLlm = new LlmClient(config, new AiStats())
-            {
-                @Override
-                public String chat(final String systemPrompt, final String userPrompt)
-                {
-                    if (systemPrompt.equals(AiAgentPrompts.PESAP_CLASSIFY_PROMPT))
-                    {
-                        classifyCallCount.incrementAndGet();
-                        return "{\"predictions\": {\"1\": \"LEAN\"}}";
-                    }
-                    if (systemPrompt.equals(AiAgentPrompts.PESAP_LINTER_PROMPT))
-                    {
-                        linterCallCount.incrementAndGet();
-                        return "{\"warnings\": {\"1\": [\"Lacks element targeting\"]}}";
-                    }
-                    return "{}";
-                }
-            };
-
-            final AiAgent agent = new AiAgent(mockLlm, dummyAnalyzer, null, config);
-            setExecutionLog(agent);
-
-            final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
-                "runPesap",
-                List.class, List.class, String.class, AiExecutionResult.class
-            );
-            runPesapMethod.setAccessible(true);
-
-            final List<String> steps = List.of("Click button");
-            final List<Integer> lines = List.of(10);
-
-            runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
-
-            final Field pesapPredictionsField = AiAgent.class.getDeclaredField("pesapPredictions");
-            pesapPredictionsField.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            final List<ContextLevel> predictions = (List<ContextLevel>) pesapPredictionsField.get(agent);
-
-            // Classification was disabled, so predictions should remain null
-            assertNotNull(predictions);
-            assertEquals(1, predictions.size());
-            assertNull(predictions.get(0));
-
-            assertEquals(0, classifyCallCount.get());
-            assertEquals(1, linterCallCount.get());
-        }
-        finally
-        {
-            config.removeProperty("neodymium.ai.pesap.classify.enabled");
-            config.removeProperty("neodymium.ai.pesap.linter.enabled");
-        }
-    }
-
-    /**
-     * Verifies that when both are disabled, no chat calls are made.
-     *
-     * @throws Exception if reflection fails
-     */
-    @Test
-    public void testPesapWithBothDisabled() throws Exception
-    {
-        config.setProperty("neodymium.ai.pesap.classify.enabled", "false");
-        config.setProperty("neodymium.ai.pesap.linter.enabled", "false");
-
-        final AtomicInteger classifyCallCount = new AtomicInteger(0);
-        final AtomicInteger linterCallCount = new AtomicInteger(0);
-
-        try
-        {
-            final LlmClient mockLlm = new LlmClient(config, new AiStats())
-            {
-                @Override
-                public String chat(final String systemPrompt, final String userPrompt)
-                {
-                    if (systemPrompt.equals(AiAgentPrompts.PESAP_CLASSIFY_PROMPT))
-                    {
-                        classifyCallCount.incrementAndGet();
-                    }
-                    if (systemPrompt.equals(AiAgentPrompts.PESAP_LINTER_PROMPT))
-                    {
-                        linterCallCount.incrementAndGet();
-                    }
-                    return "{}";
-                }
-            };
-
-            final AiAgent agent = new AiAgent(mockLlm, dummyAnalyzer, null, config);
-            setExecutionLog(agent);
-
-            final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
-                "runPesap",
-                List.class, List.class, String.class, AiExecutionResult.class
-            );
-            runPesapMethod.setAccessible(true);
-
-            final List<String> steps = List.of("Click button");
-            final List<Integer> lines = List.of(10);
-
-            runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
-
-            assertEquals(0, classifyCallCount.get());
-            assertEquals(0, linterCallCount.get());
-        }
-        finally
-        {
-            config.removeProperty("neodymium.ai.pesap.classify.enabled");
-            config.removeProperty("neodymium.ai.pesap.linter.enabled");
-        }
-    }
-
-    /**
-     * Verifies that the PESAP user prompt is formatted as a clean 0-based indexed plain text list.
-     *
-     * @throws Exception if reflection fails
-     */
-    @Test
-    public void testPesapUserPromptFormatting() throws Exception
+    public void testJitPreStepPesapFlowContextFormat() throws Exception
     {
         final AtomicReference<String> capturedUserPrompt = new AtomicReference<>();
 
         final LlmClient mockLlm = new LlmClient(config, new AiStats())
         {
             @Override
-            public String chat(final String systemPrompt, final String userPrompt)
+            public String chat(final LlmMode mode, final String systemPrompt, final String userPrompt)
             {
                 capturedUserPrompt.set(userPrompt);
-                return "{}";
+                return "{\"c\": \"AXTREE\", \"jm\": false, \"sp\": []}";
+            }
+
+            @Override
+            public String chat(final String systemPrompt, final String userPrompt)
+            {
+                return chat(LlmMode.PESAP, systemPrompt, userPrompt);
             }
         };
 
-        final AiAgent agent = new AiAgent(mockLlm, dummyAnalyzer, null, config);
+        final ActionExecutor dummyExecutor = new ActionExecutor(null);
+        final AiAgent agent = new AiAgent(mockLlm, dummyAnalyzer, dummyExecutor, config);
         setExecutionLog(agent);
 
-        final Method runPesapMethod = AiAgent.class.getDeclaredMethod(
-            "runPesap",
-            List.class, List.class, String.class, AiExecutionResult.class
+        final Field stepsField = AiAgent.class.getDeclaredField("currentStepsList");
+        stepsField.setAccessible(true);
+        final StepDetails stepDetails = new StepDetails("Click the first product");
+        stepsField.set(agent, List.of(
+            "Search for Screwdriver",
+            stepDetails.getRawInstruction(),
+            "Add to cart",
+            "Go to checkout",
+            "Enter payment details"
+        ));
+
+        final Method runPreStepPesapMethod = AiAgent.class.getDeclaredMethod(
+            "runPreStepPesap",
+            int.class, Class.class, StepDetails.class
         );
-        runPesapMethod.setAccessible(true);
+        runPreStepPesapMethod.setAccessible(true);
 
-        final List<String> steps = List.of("Click button", "Verify text");
-        final List<Integer> lines = List.of(10, 11);
+        runPreStepPesapMethod.invoke(agent, 1, null, stepDetails);
 
-        runPesapMethod.invoke(agent, steps, lines, "test.yaml", new AiExecutionResult(new HashMap<>()));
+        final String prompt = capturedUserPrompt.get();
+        assertNotNull(prompt, "Expected user prompt to be captured");
 
-        final String expectedPrompt = "## Test Steps\n1: Click button\n2: Verify text\n";
-        assertEquals(expectedPrompt, capturedUserPrompt.get());
+        // Verify flow context format: 1 previous + current + 2 next
+        assertTrue(prompt.contains("[PREVIOUS]"), "Expected [PREVIOUS] tag in flow context");
+        assertTrue(prompt.contains("[CURRENT]"), "Expected [CURRENT] tag in flow context");
+        assertTrue(prompt.contains("[NEXT]"), "Expected [NEXT] tag in flow context");
+        assertTrue(prompt.contains("Search for Screwdriver"), "Expected previous step content");
+        assertTrue(prompt.contains("Click the first product"), "Expected current step content");
+        assertTrue(prompt.contains("Add to cart"), "Expected next step 1 content");
+        assertTrue(prompt.contains("Go to checkout"), "Expected next step 2 content");
+        assertFalse(prompt.contains("Enter payment details"), "Expected step beyond window to be excluded");
     }
 
     private void setExecutionLog(final AiAgent agent) throws Exception
@@ -786,5 +592,58 @@ public final class AiExplicitTagsTest
         final Field logField = AiAgent.class.getDeclaredField("executionLog");
         logField.setAccessible(true);
         logField.set(agent, new AiDiscussionLogger("dummy instructions"));
+    }
+
+    /**
+     * Verifies that the (no-replay) tag successfully bypasses replay loading
+     * and forces live execution (which triggers identifyActions or the LLM).
+     */
+    @Test
+    public void testNoReplayBypassesPlaybookReplay() throws Exception
+    {
+        final List<Action> executedActions = new ArrayList<>();
+        final ActionExecutor recordingExecutor = new ActionExecutor(null)
+        {
+            @Override
+            public void executeAll(final List<Action> actions)
+            {
+                executedActions.addAll(actions);
+            }
+        };
+
+        final AiAgent agent = new AiAgent(dummyLlmClient, dummyAnalyzer, recordingExecutor, config);
+        setExecutionLog(agent);
+
+        final String prompt = "Click element (no-replay)";
+        final Playbook playbook = Neodymium.getAiPlaybook();
+        playbook.setRecording(false); // Replay mode
+
+        // Cache actions in the playbook step
+        final PlaybookStep pbStep = playbook.getCurrentStep();
+        pbStep.setPromptLine("Click element");
+        pbStep.setActions(List.of(new Action("CLICK", "#cached-btn", "Cached click")));
+
+        final Method getStepActionsMethod = AiAgent.class.getDeclaredMethod(
+            "getStepActions",
+            int.class, String.class, String.class, Playbook.class,
+            boolean.class, String.class, List.class,
+            StepDetails.class, AiExecutionResult.class
+        );
+        getStepActionsMethod.setAccessible(true);
+
+        final String stepText = "Click element";
+        @SuppressWarnings("unchecked")
+        final List<Action> actions = (List<Action>) getStepActionsMethod.invoke(
+            agent,
+            0, stepText, prompt, playbook,
+            false, null, new ArrayList<Action>(),
+            new StepDetails(stepText), new AiExecutionResult(new HashMap<>())
+        );
+
+        // Verify that the cached action "#cached-btn" was bypassed,
+        // and instead the live LLM actions (from dummyLlmClient: "#dummy-btn") were returned!
+        assertNotNull(actions, "Expected actions to be resolved");
+        assertFalse(actions.isEmpty(), "Expected actions list to not be empty");
+        assertEquals("#dummy-btn", actions.get(0).getTarget(), "Expected LLM resolved action target");
     }
 }

@@ -17,92 +17,104 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.xceptance.neodymium.ai.anomaly;
-import com.xceptance.neodymium.ai.AiTestVerification;
-import com.xceptance.neodymium.ai.VerificationMode;
-import com.xceptance.neodymium.ai.BaseAiTest;
 
-import static com.codeborne.selenide.Selenide.open;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
+import com.xceptance.neodymium.ai.BaseAiTest;
+import com.xceptance.neodymium.ai.VerificationMode;
+import com.xceptance.neodymium.ai.core.AiExecutionResult;
+import com.xceptance.neodymium.ai.core.AiStats;
+import com.xceptance.neodymium.ai.util.LogCaptureAppender;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.ai.util.LogCaptureAppender;
-import com.xceptance.neodymium.ai.core.AiStats;
 
 /**
  * Verifies accessibility/low-contrast auditing using non-blocking visual warnings
  * triggered via the case-insensitive '(soft)' tag.
  * 
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
-@Browser("Chrome_1024x768")
-@AiTestVerification({
-    VerificationMode.LIVE_LLM,
-    VerificationMode.OFFLINE_REPLAY,
-    VerificationMode.HUD_OFFLINE_REPLAY,
-    VerificationMode.HUD_LLM
-})
+@Browser("Chrome_1500x1000")
 public final class ContrastWarningTest extends BaseAiTest
 {
     private LogCaptureAppender logAppender;
 
+    private String url;
+
     @BeforeEach
-    public void startLogCapture()
+    public final void startLogCapture()
     {
-        logAppender = LogCaptureAppender.startCapture();
+        this.url = String.format("http://localhost:%d/AuraGlanceTest/a11y/index.html", server.getPort());
+        Neodymium.getData().put("test.url", this.url);
+        Neodymium.getData().put("neodymium.ai.agent.maxRetries", "0");
+        this.logAppender = LogCaptureAppender.startCapture();
     }
 
     @AfterEach
-    public void tearDownLogCapture()
+    public final void tearDownLogCapture()
     {
-        if (logAppender != null)
+        if (this.logAppender != null)
         {
-            logAppender.stopCapture();
+            this.logAppender.stopCapture();
         }
     }
 
     @NeodymiumTest
-    public void testAccessibilityLowContrastSoftWarning()
+    final void testAccessibilityLowContrastSoftWarning()
     {
-        final int port = server.getPort();
-        final String a11yUrl = String.format("http://localhost:%d/AuraGlanceTest/a11y/index.html", port);
+        final String steps = """
+                Open ${test.url}
+                Click on the 'Aura Defect Controls' trigger button. (hint: #aura-trigger)
+                Click the 'Inject Low Contrast' toggle. (hint: label[for='toggle-contrast'])
+                Click the close button of the controls drawer. (hint: #aura-close)
+                Observe page visual consistency (soft) (visual)
+                """;
 
-        assertAiExecution(() ->
-        {
-            open(a11yUrl);
+        // 1. LIVE_LLM execution
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
-            // Inject accessibility violation
-            Neodymium.ai().execute("Click on the 'Aura Defect Controls' trigger button. (hint: #aura-trigger)");
-            
-            try
-            {
-                Thread.sleep(500);
-            }
-            catch (final InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-            }
+        assertThat(r1)
+            .hasLlmCalls(5)
+            .hasNoEscalations()
+            .hasReplays(0)
+            .step(0, s -> s.hasLlmCalls(1))
+            .step(1, s -> s.hasLlmCalls(1))
+            .step(2, s -> s.hasLlmCalls(1))
+            .step(3, s -> s.hasLlmCalls(1))
+            .step(4, s -> s.hasLlmCalls(1));
 
-            Neodymium.ai().execute("Click the 'Inject Low Contrast' toggle. (hint: label[for='toggle-contrast'])");
-
-            // Run audit in non-blocking warning mode; it should NOT throw exception but record warning
-            Neodymium.ai().execute("Observe page visual consistency (soft) (glance)");
-        });
-
-        // 1. Programmatic assertions on internal stats
+        // Programmatic assertions on internal stats
         final AiStats stats = Neodymium.ai().getStats();
-        assertTrue(stats.getOverallCallCount() > 0 || stats.getReplayCount() > 0, "Expected either LLM calls or offline replays to be recorded");
+        assertTrue(stats.getOverallCallCount() > 0, "Expected LLM calls to be recorded");
 
-        // 2. Programmatic assertions on captured parallel log output
-        final List<String> capturedLogs = logAppender.getLogs();
+        // Programmatic assertions on captured parallel log output
+        final List<String> capturedLogs = this.logAppender.getLogs();
         final boolean hasAuraIndicator = capturedLogs.stream()
                 .anyMatch(line -> line.contains("Aura") || line.contains("Tokens") || line.contains("Observe"));
         assertTrue(hasAuraIndicator, "Expected logs to capture Aura framework trace lines");
+
+        // 2. Reset browser and run in REPLAY mode
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasReplays(5)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed())
+            .step(3, s -> s.isReplayed())
+            .step(4, s -> s.isReplayed());
     }
 }

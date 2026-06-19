@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -24,16 +23,13 @@ import com.xceptance.neodymium.ai.BaseAiTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import org.openqa.selenium.Cookie;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
-import com.xceptance.neodymium.ai.core.StepDetails;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
@@ -41,6 +37,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Integration test verifying AI clear cookies commands and their validation flow
  * in both live LLM and replay modes.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -62,27 +61,24 @@ public class ClearCookiesTest extends BaseAiTest
      * Test cookie clearing with step-by-step verification of status.
      */
     @NeodymiumTest
-    public final void testClearCookies()
+    public final void testClearCookiesDirect()
     {
         // Open domain and set test cookie
         Selenide.open(this.url);
         WebDriverRunner.getWebDriver().manage().addCookie(new Cookie("test_cookie", "test_value"));
 
-        final String steps = "clear cookies";
+        final String steps = "CLEAR_COOKIES";
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
             .hasReplays(0)
-            .hasActionsCount(1);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
+            .hasActionsCount(1)
+            .step(0, s -> s.isDirectParse());
 
         assertNull(WebDriverRunner.getWebDriver().manage().getCookieNamed("test_cookie"));
 
@@ -97,15 +93,58 @@ public class ClearCookiesTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(1)
-            .hasActionsCount(1);
+            .hasActionsCount(1)
+            .step(0, s -> s.isReplayed());
 
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
+        assertNull(WebDriverRunner.getWebDriver().manage().getCookieNamed("test_cookie"));
+    }
+
+    /**
+     * Test cookie clearing with step-by-step verification of status using lowercase step (LLM fallback).
+     */
+    @NeodymiumTest
+    public final void testClearCookiesLowercase()
+    {
+        // Open domain and set test cookie
+        Selenide.open(this.url);
+        WebDriverRunner.getWebDriver().manage().addCookie(new Cookie("test_cookie", "test_value"));
+
+        final String steps = "clear cookies";
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(0)
+            .hasActionsCount(1)
+            .step(0, s -> s.hasLlmCalls(1));
+
+        assertNull(WebDriverRunner.getWebDriver().manage().getCookieNamed("test_cookie"));
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        // Open domain and set test cookie again for replay
+        Selenide.open(this.url);
+        WebDriverRunner.getWebDriver().manage().addCookie(new Cookie("test_cookie", "test_value"));
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(1)
+            .hasActionsCount(1)
+            .step(0, s -> s.isReplayed());
 
         assertNull(WebDriverRunner.getWebDriver().manage().getCookieNamed("test_cookie"));
     }

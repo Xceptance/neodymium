@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.net.URL;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
@@ -236,26 +237,32 @@ public final class TestDataUtils
 
         }
 
-        String targetTestId = Neodymium.configuration().getTestIdFilter();
+        final String targetTestId = Neodymium.configuration().getTestIdFilter();
 
         if (StringUtils.isNotBlank(targetTestId))
         {
-            Pattern idFilter = Pattern.compile(targetTestId);
-
-            // Filter parsed datasets. We must do this after file parsing because test IDs are defined inside the files.
-            resultDataSets = resultDataSets.stream().filter(dataSet -> {
+            final Pattern idFilter = Pattern.compile(targetTestId);
+            final List<Map<String, String>> filtered = new LinkedList<>();
+            for (int i = 0; i < resultDataSets.size(); i++)
+            {
+                final Map<String, String> dataSet = resultDataSets.get(i);
                 String currentTestId = dataSet.get("testId");
                 if (StringUtils.isBlank(currentTestId))
                 {
                     currentTestId = dataSet.get("TEST_ID");
                 }
 
-                if (currentTestId == null) {
-                    return false;
+                if (currentTestId == null)
+                {
+                    currentTestId = String.valueOf(i + 1);
                 }
-                
-                return idFilter.matcher(currentTestId).find();
-            }).collect(Collectors.toList());
+
+                if (idFilter.matcher(currentTestId).find())
+                {
+                    filtered.add(dataSet);
+                }
+            }
+            resultDataSets = filtered;
         }
 
         return resultDataSets;
@@ -360,13 +367,35 @@ public final class TestDataUtils
         // look for a data set file in the class path
         for (final String fileName : fileNames)
         {
-            final InputStream input = testClass.getResourceAsStream("/" + fileName);
-            if (input != null)
+            final URL url = testClass.getResource("/" + fileName);
+            if (url != null)
             {
+                if ("file".equals(url.getProtocol()))
+                {
+                    try
+                    {
+                        final File batchDataFile = new File(url.toURI());
+                        if (batchDataFile.isFile())
+                        {
+                            final List<Map<String, String>> datasets = readDataSetsFromFile(batchDataFile, fileName);
+                            final String baseName = FilenameUtils.getName(fileName);
+                            for (final Map<String, String> ds : datasets)
+                            {
+                                ds.put("neodymium.sourceFile", baseName);
+                            }
+                            return datasets;
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        // Fall back to stream copying if URI conversion fails
+                    }
+                }
+
                 OutputStream output = null;
                 File batchDataFile = null;
 
-                try
+                try (final InputStream input = url.openStream())
                 {
                     // copy the stream to a temporary file
                     final String extension = "." + FilenameUtils.getExtension(fileName);
@@ -376,8 +405,8 @@ public final class TestDataUtils
                     IOUtils.copy(input, output);
                     output.flush();
 
-                    // read the data sets from the temporary file
-                    final List<Map<String, String>> datasets = readDataSetsFromFile(batchDataFile);
+                    // read the data sets from the temporary file passing original classpath path context
+                    final List<Map<String, String>> datasets = readDataSetsFromFile(batchDataFile, fileName);
                     final String baseName = FilenameUtils.getName(fileName);
                     for (final Map<String, String> ds : datasets)
                     {
@@ -387,13 +416,14 @@ public final class TestDataUtils
                 }
                 finally
                 {
-                    // clean up
-                    input.close();
                     if (output != null)
                     {
                         output.close();
                     }
-                    FileUtils.deleteQuietly(batchDataFile);
+                    if (batchDataFile != null)
+                    {
+                        FileUtils.deleteQuietly(batchDataFile);
+                    }
                 }
             }
         }
@@ -402,8 +432,7 @@ public final class TestDataUtils
     }
 
     /**
-     * Returns the test data sets contained in the given test data file. The data set provider used to read the file is
-     * determined from the data file's extension.
+     * Returns the test data sets contained in the given test data file.
      *
      * @param dataSetsFile
      *            the test data set file
@@ -411,7 +440,57 @@ public final class TestDataUtils
      */
     public static List<Map<String, String>> readDataSetsFromFile(final File dataSetsFile)
     {
+        return readDataSetsFromFile(dataSetsFile, null);
+    }
+
+    /**
+     * Returns the test data sets contained in the given test data file, providing classpath resource context.
+     *
+     * @param dataSetsFile
+     *            the test data set file
+     * @param classpathResourcePath
+     *            the original classpath resource path
+     * @return the data sets
+     */
+    public static List<Map<String, String>> readDataSetsFromFile(final File dataSetsFile, final String classpathResourcePath)
+    {
         LOGGER.debug("Test data set file used: " + dataSetsFile.getAbsolutePath());
+
+        final String resolvedClasspathResourcePath;
+        if (classpathResourcePath != null)
+        {
+            resolvedClasspathResourcePath = classpathResourcePath;
+        }
+        else
+        {
+            String path = null;
+            final String absolutePath = dataSetsFile.getAbsolutePath().replace('\\', '/');
+            final String[] patterns = {
+                "src/test/resources/",
+                "src/main/resources/",
+                "target/test-classes/",
+                "target/classes/",
+                "build/resources/main/",
+                "build/resources/test/",
+                "build/classes/java/main/",
+                "build/classes/java/test/",
+                "out/production/resources/",
+                "out/test/resources/",
+                "out/production/classes/",
+                "out/test/classes/",
+                "bin/"
+            };
+            for (final String pat : patterns)
+            {
+                final int idx = absolutePath.indexOf(pat);
+                if (idx != -1)
+                {
+                    path = absolutePath.substring(idx + pat.length());
+                    break;
+                }
+            }
+            resolvedClasspathResourcePath = path;
+        }
 
         final String fileExtension = FilenameUtils.getExtension(dataSetsFile.getName());
 
@@ -428,7 +507,7 @@ public final class TestDataUtils
 
             case "yaml":
             case "yml":
-                return YamlFileReader.readFile(dataSetsFile);
+                return YamlFileReader.readFile(dataSetsFile, resolvedClasspathResourcePath);
 
             case "properties":
                 return PropertyFileReader.readFile(dataSetsFile);

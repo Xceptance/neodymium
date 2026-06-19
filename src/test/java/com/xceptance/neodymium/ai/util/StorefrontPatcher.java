@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.util;
 
 import java.io.IOException;
@@ -27,6 +26,9 @@ import java.nio.file.Paths;
 
 /**
  * Programmatic patcher and subpage generator for the VÉRLA apparel sandbox.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class StorefrontPatcher
 {

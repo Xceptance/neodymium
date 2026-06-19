@@ -30,6 +30,10 @@ temp-*.properties
 embeddedLocalProxySelfSignedRootCertificate.p12
 /bin/
 /allure-results/
+/.allure/
+/allure-report/
+/aura-allure-results-temp/
+
 
 
 # IDE/AI helper folders
@@ -45,6 +49,9 @@ neodymium.code-workspace
 
 # Neodymium AI temporary scratch folder
 tmp/
+
+# Neodymium Aura Reports History
+/allure-reports-history/
 
 # Antigravity CLI
 .antigravitycli/

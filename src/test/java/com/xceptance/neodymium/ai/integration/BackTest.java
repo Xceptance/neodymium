@@ -23,19 +23,15 @@ import com.xceptance.neodymium.ai.BaseAiTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
 import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
-import com.xceptance.neodymium.ai.core.StepDetails;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 
-import io.qameta.allure.junit4.Tags;
 
 /**
  * Integration test verifying AI back navigation commands and their validation flow
@@ -68,34 +64,23 @@ public class BackTest extends BaseAiTest
     public final void testBack()
     {
         final String steps = """
-                Open ${back.test.url1}
-                Open ${back.test.url2}
-                back
+                OPEN ${back.test.url1}
+                OPEN ${back.test.url2}
+                BACK
             """;
 
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasLlmCalls(0)
-            .hasNoEscalations()
             .hasDirectParses(3)
+            .hasPesapCalls(0) // this is all done by the parser
+            .hasNoEscalations()
             .hasReplays(0)
-            .hasActionsCount(3);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertTrue(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertTrue(stepDetails1.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails2 = r1.getSteps().get(2);
-        assertTrue(stepDetails2.isDirectParse());
-        assertFalse(stepDetails2.isReplayed());
-        assertTrue(stepDetails2.getLlmCalls().isEmpty());
+            .hasActionsCount(3)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse())
+            .step(2, s -> s.isDirectParse());
 
         assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
 
@@ -106,25 +91,62 @@ public class BackTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasReplays(3)
+            .hasActionsCount(3)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed());
+
+        assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
+    }
+
+    /**
+     * Test back navigation using lowercase back.
+     */
+    @NeodymiumTest
+    public final void testBackLowercase()
+    {
+        final String steps = """
+                OPEN ${back.test.url1}
+                OPEN ${back.test.url2}
+                back
+            """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasDirectParses(2)
+            .hasReplays(0)
+            .hasActionsCount(3);
+
+        assertThat(r1.getSteps().get(0)).isDirectParse();
+        assertThat(r1.getSteps().get(1)).isDirectParse();
+        assertThat(r1.getSteps().get(2)).hasLlmCalls(1);
+
+        assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
+
+        // close browser and start replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(3)
             .hasActionsCount(3);
 
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep1 = r2.getSteps().get(1);
-        assertFalse(replayStep1.isDirectParse());
-        assertTrue(replayStep1.isReplayed());
-        assertTrue(replayStep1.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep2 = r2.getSteps().get(2);
-        assertFalse(replayStep2.isDirectParse());
-        assertTrue(replayStep2.isReplayed());
-        assertTrue(replayStep2.getLlmCalls().isEmpty());
+        assertThat(r2.getSteps().get(0)).isReplayed();
+        assertThat(r2.getSteps().get(1)).isReplayed();
+        assertThat(r2.getSteps().get(2)).isReplayed();
 
         assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
     }
@@ -137,8 +159,8 @@ public class BackTest extends BaseAiTest
     public final void testGoBackWithLLMForcedCall()
     {
         final String steps = """
-                Open ${back.test.url1}
-                Open ${back.test.url2}
+                OPEN ${back.test.url1}
+                OPEN ${back.test.url2}
                 Let's go back
             """;
 
@@ -146,28 +168,14 @@ public class BackTest extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasPesapCalls(1)
             .hasNoEscalations()
             .hasDirectParses(2)
             .hasReplays(0)
-            .hasActionsCount(3);
-
-        final StepDetails stepDetails0 = r1.getSteps().get(0);
-        assertTrue(stepDetails0.isDirectParse());
-        assertFalse(stepDetails0.isReplayed());
-        assertTrue(stepDetails0.getLlmCalls().isEmpty());
-
-        final StepDetails stepDetails1 = r1.getSteps().get(1);
-        assertTrue(stepDetails1.isDirectParse());
-        assertFalse(stepDetails1.isReplayed());
-        assertTrue(stepDetails1.getLlmCalls().isEmpty());
-
-        // no direct parse
-        final StepDetails stepDetails2 = r1.getSteps().get(2);
-        assertFalse(stepDetails2.isDirectParse());
-        assertFalse(stepDetails2.isReplayed());
-        assertEquals(1, stepDetails2.getActions().size());
-        assertEquals("BACK", stepDetails2.getActions().get(0).getType());
-        assertEquals(1, stepDetails2.getLlmCalls().size());
+            .hasActionsCount(3)
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.isDirectParse())
+            .step(2, s -> s.hasLlmCalls(1).action(0, a -> a.hasType("BACK")));
 
         assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
 
@@ -178,25 +186,14 @@ public class BackTest extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
             .hasReplays(3)
-            .hasActionsCount(3);
-
-        final StepDetails replayStep0 = r2.getSteps().get(0);
-        assertFalse(replayStep0.isDirectParse());
-        assertTrue(replayStep0.isReplayed());
-        assertTrue(replayStep0.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep1 = r2.getSteps().get(1);
-        assertFalse(replayStep1.isDirectParse());
-        assertTrue(replayStep1.isReplayed());
-        assertTrue(replayStep1.getLlmCalls().isEmpty());
-
-        final StepDetails replayStep2 = r2.getSteps().get(2);
-        assertFalse(replayStep2.isDirectParse());
-        assertTrue(replayStep2.isReplayed());
-        assertTrue(replayStep2.getLlmCalls().isEmpty());
+            .hasActionsCount(3)
+            .step(0, s -> s.isReplayed())
+            .step(1, s -> s.isReplayed())
+            .step(2, s -> s.isReplayed());
 
         assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
     }

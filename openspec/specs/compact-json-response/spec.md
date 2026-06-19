@@ -8,7 +8,7 @@ The purpose of this specification is to define the compact JSON key mapping for 
 The ActionParser and related JSON deserializers SHALL support parsing the compact short-key JSON structures returned by the LLM.
 
 #### Scenario: Parsing Compact Short Keys
-- **WHEN** the ActionParser receives a JSON payload containing compact short keys (e.g., "s", "a", "tc", "cs", "ss", "oia", "dl") and compact action-level keys (e.g., "t", "tg", "v", "d", "ed", "c", "th", "el", "ad", "ec", "r")
+- **WHEN** the ActionParser receives a JSON payload containing compact short keys (e.g., "s", "a", "tc", "cs", "sp", "oia", "dl") and compact action-level keys (e.g., "t", "tg", "v", "d", "ed", "c", "th", "el", "ad", "ec", "r")
 - **THEN** it SHALL successfully parse all properties and reconstruct the corresponding Java objects.
 
 ### Requirement: Playbook Format Immutability

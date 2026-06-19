@@ -37,6 +37,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * 4. Two-phase live LLM execution and instant offline playbacks.
  * 
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1024x768")
 @DataFolder("com/xceptance/neodymium/ai/AllFeaturesYamlTest")
@@ -59,10 +60,8 @@ public final class AllFeaturesYamlTest extends BaseAiTest
     {
         final int port = server.getPort();
         final int httpsPort = server.getHttpsPort();
-        
         Neodymium.getData().put("port", String.valueOf(port));
         Neodymium.getData().put("httpsPort", String.valueOf(httpsPort));
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
     }
 
     /**

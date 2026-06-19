@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
  * and thread-local override resolution logic.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 final class CustomRulesLoaderTest
 {
@@ -73,9 +74,9 @@ final class CustomRulesLoaderTest
     void testLoadCustomRules_configuredClasspathFile()
     {
         // Use an existing test resource on the classpath
-        final String content = CustomRulesLoader.loadCustomRules("ai-prompts/pesap-classify-prompt.md");
+        final String content = CustomRulesLoader.loadCustomRules("ai-prompts/pesap-pre-step-prompt.md");
         assertNotNull(content);
-        assertTrue(content.contains("Pre-Execution Static Analysis"));
+        assertTrue(content.contains("Predict minimal DOM context level"));
     }
 
     @Test

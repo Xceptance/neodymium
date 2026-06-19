@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.jspecify.annotations.Nullable;
@@ -56,6 +57,7 @@ import io.qameta.allure.Step;
  * strategies.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public class ActionExecutor {
     private static final Logger LOG = LoggerFactory.getLogger(ActionExecutor.class);
@@ -193,6 +195,17 @@ public class ActionExecutor {
 
     public ActionExecutor(Object test) {
         this.test = test;
+    }
+
+    /**
+     * Returns the active test instance. Used by JIT PESAP to reflectively scan
+     * the test class for custom validation methods.
+     *
+     * @return the test instance, or {@code null} if not set
+     */
+    public final Object getTestInstance()
+    {
+        return this.test;
     }
 
     public void setVariable(final String key, final String value)
@@ -352,6 +365,63 @@ public class ActionExecutor {
                 }
             } catch (Exception e) {
                 logDebug("   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neo-ref='{}']] with error: {}", target, e.getMessage());
+            }
+        }
+
+        // Strategy 0.2: Match by computed parentText
+        if (target.contains("parentText=")) {
+            final Matcher m = Pattern.compile("parentText=['\"]?(.*?)['\"]?\\]?$")
+                    .matcher(target);
+            if (m.find()) {
+                final String expectedParentText = m.group(1);
+                try {
+                    final String parentTextFinderJs = 
+                        "var expectedParentText = arguments[0];\n" +
+                        "var candidates = document.querySelectorAll('button, a, input, select, textarea, [role=\"button\"]');\n" +
+                        "var results = [];\n" +
+                        "for (var i = 0; i < candidates.length; i++) {\n" +
+                        "    var el = candidates[i];\n" +
+                        "    var parentText = '';\n" +
+                        "    var lbl = (el.innerText || el.value || el.placeholder || '').trim();\n" +
+                        "    var p = el.parentElement;\n" +
+                        "    var depth = 0;\n" +
+                        "    while (p && p !== document.body && depth < 3) {\n" +
+                        "        var pTag = p.tagName.toLowerCase();\n" +
+                        "        var role = p.getAttribute('role') || '';\n" +
+                        "        var cls = (typeof p.className === 'string' ? p.className : '').toLowerCase();\n" +
+                        "        var id = (p.id || '').toLowerCase();\n" +
+                        "        if (pTag === 'header' || pTag === 'footer' || pTag === 'nav' || pTag === 'aside') break;\n" +
+                        "        if (role === 'banner' || role === 'navigation' || role === 'contentinfo' || role === 'complementary') break;\n" +
+                        "        if (cls.includes('navbar') || cls.includes('header') || cls.includes('footer') ||\n" +
+                        "            id.includes('navbar') || id.includes('header') || id.includes('footer')) break;\n" +
+                        "        var pText = (p.innerText || '').trim();\n" +
+                        "        if (pText.length > lbl.length && pText.length < 300) {\n" +
+                        "            parentText = pText;\n" +
+                        "            break;\n" +
+                        "        }\n" +
+                        "        if (pText.length >= 300) break;\n" +
+                        "        p = p.parentElement;\n" +
+                        "        depth++;\n" +
+                        "    }\n" +
+                        "    if (parentText) {\n" +
+                        "        var formatted = parentText.replace(/\\s*\\n\\s*/g, ' | ');\n" +
+                        "        if (formatted.length > 200) { formatted = formatted.substring(0, 200) + '…'; }\n" +
+                        "        if (formatted === expectedParentText) {\n" +
+                        "            results.push(el);\n" +
+                        "        }\n" +
+                        "    }\n" +
+                        "}\n" +
+                        "return results;";
+                    
+                    final List<WebElement> matchingEls = Selenide.executeJavaScript(parentTextFinderJs, expectedParentText);
+                    if (matchingEls != null && !matchingEls.isEmpty()) {
+                        logDebug("   🔍 Resolved using Strategy 0.2: Computed parentText [{}]", expectedParentText);
+                        return Selenide.$$(matchingEls);
+                    }
+                    logDebug("   ❌ Strategy 0.2 failed: Computed parentText [{}]", expectedParentText);
+                } catch (final Exception e) {
+                    logDebug("   ❌ Strategy 0.2 failed: Computed parentText [{}] with error: {}", expectedParentText, e.getMessage());
+                }
             }
         }
 

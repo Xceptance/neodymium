@@ -30,6 +30,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
+
 import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
@@ -52,8 +54,9 @@ import java.util.Objects;
  * Automatically manages an embedded HTTP server and determines the test URL based on class/method name.
  * 
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
-public abstract class BaseAiTest
+public abstract class BaseAiTest extends BaseLlmTest
 {
     protected static EmbeddedHtmlServer server;
     protected String currentTestUrl;
@@ -68,12 +71,6 @@ public abstract class BaseAiTest
     public static void startServer() throws IOException
     {
         Configuration.headless = true;
-        // Resolve key dynamically from standard environment variable to avoid hardcoding secrets in git
-        final String envKey = System.getenv("GEMINI_API_KEY");
-        if (envKey != null && !envKey.trim().isEmpty() && System.getProperty("neodymium.ai.apiKey") == null)
-        {
-            System.setProperty("neodymium.ai.apiKey", envKey.trim());
-        }
         server = new EmbeddedHtmlServer();
         server.start();
     }
@@ -104,7 +101,6 @@ public abstract class BaseAiTest
         
         currentTestUrl = String.format("http://localhost:%d/%s/%s.html", server.getPort(), className, methodName);
         Neodymium.setAiPlaybook(null);
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
     }
 
     /**
@@ -112,6 +108,7 @@ public abstract class BaseAiTest
      * This ensures orphaned browsers from resetBrowser() calls are properly closed.
      */
     @AfterEach
+    @SuppressBrowsers
     public final void cleanUpActiveBrowser()
     {
         if (Neodymium.getWebDriverStateContainer() != null)
@@ -442,6 +439,33 @@ public abstract class BaseAiTest
     }
 
     /**
+     * Executes the implicit steps from the test dataset under the specified verification mode.
+     *
+     * @param mode the verification mode to run under
+     * @return the execution result
+     */
+    protected final AiExecutionResult runAi(final VerificationMode mode)
+    {
+        return runAi(() ->
+        {
+            try
+            {
+                Neodymium.ai().execute();
+            }
+            catch (final RuntimeException e)
+            {
+                throw e;
+            }
+            catch (final Throwable t)
+            {
+                throw new RuntimeException(t);
+            }
+        }, mode);
+    }
+
+
+
+    /**
      * Executes the test run steps under the specified verification mode.
      *
      * @param runSteps the runnable steps containing Neodymium AI execution blocks
@@ -731,7 +755,7 @@ public abstract class BaseAiTest
      */
     private String normalizeTarget(final String target)
     {
-        if (target == null || target.trim().isEmpty())
+        if (target == null || target.trim().isEmpty() || target.equals("null"))
         {
             return "";
         }

@@ -23,7 +23,6 @@ import com.xceptance.neodymium.ai.BaseAiTest;
 
 import static com.codeborne.selenide.Selenide.open;
 
-import org.junit.jupiter.api.BeforeEach;
 
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
@@ -42,13 +41,12 @@ import com.xceptance.neodymium.util.Neodymium;
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })
+/**
+ * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
+ */
 public final class ReactSpaTest extends BaseAiTest
 {
-    @BeforeEach
-    public void enablePesap()
-    {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
-    }
 
     @NeodymiumTest
     public void testAsynchronousReactSpaAudits()

@@ -49,6 +49,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * while automatically parsing, synchronizing, and saving modifications back to the original YAML test data.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class InteractiveHud
 {
@@ -100,6 +101,7 @@ public final class InteractiveHud
     private boolean lastFullPromptOpen = false;
     private String lastBreakpointsStr = "[]";
     private boolean lastHelpShown = false;
+    private String lastStateSignature = "";
     private Map<String, String> originalDataBindings;
 
     /**
@@ -194,7 +196,6 @@ public final class InteractiveHud
         this.lastCurrentUnresolvedStep = currentUnresolvedStep;
         this.lastReasoning = reasoning;
         this.lastIsReplay = isReplay;
-
         try
         {
             final String readyState = Selenide.executeJavaScript("return document.readyState;");
@@ -207,6 +208,8 @@ public final class InteractiveHud
         {
             return;
         }
+
+        this.lastStateSignature = calculateStateSignature(planned, performed, autoSkip, isFinished, currentUnresolvedStep, reasoning, isReplay);
 
         evaluateCanEdit();
         final Map<String, String> configMap = new HashMap<>();
@@ -225,7 +228,7 @@ public final class InteractiveHud
         try
         {
             Selenide.executeJavaScript(HUD_JS, HUD_HTML, planned, performed, autoSkip,
-                    hudPromptChanged, isFinished, this.canEdit, currentUnresolvedStep, this.dataBindings, configMap, reasoning, isReplay, this.lastFullPromptOpen, this.lastBreakpointsStr, this.lastHelpShown, readSettings());
+                    hudPromptChanged, isFinished, this.canEdit, currentUnresolvedStep, this.dataBindings, configMap, reasoning, isReplay, this.lastFullPromptOpen, this.lastBreakpointsStr, this.lastHelpShown, readSettings(), this.lastStateSignature);
         }
         catch (final Exception e)
         {
@@ -247,6 +250,17 @@ public final class InteractiveHud
         try {
             java.nio.file.Files.write(java.nio.file.Paths.get(".ai-hud-settings.json"), jsonPayload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         } catch (Exception e) {}
+    }
+
+    private String calculateStateSignature(final List<String> planned, final List<String> performed, final boolean autoSkip,
+            final boolean isFinished, final String currentUnresolvedStep, final String reasoning, final boolean isReplay)
+    {
+        final String plannedHash = planned != null ? String.valueOf(planned.hashCode()) : "0";
+        final String performedHash = performed != null ? String.valueOf(performed.hashCode()) : "0";
+        final String step = currentUnresolvedStep != null ? currentUnresolvedStep : "";
+        final String reason = reasoning != null ? reasoning : "";
+        final String source = Neodymium.getTestdataSourceFile() != null ? Neodymium.getTestdataSourceFile() : "";
+        return String.format("%s|%s|%b|%b|%b|%s|%s|%s", plannedHash, performedHash, autoSkip, isFinished, isReplay, step, reason, source);
     }
 
     /**
@@ -273,6 +287,7 @@ public final class InteractiveHud
      */
     public String checkHudAction()
     {
+        ensureHudInSync();
         try
         {
             final String readyState = Selenide.executeJavaScript("return document.readyState;");
@@ -337,6 +352,7 @@ public final class InteractiveHud
      */
     public Boolean checkAutoSkipStatus()
     {
+        ensureHudInSync();
         try
         {
             final Object status = Selenide.executeJavaScript("return window.neoHudAutoSkip;");
@@ -349,6 +365,50 @@ public final class InteractiveHud
         catch (final Exception e)
         {
             return null;
+        }
+    }
+
+    private void ensureHudInSync()
+    {
+        if (this.lastPlanned == null)
+        {
+            return;
+        }
+        try
+        {
+            boolean windowClosed = false;
+            try
+            {
+                final String currentHandle = Selenide.webdriver().driver().getWebDriver().getWindowHandle();
+                final Set<String> handles = Selenide.webdriver().driver().getWebDriver().getWindowHandles();
+                windowClosed = !handles.contains(currentHandle);
+            }
+            catch (final Exception e)
+            {
+                windowClosed = true;
+            }
+
+            if (windowClosed)
+            {
+                final Set<String> handles = Selenide.webdriver().driver().getWebDriver().getWindowHandles();
+                if (!handles.isEmpty())
+                {
+                    Selenide.switchTo().window(handles.iterator().next());
+                }
+            }
+
+            final String currentSig = Selenide.executeJavaScript(
+                "var el = document.getElementById('neodymium-ai-hud-container'); " +
+                "return el ? el.getAttribute('data-hud-state-sig') : null;"
+            );
+            if (currentSig == null || !currentSig.equals(this.lastStateSignature))
+            {
+                injectOrUpdateHud(this.lastPlanned, this.lastPerformed, this.lastAutoSkip, this.lastHudPromptChanged, this.lastIsFinished, this.lastCurrentUnresolvedStep, this.lastReasoning, this.lastIsReplay);
+            }
+        }
+        catch (final Exception e)
+        {
+            // Ignore if active browser context is not active or dead
         }
     }
 

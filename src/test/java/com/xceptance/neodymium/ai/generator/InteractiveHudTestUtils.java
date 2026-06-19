@@ -47,6 +47,7 @@ import com.xceptance.neodymium.util.Neodymium;
  * context, creating mock LLM clients, and building custom test AiBrowser instances.
  *
  * @author AI-generated: Gemini 2.5 Pro
+ * @author Xceptance GmbH 2026
  */
 public final class InteractiveHudTestUtils
 {

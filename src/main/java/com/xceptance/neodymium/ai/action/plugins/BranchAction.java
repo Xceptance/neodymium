@@ -24,9 +24,18 @@ import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.ai.playbook.Playbook;
+import com.xceptance.neodymium.ai.playbook.PlaybookStep;
+import com.xceptance.neodymium.util.Neodymium;
 
-public class BranchAction implements AiActionPlugin
+/**
+ * Action plugin that implements conditional branching (if-then-else) for AI playbook execution.
+ */
+public final class BranchAction implements AiActionPlugin
 {
+    /**
+     * The action name identifier.
+     */
     public static final String ACTION_NAME = "BRANCH";
 
     @Override
@@ -48,46 +57,99 @@ public class BranchAction implements AiActionPlugin
     {
         return false;
     }
+    
+    private static final ThreadLocal<Boolean> lastConditionResult = new ThreadLocal<>();
+
+    /**
+     * Gets the last condition execution result of a BranchAction on this thread.
+     *
+     * @return the last condition evaluation result, or null if none
+     */
+    public static Boolean getLastConditionResult()
+    {
+        return lastConditionResult.get();
+    }
+
+    /**
+     * Clears the last condition execution result on this thread.
+     */
+    public static void clearLastConditionResult()
+    {
+        lastConditionResult.remove();
+    }
 
     @Override
     public String getPromptInstructions()
     {
-        return "BRANCH: Used for conditional logic. Requires 'condition' (array of actions to test, usually ASSERT), 'then' (array of actions to execute if condition is met), and optionally 'else' (array of actions to execute if condition fails).";
+        return "BRANCH: Perform conditional branching. Requires 'condition' (an array of actions to test, usually ASSERT), 'then' (an array of actions to execute if the condition is met), and optionally 'else' (an array of actions to execute if the condition fails).";
     }
 
     @Override
     public void execute(final Action action, final Object testInstance, final ActionExecutor executor) throws ActionExecutionException
     {
-        if (action.getCondition() != null && !action.getCondition().isEmpty())
-        {
-            for (Action condAction : action.getCondition())
-            {
-                condAction.setSilent(true);
-            }
-            boolean conditionMet = true;
-            try
-            {
-                executor.executeAll(action.getCondition());
-            }
-            catch (final Exception | AssertionError e)
-            {
-                conditionMet = false;
-            }
+        final Playbook playbook = Neodymium.getAiPlaybook();
+        final int cursorBefore = playbook != null ? playbook.getCursor() : -1;
 
-            if (conditionMet)
+        if (playbook != null)
+        {
+            if (playbook.isRecording())
             {
-                if (action.getThen() != null)
+                final PlaybookStep currentStep = playbook.getCurrentStep();
+                if (currentStep != null)
                 {
-                    executor.executeAll(action.getThen());
+                    currentStep.setActions(List.of(action));
+                    playbook.setChanged(true);
                 }
             }
-            else
+            playbook.nextStep();
+        }
+
+        try
+        {
+            if (action.getCondition() != null && !action.getCondition().isEmpty())
             {
-                if (action.getElseActions() != null)
+                for (final Action condAction : action.getCondition())
                 {
-                    executor.executeAll(action.getElseActions());
+                    condAction.setSilent(true);
+                }
+                
+                boolean conditionMetValue = true;
+                try
+                {
+                    executor.executeAll(action.getCondition());
+                }
+                catch (final Exception | AssertionError e)
+                {
+                    conditionMetValue = false;
+                }
+
+                final boolean conditionMet = conditionMetValue;
+                lastConditionResult.set(conditionMet);
+
+                if (conditionMet)
+                {
+                    if (action.getThen() != null)
+                    {
+                        executor.executeAll(action.getThen());
+                    }
+                }
+                else
+                {
+                    if (action.getElseActions() != null)
+                    {
+                        executor.executeAll(action.getElseActions());
+                    }
                 }
             }
         }
+        catch (final Throwable t)
+        {
+            if (playbook != null)
+            {
+                playbook.setCursor(cursorBefore);
+            }
+            throw t;
+        }
     }
 }
+

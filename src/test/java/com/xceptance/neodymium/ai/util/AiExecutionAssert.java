@@ -16,19 +16,22 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.function.Consumer;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.ai.core.ContextLevel;
+import com.xceptance.neodymium.ai.core.StepDetails;
 
 /**
  * Fluent assertion helper for validating {@link AiExecutionResult} instances in tests.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiExecutionAssert
 {
@@ -48,6 +51,42 @@ public final class AiExecutionAssert
     public static AiExecutionAssert assertThat(final AiExecutionResult result)
     {
         return new AiExecutionAssert(result);
+    }
+
+    /**
+     * Entry point for fluent assertions on {@link StepDetails}.
+     *
+     * @param step the step details to validate
+     * @return the assertion helper
+     */
+    public static StepDetailsAssert assertThat(final StepDetails step)
+    {
+        return new StepDetailsAssert(step);
+    }
+
+    /**
+     * Entry point for fluent assertions on {@link Action}.
+     *
+     * @param action the action to validate
+     * @return the assertion helper
+     */
+    public static AiActionAssert assertThat(final Action action)
+    {
+        return new AiActionAssert(action);
+    }
+
+    /**
+     * Performs assertions on a specific step using a step assertion helper.
+     *
+     * @param stepIndex the 0-based index of the step
+     * @param assertion the step assertions to run
+     * @return this assertion helper
+     */
+    public final AiExecutionAssert step(final int stepIndex, final Consumer<StepDetailsAssert> assertion)
+    {
+        assertTrue(result.getSteps().size() > stepIndex, "No step found at index " + stepIndex);
+        assertion.accept(new StepDetailsAssert(result.getSteps().get(stepIndex)));
+        return this;
     }
 
     /**
@@ -223,6 +262,40 @@ public final class AiExecutionAssert
         assertTrue(result.getSteps().size() > stepIndex, "No step found at index " + stepIndex);
         assertEquals(expected, result.getSteps().get(stepIndex).isDirectParse(),
                 "Step at index " + stepIndex + " direct parse status mismatch");
+        return this;
+    }
+
+    /**
+     * Asserts the number of PESAP calls made during the execution.
+     *
+     * @param expected the expected number of PESAP calls
+     * @return this assertion helper
+     */
+    public final AiExecutionAssert hasPesapCalls(final int expected)
+    {
+        assertEquals(expected, result.getPesapCallCount(), "PESAP call count mismatch");
+        return this;
+    }
+
+    /**
+     * Asserts that no PESAP calls occurred during the execution.
+     *
+     * @return this assertion helper
+     */
+    public final AiExecutionAssert hasNoPesapCalls()
+    {
+        return hasPesapCalls(0);
+    }
+
+    /**
+     * Asserts the total number of steps in the execution result.
+     *
+     * @param expected the expected number of steps
+     * @return this assertion helper
+     */
+    public final AiExecutionAssert hasStepsCount(final int expected)
+    {
+        assertEquals(expected, result.getSteps().size(), "Step count mismatch");
         return this;
     }
 }

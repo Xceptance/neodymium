@@ -25,24 +25,51 @@ import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 
+import com.xceptance.neodymium.ai.action.SelectorParser;
+
 public class ScrollAction implements AiActionPlugin {
     @Override
     public String getActionName() { return "SCROLL"; }
 
     @Override
-    public List<Action> parseDirectInstruction(String instruction) { return null; }
+    public List<Action> parseDirectInstruction(final String instruction)
+    {
+        final String normalized = instruction.replaceAll("\\s+", " ").trim();
+        if (normalized.startsWith("SCROLL "))
+        {
+            final String arg = normalized.substring(7).trim();
+            if (arg.isEmpty())
+            {
+                throw new IllegalArgumentException("Selector target or direction for SCROLL command cannot be empty");
+            }
+            if (arg.equalsIgnoreCase("down") || arg.equalsIgnoreCase("up"))
+            {
+                return List.of(new Action("SCROLL", arg.toLowerCase(), "Scroll " + arg.toLowerCase()));
+            }
+            final SelectorParser.ParsedSelector parsed = SelectorParser.parse(arg);
+            return List.of(new Action("SCROLL", parsed.getExpression(), "Scroll to " + parsed.getExpression()));
+        }
+        return null;
+    }
 
     @Override
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "SCROLL: scroll to an element or position (requires target)."; }
+    public String getPromptInstructions() { return "SCROLL: Scroll the page to a target element or position (requires 'tg')."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {
         if (action != null && action.getTarget() != null && !action.getTarget().isBlank()) {
-            final SelenideElement element = executor.findElement(action);
-            executor.scrollIntoView(element);
+            final String target = action.getTarget().trim();
+            if (target.equalsIgnoreCase("down")) {
+                Selenide.executeJavaScript("window.scrollBy(0, window.innerHeight)");
+            } else if (target.equalsIgnoreCase("up")) {
+                Selenide.executeJavaScript("window.scrollBy(0, -window.innerHeight)");
+            } else {
+                final SelenideElement element = executor.findElement(action);
+                executor.scrollIntoView(element);
+            }
         } else {
             // Scroll down by viewport height
             Selenide.executeJavaScript("window.scrollBy(0, window.innerHeight)");

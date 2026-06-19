@@ -61,8 +61,9 @@ public final class StoreAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "STORE: Capture text from an element or store a literal/visually-identified value to use later. If capturing from an element, requires \"target\" and a single \"value\" (the variable name). If storing a literal/visually-identified value (e.g. from a visual inspection of a non-text element), requires \"value\" as a JSON array of two strings: [\"variableName\", \"literalValue\"] (and \"target\" can be omitted/null). The stored value can be used later as ${variableName}. If the stored value is a number or price for subsequent calculations, set \"adjust\": true.";
+        return "STORE: Capture element text or store a literal value. Set 'tg' to the locator (or omit for literals) and 'v' to the variable name (or to a JSON array [\"variableName\", \"literalValue\"] to store a literal). Set 'ad' to true to normalize numeric or price calculations. Stored values can be used as ${variableName} in subsequent steps.";
     }
+
 
     @Override
     public void execute(final Action action, final Object testInstance, final ActionExecutor executor)

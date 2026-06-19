@@ -55,7 +55,6 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.agent.screenshotBeforeAction")
     @DefaultValue("false")
     public boolean agentScreenshotBeforeAction();
-
     @Key("neodymium.ai.pesap.enabled")
     @DefaultValue("true")
     public boolean pesapEnabled();
@@ -156,6 +155,18 @@ public interface AiConfiguration extends Mutable
     @Key("neodymium.ai.agent.javaMethod.utilityClasses")
     @DefaultValue("com.xceptance.neodymium.ai.util.AiAssertions")
     public List<String> aiJavaMethodUtilityClasses();
+
+    @Key("neodymium.ai.aura.manager.shutdownDelay")
+    @DefaultValue("5")
+    public int auraManagerShutdownDelay();
+
+    @Key("neodymium.ai.agent.methods.classes")
+    @DefaultValue("com.xceptance.neodymium.ai.util.AiAssertions")
+    public List<String> aiJavaMethodClasses();
+
+    @Key("neodymium.ai.agent.methods.packages")
+    @DefaultValue("")
+    public List<String> aiJavaMethodPackages();
 
     /**
      * API key for assertion LLM calls. If not configured, falls back to the standard API key.

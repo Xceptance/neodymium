@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
  * resolution in {@link AiAgent}.
  *
  * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
  */
 final class AiAgentVisualTagTest
 {
@@ -53,10 +54,6 @@ final class AiAgentVisualTagTest
         assertEquals(ContextLevel.VISUAL_LEAN, invokeGetInitialContextLevel("Check page matches template (VISUAL)"));
         assertEquals(ContextLevel.VISUAL_LEAN, invokeGetInitialContextLevel("Check page matches template (ViSuAl)"));
         assertEquals(ContextLevel.VISUAL_LEAN, invokeGetInitialContextLevel("(visual) check logo"));
-
-        // (glance) implicitly triggers VISUAL_LEAN
-        assertEquals(ContextLevel.VISUAL_LEAN, invokeGetInitialContextLevel("Observe page visual consistency (glance)"));
-        assertEquals(ContextLevel.VISUAL_LEAN, invokeGetInitialContextLevel("Observe page visual consistency (GLANCE)"));
     }
 
     @Test
@@ -84,7 +81,8 @@ final class AiAgentVisualTagTest
         final Method formatFailureMessageMethod = AiAgent.class.getDeclaredMethod(
             "formatFailureMessage",
             String.class,
-            Integer.class,
+            String.class,
+            String.class,
             String.class,
             String.class
         );
@@ -94,7 +92,8 @@ final class AiAgentVisualTagTest
         final String res1 = (String) formatFailureMessageMethod.invoke(
             null,
             "Click button",
-            42,
+            null,
+            "42",
             "test.yaml",
             ": click failed"
         );
@@ -104,7 +103,8 @@ final class AiAgentVisualTagTest
         final String res2 = (String) formatFailureMessageMethod.invoke(
             null,
             "Click button",
-            42,
+            null,
+            "42",
             null,
             ": click failed"
         );
@@ -114,6 +114,7 @@ final class AiAgentVisualTagTest
         final String res3 = (String) formatFailureMessageMethod.invoke(
             null,
             "Click button",
+            null,
             null,
             "test.yaml",
             ": click failed"
@@ -126,9 +127,21 @@ final class AiAgentVisualTagTest
             "Click button",
             null,
             null,
+            null,
             ": click failed"
         );
         assertEquals("Instruction 'Click button' failed: click failed", res4);
+
+        // Case 5: split step with original instruction present
+        final String res5 = (String) formatFailureMessageMethod.invoke(
+            null,
+            "Click button",
+            "Click button and verify text",
+            "42",
+            "test.yaml",
+            ": click failed"
+        );
+        assertEquals("Instruction 'Click button' (virtual step split from: 'Click button and verify text') failed at line 42 in test.yaml: click failed", res5);
     }
 
     @Test
@@ -136,17 +149,17 @@ final class AiAgentVisualTagTest
     {
         final Method formatFailureLogContextMethod = AiAgent.class.getDeclaredMethod(
             "formatFailureLogContext",
-            Integer.class,
+            String.class,
             String.class
         );
         formatFailureLogContextMethod.setAccessible(true);
 
         // Case 1: both present
-        final String res1 = (String) formatFailureLogContextMethod.invoke(null, 42, "path/to/test.yaml");
+        final String res1 = (String) formatFailureLogContextMethod.invoke(null, "42", "path/to/test.yaml");
         assertEquals(" (test.yaml:42)", res1);
 
         // Case 2: only line number
-        final String res2 = (String) formatFailureLogContextMethod.invoke(null, 42, null);
+        final String res2 = (String) formatFailureLogContextMethod.invoke(null, "42", null);
         assertEquals(" (line 42)", res2);
 
         // Case 3: only source file

@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.testing;
 
 import org.junit.jupiter.api.Assertions;
@@ -24,6 +23,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for the {@link LlmAssert} helper utility class.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class LlmAssertTest
 {

@@ -40,6 +40,10 @@ import com.xceptance.neodymium.util.Neodymium;
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })
+/**
+ * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
+ */
 public final class CrossFrameExtractionTest extends BaseAiTest
 {
     @NeodymiumTest

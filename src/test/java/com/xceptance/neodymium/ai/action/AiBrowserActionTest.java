@@ -30,7 +30,8 @@ import com.xceptance.neodymium.ai.testing.AiMockResponse;
 /**
  * Test cases verifying browser action invocation and sequence ordering.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class AiBrowserActionTest extends BaseAiOfflineTest
 {

@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -37,10 +36,12 @@ import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Integration test class testing window, frame, and redirection navigation.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("sandbox")
-@AiTestVerification({ VerificationMode.LIVE_LLM })
 public class BrowserNavigationTest extends BaseAiTest
 {
     private String baseHttpsUrl;

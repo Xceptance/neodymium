@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -35,6 +34,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Storefront integration tests validating keyboard focus navigation using the TAB key
  * and the shift+tab key combination, leveraging the focused assertion state check.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -48,8 +50,6 @@ public class TabTesting extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
-
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", this.url);
     }
@@ -61,7 +61,7 @@ public class TabTesting extends BaseAiTest
     public final void test_TabToAnElement()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key
                 Press the TAB key
                 Press the TAB key
@@ -70,6 +70,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(4)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
 
@@ -85,7 +86,7 @@ public class TabTesting extends BaseAiTest
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key
                 Press the TAB key
                 Press the TAB key
@@ -94,6 +95,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
     }
@@ -105,7 +107,7 @@ public class TabTesting extends BaseAiTest
     public final void test_TabAnElementToAnElement()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search box
                 Verify that the search box has focus
                 Press the TAB key
@@ -114,6 +116,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(4)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
 
@@ -131,7 +134,7 @@ public class TabTesting extends BaseAiTest
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search box
                 Verify that the search box has focus
                 Press the TAB key
@@ -140,6 +143,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
     }
@@ -151,13 +155,14 @@ public class TabTesting extends BaseAiTest
     public final void test_TabXTimes()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key 3 times
                 Verify that the search box has focus
                 """, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(5);
 
@@ -178,7 +183,7 @@ public class TabTesting extends BaseAiTest
     public final void test_TabReverse()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key 4 times
                 Verify that the search button has focus
                 Press SHIFT_TAB
@@ -187,6 +192,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(4)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(8);
 
@@ -207,7 +213,7 @@ public class TabTesting extends BaseAiTest
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Press the TAB key 4 times
                 Verify that the search button has focus
                 Press SHIFT_TAB
@@ -216,6 +222,7 @@ public class TabTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasActionsCount(8);
     }

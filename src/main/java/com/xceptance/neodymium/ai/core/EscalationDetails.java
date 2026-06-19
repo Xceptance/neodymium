@@ -21,7 +21,8 @@ package com.xceptance.neodymium.ai.core;
 /**
  * Details of a context level escalation that occurred during execution.
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class EscalationDetails
 {

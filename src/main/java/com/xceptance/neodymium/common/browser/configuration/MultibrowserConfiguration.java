@@ -78,6 +78,15 @@ public class MultibrowserConfiguration
                                      Optional.ofNullable(Configuration.browserSize).orElse("1920x1080"));
         browserProfileProperties.put("browserprofile." + DEFAULT_BROWSER_ID + ".arguments", "-ignore-certificate-errors");
 
+        // Override with system properties starting with "browserprofile."
+        for (final String key : System.getProperties().stringPropertyNames())
+        {
+            if (key.startsWith(BROWSER_PROFILE_PREFIX))
+            {
+                browserProfileProperties.put(key, System.getProperty(key));
+            }
+        }
+
         parseBrowserProfiles();
     }
 
@@ -191,6 +200,17 @@ public class MultibrowserConfiguration
         CONFIGURATIONS.clear();
     }
 
+    public static Map<String, MultibrowserConfiguration> getInstances()
+    {
+        return new LinkedHashMap<>(CONFIGURATIONS);
+    }
+
+    public static void setInstances(final Map<String, MultibrowserConfiguration> instances)
+    {
+        CONFIGURATIONS.clear();
+        CONFIGURATIONS.putAll(instances);
+    }
+
     public TestEnvironment getTestEnvironment(String environment)
     {
         return testEnvironments.get(environment);
@@ -199,6 +219,26 @@ public class MultibrowserConfiguration
     public Map<String, BrowserConfiguration> getBrowserProfiles()
     {
         return browserProfiles;
+    }
+
+    /**
+     * Returns the test environment properties loaded in this configuration.
+     * 
+     * @return the test environment properties
+     */
+    public Properties getTestEnvironmentProperties()
+    {
+        return testEnvironmentProperties;
+    }
+
+    /**
+     * Returns the browser profile properties loaded in this configuration.
+     * 
+     * @return the browser profile properties
+     */
+    public Properties getBrowserProfileProperties()
+    {
+        return browserProfileProperties;
     }
 
     private static void loadPropertiesFromFile(String path, Properties properties)

@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-// AI-generated: Gemini 3.5 Flash
 package com.xceptance.neodymium.ai.integration;
 
 import com.xceptance.neodymium.ai.VerificationMode;
@@ -39,6 +38,9 @@ import com.xceptance.neodymium.util.Neodymium;
  * A storefront integration test validating that different styles and structures
  * of inline locator hints are successfully parsed, executed, and replayed, 
  * using minimal DOM context level.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 @Tag("freeform")
@@ -52,8 +54,6 @@ public class HintTesting extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
-
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", this.url);
     }
@@ -65,7 +65,7 @@ public class HintTesting extends BaseAiTest
     public final void test_MatchingHint()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search button (hint: #search-button)
                 """;
 
@@ -73,20 +73,19 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
-            .hasActionsCount(2);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "CLICK");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .step(1, s -> s.hasLlmCalls(1));
         
         assertEquals("#search-button", r1.getActions().get(1).getTarget());
 
         // our Click step
         final var stepDetails1 = r1.getSteps().get(1);
-        assertFalse(stepDetails1.isDirectParse());
-        assertEquals(ContextLevel.HINT, stepDetails1.getLlmCalls().get(0).getContextLevel());
-
         final String htmlDomContext = stepDetails1.getLlmCalls().get(0).getHtmlDomContext();
         assertTrue(htmlDomContext.contains("Page URL:"));
         assertTrue(htmlDomContext.contains("Page Title:"));
@@ -100,12 +99,12 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0) // replays don't have parses at all
-            .hasActionsCount(2);
-
-        assertThat(r2).hasAction(0, "NAVIGATE");
-        assertThat(r2).hasAction(1, "CLICK");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK");
         
         assertEquals("#search-button", r2.getActions().get(1).getTarget());
     }
@@ -118,17 +117,19 @@ public class HintTesting extends BaseAiTest
     public final void test_ComplexCSSHint()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the storefront active link (hint: ul.nav-links li:nth-child(1) a[href='index.html'])
                 """, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
-            .hasActionsCount(2);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "CLICK");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .step(1, s -> s.hasLlmCalls(1));
 
         final String target = r1.getActions().get(1).getTarget();
         assertTrue(target.contains("index.html") || target.contains("nav-links") || target.contains("Storefront") || target.contains("brand") || target.contains("xc_"));
@@ -138,7 +139,6 @@ public class HintTesting extends BaseAiTest
         assertTrue(htmlDomContext.contains("Page URL:"));
         assertTrue(htmlDomContext.contains("Page Title:"));
         assertFalse(htmlDomContext.contains("=== Interactive Elements ==="));
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
     }
 
     /**
@@ -149,17 +149,19 @@ public class HintTesting extends BaseAiTest
     public final void test_ComplexXpathHint()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the storefront active link (hint: xpath=(//ul[contains(@class,'nav-links')]/li/a)[1])
                 """, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
-            .hasActionsCount(2);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "CLICK");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .step(1, s -> s.hasLlmCalls(1));
 
         final String target = r1.getActions().get(1).getTarget();
         assertTrue(target.contains("nav-links") || target.contains("brand") || target.contains("Storefront") || target.contains("xc_"));
@@ -169,7 +171,6 @@ public class HintTesting extends BaseAiTest
         assertTrue(htmlDomContext.contains("Page URL:"));
         assertTrue(htmlDomContext.contains("Page Title:"));
         assertFalse(htmlDomContext.contains("=== Interactive Elements ==="));
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
     }
 
     /**
@@ -179,17 +180,19 @@ public class HintTesting extends BaseAiTest
     public final void test_IDHint()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the featured bear image (hint: #featured-bear-img)
                 """, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
-            .hasActionsCount(2);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "CLICK");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .step(1, s -> s.hasLlmCalls(1));
         
         final String target = r1.getActions().get(1).getTarget();
         assertTrue(target.contains("featured-bear-img"));
@@ -199,7 +202,6 @@ public class HintTesting extends BaseAiTest
         assertTrue(htmlDomContext.contains("Page URL:"));
         assertTrue(htmlDomContext.contains("Page Title:"));
         assertFalse(htmlDomContext.contains("=== Interactive Elements ==="));
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
     }
 
     /**
@@ -209,7 +211,7 @@ public class HintTesting extends BaseAiTest
     public final void test_MissingHintValue()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search button (hint: )
                 """;
         final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
@@ -218,39 +220,35 @@ public class HintTesting extends BaseAiTest
         // escalates to AXTREE level, makes 2nd LLM call and succeeds.
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasEscalations(1)
-            .hasActionsCount(2);
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .hasContextLevel(1, ContextLevel.AXTREE)
+            .step(1, s -> s.hasLlmCalls(2));
 
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "CLICK");
-        
         final String target = r1.getActions().get(1).getTarget();
         assertTrue(target.contains("search-button") || target.contains("xc_"));
 
         final var stepDetails = r1.getSteps().get(1);
         final var firstCall = stepDetails.getLlmCalls().get(0);
-        final var secondCall = stepDetails.getLlmCalls().get(1);
 
-        assertEquals(ContextLevel.HINT, firstCall.getContextLevel());
         assertTrue(firstCall.getHtmlDomContext().contains("Page URL:"));
         assertTrue(firstCall.getHtmlDomContext().contains("Page Title:"));
         assertFalse(firstCall.getHtmlDomContext().contains("=== Interactive Elements ==="));
-
-        assertEquals(ContextLevel.AXTREE, secondCall.getContextLevel());
 
         this.resetBrowser();
 
         // let's replay
         final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
 
-        // Starts at HINT context level, fails due to empty context and missing hint selector,
-        // escalates to AXTREE level, makes 2nd LLM call and succeeds.
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasEscalations(0)
             .hasActionsCount(2);
-
-        
     }
 
     /**
@@ -264,19 +262,21 @@ public class HintTesting extends BaseAiTest
         // Space before colon / hint: ( hint: #search-box ) and ( hint : #search-button )
         // Note: These will not trigger HINT context level initially but LLM still extracts them from the prompt.
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search box ( hint: #search-box )
                 Click the search button ( hint : #search-button )
                 """, VerificationMode.LIVE_LLM);
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
-            .hasActionsCount(3);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "CLICK");
-        assertThat(r1).hasAction(2, "CLICK");
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasAction(2, "CLICK")
+            .step(1, s -> s.hasLlmCalls(1))
+            .step(2, s -> s.hasLlmCalls(1));
         
         final String targetBox1 = r1.getActions().get(1).getTarget();
         final String targetBtn1 = r1.getActions().get(2).getTarget();
@@ -288,19 +288,23 @@ public class HintTesting extends BaseAiTest
         this.resetBrowser();
 
         final AiExecutionResult r2 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search box (Hint: #search-box)
                 Click the search button (HINT: #search-button)
                 """, VerificationMode.LIVE_LLM);
 
         assertThat(r2)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
-            .hasActionsCount(3);
-
-        assertThat(r2).hasAction(0, "NAVIGATE");
-        assertThat(r2).hasAction(1, "CLICK");
-        assertThat(r2).hasAction(2, "CLICK");
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasAction(2, "CLICK")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .hasContextLevel(1, ContextLevel.HINT)
+            .step(1, s -> s.hasLlmCalls(1))
+            .step(2, s -> s.hasLlmCalls(1));
 
         final String targetBox2 = r2.getActions().get(1).getTarget();
         final String targetBtn2 = r2.getActions().get(2).getTarget();
@@ -308,10 +312,6 @@ public class HintTesting extends BaseAiTest
         assertTrue(targetBtn2.contains("search-button"));
 
         final var step1 = r2.getSteps().get(1);
-        final var step2 = r2.getSteps().get(2);
-
-        assertEquals(ContextLevel.HINT, step1.getLlmCalls().get(0).getContextLevel());
-        assertEquals(ContextLevel.HINT, step2.getLlmCalls().get(0).getContextLevel());
 
         final String htmlDomContext1 = step1.getLlmCalls().get(0).getHtmlDomContext();
         assertTrue(htmlDomContext1.contains("Page URL:"));
@@ -326,7 +326,7 @@ public class HintTesting extends BaseAiTest
     public final void test_InvalidHintEscalation()
     {
         final AiExecutionResult r1 = runAi("""
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Click the search button (hint: #non-existent-button)
                 """, VerificationMode.LIVE_LLM);
 
@@ -336,11 +336,14 @@ public class HintTesting extends BaseAiTest
         // LLM generates correct action (#search-button), and execution succeeds.
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasEscalations(1)
-            .hasActionsCount(2);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "CLICK");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .hasContextLevel(1, ContextLevel.AXTREE)
+            .step(1, s -> s.hasLlmCalls(2));
         
         final String target = r1.getActions().get(1).getTarget();
         assertTrue(target.contains("search-button") || target.contains("xc_"));
@@ -349,12 +352,10 @@ public class HintTesting extends BaseAiTest
         final var firstCall = stepDetails.getLlmCalls().get(0);
         final var secondCall = stepDetails.getLlmCalls().get(1);
 
-        assertEquals(ContextLevel.HINT, firstCall.getContextLevel());
         assertTrue(firstCall.getHtmlDomContext().contains("Page URL:"));
         assertTrue(firstCall.getHtmlDomContext().contains("Page Title:"));
         assertFalse(firstCall.getHtmlDomContext().contains("=== Interactive Elements ==="));
 
-        assertEquals(ContextLevel.AXTREE, secondCall.getContextLevel());
         assertTrue(secondCall.getHtmlDomContext().contains("=== Interactive Elements ===") || secondCall.getHtmlDomContext().contains("Store Catalog"));
     }
 
@@ -365,7 +366,7 @@ public class HintTesting extends BaseAiTest
     public final void test_TypeHint()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Type "bear" into search input (hint: #search-box)
                 """;
 
@@ -373,16 +374,14 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
-            .hasActionsCount(2);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "TYPE", "#search-box", "bear");
-
-        final var stepDetails = r1.getSteps().get(1);
-        assertFalse(stepDetails.isDirectParse());
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -390,12 +389,12 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
-            .hasActionsCount(2);
-
-        assertThat(r2).hasAction(0, "NAVIGATE");
-        assertThat(r2).hasAction(1, "TYPE", "#search-box", "bear");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear");
     }
 
     /**
@@ -405,7 +404,7 @@ public class HintTesting extends BaseAiTest
     public final void test_ClearHint()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Type "bear" into search input (hint: #search-box)
                 Clear the search input (hint: #search-box)
                 """;
@@ -414,17 +413,15 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
-            .hasActionsCount(3);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "TYPE", "#search-box", "bear");
-        assertThat(r1).hasAction(2, "CLEAR", "#search-box");
-
-        final var stepDetails = r1.getSteps().get(2);
-        assertFalse(stepDetails.isDirectParse());
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "CLEAR", "#search-box")
+            .hasContextLevel(1, ContextLevel.HINT)
+            .step(2, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -432,13 +429,13 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
-            .hasActionsCount(3);
-
-        assertThat(r2).hasAction(0, "NAVIGATE");
-        assertThat(r2).hasAction(1, "TYPE", "#search-box", "bear");
-        assertThat(r2).hasAction(2, "CLEAR", "#search-box");
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "CLEAR", "#search-box");
     }
 
     /**
@@ -449,7 +446,7 @@ public class HintTesting extends BaseAiTest
     {
         final String targetUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/plp-perfect.html", server.getPort());
         final String steps = String.format("""
-                Open %s
+                OPEN %s
                 Select "Price: Low to High" from sorting dropdown (hint: #sort-select-input)
                 """, targetUrl);
 
@@ -457,16 +454,14 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
-            .hasActionsCount(2);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "SELECT", "#sort-select-input", "Price: Low to High");
-
-        final var stepDetails = r1.getSteps().get(1);
-        assertFalse(stepDetails.isDirectParse());
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "SELECT", "#sort-select-input", "Price: Low to High")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -474,12 +469,12 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
-            .hasActionsCount(2);
-
-        assertThat(r2).hasAction(0, "NAVIGATE");
-        assertThat(r2).hasAction(1, "SELECT", "#sort-select-input", "Price: Low to High");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "SELECT", "#sort-select-input", "Price: Low to High");
     }
 
     /**
@@ -490,7 +485,7 @@ public class HintTesting extends BaseAiTest
     {
         final String targetUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/plp-perfect.html", server.getPort());
         final String steps = String.format("""
-                Open %s
+                OPEN %s
                 Check the tops category checkbox (hint: #filter-cat-tops)
                 """, targetUrl);
 
@@ -498,16 +493,14 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
-            .hasActionsCount(2);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "CHECK", "#filter-cat-tops");
-
-        final var stepDetails = r1.getSteps().get(1);
-        assertFalse(stepDetails.isDirectParse());
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CHECK", "#filter-cat-tops")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -515,12 +508,12 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
-            .hasActionsCount(2);
-
-        assertThat(r2).hasAction(0, "NAVIGATE");
-        assertThat(r2).hasAction(1, "CHECK", "#filter-cat-tops");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CHECK", "#filter-cat-tops");
     }
 
     /**
@@ -531,7 +524,7 @@ public class HintTesting extends BaseAiTest
     {
         final String targetUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/plp-perfect.html", server.getPort());
         final String steps = String.format("""
-                Open %s
+                OPEN %s
                 Hover over the Tops navigation link (hint: #nav-link-tops)
                 """, targetUrl);
 
@@ -539,16 +532,14 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
-            .hasActionsCount(2);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "HOVER", "#nav-link-tops");
-
-        final var stepDetails = r1.getSteps().get(1);
-        assertFalse(stepDetails.isDirectParse());
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "HOVER", "#nav-link-tops")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -556,12 +547,12 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
-            .hasActionsCount(2);
-
-        assertThat(r2).hasAction(0, "NAVIGATE");
-        assertThat(r2).hasAction(1, "HOVER", "#nav-link-tops");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "HOVER", "#nav-link-tops");
     }
 
     /**
@@ -572,7 +563,7 @@ public class HintTesting extends BaseAiTest
     {
         final String targetUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/plp-perfect.html", server.getPort());
         final String steps = String.format("""
-                Open %s
+                OPEN %s
                 Assert that the page title is visible (hint: #plp-page-title)
                 """, targetUrl);
 
@@ -580,16 +571,14 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
-            .hasActionsCount(2);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "ASSERT", "#plp-page-title");
-
-        final var stepDetails = r1.getSteps().get(1);
-        assertFalse(stepDetails.isDirectParse());
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "ASSERT", "#plp-page-title")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -597,12 +586,12 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
-            .hasActionsCount(2);
-
-        assertThat(r2).hasAction(0, "NAVIGATE");
-        assertThat(r2).hasAction(1, "ASSERT", "#plp-page-title");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "ASSERT", "#plp-page-title");
     }
 
     /**
@@ -613,7 +602,7 @@ public class HintTesting extends BaseAiTest
     {
         final String targetUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/plp-perfect.html", server.getPort());
         final String steps = String.format("""
-                Open %s
+                OPEN %s
                 Scroll to the email input field in newsletter section (hint: #newsletter-email-input)
                 """, targetUrl);
 
@@ -621,16 +610,14 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(1)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
-            .hasActionsCount(2);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "SCROLL", "#newsletter-email-input");
-
-        final var stepDetails = r1.getSteps().get(1);
-        assertFalse(stepDetails.isDirectParse());
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "SCROLL", "#newsletter-email-input")
+            .hasContextLevel(0, ContextLevel.HINT)
+            .step(1, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -638,12 +625,12 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
-            .hasActionsCount(2);
-
-        assertThat(r2).hasAction(0, "NAVIGATE");
-        assertThat(r2).hasAction(1, "SCROLL", "#newsletter-email-input");
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "SCROLL", "#newsletter-email-input");
     }
 
     /**
@@ -653,7 +640,7 @@ public class HintTesting extends BaseAiTest
     public final void test_KeyPressHint()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Type "bear" into the search box (hint: #search-box)
                 Press ENTER on the search box (hint: #search-box)
                 """;
@@ -662,17 +649,15 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
-            .hasActionsCount(3);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "TYPE", "#search-box", "bear");
-        assertThat(r1).hasAction(2, "KEY_PRESS", "#search-box", "Enter");
-
-        final var stepDetails = r1.getSteps().get(2);
-        assertFalse(stepDetails.isDirectParse());
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "KEY_PRESS", "#search-box", "Enter")
+            .hasContextLevel(1, ContextLevel.HINT)
+            .step(2, s -> s.hasLlmCalls(1));
 
         this.resetBrowser();
 
@@ -680,13 +665,13 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
-            .hasActionsCount(3);
-
-        assertThat(r2).hasAction(0, "NAVIGATE");
-        assertThat(r2).hasAction(1, "TYPE", "#search-box", "bear");
-        assertThat(r2).hasAction(2, "KEY_PRESS", "#search-box", "Enter");
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "KEY_PRESS", "#search-box", "Enter");
     }
 
     /**
@@ -696,7 +681,7 @@ public class HintTesting extends BaseAiTest
     public final void test_KeyPressHintNoTargetInText()
     {
         final String steps = """
-                Open ${posters.storefront.url}
+                OPEN ${posters.storefront.url}
                 Type "bear" into the search box (hint: #search-box)
                 Press the ENTER key (hint: #search-box)
                 """;
@@ -705,17 +690,15 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r1)
             .hasLlmCalls(2)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(1)
-            .hasActionsCount(3);
-
-        assertThat(r1).hasAction(0, "NAVIGATE");
-        assertThat(r1).hasAction(1, "TYPE", "#search-box", "bear");
-        assertThat(r1).hasAction(2, "KEY_PRESS", "#search-box", "Enter");
-
-        final var stepDetails = r1.getSteps().get(2);
-        assertFalse(stepDetails.isDirectParse());
-        assertEquals(ContextLevel.HINT, stepDetails.getLlmCalls().get(0).getContextLevel());
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "KEY_PRESS", "#search-box", "Enter")
+            .hasContextLevel(1, ContextLevel.HINT)
+            .step(2, s -> s.hasLlmCalls(1));
 
         // back to start for replay
         this.resetBrowser();
@@ -725,12 +708,52 @@ public class HintTesting extends BaseAiTest
 
         assertThat(r2)
             .hasLlmCalls(0)
+            .hasNoPesapCalls()
             .hasNoEscalations()
             .hasDirectParses(0)
-            .hasActionsCount(3);
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "KEY_PRESS", "#search-box", "Enter");
+    }
 
-        assertThat(r2).hasAction(0, "NAVIGATE");
-        assertThat(r2).hasAction(1, "TYPE", "#search-box", "bear");
-        assertThat(r2).hasAction(2, "KEY_PRESS", "#search-box", "Enter");
+    /**
+     * Test compound step with hints to verify they stay intact during split.
+     */
+    @NeodymiumTest
+    public final void test_HintSplit()
+    {
+        final String steps = """
+                OPEN ${posters.storefront.url}
+                Type "bear" into search input (hint: #search-box) and click search button (hint: #search-button)
+                """;
+
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasPesapCalls(1)
+            .hasNoEscalations()
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "CLICK", "#search-button");
+
+        assertEquals("#search-box", r1.getActions().get(1).getTarget());
+        assertEquals("#search-button", r1.getActions().get(2).getTarget());
+
+        // Reset and check Replay
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "TYPE", "#search-box", "bear")
+            .hasAction(2, "CLICK", "#search-button");
     }
 }

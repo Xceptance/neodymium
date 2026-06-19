@@ -1,12 +1,9 @@
 package com.xceptance.neodymium.junit5.tests.utils;
 
-import java.util.Random;
-import java.util.UUID;
 
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.listeners.TestExecutionSummary.Failure;
 
-import com.xceptance.neodymium.util.Neodymium;
 
 public class MockedFailue implements Failure
 {

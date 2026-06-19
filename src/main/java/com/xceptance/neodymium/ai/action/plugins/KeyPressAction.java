@@ -58,6 +58,28 @@ public class KeyPressAction implements AiActionPlugin
     @Override
     public List<Action> parseDirectInstruction(final String instruction)
     {
+        final String normalized = instruction.replaceAll("\\s+", " ").trim();
+        if (normalized.startsWith("KEYPRESS "))
+        {
+            final String arg = normalized.substring(9).trim();
+            if (arg.isEmpty())
+            {
+                throw new IllegalArgumentException("Key sequence for KEYPRESS command cannot be empty");
+            }
+            final String[] keyParts = arg.split(",");
+            final List<Action> actionsList = new java.util.ArrayList<>();
+            for (final String keyPart : keyParts)
+            {
+                final String trimmedKey = keyPart.trim();
+                if (trimmedKey.isEmpty())
+                {
+                    throw new IllegalArgumentException("Empty key value in KEYPRESS sequence");
+                }
+                mapKey(trimmedKey);
+                actionsList.add(new Action("KEY_PRESS", null, trimmedKey, "Press key " + trimmedKey));
+            }
+            return actionsList;
+        }
         return null;
     }
 
@@ -81,7 +103,7 @@ public class KeyPressAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "KEY_PRESS: press a keyboard key (e.g., ENTER, TAB, SHIFT_TAB) (requires value).";
+        return "KEY_PRESS: Simulate pressing a keyboard key or key combination (e.g., ENTER, TAB, SHIFT_TAB) (requires 'v'; optionally set 'tg' to send it to a specific element).";
     }
 
     /**
@@ -133,14 +155,47 @@ public class KeyPressAction implements AiActionPlugin
         }
     }
 
-    /**
-     * Maps a key name string to its corresponding Selenium {@link Keys} or key chord representation.
-     *
-     * @param keyName the name of the key (case-insensitive)
-     * @return the Selenium CharSequence key mapping
-     * @throws ActionExecutionException if the key name is unknown or unsupported
-     */
     public static CharSequence mapKey(final String keyName)
+    {
+        if (keyName == null || keyName.isBlank())
+        {
+            throw new ActionExecutionException("Key name cannot be null or empty");
+        }
+        final String trimmed = keyName.trim();
+        if (trimmed.contains("+"))
+        {
+            final String[] parts = trimmed.split("\\+");
+            final CharSequence[] chords = new CharSequence[parts.length];
+            for (int i = 0; i < parts.length; i++)
+            {
+                final String part = parts[i].trim();
+                if (part.equalsIgnoreCase("Ctrl") || part.equalsIgnoreCase("Control"))
+                {
+                    chords[i] = Keys.CONTROL;
+                }
+                else if (part.equalsIgnoreCase("Shift"))
+                {
+                    chords[i] = Keys.SHIFT;
+                }
+                else if (part.equalsIgnoreCase("Alt"))
+                {
+                    chords[i] = Keys.ALT;
+                }
+                else if (part.equalsIgnoreCase("Meta") || part.equalsIgnoreCase("Cmd") || part.equalsIgnoreCase("Command"))
+                {
+                    chords[i] = Keys.META;
+                }
+                else
+                {
+                    chords[i] = mapKeySingle(part);
+                }
+            }
+            return Keys.chord(chords);
+        }
+        return mapKeySingle(trimmed);
+    }
+
+    private static CharSequence mapKeySingle(final String keyName)
     {
         if (keyName != null && keyName.length() == 1)
         {
@@ -151,7 +206,6 @@ public class KeyPressAction implements AiActionPlugin
         {
             case "ENTER", "RETURN" -> Keys.ENTER;
             case "TAB" -> Keys.TAB;
-            // Shift+Tab keyboard modifier combination chord
             case "SHIFT_TAB", "SHIFTTAB", "SHIFT+TAB", "SHIFT-TAB", "REVERSE_TAB" -> Keys.chord(Keys.SHIFT, Keys.TAB);
             case "ESCAPE", "ESC" -> Keys.ESCAPE;
             case "BACKSPACE" -> Keys.BACK_SPACE;

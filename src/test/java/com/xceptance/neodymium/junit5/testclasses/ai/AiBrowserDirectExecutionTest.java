@@ -38,7 +38,7 @@ public class AiBrowserDirectExecutionTest
     @NeodymiumTest
     public void testOpen()
     {
-        Neodymium.ai().execute("open https://xceptance.com");
+        Neodymium.ai().execute("OPEN https://xceptance.com");
         WebDriver webDriver = Neodymium.getDriver();
         Assertions.assertTrue(webDriver.getCurrentUrl().contains("xceptance.com"),
                               "The current URL should contain 'xceptance.com' after opening it.");
@@ -47,13 +47,13 @@ public class AiBrowserDirectExecutionTest
     @NeodymiumTest
     public void testNavigateBack()
     {
-        Neodymium.ai().execute("open https://www.xceptance.com/en/");
-        Neodymium.ai().execute("open https://www.xceptance.com/de/");
+        Neodymium.ai().execute("OPEN https://www.xceptance.com/en/");
+        Neodymium.ai().execute("OPEN https://www.xceptance.com/de/");
         WebDriver webDriver = Neodymium.getDriver();
         Assertions.assertTrue(webDriver.getCurrentUrl().contains("xceptance.com/de/"),
                               "The current URL should be xceptance.de before navigating back.");
 
-        Neodymium.ai().execute("navigate back");
+        Neodymium.ai().execute("BACK");
         Assertions.assertTrue(webDriver.getCurrentUrl().contains("xceptance.com/en"),
                               "The current URL should contain 'xceptance.com' after navigating back.");
     }
@@ -61,15 +61,15 @@ public class AiBrowserDirectExecutionTest
     @NeodymiumTest
     public void testNavigateForward()
     {
-        Neodymium.ai().execute("open https://xceptance.com/de");
-        Neodymium.ai().execute("open https://xceptance.com/en");
+        Neodymium.ai().execute("OPEN https://xceptance.com/de");
+        Neodymium.ai().execute("OPEN https://xceptance.com/en");
         WebDriver webDriver = Neodymium.getDriver();
         
-        Neodymium.ai().execute("navigate back");
+        Neodymium.ai().execute("BACK");
         Assertions.assertTrue(webDriver.getCurrentUrl().contains("xceptance.com/de"),
                               "The current URL should contain 'xceptance.com' after navigating back.");
 
-        Neodymium.ai().execute("navigate forward");
+        Neodymium.ai().execute("FORWARD");
         Assertions.assertTrue(webDriver.getCurrentUrl().contains("xceptance.com/en"),
                               "The current URL should contain 'xceptance.de' after navigating forward.");
     }
@@ -77,13 +77,13 @@ public class AiBrowserDirectExecutionTest
     @NeodymiumTest
     public void testClearCookies()
     {
-        Neodymium.ai().execute("open https://xceptance.com");
+        Neodymium.ai().execute("OPEN https://xceptance.com");
         WebDriver webDriver = Neodymium.getDriver();
         webDriver.manage().addCookie(new Cookie("testcookie", "testvalue"));
         Assertions.assertNotNull(webDriver.manage().getCookieNamed("testcookie"),
                                  "The test cookie should be present before clearing cookies.");
 
-        Neodymium.ai().execute("clear cookies");
+        Neodymium.ai().execute("CLEAR_COOKIES");
         Assertions.assertNull(webDriver.manage().getCookieNamed("testcookie"),
                               "The test cookie should be removed after clearing cookies.");
     }
@@ -91,11 +91,11 @@ public class AiBrowserDirectExecutionTest
     @NeodymiumTest
     public void testRefreshPage()
     {
-        Neodymium.ai().execute("open https://xceptance.com");
+        Neodymium.ai().execute("OPEN https://xceptance.com");
         WebDriver webDriver = Neodymium.getDriver();
         WebElement body = webDriver.findElement(By.tagName("body"));
         
-        Neodymium.ai().execute("refresh page");
+        Neodymium.ai().execute("REFRESH");
         
         WebDriverWait wait = new WebDriverWait(webDriver, Duration.ofSeconds(10));
         wait.until(ExpectedConditions.stalenessOf(body));
@@ -107,13 +107,41 @@ public class AiBrowserDirectExecutionTest
     @NeodymiumTest
     public void testPromptWithComments()
     {
-        Neodymium.ai().execute("open https://xceptance.com\n" +
+        Neodymium.ai().execute("OPEN https://xceptance.com\n" +
                                "# This is a comment\n" +
                                "// This is also a comment\n" +
-                               "open https://www.xceptance.com/de/");
+                               "OPEN https://www.xceptance.com/de/");
         
         WebDriver webDriver = Neodymium.getDriver();
         Assertions.assertTrue(webDriver.getCurrentUrl().contains("xceptance.com/de/"),
                               "The current URL should be xceptance.de since comments should be ignored.");
+    }
+
+    @NeodymiumTest
+    public void testDirectCommandFailFastUnknownCommand()
+    {
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            Neodymium.ai().execute("CLCIK #some-button");
+        }, "Misspelled direct command should fail-fast with AssertionError");
+    }
+
+    @NeodymiumTest
+    public void testDirectCommandFailFastMissingSelector()
+    {
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            Neodymium.ai().execute("CLICK ");
+        }, "Direct command with missing selector should fail-fast with AssertionError");
+    }
+
+    @NeodymiumTest
+    public void testDirectCommandFailFastElementNotFound()
+    {
+        Neodymium.ai().execute("OPEN https://xceptance.com");
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            Neodymium.ai().execute("CLICK #non-existent-button-id-12345");
+        }, "Direct command target not found should fail-fast with AssertionError immediately without self-healing");
     }
 }

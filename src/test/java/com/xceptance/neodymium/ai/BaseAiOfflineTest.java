@@ -35,10 +35,11 @@ import com.xceptance.neodymium.util.Neodymium;
  * <p>
  * This class automatically handles the boilerplate configuration required to test
  * Neodymium Aura AI features offline, including backing up and restoring system properties,
- * configuring dummy credentials to satisfy validation guards, disabling PESAP analysis, 
+ * configuring dummy credentials to satisfy validation guards, 
  * and initializing mock stand-ins (LLM client, SUT page context, Selenium executor).
  *
- * // AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public abstract class BaseAiOfflineTest
 {
@@ -55,11 +56,10 @@ public abstract class BaseAiOfflineTest
         // 1. Back up system properties to prevent test contamination
         this.originalSystemProperties = new HashMap<>();
         this.storeAndClearSystemProperty("neodymium.ai.apiKey");
-        this.storeAndClearSystemProperty("neodymium.ai.pesap.enabled");
         this.storeAndClearSystemProperty("neodymium.ai.agent.maxRetries");
 
         // 2. Configure mock settings browserlessly
-        MockLlmClient.configureForOffline("mock-offline-demo-key", false);
+        MockLlmClient.configureForOffline("mock-offline-demo-key");
 
         // 3. Clear data contexts
         Neodymium.setAiPlaybook(null);
@@ -96,7 +96,6 @@ public abstract class BaseAiOfflineTest
 
         // 3. Restore backed-up system properties
         System.clearProperty("neodymium.ai.apiKey");
-        System.clearProperty("neodymium.ai.pesap.enabled");
         System.clearProperty("neodymium.ai.agent.maxRetries");
 
         for (final Map.Entry<String, String> entry : this.originalSystemProperties.entrySet())
