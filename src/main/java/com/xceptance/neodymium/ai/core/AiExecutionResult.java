@@ -306,9 +306,9 @@ public final class AiExecutionResult
      */
     public final AiStatsLogger logAiStats()
     {
-        if (this.aiBrowser != null && this.aiBrowser.getStats() != null)
+        if (this.aiBrowser != null)
         {
-            this.aiBrowser.getStats().logSummary();
+            this.aiBrowser.logStats();
         }
         return new AiStatsLogger(this.aiBrowser);
     }

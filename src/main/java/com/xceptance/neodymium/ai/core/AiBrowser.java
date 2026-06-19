@@ -67,7 +67,8 @@ public class AiBrowser implements AutoCloseable {
     private AiExecutionResult lastExecutionResult;
     private AiTestRunResult lastTestRunResult;
     private final List<AiExecutionResult> executionResults = new CopyOnWriteArrayList<>();
-    private boolean statsLogged = false;
+    private boolean globalStatsLogged = false;
+    private boolean stepStatsLogged = false;
 
     private final List<Class<?>> dynamicallyRegisteredClasses = new CopyOnWriteArrayList<>();
 
@@ -345,9 +346,15 @@ public class AiBrowser implements AutoCloseable {
     @Override
     public void close()
     {
-        if (!statsLogged)
+        if (!globalStatsLogged && aiStats.getOverallCallCount() > 0)
         {
-            logStatsAndStepSummary();
+            aiStats.logSummary();
+            globalStatsLogged = true;
+        }
+        if (!stepStatsLogged && (aiStats.getReplayCount() > 0 || aiStats.getDirectParseCount() > 0 || aiStats.getOverallCallCount() > 0))
+        {
+            logStepSummary();
+            stepStatsLogged = true;
         }
     }
 
@@ -356,11 +363,27 @@ public class AiBrowser implements AutoCloseable {
      */
     public void logStatsAndStepSummary()
     {
-        if (aiStats.getOverallCallCount() > 0 || aiStats.getReplayCount() > 0 || aiStats.getDirectParseCount() > 0)
+        if (!globalStatsLogged && aiStats.getOverallCallCount() > 0)
         {
             aiStats.logSummary();
+            globalStatsLogged = true;
+        }
+        if (!stepStatsLogged && (aiStats.getReplayCount() > 0 || aiStats.getDirectParseCount() > 0 || aiStats.getOverallCallCount() > 0))
+        {
             logStepSummary();
-            statsLogged = true;
+            stepStatsLogged = true;
+        }
+    }
+
+    /**
+     * Logs the cumulative AI execution statistics.
+     */
+    public void logStats()
+    {
+        if (aiStats.getOverallCallCount() > 0)
+        {
+            aiStats.logSummary();
+            globalStatsLogged = true;
         }
     }
 
@@ -398,7 +421,7 @@ public class AiBrowser implements AutoCloseable {
             }
         }
         LOG.trace("=================================================");
-        this.statsLogged = true;
+        this.stepStatsLogged = true;
     }
 
     /**
