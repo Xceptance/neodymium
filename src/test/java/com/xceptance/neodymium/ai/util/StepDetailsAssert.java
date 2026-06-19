@@ -23,8 +23,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.function.Consumer;
+import com.xceptance.neodymium.ai.core.ContextLevel;
 import com.xceptance.neodymium.ai.core.StepDetails;
 import com.xceptance.neodymium.ai.testing.LlmAssert;
+
 
 /**
  * Fluent assertion helper for validating {@link StepDetails} instances in tests.
@@ -291,5 +293,46 @@ public final class StepDetailsAssert
     public final StepDetailsAssert hasNoEscalations()
     {
         return hasEscalations(0);
+    }
+
+    /**
+     * Asserts the ContextLevel used for the first LLM call of this step.
+     *
+     * @param expected the expected context level
+     * @return this assertion helper
+     */
+    public final StepDetailsAssert hasContextLevel(final ContextLevel expected)
+    {
+        assertTrue(step.getLlmCalls().size() > 0, "Expected step to have at least one LLM call");
+        assertEquals(expected, step.getLlmCalls().get(0).getContextLevel(), "ContextLevel mismatch at first LLM call");
+        return this;
+    }
+
+    /**
+     * Asserts the ContextLevel used for the last (end) LLM call of this step.
+     *
+     * @param expected the expected context level
+     * @return this assertion helper
+     */
+    public final StepDetailsAssert hasEndContextLevel(final ContextLevel expected)
+    {
+        assertTrue(step.getLlmCalls().size() > 0, "Expected step to have at least one LLM call");
+        final int lastIndex = step.getLlmCalls().size() - 1;
+        assertEquals(expected, step.getLlmCalls().get(lastIndex).getContextLevel(), "End ContextLevel mismatch at last LLM call");
+        return this;
+    }
+
+    /**
+     * Asserts the number of retries that occurred during this step.
+     *
+     * @param expected the expected number of retries
+     * @return this assertion helper
+     */
+    public final StepDetailsAssert hasRetries(final int expected)
+    {
+        final int calls = step.getLlmCalls().size();
+        final int retries = calls > 0 ? (calls - 1 - step.getEscalations().size()) : 0;
+        assertEquals(expected, Math.max(0, retries), "Step retry count mismatch");
+        return this;
     }
 }

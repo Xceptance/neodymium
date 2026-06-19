@@ -41,7 +41,8 @@ import com.xceptance.neodymium.util.Neodymium;
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@Tag("freeform")
+@Tag("integration")
+@Tag("llm")
 public final class SearchAndSubmitTest extends BaseAiTest
 {
     private String storefrontUrl;
@@ -52,6 +53,7 @@ public final class SearchAndSubmitTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.storefrontUrl = String.format(
             "http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html",
             server.getPort());
@@ -86,9 +88,8 @@ public final class SearchAndSubmitTest extends BaseAiTest
 
         assertThat(r1).hasAction(0, "NAVIGATE");
         assertThat(r1).hasAction(1, "TYPE");
-        // Action 2: CLICK (Search button) or KEY_PRESS (Enter) — both are valid submissions
+        assertThat(r1).hasAction(2, "ASSERT");
         assertThat(r1).hasAction(3, "ASSERT");
-        assertThat(r1).hasAction(4, "ASSERT");
 
         this.resetBrowser();
 
@@ -129,8 +130,8 @@ public final class SearchAndSubmitTest extends BaseAiTest
 
         assertThat(r1).hasAction(0, "NAVIGATE");
         assertThat(r1).hasAction(1, "TYPE");
+        assertThat(r1).hasAction(2, "ASSERT");
         assertThat(r1).hasAction(3, "ASSERT");
-        assertThat(r1).hasAction(4, "ASSERT");
 
         this.resetBrowser();
 

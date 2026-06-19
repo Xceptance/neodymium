@@ -1,0 +1,86 @@
+{
+  "id": "com.xceptance.neodymium.ai.action.WaitActionTest :: testWaitHappyPath",
+  "steps": [
+    {
+      "promptLine": "Click on the \u0027Start Process\u0027 button.",
+      "reasoning": "Clicked the \u0027Start Process\u0027 button using its ID.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-start",
+          "description": "Click on the \u0027Start Process\u0027 button",
+          "elementDetails": "Start Process button",
+          "elementContext": {
+            "text": "Start Process",
+            "id": "btn-start",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Wait for 1 second.",
+      "reasoning": "The instruction is to wait for 1 second, so a WAIT action with a value of 1000 milliseconds is generated.",
+      "actions": [
+        {
+          "type": "WAIT",
+          "value": [
+            "1000"
+          ],
+          "description": "Wait for 1 second",
+          "elementDetails": "1 second",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Wait until \u0027Processing... Please wait...\u0027 is hidden.",
+      "reasoning": "The instruction is to wait until the specified text is hidden. Since the text \u0027Processing... Please wait...\u0027 is not present in the current DOM, it is considered hidden. An ASSERT action with \u0027hidden\u0027 value will verify this condition.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "Processing... Please wait...",
+          "value": [
+            "hidden"
+          ],
+          "description": "Wait until \u0027Processing... Please wait...\u0027 is hidden",
+          "elementDetails": "text \u0027Processing... Please wait...\u0027",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Wait until \u0027Process Completed Successfully!\u0027 is visible.",
+      "reasoning": "The instruction is to wait until \u0027Process Completed Successfully!\u0027 is visible. I found an element with id \u0027success\u0027 containing this text and created an ASSERT action to wait for its visibility.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#success",
+          "value": [
+            "visible"
+          ],
+          "description": "Wait until \u0027Process Completed Successfully!\u0027 is visible",
+          "elementDetails": "Process Completed Successfully!",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

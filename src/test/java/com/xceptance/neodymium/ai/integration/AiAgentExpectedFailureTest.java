@@ -29,6 +29,7 @@ import java.lang.reflect.Field;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.util.Neodymium;
@@ -38,6 +39,8 @@ import com.xceptance.neodymium.ai.core.AiAgent;
  * Tests for the unified expected failure (bug tags) feature in both standard Neodymium
  * programmatic tests and the AI Agent playbook engine.
  */
+@Tag("integration")
+@Tag("llm")
 public final class AiAgentExpectedFailureTest
 {
     /**

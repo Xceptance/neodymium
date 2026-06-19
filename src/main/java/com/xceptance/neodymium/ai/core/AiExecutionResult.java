@@ -38,8 +38,9 @@ public final class AiExecutionResult
     private final List<LookupDetails> lookups;
     private final List<EscalationDetails> escalations;
     private final Map<String, String> testDataSnapshot;
+    private final transient AiBrowser aiBrowser;
 
-    // cumulative token/metric delta values
+    // cumulative token/metric deltas
     private long inputTokens;
     private long outputTokens;
     private long cachedTokens;
@@ -58,12 +59,23 @@ public final class AiExecutionResult
 
     private long durationMs;
 
-    public AiExecutionResult(final Map<String, String> testDataSnapshot)
+    public AiExecutionResult(final Map<String, String> testDataSnapshot, final AiBrowser aiBrowser)
     {
         this.steps = Collections.synchronizedList(new ArrayList<>());
         this.lookups = Collections.synchronizedList(new ArrayList<>());
         this.escalations = Collections.synchronizedList(new ArrayList<>());
         this.testDataSnapshot = Collections.unmodifiableMap(new HashMap<>(testDataSnapshot));
+        this.aiBrowser = aiBrowser;
+    }
+
+    /**
+     * Backward-compatible constructor for initializing execution results without a browser reference.
+     *
+     * @param testDataSnapshot the map containing current test dataset bindings
+     */
+    public AiExecutionResult(final Map<String, String> testDataSnapshot)
+    {
+        this(testDataSnapshot, null);
     }
 
     public final List<StepDetails> getSteps()
@@ -295,5 +307,100 @@ public final class AiExecutionResult
             }
         }
         return true;
+    }
+
+    /**
+     * Logs the cumulative AI execution statistics.
+     *
+     * @return the stats logger helper instance
+     */
+    public final AiStatsLogger logAiStats()
+    {
+        if (this.aiBrowser != null)
+        {
+            this.aiBrowser.logStats();
+        }
+        return new AiStatsLogger(this.aiBrowser);
+    }
+
+    /**
+     * Logs the step-by-step trace statistics for this execution.
+     *
+     * @return the step stats logger helper instance
+     */
+    public final AiStepStatsLogger logAiStepStats()
+    {
+        if (this.aiBrowser != null)
+        {
+            this.aiBrowser.logStepSummary(this);
+        }
+        return new AiStepStatsLogger(this.aiBrowser);
+    }
+
+    /**
+     * Resets the cumulative statistics and clears the execution steps.
+     *
+     * @return this execution result instance
+     */
+    public final AiExecutionResult reset()
+    {
+        if (this.aiBrowser != null)
+        {
+            if (this.aiBrowser.getStats() != null)
+            {
+                this.aiBrowser.getStats().reset();
+                this.aiBrowser.setGlobalStatsLogged(false);
+            }
+            this.aiBrowser.clearExecutionResults();
+            this.aiBrowser.setStepStatsLogged(false);
+        }
+        return this;
+    }
+
+    /**
+     * Resetter helper for AI execution statistics.
+     */
+    public static class AiStatsLogger
+    {
+        private final AiBrowser browser;
+
+        public AiStatsLogger(final AiBrowser browser)
+        {
+            this.browser = browser;
+        }
+
+        public final void reset()
+        {
+            if (this.browser != null)
+            {
+                if (this.browser.getStats() != null)
+                {
+                    this.browser.getStats().reset();
+                }
+                this.browser.setGlobalStatsLogged(false);
+            }
+        }
+    }
+
+    /**
+     * Resetter helper for step-by-step statistics.
+     */
+    public static class AiStepStatsLogger
+    {
+        private final AiBrowser browser;
+
+        public AiStepStatsLogger(final AiBrowser browser)
+        {
+            this.browser = browser;
+        }
+
+        public final void reset()
+        {
+            if (this.browser != null)
+            {
+                this.browser.clearExecutionResults();
+                this.browser.setStepStatsLogged(false);
+            }
+        }
     }
 }

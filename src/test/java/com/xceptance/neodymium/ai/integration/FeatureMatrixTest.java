@@ -17,7 +17,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.xceptance.neodymium.ai.integration;
-import com.xceptance.neodymium.ai.AiTestVerification;
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
 
@@ -26,10 +25,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 
-import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 
 import com.xceptance.neodymium.common.browser.Browser;
@@ -37,7 +36,7 @@ import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.ai.util.LogCaptureAppender;
-import com.xceptance.neodymium.ai.core.AiStats;
+
 import com.xceptance.neodymium.ai.playbook.Playbook;
 
 /**
@@ -56,6 +55,8 @@ import com.xceptance.neodymium.ai.playbook.Playbook;
  * @author AI-generated: Gemini 2.5 Flash
  * @author Xceptance GmbH 2026
  */
+@Tag("integration")
+@Tag("llm")
 public final class FeatureMatrixTest extends BaseAiTest
 {
     private String httpShopUrl;
@@ -104,7 +105,6 @@ public final class FeatureMatrixTest extends BaseAiTest
     @DataSet(id = "ShopSetup")
     public void testDataResolutionAndTiming()
     {
-        final long startTime = System.currentTimeMillis();
 
         final String steps = String.format("""
             OPEN %s
@@ -131,7 +131,7 @@ public final class FeatureMatrixTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertThat(r2)
             .hasLlmCalls(0)
             .hasNoPesapCalls()
@@ -171,7 +171,7 @@ public final class FeatureMatrixTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertThat(r2)
             .hasLlmCalls(0)
             .hasNoPesapCalls()

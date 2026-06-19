@@ -1,0 +1,27 @@
+{
+  "id": "com.xceptance.neodymium.ai.action.ClickActionTest :: testClickSvgIcon",
+  "steps": [
+    {
+      "promptLine": "Click on the Add Item button.",
+      "reasoning": "Identified the \u0027Add Item\u0027 button by its ID and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-svg",
+          "description": "Click on the Add Item button",
+          "elementDetails": "Add Item button",
+          "elementContext": {
+            "text": "Add Item",
+            "id": "btn-svg",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

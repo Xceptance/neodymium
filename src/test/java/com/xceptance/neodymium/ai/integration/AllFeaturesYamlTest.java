@@ -22,6 +22,7 @@ import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 
 import com.xceptance.neodymium.common.browser.Browser;
@@ -43,10 +44,12 @@ import com.xceptance.neodymium.util.Neodymium;
 @DataFolder("com/xceptance/neodymium/ai/AllFeaturesYamlTest")
 @AiTestVerification({
     VerificationMode.LIVE_LLM,
-    VerificationMode.OFFLINE_REPLAY,
+    VerificationMode.REPLAY,
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })
+@Tag("integration")
+@Tag("llm")
 public final class AllFeaturesYamlTest extends BaseAiTest
 {
     /**

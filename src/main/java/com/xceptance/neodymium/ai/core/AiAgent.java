@@ -214,8 +214,9 @@ public class AiAgent {
      *
      * @param instructions natural language test instructions
      */
-    public void execute(final String instructions) {
-        execute(instructions, new AiExecutionResult(Neodymium.getData()));
+    public void execute(final String instructions)
+    {
+        execute(instructions, new AiExecutionResult(Neodymium.getData(), Neodymium.ai()));
     }
 
     public void execute(final String instructions, final AiExecutionResult result)
@@ -589,6 +590,7 @@ public class AiAgent {
                     if (pesapResult != null && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
                     {
                         LOG.info("✂️ Upfront JIT step split detected: '{}' split into {}", strippedStep, pesapResult.splitSteps());
+                        final StepDetails originalStepDetails = stepDetails;
                         final List<String> splitList = pesapResult.splitSteps();
                         final String origLine = i < stepLines.size() ? stepLines.get(i) : null;
 
@@ -610,6 +612,9 @@ public class AiAgent {
                             }
                             final StepDetails partDetails = new StepDetails(part);
                             partDetails.setOriginalUnsplitInstruction(stepUnresolved);
+                            // Ensure the other split parts reference the original PESAP call too
+                            partDetails.setPesapCall(originalStepDetails.getPesapCall());
+                            partDetails.setPesapCalled(true);
                             result.getSteps().add(i + j, partDetails);
                         }
                         alreadySplitSteps.add(strippedStep);
@@ -975,15 +980,53 @@ public class AiAgent {
 
                     // Execute the approved actions via Selenium/WebDriver, applying timeout isolation
                     final long originalTimeout = com.codeborne.selenide.Configuration.timeout;
-                    if (customTimeoutMs != null) {
-                        com.codeborne.selenide.Configuration.timeout = customTimeoutMs;
+                    final long stepTimeoutMs;
+                    if (customTimeoutMs != null)
+                    {
+                        stepTimeoutMs = customTimeoutMs;
                     }
-                    try {
-                        actionExecutor.executeAll(actions);
-                    } finally {
-                        if (customTimeoutMs != null) {
-                            com.codeborne.selenide.Configuration.timeout = originalTimeout;
+                    else
+                    {
+                        long detectedTimeout = originalTimeout;
+                        // Check if there is a WAIT action in the list to dynamically adjust Selenide timeout
+                        for (final Action act : actions)
+                        {
+                            if ("WAIT".equals(act.getType()))
+                            {
+                                long waitTimeout = 10000;
+                                final String val = act.getValue();
+                                if (val != null && !val.isBlank())
+                                {
+                                    try
+                                    {
+                                        waitTimeout = Long.parseLong(val);
+                                    }
+                                    catch (final NumberFormatException ignored)
+                                    {
+                                    }
+                                }
+                                // If the step previously failed and has a target element, extend the timeout to 20000 ms
+                                final PlaybookStep pbStep = playbook != null ? playbook.getCurrentStep() : null;
+                                if (pbStep != null && pbStep.failed() && act.getTarget() != null && !act.getTarget().isBlank())
+                                {
+                                    waitTimeout = 20000;
+                                    // Also update the action's value so it's recorded correctly in the playbook
+                                    act.setValue(List.of("20000"));
+                                }
+                                detectedTimeout = Math.max(detectedTimeout, waitTimeout);
+                            }
                         }
+                        stepTimeoutMs = detectedTimeout;
+                    }
+
+                    com.codeborne.selenide.Configuration.timeout = stepTimeoutMs;
+                    try
+                    {
+                        actionExecutor.executeAll(actions);
+                    }
+                    finally
+                    {
+                        com.codeborne.selenide.Configuration.timeout = originalTimeout;
                     }
 
                     // Accumulate executed actions
@@ -1180,6 +1223,18 @@ public class AiAgent {
                     return;
                 }
                 final PlaybookStep step = playbook.getCurrentStep();
+                if (!playbook.isRecording() && step.getPromptLine() != null
+                        && step.getPromptLine().equals(instruction) && !step.failed()
+                        && playbookReplayAttempts < 1)
+                {
+                    playbookReplayAttempts++;
+                    LOG.info(
+                            "    🔄 Playbook replay action failed due to transient/timing issue. Retrying recorded actions first (Attempt {})...",
+                            playbookReplayAttempts);
+                    executionLog.logWarning("Playbook replay action failed. Retrying recorded actions first...");
+                    continue;
+                }
+
                 if (expectedFailure)
                 {
                     if (isInteractive)
@@ -1238,9 +1293,11 @@ public class AiAgent {
                     }
                 }
 
-                LOG.warn("    ⚠️ Assertion failed: {}{}", e.getMessage(),
-                        formatFailureLogContext(currentLineNumber, sourceFile));
-                executionLog.logError("Assertion failed: " + e.getMessage());
+                if (!escalatedOk)
+                {
+                    LOG.warn("    ⚠️ Assertion failed: {}{}. Retrying step.", e.getMessage(), formatFailureLogContext(currentLineNumber, sourceFile));
+                    executionLog.logError("Assertion failed: " + e.getMessage() + ". Retrying step.");
+                }
 
                 if (isInteractive) {
                     final List<String> plannedStrs = new ArrayList<>();

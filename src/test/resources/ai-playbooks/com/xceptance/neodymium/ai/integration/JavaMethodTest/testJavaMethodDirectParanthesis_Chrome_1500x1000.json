@@ -1,0 +1,40 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.JavaMethodTest :: testJavaMethodDirectParanthesis :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AssertActionTest/testAssertHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "(java: assertPriceGreaterThanZero(\"14.96 €\"))",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertPriceGreaterThanZero",
+          "value": [
+            "14.96 €"
+          ],
+          "description": "Call assertPriceGreaterThanZero with param 14.96 €",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

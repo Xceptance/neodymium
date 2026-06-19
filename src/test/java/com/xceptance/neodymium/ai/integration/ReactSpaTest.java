@@ -21,6 +21,7 @@ import com.xceptance.neodymium.ai.AiTestVerification;
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
 
+import org.junit.jupiter.api.Tag;
 import static com.codeborne.selenide.Selenide.open;
 
 
@@ -37,7 +38,7 @@ import com.xceptance.neodymium.util.Neodymium;
 @Browser("Chrome_1024x768")
 @AiTestVerification({
     VerificationMode.LIVE_LLM,
-    VerificationMode.OFFLINE_REPLAY,
+    VerificationMode.REPLAY,
     VerificationMode.HUD_OFFLINE_REPLAY,
     VerificationMode.HUD_LLM
 })
@@ -45,6 +46,8 @@ import com.xceptance.neodymium.util.Neodymium;
  * @author AI-generated: Gemini 2.5 Flash
  * @author Xceptance GmbH 2026
  */
+@Tag("integration")
+@Tag("llm")
 public final class ReactSpaTest extends BaseAiTest
 {
 

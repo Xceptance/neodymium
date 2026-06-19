@@ -23,10 +23,12 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.common.testdata.TestData;
@@ -64,6 +66,9 @@ public class AiBrowser implements AutoCloseable {
 
     private AiExecutionResult lastExecutionResult;
     private AiTestRunResult lastTestRunResult;
+    private final List<AiExecutionResult> executionResults = new CopyOnWriteArrayList<>();
+    private boolean globalStatsLogged = false;
+    private boolean stepStatsLogged = false;
 
     private final List<Class<?>> dynamicallyRegisteredClasses = new CopyOnWriteArrayList<>();
 
@@ -78,6 +83,16 @@ public class AiBrowser implements AutoCloseable {
     public final List<Class<?>> getDynamicallyRegisteredClasses()
     {
         return this.dynamicallyRegisteredClasses;
+    }
+
+    public final void setGlobalStatsLogged(final boolean globalStatsLogged)
+    {
+        this.globalStatsLogged = globalStatsLogged;
+    }
+
+    public final void setStepStatsLogged(final boolean stepStatsLogged)
+    {
+        this.stepStatsLogged = stepStatsLogged;
     }
 
     /**
@@ -204,8 +219,9 @@ public class AiBrowser implements AutoCloseable {
             }
         }
 
-        final AiExecutionResult result = new AiExecutionResult(Neodymium.getData());
+        final AiExecutionResult result = new AiExecutionResult(Neodymium.getData(), this);
         this.lastExecutionResult = result;
+        this.executionResults.add(result);
 
         if (Neodymium.getData() != null && Neodymium.getData().exists("context")) {
             agent.setSutContext(resolveTestDataToPrompt(Neodymium.getData().asString("context"), result.getLookups()));
@@ -338,10 +354,177 @@ public class AiBrowser implements AutoCloseable {
      * Closes the browser and releases resources.
      */
     @Override
-    public void close() {
-        // Log cumulative token usage before shutdown
-        if (aiStats.getOverallCallCount() > 0) {
+    public void close()
+    {
+        if (!globalStatsLogged && aiStats.getOverallCallCount() > 0)
+        {
             aiStats.logSummary();
+            globalStatsLogged = true;
+        }
+        if (!stepStatsLogged && (aiStats.getReplayCount() > 0 || aiStats.getDirectParseCount() > 0 || aiStats.getOverallCallCount() > 0))
+        {
+            logStepSummary();
+            stepStatsLogged = true;
+        }
+    }
+
+    /**
+     * Logs both the cumulative AI execution statistics and the step-by-step trace statistics.
+     */
+    public void logStatsAndStepSummary()
+    {
+        if (!globalStatsLogged && aiStats.getOverallCallCount() > 0)
+        {
+            aiStats.logSummary();
+            globalStatsLogged = true;
+        }
+        if (!stepStatsLogged && (aiStats.getReplayCount() > 0 || aiStats.getDirectParseCount() > 0 || aiStats.getOverallCallCount() > 0))
+        {
+            logStepSummary();
+            stepStatsLogged = true;
+        }
+    }
+
+    /**
+     * Logs the cumulative AI execution statistics.
+     */
+    public void logStats()
+    {
+        if (aiStats.getOverallCallCount() > 0)
+        {
+            aiStats.logSummary();
+            globalStatsLogged = true;
+        }
+    }
+
+    private void logStepSummary()
+    {
+        LOG.trace("======== 📊 AI Step Execution Statistics ========");
+        int stepIndex = 1;
+        for (final AiExecutionResult result : executionResults)
+        {
+            synchronized (result.getSteps())
+            {
+                for (final StepDetails step : result.getSteps())
+                {
+                    logSingleStep(step, stepIndex++);
+                }
+            }
+        }
+        LOG.trace("=================================================");
+    }
+
+    /**
+     * Logs the step-by-step trace statistics for a specific execution result.
+     *
+     * @param result the execution result to log
+     */
+    public final void logStepSummary(final AiExecutionResult result)
+    {
+        LOG.trace("======== 📊 AI Step Execution Statistics ========");
+        int stepIndex = 1;
+        synchronized (result.getSteps())
+        {
+            for (final StepDetails step : result.getSteps())
+            {
+                logSingleStep(step, stepIndex++);
+            }
+        }
+        LOG.trace("=================================================");
+        this.stepStatsLogged = true;
+    }
+
+    /**
+     * Clears the accumulated execution results list.
+     */
+    public final void clearExecutionResults()
+    {
+        this.executionResults.clear();
+    }
+
+    private void logSingleStep(final StepDetails step, final int stepIndex)
+    {
+        LOG.trace("  Step {}: {}", stepIndex, step.getRawInstruction());
+        final String mode;
+        if (step.isReplayed())
+        {
+            mode = "REPLAY";
+        }
+        else if (step.isDirectParse())
+        {
+            mode = "DIRECT_PARSE";
+        }
+        else
+        {
+            mode = "LLM";
+        }
+        LOG.trace("    Mode:           {}", mode);
+        LOG.trace("    Duration:       {} ms", step.getDurationMs());
+
+        final List<Action> actions = step.getActions();
+        if (actions != null && !actions.isEmpty())
+        {
+            final String actionTypes = actions.stream()
+                    .map(Action::getType)
+                    .collect(Collectors.joining(", "));
+            LOG.trace("    Actions:        {} ({})", actions.size(), actionTypes);
+        }
+        else
+        {
+            LOG.trace("    Actions:        0");
+        }
+
+        long standardIn = 0;
+        long standardOut = 0;
+        long standardCached = 0;
+        int standardCalls = 0;
+
+        long pesapIn = 0;
+        long pesapOut = 0;
+        long pesapCached = 0;
+        int pesapCalls = 0;
+
+        if (step.getPesapCall() != null)
+        {
+            final LlmCallDetails pc = step.getPesapCall();
+            pesapIn += pc.getInputTokens();
+            pesapOut += pc.getOutputTokens();
+            pesapCached += pc.getCachedTokens();
+            pesapCalls = 1;
+        }
+
+        for (final LlmCallDetails call : step.getLlmCalls())
+        {
+            if (call.getCallMode() == LlmMode.PESAP)
+            {
+                pesapIn += call.getInputTokens();
+                pesapOut += call.getOutputTokens();
+                pesapCached += call.getCachedTokens();
+                pesapCalls++;
+            }
+            else
+            {
+                standardIn += call.getInputTokens();
+                standardOut += call.getOutputTokens();
+                standardCached += call.getCachedTokens();
+                standardCalls++;
+            }
+        }
+
+        if (standardCalls > 0)
+        {
+            LOG.trace("    Standard Calls: {} (Tokens: {} in ({} cached) → {} out)",
+                      standardCalls, standardIn, standardCached, standardOut);
+        }
+        if (pesapCalls > 0)
+        {
+            LOG.trace("    PESAP Calls:    {} (Tokens: {} in ({} cached) → {} out)",
+                      pesapCalls, pesapIn, pesapCached, pesapOut);
+        }
+
+        if (step.getFailureReason() != null)
+        {
+            LOG.trace("    Failure:        {}", step.getFailureReason());
         }
     }
 

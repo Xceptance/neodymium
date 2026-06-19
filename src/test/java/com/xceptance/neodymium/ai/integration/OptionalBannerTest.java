@@ -20,6 +20,7 @@ package com.xceptance.neodymium.ai.integration;
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
 
+import org.junit.jupiter.api.Tag;
 import static com.codeborne.selenide.Selenide.open;
 
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
@@ -36,6 +37,8 @@ import com.xceptance.neodymium.util.Neodymium;
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1024x768")
+@Tag("integration")
+@Tag("llm")
 public final class OptionalBannerTest extends BaseAiTest
 {
     @NeodymiumTest
@@ -73,7 +76,7 @@ public final class OptionalBannerTest extends BaseAiTest
 
         this.resetBrowser();
 
-        final AiExecutionResult r2 = runAi(steps, VerificationMode.OFFLINE_REPLAY);
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
         assertThat(r2)
             .hasNoPesapCalls();
     }

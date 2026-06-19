@@ -1,0 +1,118 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.IncludeTest :: testStoredVariableResolutionInIncludes :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/IncludeTest/testInclude.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/IncludeTest/testInclude.html"
+          ],
+          "description": "Navigate to http://localhost:43377/IncludeTest/testInclude.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Store the order ID value as variable \u0027myOrder\u0027 (hint: #order-id)",
+      "reasoning": "",
+      "actions": [
+        {
+          "type": "STORE",
+          "target": "#order-id",
+          "value": [
+            "myOrder"
+          ],
+          "description": "Store order ID value as \u0027myOrder\u0027",
+          "elementDetails": "order ID value",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "promptLine": "If the element (hint: #element) is visible, then _include: fragments/testStoredVariableResolutionInIncludes_useVar.steps",
+      "reasoning": "",
+      "actions": [
+        {
+          "type": "BRANCH",
+          "description": "Conditional include based on element visibility",
+          "elementContext": {},
+          "replay": "",
+          "condition": [
+            {
+              "type": "ASSERT",
+              "target": "#element",
+              "value": [
+                "visible"
+              ],
+              "description": "Check if #element is visible",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "then": [
+            {
+              "type": "INCLUDE",
+              "value": [
+                "fragments/testStoredVariableResolutionInIncludes_useVar.steps"
+              ],
+              "description": "Include steps from fragments/testStoredVariableResolutionInIncludes_useVar.steps",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "else": [],
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "actions": [
+        {
+          "type": "INCLUDE",
+          "value": [
+            "fragments/testStoredVariableResolutionInIncludes_useVar.steps"
+          ],
+          "description": "Include steps from fragments/testStoredVariableResolutionInIncludes_useVar.steps",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Verify order is 98765",
+      "reasoning": "The instruction is to verify the order is \u002798765\u0027. I found an element with id \u0027order-id\u0027 and its text content is \u002798765\u0027. I will use an ASSERT action to verify its text content.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#order-id",
+          "value": [
+            "98765"
+          ],
+          "description": "Verify the order ID is 98765",
+          "elementDetails": "order-id",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}
