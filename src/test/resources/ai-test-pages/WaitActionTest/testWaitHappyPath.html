@@ -1,4 +1,10 @@
 <!DOCTYPE html>
+<!--
+Scenarios supported by this test page:
+- Scenario 1 (default): The success indicator (#success) is already present in the DOM but starts hidden (display:none) and is shown later.
+- Scenario 2 (?scenario=2): The success indicator (#success) does not exist in the DOM initially. It is dynamically created and inserted after the delay.
+- Scenario 3 (?scenario=3): The success indicator (#success) is visible immediately on load, but starts with text content "Processing..." and is updated to "Process Completed Successfully!" after the delay.
+-->
 <html>
 <head>
     <meta charset="UTF-8">
