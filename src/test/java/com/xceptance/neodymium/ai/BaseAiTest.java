@@ -635,6 +635,17 @@ public abstract class BaseAiTest extends BaseLlmTest
                     runSteps.run();
                 }
             }
+            try
+            {
+                if (Neodymium.ai() != null)
+                {
+                    Neodymium.ai().logStatsAndStepSummary();
+                }
+            }
+            catch (final Throwable t)
+            {
+                // Safety fallback to ignore log issues
+            }
             return Neodymium.getLastAiExecutionResult();
         }
         finally
@@ -834,6 +845,7 @@ public abstract class BaseAiTest extends BaseLlmTest
      * Automatically cleans up the temporary playbook directory and resets the override property key.
      */
     @AfterEach
+    @SuppressBrowsers
     public final void cleanupTempPlaybookDirectory()
     {
         if (tempPlaybookDirPropertyKey != null)

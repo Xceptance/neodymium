@@ -67,6 +67,7 @@ public class AiBrowser implements AutoCloseable {
     private AiExecutionResult lastExecutionResult;
     private AiTestRunResult lastTestRunResult;
     private final List<AiExecutionResult> executionResults = new CopyOnWriteArrayList<>();
+    private boolean statsLogged = false;
 
     private final List<Class<?>> dynamicallyRegisteredClasses = new CopyOnWriteArrayList<>();
 
@@ -344,11 +345,22 @@ public class AiBrowser implements AutoCloseable {
     @Override
     public void close()
     {
-        // Log cumulative token usage before shutdown
+        if (!statsLogged)
+        {
+            logStatsAndStepSummary();
+        }
+    }
+
+    /**
+     * Logs both the cumulative AI execution statistics and the step-by-step trace statistics.
+     */
+    public void logStatsAndStepSummary()
+    {
         if (aiStats.getOverallCallCount() > 0 || aiStats.getReplayCount() > 0 || aiStats.getDirectParseCount() > 0)
         {
             aiStats.logSummary();
             logStepSummary();
+            statsLogged = true;
         }
     }
 
