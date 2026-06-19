@@ -26,8 +26,31 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.xceptance.neodymium.ai.action.plugins.AssertAction;
+import com.xceptance.neodymium.ai.action.plugins.BackAction;
+import com.xceptance.neodymium.ai.action.plugins.BranchAction;
+import com.xceptance.neodymium.ai.action.plugins.CheckAction;
+import com.xceptance.neodymium.ai.action.plugins.ClearAction;
+import com.xceptance.neodymium.ai.action.plugins.ClearCookiesAction;
+import com.xceptance.neodymium.ai.action.plugins.ClickAction;
+import com.xceptance.neodymium.ai.action.plugins.ForwardAction;
+import com.xceptance.neodymium.ai.action.plugins.IncludeAction;
+import com.xceptance.neodymium.ai.action.plugins.JavaMethodAction;
+import com.xceptance.neodymium.ai.action.plugins.KeyPressAction;
+import com.xceptance.neodymium.ai.action.plugins.RefreshAction;
+import com.xceptance.neodymium.ai.action.plugins.ScrollAction;
+import com.xceptance.neodymium.ai.action.plugins.SplitAction;
+import com.xceptance.neodymium.ai.action.plugins.StoreAction;
+import com.xceptance.neodymium.ai.action.plugins.NavigateAction;
+import com.xceptance.neodymium.ai.action.plugins.HoverAction;
+import com.xceptance.neodymium.ai.action.plugins.SelectAction;
+
+
 import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.ai.action.plugins.SwitchWindowAction;
+import com.xceptance.neodymium.ai.action.plugins.TypeAction;
+import com.xceptance.neodymium.ai.action.plugins.WaitAction;
 
 /**
  * Registry for all available AI Actions. Instantiates plugins once on first use 
@@ -88,26 +111,27 @@ public class ActionRegistry {
     private static void registerCorePlugins()
     {
         // Register core plugins
-        register(new com.xceptance.neodymium.ai.action.plugins.NavigateAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.ClickAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.TypeAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.ClearAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.SelectAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.HoverAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.AssertAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.CheckAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.WaitAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.StoreAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.BranchAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.IncludeAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.JavaMethodAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.ScrollAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.KeyPressAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.BackAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.ForwardAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.RefreshAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.ClearCookiesAction());
-        register(new com.xceptance.neodymium.ai.action.plugins.SplitAction());
+        register(new NavigateAction());
+        register(new ClickAction());
+        register(new TypeAction());
+        register(new ClearAction());
+        register(new SelectAction());
+        register(new HoverAction());
+        register(new AssertAction());
+        register(new CheckAction());
+        register(new WaitAction());
+        register(new StoreAction());
+        register(new BranchAction());
+        register(new IncludeAction());
+        register(new JavaMethodAction());
+        register(new ScrollAction());
+        register(new KeyPressAction());
+        register(new BackAction());
+        register(new ForwardAction());
+        register(new RefreshAction());
+        register(new ClearCookiesAction());
+        register(new SwitchWindowAction());
+        register(new SplitAction());
     }
 
     /**
