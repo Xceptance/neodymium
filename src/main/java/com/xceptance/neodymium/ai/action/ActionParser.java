@@ -58,32 +58,39 @@ public class ActionParser {
      * @param llmResponse raw response from the LLM
      * @return parsed actions, never null
      */
-    public List<Action> parse(final String llmResponse) {
-        if (llmResponse == null || llmResponse.isBlank()) {
+    public List<Action> parse(final String llmResponse)
+    {
+        if (llmResponse == null || llmResponse.isBlank())
+        {
             LOG.warn("Empty LLM response");
             return Collections.emptyList();
         }
 
         final String rawJson = extractJson(llmResponse);
 
-        try {
+        try
+        {
             // 1. Try raw parsing first
             return parseInternal(rawJson);
-        } catch (final JsonSyntaxException e) {
+        }
+        catch (final JsonSyntaxException e)
+        {
             LOG.debug("Initial JSON parsing failed: {}. Attempting repair...", e.getMessage());
 
             // 2. Try repair as fallback
             final String repairedJson = repairJson(rawJson);
-            try {
+            try
+            {
                 final List<Action> actions = parseInternal(repairedJson);
                 LOG.debug("JSON successfully repaired and parsed");
                 return actions;
-            } catch (final Exception e2) {
+            }
+            catch (final Exception e2)
+            {
                 // 3. Both failed — report error back to AI
                 final String errorMessage = "Failed to parse AI response as JSON. Error: " + e2.getMessage()
                         + (repairedJson.equals(rawJson) ? "" : "\nRepaired version also failed.");
                 LOG.error(errorMessage);
-                LOG.debug("Raw response: {}", llmResponse);
                 throw new ActionParserException(errorMessage, e2);
             }
         }

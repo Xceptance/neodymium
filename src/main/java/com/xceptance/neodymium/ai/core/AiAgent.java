@@ -1829,6 +1829,13 @@ public class AiAgent {
         {
             return null;
         }
+        if (stepDetails != null && stepDetails.isPesapCalled())
+        {
+            return new PreStepPesapResult(
+                    stepDetails.getPesapPredictedContextLevel(),
+                    stepDetails.isPesapRequiresJavaMethods(),
+                    List.of());
+        }
         if (stepDetails != null)
         {
             stepDetails.setPesapCalled(true);
@@ -1899,7 +1906,6 @@ public class AiAgent {
             final long duration = System.currentTimeMillis() - startTime;
 
             LOG.debug("📊 [Pre-Step PESAP] Step {} — call took {} ms", stepIndex + 1, duration);
-            LOG.debug("💬 [Pre-Step PESAP] Response:\n{}", response);
 
             final long pesapInAfter = llmClient.getAiStats().getPesapInputTokens();
             final long pesapOutAfter = llmClient.getAiStats().getPesapOutputTokens();
@@ -2291,17 +2297,6 @@ public class AiAgent {
                         LlmMode.AGENT));
 
                 executionLog.logResponse(llmResponse);
-
-                LOG.trace("   📄 --- LLM Response (Pretty-Printed) ---");
-                String formattedResponse = llmResponse;
-                try {
-                    final String json = actionParser.extractJson(llmResponse);
-                    final JsonElement jsonElement = JsonParser.parseString(json);
-                    formattedResponse = new GsonBuilder().setPrettyPrinting().create().toJson(jsonElement);
-                } catch (final Exception e) {
-                    // Fallback to raw response on parsing failure
-                }
-                LOG.trace("\n{}", formattedResponse);
 
                 // Log reasoning
                 final String reasoning = actionParser.getReasoning(llmResponse);
