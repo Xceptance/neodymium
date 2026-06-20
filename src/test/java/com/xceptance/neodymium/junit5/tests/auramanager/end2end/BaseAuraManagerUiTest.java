@@ -1,13 +1,7 @@
 package com.xceptance.neodymium.junit5.tests.auramanager.end2end;
 
-import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
-import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.ai.BaseAiTest;
-import com.xceptance.neodymium.aura.NeodymiumAuraManager;
-import com.xceptance.neodymium.util.Neodymium;
-import java.io.IOException;
-import java.io.File;
 import com.xceptance.neodymium.common.browser.Browser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

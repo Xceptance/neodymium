@@ -34,10 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 
-import com.xceptance.neodymium.ai.core.AiAgent.DefinitiveAssertionError;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.AssertionUtils;
 import com.xceptance.neodymium.util.Neodymium;
 
 /**

@@ -23,7 +23,6 @@ import org.openqa.selenium.ElementClickInterceptedException;
 import org.openqa.selenium.ElementNotInteractableException;
 import org.openqa.selenium.StaleElementReferenceException;
 import com.codeborne.selenide.SelenideElement;
-import com.codeborne.selenide.ex.ElementShould;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;

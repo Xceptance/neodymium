@@ -53,11 +53,9 @@ import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.SelenideAddons;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.util.ScreenshotHasher;
-import com.xceptance.neodymium.ai.util.CustomRulesLoader;
 import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.reflect.TypeToken;
 import io.qameta.allure.Allure;

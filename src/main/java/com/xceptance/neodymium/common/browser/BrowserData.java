@@ -2,7 +2,6 @@ package com.xceptance.neodymium.common.browser;
 
 import com.xceptance.neodymium.common.Data;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.junit5.filtering.FilterTestMethodCallback;
 import com.xceptance.neodymium.util.Neodymium;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;

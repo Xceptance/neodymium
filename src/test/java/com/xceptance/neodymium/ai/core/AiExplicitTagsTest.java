@@ -44,8 +44,6 @@ import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.ai.core.AiStats;
-import com.xceptance.neodymium.ai.core.LlmClient;
 
 /**
  * Tests for the explicit language tags features in {@link AiAgent}:
