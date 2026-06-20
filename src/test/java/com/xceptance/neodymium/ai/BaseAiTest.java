@@ -190,6 +190,22 @@ public abstract class BaseAiTest extends BaseLlmTest
     protected void assertAiExecution(final Runnable runSteps)
     {
         final VerificationMode[] modes = resolveVerificationModes();
+        
+        // Automatically isolate playbook directory if a live generation mode is used
+        boolean hasLiveMode = false;
+        for (final VerificationMode mode : modes)
+        {
+            if (mode == VerificationMode.LIVE_LLM || mode == VerificationMode.HUD_LLM)
+            {
+                hasLiveMode = true;
+                break;
+            }
+        }
+        if (hasLiveMode)
+        {
+            useTempPlaybookDirectory();
+        }
+
         final String playbookId = Neodymium.getTestName();
         
         // Save original configurations
@@ -477,6 +493,11 @@ public abstract class BaseAiTest extends BaseLlmTest
      */
     protected final AiExecutionResult runAi(final Runnable runSteps, final VerificationMode mode)
     {
+        if (mode == VerificationMode.LIVE_LLM || mode == VerificationMode.HUD_LLM)
+        {
+            useTempPlaybookDirectory();
+        }
+
         final String playbookId = Neodymium.getTestName();
         final String origInteractive = String.valueOf(Neodymium.aiConfiguration().aiInteractive());
         final String origAutoSkip = System.getProperty("neodymium.ai.interactive.autoSkip", "false");
@@ -818,12 +839,21 @@ public abstract class BaseAiTest extends BaseLlmTest
      */
     protected final void useTempPlaybookDirectory()
     {
+        if (tempPlaybookDirPropertyKey != null)
+        {
+            return;
+        }
         final String testName = Neodymium.getTestName();
         if (testName != null)
         {
             tempPlaybookDirPropertyKey = "playbook.directory.method." + testName.trim().replace(" :: ", "::");
             final String cleanTestName = testName.replaceAll("[^_a-zA-Z0-9.-]", "_").replaceAll("_+", "_");
             tempPlaybookDir = new File("target/temp-playbooks/" + cleanTestName);
+            
+            if (tempPlaybookDir.exists())
+            {
+                deleteDirectory(tempPlaybookDir);
+            }
             
             // Activate the override to start clean
             Neodymium.getData().put(tempPlaybookDirPropertyKey, tempPlaybookDir.getAbsolutePath());
