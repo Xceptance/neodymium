@@ -1687,8 +1687,12 @@ public class AiAgent {
                                 LOG.info(
                                         "    ✅ Visual match succeeded (Hamming distance {} <= 15). Proceeding with recorded actions.",
                                         distance);
-                                if (!step.getActions().isEmpty()) {
-                                    pageAnalyzer.getPageContext(ContextLevel.LEAN);
+                                if (!step.getActions().isEmpty())
+                                {
+                                    final ContextLevel levelToUse = step.getHealedContextLevel() != null
+                                            ? step.getHealedContextLevel()
+                                            : ContextLevel.LEAN;
+                                    pageAnalyzer.getPageContext(levelToUse);
                                 }
                                 executionLog.logInfo(
                                         "Replaying actions from playbook (visual match succeeded, Hamming distance: "
@@ -1711,8 +1715,13 @@ public class AiAgent {
                             throw new ActionExecutionException(
                                     "Error during visual hash verification: " + e.getMessage(), e);
                         }
-                    } else {
-                        pageAnalyzer.getPageContext(ContextLevel.LEAN);
+                    }
+                    else
+                    {
+                        final ContextLevel levelToUse = step.getHealedContextLevel() != null
+                                ? step.getHealedContextLevel()
+                                : ContextLevel.LEAN;
+                        pageAnalyzer.getPageContext(levelToUse);
 
                         executionLog.logInfo("Replaying actions from playbook.");
                         llmClient.getAiStats().recordReplay();

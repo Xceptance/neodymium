@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai.core;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -460,6 +461,31 @@ public class AiBrowser implements AutoCloseable {
         }
         LOG.trace("    Mode:           {}", mode);
         LOG.trace("    Duration:       {} ms", step.getDurationMs());
+        LOG.trace("    Escalations:    {}", step.getEscalations().size());
+        final List<String> levels = new ArrayList<>();
+        if (!step.getEscalations().isEmpty())
+        {
+            levels.add(step.getEscalations().get(0).getFromLevel().name());
+            for (final EscalationDetails esc : step.getEscalations())
+            {
+                levels.add(esc.getToLevel().name());
+            }
+        }
+        else
+        {
+            for (final LlmCallDetails call : step.getLlmCalls())
+            {
+                if (call.getCallMode() != LlmMode.PESAP)
+                {
+                    levels.add(call.getContextLevel() != null ? call.getContextLevel().name() : "UNKNOWN");
+                    break;
+                }
+            }
+        }
+        if (!levels.isEmpty())
+        {
+            LOG.trace("    Context Levels: {}", String.join(" -> ", levels));
+        }
 
         final List<Action> actions = step.getActions();
         if (actions != null && !actions.isEmpty())

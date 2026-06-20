@@ -1,0 +1,21 @@
+# AI-generated: Gemini 2.5 Pro
+# @author AI-generated: Gemini 2.5 Pro
+# @author Xceptance GmbH 2026
+
+steps: |
+  Open http://localhost:${port}/verla-${quality}/index.html
+  Verify that the site logo or title containing 'VÉRLA' is visible.
+  Locate the search input field and type 'Minimalist' into it.
+  Press enter or click the search button to submit.
+  Verify that the search results page is loaded showing products matching the query 'Minimalist'.
+  Scroll to the bottom of the page to trigger infinite scroll.
+  Verify that more product cards are loaded and appended to the grid.
+  Click on the 'Tops' category filter in the sidebar.
+  Verify that the products displayed are refined to show only Tops.
+  Select 'Price: Low to High' from the sort dropdown list.
+  Verify that the product grid refreshes to show refined products sorted by price.
+
+data:
+  - quality: "perfect"
+  - quality: "normal"
+  - quality: "bad"

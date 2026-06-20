@@ -780,7 +780,7 @@
             animation: spin-loader 0.8s linear infinite;
         }
         .cart-dropdown {
-            display: none;
+            visibility: hidden;
             position: absolute;
             top: 100%;
             right: 0;
@@ -792,7 +792,53 @@
             padding: 20px;
             opacity: 0;
             transform: translateY(10px);
+            transition: opacity var(--transition-speed), transform var(--transition-speed), visibility var(--transition-speed);
+        }
+        #cart-dropdown-wrapper:hover .cart-dropdown {
+            visibility: visible;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        /* Quick Add Dropdown Selector */
+        .quick-add-dropdown {
+            display: none;
+            position: absolute;
+            bottom: 12%;
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-radius: var(--border-radius);
+            padding: 8px 12px;
+            z-index: 1000;
+            gap: 6px;
+            opacity: 0;
             transition: opacity var(--transition-speed), transform var(--transition-speed);
+        }
+        .quick-add-dropdown.active {
+            display: flex;
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .size-btn {
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--color-border);
+            background: var(--color-bg-primary);
+            color: var(--color-text-primary);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .size-btn:hover {
+            border-color: var(--color-accent);
+            background-color: var(--color-accent);
+            color: white;
         }
 </style>
 </head>
@@ -1484,8 +1530,7 @@
             function showCartDropdown() {
                 clearTimeout(cartHoverTimeout);
                 if (cartDropdown) {
-                    cartDropdown.style.display = 'block';
-                    cartDropdown.offsetHeight; // force reflow
+                    cartDropdown.style.visibility = 'visible';
                     cartDropdown.style.opacity = '1';
                     cartDropdown.style.transform = 'translateY(0)';
                 }
@@ -1497,7 +1542,7 @@
                     cartDropdown.style.opacity = '0';
                     cartDropdown.style.transform = 'translateY(10px)';
                     cartHoverTimeout = setTimeout(() => {
-                        cartDropdown.style.display = 'none';
+                        cartDropdown.style.visibility = 'hidden';
                     }, 300);
                 }
             }
@@ -1573,71 +1618,183 @@
                 }
             }
 
+            // Setup Quick Add sizes dropdown function
+            window.addToCart = (btn) => {
+                const card = btn.closest('.product-card');
+                const category = card ? card.getAttribute('data-category') : 'tops';
+                
+                if (category === 'accessories') {
+                    // Bypass size selector: add to cart directly!
+                    const originalText = btn.textContent;
+                    btn.disabled = true;
+                    btn.textContent = 'Adding...';
+                    btn.classList.add('adding');
+                    
+                    fetch('../index.html')
+                        .then(() => {
+                            const delay = Math.floor(Math.random() * 901) + 300;
+                            setTimeout(() => {
+                                if (card) {
+                                    const titleEl = card.querySelector('.product-title, .item-title, .product-title-bad, h2, h3, h4');
+                                    const title = titleEl ? titleEl.textContent.trim() : 'Apparel Item';
+                                    
+                                    const priceEl = card.querySelector('.product-price, .item-price, .product-price-bad');
+                                    let priceText = '0.00';
+                                    if (priceEl) {
+                                        const saleEl = priceEl.querySelector('.sale');
+                                        priceText = saleEl ? saleEl.textContent : priceEl.textContent;
+                                    }
+                                    const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0.00;
+                                    
+                                    const svgEl = card.querySelector('svg');
+                                    const svgMarkup = svgEl ? svgEl.outerHTML : '';
+                                    
+                                    const existing = cart.find(item => item.title === title);
+                                    if (existing) {
+                                        existing.qty++;
+                                    } else {
+                                        cart.push({ title: title, price, svg: svgMarkup, qty: 1 });
+                                    }
+                                    sessionStorage.setItem('verla-cart', JSON.stringify(cart));
+                                    updateCartUI();
+                                }
+                                
+                                btn.classList.remove('adding');
+                                btn.classList.add('added');
+                                btn.textContent = 'Added!';
+                                
+                                showCartDropdown();
+                                setTimeout(() => {
+                                    hideCartDropdown();
+                                }, 1500);
+                                
+                                setTimeout(() => {
+                                    btn.classList.remove('added');
+                                    btn.textContent = originalText;
+                                    btn.disabled = false;
+                                }, 1000);
+                            }, delay);
+                        })
+                        .catch(() => {
+                            btn.classList.remove('adding');
+                            btn.disabled = false;
+                            btn.textContent = originalText;
+                        });
+                    return;
+                }
+                
+                let dropdown = btn.nextElementSibling;
+                if (!dropdown || !dropdown.classList.contains('quick-add-dropdown')) {
+                    dropdown = document.createElement('div');
+                    dropdown.className = 'quick-add-dropdown';
+                    
+                    let sizes = ['XS', 'S', 'M', 'L', 'XL'];
+                    if (category === 'bottoms') {
+                        sizes = ['28', '30', '32', '34', '36', '38'];
+                    } else if (category === 'footwear' || category === 'shoes') {
+                        sizes = ['39', '40', '41', '42', '43', '44'];
+                    }
+                    
+                    dropdown.innerHTML = sizes.map(size => '<button class="size-btn" type="button" data-size="' + size + '">' + size + '</button>').join('');
+                    btn.after(dropdown);
+                }
+                
+                document.querySelectorAll('.quick-add-dropdown.active').forEach(d => {
+                    if (d !== dropdown) d.classList.remove('active');
+                });
+                
+                dropdown.classList.toggle('active');
+            };
+
             // Setup Quick Add listeners
             document.addEventListener('click', (e) => {
                 const btn = e.target.closest('.product-quick-add, .product-quick-add-bad, .btn-quick-add-bad');
-                if (!btn || btn.disabled || btn.classList.contains('adding')) return;
+                if (btn) {
+                    if (btn.disabled || btn.classList.contains('adding')) return;
+                    if (btn.textContent.trim().toLowerCase().includes('sold out')) return;
+                    
+                    e.stopPropagation();
+                    window.addToCart(btn);
+                    return;
+                }
 
-                // Don't add sold out items
-                if (btn.textContent.trim().toLowerCase().includes('sold out')) return;
-
-                e.stopPropagation();
-                const originalText = btn.textContent;
-                btn.disabled = true;
-                btn.textContent = 'Adding...';
-                btn.classList.add('adding');
-
-                fetch('../index.html')
-                    .then(() => {
-                        const delay = Math.floor(Math.random() * 901) + 300;
-                        setTimeout(() => {
-                            const card = btn.closest('.product-card, .item-box, .product-card-bad');
-                            if (card) {
-                                const titleEl = card.querySelector('.product-title, .item-title, .product-title-bad, h3, h4');
-                                const title = titleEl ? titleEl.textContent.trim() : 'Apparel Item';
-                                
-                                const priceEl = card.querySelector('.product-price, .item-price, .product-price-bad');
-                                let priceText = '0.00';
-                                if (priceEl) {
-                                    const saleEl = priceEl.querySelector('.sale');
-                                    priceText = saleEl ? saleEl.textContent : priceEl.textContent;
-                                }
-                                const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0.00;
-                                
-                                const svgEl = card.querySelector('svg');
-                                const svgMarkup = svgEl ? svgEl.outerHTML : '';
-
-                                const existing = cart.find(item => item.title === title);
-                                if (existing) {
-                                    existing.qty++;
-                                } else {
-                                    cart.push({ title, price, svg: svgMarkup, qty: 1 });
-                                }
-                                sessionStorage.setItem('verla-cart', JSON.stringify(cart));
-                                updateCartUI();
-                            }
-
-                            btn.classList.remove('adding');
-                            btn.classList.add('added');
-                            btn.textContent = 'Added!';
-
-                            showCartDropdown();
+                const sizeBtn = e.target.closest('.size-btn');
+                if (sizeBtn) {
+                    e.stopPropagation();
+                    const dropdown = sizeBtn.parentElement;
+                    const quickBtn = dropdown.previousElementSibling;
+                    const size = sizeBtn.getAttribute('data-size');
+                    
+                    if (!quickBtn || quickBtn.disabled || quickBtn.classList.contains('adding')) return;
+                    
+                    const originalText = quickBtn.textContent;
+                    quickBtn.disabled = true;
+                    quickBtn.textContent = 'Adding...';
+                    quickBtn.classList.add('adding');
+                    
+                    fetch('../index.html')
+                        .then(() => {
+                            const delay = Math.floor(Math.random() * 901) + 300;
                             setTimeout(() => {
-                                hideCartDropdown();
-                            }, 1500);
-
-                            setTimeout(() => {
-                                btn.classList.remove('added');
-                                btn.textContent = originalText;
-                                btn.disabled = false;
-                            }, 1000);
-                        }, delay);
-                    })
-                    .catch(() => {
-                        btn.classList.remove('adding');
-                        btn.disabled = false;
-                        btn.textContent = originalText;
+                                const card = quickBtn.closest('.product-card, .item-box, .product-card-bad');
+                                if (card) {
+                                    const titleEl = card.querySelector('.product-title, .item-title, .product-title-bad, h3, h4');
+                                    const title = titleEl ? titleEl.textContent.trim() : 'Apparel Item';
+                                    const titleWithSize = title + ' (' + size + ')';
+                                    
+                                    const priceEl = card.querySelector('.product-price, .item-price, .product-price-bad');
+                                    let priceText = '0.00';
+                                    if (priceEl) {
+                                        const saleEl = priceEl.querySelector('.sale');
+                                        priceText = saleEl ? saleEl.textContent : priceEl.textContent;
+                                    }
+                                    const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0.00;
+                                    
+                                    const svgEl = card.querySelector('svg');
+                                    const svgMarkup = svgEl ? svgEl.outerHTML : '';
+                                    
+                                    const existing = cart.find(item => item.title === titleWithSize);
+                                    if (existing) {
+                                        existing.qty++;
+                                    } else {
+                                        cart.push({ title: titleWithSize, price, svg: svgMarkup, qty: 1 });
+                                    }
+                                    sessionStorage.setItem('verla-cart', JSON.stringify(cart));
+                                    updateCartUI();
+                                }
+                                
+                                quickBtn.classList.remove('adding');
+                                quickBtn.classList.add('added');
+                                quickBtn.textContent = 'Added!';
+                                
+                                showCartDropdown();
+                                setTimeout(() => {
+                                    hideCartDropdown();
+                                }, 1500);
+                                
+                                setTimeout(() => {
+                                    quickBtn.classList.remove('added');
+                                    quickBtn.textContent = originalText;
+                                    quickBtn.disabled = false;
+                                }, 1000);
+                            }, delay);
+                        })
+                        .catch(() => {
+                            quickBtn.classList.remove('adding');
+                            quickBtn.disabled = false;
+                            quickBtn.textContent = originalText;
+                        });
+                        
+                    dropdown.classList.remove('active');
+                    return;
+                }
+                
+                // Close dropdowns when clicking elsewhere
+                if (!e.target.closest('.quick-add-dropdown')) {
+                    document.querySelectorAll('.quick-add-dropdown.active').forEach(d => {
+                        d.classList.remove('active');
                     });
+                }
             });
 
             updateCartUI();

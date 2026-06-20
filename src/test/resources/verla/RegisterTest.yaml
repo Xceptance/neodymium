@@ -1,0 +1,67 @@
+steps: |
+  Open http://localhost:44444/verla-${quality}/index.html
+  Select "${country}" from the country dropdown.
+  Click the "My Account" link.
+  Click the "Register" link.
+  Type "${firstName}" into the first name field.
+  Type "${lastName}" into the last name field.
+  Type "${email}" into the email address field.
+  Type "${password}" into the password field.
+  Type "${password}" into the confirm password field.
+  Click the "Register" button.
+  Assert that the page contains "Welcome, ${firstName}".
+data:
+  - firstName: John
+    lastName: Doe
+    email: john.doe.us@example.com
+    password: Password123!
+    quality: "perfect"
+    country: "United States"
+  - firstName: Jane
+    lastName: Smith
+    email: jane.smith.uk@example.com
+    password: SecurePass1!
+    quality: "perfect"
+    country: "United Kingdom"
+  - firstName: Robert
+    lastName: Brown
+    email: robert.brown.caen@example.com
+    password: SecurePass2!
+    quality: "perfect"
+    country: "Canada (EN)"
+  - firstName: Sophie
+    lastName: Tremblay
+    email: sophie.tremblay.cafr@example.com
+    password: SecurePass3!
+    quality: "perfect"
+    country: "Canada (FR)"
+  - firstName: Klaus
+    lastName: Mueller
+    email: klaus.mueller.de@example.com
+    password: SecurePass4!
+    quality: "perfect"
+    country: "Germany"
+  - firstName: Anna
+    lastName: Kowalska
+    email: anna.kowalska.pl@example.com
+    password: SecurePass5!
+    quality: "perfect"
+    country: "Poland"
+  - firstName: Erik
+    lastName: Svensson
+    email: erik.svensson.se@example.com
+    password: SecurePass6!
+    quality: "perfect"
+    country: "Sweden"
+  - firstName: Sanna
+    lastName: Virtanen
+    email: sanna.virtanen.fi@example.com
+    password: SecurePass7!
+    quality: "perfect"
+    country: "Finland"
+  - firstName: Kenji
+    lastName: Tanaka
+    email: kenji.tanaka.jp@example.com
+    password: SecurePass8!
+    quality: "perfect"
+    country: "Japan"

@@ -18,8 +18,18 @@
  */
 package com.xceptance.neodymium.ai.core;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
 
 /**
@@ -30,9 +40,9 @@ import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
  * @author AI-generated: Gemini 2.5 Flash
  * @author Xceptance GmbH 2026
  */
-@Disabled("Manual utility server - do not run in automated test suites")
 public final class RunServerTest
 {
+    @Disabled
     @Test
     public void runServerIndefinitely() throws Exception
     {
@@ -51,6 +61,9 @@ public final class RunServerTest
         System.out.println("    - Dashboard:          http://localhost:" + server.getPort() + "/AuraGlanceTest/dashboard/index.html");
         System.out.println("    - Accessibility:      http://localhost:" + server.getPort() + "/AuraGlanceTest/a11y/index.html");
         System.out.println("    - React SPA:          http://localhost:" + server.getPort() + "/AuraGlanceTest/spa/index.html");
+        System.out.println("    - VÉRLA Perfect Store: http://localhost:" + server.getPort() + "/verla-perfect/index.html");
+        System.out.println("    - VÉRLA Normal Store:  http://localhost:" + server.getPort() + "/verla-normal/index.html");
+        System.out.println("    - VÉRLA Bad Store:     http://localhost:" + server.getPort() + "/verla-bad/index.html");
         System.out.println();
         System.out.println("  [HTTPS Secure Contexts]");
         System.out.println("    - Starter Hub Portal: https://localhost:" + server.getHttpsPort() + "/");
@@ -59,6 +72,9 @@ public final class RunServerTest
         System.out.println("    - Dashboard:          https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/dashboard/index.html");
         System.out.println("    - Accessibility:      https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/a11y/index.html");
         System.out.println("    - React SPA:          https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/spa/index.html");
+        System.out.println("    - VÉRLA Perfect Store: https://localhost:" + server.getHttpsPort() + "/verla-perfect/index.html");
+        System.out.println("    - VÉRLA Normal Store:  https://localhost:" + server.getHttpsPort() + "/verla-normal/index.html");
+        System.out.println("    - VÉRLA Bad Store:     https://localhost:" + server.getHttpsPort() + "/verla-bad/index.html");
         System.out.println();
         System.out.println("  NOTE: For HTTPS, you will get a self-signed certificate warning.");
         System.out.println("        You can safely bypass this or run with Chrome's '--ignore-certificate-errors' flag.");
@@ -71,5 +87,33 @@ public final class RunServerTest
         {
             Thread.sleep(10000);
         }
+    }
+
+    @Disabled
+    @Test
+    public void regenerateProductCatalogFile() throws Exception
+    {
+        final String json;
+        try (final InputStream is = EmbeddedHtmlServer.class.getClassLoader().getResourceAsStream("ai-test-pages/verla-catalog.json"))
+        {
+            if (is == null)
+            {
+                throw new java.io.FileNotFoundException("verla-catalog.json not found in classpath resources");
+            }
+            json = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
+                .lines().collect(Collectors.joining("\n"));
+        }
+
+        final Gson gson = new Gson();
+        final EmbeddedHtmlServer.CatalogConfig config = gson.fromJson(json, EmbeddedHtmlServer.CatalogConfig.class);
+        final List<EmbeddedHtmlServer.Product> products = EmbeddedHtmlServer.generateCatalogProducts(config);
+
+        final Gson prettyGson = new GsonBuilder().setPrettyPrinting().create();
+        final String productsJson = prettyGson.toJson(products);
+
+        final java.nio.file.Path targetPath = java.nio.file.Path.of(System.getProperty("user.dir"), "src/test/resources/ai-test-pages/verla-products.json");
+        java.nio.file.Files.writeString(targetPath, productsJson, StandardCharsets.UTF_8);
+
+        System.out.println("Successfully regenerated product catalog file at: " + targetPath.toAbsolutePath());
     }
 }
