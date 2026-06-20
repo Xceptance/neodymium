@@ -1,0 +1,59 @@
+<!-- Hero Section -->
+<section class="hero-section">
+    <div style="flex: 1; max-width: 550px; z-index: 2;">
+        <span style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--color-accent); font-weight: 600; margin-bottom: 16px; display: block;">${lang_summerEssentials}</span>
+        <h1 style="font-family: var(--font-family-serif); font-size: 48px; font-weight: 600; line-height: 1.15; margin-bottom: 24px; color: var(--color-text-primary);">${lang_heroTitle}</h1>
+        <p style="color: var(--color-text-secondary); font-size: 16px; margin-bottom: 36px; line-height: 1.7;">${lang_heroDescription}</p>
+        <a href="c/tops.html" class="btn-primary" style="display: inline-block;">${lang_shopCollection}</a>
+    </div>
+    <div style="flex: 1; display: flex; justify-content: center; align-items: center; position: relative; z-index: 2;">
+        <!-- Curated Premium silhouette display SVG -->
+        <svg viewBox="0 0 100 100" style="width: 100%; max-width: 320px; color: var(--color-accent); transition: transform var(--transition-speed);" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+            <defs>
+                <linearGradient id="terracotta-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="var(--color-accent-light)"/>
+                    <stop offset="100%" stop-color="#E8DCD5"/>
+                </linearGradient>
+            </defs>
+            <circle cx="50" cy="50" r="45" fill="url(#terracotta-glow)"/>
+            <path d="M25 25 C30 18, 70 18, 75 25 L82 45 L72 48 L68 35 L68 85 L32 85 L32 35 L28 48 L18 45 Z" fill="var(--color-accent)" opacity="0.85"/>
+        </svg>
+    </div>
+    <!-- Elegant background glow -->
+    <div style="position: absolute; top: -50px; right: -50px; width: 300px; height: 300px; background: radial-gradient(circle, var(--color-accent-light) 0%, rgba(255,255,255,0) 70%); opacity: 0.5; z-index: 1;"></div>
+</section>
+
+<!-- Featured Categories -->
+<section style="margin-bottom: 60px;">
+    <h2 style="font-family: var(--font-family-serif); font-size: 28px; font-weight: 600; text-align: center; margin-bottom: 40px;">${lang_featuredCategories}</h2>
+    <div class="featured-categories-grid">
+        <a href="c/tops.html" style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 32px; text-align: center; transition: all var(--transition-speed);" onmouseover="this.style.borderColor='var(--color-accent)'; this.style.boxShadow='var(--box-shadow)'" onmouseout="this.style.borderColor='var(--color-border)'; this.style.boxShadow='none'">
+            <div style="font-size: 32px; margin-bottom: 12px;">👕</div>
+            <div style="font-weight: 600; font-size: 16px; color: var(--color-text-primary);">${lang_tops}</div>
+        </a>
+        <a href="c/bottoms.html" style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 32px; text-align: center; transition: all var(--transition-speed);" onmouseover="this.style.borderColor='var(--color-accent)'; this.style.boxShadow='var(--box-shadow)'" onmouseout="this.style.borderColor='var(--color-border)'; this.style.boxShadow='none'">
+            <div style="font-size: 32px; margin-bottom: 12px;">👖</div>
+            <div style="font-weight: 600; font-size: 16px; color: var(--color-text-primary);">${lang_bottoms}</div>
+        </a>
+        <a href="c/outerwear.html" style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 32px; text-align: center; transition: all var(--transition-speed);" onmouseover="this.style.borderColor='var(--color-accent)'; this.style.boxShadow='var(--box-shadow)'" onmouseout="this.style.borderColor='var(--color-border)'; this.style.boxShadow='none'">
+            <div style="font-size: 32px; margin-bottom: 12px;">🧥</div>
+            <div style="font-weight: 600; font-size: 16px; color: var(--color-text-primary);">${lang_outerwear}</div>
+        </a>
+        <a href="c/footwear.html" style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 32px; text-align: center; transition: all var(--transition-speed);" onmouseover="this.style.borderColor='var(--color-accent)'; this.style.boxShadow='var(--box-shadow)'" onmouseout="this.style.borderColor='var(--color-border)'; this.style.boxShadow='none'">
+            <div style="font-size: 32px; margin-bottom: 12px;">👟</div>
+            <div style="font-weight: 600; font-size: 16px; color: var(--color-text-primary);">${lang_footwear}</div>
+        </a>
+        <a href="c/accessories.html" style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 32px; text-align: center; transition: all var(--transition-speed);" onmouseover="this.style.borderColor='var(--color-accent)'; this.style.boxShadow='var(--box-shadow)'" onmouseout="this.style.borderColor='var(--color-border)'; this.style.boxShadow='none'">
+            <div style="font-size: 32px; margin-bottom: 12px;">👜</div>
+            <div style="font-weight: 600; font-size: 16px; color: var(--color-text-primary);">${lang_accessories}</div>
+        </a>
+    </div>
+</section>
+
+<!-- Featured Products Grid -->
+<section style="margin-bottom: 40px;">
+    <h2 style="font-family: var(--font-family-serif); font-size: 28px; font-weight: 600; text-align: center; margin-bottom: 40px;">${lang_featuredEssentials}</h2>
+    <div class="products-grid">
+        ${featured_products}
+    </div>
+</section>

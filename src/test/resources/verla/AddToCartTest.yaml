@@ -1,0 +1,29 @@
+# AI-generated: Gemini 2.5 Pro
+# @author AI-generated: Gemini 2.5 Pro
+# @author Xceptance GmbH 2026
+
+steps: |
+  Open ${verla.url}/verla-${quality}/index.html
+  Verify that the storefront home page has loaded.
+  Locate the first product card and click its 'Add to Cart' or 'Add' button.
+  Verify that the cart item count in the header updates.
+  Open ${verla.url}/verla-${quality}/cart.html
+  Verify that the shopping cart page is loaded showing the added product.
+  Locate the promo code input field with id 'couponCode' and type '10p-off' into it.
+  Submit the promo code form to apply the coupon.
+  Verify that the order summary now shows a 'Discount (10P-OFF)' line item.
+  Locate the promo code input field with id 'couponCode', clear its content, and type 'FREEGIFT' into it.
+  Submit the promo code form to apply the new coupon.
+  Verify that the cart table now includes a free bonus gift item.
+  Click on the country trigger button with id 'country-trigger-btn' to open the country selection modal.
+  Locate the country search input with id 'country-search' and type 'Sweden' into it.
+  Select 'Sweden' from the filtered country list results.
+  Verify that the page reloads or redirects, and prices/totals are now displayed in Swedish Krona 'kr' currency.
+
+data:
+  - testId: "perfect"
+    quality: "perfect"
+  - testId: "normal"
+    quality: "normal"
+  - testId: "bad"
+    quality: "bad"

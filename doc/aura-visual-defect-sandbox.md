@@ -268,3 +268,13 @@ To benchmark and stress-test the robustness of test automation locators (IDs, CS
 - **Accessibility:** Complete absence of semantic tags, alt text, labels, and roles. Form fields are styled divs, and checkboxes are toggled via styled click elements.
 - **Auditing Value:** Validates the resilience of self-healing locators, visual locator mapping, and AI-driven selector healing algorithms under worst-case DOM conditions.
 
+---
+
+## 10. Dynamic VÉRLA Storefront Contexts (`/verla-*`)
+
+The requirements, business features, and quality-level dimensions of the dynamic VÉRLA storefront have been extracted to a dedicated specification. 
+
+Please refer to the complete documentation in [VERLA_DEMO_STORE.md](VERLA_DEMO_STORE.md).
+
+
+

@@ -455,43 +455,7 @@ public class AiAgent {
                 // Fully strip ALL registered tags beautifully via stripAllTags static helper
                 final String strippedStep = stripAllTags(step);
 
-                StepDetails stepDetails = result.getSteps().get(i);
-                if (!isDirectInstruction(strippedStep) && needsPesap && !alreadySplitSteps.contains(strippedStep))
-                {
-                    final Object testInstance = actionExecutor.getTestInstance();
-                    final Class<?> testClass = testInstance != null ? testInstance.getClass() : null;
-                    final PreStepPesapResult pesapResult = runPreStepPesap(i, testClass, stepDetails);
-                    if (pesapResult != null && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
-                    {
-                        LOG.info("✂️ Upfront JIT step split detected: '{}' split into {}", strippedStep, pesapResult.splitSteps());
-                        final List<String> splitList = pesapResult.splitSteps();
-                        final String origLine = i < stepLines.size() ? stepLines.get(i) : null;
-
-                        stepsList.set(i, splitList.get(0));
-                        stepDetails.setExpandedInstruction(splitList.get(0));
-                        stepDetails.setOriginalUnsplitInstruction(stepUnresolved);
-
-                        for (int j = 1; j < splitList.size(); j++)
-                        {
-                            final String part = splitList.get(j);
-                            stepsList.add(i + j, part);
-                            if (i + j <= stepLines.size())
-                            {
-                                stepLines.add(i + j, origLine);
-                            }
-                            else
-                            {
-                                stepLines.add(origLine);
-                            }
-                            final StepDetails partDetails = new StepDetails(part);
-                            partDetails.setOriginalUnsplitInstruction(stepUnresolved);
-                            result.getSteps().add(i + j, partDetails);
-                        }
-                        alreadySplitSteps.add(strippedStep);
-                        i--;
-                        continue;
-                    }
-                }
+                final StepDetails stepDetails = result.getSteps().get(i);
 
                 boolean isReplay = false;
                 final Playbook playbookForCheck = Neodymium.getAiPlaybook();
@@ -581,8 +545,9 @@ public class AiAgent {
                 }
                 LOG.debug("{}", strippedStep);
                 LOG.debug("───────────────────────────────────────────────────────────");
+
                 // We always run PESAP for non-direct instructions to classify context level, check custom java methods, and handle step splitting.
-                if (!isDirectInstruction(strippedStep) && needsPesap && Neodymium.aiConfiguration().pesapEnabled() && !alreadySplitSteps.contains(strippedStep))
+                if (!isDirectInstruction(strippedStep) && needsPesap && !alreadySplitSteps.contains(strippedStep))
                 {
                     final Object testInstance = actionExecutor.getTestInstance();
                     final Class<?> testClass = testInstance != null ? testInstance.getClass() : null;
@@ -630,7 +595,6 @@ public class AiAgent {
                     for (int j = i + 1; j < stepsList.size(); j++) {
                         futureInstructions.add(stepsList.get(j));
                     }
-                    stepDetails = result.getSteps().get(i);
                     stepDetails.setExpandedInstruction(strippedStep);
                     final long stepStartTime = System.currentTimeMillis();
                     com.xceptance.neodymium.ai.action.plugins.BranchAction.clearLastConditionResult();
@@ -1723,8 +1687,12 @@ public class AiAgent {
                                 LOG.info(
                                         "    ✅ Visual match succeeded (Hamming distance {} <= 15). Proceeding with recorded actions.",
                                         distance);
-                                if (!step.getActions().isEmpty()) {
-                                    pageAnalyzer.getPageContext(ContextLevel.LEAN);
+                                if (!step.getActions().isEmpty())
+                                {
+                                    final ContextLevel levelToUse = step.getHealedContextLevel() != null
+                                            ? step.getHealedContextLevel()
+                                            : ContextLevel.LEAN;
+                                    pageAnalyzer.getPageContext(levelToUse);
                                 }
                                 executionLog.logInfo(
                                         "Replaying actions from playbook (visual match succeeded, Hamming distance: "
@@ -1747,8 +1715,13 @@ public class AiAgent {
                             throw new ActionExecutionException(
                                     "Error during visual hash verification: " + e.getMessage(), e);
                         }
-                    } else {
-                        pageAnalyzer.getPageContext(ContextLevel.LEAN);
+                    }
+                    else
+                    {
+                        final ContextLevel levelToUse = step.getHealedContextLevel() != null
+                                ? step.getHealedContextLevel()
+                                : ContextLevel.LEAN;
+                        pageAnalyzer.getPageContext(levelToUse);
 
                         executionLog.logInfo("Replaying actions from playbook.");
                         llmClient.getAiStats().recordReplay();
@@ -1829,6 +1802,13 @@ public class AiAgent {
         {
             return null;
         }
+        if (stepDetails != null && stepDetails.isPesapCalled())
+        {
+            return new PreStepPesapResult(
+                    stepDetails.getPesapPredictedContextLevel(),
+                    stepDetails.isPesapRequiresJavaMethods(),
+                    List.of());
+        }
         if (stepDetails != null)
         {
             stepDetails.setPesapCalled(true);
@@ -1899,7 +1879,6 @@ public class AiAgent {
             final long duration = System.currentTimeMillis() - startTime;
 
             LOG.debug("📊 [Pre-Step PESAP] Step {} — call took {} ms", stepIndex + 1, duration);
-            LOG.debug("💬 [Pre-Step PESAP] Response:\n{}", response);
 
             final long pesapInAfter = llmClient.getAiStats().getPesapInputTokens();
             final long pesapOutAfter = llmClient.getAiStats().getPesapOutputTokens();
@@ -2291,17 +2270,6 @@ public class AiAgent {
                         LlmMode.AGENT));
 
                 executionLog.logResponse(llmResponse);
-
-                LOG.trace("   📄 --- LLM Response (Pretty-Printed) ---");
-                String formattedResponse = llmResponse;
-                try {
-                    final String json = actionParser.extractJson(llmResponse);
-                    final JsonElement jsonElement = JsonParser.parseString(json);
-                    formattedResponse = new GsonBuilder().setPrettyPrinting().create().toJson(jsonElement);
-                } catch (final Exception e) {
-                    // Fallback to raw response on parsing failure
-                }
-                LOG.trace("\n{}", formattedResponse);
 
                 // Log reasoning
                 final String reasoning = actionParser.getReasoning(llmResponse);
