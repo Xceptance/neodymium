@@ -225,6 +225,7 @@ public abstract class BaseAiTest extends BaseLlmTest
                 if (i > 0)
                 {
                     final String activeUrl = WebDriverRunner.url();
+                    resetBrowser();
                     if (activeUrl != null && !activeUrl.equals("about:blank"))
                     {
                         Selenide.open(activeUrl);
