@@ -19,7 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.recording.TakeScreenshotsThread;
 import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
 import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
 import com.xceptance.neodymium.util.AllureAddons;

@@ -67,7 +67,6 @@ import com.xceptance.neodymium.common.browser.wrappers.GeckoBuilder;
 import com.xceptance.neodymium.common.browser.wrappers.IEBuilder;
 import com.xceptance.neodymium.common.browser.wrappers.SafariBuilder;
 import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumConfiguration;
 
 /**
  * Helper class to create webdriver for the test

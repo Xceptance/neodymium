@@ -21,8 +21,6 @@ import com.xceptance.neodymium.ai.BaseAiTest;
 
 import org.junit.jupiter.api.Assertions;
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.ai.core.ContextLevel;
-import com.xceptance.neodymium.ai.core.PageAnalyzer;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 

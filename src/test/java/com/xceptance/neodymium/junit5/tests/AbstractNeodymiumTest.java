@@ -28,7 +28,6 @@ import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
 import org.junit.platform.launcher.core.LauncherFactory;
 import org.opentest4j.AssertionFailedError;
 
-import com.xceptance.neodymium.common.browser.WebDriverCache;
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 import com.xceptance.neodymium.junit5.tests.utils.ResultAndDescriptionListener;

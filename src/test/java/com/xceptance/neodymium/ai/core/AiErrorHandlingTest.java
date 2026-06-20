@@ -27,10 +27,6 @@ import org.junit.jupiter.api.Test;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
-import com.xceptance.neodymium.ai.core.AiBrowser;
-import com.xceptance.neodymium.ai.core.AiExecutionResult;
-import com.xceptance.neodymium.ai.core.LlmCallDetails;
-import com.xceptance.neodymium.ai.core.StepDetails;
 import com.xceptance.neodymium.ai.testing.AiMockResponse;
 import com.xceptance.neodymium.util.Neodymium;
 

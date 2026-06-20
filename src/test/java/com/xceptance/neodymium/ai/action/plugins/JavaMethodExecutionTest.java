@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
-import com.xceptance.neodymium.ai.action.plugins.AiMethod;
 
 /**
  * Runtime execution tests for the {@link JavaMethodAction} plugin.

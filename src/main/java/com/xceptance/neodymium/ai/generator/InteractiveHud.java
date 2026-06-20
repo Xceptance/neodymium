@@ -26,7 +26,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,8 +39,6 @@ import org.yaml.snakeyaml.Yaml;
 import com.codeborne.selenide.Selenide;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
-import com.xceptance.neodymium.ai.core.HudActionException;
-import com.xceptance.neodymium.ai.core.HudActionType;
 import com.xceptance.neodymium.util.Neodymium;
 
 /**

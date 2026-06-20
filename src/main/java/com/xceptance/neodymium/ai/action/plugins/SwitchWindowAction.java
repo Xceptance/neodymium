@@ -28,7 +28,6 @@ import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
-import com.xceptance.neodymium.util.Neodymium;
 
 public class SwitchWindowAction implements AiActionPlugin
 {
