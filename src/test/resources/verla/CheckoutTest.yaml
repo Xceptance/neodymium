@@ -3,7 +3,7 @@
 # @author Xceptance GmbH 2026
 
 steps: |
-  Open http://localhost:${port}/verla-${quality}/register.html
+  Open ${verla.url}/verla-${quality}/register.html
   Verify that the user registration form is loaded.
   Type '${email}' into the email field.
   Type 'topsecret' into the password field.
@@ -16,9 +16,9 @@ steps: |
   Verify that the address '123 Main St' is listed in the saved addresses.
   Locate the Card form, select 'Visa', type '1111222233334100' into the card number, '12/29' into the expiry, and '123' into the CVV. Submit to add the card.
   Verify that the card ending in '4100' is listed in the saved cards.
-  Open http://localhost:${port}/verla-${quality}/index.html
+  Open ${verla.url}/verla-${quality}/index.html
   Locate the first product card and click its 'Add to Cart' or 'Add' button.
-  Open http://localhost:${port}/verla-${quality}/checkout.html
+  Open ${verla.url}/verla-${quality}/checkout.html
   Verify that the checkout page is loaded.
   Select the saved address '123 Main St' and the saved credit card ending in '4100' to autofill (or type 'Jane' into first name, 'Doe' into last name, '${email}' into email, '123 Main St' into street, 'Boston' into city, 'MA' into state, '02108' into postcode, 'Visa' as card type, '1111222233334200' as card number, '12/29' as expiry, and '123' as CVV).
   If card number is not ending in '4200', change the card number to '1111222233334200' to test payment decline.
@@ -28,27 +28,30 @@ steps: |
   Click the 'Purchase' or 'Purchase' button to place the order.
   Verify that the order is successfully created and the order confirmation details are displayed showing an order number starting with 'V-'.
   Click on the 'Logout' or 'Logout' button to clear the active logged-in user session.
-  Open http://localhost:${port}/verla-${quality}/index.html
+  Open ${verla.url}/verla-${quality}/index.html
   Locate the first product card and click its 'Add to Cart' or 'Add' button.
-  Open http://localhost:${port}/verla-${quality}/checkout.html
+  Open ${verla.url}/verla-${quality}/checkout.html
   Verify that the guest checkout page is loaded.
   Type 'Bob' into first name, 'Tester' into last name, '${guestEmail}' into email, '456 Guest Ave' into street, 'New York' into city, 'NY' into state, and '10001' into postcode.
   Select 'Visa' as card type, type '1111222233334100' into card number, '12/29' into expiry, and '123' into CVV.
   Click the 'Purchase' button to place the guest order.
   Verify that the order is successfully created and note the generated order number.
-  Open http://localhost:${port}/verla-${quality}/track-orders.html
+  Open ${verla.url}/verla-${quality}/track-orders.html
   Verify that the guest order lookup page is loaded.
   Type the guest order number into the order number field and '10001' into the zip code field.
   Click the 'Lookup' button.
   Verify that the guest order details (totals and shipping address containing New York) are loaded and displayed dynamically.
 
 data:
-  - quality: "perfect"
+  - testId: "perfect"
+    quality: "perfect"
     email: "user-perfect@example.com"
     guestEmail: "guest-perfect@example.com"
-  - quality: "normal"
+  - testId: "normal"
+    quality: "normal"
     email: "user-normal@example.com"
     guestEmail: "guest-normal@example.com"
-  - quality: "bad"
+  - testId: "bad"
+    quality: "bad"
     email: "user-bad@example.com"
     guestEmail: "guest-bad@example.com"

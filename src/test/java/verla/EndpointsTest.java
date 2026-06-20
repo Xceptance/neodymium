@@ -23,9 +23,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.List;
+
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+
 import com.xceptance.neodymium.ai.BaseAiTest;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 
@@ -37,11 +39,20 @@ import com.xceptance.neodymium.junit5.NeodymiumTest;
  */
 @Tag("integration")
 @Tag("verla")
-public class VerlaStoreEndpointsTest extends BaseAiTest
+public class EndpointsTest extends BaseAiTest
 {
     private final HttpClient client = HttpClient.newBuilder()
         .cookieHandler(new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL))
         .build();
+
+    /**
+     * Setup method to ensure temporary playbook directory is used.
+     */
+    @BeforeEach
+    public void setup()
+    {
+        useTempPlaybookDirectory();
+    }
 
     /**
      * Test routing for PLP, PDP, and missing resource cases.
@@ -324,5 +335,39 @@ public class VerlaStoreEndpointsTest extends BaseAiTest
         Assertions.assertFalse(htmxResp.body().contains("<footer"));
         // Verify that it contains product card content
         Assertions.assertTrue(htmxResp.body().contains("product-card") || htmxResp.body().contains("Quick Add"));
+    }
+
+    /**
+     * Test that the homepage content is correctly localized based on the verla_country cookie.
+     *
+     * @throws IOException if network fails
+     * @throws InterruptedException if thread is interrupted
+     */
+    @NeodymiumTest
+    public final void testHomepageLocalization() throws IOException, InterruptedException
+    {
+        final int port = server.getPort();
+
+        // 1. Request homepage with German (DE) country cookie -> should return German translations
+        final HttpRequest deReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + port + "/verla-perfect/index.html"))
+            .header("Cookie", "verla_country=DE")
+            .GET()
+            .build();
+        final HttpResponse<String> deResp = client.send(deReq, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, deResp.statusCode());
+        Assertions.assertTrue(deResp.body().contains("Sorgfältig kuratierter täglicher Komfort."));
+        Assertions.assertTrue(deResp.body().contains("Sommer-Essentials"));
+
+        // 2. Request homepage with Japanese (JP) country cookie -> should return Japanese translations
+        final HttpRequest jpReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + port + "/verla-perfect/index.html"))
+            .header("Cookie", "verla_country=JP")
+            .GET()
+            .build();
+        final HttpResponse<String> jpResp = client.send(jpReq, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, jpResp.statusCode());
+        Assertions.assertTrue(jpResp.body().contains("入念にセレクトされた日常の快適さ。"));
+        Assertions.assertTrue(jpResp.body().contains("サマー・エッセンシャル"));
     }
 }

@@ -20,47 +20,74 @@ package verla;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+
 import com.xceptance.neodymium.ai.AiTestVerification;
-import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.BaseAiTest;
+import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.testdata.DataFolder;
+import com.xceptance.neodymium.common.testdata.DataFile;
+import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 
 /**
- * Runs YAML-based Aura integration tests for product search, categories refinements, and infinite scrolling.
+ * Runs YAML-based VERLA integration tests for adding items to cart and applying coupons.
  *
  * @author AI-generated: Gemini 2.5 Pro
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@DataFolder("com/xceptance/neodymium/ai/VerlaStoreSearchTest")
+@DataFile("verla/AddToCartTest.yaml")
 @AiTestVerification({
     VerificationMode.LIVE_LLM,
-    VerificationMode.REPLAY,
-    VerificationMode.HUD_OFFLINE_REPLAY
+    VerificationMode.REPLAY
 })
 @Tag("integration")
 @Tag("verla")
-public final class VerlaStoreSearchTest extends BaseAiTest
+public final class AddToCartTest extends BaseAiTest
 {
     /**
-     * Inject dynamic server HTTP port.
+     * Setup method to inject the dynamic server port and set temporary playbook directory.
      */
     @BeforeEach
-    public void injectDynamicPorts()
+    public void setup()
     {
         useTempPlaybookDirectory();
-        final int port = server.getPort();
-        Neodymium.getData().put("port", String.valueOf(port));
+        Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
     }
 
     /**
-     * Executes the search and refinements YAML steps.
+     * Executes the add to cart YAML steps on the bad environment.
+     *
+     * @throws Throwable if execution fails
      */
     @NeodymiumTest
-    public void testSearchAndRefinement()
+    @DataSet(id = "bad")
+    public void testCartBad() throws Throwable
+    {
+        assertAiExecution();
+    }
+
+    /**
+     * Executes the add to cart YAML steps on the normal environment.
+     *
+     * @throws Throwable if execution fails
+     */
+    @NeodymiumTest
+    @DataSet(id = "normal")
+    public void testCartNormal() throws Throwable
+    {
+        assertAiExecution();
+    }
+
+    /**
+     * Executes the add to cart YAML steps on the perfect environment.
+     *
+     * @throws Throwable if execution fails
+     */
+    @NeodymiumTest
+    @DataSet(id = "perfect")
+    public void testCartPerfect() throws Throwable
     {
         assertAiExecution();
     }

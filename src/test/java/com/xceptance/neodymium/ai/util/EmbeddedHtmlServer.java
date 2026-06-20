@@ -1330,6 +1330,17 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("checkout/purchase".equals(apiMethod))
                 {
+                    // Simulate server response time of 1 to 4 seconds
+                    try
+                    {
+                        final long delay = 1000 + (long) (Math.random() * 3000);
+                        Thread.sleep(delay);
+                    }
+                    catch (final InterruptedException e)
+                    {
+                        Thread.currentThread().interrupt();
+                    }
+
                     // Checkout processing logic
                     final String firstName = params.getOrDefault("firstName", "").trim();
                     final String lastName = params.getOrDefault("lastName", "").trim();

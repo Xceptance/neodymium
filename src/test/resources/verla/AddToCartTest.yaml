@@ -3,11 +3,11 @@
 # @author Xceptance GmbH 2026
 
 steps: |
-  Open http://localhost:${port}/verla-${quality}/index.html
+  Open ${verla.url}/verla-${quality}/index.html
   Verify that the storefront home page has loaded.
   Locate the first product card and click its 'Add to Cart' or 'Add' button.
   Verify that the cart item count in the header updates.
-  Open http://localhost:${port}/verla-${quality}/cart.html
+  Open ${verla.url}/verla-${quality}/cart.html
   Verify that the shopping cart page is loaded showing the added product.
   Locate the promo code input field with id 'couponCode' and type '10p-off' into it.
   Submit the promo code form to apply the coupon.
@@ -21,6 +21,9 @@ steps: |
   Verify that the page reloads or redirects, and prices/totals are now displayed in Swedish Krona 'kr' currency.
 
 data:
-  - quality: "perfect"
-  - quality: "normal"
-  - quality: "bad"
+  - testId: "perfect"
+    quality: "perfect"
+  - testId: "normal"
+    quality: "normal"
+  - testId: "bad"
+    quality: "bad"

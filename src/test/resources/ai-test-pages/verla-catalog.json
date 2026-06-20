@@ -151,7 +151,13 @@
       "under50": "Under ${country_symbol}50",
       "range50to100": "${country_symbol}50 to ${country_symbol}100",
       "over100": "Over ${country_symbol}100",
-      "products": "products"
+      "products": "products",
+      "heroTitle": "Carefully Curated Daily Comfort.",
+      "heroDescription": "Consciously designed silhouettes, tailored premium blends, and organic finishes. Essential cuts engineered to fit your everyday life seamlessly.",
+      "summerEssentials": "Summer Essentials",
+      "shopCollection": "Shop Collection",
+      "featuredCategories": "Featured Categories",
+      "featuredEssentials": "Featured Essentials"
     },
     "fr": {
       "home": "Accueil",
@@ -221,7 +227,13 @@
       "under50": "Moins de ${country_symbol}50",
       "range50to100": "${country_symbol}50 à ${country_symbol}100",
       "over100": "Plus de ${country_symbol}100",
-      "products": "produits"
+      "products": "produits",
+      "heroTitle": "Un confort quotidien soigneusement sélectionné.",
+      "heroDescription": "Des silhouettes conçues consciemment, des mélanges haut de gamme ajustés et des finitions biologiques. Des coupes essentielles conçues pour s'adapter parfaitement à votre quotidien.",
+      "summerEssentials": "Essentiels d'été",
+      "shopCollection": "Acheter la collection",
+      "featuredCategories": "Catégories en vedette",
+      "featuredEssentials": "Essentiels en vedette"
     },
     "de": {
       "home": "Startseite",
@@ -291,7 +303,13 @@
       "under50": "Unter ${country_symbol}50",
       "range50to100": "${country_symbol}50 bis ${country_symbol}100",
       "over100": "Über ${country_symbol}100",
-      "products": "Produkte"
+      "products": "Produkte",
+      "heroTitle": "Sorgfältig kuratierter täglicher Komfort.",
+      "heroDescription": "Bewusst entworfene Silhouetten, maßgeschneiderte Premium-Mischungen und biologische Veredelungen. Essentielle Schnitte, die sich nahtlos in Ihren Alltag einfügen.",
+      "summerEssentials": "Sommer-Essentials",
+      "shopCollection": "Kollektion shoppen",
+      "featuredCategories": "Beliebte Kategorien",
+      "featuredEssentials": "Beliebte Essentials"
     },
     "pl": {
       "home": "Główna",
@@ -361,7 +379,13 @@
       "under50": "Poniżej ${country_symbol}50",
       "range50to100": "${country_symbol}50 do ${country_symbol}100",
       "over100": "Ponad ${country_symbol}100",
-      "products": "produkty"
+      "products": "produkty",
+      "heroTitle": "Starannie dobrany codzienny komfort.",
+      "heroDescription": "Świadomie zaprojektowane sylwetki, dopasowane mieszanki premium i organiczne wykończenia. Niezbędne kroje stworzone by idealnie pasować do Twojego codziennego życia.",
+      "summerEssentials": "Letnie niezbędniki",
+      "shopCollection": "Kup kolekcję",
+      "featuredCategories": "Wyróżnione kategorie",
+      "featuredEssentials": "Wyróżnione niezbędniki"
     },
     "se": {
       "home": "Hem",
@@ -431,7 +455,13 @@
       "under50": "Under ${country_symbol}50",
       "range50to100": "${country_symbol}50 till ${country_symbol}100",
       "over100": "Över ${country_symbol}100",
-      "products": "produkter"
+      "products": "produkter",
+      "heroTitle": "Noggrant utvald daglig komfort.",
+      "heroDescription": "Medvetet designade silhuetter, skräddarsydda premiumblandningar och ekologiska ytbehandlingar. Viktiga snitt designade för att sömlöst passa ditt vardagliga liv.",
+      "summerEssentials": "Sommarens måsten",
+      "shopCollection": "Handla kollektionen",
+      "featuredCategories": "Utvalda kategorier",
+      "featuredEssentials": "Utvalda klassiker"
     },
     "fi": {
       "home": "Koti",
@@ -501,7 +531,13 @@
       "under50": "Alle ${country_symbol}50",
       "range50to100": "${country_symbol}50 – ${country_symbol}100",
       "over100": "Yli ${country_symbol}100",
-      "products": "tuotetta"
+      "products": "tuotetta",
+      "heroTitle": "Huolellisesti kuratoitua arjen mukavuutta.",
+      "heroDescription": "Tietoisesti suunniteltuja siluetteja, räätälöityjä ensiluokkaisia sekoitteita ja luomupintoja. Olennaisia leikkauksia, jotka sopivat saumattomasti jokapäiväiseen elämääsi.",
+      "summerEssentials": "Kesän suosikit",
+      "shopCollection": "Osta kokoelma",
+      "featuredCategories": "Suositellut kategoriat",
+      "featuredEssentials": "Suositellut suosikit"
     },
     "ja": {
       "home": "ホーム",
@@ -571,7 +607,13 @@
       "under50": "${country_symbol}50以下",
       "range50to100": "${country_symbol}50 〜 ${country_symbol}100",
       "over100": "${country_symbol}100以上",
-      "products": "個の商品"
+      "products": "個の商品",
+      "heroTitle": "入念にセレクトされた日常の快適さ。",
+      "heroDescription": "意識的にデザインされたシルエット、テーラードのプレミアムブレンド、そしてオーガニックな仕上げ。日常にシームレスにフィットするよう設計されたエッセンシャルなカット。",
+      "summerEssentials": "サマー・エッセンシャル",
+      "shopCollection": "コレクションを見る",
+      "featuredCategories": "おすすめカテゴリー",
+      "featuredEssentials": "おすすめのエッセンシャル"
     }
   },
   "generation": {

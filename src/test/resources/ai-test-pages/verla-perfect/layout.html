@@ -1247,6 +1247,14 @@
     <script src="/shared/htmx.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Allow HTMX to swap content for 400 Bad Request responses (validation/auth errors)
+            document.body.addEventListener('htmx:beforeOnLoad', (evt) => {
+                if (evt.detail.xhr.status === 400) {
+                    evt.detail.shouldSwap = true;
+                    evt.detail.isError = false;
+                }
+            });
+
             let cartCloseTimeout;
             const modalOverlay = document.getElementById('country-modal-overlay');
             const openModalBtn = document.getElementById('country-trigger-btn');
