@@ -1144,6 +1144,17 @@ The Hamming distance measures the exact number of bits that differ between the r
 * **Micro-Variances Tolerance (Distance <= 15)**: A threshold of **`<= 15` bits** allows the test to pass seamlessly in the presence of minor rendering artifacts (like font anti-aliasing differences, OS scrollbar styles, minor subpixel shifts, or different operating system window renders) while maintaining strong visual integrity.
 * **Mismatches (Distance > 15)**: If the distance is greater than 15, the page is visually distinct. Neodymium immediately throws an `ActionExecutionException`, which catches the mismatch and triggers the standard **Self-Healing Pipeline** (context escalation, LLM re-evaluation, and playbook auto-update).
 
+#### 🧮 What does a distance threshold of 15 mean in practice?
+Since the dHash algorithm generates a 256-bit hash (16 rows × 16 comparisons/row), the threshold of `15` represents:
+* **Mathematical Difference**: Up to **15 out of 256 bits** (approximately **5.86%** of the total gradient comparison bits) can differ.
+* **Structural Similarity**: The page's overall visual layout and structural gradients must remain at least **94.14% identical**.
+
+#### 🚦 Visual Impact of Changes
+Because dHash operates on a highly downscaled $17 \times 16$ grayscale representation of the screenshot, different changes affect the Hamming distance differently:
+* **Distance 0 to 5 (Micro-variations)**: Anti-aliasing differences, OS scrollbars, minor subpixel text rendering shifts.
+* **Distance 6 to 15 (Minor updates)**: A localized change such as a small badge counter update, dynamic clock/timestamp variation, or a tiny username text length change.
+* **Distance > 15 (Significant changes)**: A missing button, overlapping layout components, a newly loaded modal/popup, or an entirely different page layout.
+
 ### ⚡ Double DOM Query Avoidance (Resource Optimization)
 To make visual assertions unbelievably fast, the framework includes a smart conditional context bypass:
 If a visual step has a successful visual hash match and contains an empty list of recorded browser actions (which is typical for simple visual checks or assertions), **it completely skips querying and parsing the DOM**. This completely avoids serialization overhead and returns success in a fraction of a millisecond.
