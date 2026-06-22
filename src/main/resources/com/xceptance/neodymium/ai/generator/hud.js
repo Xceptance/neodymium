@@ -3,6 +3,11 @@
     window.neoCurrentUnresolvedStep = currentUnresolvedStep;
     window.neoDataBindings = dataBindings;
     window.neoConfigMap = configMap;
+    window.neoCurrentBlock = currentBlock;
+    window.neoBeforeSteps = beforeSteps;
+    window.neoStepsSteps = stepsSteps;
+    window.neoAfterSteps = afterSteps;
+    window.neoCanEdit = canEdit;
 
     function getSessionStorage(key) {
         try {
@@ -355,7 +360,7 @@
             window.neoEditingStepIndex = idx;
             var stepText = (window.neoCurrentRenderedSteps && window.neoCurrentRenderedSteps[idx] !== undefined)
                 ? window.neoCurrentRenderedSteps[idx]
-                : (window.neoCurrentUnresolvedStep || document.getElementById('neo-next-action').innerText);
+                : (window.neoCurrentUnresolvedStep || (document.getElementById('neo-next-action') ? document.getElementById('neo-next-action').innerText : ''));
 
             editInput.value = stepText;
             validateEditInput();
@@ -720,7 +725,6 @@
             if (sourceIdx !== targetIdx && !isNaN(sourceIdx)) {
                 window.neoSubmitAction({ action: "REORDER", from: sourceIdx, to: targetIdx });
             }
-            return false;
         };
         window.neoDragEnd = function (e) {
             e.target.style.opacity = '1';
@@ -729,9 +733,14 @@
         };
 
         window.neoRenderFullPrompt = function () {
-            var historyContainer = document.getElementById('neo-history-table');
-            var futureContainer = document.getElementById('neo-future-table');
-            if (!historyContainer || !futureContainer) return;
+            var container = document.getElementById('neo-steps-container');
+            if (!container) return;
+
+            var currentBlock = window.neoCurrentBlock;
+            var beforeSteps = window.neoBeforeSteps;
+            var stepsSteps = window.neoStepsSteps;
+            var afterSteps = window.neoAfterSteps;
+            var canEdit = window.neoCanEdit;
 
             window.neoCurrentRenderedSteps = [];
 
@@ -753,10 +762,7 @@
                         }
                     }
                 };
-                historyContainer.addEventListener('click', handler);
-                futureContainer.addEventListener('click', handler);
-                var plannedContainer = document.getElementById('neo-planned-actions');
-                if (plannedContainer) plannedContainer.addEventListener('click', handler);
+                container.addEventListener('click', handler);
                 window.neoBpListenerAttached = true;
             }
 
@@ -769,8 +775,7 @@
                         window.neoStartEditingStep(idx);
                     }
                 };
-                historyContainer.addEventListener('click', editHandler);
-                futureContainer.addEventListener('click', editHandler);
+                container.addEventListener('click', editHandler);
                 window.neoEditStepListenerAttached = true;
             }
 
@@ -791,12 +796,13 @@
                         }
                     }
                 };
-                historyContainer.addEventListener('click', rewindHandler);
+                container.addEventListener('click', rewindHandler);
                 window.neoRewindStepListenerAttached = true;
             }
 
             var pList = window.neoPerformedList || [];
             var aList = window.neoPlannedList || [];
+            var hasMultiBlocks = (beforeSteps && beforeSteps.length > 0) || (afterSteps && afterSteps.length > 0);
 
             function escapeHtml(unsafe) {
                 return (unsafe || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -813,7 +819,7 @@
                 } else if (blockType === 'after') {
                     colorVar = 'var(--accent-warning)';
                 }
-                return '<div class="neo-block-headline" style="color: ' + colorVar + '; border-left-color: ' + colorVar + ';">' + title + '</div>';
+                return '<div class="neo-block-headline" style="color: ' + colorVar + '; border-left-color: ' + colorVar + '; margin-top: 14px; margin-bottom: 8px;">' + title + '</div>';
             }
 
             function genItem(stepText, statusStr, isInteractiveStep, localIndex) {
@@ -830,7 +836,10 @@
 
                 var classNames = 'neo-step-item';
                 var statusHtml = '';
-                if (statusStr === 'done') {
+                
+                if (statusStr === 'active') {
+                    classNames += ' active';
+                } else if (statusStr === 'done') {
                     classNames += ' completed';
                     if (isInteractiveStep) {
                         statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>' +
@@ -839,6 +848,7 @@
                         statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>';
                     }
                 }
+
                 if (stepText.indexOf('// [SKIPPED]') !== -1) {
                     classNames += ' skipped';
                     cleanText = cleanText.replace('// [SKIPPED] ', '');
@@ -846,7 +856,7 @@
                 }
 
                 var editIconHtml = '';
-                if (canEdit && isInteractiveStep) {
+                if (canEdit && (isInteractiveStep || statusStr === 'active')) {
                     editIconHtml = '<span class="neo-edit-step-icon" data-idx="' + localIndex + '" style="opacity: 0.5; cursor: pointer; padding: 2px 6px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;" title="Edit this step"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></span>';
                 }
 
@@ -858,262 +868,154 @@
                         '</div>';
                 }
 
-                var dragHandleHtml = isInteractiveStep ? '<div class="neo-step-drag-handle" style="cursor: grab; margin-right: 8px; opacity: 0.3;" title="Drag to reorder">☰</div>' : '';
-                var bpMarkerHtml = isInteractiveStep ? '<span class="neo-bp-marker" data-idx="' + localIndex + '" style="opacity: ' + bpOpacity + '; cursor: pointer; font-size: 13px; font-weight: bold; margin-right: 8px; user-select: none;" title="Toggle breakpoint">' + bpDisplay + '</span>' : '';
-                if (!isInteractiveStep && statusStr !== 'done') {
+                var dragHandleHtml = (isInteractiveStep && statusStr !== 'active') ? '<div class="neo-step-drag-handle" style="cursor: grab; margin-right: 8px; opacity: 0.3;" title="Drag to reorder">☰</div>' : '';
+                
+                var bpMarkerHtml = '';
+                if (isInteractiveStep || statusStr === 'active') {
+                    bpMarkerHtml = '<span class="neo-bp-marker" data-idx="' + localIndex + '" style="opacity: ' + bpOpacity + '; cursor: pointer; font-size: 13px; font-weight: bold; margin-right: 8px; user-select: none;" title="Toggle breakpoint">' + bpDisplay + '</span>';
+                } else if (statusStr !== 'done') {
                     bpMarkerHtml = '<span style="font-size: 12px; margin-right: 8px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.5;"><circle cx="12" cy="12" r="10"></circle></svg></span>';
                 }
 
-                var dragAttributes = isInteractiveStep ? ' draggable="true" ondragstart="window.neoDragStart(event, ' + localIndex + ')" ondragover="window.neoDragOver(event)" ondragenter="window.neoDragEnter(event)" ondragleave="window.neoDragLeave(event)" ondrop="window.neoDrop(event, ' + localIndex + ')" ondragend="window.neoDragEnd(event)"' : '';
+                var dragAttributes = (isInteractiveStep && statusStr !== 'active') ? ' draggable="true" ondragstart="window.neoDragStart(event, ' + localIndex + ')" ondragover="window.neoDragOver(event)" ondragenter="window.neoDragEnter(event)" ondragleave="window.neoDragLeave(event)" ondrop="window.neoDrop(event, ' + localIndex + ')" ondragend="window.neoDragEnd(event)"' : '';
 
-                return '<div class="' + classNames + '" style="margin-bottom: 8px;' + (!isInteractiveStep ? 'opacity: 0.75;' : '') + '"' + dragAttributes + '>' +
+                var stepNumHtml = '';
+                if (statusStr === 'active') {
+                    stepNumHtml = '<div class="neo-step-indicator" style="color: var(--accent-primary); width:30px;">➔</div>';
+                } else {
+                    stepNumHtml = '<div class="neo-step-indicator">' + (localIndex + 1) + '</div>';
+                }
+
+                var badgeHtml = '';
+                if (statusStr === 'active' && hasMultiBlocks && currentBlock) {
+                    var badgeColor = 'var(--accent-primary)';
+                    if (currentBlock === 'steps') badgeColor = 'var(--accent-purple)';
+                    else if (currentBlock === 'after') badgeColor = 'var(--accent-warning)';
+                    badgeHtml = '<div id="neo-active-step-block-badge" style="font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; color: ' + badgeColor + ';">' + currentBlock.toUpperCase() + '</div>';
+                }
+
+                var itemStyle = 'margin-bottom: 8px;';
+                if (!isInteractiveStep && statusStr !== 'active') {
+                    itemStyle += ' opacity: 0.75;';
+                }
+
+                return '<div class="' + classNames + '" style="' + itemStyle + '"' + dragAttributes + '>' +
+                    badgeHtml +
                     '<div style="display: flex; align-items: center; width: 100%;">' +
                     dragHandleHtml +
                     bpMarkerHtml +
-                    '<div class="neo-step-indicator">' + (localIndex + 1) + '</div>' +
-                    '<div class="neo-step-content" style="flex-grow: 1;">' + escapeHtml(stepText) + '</div>' +
+                    stepNumHtml +
+                    '<div class="neo-step-content"' + (statusStr === 'active' ? ' id="neo-next-action"' : '') + ' style="flex-grow: 1;' + (statusStr === 'active' ? ' font-weight: 600;' : '') + '">' + escapeHtml(stepText) + '</div>' +
                     rightActionsHtml +
                     '</div></div>';
             }
 
-            var hasMultiBlocks = (beforeSteps && beforeSteps.length > 0) || (afterSteps && afterSteps.length > 0);
-
-            if (!hasMultiBlocks) {
-                var histHtml = '';
-                if (pList && pList.length > 0) {
-                    for (var i = 0; i < pList.length; i++) {
-                        histHtml += genItem(pList[i], 'done', true, i);
-                    }
-                }
-                historyContainer.innerHTML = histHtml;
-
-                var futHtml = '';
+            if (!window.neoFullPromptOpen) {
                 if (aList && aList.length > 0) {
-                    var activeIdx = window.neoCurrentRenderedSteps.length;
-                    window.neoCurrentRenderedSteps.push(getCleanStepText(aList[0]));
-
-                    var activeElem = document.querySelector('.neo-step-item.active');
-                    if (activeElem) {
-                        activeElem.setAttribute('draggable', 'true');
-                        activeElem.setAttribute('ondragstart', 'window.neoDragStart(event, ' + activeIdx + ')');
-                        activeElem.setAttribute('ondragover', 'window.neoDragOver(event)');
-                        activeElem.setAttribute('ondragenter', 'window.neoDragEnter(event)');
-                        activeElem.setAttribute('ondragleave', 'window.neoDragLeave(event)');
-                        activeElem.setAttribute('ondrop', 'window.neoDrop(event, ' + activeIdx + ')');
-                        activeElem.setAttribute('ondragend', 'window.neoDragEnd(event)');
-
-                        var activeBp = activeElem.querySelector('.neo-bp-col') || activeElem.querySelector('.neo-bp-marker');
-                        if (activeBp) {
-                            activeBp.className = 'neo-bp-marker';
-                            activeBp.setAttribute('data-idx', activeIdx);
-                            var isBp = window.neoBreakpoints && window.neoBreakpoints.indexOf(activeIdx) !== -1;
-                            activeBp.innerText = isBp ? '🛑' : '⚪';
-                            activeBp.style.opacity = isBp ? '1' : '0.15';
-                        }
-
-                        if (!activeElem.querySelector('.neo-step-drag-handle')) {
-                            var normalView = document.getElementById('neo-active-step-normal-view');
-                            if (normalView) {
-                                var dragHandle = document.createElement('div');
-                                dragHandle.className = 'neo-step-drag-handle';
-                                dragHandle.style.cssText = 'cursor: grab; margin-right: 8px; opacity: 0.3;';
-                                dragHandle.title = 'Drag to reorder';
-                                dragHandle.innerText = '☰';
-                                normalView.insertBefore(dragHandle, normalView.firstChild);
-                            }
-                        }
-                    }
-
-                    if (aList.length > 1) {
-                        for (var j = 1; j < aList.length; j++) {
-                            futHtml += genItem(aList[j], 'pending', true, activeIdx + j);
-                        }
-                    }
+                    var activeIdx = pList.length;
+                    container.innerHTML = genItem(aList[0], 'active', true, activeIdx);
+                } else {
+                    container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">No active step</div>';
                 }
-                futureContainer.innerHTML = futHtml;
+                var addBtn = document.getElementById('neo-add-overlay-btn');
+                if (addBtn) addBtn.style.display = 'none';
             } else {
-                var histHtml = '';
-                var futHtml = '';
+                var fullHtml = '';
 
-                var bSteps = beforeSteps || [];
-                var sSteps = stepsSteps || [];
-                var aSteps = afterSteps || [];
-
-                if (currentBlock === 'before') {
-                    bSteps = pList.concat(aList);
-                } else if (currentBlock === 'steps') {
-                    sSteps = pList.concat(aList);
-                } else if (currentBlock === 'after') {
-                    aSteps = pList.concat(aList);
-                }
-
-                var activeIdx = currentBlockIndex;
-                if (aList && aList.length > 0) {
-                    window.neoCurrentRenderedSteps[activeIdx] = getCleanStepText(aList[0]);
-
-                    var activeElem = document.querySelector('.neo-step-item.active');
-                    if (activeElem) {
-                        activeElem.setAttribute('draggable', 'true');
-                        activeElem.setAttribute('ondragstart', 'window.neoDragStart(event, ' + activeIdx + ')');
-                        activeElem.setAttribute('ondragover', 'window.neoDragOver(event)');
-                        activeElem.setAttribute('ondragenter', 'window.neoDragEnter(event)');
-                        activeElem.setAttribute('ondragleave', 'window.neoDragLeave(event)');
-                        activeElem.setAttribute('ondrop', 'window.neoDrop(event, ' + activeIdx + ')');
-                        activeElem.setAttribute('ondragend', 'window.neoDragEnd(event)');
-
-                        var activeBp = activeElem.querySelector('.neo-bp-col') || activeElem.querySelector('.neo-bp-marker');
-                        if (activeBp) {
-                            activeBp.className = 'neo-bp-marker';
-                            activeBp.setAttribute('data-idx', activeIdx);
-                            var isBp = window.neoBreakpoints && window.neoBreakpoints.indexOf(activeIdx) !== -1;
-                            activeBp.innerText = isBp ? '🛑' : '⚪';
-                            activeBp.style.opacity = isBp ? '1' : '0.15';
+                if (!hasMultiBlocks) {
+                    for (var i = 0; i < pList.length; i++) {
+                        fullHtml += genItem(pList[i], 'done', true, i);
+                    }
+                    if (aList && aList.length > 0) {
+                        var activeIdx = pList.length;
+                        fullHtml += genItem(aList[0], 'active', true, activeIdx);
+                        for (var j = 1; j < aList.length; j++) {
+                            fullHtml += genItem(aList[j], 'pending', true, activeIdx + j);
                         }
+                    }
+                } else {
+                    var bSteps = beforeSteps || [];
+                    var sSteps = stepsSteps || [];
+                    var aSteps = afterSteps || [];
 
-                        if (!activeElem.querySelector('.neo-step-drag-handle')) {
-                            var normalView = document.getElementById('neo-active-step-normal-view');
-                            if (normalView) {
-                                var dragHandle = document.createElement('div');
-                                dragHandle.className = 'neo-step-drag-handle';
-                                dragHandle.style.cssText = 'cursor: grab; margin-right: 8px; opacity: 0.3;';
-                                dragHandle.title = 'Drag to reorder';
-                                dragHandle.innerText = '☰';
-                                normalView.insertBefore(dragHandle, normalView.firstChild);
+                    function getBlockPartition(blockName, rawList) {
+                        if (currentBlock === blockName) {
+                            return {
+                                completed: pList,
+                                active: (aList && aList.length > 0) ? aList[0] : null,
+                                pending: (aList && aList.length > 1) ? aList.slice(1) : [],
+                                isInteractive: true
+                            };
+                        } else {
+                            var isPast = false;
+                            if (currentBlock === 'steps' && blockName === 'before') {
+                                isPast = true;
+                            } else if (currentBlock === 'after' && (blockName === 'before' || blockName === 'steps')) {
+                                isPast = true;
+                            }
+                            return {
+                                completed: isPast ? rawList : [],
+                                active: null,
+                                pending: isPast ? [] : rawList,
+                                isInteractive: false
+                            };
+                        }
+                    }
+
+                    var blocks = [
+                        { name: 'before', title: 'Before', raw: bSteps },
+                        { name: 'steps', title: 'Steps', raw: sSteps },
+                        { name: 'after', title: 'After', raw: aSteps }
+                    ];
+
+                    for (var b = 0; b < blocks.length; b++) {
+                        var blk = blocks[b];
+                        if (blk.raw.length > 0 || currentBlock === blk.name) {
+                            var partition = getBlockPartition(blk.name, blk.raw);
+                            var blockHtml = '';
+
+                            for (var i = 0; i < partition.completed.length; i++) {
+                                blockHtml += genItem(partition.completed[i], 'done', partition.isInteractive, i);
+                            }
+                            if (partition.active) {
+                                var activeIdx = partition.completed.length;
+                                blockHtml += genItem(partition.active, 'active', true, activeIdx);
+                            }
+                            var activeOffset = partition.active ? 1 : 0;
+                            for (var i = 0; i < partition.pending.length; i++) {
+                                blockHtml += genItem(partition.pending[i], 'pending', partition.isInteractive, partition.completed.length + activeOffset + i);
+                            }
+
+                            if (blockHtml !== '') {
+                                fullHtml += genHeadline(blk.title, blk.name) + blockHtml;
                             }
                         }
                     }
                 }
 
-                if (currentBlock === 'before') {
-                    var beforeHist = '';
-                    for (var i = 0; i < currentBlockIndex; i++) {
-                        beforeHist += genItem(bSteps[i], 'done', true, i);
-                    }
-                    if (beforeHist !== '') {
-                        histHtml += genHeadline('Before', 'before') + beforeHist;
-                    }
-
-                    var beforeFut = '';
-                    for (var i = currentBlockIndex + 1; i < bSteps.length; i++) {
-                        beforeFut += genItem(bSteps[i], 'pending', true, i);
-                    }
-                    if (beforeFut !== '') {
-                        futHtml += genHeadline('Before', 'before') + beforeFut;
-                    }
-
-                    var stepsFut = '';
-                    for (var i = 0; i < sSteps.length; i++) {
-                        stepsFut += genItem(sSteps[i], 'pending', false, i);
-                    }
-                    if (stepsFut !== '') {
-                        futHtml += genHeadline('Steps', 'steps') + stepsFut;
-                    }
-
-                    var afterFut = '';
-                    for (var i = 0; i < aSteps.length; i++) {
-                        afterFut += genItem(aSteps[i], 'pending', false, i);
-                    }
-                    if (afterFut !== '') {
-                        futHtml += genHeadline('After', 'after') + afterFut;
-                    }
-                } else if (currentBlock === 'steps') {
-                    var beforeHist = '';
-                    for (var i = 0; i < bSteps.length; i++) {
-                        beforeHist += genItem(bSteps[i], 'done', false, i);
-                    }
-                    if (beforeHist !== '') {
-                        histHtml += genHeadline('Before', 'before') + beforeHist;
-                    }
-
-                    var stepsHist = '';
-                    for (var i = 0; i < currentBlockIndex; i++) {
-                        stepsHist += genItem(sSteps[i], 'done', true, i);
-                    }
-                    if (stepsHist !== '') {
-                        histHtml += genHeadline('Steps', 'steps') + stepsHist;
-                    }
-
-                    var stepsFut = '';
-                    for (var i = currentBlockIndex + 1; i < sSteps.length; i++) {
-                        stepsFut += genItem(sSteps[i], 'pending', true, i);
-                    }
-                    if (stepsFut !== '') {
-                        futHtml += genHeadline('Steps', 'steps') + stepsFut;
-                    }
-
-                    var afterFut = '';
-                    for (var i = 0; i < aSteps.length; i++) {
-                        afterFut += genItem(aSteps[i], 'pending', false, i);
-                    }
-                    if (afterFut !== '') {
-                        futHtml += genHeadline('After', 'after') + afterFut;
-                    }
-                } else if (currentBlock === 'after') {
-                    var beforeHist = '';
-                    for (var i = 0; i < bSteps.length; i++) {
-                        beforeHist += genItem(bSteps[i], 'done', false, i);
-                    }
-                    if (beforeHist !== '') {
-                        histHtml += genHeadline('Before', 'before') + beforeHist;
-                    }
-
-                    var stepsHist = '';
-                    for (var i = 0; i < sSteps.length; i++) {
-                        stepsHist += genItem(sSteps[i], 'done', false, i);
-                    }
-                    if (stepsHist !== '') {
-                        histHtml += genHeadline('Steps', 'steps') + stepsHist;
-                    }
-
-                    var afterHist = '';
-                    for (var i = 0; i < currentBlockIndex; i++) {
-                        afterHist += genItem(aSteps[i], 'done', true, i);
-                    }
-                    if (afterHist !== '') {
-                        histHtml += genHeadline('After', 'after') + afterHist;
-                    }
-
-                    var afterFut = '';
-                    for (var i = currentBlockIndex + 1; i < aSteps.length; i++) {
-                        afterFut += genItem(aSteps[i], 'pending', true, i);
-                    }
-                    if (afterFut !== '') {
-                        futHtml += genHeadline('After', 'after') + afterFut;
-                    }
-                }
-
-                historyContainer.innerHTML = histHtml;
-                futureContainer.innerHTML = futHtml;
+                container.innerHTML = fullHtml;
+                var addBtn = document.getElementById('neo-add-overlay-btn');
+                if (addBtn) addBtn.style.display = 'block';
             }
         };
 
         window.neoToggleFullPrompt = function () {
-            var historyOverlay = document.getElementById('neo-history-overlay');
-            var futureOverlay = document.getElementById('neo-future-overlay');
             var btn = document.getElementById('neo-full-prompt-btn');
-            var plannedContainer = document.getElementById('neo-planned-actions');
 
             if (window.neoFullPromptOpen) {
-                historyOverlay.style.display = 'none';
-                futureOverlay.style.display = 'none';
-                if (plannedContainer) plannedContainer.style.display = 'block';
-                btn.classList.remove('neo-btn-primary');
-                document.getElementById('neo-ai-hud').classList.remove('expanded');
-                document.querySelectorAll('.neo-step-drag-handle').forEach(el => el.remove());
-                btn.innerHTML = '▲ Show Full Prompt ▲';
                 window.neoFullPromptOpen = false;
                 setSessionStorage('neoFullPromptOpen', 'false');
+                btn.classList.remove('neo-btn-primary');
+                document.getElementById('neo-ai-hud').classList.remove('expanded');
+                btn.innerHTML = '▲ Show Full Prompt ▲';
             } else {
-                window.neoRenderFullPrompt();
-                historyOverlay.style.display = 'flex';
-                futureOverlay.style.display = 'flex';
-                // we leave plannedContainer visible so it's sandwiched between history and future
+                window.neoFullPromptOpen = true;
+                setSessionStorage('neoFullPromptOpen', 'true');
                 btn.classList.add('neo-btn-primary');
                 document.getElementById('neo-ai-hud').classList.add('expanded');
                 btn.innerHTML = '▼ Hide Full Prompt ▼';
-                window.neoFullPromptOpen = true;
-                setSessionStorage('neoFullPromptOpen', 'true');
             }
+            window.neoRenderFullPrompt();
             setTimeout(function () {
                 if (window.neoClampHudViewport) window.neoClampHudViewport();
             }, 10);
@@ -1243,18 +1145,22 @@
         if (minCircle) minCircle.style.display = 'none';
     }
 
-    if (window.neoFullPromptOpen && window.neoRenderFullPrompt) {
+    if (window.neoRenderFullPrompt) {
         window.neoRenderFullPrompt();
-        var historyOverlay = document.getElementById('neo-history-overlay');
-        var futureOverlay = document.getElementById('neo-future-overlay');
         var btn = document.getElementById('neo-full-prompt-btn');
         var rHud = document.getElementById('neo-ai-hud');
-        if (historyOverlay) historyOverlay.style.display = 'flex';
-        if (futureOverlay) futureOverlay.style.display = 'flex';
-        if (rHud) rHud.classList.add('expanded');
-        if (btn) {
-            btn.classList.add('neo-btn-primary');
-            btn.innerHTML = '▼ Hide Full Prompt ▼';
+        if (window.neoFullPromptOpen) {
+            if (rHud) rHud.classList.add('expanded');
+            if (btn) {
+                btn.classList.add('neo-btn-primary');
+                btn.innerHTML = '▼ Hide Full Prompt ▼';
+            }
+        } else {
+            if (rHud) rHud.classList.remove('expanded');
+            if (btn) {
+                btn.classList.remove('neo-btn-primary');
+                btn.innerHTML = '▲ Show Full Prompt ▲';
+            }
         }
     }
 
@@ -1284,8 +1190,12 @@
             statusDiv.style.color = '#000';
             if (dumpContainer) dumpContainer.style.display = 'none';
         }
-        nextActionDiv.innerText = planned[0];
-        plannedContainer.style.display = 'block';
+        if (nextActionDiv) {
+            nextActionDiv.innerText = planned[0];
+        }
+        if (plannedContainer) {
+            plannedContainer.style.display = 'block';
+        }
 
         // Update active step block badge
         var blockBadge = document.getElementById('neo-active-step-block-badge');
@@ -1398,7 +1308,9 @@
         statusDiv.innerText = 'Waiting...';
         statusDiv.style.background = 'transparent';
         statusDiv.style.color = '#2196F3';
-        plannedContainer.style.display = 'none';
+        if (plannedContainer) {
+            plannedContainer.style.display = 'none';
+        }
         var blockBadge = document.getElementById('neo-active-step-block-badge');
         if (blockBadge) blockBadge.style.display = 'none';
         var rContainer = document.getElementById('neo-reasoning-container');
