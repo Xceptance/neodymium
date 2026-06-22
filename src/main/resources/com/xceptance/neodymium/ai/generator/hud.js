@@ -307,13 +307,12 @@
             }
         });
 
-        var editOverlay = document.getElementById('neo-edit-overlay');
-        var editInput = document.getElementById('neo-edit-input');
-        var editError = document.getElementById('neo-edit-error');
-        var submitEditBtn = document.getElementById('neo-edit-submit-btn');
-
         function validateEditInput() {
-            var newInstr = editInput.value;
+            var elInput = document.getElementById('neo-edit-input');
+            var elError = document.getElementById('neo-edit-error');
+            var elSubmitBtn = document.getElementById('neo-edit-submit-btn');
+            if (!elInput || !elError || !elSubmitBtn) return;
+            var newInstr = elInput.value;
             var regex = /\$\{([^}]+)\}/g;
             var match;
             var missingVars = [];
@@ -340,29 +339,35 @@
                 }
             }
             if (missingVars.length > 0) {
-                editError.innerText = "Warning: Possibly unbound variables found -> " + missingVars.join(", ") + " (Save allowed)";
-                editError.style.display = 'block';
-                editError.style.color = '#FFA500';
-                submitEditBtn.disabled = false;
-                submitEditBtn.style.opacity = '1';
+                elError.innerText = "Warning: Possibly unbound variables found -> " + missingVars.join(", ") + " (Save allowed)";
+                elError.style.display = 'block';
+                elError.style.color = '#FFA500';
+                elSubmitBtn.disabled = false;
+                elSubmitBtn.style.opacity = '1';
             } else {
-                editError.style.display = 'none';
-                submitEditBtn.disabled = false;
-                submitEditBtn.style.opacity = '1';
+                elError.style.display = 'none';
+                elSubmitBtn.disabled = false;
+                elSubmitBtn.style.opacity = '1';
             }
         }
 
-        editInput.addEventListener('input', validateEditInput);
-        editInput.addEventListener('keyup', validateEditInput);
-        editInput.addEventListener('change', validateEditInput);
+        var initialEditInput = document.getElementById('neo-edit-input');
+        if (initialEditInput) {
+            initialEditInput.addEventListener('input', validateEditInput);
+            initialEditInput.addEventListener('keyup', validateEditInput);
+            initialEditInput.addEventListener('change', validateEditInput);
+        }
 
         window.neoStartEditingStep = function (idx) {
             window.neoEditingStepIndex = idx;
+            var elInput = document.getElementById('neo-edit-input');
             var stepText = (window.neoCurrentRenderedSteps && window.neoCurrentRenderedSteps[idx] !== undefined)
                 ? window.neoCurrentRenderedSteps[idx]
                 : (window.neoCurrentUnresolvedStep || (document.getElementById('neo-next-action') ? document.getElementById('neo-next-action').innerText : ''));
 
-            editInput.value = stepText;
+            if (elInput) {
+                elInput.value = stepText;
+            }
             validateEditInput();
 
             var bindingsContainer = document.getElementById('neo-bindings-container');
@@ -404,7 +409,7 @@
                     }
                 }
 
-                var newInstr = editInput.value;
+                var newInstr = elInput ? elInput.value : '';
                 var regex = /\$\{([^}]+)\}/g;
                 var match;
                 while ((match = regex.exec(newInstr)) !== null) {
@@ -432,7 +437,8 @@
 
             // Move edit overlay to the step item container being edited
             var stepItemEl = null;
-            if (idx === (performed && performed.length > 0 ? performed.length : 0)) {
+            var perfCount = (window.neoPerformedList || []).length;
+            if (idx === perfCount) {
                 // Active step
                 stepItemEl = document.querySelector('.neo-step-item.active');
             } else {
@@ -445,8 +451,10 @@
                 // Fallback to active step card
                 stepItemEl = document.querySelector('.neo-step-item.active');
             }
-            if (stepItemEl && editOverlay) {
-                stepItemEl.appendChild(editOverlay);
+            var elOverlay = document.getElementById('neo-edit-overlay');
+            if (stepItemEl && elOverlay) {
+                stepItemEl.appendChild(elOverlay);
+                elOverlay.style.display = 'flex';
             }
 
             document.getElementById('neo-bindings-container').style.maxHeight = 'none';
@@ -454,13 +462,14 @@
             document.getElementById('neo-toolbar-controls').style.display = 'none';
             document.getElementById('neo-edit-toolbar').style.display = 'flex';
 
-            editOverlay.style.display = 'flex';
-            editInput.focus();
+            if (elInput) {
+                elInput.focus();
+            }
         };
 
         document.getElementById('neo-edit-btn').addEventListener('click', function () {
             if (!this.disabled) {
-                var currentStepIdx = (performed && performed.length > 0) ? performed.length : 0;
+                var currentStepIdx = (window.neoPerformedList || []).length;
                 window.neoStartEditingStep(currentStepIdx);
             }
         });
@@ -468,7 +477,7 @@
         var editCardIcon = document.getElementById('neo-edit-card-icon');
         if (editCardIcon) {
             editCardIcon.addEventListener('click', function () {
-                var currentStepIdx = (performed && performed.length > 0) ? performed.length : 0;
+                var currentStepIdx = (window.neoPerformedList || []).length;
                 window.neoStartEditingStep(currentStepIdx);
             });
         }
@@ -479,7 +488,14 @@
             document.getElementById('neo-edit-toolbar').style.display = 'none';
 
             document.getElementById('neo-bindings-container').style.maxHeight = '100px';
-            editOverlay.style.display = 'none';
+            var elOverlay = document.getElementById('neo-edit-overlay');
+            if (elOverlay) {
+                var rHud = document.getElementById('neo-ai-hud');
+                if (rHud) {
+                    rHud.appendChild(elOverlay);
+                }
+                elOverlay.style.display = 'none';
+            }
         });
 
         var bindingsCloseBtn = document.getElementById('neo-bindings-close-btn');
@@ -489,31 +505,48 @@
             });
         }
 
-        submitEditBtn.addEventListener('click', function () {
-            if (this.disabled) return;
-            var newInstr = editInput.value;
-            if (newInstr && newInstr.trim() !== '') {
-                var updatedBindings = {};
-                var inputs = document.querySelectorAll('.neo-binding-input');
-                for (var i = 0; i < inputs.length; i++) {
-                    updatedBindings[inputs[i].dataset.key] = inputs[i].value;
-                }
-                var editIdx = (window.neoEditingStepIndex !== undefined) ? window.neoEditingStepIndex : ((performed && performed.length > 0) ? performed.length : 0);
-                window.neoSubmitAction({ action: "EDIT", instruction: newInstr.trim(), index: editIdx, bindings: updatedBindings });
+        var elSubmitEditBtn = document.getElementById('neo-edit-submit-btn');
+        if (elSubmitEditBtn) {
+            elSubmitEditBtn.addEventListener('click', function () {
+                if (this.disabled) return;
+                var elInput = document.getElementById('neo-edit-input');
+                var elOverlay = document.getElementById('neo-edit-overlay');
+                var newInstr = elInput ? elInput.value : '';
+                if (newInstr && newInstr.trim() !== '') {
+                    var updatedBindings = {};
+                    var inputs = document.querySelectorAll('.neo-binding-input');
+                    for (var i = 0; i < inputs.length; i++) {
+                        updatedBindings[inputs[i].dataset.key] = inputs[i].value;
+                    }
+                    var editIdx = (window.neoEditingStepIndex !== undefined) ? window.neoEditingStepIndex : (window.neoPerformedList || []).length;
+                    window.neoSubmitAction({ action: "EDIT", instruction: newInstr.trim(), index: editIdx, bindings: updatedBindings });
 
-                document.getElementById('bindingsDrawer').style.display = 'none';
-                document.getElementById('neo-toolbar-controls').style.display = 'flex';
-                document.getElementById('neo-edit-toolbar').style.display = 'none';
-                document.getElementById('neo-bindings-container').style.maxHeight = '100px';
-                editOverlay.style.display = 'none';
-            } else {
-                document.getElementById('bindingsDrawer').style.display = 'none';
-                document.getElementById('neo-toolbar-controls').style.display = 'flex';
-                document.getElementById('neo-edit-toolbar').style.display = 'none';
-                document.getElementById('neo-bindings-container').style.maxHeight = '100px';
-                editOverlay.style.display = 'none';
-            }
-        });
+                    document.getElementById('bindingsDrawer').style.display = 'none';
+                    document.getElementById('neo-toolbar-controls').style.display = 'flex';
+                    document.getElementById('neo-edit-toolbar').style.display = 'none';
+                    document.getElementById('neo-bindings-container').style.maxHeight = '100px';
+                    if (elOverlay) {
+                        var rHud = document.getElementById('neo-ai-hud');
+                        if (rHud) {
+                            rHud.appendChild(elOverlay);
+                        }
+                        elOverlay.style.display = 'none';
+                    }
+                } else {
+                    document.getElementById('bindingsDrawer').style.display = 'none';
+                    document.getElementById('neo-toolbar-controls').style.display = 'flex';
+                    document.getElementById('neo-edit-toolbar').style.display = 'none';
+                    document.getElementById('neo-bindings-container').style.maxHeight = '100px';
+                    if (elOverlay) {
+                        var rHud = document.getElementById('neo-ai-hud');
+                        if (rHud) {
+                            rHud.appendChild(elOverlay);
+                        }
+                        elOverlay.style.display = 'none';
+                    }
+                }
+            });
+        }
         document.getElementById('neo-rewind-btn').addEventListener('click', function () {
             if (!this.disabled) {
                 var count = (window.neoPerformedList || []).length;
@@ -733,6 +766,15 @@
         };
 
         window.neoRenderFullPrompt = function () {
+            // Safety: if the editing overlay is currently nested inside the container, append it back to #neo-ai-hud so it doesn't get destroyed.
+            var elOverlay = document.getElementById('neo-edit-overlay');
+            if (elOverlay && elOverlay.parentNode && elOverlay.parentNode !== document.getElementById('neo-ai-hud')) {
+                var rHud = document.getElementById('neo-ai-hud');
+                if (rHud) {
+                    rHud.appendChild(elOverlay);
+                }
+            }
+
             var container = document.getElementById('neo-steps-container');
             if (!container) return;
 
@@ -913,7 +955,7 @@
             if (!window.neoFullPromptOpen) {
                 if (aList && aList.length > 0) {
                     var activeIdx = pList.length;
-                    container.innerHTML = genItem(aList[0], 'active', true, activeIdx);
+                    container.innerHTML = '<div id="neo-planned-actions" class="active-step-group">' + genItem(aList[0], 'active', true, activeIdx) + '</div>';
                 } else {
                     container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">No active step</div>';
                 }
@@ -923,14 +965,24 @@
                 var fullHtml = '';
 
                 if (!hasMultiBlocks) {
+                    var histHtml = '';
                     for (var i = 0; i < pList.length; i++) {
-                        fullHtml += genItem(pList[i], 'done', true, i);
+                        histHtml += genItem(pList[i], 'done', true, i);
                     }
+                    if (histHtml !== '') {
+                        fullHtml += '<div id="neo-history-table" style="display:flex; flex-direction:column; width:100%;">' + histHtml + '</div>';
+                    }
+
                     if (aList && aList.length > 0) {
                         var activeIdx = pList.length;
-                        fullHtml += genItem(aList[0], 'active', true, activeIdx);
+                        fullHtml += '<div id="neo-planned-actions" class="active-step-group">' + genItem(aList[0], 'active', true, activeIdx) + '</div>';
+                        
+                        var futHtml = '';
                         for (var j = 1; j < aList.length; j++) {
-                            fullHtml += genItem(aList[j], 'pending', true, activeIdx + j);
+                            futHtml += genItem(aList[j], 'pending', true, activeIdx + j);
+                        }
+                        if (futHtml !== '') {
+                            fullHtml += '<div id="neo-future-table" style="display:flex; flex-direction:column; width:100%;">' + futHtml + '</div>';
                         }
                     }
                 } else {
@@ -972,22 +1024,59 @@
                         var blk = blocks[b];
                         if (blk.raw.length > 0 || currentBlock === blk.name) {
                             var partition = getBlockPartition(blk.name, blk.raw);
-                            var blockHtml = '';
+                            
+                            var blockHtml = genHeadline(blk.title, blk.name);
+                            var contentHtml = '';
 
-                            for (var i = 0; i < partition.completed.length; i++) {
-                                blockHtml += genItem(partition.completed[i], 'done', partition.isInteractive, i);
-                            }
-                            if (partition.active) {
-                                var activeIdx = partition.completed.length;
-                                blockHtml += genItem(partition.active, 'active', true, activeIdx);
-                            }
-                            var activeOffset = partition.active ? 1 : 0;
-                            for (var i = 0; i < partition.pending.length; i++) {
-                                blockHtml += genItem(partition.pending[i], 'pending', partition.isInteractive, partition.completed.length + activeOffset + i);
+                            if (blk.name === currentBlock) {
+                                var blockHist = '';
+                                for (var i = 0; i < partition.completed.length; i++) {
+                                    blockHist += genItem(partition.completed[i], 'done', partition.isInteractive, i);
+                                }
+                                if (blockHist !== '') {
+                                    contentHtml += '<div id="neo-history-table" style="display:flex; flex-direction:column; width:100%;">' + blockHist + '</div>';
+                                }
+
+                                if (partition.active) {
+                                    var activeIdx = partition.completed.length;
+                                    contentHtml += '<div id="neo-planned-actions" class="active-step-group">' + genItem(partition.active, 'active', true, activeIdx) + '</div>';
+                                }
+
+                                var blockFut = '';
+                                var activeOffset = partition.active ? 1 : 0;
+                                for (var i = 0; i < partition.pending.length; i++) {
+                                    blockFut += genItem(partition.pending[i], 'pending', partition.isInteractive, partition.completed.length + activeOffset + i);
+                                }
+                                if (blockFut !== '') {
+                                    contentHtml += '<div id="neo-future-table" style="display:flex; flex-direction:column; width:100%;">' + blockFut + '</div>';
+                                }
+                            } else {
+                                var isPast = false;
+                                if (currentBlock === 'steps' && blk.name === 'before') {
+                                    isPast = true;
+                                } else if (currentBlock === 'after' && (blk.name === 'before' || blk.name === 'steps')) {
+                                    isPast = true;
+                                }
+
+                                var blockStepsHtml = '';
+                                for (var i = 0; i < partition.completed.length; i++) {
+                                    blockStepsHtml += genItem(partition.completed[i], 'done', partition.isInteractive, i);
+                                }
+                                for (var i = 0; i < partition.pending.length; i++) {
+                                    blockStepsHtml += genItem(partition.pending[i], 'pending', partition.isInteractive, partition.completed.length + i);
+                                }
+
+                                if (blockStepsHtml !== '') {
+                                    if (isPast) {
+                                        contentHtml += '<div id="neo-history-table" style="display:flex; flex-direction:column; width:100%;">' + blockStepsHtml + '</div>';
+                                    } else {
+                                        contentHtml += '<div id="neo-future-table" style="display:flex; flex-direction:column; width:100%;">' + blockStepsHtml + '</div>';
+                                    }
+                                }
                             }
 
-                            if (blockHtml !== '') {
-                                fullHtml += genHeadline(blk.title, blk.name) + blockHtml;
+                            if (contentHtml !== '') {
+                                fullHtml += blockHtml + contentHtml;
                             }
                         }
                     }
