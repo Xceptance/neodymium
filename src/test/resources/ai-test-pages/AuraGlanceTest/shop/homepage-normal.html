@@ -1666,7 +1666,11 @@
                 const anchor = e.target.closest('a') || e.target.closest('.x-nav-clickable') || (e.target.getAttribute('onclick')?.includes('location.href') ? e.target : null);
                 if (anchor) {
                     let url = anchor.getAttribute('href') || anchor.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
-                    if (url && !url.includes('#') && !anchor.getAttribute('target') && !url.startsWith('javascript:')) {
+                    const normalizedUrl = url ? url.trim().toLowerCase() : '';
+                    if (url && !url.includes('#') && !anchor.getAttribute('target') &&
+                        !normalizedUrl.startsWith('javascript:') &&
+                        !normalizedUrl.startsWith('data:') &&
+                        !normalizedUrl.startsWith('vbscript:')) {
                         // Make sure to resolve the relative URL
                         e.preventDefault();
                         e.stopPropagation();
