@@ -19,8 +19,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.util.List;
-import com.xceptance.neodymium.ai.action.Action;
-import com.xceptance.neodymium.ai.action.SelectorParser;
 import com.xceptance.neodymium.ai.action.plugins.ClickAction;
 import com.xceptance.neodymium.ai.action.plugins.TypeAction;
 import com.xceptance.neodymium.ai.action.plugins.SelectAction;

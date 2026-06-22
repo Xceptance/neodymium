@@ -42,6 +42,7 @@ import com.xceptance.neodymium.util.Neodymium;
 @Browser("Chrome_1024x768")
 @Tag("form")
 @Tag("llm")
+@Tag("integration")
 public final class FormInteractionsTest extends BaseAiTest
 {
     private String formsUrl;
@@ -49,6 +50,7 @@ public final class FormInteractionsTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.formsUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/forms.html", server.getPort());
         Neodymium.getData().put("form.test.url", this.formsUrl);
     }

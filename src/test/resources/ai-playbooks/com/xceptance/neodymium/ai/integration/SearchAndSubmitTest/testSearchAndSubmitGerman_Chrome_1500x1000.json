@@ -1,0 +1,116 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.SearchAndSubmitTest :: testSearchAndSubmitGerman :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Beginne mit der URL http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+      "reasoning": "Navigating to the provided URL as instructed.",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html"
+          ],
+          "description": "Navigate to the specified URL",
+          "elementDetails": "http://localhost:43377/AuraGlanceTest/shop-posters-homepage/index.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Gib \u0027bear\u0027 in das Suchfeld ein",
+      "reasoning": "Identified the search input field by its ID \u0027search-box\u0027 and generated a TYPE action to enter \u0027bear\u0027.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#search-box",
+          "value": [
+            "bear"
+          ],
+          "description": "Type \u0027bear\u0027 into the search field",
+          "elementDetails": "Search posters...",
+          "elementContext": {
+            "classes": "search-input",
+            "name": "searchText",
+            "id": "search-box",
+            "placeholder": "Search posters...",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Gib \u0027bear\u0027 in das Suchfeld ein und sende die Suche ab",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "sende die Suche ab",
+      "reasoning": "The instruction \u0027sende die Suche ab\u0027 translates to submitting the search. I identified the search button by its ID \u0027search-button\u0027 and generated a CLICK action for it.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#search-button",
+          "description": "Click the search button",
+          "elementDetails": "Search button",
+          "elementContext": {
+            "classes": "btn-search",
+            "text": "Search",
+            "id": "search-button",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "originalUnsplitInstruction": "Gib \u0027bear\u0027 in das Suchfeld ein und sende die Suche ab",
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Überprüfe, dass der Titel der Suchergebnisse \u0027bear\u0027 enthält",
+      "reasoning": "The instruction asks to verify that the search results title contains \u0027bear\u0027. I identified the element with id \u0027search-title\u0027 as the search results title and created an ASSERT action to check its text content for \u0027bear\u0027.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#search-title",
+          "value": [
+            "bear"
+          ],
+          "description": "Verify that the search results title contains \u0027bear\u0027",
+          "elementDetails": "Search Results for \u0027bear\u0027",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Überprüfe, dass auf der Seite \u00273 results found.\u0027 angezeigt wird",
+      "reasoning": "The instruction is to verify the presence of specific text. I found an element with the ID \u0027search-subtitle\u0027 that contains the exact text \u00273 results found.\u0027 and created an ASSERT action to verify its content.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#search-subtitle",
+          "value": [
+            "3 results found."
+          ],
+          "description": "Verify that \u00273 results found.\u0027 is displayed on the page",
+          "elementDetails": "search-subtitle",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    }
+  ]
+}

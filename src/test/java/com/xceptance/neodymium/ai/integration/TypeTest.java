@@ -40,7 +40,8 @@ import com.xceptance.neodymium.util.Neodymium;
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@Tag("freeform")
+@Tag("integration")
+@Tag("llm")
 public class TypeTest extends BaseAiTest
 {
     private String url;
@@ -51,6 +52,7 @@ public class TypeTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
         Neodymium.getData().put("type.test.url", this.url);
     }

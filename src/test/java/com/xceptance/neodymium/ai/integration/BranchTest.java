@@ -41,7 +41,8 @@ import com.xceptance.neodymium.util.Neodymium;
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@Tag("freeform")
+@Tag("integration")
+@Tag("llm")
 public class BranchTest extends BaseAiTest
 {
     /**
@@ -50,6 +51,7 @@ public class BranchTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         final String url = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
         Neodymium.getData().put("branch.test.url", url);
     }
@@ -335,7 +337,8 @@ public class BranchTest extends BaseAiTest
             .hasDirectParses(1)
             .hasReplays(0)
             .hasActionsCount(2)
-            .step(0, s -> s.isDirectParse());
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasPesapCall());
 
         assertEquals("Main Action Triggered!", 
             Selenide.$("#result").shouldBe(Condition.visible).text());

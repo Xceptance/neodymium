@@ -14,7 +14,6 @@ import com.codeborne.selenide.impl.Html;
 import com.codeborne.selenide.impl.WebElementsCollectionWrapper;
 import com.codeborne.selenide.logevents.SelenideLogger;
 
-import io.qameta.allure.Allure;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Assert;
@@ -29,7 +28,6 @@ import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import javax.management.RuntimeErrorException;
 
 import static com.codeborne.selenide.Condition.not;
 import static com.codeborne.selenide.Selenide.$$;

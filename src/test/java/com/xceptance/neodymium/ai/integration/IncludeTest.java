@@ -45,7 +45,8 @@ import com.xceptance.neodymium.util.Neodymium;
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@Tag("freeform")
+@Tag("integration")
+@Tag("llm")
 public class IncludeTest extends BaseAiTest
 {
     /**
@@ -54,6 +55,7 @@ public class IncludeTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         final String url = String.format("http://localhost:%d/IncludeTest/testInclude.html", server.getPort());
         Neodymium.getData().put("include.test.url", url);
         Neodymium.getData().put("neodymium.classpathResourcePath", "com/xceptance/neodymium/ai/integration/IncludeTest.yaml");

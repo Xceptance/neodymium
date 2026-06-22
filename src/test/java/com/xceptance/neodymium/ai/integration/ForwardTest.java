@@ -40,7 +40,8 @@ import com.xceptance.neodymium.util.Neodymium;
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@Tag("freeform")
+@Tag("integration")
+@Tag("llm")
 public class ForwardTest extends BaseAiTest
 {
     private String url1;
@@ -52,6 +53,7 @@ public class ForwardTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url1 = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
         this.url2 = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
         Neodymium.getData().put("forward.test.url1", this.url1);

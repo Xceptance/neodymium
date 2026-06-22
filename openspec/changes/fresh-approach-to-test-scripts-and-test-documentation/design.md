@@ -43,7 +43,7 @@ data:
 ### Phase A: YAML Loading
 SnakeYAML parses the entire file as a standard YAML document. The root is expected to be a Map.
 *   **Schema Tolerance for Free Text:** The parser tolerates and ignores any unknown, extra, or free-text keys without a leading underscore. This allows authors to add arbitrary annotations, comments, or metadata without breaking execution.
-*   **Framework Key Guard:** Any key starting with an underscore (`_`) is considered a machine-space instruction. The parser strictly validates all root and dataset-level underscored keys against the official framework registry: `_meta`, `_properties`, `_context`, `_data`, `_beforeAll`, `_beforeEach`, `_steps`, `_onSuccessEach`, `_onFailureEach`, `_afterEach`, `_onSuccessAll`, `_onFailureAll`, `_afterAll`, `_include`, and `_id`. If an unrecognized underscored key is detected (e.g. `_step:` or `_dta:`), the parser must immediately throw a `MalformedPlaybookException`.
+*   **Framework Key Guard:** Any key starting with an underscore (`_`) is considered a machine-space instruction. The parser strictly validates all root and dataset-level underscored keys against the official framework registry: `_meta`, `_properties`, `_context`, `_data`, `_beforeAll`, `_beforeEach`, `_steps`, `_onSuccessEach`, `_onFailureEach`, `_afterEach`, `_onSuccessAll`, `_onFailureAll`, `_afterAll`, `_include`, `_id`, `_sensitive`, and `_dynamic`. If an unrecognized underscored key is detected (e.g. `_step:` or `_dta:`), the parser must immediately throw a `MalformedPlaybookException`.
 *   **Property Precedence & Nested Flattening:** Keys in `_properties` are recursively flattened into standard dotted keys. If a key is defined both in a nested structure and as a dotted key (e.g. `neodymium.ai.pesap.enabled: true` alongside `neodymium: ai: pesap: enabled: false`), the dotted flat key takes absolute precedence.
     *   **Unified AI Prefix Resolution (`skipReplay`):** To resolve the naming inconsistency where AI configurations use the `neodymium.ai` prefix but `skipReplay` was a raw key, `skipReplay` is strictly replaced by `neodymium.ai.skipReplay` (nested inside the `_properties` block as `neodymium -> ai -> skipReplay`). No backwards compatibility is needed.
         *   The runtime execution engine and tests will read and evaluate only `neodymium.ai.skipReplay`.
@@ -157,6 +157,173 @@ To protect sensitive keys (e.g., credentials, passwords, card numbers) from leak
 
 ---
 
+## 6a. Dynamic Data Protection (`_dynamic` — Playbook Recording Sanitization)
+
+When the AI agent records actions into a playbook during the initial generation run, resolved variable values (e.g. `john.doe.us.8f3a@example.com`) are baked directly into the JSON action fields (`value`, `target`, `hint`). If any of those variables are **dynamic** — meaning their resolved value changes between runs — the recorded playbook becomes non-deterministic: replays will fail on value mismatches (e.g. unique constraint violations for re-used emails, or wrong port numbers for programmatic URLs).
+
+The `_dynamic` directive solves this by telling the playbook recorder to **replace resolved runtime values with their original `${placeholder}` form** before persisting actions, so that replays re-resolve the variable freshly from the active dataset context.
+
+### Declaration Scopes
+
+`_dynamic` is a **list of variable key names** and can appear at any level where data is defined:
+
+1. **`_constants` scope:** Declares dynamic keys that apply to every generated execution row.
+2. **`_lookup` per-dimension scope:** Declares additional dynamic keys specific to that dimension value.
+3. **Legacy flat `data:` rows:** Can appear directly inside a dataset map.
+
+```yaml
+_data:
+  _constants:
+    _dynamic:
+      - baseUrl       # programmatic, injected at runtime
+      - email         # template uses ${random}, value changes every run
+    _sensitive:
+      password:
+        _value: "Secret123!"
+        _mock: "mockPassword_abc"
+
+  _lookup:
+    locale:
+      en-GB:
+        _dynamic:
+          - couponCode  # dimension-specific dynamic variable
+```
+
+Legacy flat format:
+```yaml
+data:
+  - testId: "us"
+    email: john.doe.us.${random}@example.com
+    password: Password123!
+    _dynamic: [email, baseUrl]
+```
+
+### Relationship to `_sensitive` and Other Implicit Sources
+
+Variables are determined to be dynamic using the following classification hierarchy:
+
+| Variable Origin | Classification | YAML Declaration Required? |
+| :--- | :--- | :--- |
+| `_data` / `_constants` / `_lookup` | Explicit | **Yes** — must be listed in `_dynamic` |
+| `_sensitive` map block | Implicit | **No** — always dynamic |
+| `store` action (runtime-captured) | Implicit | **No** — always dynamic |
+| Programmatic injection (Java API) | Declared at runtime | **No** — defined via API |
+
+There is **no auto-detection** of dynamic variables in static data blocks; they must be listed explicitly. However:
+1. All `_sensitive` variables are **implicitly dynamic**.
+2. All runtime variables captured via `store` actions (e.g. `Store text from X as "varName"`) are automatically registered as dynamic.
+3. All variables injected via the Java API with a `DYNAMIC` classification are registered as dynamic.
+
+This prevents redundant boilerplate entries in the YAML file for values that the framework already programmatically knows are dynamic.
+
+### Playbook Recording Sanitization Pipeline
+
+When the playbook recorder persists an `Action` object to JSON:
+
+1. **Build Dynamic Lookup Table:** For the active dataset row, collect all keys flagged as dynamic (explicit `_dynamic` list + implicit `_sensitive` keys). For each key, map its **resolved runtime value** → **original `${key}` placeholder string**.
+2. **Sort by Value Length (Descending):** To prevent partial substring corruption (e.g. a short value like `8080` accidentally matching inside a longer unrelated string), the lookup entries are sorted by resolved value length, longest first.
+3. **Sanitize Action Fields:** For each action's `value` field, scan for occurrences of resolved dynamic values and replace them with the corresponding `${placeholder}`. The `target` and `hint` fields are sanitized using the same lookup, but only when the resolved value appears as a **complete segment** (not as a substring of a CSS selector token or XPath expression) to prevent locator corruption.
+4. **Persist:** The sanitized action JSON is written to the playbook file.
+
+### Replay Re-Resolution
+
+When replaying a persisted playbook, the execution engine encounters `${placeholder}` tokens inside action field values. These are resolved against the **current active dataset row** at replay time, producing fresh runtime values (new random suffixes, current ports, etc.).
+
+---
+
+## 6b. Java Programmatic Variable Injection & Retrieval API
+
+In many integration tests, variables must be resolved and injected programmatically at the start of a test (e.g. dynamic staging URLs or randomly generated database entities in a JUnit `@BeforeEach` method) rather than statically defined in the playbook file.
+
+To allow Java setup code to inject and retrieve these variables with their proper classification context without forcing the author to declare them in the YAML, we expose a structured, namespace-based data API:
+
+```java
+package com.xceptance.neodymium.util;
+
+public final class Neodymium
+{
+    /** Returns the thread-local programmatic data context manager */
+    public static NeodymiumData data()
+    {
+        return getContext().neodymiumData;
+    }
+}
+```
+
+The `NeodymiumData` interface exposes the separate classification scopes, as well as root-level hierarchy-aware resolution methods:
+
+```java
+package com.xceptance.neodymium.common.testdata;
+
+public interface NeodymiumData
+{
+    /** Dynamic scope: values replaced with ${placeholder} on playbook recording */
+    DataScope dynamic();
+    
+    /** Sensitive scope: masked in logs and faked in LLM prompts, but raw for execution */
+    SensitiveDataScope sensitive();
+    
+    /** Constants scope: global constants merged into all runs */
+    DataScope constants();
+    
+    /** Normal scope: standard iteration-scoped variables */
+    DataScope normal();
+
+    /** Unified, hierarchy-aware resolution methods */
+    String get(final String name);
+    <T> T get(final String name, final Class<T> clazz);
+    boolean exists(final String name);
+}
+```
+
+The individual scopes allow clean setter and getter methods:
+
+```java
+package com.xceptance.neodymium.common.testdata;
+
+public interface DataScope
+{
+    void set(final String name, final String value);
+    String get(final String name);
+    <T> T get(final String name, final Class<T> clazz);
+    boolean exists(final String name);
+}
+
+public interface SensitiveDataScope
+{
+    void set(final String name, final String value, final String mockValue);
+    void set(final String name, final String value); // Auto-fabricated mock stand-in
+    String get(final String name);
+    <T> T get(final String name, final Class<T> clazz);
+    boolean exists(final String name);
+}
+```
+
+### Hierarchy Resolution Order
+When calling `Neodymium.data().get(name)` or `Neodymium.data().exists(name)`, the framework traverses the following resolution hierarchy in order, returning the first matching value:
+
+1. **Programmatic Java Scopes (Highest Precedence):**
+   - `sensitive()` scope
+   - `dynamic()` scope
+   - `normal()` scope
+   - `constants()` scope
+2. **Active YAML/Markdown Dataset Context (Current Iteration Scope):**
+   - Active iteration variables resolved for the current dataset row (combining dimension-specific lookups and dataset constants).
+3. **Global Playbook Defaults:**
+   - Static defaults declared inside the `_meta` block.
+4. **External Environment Configuration (Lowest Precedence):**
+   - Dotted properties mapped in `_properties` or JVM/System properties (e.g., `neodymium.properties`).
+
+### Injection & Scoping Mechanics
+When calling `.set()` on a scope (e.g. `Neodymium.data().dynamic().set("a", "b")`):
+- The variable is registered directly in the active test execution's respective metadata scope.
+- Injected dynamic and sensitive variables are automatically tracked and sanitized during playbook recording.
+- Since the classification is supplied at the point of injection, there is no need to write boilerplate `_dynamic` or `_sensitive` blocks in the playbook YAML file.
+- Any variable can be read back with the corresponding `.get()` method on a specific scope (e.g. `Neodymium.data().dynamic().get("a")`), keeping data classification explicit and symmetric for both reading and writing.
+- Alternatively, calling `Neodymium.data().get("a")` traverses the entire context hierarchy to retrieve the currently active, valid value. This is especially useful during complex multi-browser, parameterized execution splits where the active context shifts dynamically.
+
+---
+
 ## 7. Layered / Test Profile Data Structure
 
 To support clean i18n test profiles without copying entire data columns, `_data` supports an additive **layered Map structure**:
@@ -178,6 +345,15 @@ _data:
 2. **Cartesian Product:** The parser computes the Cartesian product of all active keys defined in `_dimensions`.
 3. **Lookup Resolution:** For each combination, the parser pulls the lookup override values from `_lookup` matching that dimension's value.
 4. **Merge and Flatten:** Overrides are merged with the `_constants` to build the isolated Active Variable Map per execution row.
+
+### Dropping Manual Dataset-level Identifiers (`testId` / `dataId`)
+
+In traditional Neodymium test datasets, every row required a manual unique identifier key (often `testId` or `dataId`) to name the test execution instance in reports.
+
+Under the new layered Cartesian model, these manual dataset-level identifiers are completely **dropped and deprecated**:
+- **Automated Run Names:** The execution engine dynamically construct the iteration name using the playbook filename and the Cartesian coordinates of the active dimensions (e.g. `CheckoutPlaybook [locale=en-US]`).
+- **Reduction of Boilerplate:** Eliminating required ID fields in datasets avoids typing errors and makes data sheets/lookup tables cleaner.
+- **Backward Compatibility:** For legacy flat dataset lists, manual `_testId` and `_id` are still tolerated as optional safety keys, but are no longer required.
 
 ---
 

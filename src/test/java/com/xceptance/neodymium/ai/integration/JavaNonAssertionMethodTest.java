@@ -42,7 +42,8 @@ import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@Tag("freeform")
+@Tag("integration")
+@Tag("llm")
 public class JavaNonAssertionMethodTest extends BaseAiTest
 {
     private String url;
@@ -53,6 +54,7 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
+        useTempPlaybookDirectory();
         this.url = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
         Neodymium.getData().put("javaMethod.test.url", this.url);
     }
@@ -180,6 +182,17 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
             .hasDirectParses(2)
             .hasActionsCount(2);
 
+        this.resetBrowser();
+
+        Neodymium.getData().put("locale", "de-DE");
+        final AiExecutionResult r1Replay = runAi(successSteps, VerificationMode.REPLAY);
+        assertThat(r1Replay)
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2);
+
+        this.resetBrowser();
+
         final String failingSteps = """
                 OPEN ${javaMethod.test.url}
                 java: parseLocalizedBigDecimal("abc")
@@ -208,6 +221,14 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
         assertThat(r)
             .hasDirectParses(7)
             .hasActionsCount(7);
+
+        this.resetBrowser();
+
+        final AiExecutionResult rReplay = runAi(steps, VerificationMode.REPLAY);
+        assertThat(rReplay)
+            .hasDirectParses(0)
+            .hasReplays(7)
+            .hasActionsCount(7);
     }
 
     /**
@@ -222,7 +243,19 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
                 OPEN ${javaMethod.test.url}
                 java: assertParsedBigDecimal("1.234,56, 1234.56")
             """;
-        runAi(germanSteps, VerificationMode.LIVE_LLM);
+        final AiExecutionResult rGerman = runAi(germanSteps, VerificationMode.LIVE_LLM);
+        assertThat(rGerman)
+            .hasDirectParses(2)
+            .hasActionsCount(2);
+
+        this.resetBrowser();
+
+        Neodymium.getData().put("locale", "de-DE");
+        final AiExecutionResult rGermanReplay = runAi(germanSteps, VerificationMode.REPLAY);
+        assertThat(rGermanReplay)
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2);
 
         this.resetBrowser();
 
@@ -232,6 +265,18 @@ public class JavaNonAssertionMethodTest extends BaseAiTest
                 OPEN ${javaMethod.test.url}
                 java: assertParsedBigDecimal("1,234.56, 1234.56")
             """;
-        runAi(usSteps, VerificationMode.LIVE_LLM);
+        final AiExecutionResult rUs = runAi(usSteps, VerificationMode.LIVE_LLM);
+        assertThat(rUs)
+            .hasDirectParses(2)
+            .hasActionsCount(2);
+
+        this.resetBrowser();
+
+        Neodymium.getData().put("locale", "en-US");
+        final AiExecutionResult rUsReplay = runAi(usSteps, VerificationMode.REPLAY);
+        assertThat(rUsReplay)
+            .hasDirectParses(0)
+            .hasReplays(2)
+            .hasActionsCount(2);
     }
 }

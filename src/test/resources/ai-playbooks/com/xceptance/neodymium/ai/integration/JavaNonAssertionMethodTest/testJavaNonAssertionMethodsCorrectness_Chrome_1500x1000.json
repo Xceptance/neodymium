@@ -1,0 +1,130 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.JavaNonAssertionMethodTest :: testJavaNonAssertionMethodsCorrectness :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/AssertActionTest/testAssertHappyPath.html"
+          ],
+          "description": "Navigate to http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertParsedBigDecimal(\"14,96 €, 14.96\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertParsedBigDecimal",
+          "value": [
+            "14,96 €, 14.96"
+          ],
+          "description": "Call assertParsedBigDecimal with param 14,96 €, 14.96",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertDisplayPrecision(\"$0.90, 2\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertDisplayPrecision",
+          "value": [
+            "$0.90, 2"
+          ],
+          "description": "Call assertDisplayPrecision with param $0.90, 2",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertIsNumericOrPrice(\"zł 150, true\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertIsNumericOrPrice",
+          "value": [
+            "zł 150, true"
+          ],
+          "description": "Call assertIsNumericOrPrice with param zł 150, true",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertIsNumericOrPrice(\"Total, false\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertIsNumericOrPrice",
+          "value": [
+            "Total, false"
+          ],
+          "description": "Call assertIsNumericOrPrice with param Total, false",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertNormalizeNumericOrPrice(\"14,96 €, 14.96\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertNormalizeNumericOrPrice",
+          "value": [
+            "14,96 €, 14.96"
+          ],
+          "description": "Call assertNormalizeNumericOrPrice with param 14,96 €, 14.96",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "java: assertNormalizeNumericOrPrice(\"ORD-12345, ORD-12345\")",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "JAVA_METHOD",
+          "target": "assertNormalizeNumericOrPrice",
+          "value": [
+            "ORD-12345, ORD-12345"
+          ],
+          "description": "Call assertNormalizeNumericOrPrice with param ORD-12345, ORD-12345",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

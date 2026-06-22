@@ -29,9 +29,6 @@ import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import com.xceptance.neodymium.ai.core.AiBrowser;
-import com.xceptance.neodymium.ai.core.AiExecutionResult;
-import com.xceptance.neodymium.ai.core.LookupDetails;
 import com.xceptance.neodymium.ai.testing.AiMockResponse;
 import com.xceptance.neodymium.common.testdata.TestData;
 import com.xceptance.neodymium.util.Neodymium;

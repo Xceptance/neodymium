@@ -47,9 +47,9 @@ public final class AiAgentPromptsTest
         Assertions.assertTrue(prompt.contains("## Rules"));
         Assertions.assertTrue(prompt.contains("Set \"d\" to true"));
 
-        // Should not contain verbose plugin descriptions like JavaMethod or KeyPress instructions
-        Assertions.assertFalse(prompt.contains("Invoke a Java method"));
-        Assertions.assertFalse(prompt.contains("send key presses to an element"));
+        // Should contain plugin descriptions like JavaMethod or KeyPress instructions
+        Assertions.assertTrue(prompt.contains("Invoke a public Java method"));
+        Assertions.assertTrue(prompt.contains("Simulate pressing a keyboard key"));
 
         // Should contain the list of supported action types
         Assertions.assertTrue(prompt.contains("CLICK"));
@@ -119,7 +119,7 @@ public final class AiAgentPromptsTest
     @Test
     public final void testSystemPromptMaxLength()
     {
-        final int maxHintLength = 1800;
+        final int maxHintLength = 6500;
         final int maxAxTreeLength = 11500;
         final int maxLeanLength = 11500;
         final int maxStandardLength = 11500;

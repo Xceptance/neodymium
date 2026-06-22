@@ -1,0 +1,27 @@
+{
+  "id": "com.xceptance.neodymium.ai.action.ActionEdgeCasesTest :: testStaleElements",
+  "steps": [
+    {
+      "promptLine": "Click the \u0027Click to Refresh State\u0027 button.",
+      "reasoning": "Identified the button by its ID and aria-label and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-refresh",
+          "description": "Click the \u0027Click to Refresh State\u0027 button",
+          "elementDetails": "Click to Refresh State button",
+          "elementContext": {
+            "text": "Click to Refresh State",
+            "id": "btn-refresh",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

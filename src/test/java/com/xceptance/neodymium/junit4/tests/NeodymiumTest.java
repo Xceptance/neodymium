@@ -28,7 +28,6 @@ import org.junit.runner.Result;
 import org.junit.runner.notification.Failure;
 import org.junit.runners.model.FrameworkMethod;
 
-import com.xceptance.neodymium.common.browser.WebDriverCache;
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.util.Neodymium;

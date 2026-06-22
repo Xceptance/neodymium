@@ -1,0 +1,89 @@
+{
+  "id": "com.xceptance.neodymium.ai.action.ActionEdgeCasesTest :: testShadowDomBoundaries",
+  "steps": [
+    {
+      "promptLine": "Type \u0027Shadow Test Value\u0027 into the Shadow Input text field.",
+      "reasoning": "Identified the \u0027Shadow Input\u0027 text field by its ID and generated a TYPE action to input the specified value.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#shadow-text",
+          "value": [
+            "Shadow Test Value"
+          ],
+          "description": "Type \u0027Shadow Test Value\u0027 into the Shadow Input text field",
+          "elementDetails": "Shadow Input text field",
+          "elementContext": {
+            "id": "shadow-text",
+            "placeholder": "Type inside shadow",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Check the \u0027Shadow Checkbox\u0027 checkbox.",
+      "reasoning": "Identified the \u0027Shadow Checkbox\u0027 by its ID and aria-label in the AXTree and generated a CHECK action.",
+      "actions": [
+        {
+          "type": "CHECK",
+          "target": "#shadow-check",
+          "description": "Check the \u0027Shadow Checkbox\u0027 checkbox",
+          "elementDetails": "Shadow Checkbox",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Check the \u0027Shadow Radio\u0027 radio button.",
+      "reasoning": "Identified the \u0027Shadow Radio\u0027 radio button by its ID and aria-label from the AXTree and generated a CHECK action.",
+      "actions": [
+        {
+          "type": "CHECK",
+          "target": "#shadow-radio-btn",
+          "value": [
+            "true"
+          ],
+          "description": "Check the \u0027Shadow Radio\u0027 radio button",
+          "elementDetails": "Shadow Radio",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click on the \u0027Submit Shadow Form\u0027 button.",
+      "reasoning": "Found a button with the aria-label \u0027Submit Shadow Form\u0027 and ID \u0027shadow-btn\u0027 in the Accessibility Tree and generated a CLICK action for it.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#shadow-btn",
+          "description": "Click on the \u0027Submit Shadow Form\u0027 button",
+          "elementDetails": "Submit Shadow Form button",
+          "elementContext": {
+            "text": "Submit Shadow Form",
+            "id": "shadow-btn",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

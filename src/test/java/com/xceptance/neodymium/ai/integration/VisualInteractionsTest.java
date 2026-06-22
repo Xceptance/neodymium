@@ -27,7 +27,6 @@ import static com.xceptance.neodymium.ai.util.AiExecutionAssert.assertThat;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.BaseAiTest;
-import com.xceptance.neodymium.ai.AiTestVerification;
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.common.browser.Browser;
@@ -42,7 +41,8 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1500x1000")
 @Tag("sandbox")
-@AiTestVerification({ VerificationMode.LIVE_LLM })
+@Tag("integration")
+@Tag("llm")
 public class VisualInteractionsTest extends BaseAiTest
 {
     private String baseHttpsUrl;
@@ -53,6 +53,7 @@ public class VisualInteractionsTest extends BaseAiTest
     @BeforeEach
     public final void setupSandboxUrls()
     {
+        useTempPlaybookDirectory();
         final int httpPort = server.getPort();
         this.baseHttpsUrl = String.format("https://localhost:%d/AuraGlanceTest/shop/sandbox", server.getHttpsPort());
         final String baseHttpUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox", httpPort);
@@ -69,14 +70,42 @@ public class VisualInteractionsTest extends BaseAiTest
     public final void testSvgIconButtons()
     {
         final String pageUrl = this.baseHttpsUrl + "/svg-icons.html";
-        final AiExecutionResult result = runAi(String.format("""
+        final String steps = String.format("""
                 Open %s
                 Click the trash icon button (visual).
-                """, pageUrl), VerificationMode.LIVE_LLM);
+                """, pageUrl);
 
-        assertTrue(result.isSuccess());
-        assertThat(result).hasNoPesapCalls();
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        assertTrue(r1.isSuccess());
         Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasNoPesapCall());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+        assertTrue(r2.isSuccess());
+        Selenide.$("#svg-status").shouldHave(Condition.text("Delete Clicked"));
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true);
     }
 
     /**
@@ -86,14 +115,42 @@ public class VisualInteractionsTest extends BaseAiTest
     public final void testCanvasClickCoordinates()
     {
         final String pageUrl = this.baseHttpsUrl + "/canvas-click.html";
-        final AiExecutionResult result = runAi(String.format("""
+        final String steps = String.format("""
                 Open %s
                 Click the canvas showing the red text (visual).
-                """, pageUrl), VerificationMode.LIVE_LLM);
+                """, pageUrl);
 
-        assertTrue(result.isSuccess());
-        assertThat(result).hasNoPesapCalls();
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        assertTrue(r1.isSuccess());
         Selenide.$("#canvas-status").shouldHave(Condition.text("Red Canvas Clicked"));
+
+        assertThat(r1)
+            .hasLlmCalls(1)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasNoPesapCall());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+        assertTrue(r2.isSuccess());
+        Selenide.$("#canvas-status").shouldHave(Condition.text("Red Canvas Clicked"));
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(2)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true);
     }
 
     /**
@@ -103,14 +160,46 @@ public class VisualInteractionsTest extends BaseAiTest
     public final void testFloatingLabels()
     {
         final String pageUrl = this.baseHttpsUrl + "/floating-labels.html";
-        final AiExecutionResult result = runAi(String.format("""
+        final String steps = String.format("""
                 Open %s
                 Click the red button to simulate autofill.
                 Click the green button to fix the label overlap.
-                """, pageUrl), VerificationMode.LIVE_LLM);
+                """, pageUrl);
 
-        assertTrue(result.isSuccess());
-        assertThat(result).hasNoPesapCalls();
+        final AiExecutionResult r1 = runAi(steps, VerificationMode.LIVE_LLM);
+        assertTrue(r1.isSuccess());
         Selenide.$("#label-status").shouldHave(Condition.text("Floating label transition fixed!"));
+
+        assertThat(r1)
+            .hasLlmCalls(2)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(1)
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasAction(2, "CLICK")
+            .step(0, s -> s.isDirectParse())
+            .step(1, s -> s.hasLlmCalls(1).hasNoPesapCall())
+            .step(2, s -> s.hasLlmCalls(1).hasNoPesapCall());
+
+        this.resetBrowser();
+
+        final AiExecutionResult r2 = runAi(steps, VerificationMode.REPLAY);
+        assertTrue(r2.isSuccess());
+        Selenide.$("#label-status").shouldHave(Condition.text("Floating label transition fixed!"));
+
+        assertThat(r2)
+            .hasLlmCalls(0)
+            .hasNoPesapCalls()
+            .hasNoEscalations()
+            .hasDirectParses(0)
+            .hasActionsCount(3)
+            .hasAction(0, "NAVIGATE")
+            .hasAction(1, "CLICK")
+            .hasAction(2, "CLICK")
+            .hasStepReplayed(0, true)
+            .hasStepReplayed(1, true)
+            .hasStepReplayed(2, true);
     }
 }

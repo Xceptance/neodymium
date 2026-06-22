@@ -52,6 +52,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Browser("Chrome_1500x1000")
 @Tag("featuretest")
+@Tag("integration")
+@Tag("llm")
 public final class FailureLineTracingTest extends BaseAiTest
 {
     @TempDir

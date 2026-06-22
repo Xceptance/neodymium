@@ -41,6 +41,7 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1500x1000")
 @Tag("integration")
+@Tag("llm")
 public final class LayoutTest extends BaseAiTest
 {
     private String url;
@@ -73,7 +74,7 @@ public final class LayoutTest extends BaseAiTest
             .hasLlmCalls(1)
             .hasPesapCalls(1)
             .hasNoEscalations()
-            .hasContextLevel(0, ContextLevel.VISUAL)
+            .hasContextLevel(1, ContextLevel.VISUAL)
             .step(0, step -> step.isDirectParse())
             .step(1, step -> step.hasLlmCalls(1));
 

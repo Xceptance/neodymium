@@ -27,7 +27,6 @@ import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.ai.BaseAiTest;
-import com.xceptance.neodymium.ai.AiTestVerification;
 import com.xceptance.neodymium.ai.VerificationMode;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.common.browser.Browser;
@@ -42,6 +41,8 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1500x1000")
 @Tag("sandbox")
+@Tag("integration")
+@Tag("llm")
 public class BrowserNavigationTest extends BaseAiTest
 {
     private String baseHttpsUrl;

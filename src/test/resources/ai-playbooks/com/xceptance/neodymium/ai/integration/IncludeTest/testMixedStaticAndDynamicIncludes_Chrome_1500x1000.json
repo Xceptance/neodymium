@@ -1,0 +1,122 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.IncludeTest :: testMixedStaticAndDynamicIncludes :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/IncludeTest/testInclude.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/IncludeTest/testInclude.html"
+          ],
+          "description": "Navigate to http://localhost:43377/IncludeTest/testInclude.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "If the element (hint: #element) is visible, then _include: fragments/testMixedStaticAndDynamicIncludes_parent.steps",
+      "reasoning": "Conditional include action generated.",
+      "actions": [
+        {
+          "type": "BRANCH",
+          "description": "Conditional include based on element visibility",
+          "elementContext": {},
+          "replay": "",
+          "condition": [
+            {
+              "type": "ASSERT",
+              "target": "#element",
+              "value": [
+                "visible"
+              ],
+              "description": "Check if #element is visible",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "then": [
+            {
+              "type": "INCLUDE",
+              "value": [
+                "fragments/testMixedStaticAndDynamicIncludes_parent.steps"
+              ],
+              "description": "Include steps from fragments/testMixedStaticAndDynamicIncludes_parent.steps",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "else": [],
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "actions": [
+        {
+          "type": "INCLUDE",
+          "value": [
+            "fragments/testMixedStaticAndDynamicIncludes_parent.steps"
+          ],
+          "description": "Include steps from fragments/testMixedStaticAndDynamicIncludes_parent.steps",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Mid dynamic step",
+      "reasoning": "The instruction \u0027Mid dynamic step\u0027 is interpreted as clicking the \u0027Mid Button\u0027 based on the available elements in the Accessibility Tree.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#mid",
+          "description": "Clicking the \u0027Mid Button\u0027",
+          "elementDetails": "Mid Button",
+          "elementContext": {
+            "text": "Mid Button",
+            "id": "mid",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click child button with dynamic_nested_user",
+      "reasoning": "The instruction asks to click the \u0027child button\u0027. I found a button with id \u0027child\u0027 and aria-label \u0027Child Button\u0027 in the AXTree, which is the most appropriate target.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#child",
+          "description": "Click child button with dynamic_nested_user",
+          "elementDetails": "Child Button",
+          "elementContext": {
+            "text": "Child Button",
+            "id": "child",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

@@ -22,11 +22,6 @@ import com.xceptance.neodymium.ai.BaseAiOfflineTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import com.xceptance.neodymium.ai.core.AiExecutionResult;
-import com.xceptance.neodymium.ai.core.AiTestRunResult;
-import com.xceptance.neodymium.ai.core.ContextLevel;
-import com.xceptance.neodymium.ai.core.LlmCallDetails;
-import com.xceptance.neodymium.ai.core.StepDetails;
 import com.xceptance.neodymium.ai.testing.AiMockResponse;
 import com.xceptance.neodymium.common.testdata.TestData;
 import com.xceptance.neodymium.util.Neodymium;

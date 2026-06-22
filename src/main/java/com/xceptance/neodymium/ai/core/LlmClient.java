@@ -18,10 +18,17 @@
  */
 package com.xceptance.neodymium.ai.core;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import javax.imageio.ImageIO;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Assertions;
@@ -29,9 +36,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.xceptance.neodymium.ai.config.AiConfiguration;
-import com.xceptance.neodymium.util.Neodymium;
 
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
@@ -46,10 +53,10 @@ import dev.langchain4j.model.output.TokenUsage;
  * Wraps LangChain4j to communicate with Google Gemini.
  * Supports sending text prompts with optional screenshots (vision).
  * Tracks token usage via {@link AiStats}.
-  *
+ *
  * @author AI-generated: Gemini 2.5 Flash
  * @author Xceptance GmbH 2026
-*/
+ */
 public class LlmClient
 {
     private static final Logger LOG = LoggerFactory.getLogger(LlmClient.class);
@@ -202,11 +209,6 @@ public class LlmClient
     public String chat(final String systemPrompt, final String userPrompt)
     {
         LOG.debug("   💬 Sending text-only prompt ({} chars)", userPrompt.length());
-        if (LOG.isTraceEnabled())
-        {
-            LOG.trace("🧠 --- System Prompt ---\n{}", systemPrompt);
-            LOG.trace("🗣️ --- User Prompt ---\n{}", userPrompt);
-        }
         final UserMessage userMessage = UserMessage.from(userPrompt);
 
         return chat(systemPrompt, userMessage);
@@ -234,6 +236,90 @@ public class LlmClient
     }
 
     /**
+     * Converts a Base64-encoded PNG screenshot to a Base64-encoded JPEG screenshot on-the-fly.
+     * Handles transparency safely by painting onto a solid white background first.
+     *
+     * @param base64Png the original Base64-encoded PNG image string
+     * @return the compressed Base64-encoded JPEG image string, or original string on failure
+     */
+    private String convertPngToJpgBase64(final String base64Png)
+    {
+        try
+        {
+            final byte[] pngBytes = Base64.getDecoder().decode(base64Png);
+            final BufferedImage originalImage = ImageIO.read(new ByteArrayInputStream(pngBytes));
+            if (originalImage == null)
+            {
+                return base64Png;
+            }
+
+            final BufferedImage rgbCopy = new BufferedImage(
+                    originalImage.getWidth(),
+                    originalImage.getHeight(),
+                    BufferedImage.TYPE_INT_RGB);
+
+            final Graphics2D g = rgbCopy.createGraphics();
+            g.setColor(Color.WHITE);
+            g.fillRect(0, 0, originalImage.getWidth(), originalImage.getHeight());
+            g.drawImage(originalImage, 0, 0, null);
+            g.dispose();
+
+            final ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            ImageIO.write(rgbCopy, "jpg", bos);
+            return Base64.getEncoder().encodeToString(bos.toByteArray());
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to convert PNG screenshot to JPEG on-the-fly. Falling back to PNG.", e);
+            return base64Png;
+        }
+    }
+
+    /**
+     * Formats a ChatMessage for trace logging, substituting Base64 image data with a placeholder.
+     *
+     * @param msg the ChatMessage to format
+     * @return a clean string representation of the message
+     */
+    private static String formatChatMessageForLog(final ChatMessage msg)
+    {
+        if (msg instanceof final UserMessage userMsg)
+        {
+            if (userMsg.contents() == null)
+            {
+                return msg.toString();
+            }
+            final StringBuilder sb = new StringBuilder();
+            sb.append("UserMessage { contents = [");
+            boolean first = true;
+            for (final Content content : userMsg.contents())
+            {
+                if (!first)
+                {
+                    sb.append(", ");
+                }
+                first = false;
+                if (content instanceof final TextContent textContent)
+                {
+                    sb.append("TextContent { text = \"").append(textContent.text()).append("\" }");
+                }
+                else if (content instanceof final ImageContent imageContent)
+                {
+                    sb.append("ImageContent { image = [BASE64 DATA (MIME: ")
+                            .append(imageContent.image().mimeType()).append(")] }");
+                }
+                else
+                {
+                    sb.append(content.toString());
+                }
+            }
+            sb.append("] }");
+            return sb.toString();
+        }
+        return msg.toString();
+    }
+
+    /**
      * Sends a multimodal chat message with a screenshot using the default LLM mode.
      *
      * @param systemPrompt     instructions for the LLM
@@ -245,15 +331,14 @@ public class LlmClient
             final String base64Screenshot)
     {
         LOG.debug("   💬 Sending multimodal prompt ({} chars + screenshot)", userPrompt.length());
-        if (LOG.isTraceEnabled())
-        {
-            LOG.trace("🧠 --- System Prompt ---\n{}", systemPrompt);
-            LOG.trace("🗣️ --- User Prompt ---\n{}", userPrompt);
-        }
+
+        final String base64Jpg = convertPngToJpgBase64(base64Screenshot);
+        final String mimeType = base64Jpg.equals(base64Screenshot) ? "image/png" : "image/jpeg";
+
         // Build a multimodal user message with text + image
         final UserMessage userMessage = UserMessage.from(
                 TextContent.from(userPrompt),
-                ImageContent.from(base64Screenshot, "image/png"));
+                ImageContent.from(base64Jpg, mimeType));
 
         return chat(systemPrompt, userMessage);
     }
@@ -295,7 +380,7 @@ public class LlmClient
             LOG.trace("=== LLM REQUEST MESSAGES START ===");
             for (final ChatMessage msg : messages)
             {
-                LOG.trace("Role: {}, Content:\n{}", msg.type(), msg);
+                LOG.trace("Role: {}, Content:\n{}", msg.type(), formatChatMessageForLog(msg));
             }
             LOG.trace("=== LLM REQUEST MESSAGES END ===");
         }

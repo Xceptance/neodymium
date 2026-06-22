@@ -1,0 +1,49 @@
+{
+  "id": "com.xceptance.neodymium.ai.action.HoverActionTest :: testHoverDropdown",
+  "steps": [
+    {
+      "promptLine": "Hover over the \u0027Hover Me\u0027 button.",
+      "reasoning": "Identified the \u0027Hover Me\u0027 button by its ID and generated a HOVER action.",
+      "actions": [
+        {
+          "type": "HOVER",
+          "target": "#menu-btn",
+          "description": "Hover over the \u0027Hover Me\u0027 button",
+          "elementDetails": "Hover Me button",
+          "elementContext": {
+            "text": "Hover Me",
+            "id": "menu-btn",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click on the \u0027Sub Item 1\u0027 link.",
+      "reasoning": "Identified the \u0027Sub Item 1\u0027 link by its ID and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#menu-item-1",
+          "description": "Click on the \u0027Sub Item 1\u0027 link",
+          "elementDetails": "Sub Item 1 link",
+          "elementContext": {
+            "classes": "dropdown-item",
+            "text": "Sub Item 1",
+            "id": "menu-item-1",
+            "tagName": "a"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

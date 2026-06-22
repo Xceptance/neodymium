@@ -64,15 +64,31 @@ A granular, component-level checklist to implement and verify list-based YAML st
   *   Update core terminal loggers to intercept and mask sensitive values with `********`.
   *   Ensure local WebDriver runtime retains fully functional raw access to the sensitive values.
 
+- [ ] **Task 9a: Programmatic Variable Injection & Retrieval API (Java)**
+  *   Implement `Neodymium.data()` returning a thread-local `NeodymiumData` instance.
+  *   Implement the four classification scopes: `dynamic()`, `sensitive()`, `constants()`, and `normal()`.
+  *   Register programmatically injected variables directly in the corresponding runtime context lists/registries.
+  *   Ensure injected properties are treated exactly like YAML-defined dataset values but do not require any entry in the YAML's `_dynamic` or `_sensitive` blocks.
+  *   Support retrieval of variables via symmetric `.get()` calls matching the classification scope.
+  *   Implement root-level `Neodymium.data().get(key)` and `.exists(key)` methods traversing the precedence hierarchy (Programmatic Scopes > Active Dataset Row > Playbook Metadata > External Environment Configuration).
+
+- [ ] **Task 9b: Implicit Dynamic Store Variables**
+  *   Update `store` action execution to automatically capture and register target variable names (e.g. `orderNumber`) in a `runtimeStoredVariables` registry.
+  *   Automatically append `runtimeStoredVariables` to the dynamic sanitization list during playbook recording.
+
 ---
 
 ## Component: Layered Datasets & Multipliers
 
-- [ ] **Task 10: Layered Dataset Resolution (`_constants`, `_dimensions`, `_lookup`)**
+- [ ] **Task 10: Layered Dataset Resolution (`_constants`, `_dimensions`, `_lookup`) & Test ID Deprecation**
   *   Detect when `_data` is a `Map` structure.
   *   Parse `_constants`, `_dimensions`, and `_lookup` blocks.
   *   Compute the Cartesian product of the active dimensions.
   *   Resolve override lookups per dimension target and merge with constants to explode the dynamic dataset rows.
+  *   Drop manual `testId` / `dataId` requirement for Cartesian execution.
+  *   Implement automated coordinate-based naming for generated runs (e.g. `[locale=en-US]`).
+  *   Retain backward compatibility by tolerating optional `_testId` / `_id` in legacy flat formats.
+
 
 - [ ] **Task 11: Execution Environment Precedence Engine**
   *   Extend `NeodymiumRunner` to resolve target environments dynamically.

@@ -93,6 +93,10 @@ public interface AiConfiguration extends Mutable
     @DefaultValue("true")
     public boolean playbookRecordEnabled();
 
+    @Key("playbook.directory.global")
+    @DefaultValue("src/test/resources/ai-playbooks/")
+    public String playbookDirectoryGlobal();
+
 
 
     @Key("neodymium.ai.temperature")

@@ -76,8 +76,8 @@ import com.xceptance.neodymium.ai.action.ActionRegistry;
 /**
  * Neodymium Aura Manager: A lightweight standalone web server to browse,
  * create, edit, queue, run, and view reports of Neodymium YAML test data files.
- * 
- * // AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 public final class NeodymiumAuraManager
 {
@@ -900,19 +900,6 @@ public final class NeodymiumAuraManager
             }
         }
 
-        private void deleteDirRecursively(final File file)
-        {
-            final File[] children = file.listFiles();
-            if (children != null)
-            {
-                for (final File child : children)
-                {
-                    deleteDirRecursively(child);
-                }
-            }
-            file.delete();
-        }
-
         private void handleStopProcess(final HttpExchange exchange) throws IOException
         {
             LOGGER.info("[Aura Server] User requested to stop active execution subprocess");
@@ -1089,32 +1076,14 @@ public final class NeodymiumAuraManager
 
         final Thread thread = new Thread(() -> {
             final File tempRunnerDir = new File("src/test/java/com/xceptance/neodymium/aura");
-            final File tempRunnerFile = new File(tempRunnerDir, "AuraYamlRunnerTest.java");
-            boolean createdTempFile = false;
+            final List<File> createdTempFiles = new ArrayList<>();
             try
             {
-                if (!tempRunnerFile.exists())
+                // Delete target/allure-results to clean up any old test results
+                final File allureResultsDir = new File("target/allure-results");
+                if (allureResultsDir.exists())
                 {
-                    tempRunnerDir.mkdirs();
-                    final String runnerSource = 
-                        "package com.xceptance.neodymium.aura;\n\n" +
-                        "import com.xceptance.neodymium.common.browser.Browser;\n" +
-                        "import com.xceptance.neodymium.common.testdata.DataFolder;\n" +
-                        "import com.xceptance.neodymium.junit5.NeodymiumTest;\n" +
-                        "import com.xceptance.neodymium.util.Neodymium;\n\n" +
-                        "@Browser()\n" +
-                        "@DataFolder(\".\")\n" +
-                        "public final class AuraYamlRunnerTest\n" +
-                        "{\n" +
-                        "    @NeodymiumTest\n" +
-                        "    public final void executeYamlTest() throws Throwable\n" +
-                        "    {\n" +
-                        "        Neodymium.ai().execute();\n" +
-                        "    }\n" +
-                        "}\n";
-                    Files.writeString(tempRunnerFile.toPath(), runnerSource, StandardCharsets.UTF_8);
-                    createdTempFile = true;
-                    LOGGER.info("[Aura Server] Created temporary test runner: {}", tempRunnerFile.getAbsolutePath());
+                    deleteDirRecursively(allureResultsDir);
                 }
 
                 final Map<String, List<String>> datasetsByFile = new LinkedHashMap<>();
@@ -1140,6 +1109,36 @@ public final class NeodymiumAuraManager
 
                     activeFile.set(file);
                     broadcastStatus(true);
+
+                    // Generate a unique class name per YAML file to prevent Allure grouping them as retries
+                    final String safeName = file.replaceAll("[^a-zA-Z0-9]", "_");
+                    final String className = "Aura_" + safeName + "_Test";
+                    final File tempRunnerFile = new File(tempRunnerDir, className + ".java");
+                    if (!tempRunnerFile.exists())
+                    {
+                        tempRunnerDir.mkdirs();
+                        final String runnerSource = 
+                            "package com.xceptance.neodymium.aura;\n\n" +
+                            "import com.xceptance.neodymium.common.browser.Browser;\n" +
+                            "import com.xceptance.neodymium.common.testdata.DataFolder;\n" +
+                            "import com.xceptance.neodymium.junit5.NeodymiumTest;\n" +
+                            "import com.xceptance.neodymium.util.Neodymium;\n" +
+                            "import org.junit.jupiter.api.DisplayName;\n\n" +
+                            "@Browser()\n" +
+                            "@DataFolder(\".\")\n" +
+                            "@DisplayName(\"YAML Test: " + file.replace("\"", "\\\"") + "\")\n" +
+                            "public final class " + className + "\n" +
+                            "{\n" +
+                            "    @NeodymiumTest\n" +
+                            "    public final void executeYamlTest() throws Throwable\n" +
+                            "    {\n" +
+                            "        Neodymium.ai().execute();\n" +
+                            "    }\n" +
+                            "}\n";
+                        Files.writeString(tempRunnerFile.toPath(), runnerSource, StandardCharsets.UTF_8);
+                        createdTempFiles.add(tempRunnerFile);
+                        LOGGER.info("[Aura Server] Created temporary test runner: {}", tempRunnerFile.getAbsolutePath());
+                    }
 
                     final StringBuilder idFilterBuilder = new StringBuilder();
                     boolean hasIds = false;
@@ -1182,9 +1181,10 @@ public final class NeodymiumAuraManager
                     {
                         command.add("clean");
                     }
-                    command.add("test");
-                    command.add("-Dtest=com.xceptance.neodymium.aura.AuraYamlRunnerTest");
-                    command.add("-Dneodymium.testFileFilter=" + file.replace(".", "\\."));
+                     command.add("test");
+                     command.add("-Dtest=com.xceptance.neodymium.aura." + className);
+                     command.add("-Dneodymium.testFileFilter=" + file.replace(".", "\\."));
+                     command.add("-Dallure.results.directory=" + new File("target/allure-results").getAbsolutePath());
                     if (hasIds)
                     {
                         command.add("-Dneodymium.testIdFilter=" + idFilterBuilder.toString());
@@ -1316,23 +1316,26 @@ public final class NeodymiumAuraManager
             }
             finally
             {
-                if (createdTempFile && tempRunnerFile.exists())
+                for (final File f : createdTempFiles)
                 {
-                    tempRunnerFile.delete();
-                    LOGGER.info("[Aura Server] Deleted temporary test runner: {}", tempRunnerFile.getAbsolutePath());
-                    File parent = tempRunnerDir;
-                    while (parent != null && parent.getPath().startsWith("src/test/java"))
+                    if (f.exists())
                     {
-                        final File[] children = parent.listFiles();
-                        if (children == null || children.length == 0)
-                        {
-                            parent.delete();
-                            parent = parent.getParentFile();
-                        }
-                        else
-                        {
-                            break;
-                        }
+                        f.delete();
+                        LOGGER.info("[Aura Server] Deleted temporary test runner: {}", f.getAbsolutePath());
+                    }
+                }
+                File parent = tempRunnerDir;
+                while (parent != null && parent.getPath().startsWith("src/test/java"))
+                {
+                    final File[] children = parent.listFiles();
+                    if (children == null || children.length == 0)
+                    {
+                        parent.delete();
+                        parent = parent.getParentFile();
+                    }
+                    else
+                    {
+                        break;
                     }
                 }
                 runningQueue.set(false);
@@ -1360,6 +1363,7 @@ public final class NeodymiumAuraManager
             command.add("mvn");
         }
         command.add("io.qameta.allure:allure-maven:report");
+        command.add("-Dallure.results.directory=" + new File("target/allure-results").getAbsolutePath());
 
         final ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
@@ -1473,6 +1477,19 @@ public final class NeodymiumAuraManager
         {
             Files.copy(src.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
         }
+    }
+
+    private static void deleteDirRecursively(final File file)
+    {
+        final File[] children = file.listFiles();
+        if (children != null)
+        {
+            for (final File child : children)
+            {
+                deleteDirRecursively(child);
+            }
+        }
+        file.delete();
     }
 
     public static String stripAnsi(final String line)

@@ -46,6 +46,8 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1500x1000")
 @Tag("featuretest")
+@Tag("integration")
+@Tag("llm")
 public class BugMarkerTest extends BaseAiTest
 {
     private String url;
@@ -56,8 +58,7 @@ public class BugMarkerTest extends BaseAiTest
     @BeforeEach
     public final void setupStorefrontUrl()
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
-
+        useTempPlaybookDirectory();
         url = String.format("http://localhost:%d/AuraGlanceTest/shop-posters-homepage/index.html", server.getPort());
         Neodymium.getData().put("posters.storefront.url", url);
     }

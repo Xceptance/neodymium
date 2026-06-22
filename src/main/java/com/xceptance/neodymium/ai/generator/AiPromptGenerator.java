@@ -33,7 +33,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.Strictness;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
-import com.xceptance.neodymium.ai.action.ActionParser;
 import com.xceptance.neodymium.ai.action.plugins.AssertAction;
 import com.xceptance.neodymium.ai.core.AiAgentPrompts;
 import com.xceptance.neodymium.ai.core.LlmClient;

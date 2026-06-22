@@ -28,9 +28,7 @@ import org.slf4j.LoggerFactory;
 import com.xceptance.neodymium.common.testdata.DataFile;
 import com.xceptance.neodymium.common.testdata.DataFolder;
 import com.xceptance.neodymium.util.Neodymium;
-import java.util.stream.Collectors;
 import java.util.regex.Pattern;
-import java.util.regex.Matcher;
 /**
  * Utility class for test data handling.
  * 

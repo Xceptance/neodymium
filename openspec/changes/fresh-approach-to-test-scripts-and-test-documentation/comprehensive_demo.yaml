@@ -11,7 +11,6 @@
 # It does NOT receive variable reflections/interpolations from the _data block.
 # ------------------------------------------------------------------------------
 _meta:
-  _testId: "TC_CHK_001_COMPREHENSIVE"
   _version: "1.2"
   _priority: "Critical"
   _tags: ["checkout", "happy-path", "comprehensive"]
@@ -43,12 +42,12 @@ _context: >
 # ------------------------------------------------------------------------------
 # 4. ROOT PILLAR: Global Static Setup Block (_beforeAll)
 # STATIC LIFECYCLE: Runs once before any tests start.
-# Variables are resolved only from static global metadata (e.g. ${_meta._testId}).
+# Variables are resolved only from static global metadata (e.g. ${_meta._author}).
 # ------------------------------------------------------------------------------
 _beforeAll:
   - Open home page and verify base staging layout is ready
   # Explicitly reference global metadata using namespace prefixes!
-  - Log execution of playbook "${_meta._testId}" authored by "${_meta._author}"
+  - Log execution of playbook authored by "${_meta._author}"
 
 # ------------------------------------------------------------------------------
 # 5. ROOT PILLAR: Setup Block (_beforeEach)
@@ -69,6 +68,9 @@ _steps:
   - Add item to cart
   - _include: fragments/checkout.steps
   - Verify cart total matching expected taxes for "${locale}"
+  # Stored variables at runtime are implicitly dynamic (no YAML registry required)
+  - Store text from element "#order-number" as "orderNumber"
+  - Verify order "${orderNumber}" status is "pending"
 
 # ------------------------------------------------------------------------------
 # 7. ROOT PILLAR: Iteration Success Hook (_onSuccessEach)
@@ -99,14 +101,14 @@ _afterEach:
 # STATIC LIFECYCLE: Runs once at the end if all iterations succeeded, before _afterAll.
 # ------------------------------------------------------------------------------
 _onSuccessAll:
-  - Send success notification for playbook "${_meta._testId}"
+  - Send success notification for checkout playbook
 
 # ------------------------------------------------------------------------------
 # 11. ROOT PILLAR: Playbook Failure Hook (_onFailureAll)
 # STATIC LIFECYCLE: Runs once at the end if any iteration or block failed, before _afterAll.
 # ------------------------------------------------------------------------------
 _onFailureAll:
-  - Send critical alert for playbook "${_meta._testId}" to Slack/PagerDuty
+  - Send critical alert for checkout playbook to Slack/PagerDuty
 
 # ------------------------------------------------------------------------------
 # 12. ROOT PILLAR: Global Static Teardown Block (_afterAll)
@@ -115,13 +117,23 @@ _onFailureAll:
 # ------------------------------------------------------------------------------
 _afterAll:
   - Print global execution cleanup confirmation for playbooks
-  - Close additional background monitoring services for "${_meta._testId}"
+  - Close additional background monitoring services
 
 _data:
   # Common variables merged into every active execution instance
   _constants:
     _include: fragments/default_user.yaml
     setupType: "guest"
+
+    # Variables whose resolved values change between runs. When the playbook
+    # recorder persists actions, it replaces the resolved runtime value with
+    # the original ${placeholder} form so that replays re-resolve freshly.
+    # Every dynamic variable defined in YAML MUST be listed here explicitly.
+    # Note: Variables injected programmatically via the Java API (like baseUrl)
+    # do NOT need to be listed here as their classification is defined at injection time.
+    _dynamic:
+      - email            # template uses ${random}, value changes every run
+
     _sensitive:
       password:
         _value: "realSecretPassword123!"
@@ -129,6 +141,9 @@ _data:
       creditCardNumber:
         _value: "4111111111111111"
         _mock: "4000123456789010"
+      # NOTE: Sensitive variables are implicitly dynamic. Their resolved values
+      # are never persisted in playbooks (replaced with ${placeholder} form on
+      # recording, re-resolved from the active dataset on replay).
 
   # Orthogonal execution dimensions crossed by the parser
   _dimensions:
@@ -140,6 +155,12 @@ _data:
       en-US:
         productName: "Grizzly Bear"
         subtotal: "$17.00"
+        email: john.doe.us.${random}@example.com
       en-GB:
         productName: "Black Eagle"
         subtotal: "£13.43"
+        email: jane.smith.gb.${random}@example.com
+        # _dynamic can also appear per-lookup scope to declare additional
+        # dynamic keys specific to this dimension value.
+        _dynamic:
+          - couponCode     # dimension-specific dynamic variable
