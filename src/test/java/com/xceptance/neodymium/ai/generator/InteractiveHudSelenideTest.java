@@ -2178,6 +2178,93 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         joinBgThread();
         $("#neo-ai-hud").shouldNotBe(Condition.visible);
     }
+
+    /**
+     * Verifies that if a user skips the first step in the HUD and then rewinds
+     * back to it, the skipped step is not deleted and correctly reappears in
+     * the prompt list.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testRewindToSkippedStep() throws Exception
+    {
+        // 1. Open the SUT HTML test page
+        openTestUrl();
+
+        // 2. Initialize Playbook with a clean 2-step sequence
+        final Playbook playbook = new Playbook("testRewindToSkippedStep");
+        playbook.setRecording(false);
+
+        // Define Step 1: Click Button 1
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setReasoning("Step 1");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        // Define Step 2: Click Button 2
+        final PlaybookStep step2 = new PlaybookStep();
+        step2.setPromptLine("Click button 2");
+        step2.setReasoning("Step 2");
+        step2.setActions(List.of(new Action("CLICK", "#btn2", "Click button 2")));
+        playbook.addStep(step2);
+
+        // Register the configured playbook in the Neodymium context
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Launch the AI agent in a background execution thread
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1\nClick button 2");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+        Selenide.sleep(1000); // Give background thread time to start and enter wait loop
+
+        // 4. Verify HUD starts successfully showing Step 1
+        checkBgError();
+        $("#neo-ai-hud").shouldBe(Condition.visible);
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 1"));
+
+        // 5. Click the Skip button (✕) to skip Step 1
+        $("#neo-skip-btn").click();
+        Selenide.sleep(2500); // Give background thread time to transition to next step
+
+        // 6. Verify that Step 2 is now the active next action, and the skipped step is in history
+        checkBgError();
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
+
+        // 7. Click the Rewind button (↩) to step back to the skipped first step
+        $("#neo-rewind-btn").click();
+        Selenide.sleep(2500); // Give background thread time to rewind
+
+        // 8. Verify that the HUD correctly displays the first step "Click button 1" again and did not vanish
+        checkBgError();
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 1"));
+
+        // 9. Approve the first step
+        $("#neo-approve-btn").click();
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
+
+        // 10. Skip the second step to finalize the test case
+        $("#neo-skip-btn").click();
+
+        // 11. Click Save & Exit
+        $("#neo-approve-btn").shouldHave(Condition.attribute("data-is-finished", "true"), Duration.ofSeconds(35));
+        $("#neo-exit-save-btn").click();
+
+        // 12. Verify SUT state and execution completion
+        checkBgError();
+        $("#neo-ai-hud").shouldNotBe(Condition.visible);
+        $("#result").shouldHave(Condition.exactText("Button 1 Clicked")); // Step 1 executed successfully, Step 2 skipped
+        joinBgThread();
+    }
 }
 
 

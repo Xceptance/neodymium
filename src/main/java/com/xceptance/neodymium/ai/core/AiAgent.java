@@ -2802,23 +2802,20 @@ public class AiAgent {
                 LOG.info("Reordered step from {} to {}", fromIdx, toIdx);
             }
             return i - 1;
-        } else if (HudActionType.SKIP == e.actionType) {
+        }
+        else if (HudActionType.SKIP == e.actionType)
+        {
             final String step = stepsList.get(i);
             LOG.info("Skipped step: {}", step);
             final Playbook playbook = Neodymium.getAiPlaybook();
-            if (playbook != null && playbook.getSteps().size() > i) {
-                playbook.getSteps().remove(i);
-                playbook.setRecording(true);
-                playbook.setChanged(true);
+            if (playbook != null)
+            {
+                playbook.nextStep();
             }
             this.hudPromptChanged = true;
-            stepsList.remove(i);
-            if (i >= 0 && i < stepLines.size()) {
-                stepLines.remove(i);
-            }
             if (result != null && result.getSteps().size() > i)
             {
-                result.getSteps().remove(i);
+                result.getSteps().get(i).setExpandedInstruction(step + " (Skipped)");
             }
             performedInstructions.add("// [SKIPPED] " + step);
             // A higher delay (1000ms) is needed here to prevent flickering because a screenshot is taken
@@ -2831,7 +2828,7 @@ public class AiAgent {
             catch (final InterruptedException ignored)
             {
             }
-            return i - 1;
+            return i;
         }
 
         return -2; // Unhandled or generic break;
