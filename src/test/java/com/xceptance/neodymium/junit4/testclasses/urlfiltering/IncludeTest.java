@@ -33,7 +33,7 @@ public class IncludeTest extends NeodymiumTest
         AssertionError assertionError = assertThrows(AssertionError.class, () -> {
             Selenide.open("https://www.xceptance.com/en/");
         });
-        assertEquals("Opened Link was outside permitted URLs: https://www.xceptance.com/en/ ==> expected: <true> but was: <false>",
+        assertEquals("Opened Link was outside permitted URLs: https://www.xceptance.com/en/did not match any of the include list: [https://www.google.com/, https://github.com/, https://www.xceptance.*contact] ==> expected: <true> but was: <false>",
                      assertionError.getMessage());
     }
 
@@ -45,7 +45,7 @@ public class IncludeTest extends NeodymiumTest
         AssertionError assertionError = assertThrows(AssertionError.class, () -> {
             Selenide.open("https://www.xceptance.com/en/");
         });
-        assertEquals("Opened Link was outside permitted URLs: https://www.xceptance.com/en/ ==> expected: <true> but was: <false>",
+        assertEquals("Opened Link was outside permitted URLs: https://www.xceptance.com/en/did not match any of the include list: [https://www.google.com/, https://github.com/, https://www.xceptance.*contact] ==> expected: <true> but was: <false>",
                      assertionError.getMessage());
     }
 }

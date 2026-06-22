@@ -1,0 +1,1542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- AI-generated: Gemini 3.5 Flash -->
+    <!--
+      License: Apache License 2.0
+      Copyright 2026 Xceptance Software Technologies
+    -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faq | VÉRLA</title>
+    <style>
+        /* CSS Reset & Variable Design System */
+        :root {
+            --color-bg-primary: #FFFFFF;
+            --color-bg-secondary: #FAF9F6;
+            --color-text-primary: #1A1A1A;
+            --color-text-secondary: #666666;
+            --color-border: #E6E2DA;
+            --color-accent: #C87A53; /* Soft Terracotta */
+            --color-accent-light: #F4ECE7;
+            --color-success: #5F8766;
+            --font-family-serif: "Georgia", "Times New Roman", serif;
+            --font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --transition-speed: 0.3s;
+            --max-width: 1280px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--color-bg-primary);
+            color: var(--color-text-primary);
+            font-family: var(--font-family-sans);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+            transition: color var(--transition-speed);
+        }
+
+        button {
+            font-family: inherit;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-speed);
+        }
+
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
+        /* Layout Container */
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Announcement Bar */
+        .announcement-bar {
+            background-color: var(--color-bg-secondary);
+            border-bottom: 1px solid var(--color-border);
+            text-align: center;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 8px 16px;
+            font-weight: 500;
+        }
+
+        /* Header Navigation */
+        .header {
+            background-color: var(--color-bg-primary);
+            border-bottom: 1px solid var(--color-border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            height: 80px;
+        }
+
+        .nav-list {
+            display: flex;
+            list-style: none;
+            gap: 24px;
+        }
+
+        .nav-item {
+            position: relative;
+        }
+
+        .nav-link {
+            font-size: 13px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 28px 0;
+            display: inline-block;
+        }
+
+        .nav-link:hover, .nav-link:focus {
+            color: var(--color-accent);
+        }
+
+        /* Dropdown Menu */
+        .nav-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-speed) ease;
+            transform: translateY(10px);
+            list-style: none;
+            padding: 16px 0;
+            z-index: 110;
+        }
+
+        .nav-item:hover .nav-dropdown,
+        .nav-item:focus-within .nav-dropdown {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-link {
+            padding: 8px 24px;
+            display: block;
+            font-size: 13px;
+            color: var(--color-text-secondary);
+        }
+
+        .dropdown-link:hover, .dropdown-link:focus {
+            background-color: var(--color-bg-secondary);
+            color: var(--color-accent);
+            padding-left: 28px;
+        }
+
+        /* Brand Logo */
+        .logo {
+            font-family: var(--font-family-serif);
+            font-size: 28px;
+            font-weight: 400;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            text-align: center;
+        }
+
+        /* Right Utilities */
+        .utilities {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .utility-btn {
+            color: var(--color-text-primary);
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .utility-btn:hover, .utility-btn:focus {
+            color: var(--color-accent);
+        }
+
+        .cart-badge {
+            background-color: var(--color-accent);
+            color: white;
+            font-size: 10px;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 4px;
+            font-weight: bold;
+        }
+
+        /* Country Selector Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-speed);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            width: 90%;
+            max-width: 450px;
+            padding: 32px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            position: relative;
+            transform: scale(0.95);
+            transition: transform var(--transition-speed);
+        }
+
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+
+        .modal-close-btn {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            font-size: 24px;
+            color: var(--color-text-secondary);
+            line-height: 1;
+        }
+
+        .modal-title {
+            font-family: var(--font-family-serif);
+            font-size: 22px;
+            font-weight: 400;
+            margin-bottom: 16px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--color-border);
+            font-family: inherit;
+            font-size: 14px;
+            margin-bottom: 20px;
+            outline: none;
+            transition: border-color var(--transition-speed);
+        }
+
+        .search-input:focus {
+            border-color: var(--color-accent);
+        }
+
+        .country-list {
+            list-style: none;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--color-border);
+        }
+
+        .country-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color var(--transition-speed);
+            border-bottom: 1px solid var(--color-bg-secondary);
+        }
+
+        .country-item:last-child {
+            border-bottom: none;
+        }
+
+        .country-item:hover, .country-item.selected {
+            background-color: var(--color-bg-secondary);
+            color: var(--color-accent);
+            font-weight: 500;
+        }
+
+        /* Hero Carousel */
+        .hero-carousel {
+            position: relative;
+            height: 600px;
+            background-color: var(--color-bg-secondary);
+            overflow: hidden;
+        }
+
+        .carousel-slides {
+            height: 100%;
+            position: relative;
+        }
+
+        .carousel-slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.8s ease, visibility 0.8s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .carousel-slide.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .slide-content-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            align-items: center;
+            height: 100%;
+            width: 100%;
+        }
+
+        .slide-text {
+            padding: 0 80px;
+        }
+
+        .slide-subtitle {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--color-text-secondary);
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .slide-title {
+            font-family: var(--font-family-serif);
+            font-size: 48px;
+            font-weight: 400;
+            line-height: 1.2;
+            margin-bottom: 24px;
+        }
+
+        .slide-btn {
+            background-color: var(--color-text-primary);
+            color: white;
+            padding: 14px 28px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 600;
+            display: inline-block;
+            border: 1px solid var(--color-text-primary);
+        }
+
+        .slide-btn:hover, .slide-btn:focus {
+            background-color: transparent;
+            color: var(--color-text-primary);
+        }
+
+        .slide-image-container {
+            height: 100%;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--color-bg-secondary), var(--color-border));
+        }
+
+        /* SVG Illustrative Placeholders */
+        .slide-svg {
+            max-width: 80%;
+            max-height: 80%;
+        }
+
+        /* Carousel Navigation Buttons */
+        .carousel-nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            z-index: 10;
+        }
+
+        .carousel-nav-btn:hover, .carousel-nav-btn:focus {
+            background-color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            color: var(--color-accent);
+        }
+
+        #carousel-btn-prev {
+            left: 24px;
+        }
+
+        #carousel-btn-next {
+            right: 24px;
+        }
+
+        .carousel-dots {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .carousel-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--color-border);
+            padding: 0;
+        }
+
+        .carousel-dot.active {
+            background-color: var(--color-accent);
+            transform: scale(1.25);
+        }
+
+        /* Product Grid Section */
+        .section-products {
+            padding: 80px 0;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .section-title {
+            font-family: var(--font-family-serif);
+            font-size: 32px;
+            font-weight: 400;
+            margin-bottom: 12px;
+        }
+
+        .section-desc {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+        }
+
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 32px 24px;
+        }
+
+        .product-card {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: var(--color-bg-primary);
+        }
+
+        .product-media {
+            position: relative;
+            background-color: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            height: 380px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .product-media svg {
+            width: 70%;
+            height: 70%;
+            transition: transform var(--transition-speed) ease;
+        }
+
+        .product-card:hover .product-media svg {
+            transform: scale(1.05);
+        }
+
+        .product-badge {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background-color: var(--color-accent);
+            color: white;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 4px 10px;
+            font-weight: 600;
+            border-radius: 2px;
+            z-index: 5;
+        }
+
+        .product-badge.sold-out {
+            background-color: var(--color-text-secondary);
+        }
+
+        .product-quick-add {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: rgba(26, 26, 26, 0.95);
+            color: white;
+            text-align: center;
+            padding: 14px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            transform: translateY(100%);
+            transition: transform var(--transition-speed);
+        }
+
+        .product-media:hover .product-quick-add,
+        .product-media:focus-within .product-quick-add {
+            transform: translateY(0);
+        }
+
+        .product-details {
+            padding: 16px 0 0;
+        }
+
+        .product-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .product-price {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+        }
+
+        .product-price .original {
+            text-decoration: line-through;
+            margin-right: 6px;
+            font-size: 13px;
+        }
+
+        .product-price .sale {
+            color: var(--color-accent);
+            font-weight: 600;
+        }
+
+        /* Newsletter Subscription */
+        .section-newsletter {
+            background-color: var(--color-bg-secondary);
+            border-top: 1px solid var(--color-border);
+            border-bottom: 1px solid var(--color-border);
+            padding: 80px 0;
+            text-align: center;
+        }
+
+        .newsletter-content {
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        .newsletter-title {
+            font-family: var(--font-family-serif);
+            font-size: 28px;
+            font-weight: 400;
+            margin-bottom: 12px;
+        }
+
+        .newsletter-desc {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .newsletter-form {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .newsletter-input-wrapper {
+            position: relative;
+            flex-grow: 1;
+        }
+
+        .newsletter-email {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid var(--color-border);
+            font-family: inherit;
+            font-size: 13px;
+            outline: none;
+            transition: border-color var(--transition-speed);
+        }
+
+        .newsletter-email:focus {
+            border-color: var(--color-accent);
+        }
+
+        .newsletter-submit-btn {
+            background-color: var(--color-text-primary);
+            color: white;
+            padding: 14px 28px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            border: 1px solid var(--color-text-primary);
+        }
+
+        .newsletter-submit-btn:hover, .newsletter-submit-btn:focus {
+            background-color: transparent;
+            color: var(--color-text-primary);
+        }
+
+        .newsletter-success-msg {
+            color: var(--color-success);
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 8px;
+            display: none;
+        }
+
+        /* Footer Layout */
+        .footer {
+            padding: 64px 0 40px;
+            font-size: 13px;
+            color: var(--color-text-secondary);
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 40px;
+            margin-bottom: 60px;
+        }
+
+        .footer-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: 20px;
+        }
+
+        .footer-links {
+            list-style: none;
+        }
+
+        .footer-link-item {
+            margin-bottom: 10px;
+        }
+
+        .footer-link-item a:hover {
+            color: var(--color-accent);
+        }
+
+        .footer-bottom {
+            border-top: 1px solid var(--color-border);
+            padding-top: 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        /* Cookie Consent Banner */
+        .cookie-banner {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            max-width: 420px;
+            background-color: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            padding: 24px;
+            z-index: 150;
+            transform: translateY(150%);
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .cookie-banner.active {
+            transform: translateY(0);
+        }
+
+        .cookie-text {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .cookie-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .cookie-btn {
+            flex: 1;
+            padding: 10px 16px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            text-align: center;
+            border: 1px solid var(--color-border);
+        }
+
+        .cookie-btn-accept {
+            background-color: var(--color-text-primary);
+            color: white;
+            border-color: var(--color-text-primary);
+        }
+
+        .cookie-btn-accept:hover, .cookie-btn-accept:focus {
+            background-color: transparent;
+            color: var(--color-text-primary);
+        }
+
+        .cookie-btn-decline:hover, .cookie-btn-decline:focus {
+            background-color: var(--color-bg-secondary);
+            border-color: var(--color-text-primary);
+        }
+    
+        /* Dynamic Loader and Cart additions */
+        @keyframes spin-loader {
+            to { transform: rotate(360deg); }
+        }
+        #global-page-loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.75);
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        #global-page-loader .loader-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--color-border);
+            border-top-color: var(--color-accent);
+            border-radius: 50%;
+            animation: spin-loader 0.8s linear infinite;
+        }
+        .cart-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            width: 320px;
+            z-index: 1000;
+            padding: 20px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity var(--transition-speed), transform var(--transition-speed);
+        }
+</style>
+</head>
+<body>
+
+    <!-- Announcement Bar -->
+    <div class="announcement-bar" id="promo-announcement-bar">
+        Free shipping on orders over $150 | Easy 30-day returns
+    </div>
+
+    <!-- Header Navigation -->
+    <header class="header" id="site-header">
+        <div class="container header-grid">
+            <!-- Navigation links (Left) -->
+            <nav class="navigation" aria-label="Main Navigation">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="plp-perfect.html?category=tops" class="nav-link" id="nav-link-tops" aria-haspopup="true" aria-expanded="false">Tops</a>
+                        <ul class="nav-dropdown" aria-label="Tops Submenu">
+                            <li><a href="plp-perfect.html?category=tops&subcategory=linen" class="dropdown-link">Linen Shirts</a></li>
+                            <li><a href="plp-perfect.html?category=tops&subcategory=knit" class="dropdown-link">Knit Tees</a></li>
+                            <li><a href="plp-perfect.html?category=tops&subcategory=silk" class="dropdown-link">Silk Blouses</a></li>
+                            <li><a href="plp-perfect.html?category=tops&subcategory=sweaters" class="dropdown-link">Sweaters</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a href="plp-perfect.html?category=bottoms" class="nav-link" id="nav-link-bottoms" aria-haspopup="true" aria-expanded="false">Bottoms</a>
+                        <ul class="nav-dropdown" aria-label="Bottoms Submenu">
+                            <li><a href="plp-perfect.html?category=bottoms&subcategory=pants" class="dropdown-link">Loungewear Pants</a></li>
+                            <li><a href="plp-perfect.html?category=bottoms&subcategory=shorts" class="dropdown-link">Linen Shorts</a></li>
+                            <li><a href="plp-perfect.html?category=bottoms&subcategory=skirts" class="dropdown-link">Tailored Skirts</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a href="plp-perfect.html?category=dresses" class="nav-link" id="nav-link-dresses">Dresses</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="plp-perfect.html?category=sleepwear" class="nav-link" id="nav-link-sleepwear">Sleepwear</a>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- Brand Logo (Center) -->
+            <div class="logo">
+                <a href="homepage-perfect.html" id="brand-logo-link">VÉRLA</a>
+            </div>
+
+            <!-- Utilities Navigation (Right) -->
+            <div class="utilities">
+                <!-- Country Selector Button -->
+                <button class="utility-btn" id="country-selector-btn" aria-haspopup="dialog" aria-expanded="false">
+                    Region: <span id="current-region-label">US ($)</span>
+                </button>
+                <div style="position: relative; display: inline-block;" id="cart-dropdown-wrapper">
+                    <button class="utility-btn" id="cart-btn" aria-label="View Shopping Cart">
+                        Cart <span class="cart-badge" id="cart-count-badge">0</span>
+                    </button>
+                    <!-- Cart Dropdown -->
+                    <div class="cart-dropdown" id="cart-dropdown-panel">
+                        <h4 style="font-family: var(--font-family-serif); font-size: 16px; margin-bottom: 12px; border-bottom: 1px solid var(--color-border); padding-bottom: 8px;">Shopping Cart</h4>
+                        <div id="cart-dropdown-items" style="max-height: 200px; overflow-y: auto; margin-bottom: 12px;">
+                            <p style="font-size: 13px; color: var(--color-text-secondary); text-align: center; padding: 20px 0;" id="cart-empty-message">Your cart is empty.</p>
+                        </div>
+                        <div id="cart-dropdown-footer" style="display: none; border-top: 1px solid var(--color-border); padding-top: 12px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
+                                <span>Subtotal:</span>
+                                <span id="cart-dropdown-subtotal">$0.00</span>
+                            </div>
+                            <button class="cookie-btn cookie-btn-accept" style="width: 100%; justify-content: center; padding: 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Checkout</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="main-content">
+            <section class="container" style="padding: 80px 0; max-width: 800px;">
+                <h1 style="font-family: var(--font-family-serif); font-size: 36px; font-weight: 400; margin-bottom: 16px; text-align: center;">Frequently Asked Questions</h1>
+                <p style="text-align: center; color: var(--color-text-secondary); margin-bottom: 40px;">Find quick answers about our organic fabrics, sizing, and operations.</p>
+                
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <details style="border: 1px solid var(--color-border); padding: 20px; cursor: pointer;" class="faq-item">
+                        <summary style="font-weight: 600; font-size: 16px; outline: none; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+                            <span>What makes VÉRLA linen special?</span>
+                            <span style="color: var(--color-accent);">&darr;</span>
+                        </summary>
+                        <p style="margin-top: 12px; font-size: 14px; color: var(--color-text-secondary); line-height: 1.6;">
+                            Our linen is organic and woven in Northern Europe. We use rain-fed flax crops that do not require artificial irrigation or heavy pesticides. The resulting fiber is durable, thermoregulating, and softens with every wash.
+                        </p>
+                    </details>
+                    <details style="border: 1px solid var(--color-border); padding: 20px; cursor: pointer;" class="faq-item">
+                        <summary style="font-weight: 600; font-size: 16px; outline: none; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+                            <span>How do I care for my knitwear?</span>
+                            <span style="color: var(--color-accent);">&darr;</span>
+                        </summary>
+                        <p style="margin-top: 12px; font-size: 14px; color: var(--color-text-secondary); line-height: 1.6;">
+                            We recommend hand washing in cold water using a gentle, eco-friendly wool wash. Lay flat on a clean dry towel to dry. Never tumble dry or hang wet knitwear, as this stretches the delicate stitch structure.
+                        </p>
+                    </details>
+                    <details style="border: 1px solid var(--color-border); padding: 20px; cursor: pointer;" class="faq-item">
+                        <summary style="font-weight: 600; font-size: 16px; outline: none; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+                            <span>Can I update my order after placing it?</span>
+                            <span style="color: var(--color-accent);">&darr;</span>
+                        </summary>
+                        <p style="margin-top: 12px; font-size: 14px; color: var(--color-text-secondary); line-height: 1.6;">
+                            Because we pack and ship orders swiftly, order updates can only be processed within 30 minutes of placing the order. Please reach out to customer service as soon as possible.
+                        </p>
+                    </details>
+                </div>
+            </section>
+        </main>
+
+    <!-- Footer -->
+    <footer class="footer" id="site-footer">
+        <div class="container footer-grid">
+            <div>
+                <h4 class="footer-title">Shop</h4>
+                <ul class="footer-links">
+                    <li class="footer-link-item"><a href="plp-perfect.html?category=tops" id="footer-link-tops">Tops</a></li>
+                    <li class="footer-link-item"><a href="plp-perfect.html?category=bottoms" id="footer-link-bottoms">Bottoms</a></li>
+                    <li class="footer-link-item"><a href="plp-perfect.html?category=dresses" id="footer-link-dresses">Dresses</a></li>
+                    <li class="footer-link-item"><a href="plp-perfect.html?category=new" id="footer-link-new">New Arrivals</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="footer-title">Help</h4>
+                <ul class="footer-links">
+                    <li class="footer-link-item"><a href="shipping-perfect.html" id="footer-link-shipping">Shipping & Returns</a></li>
+                    <li class="footer-link-item"><a href="track-orders-perfect.html" id="footer-link-orders">Track Orders</a></li>
+                    <li class="footer-link-item"><a href="faq-perfect.html" id="footer-link-faq">FAQ</a></li>
+                    <li class="footer-link-item"><a href="contact-perfect.html" id="footer-link-contact">Contact Us</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="footer-title">Brand</h4>
+                <ul class="footer-links">
+                    <li class="footer-link-item"><a href="about-perfect.html" id="footer-link-about">About VÉRLA</a></li>
+                    <li class="footer-link-item"><a href="stores-perfect.html" id="footer-link-stores">Our Stores</a></li>
+                    <li class="footer-link-item"><a href="careers-perfect.html" id="footer-link-careers">Careers</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="footer-title">Verify Token</h4>
+                <p style="font-size:12px; line-height: 1.6; color:var(--color-text-secondary);" id="footer-validation-token-text">
+                    Verification Code: <strong style="color:var(--color-text-primary);" id="validation-token-value">VERLA-8829-VALID</strong>
+                </p>
+            </div>
+        </div>
+        <div class="container footer-bottom">
+            <p id="copyright-text">&copy; 2026 VÉRLA. All rights reserved.</p>
+            <p id="footer-legal-links"><a href="#" style="margin-right:16px;">Privacy Policy</a> <a href="#">Terms of Service</a></p>
+        </div>
+    </footer>
+
+    <!-- Country Selector Modal Overlay -->
+    <div class="modal-overlay" id="country-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="country-modal-title">
+        <div class="modal" id="country-modal-box">
+            <button class="modal-close-btn" id="country-modal-close" aria-label="Close dialog">&times;</button>
+            <h3 class="modal-title" id="country-modal-title">Select Region</h3>
+            <input type="text" class="search-input" id="country-search-input" placeholder="Search country..." aria-label="Search countries">
+            
+            <div class="country-list-wrapper" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--color-border); margin-top: 8px;">
+                <div class="continent-group" data-continent="Europe">
+                    <div class="continent-header" style="font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-secondary); background: var(--color-bg-secondary); padding: 8px 16px; border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: 1;">Europe</div>
+                    <ul class="country-list" style="list-style: none; border: none; max-height: none; overflow-y: visible;">
+                        <li class="country-item" data-code="AT (€)">Austria (€)</li>
+                        <li class="country-item" data-code="BE (€)">Belgium (€)</li>
+                        <li class="country-item" data-code="DK (DKK)">Denmark (DKK)</li>
+                        <li class="country-item" data-code="FI (€)">Finland (€)</li>
+                        <li class="country-item" data-code="FR (€)">France (€)</li>
+                        <li class="country-item" data-code="DE (€)">Germany (€)</li>
+                        <li class="country-item" data-code="IE (€)">Ireland (€)</li>
+                        <li class="country-item" data-code="IT (€)">Italy (€)</li>
+                        <li class="country-item" data-code="NL (€)">Netherlands (€)</li>
+                        <li class="country-item" data-code="NO (NOK)">Norway (NOK)</li>
+                        <li class="country-item" data-code="PL (PLN)">Poland (PLN)</li>
+                        <li class="country-item" data-code="PT (€)">Portugal (€)</li>
+                        <li class="country-item" data-code="ES (€)">Spain (€)</li>
+                        <li class="country-item" data-code="SE (SEK)">Sweden (SEK)</li>
+                        <li class="country-item" data-code="CH (CHF)">Switzerland (CHF)</li>
+                        <li class="country-item" data-code="GB (£)">United Kingdom (£)</li>
+                    </ul>
+                </div>
+                <div class="continent-group" data-continent="Americas">
+                    <div class="continent-header" style="font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-secondary); background: var(--color-bg-secondary); padding: 8px 16px; border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: 1;">Americas</div>
+                    <ul class="country-list" style="list-style: none; border: none; max-height: none; overflow-y: visible;">
+                        <li class="country-item" data-code="AR ($)">Argentina ($)</li>
+                        <li class="country-item" data-code="BR (R$)">Brazil (R$)</li>
+                        <li class="country-item" data-code="CA ($)">Canada ($)</li>
+                        <li class="country-item" data-code="CL ($)">Chile ($)</li>
+                        <li class="country-item" data-code="CO ($)">Colombia ($)</li>
+                        <li class="country-item" data-code="MX (MXN)">Mexico (MXN)</li>
+                        <li class="country-item" data-code="PE (PEN)">Peru (PEN)</li>
+                        <li class="country-item selected" data-code="US ($)">United States ($)</li>
+                    </ul>
+                </div>
+                <div class="continent-group" data-continent="Asia/Oceania">
+                    <div class="continent-header" style="font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-secondary); background: var(--color-bg-secondary); padding: 8px 16px; border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: 1;">Asia / Oceania</div>
+                    <ul class="country-list" style="list-style: none; border: none; max-height: none; overflow-y: visible;">
+                        <li class="country-item" data-code="AU ($)">Australia ($)</li>
+                        <li class="country-item" data-code="CN (¥)">China (¥)</li>
+                        <li class="country-item" data-code="HK ($)">Hong Kong ($)</li>
+                        <li class="country-item" data-code="IN (₹)">India (₹)</li>
+                        <li class="country-item" data-code="JP (¥)">Japan (¥)</li>
+                        <li class="country-item" data-code="KR (₩)">South Korea (₩)</li>
+                        <li class="country-item" data-code="NZ ($)">New Zealand ($)</li>
+                        <li class="country-item" data-code="SG ($)">Singapore ($)</li>
+                        <li class="country-item" data-code="TW (NT$)">Taiwan (NT$)</li>
+                        <li class="country-item" data-code="TH (฿)">Thailand (฿)</li>
+                        <li class="country-item" data-code="VN (₫)">Vietnam (₫)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cookie Consent Banner -->
+    <div class="cookie-banner" id="cookie-consent-banner" role="complementary" aria-label="Cookie Consent Banner">
+        <p class="cookie-text" id="cookie-banner-text">We use cookies to optimize site design, personalize content, and analyze our traffic. By clicking Accept, you agree to our cookie policy.</p>
+        <div class="cookie-actions">
+            <button class="cookie-btn cookie-btn-accept" id="cookie-accept-all-btn">Accept All</button>
+            <button class="cookie-btn cookie-btn-decline" id="cookie-decline-btn">Preferences</button>
+        </div>
+    </div>
+
+    <!-- Cookie Preferences Modal Overlay -->
+    <div class="modal-overlay" id="cookie-preferences-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cookie-preferences-title">
+        <div class="modal" id="cookie-preferences-modal-box">
+            <button class="modal-close-btn" id="cookie-preferences-close" aria-label="Close dialog">&times;</button>
+            <h3 class="modal-title" id="cookie-preferences-title">Cookie Preferences</h3>
+            <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 20px; line-height: 1.5;">
+                Customize your cookie settings below. Essential cookies are required for the basic functionality of the website.
+            </p>
+            <div style="margin-bottom: 16px; display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px;">
+                <input type="checkbox" id="cookie-essential" checked disabled style="margin-top: 4px;">
+                <div>
+                    <label for="cookie-essential" style="font-weight: 600; font-size: 14px; color: var(--color-text-primary);">Essential Cookies</label>
+                    <p style="font-size: 12px; color: var(--color-text-secondary);">Required for system navigation, shopping cart, and region selection.</p>
+                </div>
+            </div>
+            <div style="margin-bottom: 16px; display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px;">
+                <input type="checkbox" id="cookie-analytics" style="margin-top: 4px;">
+                <div>
+                    <label for="cookie-analytics" style="font-weight: 600; font-size: 14px; color: var(--color-text-primary);">Analytics Cookies</label>
+                    <p style="font-size: 12px; color: var(--color-text-secondary);">Allows us to monitor site usage, traffic sources, and performance metrics.</p>
+                </div>
+            </div>
+            <div style="margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px;">
+                <input type="checkbox" id="cookie-marketing" style="margin-top: 4px;">
+                <div>
+                    <label for="cookie-marketing" style="font-weight: 600; font-size: 14px; color: var(--color-text-primary);">Marketing Cookies</label>
+                    <p style="font-size: 12px; color: var(--color-text-secondary);">Used to personalize advertisements and content based on your interests.</p>
+                </div>
+            </div>
+            <button class="cookie-btn cookie-btn-accept" id="cookie-save-preferences-btn" style="width: 100%; justify-content: center; padding: 12px;">Save Preferences</button>
+        </div>
+    </div>
+
+    <!-- Global Page Loader Overlay -->
+    <div id="global-page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <!-- Self-Contained JavaScript for Interactions -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- 1. Slideshow Carousel Logic ---
+            const slides = document.querySelectorAll('#homepage-hero-carousel .carousel-slide, #carousel_box .carousel-slide, #sl_container .sl-shw-div');
+            const dots = document.querySelectorAll('#homepage-hero-carousel .carousel-dot, #carousel_box .carousel-dot, #sl_container .c_dot_b');
+            const prevBtn = document.getElementById('carousel-btn-prev') || document.getElementById('btn_prev');
+            const nextBtn = document.getElementById('carousel-btn-next') || document.getElementById('btn_next');
+            let currentSlide = 0;
+            let slideInterval;
+
+            function showSlide(index) {
+                if (!slides.length) return;
+                slides[currentSlide].classList.remove('active');
+                slides[currentSlide].setAttribute('aria-hidden', 'true');
+                if (dots[currentSlide]) {
+                    dots[currentSlide].classList.remove('active');
+                    
+                }
+
+                currentSlide = (index + slides.length) % slides.length;
+
+                slides[currentSlide].classList.add('active');
+                slides[currentSlide].setAttribute('aria-hidden', 'false');
+                if (dots[currentSlide]) {
+                    dots[currentSlide].classList.add('active');
+                    
+                }
+            }
+
+            function nextSlide() {
+                showSlide(currentSlide + 1);
+            }
+
+            function prevSlide() {
+                showSlide(currentSlide - 1);
+            }
+
+            function startAutoplay() {
+                if (slides.length) slideInterval = setInterval(nextSlide, 5000);
+            }
+
+            function resetAutoplay() {
+                clearInterval(slideInterval);
+                startAutoplay();
+            }
+
+            if (prevBtn) {
+                prevBtn.addEventListener('click', () => {
+                    prevSlide();
+                    resetAutoplay();
+                });
+            }
+
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => {
+                    nextSlide();
+                    resetAutoplay();
+                });
+            }
+
+            dots.forEach(dot => {
+                dot.addEventListener('click', (e) => {
+                    const slideIndex = parseInt(e.target.getAttribute('data-slide') || e.target.getAttribute('onclick')?.replace(/[^0-9]/g, '') || 0);
+                    showSlide(slideIndex);
+                    resetAutoplay();
+                });
+            });
+
+            startAutoplay();
+
+            // Expose carousel functions globally for inline onclick handlers across different pages
+            window.prevSlide = () => { prevSlide(); resetAutoplay(); };
+            window.nextSlide = () => { nextSlide(); resetAutoplay(); };
+            window.gotoSlide = (idx) => { showSlide(idx); resetAutoplay(); };
+            window.sh_prv = () => { prevSlide(); resetAutoplay(); };
+            window.sh_nxt = () => { nextSlide(); resetAutoplay(); };
+            window.sh_go = (idx) => { showSlide(idx); resetAutoplay(); };
+
+            // --- 2. Dynamic Cart & Dropdown Logic ---
+            const cartBadge = document.getElementById('cart-count-badge');
+            const quickAddButtons = document.querySelectorAll('.product-quick-add, .product-quick-add-bad, .btn-quick-add-bad');
+            const cartWrapper = document.getElementById('cart-dropdown-wrapper');
+            const cartBtn = document.getElementById('cart-btn') || document.getElementById('btn_cart') || document.getElementById('u_cart');
+            const cartDropdown = document.getElementById('cart-dropdown-panel');
+            const cartItemsContainer = document.getElementById('cart-dropdown-items');
+            const cartSubtotalLabel = document.getElementById('cart-dropdown-subtotal');
+            const cartFooter = document.getElementById('cart-dropdown-footer');
+            let isCartSticky = false;
+            let cartHoverTimeout;
+            let cart = JSON.parse(sessionStorage.getItem('verla-cart') || '[]');
+
+            function showCartDropdown() {
+                clearTimeout(cartHoverTimeout);
+                if (cartDropdown) {
+                    cartDropdown.style.display = 'block';
+                    cartDropdown.offsetHeight; // force reflow
+                    cartDropdown.style.opacity = '1';
+                    cartDropdown.style.transform = 'translateY(0)';
+                }
+            }
+
+            function hideCartDropdown() {
+                if (isCartSticky) return;
+                if (cartDropdown) {
+                    cartDropdown.style.opacity = '0';
+                    cartDropdown.style.transform = 'translateY(10px)';
+                    cartHoverTimeout = setTimeout(() => {
+                        cartDropdown.style.display = 'none';
+                    }, 300);
+                }
+            }
+
+            if (cartWrapper) {
+                cartWrapper.addEventListener('mouseenter', showCartDropdown);
+                cartWrapper.addEventListener('mouseleave', hideCartDropdown);
+            }
+
+            if (cartBtn) {
+                cartBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    isCartSticky = !isCartSticky;
+                    if (isCartSticky) {
+                        showCartDropdown();
+                    } else {
+                        hideCartDropdown();
+                    }
+                });
+            }
+
+            document.addEventListener('click', (e) => {
+                if (cartWrapper && !cartWrapper.contains(e.target)) {
+                    isCartSticky = false;
+                    hideCartDropdown();
+                }
+            });
+
+            function updateCartUI() {
+                if (!cartBadge) return;
+                const totalCount = cart.reduce((sum, item) => sum + item.qty, 0);
+                cartBadge.textContent = totalCount;
+
+                if (cart.length === 0) {
+                    cartItemsContainer.innerHTML = '<p style="font-size: 13px; color: var(--color-text-secondary); text-align: center; padding: 20px 0;" id="cart-empty-message">Your cart is empty.</p>';
+                    if (cartFooter) cartFooter.style.display = 'none';
+                } else {
+                    cartItemsContainer.innerHTML = '';
+                    if (cartFooter) cartFooter.style.display = 'block';
+                    let subtotal = 0;
+
+                    cart.forEach((item, index) => {
+                        subtotal += item.price * item.qty;
+                        const itemEl = document.createElement('div');
+                        itemEl.style.display = 'flex';
+                        itemEl.style.alignItems = 'center';
+                        itemEl.style.gap = '12px';
+                        itemEl.style.marginBottom = '12px';
+                        itemEl.innerHTML = `
+                            <div style="width: 40px; height: 40px; background: var(--color-bg-secondary); display: flex; align-items: center; justify-content: center; border: 1px solid var(--color-border); flex-shrink: 0;">
+                                ${item.svg}
+                            </div>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-primary);">${item.title}</div>
+                                <div style="font-size: 11px; color: var(--color-text-secondary);">${item.qty} &times; $${item.price.toFixed(2)}</div>
+                            </div>
+                            <button class="remove-cart-item" data-index="${index}" style="font-size: 11px; color: var(--color-accent); font-weight: 500;">Remove</button>
+                        `;
+                        cartItemsContainer.appendChild(itemEl);
+                    });
+
+                    if (cartSubtotalLabel) cartSubtotalLabel.textContent = `$${subtotal.toFixed(2)}`;
+
+                    cartItemsContainer.querySelectorAll('.remove-cart-item').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const idx = parseInt(btn.getAttribute('data-index'));
+                            cart.splice(idx, 1);
+                            sessionStorage.setItem('verla-cart', JSON.stringify(cart));
+                            updateCartUI();
+                        });
+                    });
+                }
+            }
+
+            // Setup Quick Add listeners
+            document.addEventListener('click', (e) => {
+                const btn = e.target.closest('.product-quick-add, .product-quick-add-bad, .btn-quick-add-bad');
+                if (!btn || btn.disabled || btn.classList.contains('adding')) return;
+
+                // Don't add sold out items
+                if (btn.textContent.trim().toLowerCase().includes('sold out')) return;
+
+                e.stopPropagation();
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = 'Adding...';
+                btn.classList.add('adding');
+
+                fetch('../index.html')
+                    .then(() => {
+                        const delay = Math.floor(Math.random() * 901) + 300;
+                        setTimeout(() => {
+                            const card = btn.closest('.product-card, .item-box, .product-card-bad');
+                            if (card) {
+                                const titleEl = card.querySelector('.product-title, .item-title, .product-title-bad, h3, h4');
+                                const title = titleEl ? titleEl.textContent.trim() : 'Apparel Item';
+                                
+                                const priceEl = card.querySelector('.product-price, .item-price, .product-price-bad');
+                                let priceText = '0.00';
+                                if (priceEl) {
+                                    const saleEl = priceEl.querySelector('.sale');
+                                    priceText = saleEl ? saleEl.textContent : priceEl.textContent;
+                                }
+                                const price = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0.00;
+                                
+                                const svgEl = card.querySelector('svg');
+                                const svgMarkup = svgEl ? svgEl.outerHTML : '';
+
+                                const existing = cart.find(item => item.title === title);
+                                if (existing) {
+                                    existing.qty++;
+                                } else {
+                                    cart.push({ title, price, svg: svgMarkup, qty: 1 });
+                                }
+                                sessionStorage.setItem('verla-cart', JSON.stringify(cart));
+                                updateCartUI();
+                            }
+
+                            btn.classList.remove('adding');
+                            btn.classList.add('added');
+                            btn.textContent = 'Added!';
+
+                            showCartDropdown();
+                            setTimeout(() => {
+                                hideCartDropdown();
+                            }, 1500);
+
+                            setTimeout(() => {
+                                btn.classList.remove('added');
+                                btn.textContent = originalText;
+                                btn.disabled = false;
+                            }, 1000);
+                        }, delay);
+                    })
+                    .catch(() => {
+                        btn.classList.remove('adding');
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                    });
+            });
+
+            updateCartUI();
+            window.c_add = () => {};
+
+            // --- 3. Country Selector Logic ---
+            const countrySelectorBtn = document.getElementById('country-selector-btn') || document.getElementById('region_btn') || document.getElementById('u_select');
+            const countryModalOverlay = document.getElementById('country-modal-overlay');
+            const countryModalClose = document.getElementById('country-modal-close') || countryModalOverlay?.querySelector('.modal-close-btn') || countryModalOverlay?.querySelector('div[onclick="close_m()"]');
+            const searchInput = document.getElementById('country-search-input');
+            const countryItems = countryModalOverlay?.querySelectorAll('.country-item, .pop-li, .pop-liselected') || [];
+            const currentRegionLabel = document.getElementById('current-region-label');
+
+            if (countrySelectorBtn) {
+                countrySelectorBtn.addEventListener('click', () => {
+                    if (countryModalOverlay) {
+                        countryModalOverlay.classList.add('active');
+                        countryModalOverlay.style.opacity = '1';
+                        countryModalOverlay.style.visibility = 'visible';
+                        if (countrySelectorBtn.setAttribute) countrySelectorBtn.setAttribute('aria-expanded', 'true');
+                        if (searchInput) searchInput.focus();
+                    }
+                });
+            }
+
+            function closeCountryModal() {
+                if (countryModalOverlay) {
+                    countryModalOverlay.classList.remove('active');
+                    countryModalOverlay.style.opacity = '0';
+                    countryModalOverlay.style.visibility = 'hidden';
+                    if (countrySelectorBtn && countrySelectorBtn.setAttribute) countrySelectorBtn.setAttribute('aria-expanded', 'false');
+                }
+            }
+
+            if (countryModalClose) {
+                countryModalClose.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    closeCountryModal();
+                });
+            }
+            if (countryModalOverlay) {
+                countryModalOverlay.addEventListener('click', (e) => {
+                    if (e.target === countryModalOverlay) closeCountryModal();
+                });
+            }
+
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const term = e.target.value.toLowerCase();
+                    const groups = countryModalOverlay.querySelectorAll('.continent-group');
+                    if (groups.length) {
+                        groups.forEach(group => {
+                            let visibleCount = 0;
+                            const items = group.querySelectorAll('.country-item, .pop-li, .pop-liselected');
+                            items.forEach(item => {
+                                const text = item.textContent.toLowerCase();
+                                if (text.includes(term)) {
+                                    item.style.display = 'block';
+                                    visibleCount++;
+                                } else {
+                                    item.style.display = 'none';
+                                }
+                            });
+                            if (visibleCount > 0) {
+                                group.style.display = 'block';
+                            } else {
+                                group.style.display = 'none';
+                            }
+                        });
+                    } else {
+                        // Simple filter if no continent groups
+                        countryItems.forEach(item => {
+                            const text = item.textContent.toLowerCase();
+                            if (text.includes(term)) {
+                                item.style.display = 'block';
+                            } else {
+                                item.style.display = 'none';
+                            }
+                        });
+                    }
+                });
+            }
+
+            countryItems.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    countryItems.forEach(el => {
+                        el.classList.remove('selected');
+                        el.classList.remove('pop-liselected');
+                        if (el.setAttribute) el.setAttribute('aria-selected', 'false');
+                    });
+                    item.classList.add('selected');
+                    if (item.classList.contains('pop-li')) item.classList.add('pop-liselected');
+                    if (item.setAttribute) item.setAttribute('aria-selected', 'true');
+                    
+                    const code = item.getAttribute('data-code');
+                    if (currentRegionLabel) currentRegionLabel.textContent = code;
+                    closeCountryModal();
+                });
+            });
+            window.open_m = () => {
+                if (countryModalOverlay) {
+                    countryModalOverlay.classList.add('active');
+                    countryModalOverlay.style.opacity = '1';
+                    countryModalOverlay.style.visibility = 'visible';
+                    if (searchInput) searchInput.focus();
+                }
+            };
+            window.close_m = () => {
+                closeCountryModal();
+            };
+
+            // --- 4. Newsletter Form Logic ---
+            const newsletterForm = document.getElementById('newsletter-email-form') || document.getElementById('newsletter_form');
+            const emailInput = document.getElementById('newsletter-email-input') || document.getElementById('email_input');
+            const successMessage = document.getElementById('newsletter-success-message') || document.getElementById('success_msg');
+
+            if (newsletterForm && emailInput && successMessage) {
+                newsletterForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    if (emailInput.checkValidity()) {
+                        successMessage.style.display = 'block';
+                        newsletterForm.style.display = 'none';
+                    }
+                });
+            }
+            window.sb_m = () => {
+                const valEl = document.getElementById('mail_val') || document.getElementById('email_input') || document.getElementById('newsletter-email-input');
+                const okEl = document.getElementById('ok_lbl') || document.getElementById('success_msg') || document.getElementById('newsletter-success-message');
+                const boxEl = document.getElementById('n_box') || document.getElementById('newsletter_form') || document.getElementById('newsletter-email-form');
+                if (valEl && valEl.value) {
+                    if (okEl) okEl.style.display = 'block';
+                    if (boxEl) boxEl.style.display = 'none';
+                }
+            };
+
+            // --- 5. Cookie Consent & Preferences Logic ---
+            const cookieBanner = document.getElementById('cookie-consent-banner') || document.getElementById('cookie_banner') || document.getElementById('ck_b_bad');
+            const acceptBtn = document.getElementById('cookie-accept-all-btn') || cookieBanner?.querySelector('.cookie-btn-accept') || cookieBanner?.querySelector('div[onclick="ck_ok()"]');
+            const declineBtn = document.getElementById('cookie-decline-btn') || cookieBanner?.querySelector('.cookie-btn-decline') || cookieBanner?.querySelector('div[onclick="ck_prefs()"]') || cookieBanner?.querySelectorAll('div')[1];
+            
+            const cookiePrefsModal = document.getElementById('cookie-preferences-modal-overlay');
+            const cookiePrefsClose = document.getElementById('cookie-preferences-close');
+            const cookieSavePrefsBtn = document.getElementById('cookie-save-preferences-btn');
+            const cookieAnalyticsCb = document.getElementById('cookie-analytics');
+            const cookieMarketingCb = document.getElementById('cookie-marketing');
+
+            const consentKey = 'cookies-accepted-' + "perfect";
+            if (cookieBanner && !localStorage.getItem(consentKey)) {
+                setTimeout(() => {
+                    cookieBanner.classList.add('active');
+                    cookieBanner.style.transform = 'translateY(0)';
+                }, 1000);
+            }
+
+            function dismissCookieBanner() {
+                if (cookieBanner) {
+                    cookieBanner.classList.remove('active');
+                    cookieBanner.style.transform = 'translateY(150%)';
+                }
+                localStorage.setItem(consentKey, 'true');
+            }
+
+            if (acceptBtn) {
+                acceptBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    dismissCookieBanner();
+                    localStorage.setItem('cookies-pref-analytics', 'true');
+                    localStorage.setItem('cookies-pref-marketing', 'true');
+                });
+            }
+
+            if (declineBtn) {
+                declineBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (cookiePrefsModal) {
+                        if (cookieAnalyticsCb) cookieAnalyticsCb.checked = localStorage.getItem('cookies-pref-analytics') === 'true';
+                        if (cookieMarketingCb) cookieMarketingCb.checked = localStorage.getItem('cookies-pref-marketing') === 'true';
+                        cookiePrefsModal.classList.add('active');
+                    }
+                });
+            }
+
+            function closePrefsModal() {
+                if (cookiePrefsModal) cookiePrefsModal.classList.remove('active');
+            }
+
+            if (cookiePrefsClose) cookiePrefsClose.addEventListener('click', closePrefsModal);
+            if (cookiePrefsModal) {
+                cookiePrefsModal.addEventListener('click', (e) => {
+                    if (e.target === cookiePrefsModal) closePrefsModal();
+                });
+            }
+
+            if (cookieSavePrefsBtn) {
+                cookieSavePrefsBtn.addEventListener('click', () => {
+                    let isAnalytics = false;
+                    let isMarketing = false;
+                    isAnalytics = cookieAnalyticsCb ? cookieAnalyticsCb.checked : false;
+                    isMarketing = cookieMarketingCb ? cookieMarketingCb.checked : false;
+                    localStorage.setItem('cookies-pref-analytics', isAnalytics.toString());
+                    localStorage.setItem('cookies-pref-marketing', isMarketing.toString());
+                    closePrefsModal();
+                    dismissCookieBanner();
+                });
+            }
+            window.ck_ok = () => {
+                dismissCookieBanner();
+                localStorage.setItem('cookies-pref-analytics', 'true');
+                localStorage.setItem('cookies-pref-marketing', 'true');
+            };
+            window.ck_prefs = () => {
+                if (cookiePrefsModal) {
+                                            if (cookieAnalyticsCb) cookieAnalyticsCb.checked = localStorage.getItem('cookies-pref-analytics') === 'true';
+                        if (cookieMarketingCb) cookieMarketingCb.checked = localStorage.getItem('cookies-pref-marketing') === 'true';
+
+                    cookiePrefsModal.classList.add('active');
+                }
+            };
+
+            // --- 6. Global Delayed Navigation Interceptor ---
+            document.addEventListener('click', (e) => {
+                const anchor = e.target.closest('a') || e.target.closest('.x-nav-clickable') || (e.target.getAttribute('onclick')?.includes('location.href') ? e.target : null);
+                if (anchor) {
+                    let url = anchor.getAttribute('href') || anchor.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+                    if (url && !url.includes('#') && !anchor.getAttribute('target') && !url.startsWith('javascript:')) {
+                        // Make sure to resolve the relative URL
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const loader = document.getElementById('global-page-loader');
+                        if (loader) loader.style.display = 'flex';
+                        const delay = Math.floor(Math.random() * (1200 - 300 + 1)) + 300;
+                        setTimeout(() => {
+                            window.location.href = url;
+                        }, delay);
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

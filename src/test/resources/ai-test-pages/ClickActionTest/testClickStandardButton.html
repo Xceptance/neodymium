@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Click Action Test - Standard Button</title>
+</head>
+<body>
+    <h1>Click Action Test</h1>
+    
+    <button id="btn-submit">Submit Order</button>
+    
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('btn-submit').addEventListener('click', function() {
+            document.getElementById('result').innerText = 'Order Submitted!';
+        });
+    </script>
+</body>
+</html>

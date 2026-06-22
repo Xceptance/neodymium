@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<!--
+Scenarios supported by this test page:
+- Section 1 (Hidden Element): The success indicator (#success-1) is already present in the DOM but starts hidden (display:none) and is shown later.
+- Section 2 (Pop-in Element): The success indicator (#success-2) does not exist in the DOM initially. It is dynamically created and inserted after the delay.
+- Section 3 (Content Change): The success indicator (#success-3) is visible immediately on load, but starts with text content "Processing..." and is updated to "Process Completed Successfully!" after the delay.
+-->
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Wait Action Test</title>
+    <style>
+        .section {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .loader {
+            background-color: lightgrey;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Wait Action Test Scenarios</h1>
+    
+    <!-- Section 1: Hidden Element -->
+    <div class="section" id="section-1">
+        <h2>Section 1: Hidden Element</h2>
+        <button id="btn-start-1">Start Process 1</button>
+        <div id="loader-1" class="loader" style="display:none;">Processing 1... Please wait...</div>
+        <div id="success-1" class="success" style="display:none;">Process Completed Successfully!</div>
+    </div>
+    
+    <!-- Section 2: Pop-in Element -->
+    <div class="section" id="section-2">
+        <h2>Section 2: Pop-in Element (Dynamic Insertion)</h2>
+        <button id="btn-start-2">Start Process 2</button>
+        <div id="loader-2" class="loader" style="display:none;">Processing 2... Please wait...</div>
+        <!-- success-2 element will be dynamically created here -->
+    </div>
+    
+    <!-- Section 3: Content Change -->
+    <div class="section" id="section-3">
+        <h2>Section 3: Content Change</h2>
+        <button id="btn-start-3">Start Process 3</button>
+        <div id="loader-3" class="loader" style="display:none;">Processing 3... Please wait...</div>
+        <div id="success-3" class="success" style="display:block;">Processing...</div>
+    </div>
+    
+    <script>
+        var urlParams = new URLSearchParams(window.location.search);
+        var waitParam = urlParams.get('param1');
+        var delay = 800;
+        if (waitParam === 'random') {
+            delay = Math.floor(Math.random() * 1000) + 500;
+        } else if (waitParam !== null) {
+            delay = parseInt(waitParam, 16);
+        } else {
+            waitParam = urlParams.get('wait');
+            if (waitParam === 'random') {
+                delay = Math.floor(Math.random() * 1000) + 500;
+            } else if (waitParam !== null) {
+                delay = parseInt(waitParam, 10);
+            }
+        }
+
+        // Section 1
+        document.getElementById('btn-start-1').addEventListener('click', function() {
+            var loader = document.getElementById('loader-1');
+            var success = document.getElementById('success-1');
+            loader.style.display = 'block';
+            success.style.display = 'none';
+            
+            setTimeout(function() {
+                loader.style.display = 'none';
+                success.style.display = 'block';
+            }, delay);
+        });
+
+        // Section 2
+        document.getElementById('btn-start-2').addEventListener('click', function() {
+            var loader = document.getElementById('loader-2');
+            // Remove existing success-2 if present
+            var existing = document.getElementById('success-2');
+            if (existing) {
+                existing.remove();
+            }
+            loader.style.display = 'block';
+            
+            setTimeout(function() {
+                loader.style.display = 'none';
+                var success = document.createElement('div');
+                success.id = 'success-2';
+                success.className = 'success';
+                success.innerText = 'Process Completed Successfully!';
+                document.getElementById('section-2').appendChild(success);
+            }, delay);
+        });
+
+        // Section 3
+        document.getElementById('btn-start-3').addEventListener('click', function() {
+            var loader = document.getElementById('loader-3');
+            var success = document.getElementById('success-3');
+            success.innerText = 'Processing...';
+            loader.style.display = 'block';
+            
+            setTimeout(function() {
+                loader.style.display = 'none';
+                success.innerText = 'Process Completed Successfully!';
+            }, delay);
+        });
+    </script>
+</body>
+</html>

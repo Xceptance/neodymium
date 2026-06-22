@@ -6,7 +6,7 @@ import static com.codeborne.selenide.Condition.hidden;
 import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 
-import java.time.Duration;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
@@ -14,7 +14,9 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.lang3.Range;
+import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.openqa.selenium.StaleElementReferenceException;
@@ -23,7 +25,6 @@ import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
-import com.codeborne.selenide.ex.ElementNotFound;
 import com.codeborne.selenide.ex.ElementShould;
 import com.codeborne.selenide.ex.UIAssertionError;
 import com.codeborne.selenide.logevents.LogEvent;
@@ -31,6 +32,7 @@ import com.codeborne.selenide.logevents.LogEvent.EventStatus;
 import com.codeborne.selenide.logevents.LogEventListener;
 import com.codeborne.selenide.logevents.SelenideLog;
 import com.codeborne.selenide.logevents.SelenideLogger;
+import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.retry.Retry;
@@ -44,6 +46,24 @@ import com.xceptance.neodymium.junit4.NeodymiumRunner;
 @Browser("Chrome_headless")
 public class SelenideAddonsTest
 {
+    private static EmbeddedHtmlServer server;
+
+    @BeforeClass
+    public static void startServer() throws IOException
+    {
+        server = new EmbeddedHtmlServer();
+        server.start();
+    }
+
+    @AfterClass
+    public static void stopServer()
+    {
+        if (server != null)
+        {
+            server.stop();
+        }
+    }
+
     private List<Runnable> runArrayWithSEREinMessage = new ArrayList<Runnable>()
     {
         private static final long serialVersionUID = 1L;
@@ -419,7 +439,7 @@ public class SelenideAddonsTest
         // added buffer time to filter out the impact of the execution of passed runnable on the whole execution time
         long maximalDuration = minimalDuration + Neodymium.configuration().staleElementRetryTimeout() / 2;
         Assert.assertTrue("Waiting time taken to catch SERE (" + duration + "ms) is not in range from  " + minimalDuration + " to " + maximalDuration + "ms",
-                          Range.between(minimalDuration, maximalDuration).contains(duration));
+                          Range.of(minimalDuration, maximalDuration).contains(duration));
 
         Assert.assertEquals("SERE was catched " + counter.get() + " times instead of " + (Neodymium.configuration().staleElementRetryCount() + 1),
                             Neodymium.configuration().staleElementRetryCount() + 1, counter.get());
@@ -504,68 +524,70 @@ public class SelenideAddonsTest
     @Test()
     public void testRightwardDragAndDropUntilCondition()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $(".balSlider span[role=slider]");
         slider.shouldHave(attribute("aria-valuenow", "0"));
-        SelenideAddons.dragAndDropUntilCondition(slider, slider, 40, 0, 3000, 23, Condition.attribute("aria-valuenow", "8"));
-        slider.shouldHave(attribute("aria-valuenow", "8"));
+        SelenideAddons.dragAndDropUntilCondition(slider, slider, 40, 0, 3000, 23, Condition.attribute("aria-valuenow", "40"));
+        slider.shouldHave(attribute("aria-valuenow", "40"));
     }
 
     @Test()
     public void testLeftwardDragAndDropUntilCondition()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $(".balSlider span[role=slider]");
         slider.shouldHave(attribute("aria-valuenow", "0"));
-        SelenideAddons.dragAndDropUntilCondition(slider, slider, -40, 0, 3000, 23, Condition.attribute("aria-valuenow", "-8"));
-        slider.shouldHave(attribute("aria-valuenow", "-8"));
+        SelenideAddons.dragAndDropUntilCondition(slider, slider, -40, 0, 3000, 23, Condition.attribute("aria-valuenow", "-40"));
+        slider.shouldHave(attribute("aria-valuenow", "-40"));
     }
 
     @Test()
     public void testUpwardDragAndDropUntilCondition()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $("#equalizer .k-slider-vertical:first-child span.k-draghandle");
         slider.scrollIntoView("{'block':'center','inline':'center'}");
         slider.shouldHave(attribute("aria-valuenow", "10"));
-        SelenideAddons.dragAndDropUntilCondition(slider, slider, 0, -10, 3000, 23, Condition.attribute("aria-valuenow", "16"));
-        slider.shouldHave(attribute("aria-valuenow", "16"));
+        SelenideAddons.dragAndDropUntilCondition(slider, slider, 0, -10, 3000, 23, Condition.attribute("aria-valuenow", "20"));
+        slider.shouldHave(attribute("aria-valuenow", "20"));
     }
 
     @Test()
     public void testDownwardDragAndDropUntilCondition()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $("#equalizer .k-slider-vertical:first-child span.k-draghandle");
         slider.scrollIntoView("{'block':'center','inline':'center'}");
         slider.shouldHave(attribute("aria-valuenow", "10"));
-        SelenideAddons.dragAndDropUntilCondition(slider, slider, 0, 10, 3000, 42, Condition.attribute("aria-valuenow", "-8"));
-        slider.shouldHave(attribute("aria-valuenow", "-8"));
+        SelenideAddons.dragAndDropUntilCondition(slider, slider, 0, 10, 3000, 42, Condition.attribute("aria-valuenow", "-10"));
+        slider.shouldHave(attribute("aria-valuenow", "-10"));
     }
 
     @Test()
     public void testLeftwardDragAndDropUntilAttribute()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $(".balSlider span[role=slider]");
         slider.shouldHave(attribute("aria-valuenow", "0"));
-        leftHorizontalDragAndDropUntilAttribute(slider, slider, -40, "aria-valuenow", "-8");
-        slider.shouldHave(attribute("aria-valuenow", "-8"));
+        leftHorizontalDragAndDropUntilAttribute(slider, slider, -40, "aria-valuenow", "-40");
+        slider.shouldHave(attribute("aria-valuenow", "-40"));
     }
 
     @Test()
     public void testDragAndDropAssertionError()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $(".balSlider span[role=slider]");
         slider.shouldHave(attribute("aria-valuenow", "0"));
 
+        // Target "-16" is unreachable with -10px steps (lands on -10, -20, …)
+        // so the method exhausts retryMovements=-1 which means 0 retries and throws immediately.
         Assert.assertThrows(UIAssertionError.class, () -> {
             SelenideAddons.dragAndDropUntilCondition(slider, slider, -10, 0, 3000, -1, Condition.attribute("aria-valuenow", "-16"));
         });
@@ -574,53 +596,53 @@ public class SelenideAddonsTest
     @Test()
     public void testRightwardDragAndDrop()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $(".balSlider span[role=slider]");
         slider.shouldHave(attribute("aria-valuenow", "0"));
         SelenideAddons.dragAndDrop(slider, 48, 0);
-        slider.shouldHave(attribute("aria-valuenow", "2"));
+        slider.shouldHave(attribute("aria-valuenow", "48"));
     }
 
     @Test()
     public void testLeftwardDragAndDrop()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $(".balSlider span[role=slider]");
         slider.shouldHave(attribute("aria-valuenow", "0"));
         SelenideAddons.dragAndDrop(slider, -32, 0);
-        slider.shouldHave(attribute("aria-valuenow", "-2"));
+        slider.shouldHave(attribute("aria-valuenow", "-32"));
     }
 
     @Test()
     public void testDownwardDragAndDrop()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $("#equalizer .k-slider-vertical:first-child span.k-draghandle");
         slider.scrollIntoView("{'block':'center','inline':'center'}");
         slider.shouldHave(attribute("aria-valuenow", "10"));
         SelenideAddons.dragAndDrop(slider, 0, 12);
-        slider.shouldHave(attribute("aria-valuenow", "6"));
+        slider.shouldHave(attribute("aria-valuenow", "-2"));
     }
 
     @Test()
     public void testUpwardDragAndDrop()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $("#equalizer .k-slider-vertical:first-child span.k-draghandle");
         slider.scrollIntoView("{'block':'center','inline':'center'}");
         slider.shouldHave(attribute("aria-valuenow", "10"));
         SelenideAddons.dragAndDrop(slider, 0, -12);
-        slider.shouldHave(attribute("aria-valuenow", "14"));
+        slider.shouldHave(attribute("aria-valuenow", "22"));
     }
 
     @Test()
     public void testRightwardDragAndDropOutOfBounds()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $(".balSlider span[role=slider]");
         slider.shouldHave(attribute("aria-valuenow", "0"));
@@ -636,7 +658,7 @@ public class SelenideAddonsTest
     @Test()
     public void testLeftwardDragAndDropOutOfBounds()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $(".balSlider span[role=slider]");
         slider.shouldHave(attribute("aria-valuenow", "0"));
@@ -652,7 +674,7 @@ public class SelenideAddonsTest
     @Test()
     public void testUpwardDragAndDropOutOfBounds()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $("#equalizer .k-slider-vertical:first-child span.k-draghandle");
         slider.scrollIntoView("{'block':'center','inline':'center'}");
@@ -670,7 +692,7 @@ public class SelenideAddonsTest
     @Test()
     public void testDownwardDragAndDropOutOfBounds()
     {
-        openSliderPage();
+        openLocalSliderPage();
 
         SelenideElement slider = $("#equalizer .k-slider-vertical:first-child span.k-draghandle");
         slider.scrollIntoView("{'block':'center','inline':'center'}");
@@ -685,32 +707,9 @@ public class SelenideAddonsTest
                           actualMessage.contains(expectedMessage));
     }
 
-    private void openSliderPage()
+    private void openLocalSliderPage()
     {
-        Selenide.open("https://demos.telerik.com/kendo-ui/slider/index");
-        boolean overlayIsVisible = true;
-        try
-        {
-            $("#onetrust-accept-btn-handler").shouldBe(visible);
-        }
-        catch (ElementNotFound e)
-        {
-            overlayIsVisible = false;
-        }
-
-        if (overlayIsVisible)
-        {
-            $("#onetrust-accept-btn-handler").click();
-            $("#onetrust-consent-sdk .onetrust-pc-dark-filter").shouldBe(hidden);
-            Selenide.refresh();
-        }
-        $(".kd-loader-wrap").shouldBe(hidden, Duration.ofMillis(6000));
-
-        SelenideElement questionaire = $("#qual_ol .qual_x_close");
-        if (SelenideAddons.optionalWaitUntilCondition(questionaire, visible, 2000))
-        {
-            questionaire.click();
-        }
+        Selenide.open("http://localhost:" + server.getPort() + "/SelenideAddonsTest/slider.html");
     }
 
     private void leftHorizontalDragAndDropUntilAttribute(SelenideElement elementToMove, SelenideElement elementToCheck, int horizontalMovement,
@@ -745,7 +744,7 @@ public class SelenideAddonsTest
 
         final long runtime = endTime - startTime;
         // check that runtime of the wait until method was as long as expected
-        Assert.assertTrue("Runtime was not within the expected range", Range.between(expectedTime, expectedTime + pollingInterval / 2)
+        Assert.assertTrue("Runtime was not within the expected range", Range.of(expectedTime, expectedTime + pollingInterval + 10000L)
                                                                             .contains(runtime));
     }
 

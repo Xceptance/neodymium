@@ -9,6 +9,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 public class TestdataRunner
 {
@@ -21,11 +22,18 @@ public class TestdataRunner
         this.testData = testData;
     }
 
-    public void setUpTest(Object testClassInstance) throws IllegalArgumentException, IllegalAccessException
+    public void setUpTest(final Object testClassInstance) throws IllegalArgumentException, IllegalAccessException
     {
         if (testData != null)
         {
-            Neodymium.getData().putAll(testData.getDataSet());
+            final Map<String, String> dataSet = testData.getDataSet();
+            final String sourceFile = dataSet.get("neodymium.sourceFile");
+            if (sourceFile != null)
+            {
+                Neodymium.setTestdataSourceFile(sourceFile);
+            }
+            Neodymium.getData().putAll(dataSet);
+            Neodymium.getData().remove("neodymium.sourceFile");
             initializeDataObjects(testClassInstance);
         }
         else

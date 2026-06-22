@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Click Intercept Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card" style="position: relative;">
+                <h1>Click Interception Challenge</h1>
+                <p class="aura-desc">
+                    Clicking the "Submit Transaction" button will throw a click interception error in Selenium/Selenide 
+                    because a transparent blocking overlay is absolute-positioned directly over it.
+                </p>
+
+                <!-- Target container with overlay -->
+                <div style="position: relative; display: flex; justify-content: center; margin: 3rem 0; padding: 2rem; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+                    <!-- The actual button -->
+                    <button id="intercepted-btn" class="aura-btn" style="padding: 15px 30px; font-size: 16px; cursor: pointer; position: relative; z-index: 1;">
+                        Submit Transaction
+                    </button>
+
+                    <!-- Transparent Overlay -->
+                    <div id="blocking-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.05); z-index: 10; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <span id="overlay-text" style="background: rgba(255, 51, 102, 0.9); padding: 5px 15px; border-radius: 4px; font-size: 12px; font-weight: bold; pointer-events: none;">
+                            Blocking Overlay Active (Click here to dismiss)
+                        </span>
+                    </div>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="intercept-status" style="font-weight: bold; color: #ffcc00;">Waiting for transaction submit...</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const btn = document.getElementById('intercepted-btn');
+        const overlay = document.getElementById('blocking-overlay');
+        const status = document.getElementById('intercept-status');
+
+        btn.addEventListener('click', function() {
+            status.innerText = 'Transaction Successful!';
+            status.style.color = '#00ffcc';
+        });
+
+        // Clicking the overlay directly will dismiss it
+        overlay.addEventListener('click', function() {
+            overlay.style.display = 'none';
+            status.innerText = 'Overlay Dismissed!';
+            status.style.color = '#33ccff';
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

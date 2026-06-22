@@ -132,165 +132,176 @@ public class NeodymiumWebDriverTest extends AbstractNeodymiumTest
     @Test
     public void testValidateKeepWebDriverOpen()
     {
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "false");
         properties.put("neodymium.webDriver.keepBrowserOpen", "true");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
 
         addPropertiesForTest("temp-ValidateKeepWebDriverOpen-neodymium.properties", properties);
 
         // XVFB or a display needed
-        NeodymiumTestExecutionSummary summary = run(ValidateKeepWebDriverOpen.class);
+        final NeodymiumTestExecutionSummary summary = run(ValidateKeepWebDriverOpen.class);
         checkFail(summary, 3, 0, 1);
     }
 
     @Test
     public void testValidateKeepWebDriverOpenOnFailure()
     {
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "true");
         properties.put("neodymium.webDriver.keepBrowserOpen", "true");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
 
         addPropertiesForTest("temp-ValidateKeepWebDriverOpenOnFailure-neodymium.properties", properties);
 
         // XVFB or a display needed
-        NeodymiumTestExecutionSummary summary = run(ValidateKeepWebDriverOpenOnFailure.class);
+        final NeodymiumTestExecutionSummary summary = run(ValidateKeepWebDriverOpenOnFailure.class);
         checkFail(summary, 3, 0, 1);
     }
 
     @Test
     public void testValidateKeepBrowserOpenAnnotationClassDoesntInterfereWithConfig()
     {
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "false");
         properties.put("neodymium.webDriver.keepBrowserOpen", "false");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
 
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationClassDoesntInterfereWithConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationClassDoesntInterfereWithConfig.class);
+        final NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationClassDoesntInterfereWithConfig.class);
         checkFail(result, 3, 0, 1);
     }
 
     @Test
     public void testValidateKeepBrowserOpenOnFailureAnnotationClassDoesntInterfereWithConfig()
     {
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "true");
         properties.put("neodymium.webDriver.keepBrowserOpen", "true");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
 
         addPropertiesForTest("temp-ValidateKeepBrowserOpenOnFailureAnnotationClassDoesntInterfereWithConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationClassDoesntInterfereWithConfig.class);
+        final NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationClassDoesntInterfereWithConfig.class);
         checkFail(result, 3, 0, 1);
     }
 
     @Test
     public void testValidateKeepBrowserOpenAnnotationMethodDoesntInterfereWithConfig()
     {
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "false");
         properties.put("neodymium.webDriver.keepBrowserOpen", "false");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
 
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationMethodDoesntInterfereWithConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationMethodDoesntInterfereWithConfig.class);
+        final NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationMethodDoesntInterfereWithConfig.class);
         checkFail(result, 3, 0, 1);
     }
 
     @Test
     public void testValidateKeepBrowserOpenOnFailureAnnotationMethodDoesntInterfereWithConfig()
     {
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "true");
         properties.put("neodymium.webDriver.keepBrowserOpen", "true");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
 
         addPropertiesForTest("temp-ValidateKeepBrowserOpenOnFailureAnnotationMethodDoesntInterfereWithConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationMethodDoesntInterfereWithConfig.class);
+        final NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationMethodDoesntInterfereWithConfig.class);
         checkFail(result, 3, 0, 1);
     }
 
     @Test
     public void testValidateKeepBrowserOpenAnnotationClassOverridesConfig()
     {
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "true");
         properties.put("neodymium.webDriver.keepBrowserOpen", "false");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
 
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationClassOverridesConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationClassOverridesConfig.class);
+        final NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationClassOverridesConfig.class);
         checkFail(result, 3, 0, 1);
     }
 
     @Test
     public void testValidateKeepBrowserOpenOnFailureAnnotationClassOverridesConfig()
     {
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "false");
         properties.put("neodymium.webDriver.keepBrowserOpen", "true");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
 
         addPropertiesForTest("temp-ValidateKeepBrowserOpenOnFailureAnnotationClassOverridesConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationClassOverridesConfig.class);
+        final NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationClassOverridesConfig.class);
         checkFail(result, 3, 0, 1);
     }
 
     @Test
     public void testValidateKeepBrowserOpenAnnotationMethodOverridesConfig()
     {
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "true");
         properties.put("neodymium.webDriver.keepBrowserOpen", "false");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
 
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationMethodOverridesConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationMethodOverridesConfig.class);
+        final NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationMethodOverridesConfig.class);
         checkFail(result, 3, 0, 1);
     }
 
     @Test
     public void testValidateKeepBrowserOpenOnFailureAnnotationMethodOverridesConfig()
     {
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "false");
         properties.put("neodymium.webDriver.keepBrowserOpen", "true");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
 
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationMethodOverridesConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationMethodOverridesConfig.class);
+        final NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenOnFailureAnnotationMethodOverridesConfig.class);
         checkFail(result, 3, 0, 1);
     }
 
     @Test
     public void testValidateKeepBrowserOpenAnnotationMethodOverridesClass()
     {
-        Map<String, String> properties = new HashMap<>();
+        final Map<String, String> properties = new HashMap<>();
         properties.put("neodymium.webDriver.keepBrowserOpenOnFailure", "false");
         properties.put("neodymium.webDriver.keepBrowserOpen", "true");
         properties.put("neodymium.localproxy", "true");
+        properties.put("browserprofile.Chrome_1024x768.headless", "false");
 
         addPropertiesForTest("temp-ValidateKeepBrowserOpenAnnotationMethodOverridesConfig-neodymium.properties", properties);
 
         // XVFB or a display needed
-        NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationMethodOverridesClass.class);
+        final NeodymiumTestExecutionSummary result = run(ValidateKeepBrowserOpenAnnotationMethodOverridesClass.class);
         checkFail(result, 3, 0, 1);
     }
 

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Premium Poster Store</title>
+    <link rel="stylesheet" href="../shared/style.css">
+    <link rel="stylesheet" href="../shared/controls.css">
+    <style>
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .product-card {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .product-img-container {
+            width: 100%;
+            height: 240px;
+            background: #171923;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--bg-card-border);
+            margin-bottom: 1.25rem;
+            position: relative;
+        }
+
+        .product-img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: cover;
+            transition: var(--transition-smooth);
+        }
+
+        .product-card:hover .product-img {
+            transform: scale(1.05);
+        }
+
+        .price-tag {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            margin-top: auto;
+            padding-top: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Optional Promotional Banner -->
+    <div id="promo-banner-container" style="display: flex;">
+        <div class="promo-banner" style="width: 100%;">
+            <span>🚀 Special Trial: Unlimited Aura AI visual audits unlocked!</span>
+            <button class="promo-close" id="promo-close-btn" onclick="document.getElementById('promo-banner-container').style.display='none'">Close Banner</button>
+        </div>
+    </div>
+
+    <!-- Navigation Header -->
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="../dashboard/index.html" class="brand">
+                <span class="brand-icon"></span>
+                <span>Aura Suite Hub</span>
+            </a>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="../index.html">Hub Home</a></li>
+                    <li><a href="index.html" class="active">Shop Catalog</a></li>
+                    <li><a href="forms.html">Forms Demo</a></li>
+                    <li><a href="escalation.html">Escalation Challenge</a></li>
+                    <li><a href="visual-escalation.html">Visual Escalation</a></li>
+                    <li><a href="../a11y/index.html">Accessibility Checks</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="aura-container">
+        
+        <section class="aura-hero" style="padding: 2.5rem 3.5rem;">
+            <h1 class="shift-target">Premium Art Poster Storefront</h1>
+            <p style="margin-top: 0.75rem; color: var(--text-secondary);">
+                Browse our collection of visual graphic mockups. This storefront checks standard image loading, dHash comparisons, and flex/grid responsive scaling.
+            </p>
+        </section>
+
+        <!-- Product Listings -->
+        <section class="product-grid columns-grid">
+            
+            <!-- Poster 1 -->
+            <div class="aura-card product-card grid-item">
+                <div class="product-img-container">
+                    <img src="../shared/placeholder.png" alt="Aura Neon Gradient Poster" class="product-img" id="img-poster-1">
+                </div>
+                <h3 style="margin-bottom: 0.5rem;" class="shift-target">Aura Neon Gradient Poster</h3>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;" class="clipped-container">
+                    A beautiful, vibrant gradient mesh showcasing neon shades of deep ultraviolet and radioactive cyan.
+                </p>
+                <div class="price-tag">
+                    <span>$19.99</span>
+                    <button class="btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem;" onclick="alert('Added to cart!')">Add to Cart</button>
+                </div>
+            </div>
+
+            <!-- Poster 2 -->
+            <div class="aura-card product-card grid-item">
+                <div class="product-img-container">
+                    <img src="../shared/placeholder.png" alt="Glassmorphic Sphere Poster" class="product-img" id="img-poster-2">
+                </div>
+                <h3 style="margin-bottom: 0.5rem;">Glassmorphic Sphere Poster</h3>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;" class="clipped-container">
+                    A multi-layered glass backdrop vector sphere that refracts light beams into rainbow prisms.
+                </p>
+                <div class="price-tag">
+                    <span>$24.99</span>
+                    <button class="btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem;" onclick="alert('Added to cart!')">Add to Cart</button>
+                </div>
+            </div>
+
+            <!-- Poster 3 -->
+            <div class="aura-card product-card grid-item">
+                <div class="product-img-container">
+                    <img src="../shared/placeholder.png" alt="Cyberpunk Grid Poster" class="product-img" id="img-poster-3">
+                </div>
+                <h3 style="margin-bottom: 0.5rem;">Cyberpunk Wireframe Grid</h3>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;" class="clipped-container">
+                    An endless perspective wireframe horizon with pixelated suns rising in neon pink glows.
+                </p>
+                <div class="price-tag">
+                    <span>$14.99</span>
+                    <button class="btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem;" onclick="alert('Added to cart!')">Add to Cart</button>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Global Controls Drawer Script injection -->
+    <script src="../shared/controls.js"></script>
+
+</body>
+</html>

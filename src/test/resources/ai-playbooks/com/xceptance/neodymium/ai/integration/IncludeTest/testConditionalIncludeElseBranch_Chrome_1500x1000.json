@@ -1,0 +1,133 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.IncludeTest :: testConditionalIncludeElseBranch :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/IncludeTest/testInclude.html?hideElement\u003dtrue",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/IncludeTest/testInclude.html?hideElement\u003dtrue"
+          ],
+          "description": "Navigate to http://localhost:43377/IncludeTest/testInclude.html?hideElement\u003dtrue",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "If the element (hint: #element) is visible, then _include: fragments/testConditionalIncludeElseBranch_sub.steps else _include: fragments/testConditionalIncludeElseBranch_else.steps",
+      "reasoning": "Conditional branch to include different step files based on element visibility.",
+      "actions": [
+        {
+          "type": "BRANCH",
+          "description": "Conditional check for element visibility then include steps",
+          "elementContext": {},
+          "replay": "",
+          "condition": [
+            {
+              "type": "ASSERT",
+              "target": "#element",
+              "value": [
+                "visible"
+              ],
+              "description": "Assert element #element is visible",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "then": [
+            {
+              "type": "INCLUDE",
+              "value": [
+                "fragments/testConditionalIncludeElseBranch_sub.steps"
+              ],
+              "description": "Include steps from fragments/testConditionalIncludeElseBranch_sub.steps",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "else": [
+            {
+              "type": "INCLUDE",
+              "value": [
+                "fragments/testConditionalIncludeElseBranch_else.steps"
+              ],
+              "description": "Include steps from fragments/testConditionalIncludeElseBranch_else.steps",
+              "elementContext": {},
+              "replay": "",
+              "adjust": false
+            }
+          ],
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    },
+    {
+      "actions": [
+        {
+          "type": "INCLUDE",
+          "value": [
+            "fragments/testConditionalIncludeElseBranch_else.steps"
+          ],
+          "description": "Include steps from fragments/testConditionalIncludeElseBranch_else.steps",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click button C",
+      "reasoning": "The instruction is to click button C. I found a button with id \u0027btnC\u0027 and aria-label \u0027Button C\u0027 in the accessibility tree and generated a CLICK action targeting it.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btnC",
+          "description": "Click button C",
+          "elementDetails": "Button C",
+          "elementContext": {
+            "text": "Button C",
+            "id": "btnC",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click button D",
+      "reasoning": "The instruction is to click button D. I found a button with id \u0027btnD\u0027 and aria-label \u0027Button D\u0027 in the accessibility tree and generated a CLICK action targeting it.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btnD",
+          "description": "Click button D",
+          "elementDetails": "Button D",
+          "elementContext": {
+            "text": "Button D",
+            "id": "btnD",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Analytics Dashboard</title>
+    <link rel="stylesheet" href="../shared/style.css">
+    <link rel="stylesheet" href="../shared/controls.css">
+</head>
+<body>
+
+    <!-- Optional Promotional Banner -->
+    <div id="promo-banner-container" style="display: flex;">
+        <div class="promo-banner" style="width: 100%;">
+            <span>🚀 Special Trial: Unlimited Aura AI visual audits unlocked!</span>
+            <button class="promo-close" id="promo-close-btn" onclick="document.getElementById('promo-banner-container').style.display='none'">Close Banner</button>
+        </div>
+    </div>
+
+    <!-- Navigation Header -->
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="index.html" class="brand">
+                <span class="brand-icon"></span>
+                <span>Aura Suite Hub</span>
+            </a>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="../index.html">Hub Home</a></li>
+                    <li><a href="index.html" class="active">Dashboard</a></li>
+                    <li><a href="../shop/index.html">Shop Catalog</a></li>
+                    <li><a href="../shop/forms.html">Forms Demo</a></li>
+                    <li><a href="../shop/escalation.html">Escalation Challenge</a></li>
+                    <li><a href="../shop/visual-escalation.html">Visual Escalation</a></li>
+                    <li><a href="../a11y/index.html">Accessibility Checks</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="aura-container">
+        
+        <!-- Hero Welcomer -->
+        <section class="aura-hero">
+            <h1 class="shift-target" id="main-dashboard-title">Aura Observational Visual Auditor</h1>
+            <p style="margin-top: 1rem; color: var(--text-secondary); max-width: 700px;">
+                Welcome to the SaaS administration panel. This environment tests advanced CSS rendering, SVG layouts, responsiveness, iframe nesting, and multimodal visual analysis of dynamic structures.
+            </p>
+        </section>
+
+        <!-- Metric Cards -->
+        <section class="aura-grid-3">
+            <div class="aura-card">
+                <h3 style="color: var(--accent-cyan); font-weight: 600;">System Visual Audits</h3>
+                <div style="font-size: 2.2rem; font-weight: 700; margin: 1rem 0;">489 / 500</div>
+                <div class="clipped-container" style="color: var(--text-muted); font-size: 0.85rem;">
+                    Active visual baseline matching hit rate is currently at 97.8% (dHash verification bypasses LLM latency).
+                </div>
+            </div>
+            <div class="aura-card">
+                <h3 style="color: var(--accent-purple); font-weight: 600;">Layout Integrity</h3>
+                <div style="font-size: 2.2rem; font-weight: 700; margin: 1rem 0;">99.4%</div>
+                <div class="clipped-container" style="color: var(--text-muted); font-size: 0.85rem;">
+                    Observed alignment drift is within bounds. Automatic baseline updates registered across 12 distinct pages.
+                </div>
+            </div>
+            <div class="aura-card">
+                <h3 style="color: var(--status-success); font-weight: 600;">Server Response</h3>
+                <div style="font-size: 2.2rem; font-weight: 700; margin: 1rem 0;">18 ms</div>
+                <div class="clipped-container" style="color: var(--text-muted); font-size: 0.85rem;">
+                    Extremely low-latency layout AST DOM traverse runs on page load and click triggers.
+                </div>
+            </div>
+        </section>
+
+        <!-- SVG Analytics & Nested Frame -->
+        <section class="aura-grid-2">
+            
+            <!-- Dynamic Vector SVG Chart Card -->
+            <div class="aura-card">
+                <h3 style="margin-bottom: 1.5rem;">Visual Audit Coverage Chart</h3>
+                <div style="width: 100%; height: 260px; display: flex; align-items: center; justify-content: center;">
+                    <svg viewBox="0 0 400 200" style="width: 100%; height: 100%;">
+                        <defs>
+                            <linearGradient id="purple-cyan" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="var(--accent-purple)" />
+                                <stop offset="100%" stop-color="var(--accent-cyan)" />
+                            </linearGradient>
+                        </defs>
+                        <!-- Grid Lines -->
+                        <line x1="10" y1="180" x2="390" y2="180" stroke="var(--bg-card-border)" stroke-width="1" />
+                        <line x1="10" y1="100" x2="390" y2="100" stroke="var(--bg-card-border)" stroke-dasharray="4" stroke-width="1" />
+                        <line x1="10" y1="20" x2="390" y2="20" stroke="var(--bg-card-border)" stroke-width="1" />
+                        
+                        <!-- Smooth Spline Path -->
+                        <path d="M 20 160 C 80 120, 120 40, 180 80 C 240 120, 300 20, 380 40" 
+                              fill="none" stroke="url(#purple-cyan)" stroke-width="4" stroke-linecap="round" />
+                              
+                        <!-- Data points -->
+                        <circle cx="20" cy="160" r="5" fill="var(--accent-purple)" />
+                        <circle cx="180" cy="80" r="5" fill="var(--accent-cyan)" />
+                        <circle cx="380" cy="40" r="5" fill="var(--accent-cyan)" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Nested iFrame Card -->
+            <div class="aura-card" style="display: flex; flex-direction: column;">
+                <h3 style="margin-bottom: 1rem;">Nested Testing Environment (iFrame)</h3>
+                <div style="flex-grow: 1; border: 1px solid var(--bg-card-border); border-radius: var(--radius-sm); overflow: hidden; background: white;">
+                    <iframe src="iframe-content.html" id="test-iframe" style="width: 100%; height: 260px; border: none;"></iframe>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Global Controls Drawer Script injection -->
+    <script src="../shared/controls.js"></script>
+
+</body>
+</html>

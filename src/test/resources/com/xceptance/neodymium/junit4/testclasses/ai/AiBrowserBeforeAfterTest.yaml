@@ -1,0 +1,34 @@
+data:
+  - testId: happyPath
+    before: 
+      - java before1()
+    steps: java prompt1()
+    after:
+      - java after1()
+      - java after2()
+      
+  - testId: failBefore
+    before:
+      - java before1()
+      - java beforeFail()
+      - java before2()
+    steps: java prompt1()
+    after:
+      - java after1()
+
+  - testId: failPrompt
+    before:
+      - java before1()
+    steps: java promptFail()
+    after:
+      - java after1()
+      - java after2()
+
+  - testId: failAfters
+    before:
+      - java before1()
+    steps: java promptFail()
+    after:
+      - java afterFail1()
+      - java after1()
+      - java afterFail2()

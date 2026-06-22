@@ -1,0 +1,27 @@
+{
+  "id": "com.xceptance.neodymium.ai.action.ClickActionTest :: testClickStandardButton",
+  "steps": [
+    {
+      "promptLine": "Click the Submit Order button.",
+      "reasoning": "Identified the \u0027Submit Order\u0027 button by its ID and aria-label in the AXTree and generated a CLICK action.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit",
+          "description": "Click the Submit Order button",
+          "elementDetails": "Submit Order button",
+          "elementContext": {
+            "text": "Submit Order",
+            "id": "btn-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

@@ -1,0 +1,3215 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.xceptance.neodymium.ai.core;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.commons.lang3.StringUtils;
+import org.junit.jupiter.api.Assertions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.codeborne.selenide.Selenide;
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
+import com.xceptance.neodymium.ai.action.Action;
+import com.xceptance.neodymium.ai.action.ActionExecutor;
+import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
+import com.xceptance.neodymium.ai.action.ActionParser;
+import com.xceptance.neodymium.ai.action.ActionRegistry;
+import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.ai.action.plugins.JavaMethodAction;
+import com.xceptance.neodymium.ai.config.AiConfiguration;
+import com.xceptance.neodymium.ai.generator.InteractiveHud;
+import com.xceptance.neodymium.ai.playbook.Playbook;
+import com.xceptance.neodymium.ai.playbook.PlaybookStep;
+import com.xceptance.neodymium.ai.util.ScreenshotHasher;
+import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
+import com.xceptance.neodymium.util.AllureAddons;
+import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.SelenideAddons;
+
+import io.qameta.allure.Allure;
+
+/**
+ * The AI agent orchestration engine. Takes natural language instructions,
+ * breaks them into steps, and for each step:
+ * <ol>
+ * <li>Tries to handle obvious commands (like navigation) directly</li>
+ * <li>Captures the current page state (screenshot + DOM)</li>
+ * <li>Sends the instruction + page context to the LLM</li>
+ * <li>Parses the structured JSON response into actions</li>
+ * <li>Executes actions via Selenium</li>
+ * <li>Retries with error context if actions fail (self-healing)</li>
+ * </ol>
+ *
+ * @author AI-generated: Gemini 2.5 Flash
+ * @author Xceptance GmbH 2026
+ */
+public class AiAgent {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AiAgent.class);
+
+    private static final ThreadLocal<AiAgent> activeAgent = new ThreadLocal<>();
+    private static final ThreadLocal<AiExecutionResult> activeResult = new ThreadLocal<>();
+
+    public static AiAgent getActiveAgent()
+    {
+        return activeAgent.get();
+    }
+
+    public static AiExecutionResult getActiveResult()
+    {
+        return activeResult.get();
+    }
+
+    private void logPauseReason(String reason) {
+        try {
+            java.io.File file = new java.io.File("tmp/neodymium-ai.log");
+            if (!file.getParentFile().exists())
+                file.getParentFile().mkdirs();
+            java.nio.file.Files.writeString(file.toPath(), java.time.Instant.now() + " - PAUSE: " + reason + "\n",
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception e) {
+            LOG.warn("Could not write to neodymium-ai.log", e);
+        }
+    }
+
+    private final LlmClient llmClient;
+
+    private final PageAnalyzer pageAnalyzer;
+
+    private final ActionExecutor actionExecutor;
+
+    private final ActionParser actionParser;
+
+    private AiDiscussionLogger executionLog;
+
+    private String sutContext;
+
+    private boolean autoSkip;
+
+    private boolean hudPromptChanged = false;
+    private boolean hudSaveExit = false;
+
+    // Tracks whether the last LLM response indicated completion
+    private boolean lastLlmDone = true;
+
+    private static final int NO_ACTIONS_MAX_RETRIES = 15;
+
+    private static final Pattern BUG_TAG_PATTERN = Pattern.compile("(?i)\\(bug(?:\\s*:\\s*([^)]+))?\\)");
+
+    private static final Pattern OPTIONAL_TAG_PATTERN = Pattern.compile("(?i)\\((optional|soft)\\)");
+
+    private static final Pattern TIMEOUT_TAG_PATTERN = Pattern.compile("(?i)\\(timeout\\s*:\\s*(\\d+)(ms|s)?\\)");
+
+    private static final Pattern NO_REPLAY_TAG_PATTERN = Pattern.compile("(?i)\\(no-replay\\)");
+
+    private static final List<Pattern> STRIP_PATTERNS = List.of(
+            BUG_TAG_PATTERN,
+            OPTIONAL_TAG_PATTERN,
+            TIMEOUT_TAG_PATTERN,
+            NO_REPLAY_TAG_PATTERN);
+
+    /**
+     * Holds the result of a JIT pre-step PESAP analysis for a single step.
+     */
+    record PreStepPesapResult(
+        ContextLevel contextLevel,
+        boolean requiresJavaMethods,
+        List<String> splitSteps
+    ) {}
+
+
+
+    /**
+     * Execution-scoped reference to the current steps list.
+     * Set once in {@code execute()} and read by {@code runPreStepPesap()}.
+     */
+    private List<String> currentStepsList = null;
+
+    public static String stripAllTags(final String step)
+    {
+        if (step == null)
+        {
+            return null;
+        }
+        String stripped = step;
+        for (final Pattern pattern : STRIP_PATTERNS)
+        {
+            stripped = pattern.matcher(stripped).replaceAll("");
+        }
+        return stripped.replaceAll("\\s+", " ").trim();
+    }
+
+
+
+    /**
+     * Constructs a new AiAgent.
+     *
+     * @param llmClient      the LLM client
+     * @param pageAnalyzer   the page analyzer
+     * @param actionExecutor the action executor
+     * @param config         the AI configuration
+     */
+    public AiAgent(final LlmClient llmClient, final PageAnalyzer pageAnalyzer,
+            final ActionExecutor actionExecutor, final AiConfiguration config) {
+        this.llmClient = llmClient;
+        this.pageAnalyzer = pageAnalyzer;
+        this.actionExecutor = actionExecutor;
+        this.actionParser = new ActionParser();
+        this.autoSkip = config.aiInteractiveAutoSkip();
+    }
+
+    /**
+     * Sets the system under test context.
+     *
+     * @param sutContext the context description
+     */
+    public void setSutContext(final String sutContext) {
+        this.sutContext = sutContext;
+    }
+
+    /**
+     * Executes a block of natural language instructions. The instructions are split
+     * into individual steps (by line/sentence), and each step is processed through
+     * the LLM → action → execution loop.
+     * <p>
+     * This method manages a stateful loop that can be interrupted by an interactive
+     * HUD.
+     * The loop index ({@code i}) is mutated directly within the catch blocks of
+     * {@link HudActionException} to support features like rewinding, editing, or
+     * adding steps dynamically during execution.
+     *
+     * @param instructions natural language test instructions
+     */
+    public void execute(final String instructions)
+    {
+        execute(instructions, new AiExecutionResult(Neodymium.getData(), Neodymium.ai()));
+    }
+
+    public void execute(final String instructions, final AiExecutionResult result)
+    {
+        activeAgent.set(this);
+        activeResult.set(result);
+        // Dynamically reload the thread-local AI configuration to pick up any dynamic system property changes
+        Neodymium.reloadAiConfiguration();
+
+        // Re-read dynamically cached autoSkip field from the newly reloaded
+        // configuration
+        this.autoSkip = Neodymium.aiConfiguration().aiInteractiveAutoSkip();
+
+        if (!Boolean.getBoolean("neodymium.ai.offline") && StringUtils.isBlank(Neodymium.aiConfiguration().aiApiKey())) {
+            Assertions.fail(
+                    "AI API key not configured. Set in your ai.properties, neodymium.properties or as an evironment variable.");
+        }
+
+        executionLog = new AiDiscussionLogger(instructions);
+
+        LOG.debug("======== 🚀 AI Agent: Processing instructions ========");
+        if (sutContext == null) {
+            LOG.debug("SUT Context: none");
+        } else {
+            LOG.debug("SUT Context:\n{}", sutContext);
+        }
+
+        this.hudPromptChanged = false;
+        this.hudSaveExit = false;
+
+        if (Neodymium.aiConfiguration().aiInteractive())
+        {
+            Neodymium.getOrCreateInteractiveHud().resetHudAction();
+        }
+
+        final AiStats statsSnapshot = llmClient.getAiStats();
+        final long startStandardIn = statsSnapshot.getInputTokens();
+        final long startStandardOut = statsSnapshot.getOutputTokens();
+        final long startStandardCached = statsSnapshot.getCachedInputTokens();
+
+        final long startPesapIn = statsSnapshot.getPesapInputTokens();
+        final long startPesapOut = statsSnapshot.getPesapOutputTokens();
+        final long startPesapCached = statsSnapshot.getPesapCachedInputTokens();
+
+        final int startRetry = statsSnapshot.getTotalRetryCount();
+        final int startEscalation = statsSnapshot.getTotalEscalationCount();
+        final int startReplay = statsSnapshot.getReplayCount();
+        final int startDirectParse = statsSnapshot.getDirectParseCount();
+        final int startPesapCalls = statsSnapshot.getPesapCallCount();
+
+        final long startTimeMs = System.currentTimeMillis();
+
+        try {
+            final List<String> stepsList = new ArrayList<>(Arrays.asList(splitInstructions(instructions)));
+            LOG.debug("Split into {} step(s)", stepsList.size());
+
+            for (final String rawStep : stepsList) {
+                result.getSteps().add(new StepDetails(rawStep));
+            }
+
+            final String sourceFileVal;
+            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.sourceFile")) {
+                sourceFileVal = Neodymium.getTestdataSourceFile();
+            } else {
+                sourceFileVal = null;
+            }
+
+            List<String> stepLineNumbers = null;
+            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.stepLineNumbers"))
+            {
+                final String stepLineNumbersJson = Neodymium.getData().asString("neodymium.stepLineNumbers");
+                try
+                {
+                    stepLineNumbers = new Gson().fromJson(stepLineNumbersJson, new TypeToken<List<String>>(){}.getType());
+                }
+                catch (final Exception e)
+                {
+                    // Ignore
+                }
+            }
+
+            final List<String> stepLines = new ArrayList<>();
+            if (stepLineNumbers != null)
+            {
+                stepLines.addAll(stepLineNumbers);
+            } else {
+                for (int idx = 0; idx < stepsList.size(); idx++) {
+                    stepLines.add(null);
+                }
+            }
+            while (stepLines.size() < stepsList.size()) {
+                stepLines.add(null);
+            }
+            Neodymium.initializePlaybook();
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null && playbook.getSteps() != null)
+            {
+                for (final PlaybookStep step : playbook.getSteps())
+                {
+                    step.setFailure(null);
+                }
+            }
+            alignStepsWithPlaybookForReplay(stepsList, stepLines, result, playbook);
+
+            // Determine if JIT per-step PESAP should run (only during recording, not replay)
+            final boolean needsPesap = playbook == null || playbook.isRecording();
+
+            this.currentStepsList = stepsList;
+
+            // Run local offline semantic linter independently (when enabled)
+            boolean linterEnabledVal = Neodymium.aiConfiguration().pesapLinterEnabled();
+            if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.pesap.linter.enabled"))
+            {
+                linterEnabledVal = Neodymium.getData().asBoolean("neodymium.ai.pesap.linter.enabled", linterEnabledVal);
+            }
+            if (linterEnabledVal)
+            {
+                final List<String> lintWarnings = StepLinter.lint(stepsList, stepLines, sourceFileVal);
+                if (!lintWarnings.isEmpty()) {
+                    if (sourceFileVal != null) {
+                        LOG.warn("⚠️ AI Instructions Semantic Linter Warnings in {}:",
+                                new java.io.File(sourceFileVal).getName());
+                    } else {
+                        LOG.warn("⚠️ AI Instructions Semantic Linter Warnings");
+                    }
+                    for (final String warning : lintWarnings) {
+                        LOG.warn("    - {}", warning);
+                    }
+                }
+            }
+
+            final boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
+            final List<String> performedInstructions = new ArrayList<>();
+            final Set<String> alreadySplitSteps = new HashSet<>();
+            boolean abortedDueToExpectedFailure = false;
+            String abortedBugId = null;
+
+            for (int i = 0; i <= stepsList.size(); i++) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new RuntimeException("Thread was interrupted, halting agent execution.");
+                }
+                if (isInteractive)
+                {
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    final Boolean currentAutoSkipStatus = Neodymium.getOrCreateInteractiveHud()
+                            .checkAutoSkipStatus();
+                    if (currentAutoSkipStatus != null) {
+                        if (this.autoSkip && !currentAutoSkipStatus) {
+                            logPauseReason("HUD Fast-Forward paused (e.g., Breakpoint reached or manual pause)");
+                        }
+                        this.autoSkip = currentAutoSkipStatus;
+                    }
+
+                    // Eager pre-execution check: check if the upcoming step index is in the active
+                    // breakpoints
+                    final List<Integer> breakpoints = Neodymium.getOrCreateInteractiveHud().getBreakpoints();
+                    if (breakpoints.contains(i)) {
+                        if (this.autoSkip) {
+                            logPauseReason("HUD Fast-Forward paused (e.g., Breakpoint reached or manual pause)");
+                        }
+                        this.autoSkip = false;
+                        try {
+                            Selenide.executeJavaScript(
+                                    "if (typeof window !== 'undefined') { window.neoHudAutoSkip = false; try { sessionStorage.setItem('neoLastAutoSkip', 'false'); } catch(e){} }");
+                        } catch (final Exception e) {
+                            // Ignore browser communication errors
+                        }
+                    }
+                }
+
+                // If we've reached the end of the predefined steps list
+                if (i == stepsList.size()) {
+                    if (isInteractive) {
+                        try {
+                            if (!this.hudPromptChanged) {
+                                break;
+                            }
+                            // Show a final confirmation dialog to save the interactive session changes
+                            final List<String> finishedStrs = new ArrayList<>();
+                            finishedStrs.add("🎉 Execution Complete! Click Save & Exit to store changes.");
+                            if (this.autoSkip) {
+                                logPauseReason("Execution Complete Dialog reached");
+                            }
+                            this.autoSkip = false;
+                            Neodymium.getOrCreateInteractiveHud()
+                                    .injectOrUpdateHud(finishedStrs, performedInstructions, this.autoSkip, this.hudPromptChanged, true,
+                                            "");
+                            // Block execution until the user responds to the prompt
+                            waitForHudAction(false);
+                        } catch (final HudActionException e) {
+                            // If the user chooses to rewind, edit, or add during the final prompt,
+                            // we update the loop index 'i' and continue from the new position
+                            i = processHudActionException(e, i, stepsList, performedInstructions, stepLines, result);
+                            if (i < -1) {
+                                break;
+                            }
+                            continue;
+                        }
+                    }
+                    break;
+                }
+
+                // Resolve placeholders or variables in the raw instruction string
+                final String stepUnresolved = stepsList.get(i);
+                final String step = AiBrowser.resolveTestDataToPrompt(stepUnresolved, result.getLookups());
+
+                // Extract expected failure tags
+                boolean expectedFailure = false;
+                String bugId = null;
+                final Matcher bugMatcher = BUG_TAG_PATTERN.matcher(step);
+                if (bugMatcher.find()) {
+                    expectedFailure = true;
+                    bugId = bugMatcher.group(1);
+                    if (bugId != null) {
+                        bugId = bugId.trim();
+                    }
+                }
+
+                // Extract optional step tags
+                boolean optionalStep = false;
+                final Matcher optionalMatcher = OPTIONAL_TAG_PATTERN.matcher(step);
+                if (optionalMatcher.find()) {
+                    optionalStep = true;
+                }
+
+                // Extract custom timeout tags
+                Long customTimeoutMs = null;
+                final Matcher timeoutMatcher = TIMEOUT_TAG_PATTERN.matcher(step);
+                if (timeoutMatcher.find()) {
+                    final long value = Long.parseLong(timeoutMatcher.group(1));
+                    final String unit = timeoutMatcher.group(2);
+                    if (unit != null && unit.equalsIgnoreCase("s")) {
+                        customTimeoutMs = value * 1000;
+                    } else {
+                        customTimeoutMs = value;
+                    }
+                }
+
+                // Fully strip ALL registered tags beautifully via stripAllTags static helper
+                final String strippedStep = stripAllTags(step);
+
+                final StepDetails stepDetails = result.getSteps().get(i);
+
+                boolean isReplay = false;
+                final Playbook playbookForCheck = Neodymium.getAiPlaybook();
+                // Check if we have an active, non-recording playbook matching the current step
+                if (playbookForCheck != null && !playbookForCheck.isRecording()
+                        && playbookForCheck.getCurrentStep() != null) {
+                    final PlaybookStep stepObj = playbookForCheck.getCurrentStep();
+                    // Mark as replay only if the previous run didn't fail and prompts match exactly
+                    if (!stepObj.failed() && stepObj.getPromptLine() != null
+                            && stepObj.getPromptLine().equals(strippedStep)) {
+                        isReplay = true;
+                    }
+                }
+
+                final String currentLineNumber = (i < stepLines.size()) ? stepLines.get(i) : null;
+
+                final String parentTrace = getParentTrace(currentLineNumber);
+                final ConditionInfo condInfo = parseCondition(strippedStep);
+
+                boolean shouldSkip = false;
+                String finalStepText = strippedStep;
+
+                if (parentTrace != null && condInfo != null)
+                {
+                    final String cacheKey = parentTrace + "::" + condInfo.conditionText;
+                    if (evaluatedConditions.containsKey(cacheKey))
+                    {
+                        final boolean conditionMet = evaluatedConditions.get(cacheKey);
+                        final boolean stepConditionResult = condInfo.negated ? !conditionMet : conditionMet;
+
+                        if (stepConditionResult)
+                        {
+                            finalStepText = stripConditionPrefix(strippedStep);
+                            LOG.info("   ⏭️ Condition '{}' cached as {}. Executing step without recheck: '{}'",
+                                     condInfo.conditionText, conditionMet, finalStepText);
+                        }
+                        else
+                        {
+                            shouldSkip = true;
+                            LOG.info("   ⏭️ Skipping step '{}' because condition '{}' was evaluated as {}",
+                                     strippedStep, condInfo.conditionText, conditionMet);
+                        }
+                    }
+                }
+
+                if (shouldSkip)
+                {
+                    stepDetails.setExpandedInstruction(strippedStep + " (Skipped)");
+                    stepDetails.setReplayed(true);
+                    performedInstructions.add(stepUnresolved);
+                    continue;
+                }
+
+                final StringBuilder stepContext = new StringBuilder();
+                if (currentLineNumber != null || sourceFileVal != null) {
+                    stepContext.append(" ");
+                    if (sourceFileVal != null) {
+                        final String fileName = new File(sourceFileVal).getName();
+                        if (currentLineNumber != null && currentLineNumber.contains(":"))
+                        {
+                            stepContext.append(currentLineNumber);
+                        }
+                        else
+                        {
+                            stepContext.append(fileName);
+                            if (currentLineNumber != null)
+                            {
+                                stepContext.append(":").append(currentLineNumber);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (currentLineNumber != null)
+                        {
+                            stepContext.append(currentLineNumber);
+                        }
+                    }
+                }
+                final String contextStr = stepContext.toString();
+
+                LOG.debug("───────────────────────────────────────────────────────────");
+                if (isReplay) {
+                    LOG.debug("👣 Step 🔄 [{}/{}]{}", i + 1, stepsList.size(), contextStr);
+                } else {
+                    LOG.debug("👣 Step 🧠 [{}/{}]{}", i + 1, stepsList.size(), contextStr);
+                }
+                LOG.debug("{}", strippedStep);
+                LOG.debug("───────────────────────────────────────────────────────────");
+
+                // We always run PESAP for non-direct instructions to classify context level, check custom java methods, and handle step splitting.
+                if (!isDirectInstruction(strippedStep) && needsPesap && !alreadySplitSteps.contains(strippedStep))
+                {
+                    final Object testInstance = actionExecutor.getTestInstance();
+                    final Class<?> testClass = testInstance != null ? testInstance.getClass() : null;
+                    final PreStepPesapResult pesapResult = runPreStepPesap(i, testClass, stepDetails);
+                    if (pesapResult != null && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
+                    {
+                        LOG.info("✂️ Upfront JIT step split detected: '{}' split into {}", strippedStep, pesapResult.splitSteps());
+                        final StepDetails originalStepDetails = stepDetails;
+                        final List<String> splitList = pesapResult.splitSteps();
+                        final String origLine = i < stepLines.size() ? stepLines.get(i) : null;
+
+                        stepsList.set(i, splitList.get(0));
+                        stepDetails.setExpandedInstruction(splitList.get(0));
+                        stepDetails.setOriginalUnsplitInstruction(stepUnresolved);
+
+                        for (int j = 1; j < splitList.size(); j++)
+                        {
+                            final String part = splitList.get(j);
+                            stepsList.add(i + j, part);
+                            if (i + j <= stepLines.size())
+                            {
+                                stepLines.add(i + j, origLine);
+                            }
+                            else
+                            {
+                                stepLines.add(origLine);
+                            }
+                            final StepDetails partDetails = new StepDetails(part);
+                            partDetails.setOriginalUnsplitInstruction(stepUnresolved);
+                            // Ensure the other split parts reference the original PESAP call too
+                            partDetails.setPesapCall(originalStepDetails.getPesapCall());
+                            partDetails.setPesapCalled(true);
+                            result.getSteps().add(i + j, partDetails);
+                        }
+                        alreadySplitSteps.add(strippedStep);
+                        i--;
+                        continue;
+                    }
+                }
+
+                try
+                {
+                    executionLog.startStep(i + 1, stepsList.size(), strippedStep);
+                    final List<String> futureInstructions = new ArrayList<>();
+                    for (int j = i + 1; j < stepsList.size(); j++) {
+                        futureInstructions.add(stepsList.get(j));
+                    }
+                    stepDetails.setExpandedInstruction(strippedStep);
+                    final long stepStartTime = System.currentTimeMillis();
+                    com.xceptance.neodymium.ai.action.plugins.BranchAction.clearLastConditionResult();
+                    try
+                    {
+                        executeStep(i, finalStepText, expectedFailure, bugId, optionalStep, customTimeoutMs, performedInstructions, stepUnresolved, futureInstructions, currentLineNumber, sourceFileVal, stepDetails, result, stepsList, stepLines);
+                        final Boolean lastCond = com.xceptance.neodymium.ai.action.plugins.BranchAction.getLastConditionResult();
+                        if (lastCond != null && parentTrace != null && condInfo != null)
+                        {
+                            final String cacheKey = parentTrace + "::" + condInfo.conditionText;
+                            evaluatedConditions.put(cacheKey, lastCond);
+                        }
+                    }
+                    catch (final HudActionException e)
+                    {
+                        throw e;
+                    }
+                    catch (final Throwable t)
+                    {
+                        stepDetails.setFailureReason(t.getMessage());
+                        throw t;
+                    }
+                    finally
+                    {
+                        stepDetails.setDurationMs(System.currentTimeMillis() - stepStartTime);
+                    }
+                    performedInstructions.add(stepsList.get(i));
+                }
+                catch (final HudActionException e)
+                {
+                    i = processHudActionException(e, i, stepsList, performedInstructions, stepLines, result);
+                    if (i < -1)
+                    {
+                        break;
+                    }
+                    continue;
+                } catch (final ExpectedFailureAbortException e) {
+                    abortedDueToExpectedFailure = true;
+                    abortedBugId = e.getBugId();
+                    break;
+                } finally {
+                    executionLog.endStep();
+                }
+            }
+
+            LOG.debug("───────────────────────────────────────────────────────────");
+            if (abortedDueToExpectedFailure) {
+                LOG.debug("🛑 Early abort: Expected failure matched recorded state (Bug: {})!",
+                        abortedBugId != null ? abortedBugId : "unspecified");
+            } else {
+                LOG.debug("🏆 All steps completed successfully!");
+            }
+            LOG.debug("───────────────────────────────────────────────────────────");
+        } finally {
+            activeAgent.remove();
+            activeResult.remove();
+            final long durationMs = System.currentTimeMillis() - startTimeMs;
+            result.setDurationMs(durationMs);
+
+            final AiStats stats = llmClient.getAiStats();
+            result.setInputTokens(stats.getInputTokens() - startStandardIn);
+            result.setOutputTokens(stats.getOutputTokens() - startStandardOut);
+            result.setCachedTokens(stats.getCachedInputTokens() - startStandardCached);
+            result.setTotalTokens(result.getInputTokens() + result.getOutputTokens());
+
+            result.setPesapInputTokens(stats.getPesapInputTokens() - startPesapIn);
+            result.setPesapOutputTokens(stats.getPesapOutputTokens() - startPesapOut);
+            result.setPesapCachedTokens(stats.getPesapCachedInputTokens() - startPesapCached);
+            result.setPesapTotalTokens(result.getPesapInputTokens() + result.getPesapOutputTokens());
+
+            result.setRetryCount(stats.getTotalRetryCount() - startRetry);
+            result.setEscalationCount(stats.getTotalEscalationCount() - startEscalation);
+            result.setReplayCount(stats.getReplayCount() - startReplay);
+            result.setDirectParseCount(stats.getDirectParseCount() - startDirectParse);
+            result.setPesapCallCount(stats.getPesapCallCount() - startPesapCalls);
+
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null) {
+                if (hudPromptChanged && !hudSaveExit) {
+                    playbook.setChanged(false);
+                    LOG.info("Playbook saving prevented because interactive modifications were not saved to YAML.");
+                }
+                if (playbook.isChanged()) {
+                    Allure.label("tag", "Playbook Changed");
+                }
+                if (playbook.isRecording()) {
+                    Allure.label("tag", "Playbook Recorded");
+                }
+            }
+
+            if (Neodymium.aiConfiguration().attachFullDiscussionToReport()) {
+                Allure.addAttachment("AI Discussion", "text/html", executionLog.generateHtml(), ".html");
+            }
+            if (Neodymium.aiConfiguration().attachTokenUsageToReport()) {
+                Allure.addAttachment("AI Execution Statistics", "text/plain", stats.toSummaryString(), ".txt");
+            }
+        }
+    }
+
+    /**
+     * Executes a single instruction step. First tries to handle it directly (e.g.
+     * navigation), then falls back to the playbook replay or LLM with retry logic.
+     * <p>
+     * If the step execution fails, it retries up to {@code maxRetries} times.
+     * During interactive mode, it displays the failure in the HUD and blocks
+     * until the user resolves it.
+     *
+     * @param stepIndex             the index of the current step
+     * @param instruction           the resolved test instruction to execute
+     * @param expectedFailure       whether this step is expected to fail
+     * @param bugId                 the bug ID if expected to fail
+     * @param optionalStep          whether this is an optional or soft step
+     * @param customTimeoutMs       a custom timeout override for Selenide execution
+     * @param performedInstructions list of already executed instructions for HUD
+     *                              state
+     * @param unresolvedInstruction the original unresolved instruction string
+     * @param futureInstructions    list of remaining instructions for HUD state
+     * @param currentLineNumber     the line number in the source file
+     * @param sourceFile            the path to the source file
+     * @throws HudActionException if the user triggers a control-flow change via the
+     *                            HUD
+     */
+    private void executeStep(final int stepIndex, final String instruction, final boolean expectedFailure,
+            final String bugId,
+            final boolean optionalStep, final Long customTimeoutMs,
+            final List<String> performedInstructions,
+            final String unresolvedInstruction,
+            final List<String> futureInstructions,
+            final String currentLineNumber,
+            final String sourceFile,
+            final StepDetails stepDetails,
+            final AiExecutionResult result,
+            final List<String> stepsList,
+            final List<String> stepLines) throws HudActionException
+    {
+        int errorCount = 0;
+        int playbookReplayAttempts = 0;
+        boolean hasApprovedCurrentStep = false;
+        final Playbook playbook = Neodymium.getAiPlaybook();
+        final boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
+
+        final boolean isNoReplay = (unresolvedInstruction != null && unresolvedInstruction.toLowerCase().contains("(no-replay)"))
+                || (stepDetails != null && stepDetails.getOriginalUnsplitInstruction() != null && stepDetails.getOriginalUnsplitInstruction().toLowerCase().contains("(no-replay)"));
+
+        if (playbook != null && !playbook.isRecording() && playbook.getCurrentStep() != null)
+        {
+            final PlaybookStep step = playbook.getCurrentStep();
+            if (step.getScreenshotHash() != null && step.getExpectedErrorMessage() != null && !step.isExpectedFailure() && !isNoReplay)
+            {
+                LOG.info("    🔍 Step has cached visual failure screenshot hash. Verifying if screen is still broken the same way...");
+                try
+                {
+                    final String currentScreenshot = pageAnalyzer.captureScreenshot("Visual Failure Replay: " + instruction);
+                    final String currentHash = ScreenshotHasher.computeHash(currentScreenshot);
+                    final int distance = ScreenshotHasher.getHammingDistance(step.getScreenshotHash(), currentHash);
+                    LOG.info("    📊 Visual Failure Replay Screenshot dHash comparison: Distance = {}, Recorded: {}, Current: {}", distance, step.getScreenshotHash(), currentHash);
+
+                    if (distance <= 15)
+                    {
+                        LOG.info("    ✅ SUT screen matches the recorded defective state (Hamming distance {} <= 15). Immediately throwing recorded failure.", distance);
+                        llmClient.getAiStats().recordReplay();
+                        stepDetails.setReplayed(true);
+                        playbook.nextStep();
+
+                        final String errorType = step.getExpectedErrorType();
+                        final String errorMsg = formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\n" + step.getExpectedErrorMessage());
+                        if (DefinitiveAssertionError.class.getName().equals(errorType))
+                        {
+                            throw new DefinitiveAssertionError(errorMsg);
+                        }
+
+                        throw new AssertionError(errorMsg);
+                    }
+                    else
+                    {
+                        LOG.info("    ⚠️ Visual defect appearance changed (Hamming distance {} > 15). Proceeding with normal execution/healing.", distance);
+                    }
+                }
+                catch (final AssertionError e)
+                {
+                    throw e;
+                }
+                catch (final Exception e)
+                {
+                    LOG.error("    ❌ Error during defective state visual hash comparison", e);
+                }
+            }
+        }
+
+        while (true)
+        {
+            try
+            {
+                final int cursorBefore = playbook != null ? playbook.getCursor() : -1;
+                // AI-generated: Gemini 3.5 Flash - Reset compound step tracking on each attempt
+                final List<Action> accumulatedActions = new ArrayList<>();
+                stepDetails.getActions().clear();
+                this.lastLlmDone = true;
+
+                while (true) {
+                    if (isInteractive && !hasApprovedCurrentStep) {
+                        final List<String> plannedStrs = new ArrayList<>();
+                        plannedStrs.add(instruction);
+                        if (futureInstructions != null) {
+                            plannedStrs.addAll(futureInstructions);
+                        }
+
+                        // Show HUD immediately so the user doesn't wait forever, indicating reasoning
+                        // is loading
+                        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                                "Loading reasoning...", false);
+                    }
+
+                    // Clear actions of the current step if this is a continuation turn during
+                    // recording/healing
+                    if (!accumulatedActions.isEmpty() && playbook.isRecording()) {
+                        playbook.getCurrentStep().getActions().clear();
+                    }
+
+                    // Try to resolve the required actions (from playbook cache, direct plugins, or
+                    // LLM)
+                    final List<Action> actions = getStepActions(stepIndex, instruction, unresolvedInstruction, playbook, expectedFailure, bugId, accumulatedActions, stepDetails, result);
+
+                    if (isInteractive && !hasApprovedCurrentStep) {
+                        // Update the HUD with the proposed actions and reasoning before executing them
+                        final List<String> plannedStrs = new ArrayList<>();
+                        plannedStrs.add(instruction);
+                        if (futureInstructions != null) {
+                            plannedStrs.addAll(futureInstructions);
+                        }
+
+                        String reasoning = null;
+                        boolean isReplay = false;
+                        final PlaybookStep stepObj = playbook.getCurrentStep();
+                        if (stepObj != null) {
+                            reasoning = stepObj.getReasoning();
+                            // If playbook is not recording, it's a replay of an existing step
+                            if (!playbook.isRecording() && stepObj.getPromptLine() != null
+                                    && stepObj.getPromptLine().equals(instruction)) {
+                                isReplay = true;
+                            }
+                        }
+
+                        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction, reasoning,
+                                isReplay);
+
+                        // Block and wait for the user to approve the actions
+                        waitForHudAction(true);
+                        hasApprovedCurrentStep = true;
+                    }
+
+                    // Check if LLM returned a SPLIT action
+                    int splitActionIndex = -1;
+                    for (int aIdx = 0; aIdx < actions.size(); aIdx++)
+                    {
+                        if ("SPLIT".equals(actions.get(aIdx).getType()))
+                        {
+                            splitActionIndex = aIdx;
+                            break;
+                        }
+                    }
+
+                    if (splitActionIndex != -1)
+                    {
+                        final Action splitAction = actions.get(splitActionIndex);
+                        final String remainingInstruction = splitAction.getValue();
+                        if (remainingInstruction != null && !remainingInstruction.trim().isEmpty())
+                        {
+                            LOG.info("✂️ Runtime SPLIT action detected. Remaining: '{}'", remainingInstruction);
+
+                            // 1. Get preceding actions
+                            final List<Action> precedingActions = new ArrayList<>(actions.subList(0, splitActionIndex));
+
+                            // 2. Execute preceding actions
+                            final long originalTimeout = com.codeborne.selenide.Configuration.timeout;
+                            if (customTimeoutMs != null)
+                            {
+                                com.codeborne.selenide.Configuration.timeout = customTimeoutMs;
+                            }
+                            try
+                            {
+                                actionExecutor.executeAll(precedingActions);
+                            }
+                            finally
+                            {
+                                if (customTimeoutMs != null)
+                                {
+                                    com.codeborne.selenide.Configuration.timeout = originalTimeout;
+                                }
+                            }
+                            accumulatedActions.addAll(precedingActions);
+
+                            // 3. Update current playbook step
+                            final String firstPartPrompt = deriveFirstPartPrompt(instruction, remainingInstruction);
+                            stepDetails.setOriginalUnsplitInstruction(unresolvedInstruction);
+                            if (playbook.isRecording())
+                            {
+                                final PlaybookStep currentPbStep = playbook.getCurrentStep();
+                                currentPbStep.setPromptLine(firstPartPrompt);
+                                currentPbStep.setOriginalUnsplitInstruction(unresolvedInstruction);
+                                currentPbStep.setActions(new ArrayList<>(precedingActions));
+                                playbook.setChanged(true);
+                            }
+
+                            // 4. Insert remaining instruction in stepsList, stepLines, result.getSteps()
+                            final int nextStepIndex = stepIndex + 1;
+                            stepsList.set(stepIndex, firstPartPrompt);
+                            stepsList.add(nextStepIndex, remainingInstruction);
+                            if (nextStepIndex <= stepLines.size())
+                            {
+                                stepLines.add(nextStepIndex, currentLineNumber);
+                            }
+                            else
+                            {
+                                stepLines.add(currentLineNumber);
+                            }
+
+                            final StepDetails nextStepDetails = new StepDetails(remainingInstruction);
+                            nextStepDetails.setOriginalUnsplitInstruction(unresolvedInstruction);
+                            result.getSteps().add(nextStepIndex, nextStepDetails);
+
+                            // 5. Insert remaining step in playbook
+                            if (playbook.isRecording())
+                            {
+                                final PlaybookStep nextPbStep = new PlaybookStep();
+                                nextPbStep.setPromptLine(remainingInstruction);
+                                nextPbStep.setOriginalUnsplitInstruction(unresolvedInstruction);
+                                nextPbStep.setReasoning("Split remainder from: " + instruction);
+                                if (playbook.getSteps().size() > playbook.getCursor() + 1)
+                                {
+                                    playbook.getSteps().add(playbook.getCursor() + 1, nextPbStep);
+                                }
+                                else
+                                {
+                                    playbook.getSteps().add(nextPbStep);
+                                }
+                                playbook.setChanged(true);
+                            }
+
+                            // 6. Advance playbook cursor and return immediately
+                            playbook.nextStep();
+                            return;
+                        }
+                    }
+
+                    // Execute the approved actions via Selenium/WebDriver, applying timeout isolation
+                    final long originalTimeout = com.codeborne.selenide.Configuration.timeout;
+                    final long stepTimeoutMs;
+                    if (customTimeoutMs != null)
+                    {
+                        stepTimeoutMs = customTimeoutMs;
+                    }
+                    else
+                    {
+                        long detectedTimeout = originalTimeout;
+                        // Check if there is a WAIT action in the list to dynamically adjust Selenide timeout
+                        for (final Action act : actions)
+                        {
+                            if ("WAIT".equals(act.getType()))
+                            {
+                                long waitTimeout = 10000;
+                                final String val = act.getValue();
+                                if (val != null && !val.isBlank())
+                                {
+                                    try
+                                    {
+                                        waitTimeout = Long.parseLong(val);
+                                    }
+                                    catch (final NumberFormatException ignored)
+                                    {
+                                    }
+                                }
+                                // If the step previously failed and has a target element, extend the timeout to 20000 ms
+                                final PlaybookStep pbStep = playbook != null ? playbook.getCurrentStep() : null;
+                                if (pbStep != null && pbStep.failed() && act.getTarget() != null && !act.getTarget().isBlank())
+                                {
+                                    waitTimeout = 20000;
+                                    // Also update the action's value so it's recorded correctly in the playbook
+                                    act.setValue(List.of("20000"));
+                                }
+                                detectedTimeout = Math.max(detectedTimeout, waitTimeout);
+                            }
+                        }
+                        stepTimeoutMs = detectedTimeout;
+                    }
+
+                    com.codeborne.selenide.Configuration.timeout = stepTimeoutMs;
+                    try
+                    {
+                        actionExecutor.executeAll(actions);
+                    }
+                    finally
+                    {
+                        com.codeborne.selenide.Configuration.timeout = originalTimeout;
+                    }
+
+                    // Accumulate executed actions
+                    accumulatedActions.addAll(actions);
+
+                    // If LLM returned "done": false and we are in recording/healing mode, loop to
+                    // ask for subsequent turns
+                    if (playbook.isRecording() && !this.lastLlmDone) {
+                        LOG.info(
+                                "    🔄 Multi-stage compound step: LLM indicated 'done: false'. Looping for next actions...");
+                        continue;
+                    }
+
+                    break;
+                }
+
+                // If recording, assign all accumulated actions to the current playbook step
+                if (playbook != null && playbook.getCursor() == cursorBefore)
+                {
+                    final PlaybookStep finalStep = playbook.getCurrentStep();
+                    if (playbook.isRecording() && finalStep != null)
+                    {
+                        finalStep.setActions(new ArrayList<>(accumulatedActions));
+                        playbook.setChanged(true);
+                    }
+
+                    // Move the playbook cursor forward upon successful execution of all compound actions
+                    playbook.nextStep();
+                }
+
+                break;
+            } catch (final ActionExecutionException e) {
+                if (optionalStep) {
+                    LOG.warn("    ⚠️ Optional/Soft step failed: {}. Bypassing failure due to optional/soft tag.",
+                            e.getMessage());
+                    executionLog.logWarning("Optional step failed: " + e.getMessage() + ". Bypassing failure.");
+                    final PlaybookStep step = playbook.getCurrentStep();
+                    if (playbook.isRecording() && step != null) {
+                        step.setPromptLine(instruction);
+                        step.setReasoning("Optional step execution failed: " + e.getMessage());
+                        playbook.setChanged(true);
+                    }
+                    playbook.nextStep();
+                    return;
+                }
+
+                if (expectedFailure)
+                {
+                    if (isInteractive)
+                    {
+                        promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                    }
+                    handleExpectedFailure(playbook.getCurrentStep(), instruction, unresolvedInstruction, bugId, e,
+                            playbook);
+                    return;
+                }
+
+                final PlaybookStep step = playbook.getCurrentStep();
+
+                if (!playbook.isRecording() && step.getPromptLine() != null
+                        && step.getPromptLine().equals(instruction) && !step.failed()
+                        && playbookReplayAttempts < 1) {
+                    playbookReplayAttempts++;
+                    LOG.info(
+                            "    🔄 Playbook replay action failed due to transient/timing issue. Retrying recorded actions first (Attempt {})...",
+                            playbookReplayAttempts);
+                    executionLog.logWarning("Playbook replay action failed. Retrying recorded actions first...");
+                    continue;
+                }
+
+                if (isDirectInstruction(instruction))
+                {
+                    final Throwable finalThrowable = e.getCause() != null ? e.getCause() : e;
+                    recordVisualFailureIfRecording(unresolvedInstruction, finalThrowable, playbook);
+                    SelenideAddons.wrapAssertionError(() -> {
+                        throw new AssertionError(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, " (direct shortcut):\n\n") + finalThrowable.getMessage(), finalThrowable);
+                    });
+                }
+
+                // something went wrong, but we can try to retry
+                step.setFailure(e);
+
+                // Escalate Context Level
+                boolean escalatedOk = false;
+                if (!isDirectInstruction(instruction)) {
+                    final ContextLevel currentLevel = step.getHealedContextLevel() != null
+                            ? step.getHealedContextLevel()
+                            : getInitialContextLevel(instruction);
+                    final ContextLevel escalated = currentLevel.escalate();
+                    if (escalated != null) {
+                        step.setHealedContextLevel(escalated);
+                        LOG.info("    📈 Escalating context from {} to {} after execution error: {}", currentLevel,
+                                escalated, e.getMessage());
+                        executionLog.logInfo("Context escalation: " + currentLevel + " → " + escalated + " (error: "
+                                + e.getMessage() + ")");
+                        final EscalationDetails escalation = new EscalationDetails(currentLevel, escalated, false, e.getMessage());
+                        result.getEscalations().add(escalation);
+                        if (stepDetails != null)
+                        {
+                            stepDetails.getEscalations().add(escalation);
+                        }
+                        llmClient.getAiStats().recordEscalation(false);
+                        escalatedOk = true;
+                        // Do not increment error count when escalating
+                    }
+                }
+
+                if (!escalatedOk) {
+                    errorCount++;
+                }
+
+                LOG.warn("    ⚠️ Actions failed: {}{} (Attempt {}/{})", e.getMessage(),
+                        formatFailureLogContext(currentLineNumber, sourceFile), errorCount, getMaxRetries() + 1);
+                executionLog.logWarning("Action failed: " + e + ". Retrying...");
+
+                if (errorCount > getMaxRetries()) {
+                    final Throwable finalThrowable = e.getCause() != null ? e.getCause() : e;
+                    executionLog.logError("Max retries for errors reached.");
+                    if (isInteractive) {
+                        final List<String> plannedStrs = new ArrayList<>();
+                        plannedStrs.add("⚠️ " + instruction);
+                        if (futureInstructions != null) {
+                            plannedStrs.addAll(futureInstructions);
+                        }
+                        if (this.autoSkip) {
+                            logPauseReason("Action Failed with Error: " + e.getMessage());
+                        }
+                        this.autoSkip = false;
+                        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                                "Max retries reached: " + e.getMessage(), false);
+                        waitForHudAction(false); // Never auto-skip errors
+                        errorCount = 0;
+                    }
+                    else
+                    {
+                        recordVisualFailureIfRecording(unresolvedInstruction, finalThrowable, playbook);
+                        SelenideAddons.wrapAssertionError(() -> {
+                            throw new AssertionError(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, " (" + (getMaxRetries() + 1)
+                                    + " tries):\n\n") + finalThrowable.getMessage(), finalThrowable);
+                        });
+                    }
+                } else {
+                    // Wait before retry
+                    if (isInteractive) {
+                        final List<String> plannedStrs = new ArrayList<>();
+                        plannedStrs.add("⚠️ " + instruction);
+                        if (futureInstructions != null) {
+                            plannedStrs.addAll(futureInstructions);
+                        }
+                        if (this.autoSkip) {
+                            logPauseReason("Action Failed: " + e.getMessage());
+                        }
+                        this.autoSkip = false;
+                        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                                "Action Failed: " + e.getMessage(), false);
+                        waitForHudAction(false); // Never auto-skip errors
+                    } else {
+                        sleep(1000);
+                    }
+                }
+            } catch (final HudActionException e) {
+                throw e; // Rethrow to be caught by the outer loop
+            } catch (final AssertionError e) {
+                if (e instanceof DefinitiveAssertionError) {
+                    if (expectedFailure) {
+                        if (isInteractive) {
+                            promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                        }
+                        handleExpectedFailure(playbook.getCurrentStep(), instruction, unresolvedInstruction, bugId, e, playbook);
+                        return;
+                    }
+                    final PlaybookStep step = playbook.getCurrentStep();
+                    if (step != null) {
+                        step.setFailure(new ActionExecutionException(e.getMessage(), e));
+                    }
+                    if (isInteractive)
+                    {
+                        final List<String> plannedStrs = new ArrayList<>();
+                        plannedStrs.add("⚠️ " + instruction);
+                        if (futureInstructions != null)
+                        {
+                            plannedStrs.addAll(futureInstructions);
+                        }
+                        if (this.autoSkip)
+                        {
+                            logPauseReason("Assertion Failed: " + e.getMessage());
+                        }
+                        this.autoSkip = false;
+                        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                                "Assertion Failed: " + e.getMessage(), false);
+                        waitForHudAction(false); // Never auto-skip errors
+                    }
+                    else
+                    {
+                        recordVisualFailureIfRecording(unresolvedInstruction, e, playbook);
+                        throw e;
+                    }
+                }
+                if (optionalStep) {
+                    LOG.warn(
+                            "    ⚠️ Optional/Soft step assertion failed: {}. Bypassing failure due to optional/soft tag.",
+                            e.getMessage());
+                    executionLog
+                            .logWarning("Optional step assertion failed: " + e.getMessage() + ". Bypassing failure.");
+                    final PlaybookStep step = playbook.getCurrentStep();
+                    if (playbook.isRecording() && step != null) {
+                        step.setPromptLine(instruction);
+                        step.setReasoning("Optional step assertion failed: " + e.getMessage());
+                        playbook.setChanged(true);
+                    }
+                    playbook.nextStep();
+                    return;
+                }
+                final PlaybookStep step = playbook.getCurrentStep();
+                if (!playbook.isRecording() && step.getPromptLine() != null
+                        && step.getPromptLine().equals(instruction) && !step.failed()
+                        && playbookReplayAttempts < 1)
+                {
+                    playbookReplayAttempts++;
+                    LOG.info(
+                            "    🔄 Playbook replay action failed due to transient/timing issue. Retrying recorded actions first (Attempt {})...",
+                            playbookReplayAttempts);
+                    executionLog.logWarning("Playbook replay action failed. Retrying recorded actions first...");
+                    continue;
+                }
+
+                if (expectedFailure)
+                {
+                    if (isInteractive)
+                    {
+                        promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                    }
+                    handleExpectedFailure(step, instruction, unresolvedInstruction, bugId, e, playbook);
+                    return;
+                }
+
+                step.setFailure(new ActionExecutionException(e.getMessage(), e));
+
+                // Escalate Context Level before bubbling up
+                boolean escalatedOk = false;
+                if (!isDirectInstruction(instruction)) {
+                    final ContextLevel currentLevel = step.getHealedContextLevel() != null
+                            ? step.getHealedContextLevel()
+                            : getInitialContextLevel(instruction);
+                    final ContextLevel escalated = currentLevel.escalate();
+                    if (escalated != null) {
+                        step.setHealedContextLevel(escalated);
+                        LOG.info("    📈 Escalating context from {} to {} after assertion failure: {}", currentLevel,
+                                escalated, e.getMessage());
+                        executionLog.logInfo("Context escalation: " + currentLevel + " → " + escalated
+                                + " (assertion failed: " + e.getMessage() + ")");
+                        final EscalationDetails escalation = new EscalationDetails(currentLevel, escalated, false, e.getMessage());
+                        result.getEscalations().add(escalation);
+                        if (stepDetails != null)
+                        {
+                            stepDetails.getEscalations().add(escalation);
+                        }
+                        llmClient.getAiStats().recordEscalation(false);
+                        escalatedOk = true;
+
+                        LOG.warn("    ⚠️ Assertion failed: {}{}. Retrying with escalated context.", e.getMessage(),
+                                formatFailureLogContext(currentLineNumber, sourceFile));
+
+                        if (isInteractive) {
+                            final List<String> plannedStrs = new ArrayList<>();
+                            plannedStrs.add("⚠️ " + instruction);
+                            if (futureInstructions != null) {
+                                plannedStrs.addAll(futureInstructions);
+                            }
+                            if (this.autoSkip) {
+                                logPauseReason("Assertion Failed: " + e.getMessage());
+                            }
+                            this.autoSkip = false;
+                            Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                                    performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                                    "Assertion Failed: " + e.getMessage(), false);
+                            waitForHudAction(false); // Never auto-skip errors
+                        } else {
+                            sleep(1000);
+                        }
+                        continue;
+                    }
+                }
+
+                if (!escalatedOk)
+                {
+                    LOG.warn("    ⚠️ Assertion failed: {}{}. Retrying step.", e.getMessage(), formatFailureLogContext(currentLineNumber, sourceFile));
+                    executionLog.logError("Assertion failed: " + e.getMessage() + ". Retrying step.");
+                }
+
+                if (isInteractive) {
+                    final List<String> plannedStrs = new ArrayList<>();
+                    plannedStrs.add("⚠️ " + instruction);
+                    if (futureInstructions != null) {
+                        plannedStrs.addAll(futureInstructions);
+                    }
+                    if (this.autoSkip) {
+                        logPauseReason("Assertion Failed: " + e.getMessage());
+                    }
+                    this.autoSkip = false;
+                    Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                            "Assertion Failed: " + e.getMessage(), false);
+                    waitForHudAction(false); // Never auto-skip errors
+                }
+                else
+                {
+                    recordVisualFailureIfRecording(unresolvedInstruction, e, playbook);
+                    throw new AssertionError(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\n" + e.getMessage()), e);
+                }
+            }
+            catch (final Exception e)
+            {
+                if (optionalStep)
+                {
+                    LOG.warn("    ⚠️ Optional/Soft step unexpected error: {}. Bypassing failure due to optional/soft tag.", e.getMessage());
+                    executionLog.logWarning("Optional step unexpected error: " + e.getMessage() + ". Bypassing failure.");
+                    final PlaybookStep step = playbook.getCurrentStep();
+                    if (playbook.isRecording() && step != null) {
+                        step.setPromptLine(instruction);
+                        step.setReasoning("Optional step unexpected error: " + e.getMessage());
+                        playbook.setChanged(true);
+                    }
+                    playbook.nextStep();
+                    return;
+                }
+                final PlaybookStep step = playbook.getCurrentStep();
+                if (expectedFailure)
+                {
+                    if (isInteractive)
+                    {
+                        promptUserOnExpectedFailure(instruction, unresolvedInstruction, futureInstructions, performedInstructions, e);
+                    }
+                    handleExpectedFailure(step, instruction, unresolvedInstruction, bugId, e, playbook);
+                    return;
+                }
+
+                LOG.error("Unexpected error executing step: {}{}", instruction,
+                        formatFailureLogContext(currentLineNumber, sourceFile), e);
+                if (isInteractive) {
+                    final List<String> plannedStrs = new ArrayList<>();
+                    plannedStrs.add("⚠️ " + instruction);
+                    if (futureInstructions != null) {
+                        plannedStrs.addAll(futureInstructions);
+                    }
+                    if (this.autoSkip) {
+                        logPauseReason("Unexpected Error: " + e.getMessage());
+                    }
+                    this.autoSkip = false;
+                    Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                            performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                            "Unexpected Error: " + e.getMessage(), false);
+                    waitForHudAction(false); // Never auto-skip errors
+                }
+                else
+                {
+                    recordVisualFailureIfRecording(unresolvedInstruction, e, playbook);
+                    SelenideAddons.wrapAssertionError(() -> {
+                        throw new AiAgentException(formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\nUnexpected error executing step: " + instruction), e);
+                    });
+                }
+            }
+        }
+
+        if (expectedFailure)
+        {
+            final String msg = formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ": Expected step to fail with " + (bugId != null ? "bug: " + bugId : "expected failure") + ", but it succeeded.");
+            LOG.error("    ❌ {}", msg);
+            throw new AssertionError(msg);
+        }
+    }
+
+    private static String formatFailureMessage(final String instruction, final String originalUnsplitInstruction, final String lineNumber, final String sourceFile, final String suffix)
+    {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("Instruction '").append(instruction).append("'");
+        if (originalUnsplitInstruction != null)
+        {
+            sb.append(" (virtual step split from: '").append(originalUnsplitInstruction).append("')");
+        }
+        sb.append(" failed");
+        if (lineNumber != null)
+        {
+            if (lineNumber.contains(":") || lineNumber.contains("->"))
+            {
+                sb.append(" at ").append(lineNumber);
+            }
+            else
+            {
+                sb.append(" at line ").append(lineNumber);
+            }
+        }
+        if (sourceFile != null && !Objects.equals(lineNumber, sourceFile))
+        {
+            sb.append(" in ").append(sourceFile);
+        }
+        sb.append(suffix);
+        return sb.toString();
+    }
+
+    private static String formatFailureLogContext(final String lineNumber, final String sourceFile)
+    {
+        if (lineNumber == null && sourceFile == null)
+        {
+            return "";
+        }
+        final StringBuilder sb = new StringBuilder();
+        sb.append(" (");
+        if (sourceFile != null)
+        {
+            final String fileName = new File(sourceFile).getName();
+            if (lineNumber != null && lineNumber.contains(":"))
+            {
+                sb.append(lineNumber);
+            }
+            else
+            {
+                sb.append(fileName);
+                if (lineNumber != null)
+                {
+                    sb.append(":").append(lineNumber);
+                }
+            }
+        }
+        else
+        {
+            if (lineNumber.contains(":"))
+            {
+                sb.append(lineNumber);
+            }
+            else
+            {
+                sb.append("line ").append(lineNumber);
+            }
+        }
+        sb.append(")");
+        return sb.toString();
+    }
+
+    private void handleExpectedFailure(final PlaybookStep step, final String instruction, final String unresolvedInstruction,
+            final String bugId, final Throwable t, final Playbook playbook)
+    {
+        final boolean isVisual = unresolvedInstruction.toLowerCase().contains("(visual)")
+                || unresolvedInstruction.toLowerCase().contains("(glance)")
+                || unresolvedInstruction.toLowerCase().contains("(layout)");
+        final String errorType = t.getClass().getName();
+        final String errorMessage = t.getMessage() != null ? t.getMessage() : "";
+
+        if (playbook.isRecording()) {
+            LOG.info("    🎯 Recording expected failure for bug: {} (Error Type: {}, Message: {})", bugId, errorType,
+                    errorMessage);
+            step.setExpectedFailure(true);
+            step.setBugId(bugId);
+            step.setExpectedErrorType(errorType);
+            step.setExpectedErrorMessage(errorMessage);
+            step.setPromptLine(instruction);
+            if (step.getReasoning() == null || step.getReasoning().isEmpty()) {
+                step.setReasoning("Expected failure recorded for bug: " + (bugId != null ? bugId : "unspecified"));
+            }
+
+            if (isVisual) {
+                try {
+                    final String screenshot = pageAnalyzer.captureScreenshot("Defective State: " + instruction);
+                    final String dHash = ScreenshotHasher.computeHash(screenshot);
+                    step.setScreenshotHash(dHash);
+                    LOG.info("    📸 Captured defective state screenshot dHash: {}", dHash);
+                } catch (final Exception ex) {
+                    LOG.warn("    ⚠️ Failed to capture defective state screenshot: {}", ex.getMessage());
+                }
+            }
+            playbook.setChanged(true);
+            playbook.nextStep();
+            throw new ExpectedFailureAbortException(bugId, t);
+        } else {
+            LOG.info(
+                    "    🔍 Replaying expected failure for bug: {}. Proceeding successfully because the step failed as expected.",
+                    bugId);
+
+            if (isVisual && step.getScreenshotHash() != null) {
+                try {
+                    final String screenshot = pageAnalyzer
+                            .captureScreenshot("Defective State Verification: " + instruction);
+                    final String currentHash = ScreenshotHasher.computeHash(screenshot);
+                    final int distance = ScreenshotHasher.getHammingDistance(step.getScreenshotHash(), currentHash);
+                    LOG.info(
+                            "    📊 Defective State Screenshot dHash comparison: Distance = {}, Recorded: {}, Current: {}",
+                            distance, step.getScreenshotHash(), currentHash);
+
+                    if (distance > 15) {
+                        final String msg = "Visual defect appearance changed! Defective state screenshot mismatch (Hamming distance "
+                                + distance + " > 15).";
+                        LOG.error("    ❌ {}", msg);
+                        throw new AssertionError(msg, t);
+                    }
+                    LOG.info("    ✅ Visual defect appearance verified (Hamming distance {} <= 15).", distance);
+                } catch (final Exception ex) {
+                    LOG.error("    ❌ Error during defective state visual hash comparison", ex);
+                    throw new AssertionError(
+                            "Error during defective state visual hash verification: " + ex.getMessage(), t);
+                }
+            }
+
+            LOG.info("    ✅ Expected failure verified (step failed). Proceeding successfully!");
+            executionLog.logInfo(
+                    "Expected failure verified (step failed) (Bug: " + (bugId != null ? bugId : "unspecified") + ").");
+            playbook.nextStep();
+            throw new ExpectedFailureAbortException(bugId, t);
+        }
+    }
+
+    /**
+     * Blocks the current execution thread and polls the interactive HUD for user
+     * action.
+     * <p>
+     * Implements a polling loop that checks for user input every second, up to a
+     * maximum
+     * of 1 hour (3600 seconds). Depending on the user's input, it parses the JSON
+     * response
+     * and throws a specific {@link HudActionException} to signal the outer
+     * execution loop
+     * to modify its state (e.g., skip, rewind, add, edit).
+     *
+     * @param allowAutoSkip whether to immediately return if the user has enabled
+     *                      auto-skip
+     * @throws HudActionException thrown to control the flow of the main execution
+     *                            loop
+     */
+    private void waitForHudAction(final boolean allowAutoSkip) throws HudActionException {
+        if (allowAutoSkip && this.autoSkip) {
+            final Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
+            if (s != null) {
+                this.autoSkip = s;
+            }
+            if (this.autoSkip) {
+                Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                return;
+            }
+        }
+
+        if (com.codeborne.selenide.Configuration.headless
+                && !Boolean.getBoolean("neodymium.ai.interactive.allowHeadlessHUD")) {
+            throw new RuntimeException("HUD prompted for manual user interaction (allowAutoSkip=" + allowAutoSkip
+                    + ", autoSkip=" + this.autoSkip
+                    + ") but the test is running in HEADLESS mode. Aborting execution to prevent hanging.");
+        }
+
+        LOG.info("Waiting for user action in HUD...");
+        boolean handled = false;
+        for (int wait = 0; wait < 3600; wait++) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new RuntimeException("Thread was interrupted, halting agent execution.");
+            }
+            if (allowAutoSkip) {
+                final Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
+                if (s != null) {
+                    this.autoSkip = s;
+                }
+                if (this.autoSkip) {
+                    return;
+                }
+            }
+
+            final String hudActionStr = Neodymium.getOrCreateInteractiveHud().checkHudAction();
+            if (hudActionStr != null) {
+
+                final JsonObject actionObj = JsonParser.parseString(hudActionStr)
+                        .getAsJsonObject();
+                final String actionType = actionObj.has("action") ? actionObj.get("action").getAsString() : "";
+
+                HudActionType typeEnum = null;
+                try {
+                    typeEnum = HudActionType.valueOf(actionType);
+                } catch (IllegalArgumentException e) {
+                    // Ignore unknown actions
+                }
+
+                if (typeEnum == HudActionType.APPROVE) {
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    handled = true;
+                    break;
+                } else if (typeEnum == HudActionType.SKIP) {
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    throw new HudActionException(HudActionType.SKIP, null, 0);
+                } else if (typeEnum == HudActionType.REWIND) {
+                    final int rIdx = actionObj.get("index").getAsInt();
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    throw new HudActionException(HudActionType.REWIND, null, rIdx);
+                } else if (typeEnum == HudActionType.ADD) {
+                    final String instructionAdd = actionObj.get("instruction").getAsString();
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    throw new HudActionException(HudActionType.ADD, instructionAdd, 0);
+                } else if (typeEnum == HudActionType.EDIT) {
+                    final String instructionEdit = actionObj.get("instruction").getAsString();
+                    final int eIdx = actionObj.has("index") ? actionObj.get("index").getAsInt() : 0;
+                    final Map<String, String> bindingsMap = new HashMap<>();
+                    if (actionObj.has("bindings")) {
+                        final JsonObject bObj = actionObj.getAsJsonObject("bindings");
+                        for (String key : bObj.keySet()) {
+                            bindingsMap.put(key, bObj.get(key).getAsString());
+                        }
+                    }
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    throw new HudActionException(HudActionType.EDIT, instructionEdit, eIdx, bindingsMap);
+                } else if (typeEnum == HudActionType.APPEND) {
+                    final String instructionAppend = actionObj.get("instruction").getAsString();
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    throw new HudActionException(HudActionType.APPEND, instructionAppend, 0);
+                } else if (typeEnum == HudActionType.REORDER) {
+                    final int fromIdx = actionObj.get("from").getAsInt();
+                    final int toIdx = actionObj.get("to").getAsInt();
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    throw new HudActionException(HudActionType.REORDER, null, fromIdx, toIdx, null, null);
+                } else if (typeEnum == HudActionType.SETTINGS) {
+                    final String settingsPayload = actionObj.get("payload").getAsString();
+                    Neodymium.getOrCreateInteractiveHud().saveSettings(settingsPayload);
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    continue; // Settings handled internally, keep waiting
+                } else if (typeEnum == HudActionType.SAVE_EXIT) {
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    throw new HudActionException(HudActionType.SAVE_EXIT, null, 0);
+                } else if (typeEnum == HudActionType.DUMP) {
+                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    try {
+                        String dom = pageAnalyzer.getPageContext(ContextLevel.VISUAL);
+                        String history = AiAgentPrompts.buildStepHistory(Neodymium.getAiPlaybook());
+
+                        StringBuilder rawDom = new StringBuilder();
+                        try {
+                            com.codeborne.selenide.Selenide.switchTo().defaultContent();
+                            rawDom.append("<!-- MAIN PAGE -->\n");
+                            rawDom.append((String) com.codeborne.selenide.Selenide
+                                    .executeJavaScript("return document.documentElement.outerHTML;"));
+
+                            com.codeborne.selenide.ElementsCollection frames = com.codeborne.selenide.Selenide
+                                    .$$("iframe, frame");
+                            for (int f = 0; f < frames.size(); f++) {
+                                try {
+                                    com.codeborne.selenide.Selenide.switchTo().frame(frames.get(f));
+                                    rawDom.append("\n\n<!-- IFRAME ").append(f).append(" -->\n");
+                                    rawDom.append((String) com.codeborne.selenide.Selenide
+                                            .executeJavaScript("return document.documentElement.outerHTML;"));
+                                } catch (Exception ignored) {
+                                } finally {
+                                    com.codeborne.selenide.Selenide.switchTo().defaultContent();
+                                }
+                            }
+                        } catch (Exception e) {
+                            rawDom.append("\nError extracting raw DOM: ").append(e.getMessage());
+                        }
+
+                        long timestamp = System.currentTimeMillis();
+                        String content = "======== AI DEBUG DUMP ========\n\n" +
+                                "--- SUT CONTEXT ---\n" + sutContext + "\n\n" +
+                                "--- HISTORY ---\n" + history + "\n\n" +
+                                "--- AI PARSED DOM ---\n" + dom + "\n";
+                        java.io.File txtFile = new java.io.File("tmp/neodymium-ai-dump-" + timestamp + ".txt");
+                        java.io.File htmlFile = new java.io.File("tmp/neodymium-ai-dump-" + timestamp + ".html");
+                        if (!txtFile.getParentFile().exists())
+                            txtFile.getParentFile().mkdirs();
+                        java.nio.file.Files.writeString(txtFile.toPath(), content);
+                        java.nio.file.Files.writeString(htmlFile.toPath(), rawDom.toString());
+                        LOG.info(
+                                "Debug context dumped to: " + txtFile.getAbsolutePath() + " and " + htmlFile.getName());
+                    } catch (Exception e) {
+                        LOG.error("Failed to dump context", e);
+                    }
+                    continue; // Keep waiting
+                }
+            }
+            sleep(1000);
+        }
+        if (!handled) {
+            throw new RuntimeException("User did not approve the actions within 1 hour. Halting execution.");
+        }
+        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+    }
+
+    private List<Action> getStepActions(final int stepIndex, final String instruction, final String unresolvedInstruction, final Playbook playbook,
+            final boolean expectedFailure, final String bugId, final List<Action> accumulatedActions,
+            final StepDetails stepDetails, final AiExecutionResult result) {
+        List<Action> actions = new ArrayList<Action>();
+        PlaybookStep step = playbook.getCurrentStep();
+        boolean visualMatchSucceeded = false;
+
+        final boolean isNoReplay = (unresolvedInstruction != null && unresolvedInstruction.toLowerCase().contains("(no-replay)"))
+                || (stepDetails != null && stepDetails.getOriginalUnsplitInstruction() != null && stepDetails.getOriginalUnsplitInstruction().toLowerCase().contains("(no-replay)"));
+
+        // 1. Are we replaying a playbook?
+        if (!isNoReplay && (playbook.isRecording() == false || (step.getPromptLine() != null && step.getPromptLine().equals(instruction)
+                && !step.getActions().isEmpty() && !step.failed())))
+        {
+            if (playbook.isRecording() == false && step.isExpectedFailure())
+            {
+                llmClient.getAiStats().recordReplay();
+                stepDetails.setReplayed(true);
+                final String errorMsg = step.getExpectedErrorMessage() != null ? step.getExpectedErrorMessage() : "Recorded expected failure";
+                throw new ActionExecutionException(errorMsg, null);
+            }
+            // Only if we are not trying to heal a step
+            if (step.failed() == false) {
+                // Check if the prompt is still the same, or if we are at the end of the
+                // playbook
+                if (step.getPromptLine() == null || step.getPromptLine().equals(instruction) == false) {
+                    // prompt change found, or new step at the end of playbook!
+                    final String msg = "Prompt differs from recording or new instruction. Old: '" + step.getPromptLine()
+                            + "', New: '"
+                            + instruction + "'. Starting new recording.";
+                    AllureAddons.addInfoBeforeStep("Playbook Change: " + msg);
+                    executionLog.logWarning(msg);
+                    playbook.setRecording(true);
+                    playbook.removeFutureSteps();
+                    step = playbook.getCurrentStep();
+                } else {
+                    if (step.getScreenshotHash() != null && !step.isExpectedFailure()) {
+                        LOG.info("    🔍 Step has visual screenshot hash recorded. Verifying visual match first...");
+                        try {
+                            final String currentScreenshot = pageAnalyzer.captureScreenshot("Replay: " + instruction);
+                            final String currentHash = ScreenshotHasher.computeHash(currentScreenshot);
+                            final int distance = ScreenshotHasher.getHammingDistance(step.getScreenshotHash(),
+                                    currentHash);
+                            LOG.info(
+                                    "    📊 Replay Screenshot dHash comparison: Distance = {}, Recorded: {}, Current: {}",
+                                    distance, step.getScreenshotHash(), currentHash);
+
+                            if (distance <= 15) {
+                                LOG.info(
+                                        "    ✅ Visual match succeeded (Hamming distance {} <= 15). Proceeding with recorded actions.",
+                                        distance);
+                                if (!step.getActions().isEmpty())
+                                {
+                                    final ContextLevel levelToUse = step.getHealedContextLevel() != null
+                                            ? step.getHealedContextLevel()
+                                            : ContextLevel.LEAN;
+                                    pageAnalyzer.getPageContext(levelToUse);
+                                }
+                                executionLog.logInfo(
+                                        "Replaying actions from playbook (visual match succeeded, Hamming distance: "
+                                                + distance + ").");
+                                llmClient.getAiStats().recordReplay();
+                                stepDetails.setReplayed(true);
+                                actions.addAll(step.getActions());
+                                visualMatchSucceeded = true;
+                            } else {
+                                LOG.warn(
+                                        "    ⚠️ Visual match failed (Hamming distance {} > 15). The page's visual appearance has changed. Initiating self-healing/re-verification...",
+                                        distance);
+                                throw new ActionExecutionException(
+                                        "Visual screenshot hash mismatch (distance: " + distance + ")", null);
+                            }
+                        } catch (final ActionExecutionException e) {
+                            throw e;
+                        } catch (final Exception e) {
+                            LOG.error("    ❌ Error during replay visual hash comparison", e);
+                            throw new ActionExecutionException(
+                                    "Error during visual hash verification: " + e.getMessage(), e);
+                        }
+                    }
+                    else
+                    {
+                        final ContextLevel levelToUse = step.getHealedContextLevel() != null
+                                ? step.getHealedContextLevel()
+                                : ContextLevel.LEAN;
+                        pageAnalyzer.getPageContext(levelToUse);
+
+                        executionLog.logInfo("Replaying actions from playbook.");
+                        llmClient.getAiStats().recordReplay();
+                        stepDetails.setReplayed(true);
+                        actions.addAll(step.getActions());
+                    }
+                }
+            }
+        }
+
+        // 2. Try to identify the action intent upfront.
+        if (actions.isEmpty() && !visualMatchSucceeded)
+        {
+            actions = identifyActions(instruction, step, stepDetails);
+        }
+
+        // 3. Prepare Phase and LLM Check
+        boolean requiresLlm = actions.isEmpty() && !visualMatchSucceeded;
+        boolean requiresScreenshot = Neodymium.aiConfiguration().agentScreenshotBeforeAction();
+
+        if (!actions.isEmpty()) {
+            for (final Action a : actions) {
+                final AiActionPlugin plugin = a.getPlugin();
+                if (plugin != null) {
+                    try {
+                        plugin.prepare(a, actionExecutor);
+                    } catch (ActionExecutionException e) {
+                        LOG.warn("Failed to prepare action: {}", e.getMessage(), e);
+                    }
+                    if (plugin.requiresScreenshot(a)) {
+                        requiresScreenshot = true;
+                    }
+                    if (plugin.requiresLlm(a, actionExecutor)) {
+                        requiresLlm = true;
+                    }
+                }
+            }
+        }
+
+        if (requiresLlm) {
+            // Intent extracted, but it requires the LLM to process it fully (or actions
+            // empty)
+            actions = getActionsFromLLM(stepIndex, instruction, step, playbook, requiresScreenshot, expectedFailure,
+                    bugId, accumulatedActions, stepDetails, result);
+        } else {
+            // Simple action that can be executed directly, or local replay comparison
+            // succeeded
+            if (playbook.isRecording()) {
+                step.setPromptLine(instruction);
+                step.setReasoning("directly parsed or local validation succeeded");
+                step.setActions(actions);
+                if (stepDetails.getOriginalUnsplitInstruction() != null)
+                {
+                    step.setOriginalUnsplitInstruction(stepDetails.getOriginalUnsplitInstruction());
+                }
+                playbook.setChanged(true);
+            }
+        }
+
+        stepDetails.getActions().addAll(actions);
+        return actions;
+    }
+
+    /**
+     * Runs a JIT pre-step PESAP call for the given step index.
+     * Uses a 1-previous / current / 2-next flow context window.
+     * Results are cached per step index so retries don't re-trigger the call.
+     *
+     * @param stepIndex   the 0-based step index
+     * @param testClass   the active test class for method scanning, or {@code null}
+     * @param stepDetails the step details to populate with PESAP results
+     * @return the parsed result, or {@code null} if the call failed
+     */
+    private PreStepPesapResult runPreStepPesap(final int stepIndex, final Class<?> testClass,
+            final StepDetails stepDetails)
+    {
+        if (Boolean.getBoolean("neodymium.ai.offline") || this.currentStepsList == null)
+        {
+            return null;
+        }
+        if (stepDetails != null && stepDetails.isPesapCalled())
+        {
+            return new PreStepPesapResult(
+                    stepDetails.getPesapPredictedContextLevel(),
+                    stepDetails.isPesapRequiresJavaMethods(),
+                    List.of());
+        }
+        if (stepDetails != null)
+        {
+            stepDetails.setPesapCalled(true);
+        }
+        try
+        {
+            // Build 1-previous / current / 2-next flow context
+            final StringBuilder flowContext = new StringBuilder();
+            if (stepIndex > 0)
+            {
+                final String prev = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex - 1));
+                flowContext.append("[PREVIOUS] Step ").append(stepIndex).append(": ").append(stripAllTags(prev)).append("\n");
+            }
+            final String current = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex));
+            flowContext.append("[CURRENT]  Step ").append(stepIndex + 1).append(": ").append(stripAllTags(current)).append("\n");
+            if (stepIndex + 1 < this.currentStepsList.size())
+            {
+                final String next1 = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex + 1));
+                flowContext.append("[NEXT]     Step ").append(stepIndex + 2).append(": ").append(stripAllTags(next1)).append("\n");
+            }
+            if (stepIndex + 2 < this.currentStepsList.size())
+            {
+                final String next2 = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex + 2));
+                flowContext.append("[NEXT]     Step ").append(stepIndex + 3).append(": ").append(stripAllTags(next2)).append("\n");
+            }
+
+            // Build the JIT PESAP prompt
+            final String systemPrompt = AiAgentPrompts.getPesapPreStepPrompt();
+            final String userPrompt = "## Flow Context\n" + flowContext.toString();
+
+            LOG.debug("💬 [Pre-Step PESAP] Step {} — running analysis", stepIndex + 1);
+
+            final long startTime = System.currentTimeMillis();
+            final long pesapInBefore = llmClient.getAiStats().getPesapInputTokens();
+            final long pesapOutBefore = llmClient.getAiStats().getPesapOutputTokens();
+            final long pesapCachedBefore = llmClient.getAiStats().getPesapCachedInputTokens();
+
+            final String response;
+            try
+            {
+                response = llmClient.chat(LlmMode.PESAP, systemPrompt, userPrompt);
+            }
+            catch (final Exception e)
+            {
+                final Integer code = (e instanceof LlmHttpException) ? ((LlmHttpException) e).getStatusCode() : null;
+                if (stepDetails != null)
+                {
+                    stepDetails.setPesapCall(new LlmCallDetails(
+                            systemPrompt,
+                            userPrompt,
+                            null,
+                            null,
+                            0,
+                            null,
+                            null,
+                            null,
+                            0L,
+                            0L,
+                            0L,
+                            0L,
+                            e.getMessage(),
+                            code,
+                            LlmMode.PESAP
+                    ));
+                }
+                throw e;
+            }
+            final long duration = System.currentTimeMillis() - startTime;
+
+            LOG.debug("📊 [Pre-Step PESAP] Step {} — call took {} ms", stepIndex + 1, duration);
+
+            final long pesapInAfter = llmClient.getAiStats().getPesapInputTokens();
+            final long pesapOutAfter = llmClient.getAiStats().getPesapOutputTokens();
+            final long pesapCachedAfter = llmClient.getAiStats().getPesapCachedInputTokens();
+
+            final long callInputTokens = pesapInAfter - pesapInBefore;
+            final long callOutputTokens = pesapOutAfter - pesapOutBefore;
+            final long callCachedTokens = pesapCachedAfter - pesapCachedBefore;
+            final long callTotalTokens = callInputTokens + callOutputTokens;
+
+            String parsedJson = null;
+            try
+            {
+                parsedJson = this.actionParser.extractJson(response);
+            }
+            catch (final Exception e)
+            {
+                // Ignore
+            }
+
+            if (stepDetails != null)
+            {
+                stepDetails.setPesapCall(new LlmCallDetails(
+                        systemPrompt,
+                        userPrompt,
+                        null,
+                        null,
+                        0,
+                        null,
+                        response,
+                        parsedJson,
+                        callInputTokens,
+                        callOutputTokens,
+                        callCachedTokens,
+                        callTotalTokens,
+                        null,
+                        200,
+                        LlmMode.PESAP
+                ));
+            }
+
+            // Parse JSON response
+            final JsonObject responseObj = JsonParser.parseString(response).getAsJsonObject();
+            final String levelStr = responseObj.has("c")
+                    ? responseObj.get("c").getAsString() : null;
+            final ContextLevel level = levelStr != null
+                    ? ContextLevel.valueOf(levelStr.toUpperCase().trim())
+                    : getInitialContextLevel(current);
+
+            final boolean requiresJavaMethods = responseObj.has("jm")
+                    && responseObj.get("jm").getAsBoolean();
+
+            List<String> splitSteps = null;
+            if (responseObj.has("sp") && responseObj.get("sp").isJsonArray())
+            {
+                splitSteps = new ArrayList<>();
+                for (final JsonElement el : responseObj.getAsJsonArray("sp"))
+                {
+                    splitSteps.add(el.getAsString());
+                }
+            }
+            else
+            {
+                splitSteps = List.of();
+            }
+
+            final PreStepPesapResult result = new PreStepPesapResult(
+                level, requiresJavaMethods, splitSteps
+            );
+
+            // Populate StepDetails
+            stepDetails.setPesapPredictedContextLevel(level);
+            stepDetails.setPesapRequiresJavaMethods(requiresJavaMethods);
+
+            return result;
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("⚠️ Pre-Step PESAP failed for step {} — falling back to defaults: {}", stepIndex + 1, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Dedicated testing entry point for JIT pre-step PESAP analysis using a predefined list of steps.
+     * Sets the currentStepsList context and executes the classification.
+     *
+     * @param steps       the full list of test steps for flow context
+     * @param stepIndex   the active step index to analyze
+     * @param stepDetails the step details instance to populate
+     * @return the JIT pre-step PESAP result, or {@code null} if it failed
+     */
+    PreStepPesapResult runPreStepPesapForTest(final List<String> steps, final int stepIndex,
+            final StepDetails stepDetails)
+    {
+        this.currentStepsList = steps;
+        return this.runPreStepPesap(stepIndex, null, stepDetails);
+    }
+
+    /**
+     * Finds the registered {@link JavaMethodAction} plugin, if present.
+     *
+     * @return the plugin instance, or {@code null} if not registered
+     */
+    private JavaMethodAction findJavaMethodPlugin()
+    {
+        for (final AiActionPlugin plugin : ActionRegistry.getAllPlugins())
+        {
+            if (plugin instanceof JavaMethodAction)
+            {
+                return (JavaMethodAction) plugin;
+            }
+        }
+        return null;
+    }
+    /**
+     * Determines the initial context level for a given instruction.
+     * Case-insensitively checks for "(visual)" to start at VISUAL context level,
+     * and "(hint:" to start at HINT context level, falling back to LEAN.
+     *
+     * @param instruction the instruction to check
+     * @return the initial context level
+     */
+    private static final ContextLevel getInitialContextLevel(final String instruction)
+    {
+        final String lower = instruction.toLowerCase();
+        if (lower.contains("(visual)") || lower.contains("(glance)"))
+        {
+            return ContextLevel.VISUAL_LEAN;
+        }
+        else if (lower.contains("(hint:"))
+        {
+            return ContextLevel.HINT;
+        }
+        else
+        {
+            return ContextLevel.AXTREE;
+        }
+    }
+
+    private int getMaxRetries() {
+        if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.ai.agent.maxRetries")) {
+            try {
+                return Neodymium.getData().asInt("neodymium.ai.agent.maxRetries");
+            } catch (final Exception e) {
+                // ignore and fall back
+            }
+        }
+        return Neodymium.aiConfiguration().agentMaxRetries();
+    }
+
+    private List<Action> getActionsFromLLM(final int stepIndex, final String instruction,
+            final PlaybookStep playbookStep,
+            final Playbook playbook, final boolean requiresScreenshot, final boolean expectedFailure,
+            final String bugId, final List<Action> accumulatedActions,
+            final StepDetails stepDetails, final AiExecutionResult result)
+    {
+        if (Boolean.getBoolean("neodymium.ai.offline"))
+        {
+            throw new ActionExecutionException("Cannot query LLM client to self-heal in offline mode.", null);
+        }
+        // If we are inside a playbook replay and failed, we have an initial error
+        // already.
+        String lastError;
+        if (playbookStep.failed() && playbook.isRecording() == false) {
+            AllureAddons.printToReport("Self Heal Playbook step '" + playbookStep.getPromptLine() + "'");
+            lastError = playbookStep.getLastFailure();
+        } else {
+            lastError = null;
+        }
+
+        int errorCount = 0;
+        int noActionsCount = 0;
+        Throwable lastThrowable = null;
+        boolean lastWasNoActions = false;
+        boolean isRecoveryAttempt = lastError != null;
+
+        // Resolve test class for method targeting
+        final Object testInstance = actionExecutor.getTestInstance();
+        final Class<?> testClass = testInstance != null ? testInstance.getClass() : null;
+
+        // JIT Pre-Step PESAP: run once on initial attempt only, cache result
+        PreStepPesapResult pesapResult = null;
+        Set<String> targetedMethods = null;
+        boolean includeJavaMethod = true;
+
+        ContextLevel contextLevel = playbookStep.getHealedContextLevel();
+
+        if (contextLevel == null)
+        {
+            final ContextLevel baseLevel = getInitialContextLevel(instruction);
+            if (baseLevel == ContextLevel.AXTREE || baseLevel == ContextLevel.HINT)
+            {
+                if (stepDetails.isPesapCalled())
+                {
+                    contextLevel = stepDetails.getPesapPredictedContextLevel();
+                    includeJavaMethod = stepDetails.isPesapRequiresJavaMethods();
+                    LOG.info("    🔮 JIT PESAP retrieved cached ContextLevel: {}, requiresJavaMethods: {}", contextLevel, includeJavaMethod);
+                }
+                else if (baseLevel == ContextLevel.AXTREE && !isRecoveryAttempt && Neodymium.aiConfiguration().pesapEnabled())
+                {
+                    pesapResult = runPreStepPesap(stepIndex, testClass, stepDetails);
+                    if (pesapResult != null)
+                    {
+                        contextLevel = pesapResult.contextLevel();
+                        includeJavaMethod = pesapResult.requiresJavaMethods();
+                        targetedMethods = null;
+                        LOG.info("    🔮 JIT PESAP predicted ContextLevel: {}, requiresJavaMethods: {}", contextLevel, includeJavaMethod);
+                    }
+                }
+            }
+            else
+            {
+                if (stepDetails.isPesapCalled())
+                {
+                    includeJavaMethod = stepDetails.isPesapRequiresJavaMethods();
+                    LOG.info("    🔮 JIT PESAP retrieved cached requiresJavaMethods: {}", includeJavaMethod);
+                }
+            }
+
+            if (contextLevel == null)
+            {
+                contextLevel = baseLevel;
+            }
+        }
+
+        while (true) {
+            final String attemptLabel = lastWasNoActions ? "Retry (No Actions) " + noActionsCount
+                    : (lastError != null ? "Retry (Error) " + errorCount : "Initial Attempt");
+
+            executionLog.startAttempt(attemptLabel + " [" + contextLevel + "]");
+
+            try {
+                // 1. Capture page state at the CURRENT context level
+                final String domContext = pageAnalyzer.getPageContext(contextLevel);
+
+                // Screenshots: only at VISUAL level, or if explicitly requested by a plugin
+                final String screenshot = (contextLevel.includesScreenshot() || requiresScreenshot)
+                        ? pageAnalyzer.captureScreenshot("Step: " + instruction)
+                        : null;
+
+                // 2. Build step history — only during recovery attempts (retry, escalation,
+                // no-actions-retry) to give the LLM context about the test flow.
+                // First-attempt happy path gets no history to keep prompts lean.
+                String historyBlock = isRecoveryAttempt
+                        ? AiAgentPrompts.buildStepHistory(playbook)
+                        : "";
+                if (!accumulatedActions.isEmpty()) {
+                    final StringBuilder sb = new StringBuilder(historyBlock);
+                    if (sb.length() > 0 && !historyBlock.endsWith("\n")) {
+                        sb.append("\n");
+                    }
+                    sb.append("\n### Actions Executed In This Step So Far\n");
+                    int actNum = 1;
+                    for (final Action act : accumulatedActions) {
+                        sb.append(actNum++).append(". ").append(act.toString()).append("\n");
+                    }
+                    historyBlock = sb.toString();
+                }
+
+                // Dynamic Java methods block (static system prompt optimization)
+                final boolean useJavaMethod = isRecoveryAttempt ? true : includeJavaMethod;
+                final Set<String> useMethods = isRecoveryAttempt ? null : targetedMethods;
+
+                final String javaMethodsBlock;
+                if (useJavaMethod && testClass != null)
+                {
+                    final com.xceptance.neodymium.ai.action.plugins.JavaMethodAction jma =
+                        (com.xceptance.neodymium.ai.action.plugins.JavaMethodAction) com.xceptance.neodymium.ai.action.ActionRegistry.getPlugin("JAVA_METHOD");
+                    if (jma != null)
+                    {
+                        final String methodsList = jma.getPromptInstructions(testClass, useMethods);
+                        if (methodsList != null && !methodsList.isBlank())
+                        {
+                            final int idx = methodsList.indexOf("\n  Available methods for this step:");
+                            final String listing = (idx >= 0) ? methodsList.substring(idx).trim() : methodsList.trim();
+                            javaMethodsBlock = "\n### Available Custom Java Methods\n" + listing + "\n";
+                        }
+                        else
+                        {
+                            javaMethodsBlock = "";
+                        }
+                    }
+                    else
+                    {
+                        javaMethodsBlock = "";
+                    }
+                }
+                else
+                {
+                    javaMethodsBlock = "";
+                }
+
+                // 3. Build prompt
+                final String userPrompt;
+                if (lastWasNoActions)
+                {
+                    LOG.info("    🔄 Retry attempt (no actions returned) {}/{} for instruction: {}", noActionsCount,
+                            NO_ACTIONS_MAX_RETRIES, instruction);
+                    userPrompt = AiAgentPrompts.buildNoActionsRetryPrompt(instruction, sutContext, domContext,
+                            historyBlock, javaMethodsBlock);
+                }
+                else if (lastError != null)
+                {
+                    LOG.info("    🔄 Retry attempt (error) {}/{} — previous error: {}", errorCount, getMaxRetries(),
+                            lastError);
+                    userPrompt = AiAgentPrompts.buildRetryPrompt(instruction, sutContext, domContext, lastError,
+                            historyBlock, javaMethodsBlock);
+                }
+                else
+                {
+                    userPrompt = AiAgentPrompts.buildUserPrompt(instruction, sutContext, domContext, historyBlock, javaMethodsBlock);
+                }
+
+                // 4. Send to LLM with context-level-aware system prompt (100% static)
+                executionLog.logPrompt(userPrompt);
+
+                final String systemPrompt = AiAgentPrompts.getSystemPrompt(contextLevel);
+
+                LOG.debug("   💬 Sending prompt to LLM... [context: {}]", contextLevel);
+                llmClient.getAiStats().recordContextLevel(contextLevel);
+                final String llmResponse;
+
+                final long standardInBefore = llmClient.getAiStats().getInputTokens();
+                final long standardOutBefore = llmClient.getAiStats().getOutputTokens();
+                final long standardCachedBefore = llmClient.getAiStats().getCachedInputTokens();
+
+                try {
+                    if (screenshot != null) {
+                        llmResponse = llmClient.chatWithScreenshot(
+                                systemPrompt, userPrompt, screenshot);
+                    } else {
+                        llmResponse = llmClient.chat(systemPrompt, userPrompt);
+                    }
+                } catch (final Exception e) {
+                    LOG.warn("LLM call failed or timed out: {}", e.getMessage());
+                    final Integer code = (e instanceof LlmHttpException) ? ((LlmHttpException) e).getStatusCode()
+                            : null;
+                    stepDetails.getLlmCalls().add(new LlmCallDetails(
+                            systemPrompt,
+                            userPrompt,
+                            screenshot,
+                            domContext,
+                            domContext == null ? 0 : domContext.length(),
+                            contextLevel,
+                            null,
+                            null,
+                            0L,
+                            0L,
+                            0L,
+                            0L,
+                            e.getMessage(),
+                            code,
+                            LlmMode.AGENT));
+                    throw new ActionExecutionException("LLM call failed or timed out: " + e.getMessage(), e);
+                }
+
+                final long standardInAfter = llmClient.getAiStats().getInputTokens();
+                final long standardOutAfter = llmClient.getAiStats().getOutputTokens();
+                final long standardCachedAfter = llmClient.getAiStats().getCachedInputTokens();
+
+                final long callInputTokens = standardInAfter - standardInBefore;
+                final long callOutputTokens = standardOutAfter - standardOutBefore;
+                final long callCachedTokens = standardCachedAfter - standardCachedBefore;
+                final long callTotalTokens = callInputTokens + callOutputTokens;
+
+                String parsedActions = null;
+                try {
+                    parsedActions = actionParser.extractJson(llmResponse);
+                } catch (final Exception e) {
+                    // Ignore
+                }
+
+                stepDetails.getLlmCalls().add(new LlmCallDetails(
+                        systemPrompt,
+                        userPrompt,
+                        screenshot,
+                        domContext,
+                        domContext == null ? 0 : domContext.length(),
+                        contextLevel,
+                        llmResponse,
+                        parsedActions,
+                        callInputTokens,
+                        callOutputTokens,
+                        callCachedTokens,
+                        callTotalTokens,
+                        null,
+                        200,
+                        LlmMode.AGENT));
+
+                executionLog.logResponse(llmResponse);
+
+                // Log reasoning
+                final String reasoning = actionParser.getReasoning(llmResponse);
+                if (!reasoning.isEmpty()) {
+                    LOG.debug("   🧠 --- LLM Reasoning ---");
+                    LOG.debug("     {}", reasoning);
+                    executionLog.logReasoning(reasoning);
+                }
+
+                // Check if the LLM explicitly requested more context
+                if (actionParser.isEscalateRequested(llmResponse)) {
+                    final ContextLevel targetLvl = actionParser.getTargetContextLevel(llmResponse);
+                    final ContextLevel escalated = (targetLvl != null && targetLvl.ordinal() > contextLevel.ordinal())
+                            ? targetLvl
+                            : contextLevel.escalate();
+                    if (escalated != null) {
+                        LOG.info("    📈 LLM requested escalation from {} to {}: {}",
+                                contextLevel, escalated, reasoning);
+                        executionLog.logInfo("Context escalation: " + contextLevel + " → " + escalated
+                                + " (LLM requested: " + reasoning + ")");
+                        final EscalationDetails escalation = new EscalationDetails(contextLevel, escalated, true, reasoning);
+                        result.getEscalations().add(escalation);
+                        if (stepDetails != null)
+                        {
+                            stepDetails.getEscalations().add(escalation);
+                        }
+                        contextLevel = escalated;
+                        llmClient.getAiStats().recordEscalation(true);
+                        // Do NOT increment errorCount — escalation is not a retry
+                        lastError = null;
+                        lastWasNoActions = false;
+                        isRecoveryAttempt = true;
+                        continue;
+                    }
+                    // Already at max level — fall through to normal failure handling
+                    LOG.warn("    ⚠️ LLM requested escalation but already at max level {}", contextLevel);
+                }
+
+                // Check if the LLM reported failure (e.g. a verification that didn't pass)
+                if (!actionParser.isSuccess(llmResponse)) {
+                    final String error = actionParser.getError(llmResponse);
+                    final String message = error.isEmpty()
+                            ? "LLM reported failure for: " + instruction
+                            : "Verification failed: " + error;
+                    LOG.error("    ❌ {}", message);
+                    executionLog.logError(message);
+                    if (actionParser.isDone(llmResponse))
+                    {
+                        throw new DefinitiveAssertionError(message);
+                    }
+                    else
+                    {
+                        throw new ActionExecutionException(message, null);
+                    }
+                }
+
+                // 5. Parse actions
+                final List<Action> actions;
+                try {
+                    actions = actionParser.parse(llmResponse);
+                } catch (final ActionParser.ActionParserException e) {
+                    LOG.warn("JSON parsing failed: {}", e.getMessage());
+                    executionLog.logWarning("JSON parsing failed: " + e.getMessage() + ". Retrying...");
+                    throw new ActionExecutionException(e.getMessage(), e);
+                }
+                this.lastLlmDone = actionParser.isDone(llmResponse);
+                if (actions.isEmpty()) {
+                    if (actionParser.isDone(llmResponse) && actionParser.isSuccess(llmResponse)) {
+                        LOG.info(
+                                "    ✅ LLM returned no actions, but indicated success and completion. Treating as 'No Action Needed'.");
+                        executionLog.logInfo("No actions needed based on LLM evaluation.");
+                    } else {
+                        if (expectedFailure) {
+                            throw new ActionExecutionException(
+                                    "LLM returned no actions for instruction: " + instruction, null);
+                        }
+                        noActionsCount++;
+                        llmClient.getAiStats().recordRetry(true);
+                        if (noActionsCount > NO_ACTIONS_MAX_RETRIES) {
+                            executionLog.logError("Max retries for empty response reached.");
+                            SelenideAddons.wrapAssertionError(() -> {
+                                throw new AssertionError("could not fulfill '" + instruction + "' retried "
+                                        + NO_ACTIONS_MAX_RETRIES + " times (no actions returned)");
+                            });
+                        }
+                        LOG.warn(
+                                "    ⚠️ LLM returned no actions for instruction: {}. Retrying with pressure prompt (Retry {}/{})",
+                                instruction, noActionsCount, NO_ACTIONS_MAX_RETRIES);
+                        executionLog.logWarning("No actions returned. Retrying...");
+                        lastWasNoActions = true;
+                        lastError = null;
+                        isRecoveryAttempt = true;
+                        sleep(1000);
+                        continue;
+                    }
+                }
+
+                executionLog.logActions(actions);
+
+                LOG.debug("   📋 --- LLM Proposed Actions ---");
+                for (int actIdx = 0; actIdx < actions.size(); actIdx++) {
+                    LOG.debug("     {}. {}", actIdx + 1, actions.get(actIdx));
+                }
+
+                if (playbookStep.failed()) {
+                    final String msg = "Playbook step healed from failure. Generating new actions.";
+                    executionLog.logInfo(msg);
+                    AllureAddons.printToReport(
+                            "Playbook Healed - Prompt: " + instruction + ", Actions count: " + actions.size());
+                }
+
+                if (playbookStep.getHealedContextLevel() != contextLevel) {
+                    playbookStep.setHealedContextLevel(contextLevel);
+                    playbook.setChanged(true);
+                }
+
+                playbookStep.setActions(actions);
+                playbookStep.setPromptLine(instruction);
+                playbookStep.setReasoning(reasoning);
+                if (stepDetails.getOriginalUnsplitInstruction() != null)
+                {
+                    playbookStep.setOriginalUnsplitInstruction(stepDetails.getOriginalUnsplitInstruction());
+                }
+                if (accumulatedActions.isEmpty())
+                {
+                    final String oldHash = playbookStep.getScreenshotHash();
+                    final String newHash = (screenshot != null) ? ScreenshotHasher.computeHash(screenshot) : null;
+                    if (!Objects.equals(oldHash, newHash))
+                    {
+                        playbookStep.setScreenshotHash(newHash);
+                        playbook.setChanged(true);
+                    }
+                }
+                playbookStep.setFailure(null);
+
+                return actions;
+            } catch (final ActionExecutor.ActionExecutionException e) {
+                if (expectedFailure) {
+                    throw e;
+                }
+                // Try escalating context BEFORE burning a retry count
+                final ContextLevel escalated = contextLevel.escalate();
+                if (escalated != null && contextLevel != escalated) {
+                    LOG.info("    📈 Escalating context from {} to {} after error: {}",
+                            contextLevel, escalated, e.getMessage());
+                    executionLog.logInfo("Context escalation: " + contextLevel + " → " + escalated
+                            + " (error: " + e.getMessage() + ")");
+                    contextLevel = escalated;
+                    lastError = null;
+                    lastWasNoActions = false;
+                    isRecoveryAttempt = true;
+                    llmClient.getAiStats().recordEscalation(false);
+                    // Do NOT increment errorCount — escalation is not a retry
+                    continue;
+                }
+
+                // Already at max context level — now it's a real retry
+                errorCount++;
+                llmClient.getAiStats().recordRetry(false);
+                lastError = e.getMessage();
+                lastThrowable = e.getCause() != null ? e.getCause() : e;
+                lastWasNoActions = false;
+                isRecoveryAttempt = true;
+                LOG.warn("    ⚠️ Action failed: {} (Attempt {}/{}) [context: {}]",
+                        lastError, errorCount, getMaxRetries() + 1, contextLevel);
+                executionLog.logWarning("Action failed: " + lastError + ". Retrying...");
+
+                // Record the level we reached for future healing attempts
+                playbookStep.setHealedContextLevel(contextLevel);
+
+                if (errorCount > getMaxRetries()) {
+                    final Throwable finalThrowable = lastThrowable;
+                    executionLog.logError("Max retries for errors reached.");
+                    SelenideAddons.wrapAssertionError(() -> {
+                        throw new AssertionError("Instruction '" + instruction + "' failed (" + (getMaxRetries() + 1)
+                                + " tries):\n\n" + finalThrowable.getMessage(), finalThrowable);
+                    });
+                }
+
+                // Wait before retry
+                sleep(1000);
+            } catch (final Exception e) {
+                LOG.error("Unexpected error executing step: {}", instruction, e);
+                if (expectedFailure) {
+                    throw new ActionExecutionException("Unexpected error executing step: " + e.getMessage(), e);
+                }
+                SelenideAddons.wrapAssertionError(() -> {
+                    throw new AiAgentException("Unexpected error executing step: " + instruction, e);
+                });
+            } finally {
+                executionLog.endAttempt();
+            }
+        }
+    }
+
+    private List<Action> identifyActions(final String instruction, final PlaybookStep playbookStep, final StepDetails stepDetails)
+    {
+        for (final AiActionPlugin plugin : ActionRegistry.getAllPlugins())
+        {
+            final List<Action> actions = plugin.parseDirectInstruction(instruction);
+            if (actions != null && !actions.isEmpty())
+            {
+                playbookStep.setActions(actions);
+                playbookStep.setPromptLine(instruction);
+                playbookStep.setReasoning("directly parsed");
+                playbookStep.setScreenshotHash(null);
+                playbookStep.setFailure(null);
+                llmClient.getAiStats().recordDirectParse();
+                if (stepDetails != null)
+                {
+                    stepDetails.setDirectParse(true);
+                }
+                return actions;
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    /**
+     * Checks if any registered plugin can directly parse the instruction.
+     *
+     * @param instruction the instruction string
+     * @return true if directly parsed, false otherwise
+     */
+    public static boolean isDirectInstruction(final String instruction)
+    {
+        for (final AiActionPlugin plugin : ActionRegistry.getAllPlugins())
+        {
+            final List<Action> actions = plugin.parseDirectInstruction(instruction);
+            if (actions != null && !actions.isEmpty())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Splits a multi-line instruction block into individual steps. Each non-empty
+     * line becomes a step. Lines starting with # or // are treated as comments and
+     * ignored.
+     */
+    String[] splitInstructions(final String instructions) {
+        return instructions.strip().lines()
+                .map(String::strip)
+                .filter(line -> !line.isEmpty() && !line.startsWith("#") && !line.startsWith("//"))
+                .toArray(String[]::new);
+    }
+
+    private void sleep(final long ms) {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new RuntimeException("Thread was interrupted, halting agent execution.");
+        }
+        try {
+            Thread.sleep(ms);
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Thread was interrupted, halting agent execution.", e);
+        }
+    }
+
+    private void promptUserOnExpectedFailure(final String instruction, final String unresolvedInstruction,
+            final List<String> futureInstructions, final List<String> performedInstructions, final Throwable t)
+            throws HudActionException
+    {
+        if (this.autoSkip)
+        {
+            return;
+        }
+        final List<String> plannedStrs = new ArrayList<>();
+        plannedStrs.add("⚠️ " + instruction);
+        if (futureInstructions != null)
+        {
+            plannedStrs.addAll(futureInstructions);
+        }
+        Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(plannedStrs,
+                performedInstructions, this.autoSkip, false, false, unresolvedInstruction,
+                "Expected failure/defect detected: " + t.getMessage(), false);
+        waitForHudAction(false);
+    }
+
+    /**
+     * Exception thrown when the AI agent cannot complete an instruction.
+     */
+    public static class AiAgentException extends RuntimeException {
+        private static final long serialVersionUID = 19162317741L;
+
+        /**
+         * Constructs a new AiAgentException.
+         *
+         * @param message the detail message
+         * @param cause   the root cause
+         */
+        public AiAgentException(final String message, final Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    /**
+     * Exception thrown when the AI agent definitively verifies that a condition has failed
+     * (i.e. success = false and done = true returned by the LLM).
+     * This represents a final verification failure and prevents context level escalation or retries.
+     */
+    public static class DefinitiveAssertionError extends AssertionError
+    {
+        private static final long serialVersionUID = 1L;
+
+        public DefinitiveAssertionError(final String message)
+        {
+            super(message);
+        }
+    }
+
+    /**
+     * Returns the LLM client instance.
+     *
+     * @return the LLM client
+     */
+    public LlmClient getLlmClient() {
+        return llmClient;
+    }
+
+    private boolean saveYamlAndExit(final int currentIndex, final List<String> performedInstructions) {
+        LOG.info("User requested Save & Exit. Halting execution and generating yaml.");
+        final Playbook playbook = Neodymium.getAiPlaybook();
+        if (playbook != null && playbook.getSteps().size() > currentIndex) {
+            playbook.getSteps().subList(currentIndex, playbook.getSteps().size()).clear();
+            playbook.setChanged(true);
+        }
+
+        final InteractiveHud hud = Neodymium
+                .getOrCreateInteractiveHud();
+        hud.saveYamlDataFileIfModified(performedInstructions);
+        return true;
+    }
+
+    /**
+     * Processes a HUD action exception and updates the test playbook, instruction
+     * list,
+     * and loop index accordingly.
+     * 
+     * @return the new loop index (i), or -1 to break the execution loop.
+     */
+    private int processHudActionException(final HudActionException e, final int i,
+            final List<String> stepsList, final List<String> performedInstructions,
+            final List<String> stepLines, final AiExecutionResult result)
+    {
+        if (HudActionType.REWIND == e.actionType)
+        {
+            final int rIdx = e.index;
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null) {
+                playbook.setCursor(rIdx);
+            }
+            if (performedInstructions.size() > rIdx) {
+                performedInstructions.subList(rIdx, performedInstructions.size()).clear();
+            }
+            LOG.info("Rewound execution back to step index {}", rIdx);
+            return rIdx - 1;
+        } else if (HudActionType.SAVE_EXIT == e.actionType) {
+            this.hudSaveExit = saveYamlAndExit(i, performedInstructions);
+            return -2; // signal break
+        } else if (HudActionType.ADD == e.actionType) {
+            final String newInstr = e.instruction;
+            stepsList.add(newInstr);
+            stepLines.add(null);
+            if (result != null)
+            {
+                result.getSteps().add(new StepDetails(newInstr));
+            }
+
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null)
+            {
+                final PlaybookStep emptyStep = new PlaybookStep();
+                emptyStep.setPromptLine(newInstr);
+                emptyStep.setReasoning("Manually added by user via HUD");
+                playbook.getSteps().add(emptyStep);
+                playbook.setRecording(true);
+                playbook.setChanged(true);
+            }
+
+            this.hudPromptChanged = true;
+            LOG.info("Inserted new action: {}", newInstr);
+            return i - 1;
+        } else if (HudActionType.EDIT == e.actionType) {
+            final String editInstr = e.instruction;
+            int editIdx = i;
+            if (e.index >= 0 && e.index < stepsList.size()) {
+                editIdx = e.index;
+            }
+
+            final Map<String, String> updatedBindings = e.bindings;
+            if (updatedBindings != null && !updatedBindings.isEmpty()) {
+                Neodymium.getData().putAll(updatedBindings);
+                Neodymium.getOrCreateInteractiveHud().setDataBindings(
+                        new HashMap<>(Neodymium.getData()));
+            }
+
+            stepsList.set(editIdx, editInstr);
+            if (editIdx >= 0 && editIdx < stepLines.size())
+            {
+                stepLines.set(editIdx, null);
+            }
+            if (result != null && result.getSteps().size() > editIdx)
+            {
+                result.getSteps().set(editIdx, new StepDetails(editInstr));
+            }
+
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null && playbook.getSteps().size() > editIdx)
+            {
+                playbook.getSteps().get(editIdx).setPromptLine(editInstr);
+                playbook.getSteps().get(editIdx).setReasoning("Manually edited by user via HUD");
+                playbook.getSteps().get(editIdx).setActions(new ArrayList<>());
+                playbook.setRecording(true);
+                playbook.setChanged(true);
+            }
+
+            this.hudPromptChanged = true;
+            LOG.info("Edited action at index {} to: {}", editIdx, editInstr);
+            return i - 1;
+        }
+        else if (HudActionType.APPEND == e.actionType)
+        {
+            final String newInstr = e.instruction;
+            stepsList.add(newInstr);
+            stepLines.add(null);
+            
+            if (result != null)
+            {
+                result.getSteps().add(new StepDetails(newInstr));
+            }
+
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null)
+            {
+                final PlaybookStep emptyStep = new PlaybookStep();
+                emptyStep.setPromptLine(newInstr);
+                emptyStep.setReasoning("Manually appended by user via HUD");
+                playbook.getSteps().add(emptyStep);
+                playbook.setRecording(true);
+                playbook.setChanged(true);
+            }
+
+            this.hudPromptChanged = true;
+            LOG.info("Appended new action to end: {}", newInstr);
+            return i - 1;
+        }
+        else if (HudActionType.REORDER == e.actionType)
+        {
+            final int fromIdx = e.index;
+            final int toIdx = e.indexTo;
+            
+            if (fromIdx >= 0 && fromIdx < stepsList.size() && toIdx >= 0 && toIdx < stepsList.size())
+            {
+                String stepToMove = stepsList.remove(fromIdx);
+                stepsList.add(toIdx, stepToMove);
+                
+                if (fromIdx < stepLines.size())
+                {
+                    String lineToMove = stepLines.remove(fromIdx);
+                    if (toIdx < stepLines.size()) {
+                        stepLines.add(toIdx, lineToMove);
+                    } else {
+                        stepLines.add(lineToMove);
+                    }
+                }
+                
+                if (result != null && fromIdx < result.getSteps().size())
+                {
+                    StepDetails detailToMove = result.getSteps().remove(fromIdx);
+                    if (toIdx < result.getSteps().size()) {
+                        result.getSteps().add(toIdx, detailToMove);
+                    } else {
+                        result.getSteps().add(detailToMove);
+                    }
+                }
+                
+                final Playbook playbook = Neodymium.getAiPlaybook();
+                if (playbook != null && fromIdx < playbook.getSteps().size())
+                {
+                    PlaybookStep pbToMove = playbook.getSteps().remove(fromIdx);
+                    if (toIdx < playbook.getSteps().size()) {
+                        playbook.getSteps().add(toIdx, pbToMove);
+                    } else {
+                        playbook.getSteps().add(pbToMove);
+                    }
+                    playbook.setRecording(true);
+                    playbook.setChanged(true);
+                }
+                
+                this.hudPromptChanged = true;
+                LOG.info("Reordered step from {} to {}", fromIdx, toIdx);
+            }
+            return i - 1;
+        }
+        else if (HudActionType.SKIP == e.actionType)
+        {
+            final String step = stepsList.get(i);
+            LOG.info("Skipped step: {}", step);
+            final Playbook playbook = Neodymium.getAiPlaybook();
+            if (playbook != null)
+            {
+                playbook.nextStep();
+            }
+            this.hudPromptChanged = true;
+            if (result != null && result.getSteps().size() > i)
+            {
+                result.getSteps().get(i).setExpandedInstruction(step + " (Skipped)");
+            }
+            performedInstructions.add("// [SKIPPED] " + step);
+            // A higher delay (1000ms) is needed here to prevent flickering because a screenshot is taken
+            // on the next step right after skip transition, and we want to ensure the browser and HUD state
+            // have fully stabilized.
+            try
+            {
+                Thread.sleep(1000);
+            }
+            catch (final InterruptedException ignored)
+            {
+            }
+            return i;
+        }
+
+        return -2; // Unhandled or generic break;
+    }
+
+    private void alignStepsWithPlaybookForReplay(
+            final List<String> stepsList,
+            final List<String> stepLines,
+            final AiExecutionResult result,
+            final Playbook playbook)
+    {
+        if (playbook == null || playbook.isRecording() || playbook.getSteps() == null)
+        {
+            return;
+        }
+
+        final List<PlaybookStep> playbookSteps = playbook.getSteps();
+        int playbookIdx = 0;
+
+        for (int i = 0; i < stepsList.size(); i++)
+        {
+            if (playbookIdx >= playbookSteps.size())
+            {
+                break;
+            }
+
+            final String currentInstr = stripAllTags(stepsList.get(i));
+            final PlaybookStep pbStep = playbookSteps.get(playbookIdx);
+
+            final String origUnsplit = pbStep.getOriginalUnsplitInstruction();
+            if (origUnsplit != null && stripAllTags(origUnsplit).equals(currentInstr))
+            {
+                final List<PlaybookStep> splitParts = new ArrayList<>();
+                splitParts.add(pbStep);
+
+                int nextPbIdx = playbookIdx + 1;
+                while (nextPbIdx < playbookSteps.size())
+                {
+                    final PlaybookStep nextPbStep = playbookSteps.get(nextPbIdx);
+                    final String nextOrig = nextPbStep.getOriginalUnsplitInstruction();
+                    if (nextOrig != null && stripAllTags(nextOrig).equals(currentInstr))
+                    {
+                        splitParts.add(nextPbStep);
+                        nextPbIdx++;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                if (splitParts.size() > 1)
+                {
+                    final String origLine = i < stepLines.size() ? stepLines.get(i) : null;
+
+                    // Replace the first one
+                    stepsList.set(i, splitParts.get(0).getPromptLine());
+                    final StepDetails firstDetails = result.getSteps().get(i);
+                    firstDetails.setExpandedInstruction(splitParts.get(0).getPromptLine());
+                    firstDetails.setOriginalUnsplitInstruction(origUnsplit);
+
+                    // Insert the subsequent parts
+                    for (int j = 1; j < splitParts.size(); j++)
+                    {
+                        final String partPrompt = splitParts.get(j).getPromptLine();
+                        stepsList.add(i + j, partPrompt);
+                        if (i + j <= stepLines.size())
+                        {
+                            stepLines.add(i + j, origLine);
+                        }
+                        else
+                        {
+                            stepLines.add(origLine);
+                        }
+
+                        final StepDetails newDetails = new StepDetails(partPrompt);
+                        newDetails.setOriginalUnsplitInstruction(origUnsplit);
+                        result.getSteps().add(i + j, newDetails);
+                    }
+
+                    // Advance i past the newly inserted steps
+                    i += splitParts.size() - 1;
+                }
+                else
+                {
+                    stepsList.set(i, pbStep.getPromptLine());
+                    final StepDetails details = result.getSteps().get(i);
+                    details.setExpandedInstruction(pbStep.getPromptLine());
+                    details.setOriginalUnsplitInstruction(origUnsplit);
+                }
+
+                playbookIdx = nextPbIdx;
+            }
+            else
+            {
+                playbookIdx++;
+            }
+        }
+    }
+
+    private String deriveFirstPartPrompt(final String original, final String remaining)
+    {
+        if (original == null)
+        {
+            return "";
+        }
+        if (remaining == null || remaining.trim().isEmpty())
+        {
+            return original;
+        }
+
+        final String origLower = original.toLowerCase();
+        final String remLower = remaining.toLowerCase().trim();
+
+        final int idx = origLower.lastIndexOf(remLower);
+        if (idx != -1)
+        {
+            String firstPart = original.substring(0, idx).trim();
+            // Clean up trailing connecting words like "and", "then", ",", "and then", "after that"
+            firstPart = firstPart.replaceAll("(?i)\\b(and|then|and\\s+then|after\\s+that|after|then\\s+click|and\\s+click)\\b\\s*$", "").trim();
+            // Also strip trailing punctuation
+            firstPart = firstPart.replaceAll("[,.;:-]+$", "").trim();
+            if (!firstPart.isEmpty())
+            {
+                return firstPart;
+            }
+        }
+        return "Execute first part of: " + original;
+    }
+
+    private void recordVisualFailureIfRecording(final String unresolvedInstruction, final Throwable t, final Playbook playbook)
+    {
+        if (playbook != null && playbook.isRecording() && unresolvedInstruction != null)
+        {
+            final PlaybookStep step = playbook.getCurrentStep();
+            if (step != null)
+            {
+                final boolean isVisualTag = unresolvedInstruction.toLowerCase().contains("(visual)") || unresolvedInstruction.toLowerCase().contains("(layout)");
+                final boolean wasVisualExecution = step.getHealedContextLevel() != null && step.getHealedContextLevel().includesScreenshot();
+                if (isVisualTag || wasVisualExecution)
+                {
+                    final String errorType = t.getClass().getName();
+                    final String errorMessage = t.getMessage() != null ? t.getMessage() : "";
+                    LOG.info("    🎯 Recording visual failure (Error Type: {}, Message: {})", errorType, errorMessage);
+                    step.setExpectedErrorType(errorType);
+                    step.setExpectedErrorMessage(errorMessage);
+                    try
+                    {
+                        final String screenshot = pageAnalyzer.captureScreenshot("Defective State: " + unresolvedInstruction);
+                        final String dHash = ScreenshotHasher.computeHash(screenshot);
+                        step.setScreenshotHash(dHash);
+                        LOG.info("    📸 Captured visual failure screenshot dHash: {}", dHash);
+                    }
+                    catch (final Exception ex)
+                    {
+                        LOG.warn("    ⚠️ Failed to capture visual failure screenshot: {}", ex.getMessage());
+                    }
+                    playbook.setChanged(true);
+                }
+            }
+        }
+    }
+
+    private final Map<String, Boolean> evaluatedConditions = new HashMap<>();
+
+    private static final class ConditionInfo
+    {
+        final String conditionText;
+        final boolean negated;
+
+        ConditionInfo(final String conditionText, final boolean negated)
+        {
+            this.conditionText = conditionText;
+            this.negated = negated;
+        }
+    }
+
+    private String getParentTrace(final String trace)
+    {
+        if (trace == null)
+        {
+            return null;
+        }
+        if (trace.contains(" -> "))
+        {
+            final String[] parts = trace.split(" -> ");
+            return parts[parts.length - 1].trim();
+        }
+        return trace.trim();
+    }
+
+    private ConditionInfo parseCondition(final String instruction)
+    {
+        final String trimmed = instruction.trim();
+        if (trimmed.startsWith("If not "))
+        {
+            final int thenIdx = trimmed.indexOf(", then ");
+            if (thenIdx != -1)
+            {
+                return new ConditionInfo(trimmed.substring(7, thenIdx).trim(), true);
+            }
+            final int thenIdx2 = trimmed.indexOf(" then ");
+            if (thenIdx2 != -1)
+            {
+                return new ConditionInfo(trimmed.substring(7, thenIdx2).trim(), true);
+            }
+        }
+        else if (trimmed.startsWith("If "))
+        {
+            final int thenIdx = trimmed.indexOf(", then ");
+            if (thenIdx != -1)
+            {
+                return new ConditionInfo(trimmed.substring(3, thenIdx).trim(), false);
+            }
+            final int thenIdx2 = trimmed.indexOf(" then ");
+            if (thenIdx2 != -1)
+            {
+                return new ConditionInfo(trimmed.substring(3, thenIdx2).trim(), false);
+            }
+        }
+        return null;
+    }
+
+    private String stripConditionPrefix(final String instruction)
+    {
+        final String trimmed = instruction.trim();
+        final int thenIdx = trimmed.indexOf(", then ");
+        if (thenIdx != -1)
+        {
+            return trimmed.substring(thenIdx + 7).trim();
+        }
+        final int thenIdx2 = trimmed.indexOf(" then ");
+        if (thenIdx2 != -1)
+        {
+            return trimmed.substring(thenIdx2 + 6).trim();
+        }
+        return instruction;
+    }
+
+    public final void executeIncludeSteps(final List<YamlFileReader.Step> steps) throws HudActionException
+    {
+        final AiExecutionResult result = getActiveResult();
+        if (result == null)
+        {
+            throw new IllegalStateException("No active AiExecutionResult found in thread context");
+        }
+
+        final List<String> performedInstructions = new ArrayList<>();
+
+        final List<String> includeStepsList = new ArrayList<>();
+        final List<String> includeStepLines = new ArrayList<>();
+        for (final YamlFileReader.Step step : steps)
+        {
+            includeStepsList.add(step.text);
+            includeStepLines.add(step.trace);
+        }
+
+        for (int i = 0; i < steps.size(); i++)
+        {
+            final YamlFileReader.Step step = steps.get(i);
+            final String stepText = AiBrowser.resolveTestDataToPrompt(step.text, result.getLookups());
+
+            final StepDetails stepDetails = new StepDetails(step.text);
+            result.getSteps().add(stepDetails);
+
+            boolean expectedFailureVal = false;
+            String bugIdVal = null;
+            final Matcher bugMatcher = BUG_TAG_PATTERN.matcher(stepText);
+            if (bugMatcher.find())
+            {
+                expectedFailureVal = true;
+                bugIdVal = bugMatcher.group(1);
+                if (bugIdVal != null)
+                {
+                    bugIdVal = bugIdVal.trim();
+                }
+            }
+            final boolean expectedFailure = expectedFailureVal;
+            final String bugId = bugIdVal;
+
+            boolean optionalStepVal = false;
+            final Matcher optionalMatcher = OPTIONAL_TAG_PATTERN.matcher(stepText);
+            if (optionalMatcher.find())
+            {
+                optionalStepVal = true;
+            }
+            final boolean optionalStep = optionalStepVal;
+
+            Long customTimeoutMsVal = null;
+            final Matcher timeoutMatcher = TIMEOUT_TAG_PATTERN.matcher(stepText);
+            if (timeoutMatcher.find())
+            {
+                final long value = Long.parseLong(timeoutMatcher.group(1));
+                final String unit = timeoutMatcher.group(2);
+                if (unit != null && unit.equalsIgnoreCase("s"))
+                {
+                    customTimeoutMsVal = value * 1000;
+                }
+                else
+                {
+                    customTimeoutMsVal = value;
+                }
+            }
+            final Long customTimeoutMs = customTimeoutMsVal;
+
+            final String strippedStep = stripAllTags(stepText);
+
+            final List<String> futureInstructions = new ArrayList<>();
+            for (int j = i + 1; j < steps.size(); j++)
+            {
+                futureInstructions.add(steps.get(j).text);
+            }
+
+            final String traceLine;
+            final String traceFile;
+            if (step.trace != null)
+            {
+                final int arrowIdx = step.trace.indexOf(" -> ");
+                final String immediateTrace = (arrowIdx != -1) ? step.trace.substring(0, arrowIdx) : step.trace;
+                final int colonIdx = immediateTrace.lastIndexOf(':');
+                if (colonIdx != -1)
+                {
+                    traceFile = immediateTrace.substring(0, colonIdx);
+                    traceLine = immediateTrace.substring(colonIdx + 1);
+                }
+                else
+                {
+                    traceFile = immediateTrace;
+                    traceLine = null;
+                }
+            }
+            else
+            {
+                traceFile = null;
+                traceLine = null;
+            }
+
+            final long stepStartTime = System.currentTimeMillis();
+            try
+            {
+                stepDetails.setExpandedInstruction(strippedStep);
+                executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs,
+                        performedInstructions, step.text, futureInstructions,
+                        traceLine, traceFile, stepDetails, result, includeStepsList, includeStepLines);
+            }
+            catch (final HudActionException e)
+            {
+                throw e;
+            }
+            catch (final AssertionError e)
+            {
+                stepDetails.setFailureReason(e.getMessage());
+                throw e;
+            }
+            catch (final Throwable t)
+            {
+                stepDetails.setFailureReason(t.getMessage());
+                throw new RuntimeException(t);
+            }
+            finally
+            {
+                stepDetails.setDurationMs(System.currentTimeMillis() - stepStartTime);
+            }
+            performedInstructions.add(step.text);
+        }
+    }
+
+    private static final class ExpectedFailureAbortException extends RuntimeException
+    {
+        private static final long serialVersionUID = 1L;
+        private final String bugId;
+
+        public ExpectedFailureAbortException(final String bugId, final Throwable cause)
+        {
+            super("Expected failure abort for bug: " + bugId, cause);
+            this.bugId = bugId;
+        }
+
+        public String getBugId()
+        {
+            return this.bugId;
+        }
+    }
+}

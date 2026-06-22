@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Click Action Test - Disabled Button</title>
+</head>
+<body>
+    <h1>Click Action Test</h1>
+    
+    <button id="btn-disabled" disabled>Disabled Order Button</button>
+    
+    <div id="result">Initial State</div>
+    
+    <script>
+        document.getElementById('btn-disabled').addEventListener('click', function() {
+            document.getElementById('result').innerText = 'Disabled button clicked!';
+        });
+    </script>
+</body>
+</html>

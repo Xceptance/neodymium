@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Select Action Test</title>
+</head>
+<body>
+    <h1>Select Action Test</h1>
+    
+    <label for="country-select">Country:</label>
+    <select id="country-select">
+        <option value="">--Please choose an option--</option>
+        <option value="US">United States</option>
+        <option value="DE">Germany</option>
+        <option value="FR">France</option>
+    </select>
+    <br><br>
+    
+    <button id="btn-submit">Submit Country</button>
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('btn-submit').addEventListener('click', function() {
+            var select = document.getElementById('country-select');
+            var selectedText = select.options[select.selectedIndex].text;
+            document.getElementById('result').innerText = 'Selected Country: ' + selectedText;
+        });
+    </script>
+</body>
+</html>

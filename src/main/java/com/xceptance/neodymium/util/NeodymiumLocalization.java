@@ -55,12 +55,40 @@ public class NeodymiumLocalization
         return getText(key, null);
     }
 
+    public String tryGetText(final String key)
+    {
+        return tryGetText(key, null);
+    }
+
+    public String tryGetText(final String key, final String localeParam)
+    {
+        final String result = findText(key, localeParam);
+        return result != null ? result : key;
+    }
+
     public String getText(final String key, final String localeParam)
+    {
+        // if properties is not set then the localization yaml file was not found or is empty / invalid
+        if (properties == null)
+        {
+            throw new RuntimeException("Localization file was not found or is invalid");
+        }
+
+        final String result = findText(key, localeParam);
+
+        if (result == null)
+        {
+            Assert.fail(MessageFormat.format("Cannot find localization for ''{0}'' and locale {1}", key, localeParam));
+        }
+
+        return result;
+    }
+
+    private String findText(final String key, final String localeParam)
     {
         if (properties == null)
         {
-            // if properties is not set then the localization yaml file was not found or is empty / invalid
-            throw new RuntimeException("Localization file was not found or is invalid");
+            return null;
         }
 
         final String localeString;
@@ -78,7 +106,7 @@ public class NeodymiumLocalization
         {
             locale = LocaleUtils.toLocale(localeString);
         }
-        catch (IllegalArgumentException e)
+        catch (final IllegalArgumentException e)
         {
             // the locale was not found
             locale = null;
@@ -97,11 +125,6 @@ public class NeodymiumLocalization
         if (result == null)
         {
             result = properties.getProperty("default." + key);
-        }
-
-        if (result == null)
-        {
-            Assert.fail(MessageFormat.format("Cannot find localization for ''{0}'' and locale {1}", key, localeString));
         }
 
         return result;

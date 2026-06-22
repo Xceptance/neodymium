@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Form Interactions</title>
+    <link rel="stylesheet" href="../shared/style.css">
+    <link rel="stylesheet" href="../shared/controls.css">
+</head>
+<body>
+
+    <!-- Optional Promotional Banner -->
+    <div id="promo-banner-container" style="display: flex;">
+        <div class="promo-banner" style="width: 100%;">
+            <span>🚀 Special Trial: Unlimited Aura AI visual audits unlocked!</span>
+            <button class="promo-close" id="promo-close-btn" onclick="document.getElementById('promo-banner-container').style.display='none'">Close Banner</button>
+        </div>
+    </div>
+
+    <!-- Navigation Header -->
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="../dashboard/index.html" class="brand">
+                <span class="brand-icon"></span>
+                <span>Aura Suite Hub</span>
+            </a>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="../index.html">Hub Home</a></li>
+                    <li><a href="index.html">Shop Catalog</a></li>
+                    <li><a href="forms.html" class="active">Forms Interaction</a></li>
+                    <li><a href="escalation.html">Escalation Challenge</a></li>
+                    <li><a href="visual-escalation.html">Visual Escalation</a></li>
+                    <li><a href="../a11y/index.html">Accessibility Checks</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="aura-container">
+        
+        <section class="aura-hero" style="padding: 2rem 3.5rem;">
+            <h1>Dynamic Forms & Reactive Auditing</h1>
+            <p style="margin-top: 0.5rem; color: var(--text-secondary);">
+                Submit form fields, trigger client-side input validations, and interact with live pricing calculators to check real-time state changes.
+            </p>
+        </section>
+
+        <section class="aura-grid-2">
+            
+            <!-- Registration Form Card -->
+            <div class="aura-card">
+                <h3 style="margin-bottom: 1.5rem;" class="shift-target">Customer Account Creation</h3>
+                
+                <form id="register-form" onsubmit="handleRegister(event)" novalidate>
+                    <div class="form-group">
+                        <label class="form-label" for="reg-username">Full Name</label>
+                        <input type="text" id="reg-username" class="form-control" placeholder="Enter your full name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="reg-email">Email Address</label>
+                        <input type="email" id="reg-email" class="form-control" placeholder="name@domain.com" required>
+                        <span class="form-error" id="email-error" style="display: none;">⚠ This email format is invalid.</span>
+                    </div>
+
+                    <div class="form-group" style="position: relative;">
+                        <label class="form-label" for="reg-password">Security Password</label>
+                        <input type="password" id="reg-password" class="form-control" placeholder="••••••••" required>
+                        <!-- Close / cancel target button that might overlap with custom toggle styles -->
+                        <button type="button" class="promo-close overlap-target-btn" id="reg-cancel-btn" style="position: absolute; right: 10px; bottom: 10px; display: inline-block;">Cancel</button>
+                    </div>
+
+                    <div style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: center;">
+                        <button type="submit" class="btn-primary" id="btn-submit-reg">Create Account</button>
+                        <span id="reg-status-success" style="color: var(--status-success); font-weight: 600; display: none;">Account Registered!</span>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Dynamic Checkout Calculator -->
+            <div class="aura-card">
+                <h3 style="margin-bottom: 1.5rem;">Interactive Order Summary</h3>
+                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                    Modify the order quantities below. The pricing totals are computed reactively in the browser.
+                </p>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Unit Price</th>
+                            <th style="width: 100px;">Quantity</th>
+                            <th style="text-align: right;">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Neon Gradient Poster</td>
+                            <td>$19.99</td>
+                            <td>
+                                <input type="number" id="qty-poster-1" class="form-control" style="padding: 0.35rem 0.5rem;" value="1" min="0" oninput="calculateTotal()">
+                            </td>
+                            <td style="text-align: right; font-weight: 600;" id="sub-poster-1">$19.99</td>
+                        </tr>
+                        <tr>
+                            <td>Glassmorphic Sphere</td>
+                            <td>$24.99</td>
+                            <td>
+                                <input type="number" id="qty-poster-2" class="form-control" style="padding: 0.35rem 0.5rem;" value="0" min="0" oninput="calculateTotal()">
+                            </td>
+                            <td style="text-align: right; font-weight: 600;" id="sub-poster-2">$0.00</td>
+                        </tr>
+                        <tr style="border-top: 2px solid var(--bg-card-border);">
+                            <td colspan="3" style="font-weight: 700; text-align: right; font-size: 1.1rem; color: var(--text-primary);">Total Price:</td>
+                            <td style="text-align: right; font-weight: 700; font-size: 1.1rem; color: var(--accent-cyan);" id="cart-total">$19.99</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Global Controls Drawer Script injection -->
+    <script src="../shared/controls.js"></script>
+
+    <!-- Forms Page JavaScript logic -->
+    <script>
+        // Real-time Pricing calculation
+        function calculateTotal() {
+            const qty1 = parseInt(document.getElementById('qty-poster-1').value) || 0;
+            const qty2 = parseInt(document.getElementById('qty-poster-2').value) || 0;
+
+            const sub1 = qty1 * 19.99;
+            const sub2 = qty2 * 24.99;
+            const total = sub1 + sub2;
+
+            document.getElementById('sub-poster-1').innerText = '$' + sub1.toFixed(2);
+            document.getElementById('sub-poster-2').innerText = '$' + sub2.toFixed(2);
+            document.getElementById('cart-total').innerText = '$' + total.toFixed(2);
+        }
+
+        // Account Registration form validation
+        function handleRegister(event) {
+            event.preventDefault();
+            const email = document.getElementById('reg-email').value;
+            const emailError = document.getElementById('email-error');
+            const successMsg = document.getElementById('reg-status-success');
+
+            // Simple client-side regex check to trigger visual error anomalies
+            if (!email.includes('@') || email.length < 5) {
+                emailError.style.display = 'block';
+                successMsg.style.display = 'none';
+            } else {
+                emailError.style.display = 'none';
+                successMsg.style.display = 'inline';
+                setTimeout(() => {
+                    successMsg.style.display = 'none';
+                }, 30000);
+            }
+        }
+    </script>
+
+</body>
+</html>

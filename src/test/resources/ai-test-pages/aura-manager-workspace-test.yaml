@@ -1,0 +1,30 @@
+# AI-generated: Gemini 2.5 Pro
+data:
+  - testId: "Create_Test"
+    before:
+      - java startManager()
+    steps: |
+      Open ${auraManagerUrl} in the browser
+      Click the "Create New Test" button
+      Wait for the Create Test Modal to appear
+      Enter "Automated Workspace Test" into the test name input field
+      Click the "Create Test" submit button
+      Click the "Close" button in the editor panel
+      java verifyAutomatedWorkspaceTestPresent()
+    after:
+      - java deleteWorkspaceTestFile()
+      - java stopManager()
+
+  - testId: "Delete_Test"
+    before:
+      - java createWorkspaceTestFile()
+      - java startManager()
+    steps: |
+      Open ${auraManagerUrl} in the browser
+      Select the file "automated-workspace-test.yaml" from the file selection list
+      Click the "Delete" button in the editor panel
+      Wait for the "Delete Test Case" modal to appear
+      Click the "Confirm Delete" button
+      java verifyAutomatedWorkspaceTestNotPresent()
+    after:
+      - java stopManager()

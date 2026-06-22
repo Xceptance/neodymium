@@ -1,0 +1,85 @@
+{
+  "id": "com.xceptance.neodymium.ai.action.AssertActionTest :: testAssertHappyPath",
+  "steps": [
+    {
+      "promptLine": "Assert that the page title is \u0027Assert Action Test\u0027.",
+      "reasoning": "The instruction is to assert the page title. I have created an ASSERT action with \u0027tg\u0027 set to \u0027title\u0027 and \u0027v\u0027 set to the expected title \u0027Assert Action Test\u0027.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "title",
+          "value": [
+            "Assert Action Test"
+          ],
+          "description": "Assert that the page title is \u0027Assert Action Test\u0027",
+          "elementDetails": "page title",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    },
+    {
+      "promptLine": "Verify that the welcome message is \u0027Welcome to our web store!\u0027.",
+      "reasoning": "Verified the text content of the element with id \u0027welcome-message\u0027 to be \u0027Welcome to our web store!\u0027.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#welcome-message",
+          "value": [
+            "Welcome to our web store!"
+          ],
+          "description": "Verify that the welcome message is \u0027Welcome to our web store!\u0027",
+          "elementDetails": "welcome message",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "STANDARD"
+    },
+    {
+      "promptLine": "Assert that the \u0027Clickable Button\u0027 button is visible.",
+      "reasoning": "Asserting the visibility of the button with id \u0027visible-btn\u0027 as requested.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "#visible-btn",
+          "value": [
+            "visible"
+          ],
+          "description": "Assert that the \u0027Clickable Button\u0027 button is visible.",
+          "elementDetails": "Clickable Button",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Verify that the \u0027Secret Button\u0027 button is hidden.",
+      "reasoning": "The instruction is to verify that the \u0027Secret Button\u0027 button is hidden. Since no element with \u0027Secret Button\u0027 is present in the provided Accessibility Tree, asserting its \u0027hidden\u0027 state is appropriate. I\u0027ve used an aria-label selector as it\u0027s common in AXTree representations.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "[aria-label\u003d\"Secret Button\"]",
+          "value": [
+            "hidden"
+          ],
+          "description": "Verify that the \u0027Secret Button\u0027 button is hidden.",
+          "elementDetails": "Secret Button",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

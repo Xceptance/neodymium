@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Action Edge Cases - Stale Element</title>
+</head>
+<body>
+    <h1>Stale Element Edge Case</h1>
+    
+    <div id="container">
+        <!-- Re-rendered button -->
+        <button id="btn-refresh">Click to Refresh State</button>
+    </div>
+    
+    <div id="result"></div>
+    
+    <script>
+        function setupButton() {
+            var btn = document.getElementById('btn-refresh');
+            if (btn) {
+                btn.addEventListener('click', function() {
+                    document.getElementById('result').innerText = 'Stale Element Clicked Successfully!';
+                });
+            }
+        }
+        
+        setupButton();
+        
+        // Every 800ms, replace the button completely in the DOM
+        setInterval(function() {
+            var container = document.getElementById('container');
+            container.innerHTML = '<button id="btn-refresh">Click to Refresh State</button>';
+            setupButton();
+        }, 800);
+    </script>
+</body>
+</html>

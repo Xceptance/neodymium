@@ -1,0 +1,5 @@
+Open login dialog
+Type "${username}" into email input
+Type "${password}" into password input
+Click login button
+Verify dashboard is displayed for "${username}"

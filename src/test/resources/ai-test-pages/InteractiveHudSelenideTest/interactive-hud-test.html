@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interactive HUD Test Page</title>
+</head>
+<body>
+    <h1>Interactive HUD Test Page</h1>
+    <button id="btn1">Button 1</button>
+    <button id="btn2">Button 2</button>
+    <button id="btn3" style="display:none;">Invisible Button</button>
+    <input id="text-input" type="text" />
+    <div id="result">Initial State</div>
+    <div id="click-count">0</div>
+    <script>
+        let count = 0;
+        document.getElementById('btn1').onclick = function() {
+            count++;
+            document.getElementById('click-count').innerText = count;
+            document.getElementById('result').innerText = "Button 1 Clicked";
+        };
+        document.getElementById('btn2').onclick = function() {
+            count++;
+            document.getElementById('click-count').innerText = count;
+            document.getElementById('result').innerText = "Button 2 Clicked";
+        };
+        document.getElementById('text-input').onchange = function() {
+            document.getElementById('result').innerText = "Typed: " + this.value;
+        };
+    </script>
+</body>
+</html>

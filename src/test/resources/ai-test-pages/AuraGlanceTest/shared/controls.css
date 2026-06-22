@@ -1,0 +1,178 @@
+/* Floating Control Center Drawer */
+
+.aura-controls-trigger {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), 0 0 20px var(--accent-purple-glow);
+    z-index: 9999;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.aura-controls-trigger:hover {
+    transform: scale(1.1) rotate(90deg);
+}
+
+.aura-controls-trigger svg {
+    width: 28px;
+    height: 28px;
+    fill: white;
+}
+
+.aura-drawer {
+    position: fixed;
+    top: 0;
+    right: -380px;
+    width: 380px;
+    height: 100vh;
+    background: hsla(220, 20%, 10%, 0.85);
+    backdrop-filter: blur(25px);
+    border-left: 1px solid var(--bg-card-border);
+    box-shadow: -15px 0 35px rgba(0, 0, 0, 0.6);
+    z-index: 9998;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 2.5rem 2rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.aura-drawer.open {
+    right: 0;
+}
+
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--bg-card-border);
+    padding-bottom: 1rem;
+}
+
+.drawer-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.drawer-close {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.drawer-close:hover {
+    color: var(--text-primary);
+    transform: scale(1.1);
+}
+
+.drawer-section {
+    margin-bottom: 2rem;
+}
+
+.drawer-section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+
+/* Switches and Controls */
+.control-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: hsla(220, 20%, 15%, 0.5);
+    border: 1px solid var(--bg-card-border);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    transition: var(--transition-smooth);
+}
+
+.control-item:hover {
+    border-color: hsla(190, 90%, 50%, 0.3);
+}
+
+.control-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    cursor: pointer;
+}
+
+.control-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.control-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Custom CSS switch toggle */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: hsla(220, 20%, 25%, 0.6);
+    transition: .3s;
+    border-radius: 24px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-gradient: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+    background-color: var(--accent-purple);
+}
+
+input:checked + .slider:before {
+    transform: translateX(20px);
+}

@@ -19,7 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.recording.TakeScreenshotsThread;
 import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
 import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
 import com.xceptance.neodymium.util.AllureAddons;
@@ -145,7 +144,6 @@ public class VideoWriter implements Writer
                 LOGGER.error("something went wrong with video processing");
                 break;
             }
-            LOGGER.info("process video is processing");
             Selenide.sleep(200);
         }
         File tempFile = new File(recordingConfigurations.tempFolderToStoreRecording() + "/" + "temp" + UUID.randomUUID() + ".mp4");
@@ -170,7 +168,6 @@ public class VideoWriter implements Writer
                 LOGGER.error("something went wrong with adjusting frame rate");
                 break;
             }
-            LOGGER.info("video frame rate adjustment is processing");
             Selenide.sleep(200);
         }
         tempFile.delete();

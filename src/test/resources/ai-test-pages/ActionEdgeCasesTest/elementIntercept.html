@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Action Edge Cases - Element Intercept</title>
+    <style>
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Element Interception Edge Case</h1>
+    
+    <!-- Temporary overlay -->
+    <div id="overlay">Loading system modules...</div>
+    
+    <button id="btn-action" style="padding: 10px 20px;">Submit Transaction</button>
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('btn-action').addEventListener('click', function() {
+            document.getElementById('result').innerText = 'Transaction Completed successfully!';
+        });
+        
+        // Hide the overlay after 800ms
+        setTimeout(function() {
+            document.getElementById('overlay').style.display = 'none';
+        }, 800);
+    </script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.AdvancedDomTest :: testShadowDom :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html"
+          ],
+          "description": "Navigate to https://localhost:39389/AuraGlanceTest/shop/sandbox/shadow-dom.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Type \u0027admin\u0027 into the username input inside the shadow root.",
+      "reasoning": "Identified the username input by its ID and generated a TYPE action to enter \u0027admin\u0027.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#shadow-username",
+          "value": [
+            "admin"
+          ],
+          "description": "Type \u0027admin\u0027 into the username input",
+          "elementDetails": "Username textbox",
+          "elementContext": {
+            "id": "shadow-username",
+            "placeholder": "Username",
+            "tagName": "input",
+            "type": "text"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Type \u0027secret\u0027 into the password input inside the shadow root.",
+      "reasoning": "Identified the password input by its ID \u0027#shadow-password\u0027 and generated a TYPE action to enter \u0027secret\u0027.",
+      "actions": [
+        {
+          "type": "TYPE",
+          "target": "#shadow-password",
+          "value": [
+            "secret"
+          ],
+          "description": "Type \u0027secret\u0027 into the password input field.",
+          "elementDetails": "Password input with id \u0027shadow-password\u0027",
+          "elementContext": {
+            "id": "shadow-password",
+            "placeholder": "Password",
+            "tagName": "input",
+            "type": "password"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    },
+    {
+      "promptLine": "Click the login button inside the shadow root.",
+      "reasoning": "The instruction asks to click the login button inside the shadow root. The AXTree shows a button with id \u0027shadow-submit\u0027 and aria-label \u0027Login\u0027, which is the correct target. I am using the ID as the locator.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#shadow-submit",
+          "description": "Click the login button",
+          "elementDetails": "Login button",
+          "elementContext": {
+            "text": "Login",
+            "id": "shadow-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
+    }
+  ]
+}

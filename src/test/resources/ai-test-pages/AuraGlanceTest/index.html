@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neodymium Aura AI - Aura Test Suite Hub</title>
+    <link rel="stylesheet" href="shared/style.css">
+    <style>
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .badge-purple {
+            background: rgba(139, 92, 246, 0.2);
+            color: hsl(260, 85%, 65%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        .badge-cyan {
+            background: rgba(6, 182, 212, 0.2);
+            color: hsl(190, 90%, 50%);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+        .badge-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--status-success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .app-link {
+            display: inline-block;
+            margin-top: 1.5rem;
+            text-decoration: none;
+            color: var(--accent-cyan);
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: var(--transition-smooth);
+        }
+        .app-link:hover {
+            color: var(--text-primary);
+            text-shadow: 0 0 8px var(--accent-cyan-glow);
+        }
+        .code-box {
+            background: hsl(220, 20%, 5%);
+            border: 1px solid var(--bg-card-border);
+            border-radius: var(--radius-sm);
+            padding: 1rem 1.25rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            color: var(--accent-cyan);
+            overflow-x: auto;
+            margin: 1rem 0;
+            position: relative;
+        }
+        .code-box::before {
+            content: "Terminal";
+            position: absolute;
+            top: 2px;
+            right: 8px;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+        .glow-title {
+            background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.8rem;
+            font-weight: 800;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.02em;
+        }
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.15rem;
+            margin-bottom: 2rem;
+            max-width: 800px;
+        }
+        .feature-icon {
+            font-size: 1.5rem;
+            margin-right: 0.5rem;
+        }
+        .card-header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="#" class="brand">
+                <span class="brand-icon"></span>
+                <span>AURA GLANCE SANDBOX</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="#" class="active">Hub Home</a></li>
+                <li><a href="shop/index.html">Poster Store</a></li>
+                <li><a href="shop/homepage-perfect.html">Apparel Store</a></li>
+                <li><a href="shop/forms.html">Forms Demo</a></li>
+                <li><a href="shop/escalation.html">Escalation Challenge</a></li>
+                <li><a href="shop/visual-escalation.html">Visual Escalation</a></li>
+                <li><a href="dashboard/index.html">Dashboard</a></li>
+                <li><a href="a11y/index.html">A11y Arena</a></li>
+                <li><a href="spa/index.html">React SPA</a></li>
+            </ul>
+        </div>
+    </header>
+
+    <main class="aura-container">
+        <div class="aura-hero">
+            <h1 class="glow-title">Neodymium Aura AI Sandbox</h1>
+            <p class="subtitle">Welcome to the local, self-contained multi-port visual testing grounds for Neodymium Aura AI and the visual auditor <strong>Aura Glance</strong>. Interact with the sub-apps, trigger the floatable Chaos drawer to inject layout shifts, overlaps, accessibility defects, and verify visual regression checks.</p>
+        </div>
+
+        <h2 style="margin-bottom: 1.5rem; font-size: 1.75rem; font-weight: 700;">Sub-Application Test Environments</h2>
+        
+        <div class="aura-grid-3">
+            <!-- Card 1: Shop -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">E-Commerce Store</h3>
+                    <span class="badge badge-purple">Flex Grid</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Product listings, adaptive media scales, dynamic layouts, and absolute positioning matrices. Ideal for checking general page visual integrity and image serving.</p>
+                <a href="shop/index.html" class="app-link">Launch E-Commerce Store &rarr;</a>
+            </div>
+
+            <!-- Card 2: Forms -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Interactive Forms</h3>
+                    <span class="badge badge-cyan">Reactive UI</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Client-side form input validation, conditional state warnings, dynamic total price calculators, and absolute overlap hotspots for visual assertions.</p>
+                <a href="shop/forms.html" class="app-link">Launch Forms Demo &rarr;</a>
+            </div>
+
+            <!-- Card 3: Dashboard -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Admin Dashboard</h3>
+                    <span class="badge badge-success">Iframes</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Analytical charts with complex SVG components, multi-column dashboard, and nested cross-origin iframes. Validates selector extractions across iframe boundaries.</p>
+                <a href="dashboard/index.html" class="app-link">Launch Dashboard &rarr;</a>
+            </div>
+        </div>
+
+        <div class="aura-grid-3">
+            <!-- Card 4: Accessibility -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">A11y Arena</h3>
+                    <span class="badge badge-purple">Contrast Check</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Dedicated page for accessibility audits. Includes toggles for extremely low contrast ratios and text-clipping overrides to trigger non-blocking '(soft)' warning assertions.</p>
+                <a href="a11y/index.html" class="app-link">Launch A11y Arena &rarr;</a>
+            </div>
+
+            <!-- Card 5: React-like SPA -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Asynchronous SPA</h3>
+                    <span class="badge badge-cyan">AJAX & HTMX</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Simulates modern Single Page Applications (SPAs) with initial loading suspense skeletons, async AJAX lists, and HTMX dynamic HTML swaps. Perfect for wait-assertion audits.</p>
+                <a href="spa/index.html" class="app-link">Launch React SPA &rarr;</a>
+            </div>
+
+            <!-- Card 6: Escalation Challenge -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Escalation Challenge</h3>
+                    <span class="badge badge-success">AXTree to Lean</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Interact with custom interactive elements (divs, spans, hidden inputs) that are omitted from AXTree, forcing context escalation from AXTREE to LEAN.</p>
+                <a href="shop/escalation.html" class="app-link">Launch Escalation Demo &rarr;</a>
+            </div>
+        </div>
+
+        <h2 style="margin-top: 3.5rem; margin-bottom: 1rem; font-size: 1.75rem; font-weight: 700;">Multi-Quality Apparel Store Playground</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 2rem; max-width: 800px; font-size: 0.95rem;">
+            A set of visually identical storefront pages built with varying levels of HTML and CSS quality (Perfect, Normal, and Bad). These are designed to validate the robustness of automation tools, locator paths (IDs, CSS, XPath), and visual/textual checks under different structural scenarios.
+        </p>
+
+        <div class="aura-grid-3" style="margin-bottom: 2.5rem;">
+            <!-- Perfect Quality -->
+            <div class="aura-card" style="border-color: hsla(145, 80%, 45%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Perfect Quality</h3>
+                    <span class="badge badge-success">Clean & Semantic</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Fully semantic HTML5 structure, clear and unique IDs/classes, complete ARIA descriptions, and modular clean JavaScript.</p>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <a href="shop/homepage-perfect.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Homepage &rarr;</a>
+                    <a href="shop/plp-perfect.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Product Listing &rarr;</a>
+                </div>
+            </div>
+
+            <!-- Normal Quality -->
+            <div class="aura-card" style="border-color: hsla(38, 95%, 55%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Normal Quality</h3>
+                    <span class="badge badge-cyan">Standard Quality</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Mixed semantic markup with wrapper divs, generic/inconsistent naming structures, basic form placeholders, and inline handlers.</p>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <a href="shop/homepage-normal.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Homepage &rarr;</a>
+                    <a href="shop/plp-normal.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Product Listing &rarr;</a>
+                </div>
+            </div>
+
+            <!-- Bad Quality -->
+            <div class="aura-card" style="border-color: hsla(355, 85%, 55%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Bad Quality</h3>
+                    <span class="badge badge-purple" style="background: rgba(239, 68, 68, 0.15); color: hsl(355, 85%, 55%); border: 1px solid rgba(239, 68, 68, 0.25);">Horrible Code</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Nested non-semantic divs, duplicate element IDs, inline layout styling, lack of labels, and obfuscated global inline scripting.</p>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <a href="shop/homepage-bad.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Homepage &rarr;</a>
+                    <a href="shop/plp-bad.html" class="app-link" style="margin-top: 0; display: inline-block;">Launch Product Listing &rarr;</a>
+                </div>
+            </div>
+        </div>
+
+        <h2 style="margin-bottom: 1.5rem; font-size: 1.75rem; font-weight: 700;">Context Escalation Challenges</h2>
+
+        <div class="aura-grid-2">
+            <!-- Card 6: Escalation Challenge -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Textual Escalation</h3>
+                    <span class="badge badge-success">AXTree to Lean to Standard</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Interact with custom interactive elements (divs, spans, hidden inputs) that are omitted from AXTree, forcing context escalation from AXTREE to LEAN and STANDARD.</p>
+                <a href="shop/escalation.html" class="app-link">Launch Escalation Demo &rarr;</a>
+            </div>
+
+            <!-- Card 7: Visual Escalation -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Visual Escalation</h3>
+                    <span class="badge badge-purple">Multimodal Visual</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Verify text and click elements drawn purely graphically on canvas or via CSS pseudo-elements, forcing escalation from STANDARD to VISUAL.</p>
+                <a href="shop/visual-escalation.html" class="app-link">Launch Visual Escalation &rarr;</a>
+            </div>
+        </div>
+
+        <div class="aura-card" style="margin-top: 2.5rem; background: radial-gradient(circle at center, hsla(260, 85%, 65%, 0.05), transparent 80%);">
+            <h3 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 1rem; color: var(--accent-cyan);">Aura Defect Controls (Chaos Drawer)</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.95rem;">Every sub-application contains a floating gear-wheel icon in the <strong>bottom-right corner</strong> of the page. Click it to open the Chaos drawer, where you can manually or programmatically inject visual and functional defects:</p>
+            <ul style="color: var(--text-secondary); font-size: 0.9rem; margin-left: 1.5rem; line-height: 1.8; margin-bottom: 1.5rem;">
+                <li><strong>Inject Element Overlap:</strong> Forces buttons to slide absolute over primary header titles.</li>
+                <li><strong>Inject Low Contrast:</strong> Overrides colors to near-invisible shades for testing contrast and a11y checks.</li>
+                <li><strong>Inject Clipped Text:</strong> Caps description card heights to 60px with hidden overflow, hiding trailing text.</li>
+                <li><strong>Inject Mobile Overlap:</strong> Squeezes multi-column grids horizontally without wrapping.</li>
+                <li><strong>Inject Layout Shift:</strong> Displaces rows with off-center padding and margins to simulate misalignments.</li>
+                <li><strong>Show Promo Banner:</strong> Mounts or unmounts a promotional banner on top of the layout to test optional steps.</li>
+            </ul>
+
+            <h3 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 1rem; color: var(--accent-purple);">Running Automated Tests</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.95rem;">To compile and execute the pre-configured visual test suites locally, execute the following commands in your workspace root:</p>
+            <div class="code-box">mvn test -Pjunit-5 -Dtest=com.xceptance.neodymium.ai.Aura*Test</div>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 1rem;">The test suites automatically spin up the embedded server, load the test applications, and perform various visual AI assertions, visual dHash baseline replays, accessibility audits, and AJAX/HTMX checks.</p>
+        </div>
+    </main>
+
+</body>
+</html>

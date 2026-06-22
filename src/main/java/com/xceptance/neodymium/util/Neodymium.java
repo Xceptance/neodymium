@@ -20,6 +20,13 @@ import com.browserup.bup.BrowserUpProxy;
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
+import com.xceptance.neodymium.ai.config.AiConfiguration;
+import com.xceptance.neodymium.ai.core.AiBrowser;
+import com.xceptance.neodymium.ai.core.AiExecutionResult;
+import com.xceptance.neodymium.ai.core.AiTestRunResult;
+import com.xceptance.neodymium.ai.generator.InteractiveHud;
+import com.xceptance.neodymium.ai.playbook.Playbook;
+import com.xceptance.neodymium.ai.playbook.PlaybookManager;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
 import com.xceptance.neodymium.common.testdata.TestData;
@@ -37,14 +44,28 @@ public class Neodymium
     // keep our current WebDriver state
     private WebDriverStateContainer webDriverStateContainer;
 
+    // keep our current AiBrowser instance
+    private AiBrowser aiBrowser;
+
+    // keep our active AI Playbook instance
+    private Playbook activeAiPlaybook;
+
+    // keep our interactive HUD instance
+    private InteractiveHud interactiveHud;
+
     // keep our current browser profile name
     private String browserProfileName;
-    
+
+    // keep our active test data source file path/name
+    private String testdataSourceFile;
+
     // keep our current browser name
     private String browserName;
 
+    private String testName;
+
     private static List<String> browserFilter = generateBrowserFilter();
-    
+
     // keep our current remote debugging port
     private int remoteDebuggingPort;
 
@@ -54,7 +75,10 @@ public class Neodymium
     private WebElement lastUsedElement;
 
     // our global configuration
-    private final NeodymiumConfiguration configuration;
+    private NeodymiumConfiguration configuration;
+
+    // our AI configuration
+    private AiConfiguration aiConfiguration;
 
     // localization
     private final NeodymiumLocalization localization;
@@ -75,6 +99,7 @@ public class Neodymium
             ConfigFactory.setProperty(TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:this/path/should/never/exist/noOneShouldCreateMe.properties");
         }
         configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
+        aiConfiguration = ConfigFactory.create(AiConfiguration.class, System.getProperties(), System.getenv());
         localization = NeodymiumLocalization.build(configuration.localizationFile());
     }
 
@@ -141,6 +166,20 @@ public class Neodymium
      *
      * @param key
      *            key to lookup
+     * @return localized text or the key if no localization is found
+     */
+    public static String tryLocalizedText(final String key)
+    {
+        return getContext().localization.tryGetText(key);
+    }
+
+    /**
+     * Shortcut for localized text access. Will fail with an assertion if the key cannot be found.<br>
+     * Looks up the key in the localization setup starting the configured full locale e.g. 'en_US', falls back to the
+     * language 'en' if not found, fallback to default, and finally break with an assertion if the key can't be found.
+     *
+     * @param key
+     *            key to lookup
      * @param locale
      *            locale to lookup the key with
      * @return localized text
@@ -148,6 +187,22 @@ public class Neodymium
     public static String localizedText(final String key, final String locale)
     {
         return getContext().localization.getText(key, locale);
+    }
+
+    /**
+     * Shortcut for localized text access. Will fail with an assertion if the key cannot be found.<br>
+     * Looks up the key in the localization setup starting the configured full locale e.g. 'en_US', falls back to the
+     * language 'en' if not found, fallback to default, and finally break with an assertion if the key can't be found.
+     *
+     * @param key
+     *            key to lookup
+     * @param locale
+     *            locale to lookup the key with
+     * @return localized text or key of no localization is found
+     */
+    public static String tryLocalizedText(final String key, final String locale)
+    {
+        return getContext().localization.tryGetText(key, locale);
     }
 
     /**
@@ -162,7 +217,8 @@ public class Neodymium
     }
 
     /**
-     * Get the complete test data set and add set the flag to attach the test data to the report after the test finished.
+     * Get the complete test data set and add set the flag to attach the test data to the report after the test
+     * finished.
      *
      * @return dataMap
      */
@@ -193,6 +249,16 @@ public class Neodymium
     public static NeodymiumConfiguration configuration()
     {
         return getContext().configuration;
+    }
+
+    /**
+     * Get the current AiConfiguration instance
+     * 
+     * @return aiConfiguration
+     */
+    public static AiConfiguration aiConfiguration()
+    {
+        return getContext().aiConfiguration;
     }
 
     /**
@@ -296,6 +362,116 @@ public class Neodymium
     }
 
     /**
+     * Get the active test data source file path/name.
+     * 
+     * @return test data source file path/name
+     */
+    public static String getTestdataSourceFile()
+    {
+        return getContext().testdataSourceFile;
+    }
+
+    /**
+     * Set the active test data source file path/name.
+     * 
+     * @param testdataSourceFile
+     *            the test data source file path/name
+     */
+    public static void setTestdataSourceFile(final String testdataSourceFile)
+    {
+        getContext().testdataSourceFile = testdataSourceFile;
+    }
+
+    /**
+     * Get the current AiBrowser instance
+     * 
+     * @return aiBrowser
+     */
+    public static AiBrowser ai()
+    {
+        return getContext().aiBrowser;
+    }
+
+    /**
+     * Set the current AiBrowser instance.<br>
+     * <b>Attention:</b> This function is mainly used to set information within the context internally.
+     * 
+     * @param aiBrowser
+     *            the AiBrowser to set
+     */
+    public static void setAiBrowser(AiBrowser aiBrowser)
+    {
+        getContext().aiBrowser = aiBrowser;
+    }
+
+    public static AiExecutionResult getLastAiExecutionResult()
+    {
+        final AiBrowser ai = ai();
+        return ai == null ? null : ai.getLastExecutionResult();
+    }
+
+    public static AiTestRunResult getLastAiTestRunResult()
+    {
+        final AiBrowser ai = ai();
+        return ai == null ? null : ai.getLastTestRunResult();
+    }
+
+    /**
+     * Get the current active AI Playbook instance
+     * 
+     * @return playbook
+     */
+    public static Playbook getAiPlaybook()
+    {
+        return getContext().activeAiPlaybook;
+    }
+
+    /**
+     * Set the current active AI Playbook instance
+     * 
+     * @param playbook
+     *            the Playbook to set
+     */
+    public static void setAiPlaybook(Playbook playbook)
+    {
+        getContext().activeAiPlaybook = playbook;
+    }
+
+    /**
+     * Get the current InteractiveHud instance
+     * 
+     * @return interactiveHud
+     */
+    public static InteractiveHud getInteractiveHud()
+    {
+        return getContext().interactiveHud;
+    }
+
+    /**
+     * Get or create the InteractiveHud instance
+     * 
+     * @return interactiveHud
+     */
+    public static InteractiveHud getOrCreateInteractiveHud()
+    {
+        if (getContext().interactiveHud == null) {
+            getContext().interactiveHud = new InteractiveHud();
+        }
+        return getContext().interactiveHud;
+    }
+
+    /**
+     * Set the current InteractiveHud instance
+     * 
+     * @param interactiveHud
+     *            the InteractiveHud to set
+     */
+    public static void setInteractiveHud(InteractiveHud interactiveHud)
+    {
+        getContext().interactiveHud = interactiveHud;
+    }
+
+    /**
      * Name of the current browser
      * 
      * @return browser name
@@ -303,6 +479,16 @@ public class Neodymium
     public static String getBrowserName()
     {
         return getContext().browserName;
+    }
+
+    public static String getTestName()
+    {
+        return getContext().testName;
+    }
+
+    public static void setTestName(String testName)
+    {
+        getContext().testName = testName;
     }
 
     /**
@@ -316,7 +502,7 @@ public class Neodymium
     {
         getContext().browserName = browserName;
     }
-    
+
     /**
      * Remote debugging port of the current bowser
      * 
@@ -326,7 +512,7 @@ public class Neodymium
     {
         return getContext().remoteDebuggingPort;
     }
-    
+
     /**
      * Set the remote debugging port of the current browser.<br>
      * <b>Attention:</b> This function is mainly used to set information within the context internally.
@@ -647,25 +833,31 @@ public class Neodymium
      */
     public static WebElement getLastUsedElement()
     {
-        if (getContext().lastUsedElement != null && getContext().lastLocator != null)
+        try
         {
-            return getContext().lastUsedElement.findElement(getContext().lastLocator);
+            if (getContext().lastUsedElement != null && getContext().lastLocator != null)
+            {
+                return getContext().lastUsedElement.findElement(getContext().lastLocator);
+            }
+            else if (getContext().lastLocator != null && hasDriver())
+            {
+                return getDriver().findElement(getContext().lastLocator);
+            }
+            else
+            {
+                return null;
+            }
         }
-        else if (getContext().lastLocator != null && hasDriver())
+        catch (Throwable t)
         {
-            return getDriver().findElement(getContext().lastLocator);
-        }
-        else
-        {
+            // if this breaks something upfront was already broken so we want the original error instead of this one
+            // covring up
             return null;
         }
     }
 
     /**
-     * Checks if the test already looked up any element. 
-     *
-     * return whether there is a last element stored
-     *
+     * Checks if the test already looked up any element. return whether there is a last element stored
      */
     public static boolean hasLastUsedElement()
     {
@@ -682,4 +874,125 @@ public class Neodymium
             return false;
         }
     }
+
+    public static void initializePlaybook()
+    {
+        Playbook playbook = Neodymium.getAiPlaybook();
+        if (playbook == null)
+        {
+            final String playbookId = getTestName();
+
+            final boolean skipReplay = Neodymium.getData().exists("skipReplay") && Neodymium.getData().asBoolean("skipReplay", false);
+
+            if (!skipReplay)
+            {
+                playbook = PlaybookManager.loadPlaybook(playbookId);
+            }
+
+            if (playbook != null)
+            {
+                playbook.setRecording(false);
+                Neodymium.setAiPlaybook(playbook);
+            }
+            else
+            {
+                playbook = new Playbook(playbookId);
+                Neodymium.setAiPlaybook(playbook);
+            }
+        }
+    }
+
+    public static void expectFailure(final String bugId, final Runnable runnable)
+    {
+        new ExpectedFailureBuilder(bugId).run(runnable);
+    }
+
+    public static ExpectedFailureBuilder expectFailure(final String bugId)
+    {
+        return new ExpectedFailureBuilder(bugId);
+    }
+
+    public static class ExpectedFailureBuilder
+    {
+        private final String bugId;
+        private final List<Class<? extends Throwable>> exceptionTypes = new ArrayList<>();
+        private String messagePattern;
+
+        public ExpectedFailureBuilder(final String bugId)
+        {
+            this.bugId = bugId;
+        }
+
+        public ExpectedFailureBuilder ofType(final Class<? extends Throwable> exceptionType)
+        {
+            this.exceptionTypes.add(exceptionType);
+            return this;
+        }
+
+        public ExpectedFailureBuilder withMessage(final String messagePattern)
+        {
+            this.messagePattern = messagePattern;
+            return this;
+        }
+
+        public void run(final Runnable runnable)
+        {
+            try
+            {
+                runnable.run();
+            }
+            catch (final Throwable t)
+            {
+                if (!exceptionTypes.isEmpty())
+                {
+                    boolean matched = false;
+                    for (final Class<? extends Throwable> type : exceptionTypes)
+                    {
+                        if (type.isInstance(t))
+                        {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched)
+                    {
+                        final String msg = "Expected failure of type(s) " + exceptionTypes + " but got " + t.getClass().getName() + " for bug: " + bugId;
+                        throw new AssertionError(msg, t);
+                    }
+                }
+
+                if (messagePattern != null && !messagePattern.isEmpty())
+                {
+                    final String actualMsg = t.getMessage() != null ? t.getMessage() : "";
+                    if (!actualMsg.contains(messagePattern) && !messagePattern.contains(actualMsg))
+                    {
+                        final String msg = "Expected failure message pattern mismatch.\nExpected to contain or be contained in: \"" + messagePattern + "\"\nActual message: \"" + actualMsg + "\" for bug: " + bugId;
+                        throw new AssertionError(msg, t);
+                    }
+                }
+
+                return;
+            }
+
+            final String msg = "Expected code block to fail with " + (bugId != null ? "bug: " + bugId : "expected failure") + ", but it completed successfully.";
+            throw new AssertionError(msg);
+        }
+    }
+
+    /**
+     * Re-creates the thread-local AI configuration instance from the latest system properties and env.
+     */
+    public static void reloadAiConfiguration()
+    {
+        getContext().aiConfiguration = ConfigFactory.create(AiConfiguration.class, System.getProperties(), System.getenv());
+    }
+
+    /**
+     * Re-creates the thread-local main configuration instance from the latest system properties and env.
+     */
+    public static void reloadConfiguration()
+    {
+        getContext().configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
+    }
+
 }

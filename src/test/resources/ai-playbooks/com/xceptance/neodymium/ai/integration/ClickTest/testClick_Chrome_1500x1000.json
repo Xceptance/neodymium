@@ -1,0 +1,44 @@
+{
+  "id": "com.xceptance.neodymium.ai.integration.ClickTest :: testClick :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "OPEN http://localhost:43377/ClickActionTest/testClickStandardButton.html",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "NAVIGATE",
+          "value": [
+            "http://localhost:43377/ClickActionTest/testClickStandardButton.html"
+          ],
+          "description": "Navigate to http://localhost:43377/ClickActionTest/testClickStandardButton.html",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Click the \u0027Submit Order\u0027 button (hint: #btn-submit)",
+      "reasoning": "Clicked the \u0027Submit Order\u0027 button.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-submit",
+          "description": "Click \u0027Submit Order\u0027 button",
+          "elementDetails": "\u0027Submit Order\u0027 button",
+          "elementContext": {
+            "text": "Submit Order",
+            "id": "btn-submit",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
+    }
+  ]
+}

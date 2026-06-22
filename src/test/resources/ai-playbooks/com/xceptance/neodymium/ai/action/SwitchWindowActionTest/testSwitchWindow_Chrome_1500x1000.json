@@ -1,0 +1,60 @@
+{
+  "id": "com.xceptance.neodymium.ai.action.SwitchWindowActionTest :: testSwitchWindow :: Browser Chrome_1500x1000",
+  "steps": [
+    {
+      "promptLine": "Switch to the new window",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "SWITCH_WINDOW",
+          "description": "Switch to new window",
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Switch to window 0",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "SWITCH_WINDOW",
+          "target": "0",
+          "description": "Switch to window 0",
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Switch to window win_1",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "SWITCH_WINDOW",
+          "target": "win_1",
+          "description": "Switch to window win_1",
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    },
+    {
+      "promptLine": "Switch to window \u0027Original Window\u0027",
+      "reasoning": "directly parsed or local validation succeeded",
+      "actions": [
+        {
+          "type": "SWITCH_WINDOW",
+          "target": "Original Window",
+          "description": "Switch to window Original Window",
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false
+    }
+  ]
+}

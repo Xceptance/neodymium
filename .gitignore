@@ -30,6 +30,32 @@ temp-*.properties
 embeddedLocalProxySelfSignedRootCertificate.p12
 /bin/
 /allure-results/
+/.allure/
+/allure-report/
+/aura-allure-results-temp/
 
-# intellij project directory
+
+
+# IDE/AI helper folders
 .idea
+/.agents/
+/.gemini/
+/.specify/
+/.vscode/
+/specs/
+
+newTickets.txt
+neodymium.code-workspace
+
+# Neodymium AI temporary scratch folder
+tmp/
+
+# Neodymium Aura Reports History
+/allure-reports-history/
+
+# Antigravity CLI
+.antigravitycli/
+
+# Neodymium AI playbooks
+/src/test/resources/ai-playbooks/
+

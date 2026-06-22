@@ -499,19 +499,21 @@ if (!window.NEODYMIUM) {
 		 *            evenColor the color used for even highlight.
 		 */
 		switchHighlightStyle = function(baseDocument, oddFlag, oddColor, evenColor) {
-			[ 'neodymium-highlight-box', 'neodymium-outline-box' ].forEach(function(className) {
-				var elements = baseDocument.getElementsByClassName(className);
-				for (var i = 0; i < elements.length; i++) {
-					var style = elements[i].getAttribute('style');
-					if (oddFlag) {
-						elements[i].setAttribute('style', style.replace(
-								evenColor, oddColor));
-					} else {
-						elements[i].setAttribute('style', style.replace(
-								oddColor, evenColor));
-					}
+			var highlights = baseDocument.getElementsByClassName('neodymium-highlight-box');
+			for (var i = 0; i < highlights.length; i++) {
+				highlights[i].style.opacity = oddFlag ? '0.75' : '0';
+			}
+			
+			var outlines = baseDocument.getElementsByClassName('neodymium-outline-box');
+			for (var i = 0; i < outlines.length; i++) {
+				if (oddFlag) {
+					outlines[i].style.backgroundColor = oddColor;
+					outlines[i].style.outline = '1px solid blue';
+				} else {
+					outlines[i].style.backgroundColor = outlines[i].__origBG || '';
+					outlines[i].style.outline = outlines[i].__origOutline || '';
 				}
-			});
+			}
 		}
 
 		/**
@@ -622,48 +624,54 @@ if (!window.NEODYMIUM) {
 		 *            [evenColor] the color used for even highlight.
 		 * @return {Array} The highlight interval and clearing timeout.
 		 */
-		this.highlightAllElements = function(elements, baseDocument, duration, oddColor, evenColor) {
+		this.highlightAllElements = function(elements, baseDocument, duration, oddColor, evenColor, blinkCount) {
 			var _oddColor = oddColor ? oddColor	: 'rgb(255, 255, 90)';
 			var _evenColor = evenColor ? evenColor : 'rgb(255, 255, 210)';
 
 			if (elements && elements.length > 0 && baseDocument) {
-				var blinking = duration > 260 ? 250 : duration - 10;
 				var moreThanOnce = elements.length > 1;
 				let hash = new Date().getTime();
-				if (blinking > 0) {
-					// now highlight the nodes
-					var isOneHighlighted = false;
-					for (var i = 0; i < elements.length; i++) {
-						if (/^FRAME(SET)?$/.test(elements[i].localName
-								.toUpperCase())) {
-							outline(elements[i], _oddColor);
-							isOneHighlighted = true;
-						} else {
-							if (isVisible(elements[i])) {
+				
+				// Clear any previous interval if it exists to avoid overlapping/leaked timers
+				if (window.NEODYMIUM && window.NEODYMIUM._activeInterval) {
+					window.clearInterval(window.NEODYMIUM._activeInterval);
+					window.NEODYMIUM._activeInterval = null;
+				}
+
+				// now highlight the nodes
+				var isOneHighlighted = false;
+				for (var i = 0; i < elements.length; i++) {
+					if (/^FRAME(SET)?$/.test(elements[i].localName
+							.toUpperCase())) {
+						outline(elements[i], _oddColor);
+						isOneHighlighted = true;
+					} else {
+						if (isVisible(elements[i])) {
 							highlightSingleElement(elements[i], i,
 									moreThanOnce, _oddColor, hash);
 							isOneHighlighted = true;
-						}}
+						}
 					}
+				}
 
-					if (isOneHighlighted) {
-						var self = this;
-						var counter = 0;
-						var interval = window.setInterval(function() {
-							switchHighlightStyle(baseDocument,
-									counter % 2 === 0, _oddColor, _evenColor);
-							counter++;
-						}, blinking);
+				if (isOneHighlighted && duration > 0) {
+					var counter = 0;
+					var _blinkCount = (blinkCount !== undefined && blinkCount !== null) ? blinkCount : 3;
+					var maxTicks = 2 * _blinkCount - 1;
+					var interval = window.setInterval(function() {
+						if (counter >= maxTicks) {
+							window.clearInterval(interval);
+							return;
+						}
+						switchHighlightStyle(baseDocument,
+								counter % 2 !== 0, _oddColor, _evenColor);
+						counter++;
+					}, duration);
 
-						// clear blinking after defined duration.
-						var timeout = window.setTimeout(function() {
-							self.resetHighlightElements(baseDocument, interval,
-									null, hash);
-						}, duration);
-						return [ interval, timeout ];
+					// Store the active interval ID so it can be cleared globally
+					if (window.NEODYMIUM) {
+						window.NEODYMIUM._activeInterval = interval;
 					}
-				} else if (isVisible(elements[0])) {
-					scrollToElement(elements[0]);
 				}
 			}
 			return null;
@@ -684,6 +692,10 @@ if (!window.NEODYMIUM) {
 		this.resetHighlightElements = function(baseDocument, interval, timeout,	hash) {
 			if (interval) {
 				window.clearInterval(interval);
+			}
+			if (window.NEODYMIUM && window.NEODYMIUM._activeInterval) {
+				window.clearInterval(window.NEODYMIUM._activeInterval);
+				window.NEODYMIUM._activeInterval = null;
 			}
 			if (timeout) {
 				window.clearTimeout(timeout);
@@ -713,6 +725,12 @@ if (!window.NEODYMIUM) {
 				e.__origBG = e.__origOutline = e.__origClass = null;
 			}
 		}
+
+		// Export visibility check helpers to facilitate diagnostic queries and robust testing
+		this.isVisible = isVisible;
+		this.consumesSpace = consumesSpace;
+		this.isDisplayed = isDisplayed;
+		this.getOverflowState = getOverflowState;
 	}
 
 	window.NEODYMIUM = new NeodymiumInteractor();

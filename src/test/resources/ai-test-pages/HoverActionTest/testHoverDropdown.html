@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Hover Action Test</title>
+    <style>
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+        }
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+        .dropdown-item {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            cursor: pointer;
+        }
+        .dropdown-item:hover {
+            background-color: #f1f1f1;
+        }
+    </style>
+</head>
+<body>
+    <h1>Hover Action Test</h1>
+    <div class="dropdown" id="hover-menu">
+        <button id="menu-btn">Hover Me</button>
+        <div class="dropdown-content">
+            <a class="dropdown-item" id="menu-item-1">Sub Item 1</a>
+        </div>
+    </div>
+    <div id="result"></div>
+    <script>
+        document.getElementById('menu-item-1').addEventListener('click', function() {
+            document.getElementById('result').innerText = 'Dropdown Item Clicked!';
+        });
+    </script>
+</body>
+</html>

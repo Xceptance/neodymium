@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Store Action Test</title>
+</head>
+<body>
+    <h1>Store Action Test</h1>
+    
+    <div id="order-id">ORD-987654</div>
+    <div id="price-amount">14,96 €</div>
+    
+    <label for="input-target">Verify Order ID:</label>
+    <input type="text" id="input-target">
+    <button id="btn-verify">Verify</button>
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('btn-verify').addEventListener('click', function() {
+            var inputVal = document.getElementById('input-target').value;
+            if (inputVal === 'ORD-987654') {
+                document.getElementById('result').innerText = 'Verified successfully!';
+            } else {
+                document.getElementById('result').innerText = 'Verification failed: ' + inputVal;
+            }
+        });
+    </script>
+</body>
+</html>

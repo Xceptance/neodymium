@@ -1,0 +1,14 @@
+# AI-generated: Gemini 2.5 Pro
+
+# Root level steps that run on each iteration
+steps: |
+  Open ${shopUrl}
+  Click on the 'Aura Defect Controls' trigger button. (hint: #aura-trigger)
+  Click the 'Show Promo Banner' toggle to hide it. (hint: label[for='toggle-banner'])
+  Click 'Close Banner' (optional)
+  Observe page visual consistency (visual)
+
+# Iteration dataset defining test parameters for HTTP and HTTPS environments
+data:
+  - shopUrl: "http://localhost:${port}/AuraGlanceTest/shop/index.html?controls=true"
+  - shopUrl: "https://localhost:${httpsPort}/AuraGlanceTest/shop/index.html?controls=true"

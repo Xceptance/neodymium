@@ -1,0 +1,9 @@
+{
+  "id": "com.xceptance.neodymium.ai.action.ClickActionTest :: testClickHiddenElement",
+  "steps": [
+    {
+      "actions": [],
+      "expectedFailure": false
+    }
+  ]
+}

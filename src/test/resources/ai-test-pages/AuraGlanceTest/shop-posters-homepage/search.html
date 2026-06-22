@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results - Posters Art Store</title>
+    <link rel="stylesheet" href="../shared/style.css">
+    <link rel="stylesheet" href="../shared/controls.css">
+    <style>
+        /* Light Theme Overrides (mainly white and blue) */
+        body {
+            background-color: #ffffff !important;
+            color: #1a365d !important;
+            font-family: 'Outfit', sans-serif;
+        }
+        .aura-header {
+            background: #f7fafc !important;
+            border-bottom: 2px solid #e2e8f0 !important;
+        }
+        .header-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem 2rem;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            color: #2b6cb0 !important;
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+        .brand-icon {
+            color: #e53e3e !important;
+            font-size: 1.8rem;
+            font-weight: 900;
+            background: none !important;
+            box-shadow: none !important;
+            width: auto !important;
+            height: auto !important;
+            display: inline !important;
+        }
+        .nav-links a {
+            color: #4a5568 !important;
+            transition: all 0.2s ease;
+        }
+        .nav-links a:hover {
+            color: #2b6cb0 !important;
+            background: #ebf8ff !important;
+        }
+        .aura-container {
+            max-width: 1400px;
+            margin: 2.5rem auto;
+            padding: 0 2rem;
+        }
+        .search-form {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+            max-width: 800px;
+        }
+        .search-input {
+            flex: 1;
+            padding: 0.75rem 1.25rem;
+            border: 2px solid #cbd5e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: #ffffff;
+            color: #2d3748;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: #3182ce;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+        }
+        .btn-search {
+            background-color: #3182ce !important;
+            color: #ffffff !important;
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+        }
+        .btn-search:hover {
+            background-color: #2b6cb0 !important;
+        }
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 2.5rem;
+            margin-top: 1.5rem;
+        }
+        .product-card {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 12px;
+            padding: 1.5rem !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02) !important;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            color: #2d3748 !important;
+        }
+        .product-card:hover {
+            box-shadow: 0 10px 15px rgba(0,0,0,0.05) !important;
+            border-color: #cbd5e0 !important;
+        }
+        .product-img-container {
+            width: 100%;
+            height: 260px;
+            background: #f7fafc;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 1.25rem;
+        }
+        .product-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .product-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1a365d;
+            margin-bottom: 0.5rem;
+        }
+        .product-description {
+            font-size: 0.9rem;
+            color: #4a5568;
+            margin-bottom: 1rem;
+        }
+        .price-tag {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #2b6cb0;
+            margin-top: auto;
+        }
+        .minicart {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #ebf8ff;
+            border: 1px solid #bee3f8;
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            color: #2b6cb0;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation Header -->
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="index.html" class="brand">
+                <span class="brand-icon">✕</span>
+                <span>Posters</span>
+            </a>
+            <nav style="display: flex; align-items: center; gap: 2rem;">
+                <ul class="nav-links">
+                    <li><a href="index.html">Storefront</a></li>
+                </ul>
+                <div class="minicart" id="minicart">
+                    <span>🛒</span>
+                    <span id="cart-count">0 items</span>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="aura-container">
+        
+        <!-- Search Form -->
+        <form action="search.html" method="get" class="search-form">
+            <input type="text" name="searchText" id="search-box" class="search-input" placeholder="Search posters..." required>
+            <button type="submit" id="search-button" class="btn-search">Search</button>
+        </form>
+
+        <h2 style="margin-bottom: 0.5rem; color: #1a365d;" id="search-title">Search Results</h2>
+        <p style="color: #718096; margin-bottom: 2rem;" id="search-subtitle">Showing results for your search query.</p>
+
+        <!-- Search Results Grid -->
+        <div class="results-grid" id="results-grid">
+            
+            <!-- Result 1: Brown Bear -->
+            <div class="product-card">
+                <div class="product-img-container">
+                    <img src="brown_bear.png" alt="Brown Bear" class="product-img" id="img-bear-1">
+                </div>
+                <h3 class="product-title">Majestic Brown Bear</h3>
+                <p class="product-description">Professional wildlife photograph of a brown grizzly bear in the forest.</p>
+                <div class="price-tag">$19.99</div>
+            </div>
+
+            <!-- Result 2: Gummy Bears (Green) -->
+            <div class="product-card">
+                <div class="product-img-container">
+                    <img src="gummy_bears.png" alt="Gummy Bears" class="product-img" id="img-bear-2">
+                </div>
+                <h3 class="product-title">Green Gummy Bears</h3>
+                <p class="product-description">A clean studio shot showcasing translucent green gummy bears.</p>
+                <div class="price-tag">$12.99</div>
+            </div>
+
+            <!-- Result 3: Metallic Gummy Bears on Keyboard -->
+            <div class="product-card">
+                <div class="product-img-container">
+                    <img src="metallic_gummy_bears.png" alt="Metallic Gummy Bears" class="product-img" id="img-bear-3">
+                </div>
+                <h3 class="product-title">Metallic Gummy Bears</h3>
+                <p class="product-description">Metallic shiny gummy bears sitting on top of a laptop keyboard.</p>
+                <div class="price-tag">$15.99</div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Global Controls Drawer Script injection -->
+    <script src="../shared/controls.js"></script>
+
+    <!-- Client-side javascript to parse search query -->
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchText = urlParams.get('searchText');
+        if (searchText) {
+            document.getElementById('search-box').value = searchText;
+            document.getElementById('search-title').innerText = "Search Results for '" + searchText + "'";
+            
+            if (searchText.toLowerCase().trim() !== 'bear') {
+                // If query is not "bear", show empty results
+                document.getElementById('results-grid').innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: #718096;">No products found matching "' + searchText + '".</div>';
+                document.getElementById('search-subtitle').innerText = "0 results found.";
+            } else {
+                document.getElementById('search-subtitle').innerText = "3 results found.";
+            }
+        }
+    </script>
+
+</body>
+</html>

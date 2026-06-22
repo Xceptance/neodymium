@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SVG Icons Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>SVG Icon Buttons Challenge</h1>
+                <p class="aura-desc">
+                    These buttons contain raw SVG elements with zero text content, title tags, or aria-labels. 
+                    The visual AI agent must rely on visual recognition to differentiate them and perform the requested action.
+                </p>
+
+                <div class="aura-toolbar" style="display: flex; gap: 1rem; margin: 2rem 0; justify-content: center;">
+                    <!-- Edit Button -->
+                    <button id="btn-edit" class="aura-btn aura-btn-icon" style="padding: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer; color: #fff;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 20h9"></path>
+                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                        </svg>
+                    </button>
+
+                    <!-- Delete Button -->
+                    <button id="btn-delete" class="aura-btn aura-btn-icon" style="padding: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer; color: #fff;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18"></path>
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                        </svg>
+                    </button>
+
+                    <!-- Share Button -->
+                    <button id="btn-share" class="aura-btn aura-btn-icon" style="padding: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer; color: #fff;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="18" cy="5" r="3"></circle>
+                            <circle cx="6" cy="12" r="3"></circle>
+                            <circle cx="18" cy="19" r="3"></circle>
+                            <path d="m8.59 13.51 5.82 3.24"></path>
+                            <path d="m14.39 7.25-5.8 3.23"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="svg-status" style="font-weight: bold; color: #00ffcc;">No action taken yet</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.getElementById('btn-edit').addEventListener('click', function() {
+            document.getElementById('svg-status').innerText = 'Edit Clicked';
+            document.getElementById('svg-status').style.color = '#33ccff';
+        });
+        document.getElementById('btn-delete').addEventListener('click', function() {
+            document.getElementById('svg-status').innerText = 'Delete Clicked';
+            document.getElementById('svg-status').style.color = '#ff3366';
+        });
+        document.getElementById('btn-share').addEventListener('click', function() {
+            document.getElementById('svg-status').innerText = 'Share Clicked';
+            document.getElementById('svg-status').style.color = '#ffcc00';
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

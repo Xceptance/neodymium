@@ -1,0 +1,855 @@
+<div id="neodymium-ai-hud-container" data-hud-version="4" class="neo-console-container">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* CSS Variables for Harmonious Theme Support inside Neodymium AI HUD */
+        #neodymium-ai-hud-container {
+            --bg-main: rgba(18, 20, 26, 0.96);
+            --bg-drawer: rgba(13, 15, 20, 0.98);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-primary: #3b82f6;
+            --accent-primary-hover: #2563eb;
+            --accent-success: #10b981;
+            --accent-success-hover: #059669;
+            --accent-warning: #f59e0b;
+            --accent-danger: #ef4444;
+            --accent-danger-hover: #dc2626;
+            --accent-purple: #a855f7;
+            --step-active-bg: rgba(59, 130, 246, 0.08);
+            --step-active-border: #3b82f6;
+            --step-completed-bg: rgba(16, 185, 129, 0.03);
+            --step-completed-text: #9ca3af;
+            --input-bg: #151821;
+            --input-border: rgba(255, 255, 255, 0.15);
+            --tooltip-bg: #0d0f14;
+            --toolbar-bg: rgba(10, 11, 15, 0.5);
+            --table-header-bg: #151821;
+            --table-row-hover: rgba(255, 255, 255, 0.04);
+            --shadow-color: rgba(0, 0, 0, 0.6);
+            --shadow-glow: rgba(168, 85, 247, 0.15);
+            --btn-secondary-bg: rgba(255, 255, 255, 0.06);
+            --btn-secondary-hover: rgba(255, 255, 255, 0.12);
+        }
+
+        #neo-ai-hud {
+            width: 390px;
+            height: 425px;
+            background: var(--bg-main);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            box-shadow: 0 12px 40px var(--shadow-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: height 0.4s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s ease, opacity 0.3s;
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--text-primary);
+            z-index: 2147483647;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            opacity: 1;
+            box-sizing: border-box;
+        }
+
+        /* Light Theme Overrides */
+        #neodymium-ai-hud-container.light-theme {
+            --bg-main: rgba(255, 255, 255, 0.97);
+            --bg-drawer: rgba(243, 244, 246, 0.98);
+            --border-color: rgba(0, 0, 0, 0.08);
+            --text-primary: #1f2937;
+            --text-secondary: #4b5563;
+            --accent-primary: #2563eb;
+            --accent-primary-hover: #1d4ed8;
+            --accent-success: #059669;
+            --accent-success-hover: #047857;
+            --accent-warning: #d97706;
+            --accent-danger: #dc2626;
+            --accent-danger-hover: #b91c1c;
+            --accent-purple: #7c3aed;
+            --step-active-bg: rgba(37, 99, 235, 0.05);
+            --step-active-border: #2563eb;
+            --step-completed-bg: rgba(5, 150, 105, 0.02);
+            --step-completed-text: #6b7280;
+            --input-bg: #ffffff;
+            --input-border: rgba(0, 0, 0, 0.12);
+            --tooltip-bg: #f3f4f6;
+            --toolbar-bg: rgba(0, 0, 0, 0.02);
+            --table-header-bg: #e5e7eb;
+            --table-row-hover: rgba(0, 0, 0, 0.02);
+            --shadow-color: rgba(0, 0, 0, 0.12);
+            --shadow-glow: rgba(124, 58, 237, 0.1);
+            --btn-secondary-bg: rgba(0, 0, 0, 0.05);
+            --btn-secondary-hover: rgba(0, 0, 0, 0.1);
+        }
+
+        /* Floating container */
+        .neo-console-container {
+            position: fixed;
+            bottom: 0px;
+            right: 0px;
+            width: auto;
+            height: auto;
+            z-index: 2147483647;
+        }
+
+        #neo-ai-hud.expanded {
+            height: calc(100vh - 40px) !important;
+        }
+
+        .neo-header {
+            background: rgba(0, 0, 0, 0.15);
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            flex-shrink: 0;
+            box-sizing: border-box;
+        }
+
+        .neo-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: -0.2px;
+        }
+
+        .neo-status-badge {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 9999px;
+            background: rgba(245, 158, 11, 0.12);
+            color: var(--accent-warning);
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            letter-spacing: 0.8px;
+            display: inline-block;
+        }
+
+        /* Container of prompt steps */
+        .neo-step-list {
+            padding: 15px;
+            flex: 1 1 0%;
+            min-height: 0;
+            max-height: 100%;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+
+        /* Custom Scrollbar */
+        .neo-step-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .neo-step-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .neo-step-list::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        /* Step Card item */
+        .neo-step-item {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px 16px;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-primary);
+            transition: all 0.25s ease;
+            position: relative;
+            background: rgba(255, 255, 255, 0.01);
+            box-sizing: border-box;
+        }
+
+        .neo-step-item.drag-over {
+            border-top: 2px solid var(--accent-primary);
+            box-shadow: inset 0 3px 6px rgba(59, 130, 246, 0.4);
+        }
+
+        .neo-step-item.completed {
+            background: var(--step-completed-bg);
+            color: var(--step-completed-text);
+            border-color: rgba(16, 185, 129, 0.12);
+        }
+
+        .neo-step-item.completed .rewind-hover-indicator {
+            display: none;
+        }
+
+        .neo-step-item.completed:hover .checkmark,
+        .neo-step-item.completed.hovered .checkmark {
+            display: none !important;
+        }
+
+        .neo-step-item.completed:hover .rewind-hover-indicator,
+        .neo-step-item.completed.hovered .rewind-hover-indicator {
+            display: inline-flex !important;
+        }
+
+        .neo-step-item.skipped {
+            opacity: 0.5;
+            background: rgba(255, 255, 255, 0.02) !important;
+            border-color: rgba(255, 255, 255, 0.05) !important;
+        }
+
+        .neo-step-item.skipped .neo-step-content {
+            text-decoration: line-through;
+            color: var(--text-secondary);
+        }
+
+        .neo-step-item.active {
+            background: var(--step-active-bg);
+            border-color: var(--step-active-border);
+            box-shadow: inset 3px 0 0 var(--step-active-border);
+        }
+
+        .neo-step-indicator {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            width: 30px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .neo-step-content {
+            flex-grow: 1;
+            word-break: break-word;
+            font-weight: 500;
+        }
+
+        .neo-bp-marker {
+            transition: opacity 0.2s ease;
+        }
+
+        .neo-step-item:hover .neo-bp-marker {
+            opacity: 0.65 !important;
+        }
+
+        /* AI Reasoning Card Styling */
+        .neo-reasoning-card {
+            padding: 12px 16px;
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(124, 58, 237, 0.04));
+            border: 1px solid rgba(168, 85, 247, 0.2);
+            border-left: 4px solid var(--accent-purple);
+            border-radius: 8px;
+            box-shadow: 0 0 15px var(--shadow-glow);
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+
+        .neo-reasoning-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #c084fc;
+            letter-spacing: 0.6px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 6px;
+        }
+
+        .neo-reasoning-body {
+            font-size: 12.5px;
+            line-height: 1.5;
+            color: var(--text-primary);
+        }
+
+        .neo-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            color: var(--text-primary);
+        }
+
+        .neo-table th {
+            text-align: left;
+            padding: 8px 10px;
+            background: var(--table-header-bg);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .neo-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .neo-table tr:hover {
+            background: var(--table-row-hover);
+        }
+
+        .neo-table input {
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: var(--text-primary);
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .neo-table input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+        }
+
+        /* Prompt toggle button */
+        .neo-prompt-toggle-bar {
+            padding: 8px 15px;
+            background: rgba(0, 0, 0, 0.1);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: center;
+            flex-shrink: 0;
+            box-sizing: border-box;
+        }
+
+        .neo-prompt-toggle-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .neo-prompt-toggle-btn:hover {
+            color: var(--text-primary);
+            background: var(--btn-secondary-bg);
+        }
+
+        /* Toolbar at the bottom */
+        .neo-toolbar {
+            padding: 12px 16px;
+            background: var(--toolbar-bg);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+            box-sizing: border-box;
+        }
+
+        .neo-btn {
+            flex: 1;
+            height: 36px;
+            border-radius: 8px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--text-secondary);
+            cursor: pointer;
+            outline: none;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 0;
+            white-space: nowrap;
+            box-sizing: border-box;
+        }
+
+        .neo-btn:disabled {
+            opacity: 0.35 !important;
+            cursor: not-allowed;
+            background: rgba(255, 255, 255, 0.01) !important;
+            border-color: var(--border-color) !important;
+            color: var(--text-secondary) !important;
+            box-shadow: none !important;
+        }
+
+        /* Hover & Active States for Each Button */
+        #neo-rewind-btn:hover:not(:disabled) {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
+        }
+
+        #neo-approve-btn {
+            color: var(--accent-success);
+            border-color: var(--accent-success);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        #neo-approve-btn:hover:not(:disabled) {
+            color: #ffffff;
+            background: var(--accent-success);
+            border-color: var(--accent-success);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+        }
+
+        #neo-autoskip-btn {
+            color: var(--accent-primary);
+            border-color: var(--accent-primary);
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        #neo-autoskip-btn:hover:not(:disabled) {
+            color: #ffffff;
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+        }
+
+        #neo-skip-btn:hover:not(:disabled) {
+            color: #ffffff;
+            background: var(--accent-danger);
+            border-color: var(--accent-danger);
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+        }
+
+        #neo-edit-btn {
+            color: var(--accent-purple);
+            border-color: var(--accent-purple);
+            background: rgba(168, 85, 247, 0.05);
+        }
+
+        #neo-edit-btn:hover:not(:disabled) {
+            color: #ffffff;
+            background: var(--accent-purple);
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 12px rgba(168, 85, 247, 0.3);
+        }
+
+        #neo-edit-btn.neo-btn-active {
+            color: #ffffff;
+            background: var(--accent-purple);
+            border-color: var(--accent-purple);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 12px rgba(168, 85, 247, 0.2);
+        }
+
+        #neo-edit-cancel-btn {
+            color: var(--accent-danger);
+            border-color: var(--accent-danger);
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        #neo-edit-cancel-btn:hover:not(:disabled) {
+            color: #ffffff;
+            background: var(--accent-danger);
+            border-color: var(--accent-danger);
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+        }
+
+        #neo-edit-submit-btn {
+            color: var(--accent-success);
+            border-color: var(--accent-success);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        #neo-edit-submit-btn:hover:not(:disabled) {
+            color: #ffffff;
+            background: var(--accent-success);
+            border-color: var(--accent-success);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .neo-input {
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: var(--text-primary);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13.5px;
+            transition: all 0.2s ease;
+        }
+
+        .neo-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+
+
+        .neo-btn-warning {
+            color: var(--accent-warning) !important;
+            border-color: rgba(245, 158, 11, 0.25) !important;
+            background: rgba(245, 158, 11, 0.03) !important;
+        }
+
+        .neo-btn-warning:hover:not(:disabled) {
+            color: #ffffff !important;
+            background: var(--accent-warning) !important;
+            border-color: var(--accent-warning) !important;
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.3) !important;
+        }
+
+        .neo-btn-primary {
+            color: #3b82f6 !important;
+            border-color: rgba(59, 130, 246, 0.25) !important;
+            background: rgba(59, 130, 246, 0.03) !important;
+        }
+
+        .neo-btn-primary:hover:not(:disabled) {
+            color: #ffffff !important;
+            background: var(--accent-primary) !important;
+            border-color: var(--accent-primary) !important;
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.3) !important;
+        }
+
+
+        /* Floating Variables Drawer: Absolutely positioned to avoid layout shifting */
+        .neo-bindings-drawer {
+            position: absolute;
+            right: 425px;
+            bottom: 20px;
+            width: 350px;
+            height: 425px;
+            background: var(--bg-drawer);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            box-shadow: 0 12px 40px var(--shadow-color);
+            display: none;
+            /* Toggle with JS */
+            flex-direction: column;
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 2147483646;
+            box-sizing: border-box;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(25px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .neo-drawer-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-sizing: border-box;
+        }
+
+        .neo-drawer-content {
+            padding: 15px;
+            overflow-y: auto;
+            flex-grow: 1;
+            box-sizing: border-box;
+        }
+        .neo-block-headline {
+            font-family: 'Outfit', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 14px;
+            margin-bottom: 8px;
+            padding-left: 6px;
+            box-sizing: border-box;
+        }
+
+    </style>
+
+    <!-- Sliding Variables Drawer -->
+    <div class="neo-bindings-drawer" id="bindingsDrawer">
+        <div class="neo-drawer-header">
+            <span>Data Bindings</span>
+            <span style="font-size: 16px; color: var(--text-secondary); cursor: pointer;"
+                id="neo-bindings-close-btn">✕</span>
+        </div>
+        <div class="neo-drawer-content">
+            <div id="neo-bindings-container"
+                style="display:none; overflow-y:auto; background:var(--input-bg); border:1px solid var(--border-color); border-radius:8px; padding:8px; height:100%; box-sizing:border-box;">
+                <table id="neo-bindings-table" class="neo-table">
+                    <tbody id="neo-bindings-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Console Panel -->
+    <div id="neo-ai-hud" class="neo-console">
+        <div class="neo-header" id="neo-hud-header">
+            <span id="neo-header-title" class="neo-title">🤖 Neodymium Aura Console</span>
+            <div style="display:flex; gap:12px; align-items:center;">
+                <span id="neo-status-indicator" class="neo-status-badge">Pending</span>
+                <button id="neo-settings-btn"
+                    style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s; display:flex; align-items:center; justify-content:center; width:24px; height:24px;"
+                    title="Settings"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
+                <button id="neo-info-btn"
+                    style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s; display:flex; align-items:center; justify-content:center; width:24px; height:24px;"
+                    title="Help"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
+                <button id="neo-min-btn"
+                    style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s; display:flex; align-items:center; justify-content:center; width:24px; height:24px;"
+                    title="Minimize"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+            </div>
+        </div>
+
+        <!-- Full Prompt toggle bar -->
+        <div class="neo-prompt-toggle-bar">
+            <button class="neo-prompt-toggle-btn" id="neo-full-prompt-btn">
+                ▲ Show Full Prompt ▲
+            </button>
+        </div>
+
+        <!-- Scrollable step list and reasoning area -->
+        <div id="neo-hud-content" class="neo-step-list">
+            <!-- Unified Steps Container -->
+            <div id="neo-steps-container" style="display:flex; flex-direction:column; width:100%;"></div>
+
+            <!-- Optional Add Instruction button at the very bottom (visible when expanded) -->
+            <button class="neo-btn" id="neo-add-overlay-btn" title="Add new step at the end" style="display: none; width: 100%; margin-top: 10px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> Add New Instruction</button>
+        </div>
+
+        <!-- Edit Step Overlay template (hidden by default, dynamically moved to active editing card) -->
+        <div id="neo-edit-overlay" style="display:none; margin-top:8px; flex-direction:column;">
+            <div
+                style="font-weight: 600; margin-bottom: 6px; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit
+                Instruction Text
+            </div>
+            <input type="text" id="neo-edit-input" class="neo-input" placeholder=""
+                style="width:100%; box-sizing:border-box; margin-bottom:5px;">
+            <div id="neo-edit-error"
+                style="color:var(--accent-danger); font-size:11px; margin-bottom:10px; display:none;"></div>
+            <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4;">
+                <em>* Saving will clear actions. The AI will regenerate Selenide locators/modes during the
+                    next run.</em>
+            </div>
+        </div>
+
+        <!-- AI Reasoning Block -->
+        <div id="neo-reasoning-container" class="neo-reasoning-card" style="display:none; margin: 0 15px 10px 15px;">
+            <div class="neo-reasoning-title">🧠 AI Reasoning</div>
+            <div class="neo-reasoning-body" id="neo-reasoning-text"></div>
+        </div>
+
+        <!-- Playbook Replay Block -->
+        <div id="neo-playbook-container" class="neo-reasoning-card"
+            style="display:none; margin: 0 15px 10px 15px; border-left-color: var(--accent-success); background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.04)); border-color: rgba(16, 185, 129, 0.2);">
+            <div class="neo-reasoning-title" style="color: #6ee7b7;">📼 Playbook Replay</div>
+            <div class="neo-reasoning-body" id="neo-playbook-reasoning"></div>
+        </div>
+
+        <!-- Optional Dump Context overlay button inside HUD -->
+        <div id="neo-dump-container" style="display:none; padding:12px 16px 0 16px; background:var(--toolbar-bg); flex-shrink: 0;">
+            <button id="neo-dump-btn" class="neo-btn"
+                style="width:100%; background:rgba(239, 68, 68, 0.12); color:#ef4444; border-color:rgba(239, 68, 68, 0.25);"
+                title="Dump context (DOM, History, Error) to file"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Dump Debug
+                Context</button>
+        </div>
+
+        <!-- Toolbar controls (Standard Mode) -->
+        <div class="neo-toolbar" id="neo-toolbar-controls" style="display: flex;">
+            <button class="neo-btn" id="neo-rewind-btn" title="Rewind 1 step back"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg> Back</button>
+            <button class="neo-btn" id="neo-approve-btn" title="Run current active step only and pause"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Run</button>
+            <button class="neo-btn" id="neo-autoskip-btn" title="Fast-Forward [Alt+S]">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="13 19 22 12 13 5 13 19"></polygon><polygon points="2 19 11 12 2 5 2 19"></polygon></svg>
+                <span id="neo-autoskip-icon"
+                    style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; opacity: 0.01; pointer-events: none; z-index: -1;">⏩</span>
+                <span id="neo-autoskip-text"
+                    style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; opacity: 0.01; pointer-events: none; z-index: -1;">Fast-Forward</span>
+                <span>Auto</span>
+            </button>
+            <button class="neo-btn" id="neo-skip-btn" title="Skip current step and pause at next step"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg> Skip</button>
+            <button class="neo-btn" id="neo-edit-btn" title="Toggle Edit instruction mode"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit</button>
+        </div>
+
+        <!-- Toolbar controls (Edit Mode) -->
+        <div class="neo-toolbar" id="neo-edit-toolbar" style="display: none;">
+            <button class="neo-btn" id="neo-edit-cancel-btn" title="Cancel step editing"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Cancel</button>
+            <button class="neo-btn" id="neo-edit-submit-btn" title="Save changes and regenerate actions"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polyline points="20 6 9 17 4 12"></polyline></svg> Save</button>
+        </div>
+
+        <!-- Save & Exit / Finished Overlay -->
+        <div id="neo-save-exit-overlay"
+            style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:10005; flex-direction:column; padding:20px; box-sizing:border-box; backdrop-filter: blur(20px); border-radius: 16px;">
+            <!-- Header (Dynamic) -->
+            <div id="neo-overlay-header"
+                style="font-weight: 700; font-size: 18px; color: var(--text-primary); margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+            </div>
+
+            <!-- Warning Block (Only shown when changes exist) -->
+            <div id="neo-overlay-warning-block"
+                style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 15px; display: flex; gap: 10px; align-items: flex-start;">
+                <span style="font-size: 16px; color: var(--accent-danger);">⚠️</span>
+                <div style="font-size: 12px; color: var(--text-primary); line-height: 1.4;">
+                    <strong>WARNING:</strong> The original test file will be overwritten with the updated step
+                    definitions. This action cannot be undone.
+                </div>
+            </div>
+
+            <!-- No Changes Clean State Block (Only shown when NO changes exist) -->
+            <div id="neo-overlay-finished-block"
+                style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 16px; margin-bottom: 25px; display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center;">
+                <span style="font-size: 32px; color: var(--accent-success);">🏁</span>
+                <div style="font-size: 13.5px; color: var(--text-primary); line-height: 1.5; font-weight: 600;">
+                    Execution Finished!
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">
+                    All steps were executed successfully. No changes or skips were made to the test class instruction
+                    set.
+                </div>
+            </div>
+
+            <!-- Modifications Block (Only shown when changes exist) -->
+            <div id="neo-overlay-modifications-block"
+                style="flex-grow: 1; display: flex; flex-direction: column; min-height: 0;">
+                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); margin-bottom: 8px;">Summary
+                    of Modifications:</div>
+                <div
+                    style="flex-grow: 1; overflow-y: auto; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); margin-bottom: 20px;">
+                    <div id="neo-altered-steps-list" style="margin-bottom: 12px;"></div>
+                    <div id="neo-skipped-steps-list" style="margin-bottom: 12px;"></div>
+                </div>
+            </div>
+
+            <!-- Buttons Container -->
+            <div id="neo-overlay-buttons-container" style="display: flex; gap: 10px; margin-top: auto;">
+            </div>
+        </div>
+
+        <!-- Overlay templates nested inside console wrapper -->
+        <!-- Settings Overlay -->
+        <div id="neo-settings-overlay"
+            style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:10000; flex-direction:column; padding:18px; box-sizing:border-box; justify-content:center; border-radius:16px;">
+            <div
+                style="color:var(--text-primary); font-weight:bold; margin-bottom:10px; font-size:14px; display:flex; align-items:center; gap:6px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Settings
+            </div>
+            <div style="font-size:12px; color:var(--text-secondary); margin-bottom:15px; line-height:1.4;">Configure HUD
+                appearance. Settings persist across test runs.</div>
+
+            <div style="margin-bottom:10px;">
+                <label
+                    style="display:block; font-size:12px; font-weight:bold; color:var(--text-primary); margin-bottom:4px;">Theme</label>
+                <select id="neo-theme-select" class="neo-input" style="width:100%; box-sizing:border-box;">
+                    <option value="dark">Dark Mode</option>
+                    <option value="light">Light Mode</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <label
+                    style="display:block; font-size:12px; font-weight:bold; color:var(--text-primary); margin-bottom:4px;">Zoom
+                    Factor (%)</label>
+                <input type="number" id="neo-zoom-input" class="neo-input" step="10" min="50" max="300" value="100"
+                    style="width:100%; box-sizing:border-box;">
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: auto;">
+                <button id="neo-settings-cancel-btn" class="neo-btn" style="flex:unset; width:100px;">Cancel</button>
+                <button id="neo-settings-submit-btn" class="neo-btn"
+                    style="flex:unset; width:100px; background:var(--accent-primary); color:white; border-color:var(--accent-primary);">Save</button>
+            </div>
+        </div>
+
+        <!-- Add Step Overlay -->
+        <div id="neo-add-overlay"
+            style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:10000; flex-direction:column; padding:18px; box-sizing:border-box; justify-content:center; border-radius:16px;">
+            <div
+                style="color:var(--accent-primary); font-weight:bold; margin-bottom:10px; font-size:14px; display:flex; align-items:center; gap:6px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> <span id="neo-add-overlay-title">Add Action At The End</span>
+            </div>
+            <div style="font-size:11.5px; color:var(--text-secondary); margin-bottom:15px; line-height:1.4;"
+                id="neo-add-overlay-desc">This action will be appended to the end of the script.</div>
+            <input type="text" id="neo-add-input" class="neo-input" placeholder="e.g. Type 'foo' into search"
+                style="width:100%; box-sizing:border-box; margin-bottom:15px;">
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button id="neo-add-cancel-btn" class="neo-btn" style="flex:unset; width:100px;">Cancel</button>
+                <button id="neo-add-submit-btn" class="neo-btn"
+                    style="flex:unset; width:100px; background:var(--accent-primary); color:white; border-color:var(--accent-primary);">Insert</button>
+            </div>
+        </div>
+
+        <!-- Custom Confirm Overlay -->
+        <div id="neo-confirm-overlay"
+            style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:10002; flex-direction:column; padding:20px; box-sizing:border-box; justify-content:center; align-items:center; border-radius:16px; text-align:center;">
+            <div style="font-size:32px; margin-bottom:12px;">🔄</div>
+            <div style="font-weight:600; font-size:15px; color:var(--text-primary); margin-bottom:8px;">Rewind Execution?</div>
+            <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:20px; line-height:1.4;">
+                Are you sure you want to rewind execution back to this step?
+            </div>
+            <div style="display:flex; gap:10px; width:100%; justify-content:center;">
+                <button id="neo-confirm-cancel-btn" class="neo-btn" style="flex:unset; width:100px;">Cancel</button>
+                <button id="neo-confirm-submit-btn" class="neo-btn" style="flex:unset; width:100px; background:var(--accent-warning); color:white; border-color:var(--accent-warning);">Rewind</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Minimized HUD indicator -->
+    <div id="neo-min-circle"
+        style="display:none; position:fixed; bottom:20px; right:20px; width:56px; height:56px; border-radius:50%; background:var(--bg-main); border:1.5px solid var(--accent-primary); box-shadow:0 8px 30px var(--shadow-color); cursor:pointer; align-items:center; justify-content:center; z-index:2147483647; backdrop-filter:blur(20px); transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+        <span id="neo-min-icon"
+            style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; font-size:18px; color:var(--text-primary); font-weight:bold;">+</span>
+    </div>
+
+    <!-- Help overlay (rendered adjacent to main console) -->
+    <div id="neo-help-overlay"
+        style="display:none; position:absolute; bottom:20px; right:425px; width:350px; background:var(--bg-drawer); border:1px solid var(--border-color); border-radius:16px; z-index:2147483646; padding:18px; box-sizing:border-box; box-shadow:0 12px 40px var(--shadow-color); color:var(--text-primary); font-size:13px; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);">
+        <div
+            style="color:var(--accent-primary); font-weight:bold; margin-bottom:12px; font-size:15px; text-align:center;">
+            Interactive Debug Help</div>
+        <div style="margin-bottom:12px; line-height:1.5;">
+            <strong>Shortcuts:</strong><br>
+            <span
+                style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Alt+A</span>
+            or <span
+                style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Ctrl+Enter</span>
+            : Approve current step<br>
+            <span
+                style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Alt+S</span>
+            : Toggle Fast-Forward<br>
+            <span
+                style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Alt+E</span>
+            : Edit current step<br>
+        </div>
+        <div style="line-height:1.5;">
+            <strong>Features:</strong><br>
+            - Click the <strong>first column</strong> in the Step List (⚪/🛑) to toggle a <strong>breakpoint</strong>.
+            Fast-Forward will pause there.<br>
+            - Steps starting with ⚠️ indicate a failed action being retried.
+        </div>
+    </div>
+</div>

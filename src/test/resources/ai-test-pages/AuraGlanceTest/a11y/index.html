@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Accessibility Testing</title>
+    <link rel="stylesheet" href="../shared/style.css">
+    <link rel="stylesheet" href="../shared/controls.css">
+</head>
+<body>
+
+    <!-- Optional Promotional Banner -->
+    <div id="promo-banner-container" style="display: flex;">
+        <div class="promo-banner" style="width: 100%;">
+            <span>🚀 Special Trial: Unlimited Aura AI visual audits unlocked!</span>
+            <button class="promo-close" id="promo-close-btn" onclick="document.getElementById('promo-banner-container').style.display='none'">Close Banner</button>
+        </div>
+    </div>
+
+    <!-- Navigation Header -->
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="../dashboard/index.html" class="brand">
+                <span class="brand-icon"></span>
+                <span>Aura Suite Hub</span>
+            </a>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="../index.html">Hub Home</a></li>
+                    <li><a href="../dashboard/index.html">Dashboard</a></li>
+                    <li><a href="../shop/index.html">Shop Catalog</a></li>
+                    <li><a href="../shop/forms.html">Forms Demo</a></li>
+                    <li><a href="../shop/escalation.html">Escalation Challenge</a></li>
+                    <li><a href="../shop/visual-escalation.html">Visual Escalation</a></li>
+                    <li><a href="index.html" class="active">Accessibility Checks</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="aura-container">
+        
+        <section class="aura-hero" style="padding: 2.5rem 3.5rem;">
+            <h1>Visual Integrity & Accessibility Auditing</h1>
+            <p style="margin-top: 0.75rem; color: var(--text-secondary);">
+                This isolated sandbox targets design sanity rules. Use the slide-drawer to trigger overlapping modal cards, contrast deterioration, and text overflow containment errors.
+            </p>
+        </section>
+
+        <!-- Main Test Cards Grid -->
+        <section class="aura-grid-2 columns-grid">
+            
+            <!-- Contrast Card -->
+            <div class="aura-card grid-item">
+                <h3 style="color: var(--accent-cyan); margin-bottom: 1rem;">Color Contrast Analysis</h3>
+                <p style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.5rem;">
+                    Legibility and color contrast are key pillars of modern web design. Toggling "Inject Low Contrast" shifts the background to stark white and subtext elements to dynamic near-white gray.
+                </p>
+                <div class="form-group">
+                    <!-- Target for overlap checks -->
+                    <button class="btn-primary overlap-target-btn" id="a11y-action-btn">Trigger Local Scan</button>
+                </div>
+            </div>
+
+            <!-- Text Clipping Card -->
+            <div class="aura-card grid-item">
+                <h3 style="color: var(--accent-purple); margin-bottom: 1rem;">Clipped Content & Text Boundaries</h3>
+                <div class="clipped-container" id="a11y-clipped-text-block" style="padding: 0.5rem; border-radius: var(--radius-sm); background: hsla(220, 20%, 8%, 0.4);">
+                    <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5;">
+                        This paragraph is placed inside a boundary container. When clipped layout defects are enabled, the container height is constrained to 60px with overflow hidden, slicing the lines in half.
+                    </p>
+                </div>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 1rem;">
+                    A dynamic design prevents cutting off descriptions. AI multimodal glance audits identify clipped text bounding anomalies cleanly.
+                </p>
+            </div>
+
+            <!-- Alignment Card -->
+            <div class="aura-card grid-item shift-target">
+                <h3 style="color: var(--status-warning); margin-bottom: 1rem;">Grid Alignment & Shifts</h3>
+                <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1rem;">
+                    Grid alignment keeps layouts balanced. Turning on grid displacement shifts this entire column block askew from standard rows.
+                </p>
+                <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">
+                    Baseline dHash: 0x8C1B4E8F2D900A3C
+                </span>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Global Controls Drawer Script injection -->
+    <script src="../shared/controls.js"></script>
+
+</body>
+</html>

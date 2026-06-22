@@ -1,0 +1,26 @@
+# Test: End-to-End Order Checkout
+# Validates guest and premium checkout flows.
+
+_context: Validates checkout on the staging environment
+
+steps:
+  - Navigate to home page
+  # Set up user session with profile credentials
+  - _include: fragments/login.steps
+  - Select product from catalog matching role "${role}"
+  - Add item to cart
+  # Complete the order placement
+  - _include: fragments/checkout.steps
+  - Verify order confirmation message is visible for "${username}"
+
+data:
+  - _testId: GuestCheckout
+    _include: fragments/default_user.yaml
+    shippingMethod: Ground
+    promoCode: FREESHIP
+
+  - _testId: PremiumCheckout
+    _include: fragments/default_user.yaml
+    username: premium_user@xceptance.com
+    shippingMethod: NextDay
+    promoCode: PREMIUM20

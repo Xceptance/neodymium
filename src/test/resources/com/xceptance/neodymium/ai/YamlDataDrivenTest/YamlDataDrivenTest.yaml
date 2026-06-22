@@ -1,0 +1,16 @@
+# AI-generated: Gemini 2.5 Pro
+
+# Root level steps that run on each iteration
+steps: |
+  Open ${formsUrl}
+  Type '${userFullName}' into the 'Full Name' field.
+  Type '${userEmail}' into the 'Email Address' field.
+  Click the 'Create Account' button.
+  Verify that the success indicator 'Account Registered!' is visible.
+
+# Iteration dataset defining test parameters for Alice and Bob
+data:
+  - userFullName: "Alice Developer"
+    userEmail: "alice@example.com"
+  - userFullName: "Bob Tester"
+    userEmail: "bob@example.com"

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Click Action Test - SVG Icon</title>
+</head>
+<body>
+    <h1>Click Action Test</h1>
+    
+    <button id="btn-svg" style="display: flex; align-items: center; gap: 8px;">
+        <svg id="svg-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="16"></line>
+            <line x1="8" y1="12" x2="16" y2="12"></line>
+        </svg>
+        Add Item
+    </button>
+    
+    <div id="result">Initial State</div>
+    
+    <script>
+        document.getElementById('btn-svg').addEventListener('click', function() {
+            document.getElementById('result').innerText = 'SVG Button Clicked!';
+        });
+    </script>
+</body>
+</html>

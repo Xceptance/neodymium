@@ -50,14 +50,33 @@ public class DebugUtils
         highlightAllElements(() -> elements, driver);
     }
 
-    private static void highlightAllElements(Supplier<List<WebElement>> getElements, WebDriver driver)
+    private static void highlightAllElements(final Supplier<List<WebElement>> getElements, final WebDriver driver)
     {
         if (Neodymium.configuration().debuggingHighlightSelectedElements())
         {
-            highlightElements(getElements.get(), driver);
-            if (Neodymium.configuration().debuggingHighlightDuration() > 0)
+            final List<WebElement> elements = getElements.get();
+            
+            // Get single-flash duration, defaulting to 100ms if not configured
+            long duration = Neodymium.configuration().debuggingHighlightDuration();
+            if (duration <= 0)
             {
-                Selenide.sleep(Neodymium.configuration().debuggingHighlightDuration());
+                duration = 100;
+            }
+            
+            // Get number of blinks, defaulting to 3 if not configured
+            int blinkCount = Neodymium.configuration().debuggingHighlightBlinkCount();
+            if (blinkCount <= 0)
+            {
+                blinkCount = 3;
+            }
+            
+            // Total highlight display duration calculated dynamically and reliably (each full cycle contains an ON and an OFF state)
+            final long totalDuration = 2 * duration * blinkCount;
+            
+            highlightElements(elements, driver, duration, blinkCount);
+            if (totalDuration > 0)
+            {
+                Selenide.sleep(totalDuration);
             }
             resetAllHighlight();
         }
@@ -76,18 +95,56 @@ public class DebugUtils
         Selenide.executeJavaScript(injectJS);
     }
 
-    static void highlightElements(List<WebElement> elements, WebDriver driver)
+    /**
+     * Highlights elements with the configured duration for backward compatibility.
+     */
+    static void highlightElements(final List<WebElement> elements, final WebDriver driver)
     {
         long highlightTime = Neodymium.configuration().debuggingHighlightDuration();
         if (highlightTime <= 0)
         {
-            highlightTime = 75;
+            highlightTime = 100;
         }
-        Selenide.executeJavaScript("if(window.NEODYMIUM){"
-                                   + "window.NEODYMIUM.highlightAllElements(arguments[0], document, "
-                                   + highlightTime + ");"
-                                   + "}",
-                                   elements, driver.getWindowHandle());
+        int blinkCount = Neodymium.configuration().debuggingHighlightBlinkCount();
+        if (blinkCount <= 0)
+        {
+            blinkCount = 3;
+        }
+        highlightElements(elements, driver, highlightTime, blinkCount);
+    }
+
+    /**
+     * Highlights elements for a specific single-flash duration.
+     */
+    static void highlightElements(final List<WebElement> elements, final WebDriver driver, final long duration)
+    {
+        int blinkCount = Neodymium.configuration().debuggingHighlightBlinkCount();
+        if (blinkCount <= 0)
+        {
+            blinkCount = 3;
+        }
+        highlightElements(elements, driver, duration, blinkCount);
+    }
+
+    static void highlightElements(final List<WebElement> elements, final WebDriver driver, final long duration, final int blinkCount)
+    {
+        final Object result = Selenide.executeJavaScript(
+            "if (window.NEODYMIUM)\n"
+            + "{\n"
+            + "    try\n"
+            + "    {\n"
+            + "        window.NEODYMIUM.highlightAllElements(arguments[0], document, " + duration + ", null, null, " + blinkCount + ");\n"
+            + "    }\n"
+            + "    catch (e)\n"
+            + "    {\n"
+            + "        return 'JS_ERROR: ' + e.message + '\\n' + e.stack;\n"
+            + "    }\n"
+            + "}",
+            elements);
+        if (result != null && result.toString().startsWith("JS_ERROR"))
+        {
+            System.err.println("Neodymium Element Highlighting Javascript Error:\n" + result);
+        }
     }
 
     static void resetAllHighlight()

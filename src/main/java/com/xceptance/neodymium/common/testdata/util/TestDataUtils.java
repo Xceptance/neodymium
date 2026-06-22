@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.net.URL;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
@@ -25,7 +26,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.xceptance.neodymium.common.testdata.DataFile;
-
+import com.xceptance.neodymium.common.testdata.DataFolder;
+import com.xceptance.neodymium.util.Neodymium;
+import java.util.regex.Pattern;
 /**
  * Utility class for test data handling.
  * 
@@ -51,46 +54,275 @@ public final class TestDataUtils
      */
     public static List<Map<String, String>> getDataSets(final Class<?> testClass) throws FileNotFoundException, IOException
     {
-        // no specific file -> try the usual suspects
-        final Set<String> fileNames = new LinkedHashSet<String>();
+        Pattern fileFilterPattern = null;
+        if (StringUtils.isNotBlank(Neodymium.configuration().getTestFileFilter())) {
+            // Compile the filter regex once to optimize repeated matching during file discovery
+            fileFilterPattern = Pattern.compile(Neodymium.configuration().getTestFileFilter());
+        }
 
-        DataFile dataFile = testClass.getAnnotation(DataFile.class);
-        String filePath = dataFile != null ? dataFile.value() : null;
+        DataFile[] dataFiles = testClass.getAnnotationsByType(DataFile.class);
+        DataFolder[] dataFolders = testClass.getAnnotationsByType(DataFolder.class);
 
-        if (StringUtils.isBlank(filePath))
+        // If this is an AI Test Generator, do not read data sets but automatically create data folders if requested
+        boolean isGenerator = false;
+        for (java.lang.annotation.Annotation a : testClass.getAnnotations()) {
+            if (a.annotationType().getSimpleName().equals("NeodymiumTestGenerator")) {
+                isGenerator = true;
+                break;
+            }
+        }
+        if (!isGenerator) {
+            for (java.lang.reflect.Method m : testClass.getMethods()) {
+                for (java.lang.annotation.Annotation a : m.getAnnotations()) {
+                    if (a.annotationType().getSimpleName().equals("NeodymiumTestGenerator")) {
+                        isGenerator = true;
+                        break;
+                    }
+                }
+                if (isGenerator) break;
+            }
+        }
+        if (isGenerator) {
+            for (DataFolder dataFolder : dataFolders) {
+                String folderPath = dataFolder.value();
+                if (StringUtils.isNotBlank(folderPath)) {
+                    new File("src/test/resources/" + folderPath).mkdirs();
+                }
+            }
+            return new LinkedList<>();
+        }
+
+        List<Map<String, String>> resultDataSets = new LinkedList<>();
+        Map<String, String> testIdToFileName = new HashMap<>();
+
+        if (dataFiles.length == 0 && dataFolders.length == 0)
         {
+            // no specific file -> try the usual suspects
+            final Set<String> fileNames = new LinkedHashSet<String>();
+
             final String dottedName = testClass.getName();
             final String slashedName = dottedName.replace('.', '/');
 
             String[] filetype = new String[]
             {
-              ".csv", ".json", ".xml"
+              ".yaml", ".yml", ".json", ".csv", ".xml", ".properties"
             };
             for (final String fileExtension : filetype)
             {
                 fileNames.add(slashedName + fileExtension);
                 fileNames.add(dottedName + fileExtension);
             }
+
+            if (fileFilterPattern != null) {
+                final Pattern finalFilter = fileFilterPattern;
+                // Pre-filter implicit files before triggering disk I/O
+                fileNames.removeIf(name -> !finalFilter.matcher(name.replace('\\', '/')).find());
+            }
+
+            List<File> dataSetFileDirs = new LinkedList<>();
+            dataSetFileDirs.add(new File("."));
+            dataSetFileDirs.add(new File("src/test/resources"));
+
+            List<Map<String, String>> fileDataSets = getDataSets(dataSetFileDirs, fileNames, testClass);
+            
+            appendDataSetsAndCheckIDs(resultDataSets, fileDataSets, dataSetFileDirs.get(0).getName(), testIdToFileName);
         }
         else
         {
-            InputStream inputStream = testClass.getResourceAsStream("/" + filePath);
-            if (inputStream != null)
+
+
+        for (DataFile dataFile : dataFiles)
+        {
+            String filePath = dataFile.value();
+            if (StringUtils.isBlank(filePath))
             {
-                fileNames.add(filePath);
+                continue;
             }
-            else
+
+            if (fileFilterPattern != null && !fileFilterPattern.matcher(filePath.replace('\\', '/')).find()) {
+                // Skip reading this explicit @DataFile if it does not match the requested filter
+                continue;
+            }
+
+            InputStream inputStream = testClass.getResourceAsStream("/" + filePath);
+            File localFile = new File("src/test/resources/" + filePath);
+            if (inputStream == null && !localFile.exists())
             {
                 throw new RuntimeException("The data file:\"" + filePath + "\" provided within the test class:\"" + testClass.getSimpleName()
                                            + "\" can't be read.");
             }
+
+            Set<String> fileNames = new LinkedHashSet<>();
+            fileNames.add(filePath);
+
+            List<File> dataSetFileDirs = new LinkedList<>();
+            dataSetFileDirs.add(new File("."));
+            dataSetFileDirs.add(new File("src/test/resources"));
+
+            List<Map<String, String>> fileDataSets = getDataSets(dataSetFileDirs, fileNames, testClass);
+
+            appendDataSetsAndCheckIDs(resultDataSets, fileDataSets, filePath, testIdToFileName);
         }
 
-        List<File> dataSetFileDirs = new LinkedList<>();
-        dataSetFileDirs.add(new File("."));
+        for (DataFolder dataFolder : dataFolders)
+        {
+            String folderPath = dataFolder.value();
+            if (StringUtils.isBlank(folderPath))
+            {
+                continue;
+            }
 
-        // look for such a file in the usual directories
-        return getDataSets(dataSetFileDirs, fileNames, testClass);
+            File folder = new File("src/test/resources/" + folderPath);
+            if (!folder.exists() || !folder.isDirectory())
+            {
+                java.net.URL url = testClass.getResource("/" + folderPath);
+                if (url != null && "file".equals(url.getProtocol()))
+                {
+                    try
+                    {
+                        folder = new File(url.toURI());
+                    }
+                    catch (Exception e)
+                    {
+                        LOGGER.warn("Failed to convert URI for folder: " + folderPath, e);
+                    }
+                }
+            }
+
+            if (!folder.exists()) {
+                LOGGER.info("The data folder:\"" + folderPath + "\" provided within the test class:\"" + testClass.getSimpleName()
+                                           + "\" does not exist. Creating it automatically.");
+                new File("src/test/resources/" + folderPath).mkdirs();
+                folder = new File("src/test/resources/" + folderPath);
+            }
+
+            if (folder.exists() && folder.isDirectory())
+            {
+                List<File> fileList = new LinkedList<>();
+                collectFilesRecursively(folder, fileList);
+                // Sort to ensure determinism
+                fileList.sort((f1, f2) -> f1.getAbsolutePath().compareTo(f2.getAbsolutePath()));
+
+                for (File file : fileList)
+                {
+                    if (file.isDirectory())
+                    {
+                        continue;
+                    }
+
+                    if (fileFilterPattern != null && !fileFilterPattern.matcher(file.getAbsolutePath().replace('\\', '/')).find()) {
+                        // Skip parsing this discovered file entirely to save time during large test runs
+                        continue;
+                    }
+
+                    if (!isSupportedExtension(file.getName()))
+                    {
+                        LOGGER.warn("Unsupported or ignored test data file: " + file.getAbsolutePath());
+                        continue;
+                    }
+
+                    List<Map<String, String>> fileDataSets = readDataSetsFromFile(file);
+
+                    appendDataSetsAndCheckIDs(resultDataSets, fileDataSets, file.getAbsolutePath(), testIdToFileName);
+                }
+            }
+            else
+            {
+                LOGGER.warn("The data folder:\"" + folderPath + "\" provided within the test class:\"" + testClass.getSimpleName()
+                                           + "\" does not exist or is not a directory.");
+            }
+        }
+
+        }
+
+        final String targetTestId = Neodymium.configuration().getTestIdFilter();
+
+        if (StringUtils.isNotBlank(targetTestId))
+        {
+            final Pattern idFilter = Pattern.compile(targetTestId);
+            final List<Map<String, String>> filtered = new LinkedList<>();
+            for (int i = 0; i < resultDataSets.size(); i++)
+            {
+                final Map<String, String> dataSet = resultDataSets.get(i);
+                String currentTestId = dataSet.get("testId");
+                if (StringUtils.isBlank(currentTestId))
+                {
+                    currentTestId = dataSet.get("TEST_ID");
+                }
+
+                if (currentTestId == null)
+                {
+                    currentTestId = String.valueOf(i + 1);
+                }
+
+                if (idFilter.matcher(currentTestId).find())
+                {
+                    filtered.add(dataSet);
+                }
+            }
+            resultDataSets = filtered;
+        }
+
+        return resultDataSets;
+    }
+
+    private static void collectFilesRecursively(File folder, List<File> fileList)
+    {
+        File[] files = folder.listFiles();
+        if (files == null) return;
+        
+        for (File f : files)
+        {
+            if (f.isDirectory())
+            {
+                collectFilesRecursively(f, fileList);
+            }
+            else
+            {
+                fileList.add(f);
+            }
+        }
+    }
+
+    private static boolean isSupportedExtension(String fileName)
+    {
+        String lowerCaseName = fileName.toLowerCase();
+        return lowerCaseName.endsWith(".csv") || lowerCaseName.endsWith(".xml") 
+            || lowerCaseName.endsWith(".json") || lowerCaseName.endsWith(".yaml") 
+            || lowerCaseName.endsWith(".yml") || lowerCaseName.endsWith(".properties");
+    }
+
+    private static void appendDataSetsAndCheckIDs(final List<Map<String, String>> result, final List<Map<String, String>> newDataSets, final String sourceName, final Map<String, String> testIdToFileName)
+    {
+        for (final Map<String, String> dataSet : newDataSets)
+        {
+            String testId = dataSet.get("testId");
+            if (StringUtils.isBlank(testId))
+            {
+                testId = dataSet.get("TEST_ID");
+            }
+
+            final String sourceFileFromDataSet = dataSet.get("neodymium.sourceFile");
+            final String actualSourceName = (StringUtils.isNotBlank(sourceFileFromDataSet) && !".".equals(sourceFileFromDataSet)) ? sourceFileFromDataSet : sourceName;
+
+            if (StringUtils.isNotBlank(testId))
+            {
+                if (testIdToFileName.containsKey(testId))
+                {
+                    final String previousSourceName = testIdToFileName.get(testId);
+                    if (!previousSourceName.equals(actualSourceName))
+                    {
+                        throw new RuntimeException("Duplicate test dataset ID '" + testId + "' found in file '" + actualSourceName + "'. Already defined in '" + previousSourceName + "'.");
+                    }
+                }
+                testIdToFileName.put(testId, actualSourceName);
+            }
+            
+            // Add internal metadata for tracking the source file
+            dataSet.put("neodymium.sourceFile", actualSourceName);
+
+            result.add(dataSet);
+        }
     }
 
     /**
@@ -119,7 +351,13 @@ public final class TestDataUtils
                 final File batchDataFile = new File(directory, fileName);
                 if (batchDataFile.isFile())
                 {
-                    return readDataSetsFromFile(batchDataFile);
+                    final List<Map<String, String>> datasets = readDataSetsFromFile(batchDataFile);
+                    final String baseName = FilenameUtils.getName(fileName);
+                    for (final Map<String, String> ds : datasets)
+                    {
+                        ds.put("neodymium.sourceFile", baseName);
+                    }
+                    return datasets;
                 }
             }
         }
@@ -127,13 +365,35 @@ public final class TestDataUtils
         // look for a data set file in the class path
         for (final String fileName : fileNames)
         {
-            final InputStream input = testClass.getResourceAsStream("/" + fileName);
-            if (input != null)
+            final URL url = testClass.getResource("/" + fileName);
+            if (url != null)
             {
+                if ("file".equals(url.getProtocol()))
+                {
+                    try
+                    {
+                        final File batchDataFile = new File(url.toURI());
+                        if (batchDataFile.isFile())
+                        {
+                            final List<Map<String, String>> datasets = readDataSetsFromFile(batchDataFile, fileName);
+                            final String baseName = FilenameUtils.getName(fileName);
+                            for (final Map<String, String> ds : datasets)
+                            {
+                                ds.put("neodymium.sourceFile", baseName);
+                            }
+                            return datasets;
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        // Fall back to stream copying if URI conversion fails
+                    }
+                }
+
                 OutputStream output = null;
                 File batchDataFile = null;
 
-                try
+                try (final InputStream input = url.openStream())
                 {
                     // copy the stream to a temporary file
                     final String extension = "." + FilenameUtils.getExtension(fileName);
@@ -143,15 +403,25 @@ public final class TestDataUtils
                     IOUtils.copy(input, output);
                     output.flush();
 
-                    // read the data sets from the temporary file
-                    return readDataSetsFromFile(batchDataFile);
+                    // read the data sets from the temporary file passing original classpath path context
+                    final List<Map<String, String>> datasets = readDataSetsFromFile(batchDataFile, fileName);
+                    final String baseName = FilenameUtils.getName(fileName);
+                    for (final Map<String, String> ds : datasets)
+                    {
+                        ds.put("neodymium.sourceFile", baseName);
+                    }
+                    return datasets;
                 }
                 finally
                 {
-                    // clean up
-                    input.close();
-                    output.close();
-                    FileUtils.deleteQuietly(batchDataFile);
+                    if (output != null)
+                    {
+                        output.close();
+                    }
+                    if (batchDataFile != null)
+                    {
+                        FileUtils.deleteQuietly(batchDataFile);
+                    }
                 }
             }
         }
@@ -160,8 +430,7 @@ public final class TestDataUtils
     }
 
     /**
-     * Returns the test data sets contained in the given test data file. The data set provider used to read the file is
-     * determined from the data file's extension.
+     * Returns the test data sets contained in the given test data file.
      *
      * @param dataSetsFile
      *            the test data set file
@@ -169,7 +438,57 @@ public final class TestDataUtils
      */
     public static List<Map<String, String>> readDataSetsFromFile(final File dataSetsFile)
     {
+        return readDataSetsFromFile(dataSetsFile, null);
+    }
+
+    /**
+     * Returns the test data sets contained in the given test data file, providing classpath resource context.
+     *
+     * @param dataSetsFile
+     *            the test data set file
+     * @param classpathResourcePath
+     *            the original classpath resource path
+     * @return the data sets
+     */
+    public static List<Map<String, String>> readDataSetsFromFile(final File dataSetsFile, final String classpathResourcePath)
+    {
         LOGGER.debug("Test data set file used: " + dataSetsFile.getAbsolutePath());
+
+        final String resolvedClasspathResourcePath;
+        if (classpathResourcePath != null)
+        {
+            resolvedClasspathResourcePath = classpathResourcePath;
+        }
+        else
+        {
+            String path = null;
+            final String absolutePath = dataSetsFile.getAbsolutePath().replace('\\', '/');
+            final String[] patterns = {
+                "src/test/resources/",
+                "src/main/resources/",
+                "target/test-classes/",
+                "target/classes/",
+                "build/resources/main/",
+                "build/resources/test/",
+                "build/classes/java/main/",
+                "build/classes/java/test/",
+                "out/production/resources/",
+                "out/test/resources/",
+                "out/production/classes/",
+                "out/test/classes/",
+                "bin/"
+            };
+            for (final String pat : patterns)
+            {
+                final int idx = absolutePath.indexOf(pat);
+                if (idx != -1)
+                {
+                    path = absolutePath.substring(idx + pat.length());
+                    break;
+                }
+            }
+            resolvedClasspathResourcePath = path;
+        }
 
         final String fileExtension = FilenameUtils.getExtension(dataSetsFile.getName());
 
@@ -183,6 +502,10 @@ public final class TestDataUtils
 
             case "json":
                 return JsonFileReader.readFile(dataSetsFile);
+
+            case "yaml":
+            case "yml":
+                return YamlFileReader.readFile(dataSetsFile, resolvedClasspathResourcePath);
 
             case "properties":
                 return PropertyFileReader.readFile(dataSetsFile);
@@ -302,6 +625,20 @@ public final class TestDataUtils
         {
             InputStream is = null;
             String path;
+
+            path = base + "yaml";
+            is = clazz.getResourceAsStream(path);
+            if (is != null)
+            {
+                return getFirstDataSetFromFile(YamlFileReader.readFile(is), path);
+            }
+
+            path = base + "yml";
+            is = clazz.getResourceAsStream(path);
+            if (is != null)
+            {
+                return getFirstDataSetFromFile(YamlFileReader.readFile(is), path);
+            }
 
             path = base + "csv";
             is = clazz.getResourceAsStream(path);
