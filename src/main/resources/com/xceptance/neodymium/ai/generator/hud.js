@@ -1,7 +1,7 @@
-(function(hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen, lastBreakpointsStr, lastHelpShown, settingsJson, stateSignature) {
+(function (hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen, lastBreakpointsStr, lastHelpShown, settingsJson, stateSignature) {
     if (!window.neoPollingMonitorActive) {
         window.neoPollingMonitorActive = true;
-        setInterval(function() {
+        setInterval(function () {
             var hudContainer = document.getElementById('neodymium-ai-hud-container');
             var hudEl = document.getElementById('neo-ai-hud');
             var stateStr = "not existing";
@@ -25,7 +25,7 @@
     function getSessionStorage(key) {
         try {
             return sessionStorage.getItem(key);
-        } catch(e) {
+        } catch (e) {
             return null;
         }
     }
@@ -33,7 +33,7 @@
     function setSessionStorage(key, value) {
         try {
             sessionStorage.setItem(key, value);
-        } catch(e) {}
+        } catch (e) { }
     }
 
     if (window.neoFullPromptOpen === undefined) {
@@ -66,21 +66,21 @@
 
         window.neodymiumPromptGenerationHudInjected = true;
         window.neoHudAction = null;
-        window.neoSubmitAction = function(actionObj) {
+        window.neoSubmitAction = function (actionObj) {
             window.neoHudAction = JSON.stringify(actionObj);
             if (window.neoMinimizeHud) {
                 var shouldMinimize = false;
-                if (actionObj.action === 'APPROVE' || actionObj.action === 'SAVE_EXIT' || actionObj.action === 'SKIP') shouldMinimize = true;
+                if (actionObj.action === 'APPROVE' || actionObj.action === 'SAVE_EXIT') shouldMinimize = true;
                 if (shouldMinimize) window.neoMinimizeHud();
             }
         };
         window.neoHudAutoSkip = autoSkip;
-        
+
         var autoSkipBtn = document.getElementById('neo-autoskip-btn');
         var autoSkipIcon = document.getElementById('neo-autoskip-icon');
         var autoSkipText = document.getElementById('neo-autoskip-text');
-        
-        window.updateAutoSkipBtn = function() {
+
+        window.updateAutoSkipBtn = function () {
             if (window.neoHudAutoSkip) {
                 if (autoSkipIcon) autoSkipIcon.innerText = '⏸️';
                 if (autoSkipText) autoSkipText.innerText = 'Pause';
@@ -100,13 +100,13 @@
         window.updateAutoSkipBtn();
 
         if (autoSkipBtn) {
-            autoSkipBtn.addEventListener('click', function(e) {
+            autoSkipBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 window.neoHudAutoSkip = !window.neoHudAutoSkip;
                 window.updateAutoSkipBtn();
-                
+
                 setSessionStorage('neoLastAutoSkip', window.neoHudAutoSkip ? 'true' : 'false');
-                
+
                 if (window.neoHudAutoSkip) {
                     // Java will automatically detect the autoSkip state, handle breakpoints, and break out of its wait loop.
                     if (window.neoMinimizeHud) window.neoMinimizeHud();
@@ -118,11 +118,11 @@
         hudElement.style.opacity = '1';
 
         // Prevent mouse interactions inside the HUD from bubbling up and closing page overlays
-        hudElement.addEventListener('click', function(e) { e.stopPropagation(); });
-        hudElement.addEventListener('mousedown', function(e) { e.stopPropagation(); });
-        hudElement.addEventListener('mouseup', function(e) { e.stopPropagation(); });
+        hudElement.addEventListener('click', function (e) { e.stopPropagation(); });
+        hudElement.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+        hudElement.addEventListener('mouseup', function (e) { e.stopPropagation(); });
 
-        window.neoMinimizeHud = function() {
+        window.neoMinimizeHud = function () {
             var mainHud = document.getElementById('neo-ai-hud');
             var minCircle = document.getElementById('neo-min-circle');
             var minIcon = document.getElementById('neo-min-icon');
@@ -140,7 +140,7 @@
             setSessionStorage('neoHudMinimized', 'true');
         };
 
-        window.neoMaximizeHud = function() {
+        window.neoMaximizeHud = function () {
             var mainHud = document.getElementById('neo-ai-hud');
             var minCircle = document.getElementById('neo-min-circle');
             var minIcon = document.getElementById('neo-min-icon');
@@ -153,8 +153,8 @@
                 }
             }
             setSessionStorage('neoHudMinimized', 'false');
-            
-            setTimeout(function() {
+
+            setTimeout(function () {
                 if (!mainHud) return;
                 var rect = mainHud.getBoundingClientRect();
                 var currentBottom = parseFloat(mainHud.style.bottom) || 20;
@@ -165,7 +165,7 @@
                     setSessionStorage('neoHudPosBottom', newBottom + 'px');
                     if (minCircle) minCircle.style.bottom = newBottom + 'px';
                 }
-                
+
                 var currentRight = parseFloat(mainHud.style.right) || 20;
                 if (currentRight + rect.width > window.innerWidth) {
                     var newRight = window.innerWidth - rect.width;
@@ -179,7 +179,7 @@
 
         var minCircle = document.getElementById('neo-min-circle');
         if (minCircle) {
-            minCircle.addEventListener('click', function(e) {
+            minCircle.addEventListener('click', function (e) {
                 if (window.neoIsDraggingHud) return;
                 window.neoMaximizeHud();
             });
@@ -187,30 +187,30 @@
 
         var minBtn = document.getElementById('neo-min-btn');
         if (minBtn) {
-            minBtn.addEventListener('click', function(e) {
+            minBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 window.neoMinimizeHud();
             });
         }
-        
+
         function makeDraggable(dragHandle, moveTargets) {
             if (!dragHandle || !moveTargets || moveTargets.length === 0) return;
             var isDown = false;
             var startX, startY, startRight, startBottom;
 
-            dragHandle.addEventListener('mousedown', function(e) {
+            dragHandle.addEventListener('mousedown', function (e) {
                 if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
                 isDown = true;
                 window.neoIsDraggingHud = false;
                 startX = e.clientX;
                 startY = e.clientY;
-                
+
                 startRight = parseFloat(moveTargets[0].style.right) || 20;
                 startBottom = parseFloat(moveTargets[0].style.bottom) || 20;
                 e.preventDefault();
             });
 
-            document.addEventListener('mousemove', function(e) {
+            document.addEventListener('mousemove', function (e) {
                 if (!isDown) return;
                 var dx = e.clientX - startX;
                 var dy = e.clientY - startY;
@@ -218,21 +218,21 @@
 
                 var newRight = startRight - dx;
                 var newBottom = startBottom - dy;
-                
+
                 var w = moveTargets[0].offsetWidth || 40;
                 var h = moveTargets[0].offsetHeight || 40;
                 if (newRight < 20) newRight = 20;
                 if (newBottom < 20) newBottom = 20;
                 if (newRight + w > window.innerWidth - 20) newRight = window.innerWidth - w - 20;
                 if (newBottom + h > window.innerHeight - 20) newBottom = window.innerHeight - h - 20;
-                
-                moveTargets.forEach(function(target) {
+
+                moveTargets.forEach(function (target) {
                     target.style.right = newRight + 'px';
                     target.style.bottom = newBottom + 'px';
                     target.style.left = 'auto';
                     target.style.top = 'auto';
                 });
-                
+
                 var helpOverlay = document.getElementById('neo-help-overlay');
                 if (helpOverlay) {
                     helpOverlay.style.right = (newRight + 405) + 'px';
@@ -243,15 +243,15 @@
                     bindingsDrawer.style.right = (newRight + 405) + 'px';
                     bindingsDrawer.style.bottom = newBottom + 'px';
                 }
-                
+
                 setSessionStorage('neoHudPosRight', newRight + 'px');
                 setSessionStorage('neoHudPosBottom', newBottom + 'px');
             });
 
-            window.addEventListener('mouseup', function() {
+            window.addEventListener('mouseup', function () {
                 if (isDown) {
                     isDown = false;
-                    setTimeout(function(){ window.neoIsDraggingHud = false; }, 50);
+                    setTimeout(function () { window.neoIsDraggingHud = false; }, 50);
                 }
             }, true);
         }
@@ -264,35 +264,35 @@
 
         if (helpBtn && helpOverlay) {
             var isHovering = false;
-            helpBtn.addEventListener('mouseenter', function() {
+            helpBtn.addEventListener('mouseenter', function () {
                 isHovering = true;
                 helpOverlay.style.display = 'block';
             });
-            helpBtn.addEventListener('mouseleave', function() {
+            helpBtn.addEventListener('mouseleave', function () {
                 isHovering = false;
-                setTimeout(function() {
+                setTimeout(function () {
                     if (!isHovering) {
                         helpOverlay.style.display = 'none';
                     }
                 }, 100);
             });
-            helpOverlay.addEventListener('mouseenter', function() {
+            helpOverlay.addEventListener('mouseenter', function () {
                 isHovering = true;
             });
-            helpOverlay.addEventListener('mouseleave', function() {
+            helpOverlay.addEventListener('mouseleave', function () {
                 isHovering = false;
-                setTimeout(function() {
+                setTimeout(function () {
                     if (!isHovering) {
                         helpOverlay.style.display = 'none';
                     }
                 }, 100);
             });
-            
+
             if (!window.neoHelpShown) {
                 helpOverlay.style.display = 'block';
                 window.neoHelpShown = true;
                 setSessionStorage('neoHelpShown', 'true');
-                setTimeout(function() {
+                setTimeout(function () {
                     if (!isHovering) {
                         helpOverlay.style.display = 'none';
                     }
@@ -300,7 +300,7 @@
             }
         }
 
-        document.getElementById('neo-approve-btn').addEventListener('click', function() {
+        document.getElementById('neo-approve-btn').addEventListener('click', function () {
             if (!this.disabled) {
                 if (this.dataset.isFinished === 'true') {
                     window.neoSubmitAction({ action: "SAVE_EXIT" });
@@ -312,7 +312,7 @@
             }
         });
 
-        document.getElementById('neo-skip-btn').addEventListener('click', function() {
+        document.getElementById('neo-skip-btn').addEventListener('click', function () {
             if (!this.disabled) {
                 window.neoSubmitAction({ action: "SKIP" });
                 this.disabled = true;
@@ -369,18 +369,18 @@
         editInput.addEventListener('keyup', validateEditInput);
         editInput.addEventListener('change', validateEditInput);
 
-        window.neoStartEditingStep = function(idx) {
+        window.neoStartEditingStep = function (idx) {
             window.neoEditingStepIndex = idx;
             var stepText = (window.neoCurrentRenderedSteps && window.neoCurrentRenderedSteps[idx] !== undefined)
                 ? window.neoCurrentRenderedSteps[idx]
                 : (window.neoCurrentUnresolvedStep || document.getElementById('neo-next-action').innerText);
-            
+
             editInput.value = stepText;
             validateEditInput();
-            
+
             var bindingsContainer = document.getElementById('neo-bindings-container');
             var bindingsTbody = document.getElementById('neo-bindings-tbody');
-            
+
             function resolveValue(val) {
                 if (!val || typeof val !== 'string') return val;
                 var maxDepth = 10;
@@ -388,7 +388,7 @@
                 for (var i = 0; i < maxDepth; i++) {
                     if (current.indexOf('${') === -1) break;
                     var prev = current;
-                    current = current.replace(/\$\{([^}]+)\}/g, function(match, key) {
+                    current = current.replace(/\$\{([^}]+)\}/g, function (match, key) {
                         if (window.neoDataBindings && window.neoDataBindings[key] !== undefined) return window.neoDataBindings[key];
                         if (window.neoConfigMap && window.neoConfigMap[key] !== undefined) return window.neoConfigMap[key];
                         return match;
@@ -397,7 +397,7 @@
                 }
                 return current;
             }
-            
+
             function renderTable() {
                 bindingsTbody.innerHTML = '';
                 var hasRows = false;
@@ -416,14 +416,14 @@
                         hasRows = true;
                     }
                 }
-                
+
                 var newInstr = editInput.value;
                 var regex = /\$\{([^}]+)\}/g;
                 var match;
                 while ((match = regex.exec(newInstr)) !== null) {
                     var varName = match[1];
                     if (window.neoDataBindings && window.neoDataBindings.hasOwnProperty(varName)) continue;
-                    
+
                     if (window.neoConfigMap && window.neoConfigMap.hasOwnProperty(varName)) {
                         var tr = document.createElement('tr');
                         var valHtml = '<span style="color:#888;">' + resolveValue(window.neoConfigMap[varName]) + '</span>';
@@ -432,7 +432,7 @@
                         hasRows = true;
                     }
                 }
-                
+
                 if (hasRows) {
                     bindingsContainer.style.display = 'flex';
                     bindingsContainer.style.flexDirection = 'column';
@@ -440,9 +440,9 @@
                     bindingsContainer.style.display = 'none';
                 }
             }
-            
+
             renderTable();
-            
+
             // Move edit overlay to the step item container being edited
             var stepItemEl = null;
             if (idx === (performed && performed.length > 0 ? performed.length : 0)) {
@@ -461,17 +461,17 @@
             if (stepItemEl && editOverlay) {
                 stepItemEl.appendChild(editOverlay);
             }
-            
+
             document.getElementById('neo-bindings-container').style.maxHeight = 'none';
             document.getElementById('bindingsDrawer').style.display = 'flex';
             document.getElementById('neo-toolbar-controls').style.display = 'none';
             document.getElementById('neo-edit-toolbar').style.display = 'flex';
-            
+
             editOverlay.style.display = 'flex';
             editInput.focus();
         };
 
-        document.getElementById('neo-edit-btn').addEventListener('click', function() {
+        document.getElementById('neo-edit-btn').addEventListener('click', function () {
             if (!this.disabled) {
                 var currentStepIdx = (performed && performed.length > 0) ? performed.length : 0;
                 window.neoStartEditingStep(currentStepIdx);
@@ -480,22 +480,22 @@
 
         var editCardIcon = document.getElementById('neo-edit-card-icon');
         if (editCardIcon) {
-            editCardIcon.addEventListener('click', function() {
+            editCardIcon.addEventListener('click', function () {
                 var currentStepIdx = (performed && performed.length > 0) ? performed.length : 0;
                 window.neoStartEditingStep(currentStepIdx);
             });
         }
 
-        document.getElementById('neo-edit-cancel-btn').addEventListener('click', function() {
+        document.getElementById('neo-edit-cancel-btn').addEventListener('click', function () {
             document.getElementById('bindingsDrawer').style.display = 'none';
             document.getElementById('neo-toolbar-controls').style.display = 'flex';
             document.getElementById('neo-edit-toolbar').style.display = 'none';
-            
+
             document.getElementById('neo-bindings-container').style.maxHeight = '100px';
             editOverlay.style.display = 'none';
         });
 
-        submitEditBtn.addEventListener('click', function() {
+        submitEditBtn.addEventListener('click', function () {
             if (this.disabled) return;
             var newInstr = editInput.value;
             if (newInstr && newInstr.trim() !== '') {
@@ -506,7 +506,7 @@
                 }
                 var editIdx = (window.neoEditingStepIndex !== undefined) ? window.neoEditingStepIndex : ((performed && performed.length > 0) ? performed.length : 0);
                 window.neoSubmitAction({ action: "EDIT", instruction: newInstr.trim(), index: editIdx, bindings: updatedBindings });
-                
+
                 document.getElementById('bindingsDrawer').style.display = 'none';
                 document.getElementById('neo-toolbar-controls').style.display = 'flex';
                 document.getElementById('neo-edit-toolbar').style.display = 'none';
@@ -520,7 +520,7 @@
                 editOverlay.style.display = 'none';
             }
         });
-        document.getElementById('neo-rewind-btn').addEventListener('click', function() {
+        document.getElementById('neo-rewind-btn').addEventListener('click', function () {
             if (!this.disabled) {
                 var histList = document.getElementById('neo-history-list');
                 var count = histList ? histList.children.length : 0;
@@ -531,19 +531,19 @@
         });
 
         var addOverlay = document.getElementById('neo-add-overlay');
-        document.getElementById('neo-add-overlay-btn').addEventListener('click', function() {
+        document.getElementById('neo-add-overlay-btn').addEventListener('click', function () {
             if (!this.disabled) {
                 addOverlay.style.display = 'flex';
                 document.getElementById('neo-add-input').focus();
             }
         });
 
-        document.getElementById('neo-add-cancel-btn').addEventListener('click', function() {
+        document.getElementById('neo-add-cancel-btn').addEventListener('click', function () {
             addOverlay.style.display = 'none';
             document.getElementById('neo-add-input').value = '';
         });
 
-        document.getElementById('neo-add-submit-btn').addEventListener('click', function() {
+        document.getElementById('neo-add-submit-btn').addEventListener('click', function () {
             var input = document.getElementById('neo-add-input').value.trim();
             if (input !== '') {
                 window.neoSubmitAction({ action: "ADD", instruction: input });
@@ -552,7 +552,7 @@
             }
         });
 
-        document.getElementById('neo-add-input').addEventListener('keypress', function(e) {
+        document.getElementById('neo-add-input').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 document.getElementById('neo-add-submit-btn').click();
             }
@@ -560,13 +560,13 @@
 
         var dumpBtn = document.getElementById('neo-dump-btn');
         if (dumpBtn) {
-            dumpBtn.addEventListener('click', function() {
+            dumpBtn.addEventListener('click', function () {
                 if (!this.disabled) {
                     window.neoHudAction = JSON.stringify({ action: "DUMP" });
                     this.disabled = true;
                     this.style.opacity = '0.5';
                     this.innerText = '⏳ Dumping...';
-                    setTimeout(function() {
+                    setTimeout(function () {
                         dumpBtn.disabled = false;
                         dumpBtn.style.opacity = '1';
                         dumpBtn.innerText = '📥 Dump Debug Context';
@@ -578,42 +578,42 @@
         var settingsOverlay = document.getElementById('neo-settings-overlay');
         var settingsBtn = document.getElementById('neo-settings-btn');
         if (settingsBtn && settingsOverlay) {
-            settingsBtn.addEventListener('click', function() {
+            settingsBtn.addEventListener('click', function () {
                 settingsOverlay.style.display = 'flex';
             });
         }
-        
+
         var settingsCancelBtn = document.getElementById('neo-settings-cancel-btn');
         if (settingsCancelBtn && settingsOverlay) {
-            settingsCancelBtn.addEventListener('click', function() {
+            settingsCancelBtn.addEventListener('click', function () {
                 settingsOverlay.style.display = 'none';
             });
         }
-        
+
         var settingsSubmitBtn = document.getElementById('neo-settings-submit-btn');
         if (settingsSubmitBtn && settingsOverlay) {
-            settingsSubmitBtn.addEventListener('click', function() {
+            settingsSubmitBtn.addEventListener('click', function () {
                 var theme = document.getElementById('neo-theme-select').value;
                 var zoom = parseInt(document.getElementById('neo-zoom-input').value, 10);
                 if (isNaN(zoom)) zoom = 100;
-                
+
                 var settingsPayload = {
                     theme: theme,
                     zoomFactor: zoom
                 };
-                
+
                 window.neoApplySettings(settingsPayload);
-                
+
                 window.neoSubmitAction({ action: 'SETTINGS', payload: JSON.stringify(settingsPayload) });
                 settingsOverlay.style.display = 'none';
             });
         }
-        
-        window.neoApplySettings = function(settingsObj) {
+
+        window.neoApplySettings = function (settingsObj) {
             if (!settingsObj) return;
             var container = document.getElementById('neodymium-ai-hud-container');
             if (!container) return;
-            
+
             if (settingsObj.zoomFactor) {
                 var zoomDec = settingsObj.zoomFactor / 100.0;
                 container.style.zoom = zoomDec;
@@ -630,10 +630,10 @@
 
 
         // Keyboard shortcuts logic
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', function (e) {
             if (e.repeat) return; // Prevent holding the key from triggering multiple times
             // If typing in the input field, don't trigger shortcuts
-            if (document.activeElement === document.getElementById('neo-add-input') || 
+            if (document.activeElement === document.getElementById('neo-add-input') ||
                 document.activeElement === document.getElementById('neo-edit-input')) {
                 if (e.key === 'Enter') {
                     if (document.activeElement === document.getElementById('neo-add-input')) {
@@ -648,12 +648,12 @@
             var key = e.key ? e.key.toLowerCase() : '';
             var isAltA = e.altKey && key === 'a';
             var isCtrlEnter = e.ctrlKey && e.code === 'Enter';
-            
+
             if (isAltA || isCtrlEnter || (e.altKey && (key === 's' || key === 'h'))) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
-                
+
                 if (isAltA || isCtrlEnter) {
                     var btn = document.getElementById('neo-approve-btn');
                     if (!btn.disabled) {
@@ -678,7 +678,7 @@
         }, true);
 
         // Also intercept keyup to prevent the application from reacting to the release of the shortcut keys
-        document.addEventListener('keyup', function(e) {
+        document.addEventListener('keyup', function (e) {
             if (e.altKey && e.key) {
                 var key = e.key.toLowerCase();
                 if (key === 'a' || key === 's' || key === 'h') {
@@ -688,27 +688,27 @@
                 }
             }
         }, true);
-        window.neoDragStart = function(e, idx) {
+        window.neoDragStart = function (e, idx) {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', idx);
             e.target.style.opacity = '0.4';
             window.neoDraggedItem = e.target;
         };
-        window.neoDragOver = function(e) {
+        window.neoDragOver = function (e) {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             return false;
         };
-        window.neoDragEnter = function(e) {
+        window.neoDragEnter = function (e) {
             e.preventDefault();
             var target = e.target.closest('.neo-step-item');
             if (target && target !== window.neoDraggedItem) target.classList.add('drag-over');
         };
-        window.neoDragLeave = function(e) {
+        window.neoDragLeave = function (e) {
             var target = e.target.closest('.neo-step-item');
             if (target) target.classList.remove('drag-over');
         };
-        window.neoDrop = function(e, targetIdx) {
+        window.neoDrop = function (e, targetIdx) {
             e.stopPropagation();
             var target = e.target.closest('.neo-step-item');
             if (target) target.classList.remove('drag-over');
@@ -718,21 +718,21 @@
             }
             return false;
         };
-        window.neoDragEnd = function(e) {
+        window.neoDragEnd = function (e) {
             e.target.style.opacity = '1';
             var items = document.querySelectorAll('.neo-step-item');
-            for(var i = 0; i < items.length; i++) items[i].classList.remove('drag-over');
+            for (var i = 0; i < items.length; i++) items[i].classList.remove('drag-over');
         };
 
-        window.neoRenderFullPrompt = function() {
+        window.neoRenderFullPrompt = function () {
             var historyContainer = document.getElementById('neo-history-table');
             var futureContainer = document.getElementById('neo-future-table');
             if (!historyContainer || !futureContainer) return;
-            
+
             window.neoCurrentRenderedSteps = [];
-            
+
             if (!window.neoBpListenerAttached) {
-                var handler = function(e) {
+                var handler = function (e) {
                     var marker = e.target.closest('.neo-bp-marker');
                     if (marker) {
                         var idxInList = parseInt(marker.getAttribute('data-idx'));
@@ -757,7 +757,7 @@
             }
 
             if (!window.neoEditStepListenerAttached) {
-                var editHandler = function(e) {
+                var editHandler = function (e) {
                     var target = e.target.closest('.neo-edit-step-icon');
                     if (target) {
                         e.stopPropagation();
@@ -785,11 +785,11 @@
                 var cleanText = getCleanStepText(stepText);
                 var stepIdx = window.neoCurrentRenderedSteps.length;
                 window.neoCurrentRenderedSteps.push(cleanText);
-                
+
                 var isBp = window.neoBreakpoints && window.neoBreakpoints.indexOf(stepIdx) !== -1;
                 var bpDisplay = isBp ? '🛑' : '⚪';
                 var bpOpacity = isBp ? '1' : '0.15';
-                
+
                 var classNames = 'neo-step-item';
                 if (statusStr === 'done') {
                     classNames += ' completed';
@@ -799,20 +799,20 @@
                     cleanText = cleanText.replace('// [SKIPPED] ', '');
                     stepText = stepText.replace('// [SKIPPED] ', '');
                 }
-                
+
                 var editIconHtml = '';
                 if (canEdit) {
                     editIconHtml = '<span class="neo-edit-step-icon" data-idx="' + stepIdx + '" style="margin-left: auto; opacity: 0.5; cursor: pointer; padding: 2px 6px; display: inline-flex; align-items: center; justify-content: center;" title="Edit this step"><i class="fa-solid fa-pen"></i></span>';
                 }
-                
+
                 return '<div class="' + classNames + '" style="margin-bottom: 8px;" draggable="true" ondragstart="window.neoDragStart(event, ' + stepIdx + ')" ondragover="window.neoDragOver(event)" ondragenter="window.neoDragEnter(event)" ondragleave="window.neoDragLeave(event)" ondrop="window.neoDrop(event, ' + stepIdx + ')" ondragend="window.neoDragEnd(event)">' +
-                       '<div style="display: flex; align-items: center; width: 100%;">' +
-                       '<div class="neo-step-drag-handle" style="cursor: grab; margin-right: 8px; opacity: 0.3;" title="Drag to reorder">☰</div>' +
-                       '<span class="neo-bp-marker" data-idx="' + stepIdx + '" style="opacity: ' + bpOpacity + '; cursor: pointer; font-size: 13px; font-weight: bold; margin-right: 8px; user-select: none;" title="Toggle breakpoint">' + bpDisplay + '</span>' +
-                       '<div class="neo-step-indicator">' + (stepIdx + 1) + '</div>' +
-                       '<div class="neo-step-content" style="flex-grow: 1;">' + escapeHtml(stepText) + '</div>' +
-                       editIconHtml +
-                       '</div></div>';
+                    '<div style="display: flex; align-items: center; width: 100%;">' +
+                    '<div class="neo-step-drag-handle" style="cursor: grab; margin-right: 8px; opacity: 0.3;" title="Drag to reorder">☰</div>' +
+                    '<span class="neo-bp-marker" data-idx="' + stepIdx + '" style="opacity: ' + bpOpacity + '; cursor: pointer; font-size: 13px; font-weight: bold; margin-right: 8px; user-select: none;" title="Toggle breakpoint">' + bpDisplay + '</span>' +
+                    '<div class="neo-step-indicator">' + (stepIdx + 1) + '</div>' +
+                    '<div class="neo-step-content" style="flex-grow: 1;">' + escapeHtml(stepText) + '</div>' +
+                    editIconHtml +
+                    '</div></div>';
             }
 
             var histHtml = '';
@@ -827,7 +827,7 @@
             if (aList && aList.length > 0) {
                 var activeIdx = window.neoCurrentRenderedSteps.length;
                 window.neoCurrentRenderedSteps.push(getCleanStepText(aList[0])); // increment index for the active step so future steps have correct numbers
-                
+
                 var activeElem = document.querySelector('.neo-step-item.active');
                 if (activeElem) {
                     activeElem.setAttribute('draggable', 'true');
@@ -837,7 +837,7 @@
                     activeElem.setAttribute('ondragleave', 'window.neoDragLeave(event)');
                     activeElem.setAttribute('ondrop', 'window.neoDrop(event, ' + activeIdx + ')');
                     activeElem.setAttribute('ondragend', 'window.neoDragEnd(event)');
-                    
+
                     var activeBp = activeElem.querySelector('.neo-bp-col') || activeElem.querySelector('.neo-bp-marker');
                     if (activeBp) {
                         activeBp.className = 'neo-bp-marker';
@@ -859,7 +859,7 @@
                         }
                     }
                 }
-                
+
                 if (aList.length > 1) {
                     for (var j = 1; j < aList.length; j++) {
                         futHtml += genItem(aList[j], 'pending');
@@ -869,12 +869,12 @@
             futureContainer.innerHTML = futHtml;
         };
 
-        window.neoToggleFullPrompt = function() {
+        window.neoToggleFullPrompt = function () {
             var historyOverlay = document.getElementById('neo-history-overlay');
             var futureOverlay = document.getElementById('neo-future-overlay');
             var btn = document.getElementById('neo-full-prompt-btn');
             var plannedContainer = document.getElementById('neo-planned-actions');
-            
+
             if (window.neoFullPromptOpen) {
                 historyOverlay.style.display = 'none';
                 futureOverlay.style.display = 'none';
@@ -895,35 +895,35 @@
                 window.neoFullPromptOpen = true;
                 setSessionStorage('neoFullPromptOpen', 'true');
             }
-            setTimeout(function() {
+            setTimeout(function () {
                 if (window.neoClampHudViewport) window.neoClampHudViewport();
             }, 10);
         };
 
-        window.neoClampHudViewport = function() {
+        window.neoClampHudViewport = function () {
             var hud = document.getElementById('neo-ai-hud');
             if (hud && hud.style.display !== 'none') {
                 var rect = hud.getBoundingClientRect();
                 var currentRight = parseFloat(hud.style.right) || 20;
                 var currentBottom = parseFloat(hud.style.bottom) || 20;
-                
+
                 var maxRight = window.innerWidth - rect.width - 20;
                 var maxBottom = window.innerHeight - rect.height - 20;
-                
+
                 var newRight = currentRight;
                 var newBottom = currentBottom;
-                
+
                 if (newRight > maxRight) newRight = maxRight;
                 if (newRight < 20) newRight = 20;
                 if (newBottom > maxBottom) newBottom = maxBottom;
                 if (newBottom < 20) newBottom = 20;
-                
+
                 if (newRight !== currentRight || newBottom !== currentBottom) {
                     hud.style.right = newRight + 'px';
                     hud.style.bottom = newBottom + 'px';
                     setSessionStorage('neoHudPosRight', newRight + 'px');
                     setSessionStorage('neoHudPosBottom', newBottom + 'px');
-                    
+
                     var minCircle = document.getElementById('neo-min-circle');
                     if (minCircle) {
                         minCircle.style.right = newRight + 'px';
@@ -944,7 +944,7 @@
         };
 
         document.getElementById('neo-full-prompt-btn').addEventListener('click', window.neoToggleFullPrompt);
-        
+
         window.addEventListener('resize', window.neoClampHudViewport);
     }
 
@@ -964,7 +964,7 @@
 
     var currentHud = document.getElementById('neo-ai-hud');
     var minCircle = document.getElementById('neo-min-circle');
-    
+
     if (getSessionStorage('neoHudPosRight')) {
         var r = getSessionStorage('neoHudPosRight');
         var b = getSessionStorage('neoHudPosBottom');
@@ -988,12 +988,25 @@
     var wasLoading = lastReasoning === "Loading reasoning...";
 
     if (!isNowLoading) {
-        if ((lastNextAction !== null && lastNextAction !== currentNextAction) ||
-            (lastPerfLen !== null && parseInt(lastPerfLen) !== currentPerfLen) ||
+        // Conditions that always trigger a maximize, regardless of auto-skip state:
+        // – The user manually paused (was in auto-skip, now is not)
+        // – An error step is active
+        // – Execution finished
+        var shouldMaximize =
             (lastAutoSkip === 'true' && !currentAutoSkip) ||
-            currentNextAction.startsWith('⚠️') ||
-            wasLoading ||
-            isFinished) {
+            currentNextAction.startsWith('\u26a0\ufe0f') ||
+            isFinished;
+
+        // While auto-skip is active, suppress step-change/load-complete maximize triggers.
+        // The HUD should stay minimized until the user explicitly pauses or an error occurs.
+        if (!window.neoHudAutoSkip) {
+            shouldMaximize = shouldMaximize ||
+                (lastNextAction !== null && lastNextAction !== currentNextAction) ||
+                (lastPerfLen !== null && parseInt(lastPerfLen) !== currentPerfLen) ||
+                wasLoading;
+        }
+
+        if (shouldMaximize) {
             setSessionStorage('neoHudMinimized', 'false');
         }
     }
@@ -1171,21 +1184,19 @@
         if (historyContainer) historyContainer.style.display = 'block';
         var historyList = document.getElementById('neo-history-list');
         if (historyList) {
-            historyList.innerHTML = performed.map(function(a, index) {
+            historyList.innerHTML = performed.map(function (a, index) {
                 return '<li style="margin-bottom:3px; padding:2px; background:#444; cursor:pointer;" onclick="if(confirm(\'Rewind execution back to this step?\')) window.neoSubmitAction({ action: \'REWIND\', index: ' + index + ' });" title="Click to rewind">[' + index + '] ' + a + '</li>';
             }).join('');
         }
     }
 
-    // Hide HUD container permanently if auto-skip is enabled
+    // The outer container must always remain visible so the mini-circle pause button
+    // is reachable during auto-skip. Visibility of the main HUD panel vs. the
+    // mini-circle is controlled individually by neoMinimizeHud / neoMaximizeHud.
     var hudContainer = document.getElementById('neodymium-ai-hud-container');
     if (hudContainer) {
         hudContainer.setAttribute('data-hud-state-sig', stateSignature);
-        if (autoSkip) {
-            hudContainer.style.display = 'none';
-        } else {
-            hudContainer.style.display = '';
-        }
+        hudContainer.style.display = '';
         // Ensure the HUD container is always the last child of document.body
         // to render on top of any dynamically added overlays/modals.
         if (document.body && document.body.lastChild !== hudContainer) {
@@ -1206,7 +1217,7 @@
             if (tbControls) tbControls.style.display = 'none';
             if (tbEdit) tbEdit.style.display = 'none';
             if (bDrawer) bDrawer.style.display = 'none';
-            
+
             finishOverlay.style.display = 'flex';
             var overlayHeader = document.getElementById('neo-overlay-header');
             var warningBlock = document.getElementById('neo-overlay-warning-block');
@@ -1218,18 +1229,18 @@
                 overlayHeader.innerHTML = '<i class="fa-solid fa-floppy-disk" style="color: var(--accent-success);"></i> Neodymium Save & Exit';
                 warningBlock.style.display = 'flex';
                 finishedBlock.style.display = 'none';
-                modificationsBlock.style.display = 'none'; 
-                
+                modificationsBlock.style.display = 'none';
+
                 buttonsContainer.innerHTML = `
                     <button class="neo-btn" id="neo-exit-close-btn" style="flex: 1; color: #ef4444; border-color: rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.03);"><i class="fa-solid fa-xmark"></i> Cancel & Close</button>
                     <button class="neo-btn" id="neo-exit-save-btn" style="flex: 1.5; color: #ffffff; background: var(--accent-success); border-color: var(--accent-success);"><i class="fa-solid fa-check"></i> Save & Overwrite</button>
                 `;
-                
-                document.getElementById('neo-exit-close-btn').addEventListener('click', function() {
+
+                document.getElementById('neo-exit-close-btn').addEventListener('click', function () {
                     window.neoSubmitAction({ action: "APPROVE" });
                 });
-                
-                document.getElementById('neo-exit-save-btn').addEventListener('click', function() {
+
+                document.getElementById('neo-exit-save-btn').addEventListener('click', function () {
                     window.neoSubmitAction({ action: "SAVE_EXIT" });
                 });
             } else {
@@ -1237,12 +1248,12 @@
                 warningBlock.style.display = 'none';
                 finishedBlock.style.display = 'flex';
                 modificationsBlock.style.display = 'none';
-                
+
                 buttonsContainer.innerHTML = `
                     <button class="neo-btn" id="neo-overlay-close-btn" style="width: 100%; color: #ffffff; background: var(--accent-primary); border-color: var(--accent-primary);"><i class="fa-solid fa-check"></i> Close Test</button>
                 `;
-                
-                document.getElementById('neo-overlay-close-btn').addEventListener('click', function() {
+
+                document.getElementById('neo-overlay-close-btn').addEventListener('click', function () {
                     window.neoSubmitAction({ action: "APPROVE" });
                 });
             }
@@ -1259,7 +1270,7 @@
             var tSelect = document.getElementById('neo-theme-select');
             if (zInput && loadedSettings.zoomFactor) zInput.value = loadedSettings.zoomFactor;
             if (tSelect && loadedSettings.theme) tSelect.value = loadedSettings.theme;
-        } catch(e) {}
+        } catch (e) { }
     }
 
 })(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9], arguments[10], arguments[11], arguments[12], arguments[13], arguments[14], arguments[15], arguments[16]);

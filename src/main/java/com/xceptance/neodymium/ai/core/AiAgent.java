@@ -22,9 +22,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -35,8 +35,13 @@ import org.junit.jupiter.api.Assertions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codeborne.selenide.Selenide;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
@@ -48,18 +53,12 @@ import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.ai.generator.InteractiveHud;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
+import com.xceptance.neodymium.ai.util.ScreenshotHasher;
+import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.SelenideAddons;
-import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.ai.util.ScreenshotHasher;
-import com.xceptance.neodymium.ai.util.CustomRulesLoader;
-import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
-import com.google.gson.reflect.TypeToken;
 import io.qameta.allure.Allure;
 
 /**
@@ -987,18 +986,6 @@ public class AiAgent {
                         if (customTimeoutMs != null) {
                             com.codeborne.selenide.Configuration.timeout = originalTimeout;
                         }
-                    }
-
-                    // Give the browser a moment to initiate and complete a navigation (if the action triggered one).
-                    // A higher delay (1000ms) is needed here to prevent flickering because a screenshot is taken
-                    // on the next step right after page load, and we want to ensure the page load/screenshot is ready
-                    // and the HUD state has fully transitioned.
-                    try
-                    {
-                        Thread.sleep(1000);
-                    }
-                    catch (final InterruptedException e)
-                    {
                     }
 
                     // Accumulate executed actions
