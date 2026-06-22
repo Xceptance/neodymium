@@ -881,6 +881,7 @@
                 if (plannedContainer) plannedContainer.style.display = 'block';
                 btn.classList.remove('neo-btn-primary');
                 document.getElementById('neo-ai-hud').classList.remove('expanded');
+                document.querySelectorAll('.neo-step-drag-handle').forEach(el => el.remove());
                 btn.innerHTML = '▲ Show Full Prompt ▲';
                 window.neoFullPromptOpen = false;
                 setSessionStorage('neoFullPromptOpen', 'false');
