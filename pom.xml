@@ -52,7 +52,7 @@
 		<selenide.version>7.16.0</selenide.version>
 		<cucumber.version>7.33.0</cucumber.version>
 		<browserup.version>3.2.2</browserup.version>
-		<log4j.version>2.25.3</log4j.version>
+		<log4j.version>2.25.4</log4j.version>
 		<junit.version>4.13.2</junit.version>
 		<junit.jupiter.version>6.1.0-M1</junit.jupiter.version>
 		<junit.vintage.version>6.1.0-M1</junit.vintage.version>
