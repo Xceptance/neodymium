@@ -378,7 +378,7 @@ public class AiAgent {
                         this.autoSkip = false;
                         try {
                             Selenide.executeJavaScript(
-                                    "if (typeof window !== 'undefined') { window.neoHudAutoSkip = false; try { sessionStorage.setItem('neoAutoSkip', 'false'); } catch(e){} }");
+                                    "if (typeof window !== 'undefined') { window.neoHudAutoSkip = false; try { sessionStorage.setItem('neoLastAutoSkip', 'false'); } catch(e){} }");
                         } catch (final Exception e) {
                             // Ignore browser communication errors
                         }

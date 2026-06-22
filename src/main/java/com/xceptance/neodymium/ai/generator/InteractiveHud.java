@@ -360,6 +360,7 @@ public final class InteractiveHud
             {
                 return null;
             }
+            this.lastAutoSkip = (Boolean) status;
             return (Boolean) status;
         }
         catch (final Exception e)
