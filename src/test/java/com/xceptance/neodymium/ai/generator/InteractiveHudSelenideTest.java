@@ -891,15 +891,21 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Selenide.sleep(2500); // Give background thread time to execute step and render the next step in HUD
 
         // 5. Verify Step 1 executed successfully, and Step 2 is now pending in the HUD.
-        // Also assert that the execution history item for Step 1 is visible.
+        // Also assert that the execution history item for Step 1 is visible in the full prompt view.
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible);
         $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
         $("#result").shouldHave(Condition.exactText("Button 1 Clicked"));
-        $("#neo-history-list li").shouldHave(Condition.text("Click button 1")); // Assert history item is rendered
 
-        // 6. Click the Back button (⏪) in the HUD to rewind the execution back to Step 1
-        $("#neo-rewind-btn").shouldBe(Condition.enabled).click();
+        // Expand full prompt to see history/past tasks
+        $("#neo-full-prompt-btn").click();
+        $("#neo-history-table .neo-step-item.completed .neo-step-content").shouldHave(Condition.text("Click button 1")); // Assert history item is rendered
+
+        // 6. Hover over the completed step (using js class add to bypass headless hover limits) and click the rewind hover indicator, then accept the confirmation dialog
+        Selenide.executeJavaScript("document.querySelector('#neo-history-table .neo-step-item.completed').classList.add('hovered');");
+        $("#neo-history-table .neo-step-item.completed .rewind-hover-indicator").shouldBe(Condition.visible).click();
+        $("#neo-confirm-overlay").shouldBe(Condition.visible);
+        $("#neo-confirm-submit-btn").click();
         Selenide.sleep(2500); // Give background thread time to process rewind and update HUD
 
         // 7. Verify that the HUD successfully rolls back its internal cursor and highlights Step 1 as pending
@@ -2263,6 +2269,172 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         checkBgError();
         $("#neo-ai-hud").shouldNotBe(Condition.visible);
         $("#result").shouldHave(Condition.exactText("Button 1 Clicked")); // Step 1 executed successfully, Step 2 skipped
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that the interactive HUD correctly shows block badges (BEFORE, STEPS, AFTER)
+     * on the active step card and renders the appropriate headlines inside the expanded full prompt view
+     * when executing before, steps, and after blocks.
+     * 
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testBeforeStepsStepsAndAfterStepsWithHeadlines() throws Exception
+    {
+        // 1. Open the SUT HTML test page
+        openTestUrl();
+
+        // 2. Initialize the Playbook with a clean 6-step sequence matching our blocks (2 steps per block)
+        final Playbook playbook = new Playbook("testBeforeStepsStepsAndAfterStepsWithHeadlines");
+        playbook.setRecording(false);
+
+        // Before steps (Steps 1 & 2): Click Button 1
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setReasoning("Before block step 1");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        final PlaybookStep step2 = new PlaybookStep();
+        step2.setPromptLine("Click button 1");
+        step2.setReasoning("Before block step 2");
+        step2.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step2);
+
+        // Main steps steps (Steps 3 & 4): Click Button 2
+        final PlaybookStep step3 = new PlaybookStep();
+        step3.setPromptLine("Click button 2");
+        step3.setReasoning("Main steps block step 1");
+        step3.setActions(List.of(new Action("CLICK", "#btn2", "Click button 2")));
+        playbook.addStep(step3);
+
+        final PlaybookStep step4 = new PlaybookStep();
+        step4.setPromptLine("Click button 2");
+        step4.setReasoning("Main steps block step 2");
+        step4.setActions(List.of(new Action("CLICK", "#btn2", "Click button 2")));
+        playbook.addStep(step4);
+
+        // After steps (Steps 5 & 6): Click Button 1
+        final PlaybookStep step5 = new PlaybookStep();
+        step5.setPromptLine("Click button 1");
+        step5.setReasoning("After block step 1");
+        step5.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step5);
+
+        final PlaybookStep step6 = new PlaybookStep();
+        step6.setPromptLine("Click button 1");
+        step6.setReasoning("After block step 2");
+        step6.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step6);
+
+        // Register the playbook
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Launch the AI agent in a background thread executing before, steps, and after blocks
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.before("Click button 1\nClick button 1")
+                  .steps("Click button 2\nClick button 2")
+                  .after("Click button 1\nClick button 1")
+                  .execute();
+            }
+            catch (final Throwable e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Verify Phase 1: Before block execution (Step 1 active)
+        Selenide.sleep(1000);
+        checkBgError();
+        waitHudReady();
+        
+        // Assert active step details for before block
+        $("#neo-active-step-block-badge").shouldBe(Condition.visible).shouldHave(Condition.exactText("BEFORE"));
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 1"));
+
+        // Expand the full prompt and assert headlines
+        $("#neo-full-prompt-btn").click();
+        $$(".neo-block-headline").get(0).shouldHave(Condition.exactText("BEFORE"));
+        $$(".neo-block-headline").get(1).shouldHave(Condition.exactText("STEPS"));
+        $$(".neo-block-headline").get(2).shouldHave(Condition.exactText("AFTER"));
+        $("#neo-full-prompt-btn").click(); // collapse
+
+        // Run Before step 1
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2500);
+
+        // Verify Step 2 active
+        checkBgError();
+        $("#neo-active-step-block-badge").shouldBe(Condition.visible).shouldHave(Condition.exactText("BEFORE"));
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 1"));
+
+        // Run Before step 2
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2500);
+
+        // 5. Verify Phase 2: Steps block execution (Step 3 active)
+        checkBgError();
+        $("#neo-ai-hud").shouldBe(Condition.visible);
+
+        // Assert active step details for steps block
+        $("#neo-active-step-block-badge").shouldBe(Condition.visible).shouldHave(Condition.exactText("STEPS"));
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
+
+        // Expand the full prompt and assert headlines
+        $("#neo-full-prompt-btn").click();
+        $$(".neo-block-headline").get(0).shouldHave(Condition.exactText("BEFORE"));
+        $$(".neo-block-headline").get(1).shouldHave(Condition.exactText("STEPS"));
+        $$(".neo-block-headline").get(2).shouldHave(Condition.exactText("AFTER"));
+        $("#neo-full-prompt-btn").click(); // collapse
+
+        // Run Steps step 1
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2500);
+
+        // Verify Step 4 active
+        checkBgError();
+        $("#neo-active-step-block-badge").shouldBe(Condition.visible).shouldHave(Condition.exactText("STEPS"));
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
+
+        // Run Steps step 2
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2500);
+
+        // 6. Verify Phase 3: After block execution (Step 5 active)
+        checkBgError();
+        $("#neo-ai-hud").shouldBe(Condition.visible);
+
+        // Assert active step details for after block
+        $("#neo-active-step-block-badge").shouldBe(Condition.visible).shouldHave(Condition.exactText("AFTER"));
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 1"));
+
+        // Expand the full prompt and assert headlines
+        $("#neo-full-prompt-btn").click();
+        $$(".neo-block-headline").get(0).shouldHave(Condition.exactText("BEFORE"));
+        $$(".neo-block-headline").get(1).shouldHave(Condition.exactText("STEPS"));
+        $$(".neo-block-headline").get(2).shouldHave(Condition.exactText("AFTER"));
+        $("#neo-full-prompt-btn").click(); // collapse
+
+        // Run After step 1
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2500);
+
+        // Verify Step 6 active
+        checkBgError();
+        $("#neo-active-step-block-badge").shouldBe(Condition.visible).shouldHave(Condition.exactText("AFTER"));
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 1"));
+
+        // Run After step 2
+        $("#neo-approve-btn").click();
+
+        // 7. Verify SUT state and execution completion
+        checkBgError();
+        $("#neo-ai-hud").shouldNotBe(Condition.visible);
+        $("#result").shouldHave(Condition.exactText("Button 1 Clicked"));
         joinBgThread();
     }
 }

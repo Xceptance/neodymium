@@ -4,7 +4,6 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         /* CSS Variables for Harmonious Theme Support inside Neodymium AI HUD */
@@ -145,6 +144,8 @@
         .neo-step-list {
             padding: 15px;
             flex-grow: 1;
+            flex-shrink: 1;
+            min-height: 0;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
@@ -195,12 +196,14 @@
             display: none;
         }
 
-        .neo-step-item.completed:hover .checkmark {
+        .neo-step-item.completed:hover .checkmark,
+        .neo-step-item.completed.hovered .checkmark {
             display: none !important;
         }
 
-        .neo-step-item.completed:hover .rewind-hover-indicator {
-            display: inline !important;
+        .neo-step-item.completed:hover .rewind-hover-indicator,
+        .neo-step-item.completed.hovered .rewind-hover-indicator {
+            display: inline-flex !important;
         }
 
         .neo-step-item.skipped {
@@ -496,19 +499,6 @@
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
         }
 
-        /* Class-based button coloring overrides to prevent solid green/orange dynamic style overrides */
-        .neo-btn-success {
-            color: #10b981 !important;
-            border-color: rgba(16, 185, 129, 0.25) !important;
-            background: rgba(16, 185, 129, 0.03) !important;
-        }
-
-        .neo-btn-success:hover:not(:disabled) {
-            color: #ffffff !important;
-            background: var(--accent-success) !important;
-            border-color: var(--accent-success) !important;
-            box-shadow: 0 0 12px rgba(16, 185, 129, 0.3) !important;
-        }
 
         .neo-btn-warning {
             color: var(--accent-warning) !important;
@@ -536,14 +526,6 @@
             box-shadow: 0 0 12px rgba(59, 130, 246, 0.3) !important;
         }
 
-        .neo-visually-hidden-active-step {
-            position: absolute !important;
-            opacity: 0.001 !important;
-            pointer-events: none !important;
-            z-index: -9999 !important;
-            top: 0 !important;
-            left: 0 !important;
-        }
 
         /* Floating Variables Drawer: Absolutely positioned to avoid layout shifting */
         .neo-bindings-drawer {
@@ -597,40 +579,18 @@
             flex-grow: 1;
             box-sizing: border-box;
         }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
+        .neo-block-headline {
+            font-family: 'Outfit', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 14px;
+            margin-bottom: 8px;
+            padding-left: 6px;
+            box-sizing: border-box;
         }
 
-        .spinner-icon {
-            animation: spin 1.2s linear infinite;
-            color: var(--accent-success);
-        }
-
-        @keyframes pulse-glow {
-            0% {
-                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
-            }
-
-            70% {
-                box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
-            }
-
-            100% {
-                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-            }
-        }
-
-        .circle-pulse {
-            animation: pulse-glow 2s infinite;
-            border-color: var(--accent-success) !important;
-        }
     </style>
 
     <!-- Sliding Variables Drawer -->
@@ -657,14 +617,14 @@
             <div style="display:flex; gap:12px; align-items:center;">
                 <span id="neo-status-indicator" class="neo-status-badge">Pending</span>
                 <button id="neo-settings-btn"
-                    style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s;"
-                    title="Settings"><i class="fa-solid fa-gear"></i></button>
+                    style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s; display:flex; align-items:center; justify-content:center; width:24px; height:24px;"
+                    title="Settings"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
                 <button id="neo-info-btn"
-                    style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s;"
-                    title="Help"><i class="fa-solid fa-circle-info"></i></button>
+                    style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s; display:flex; align-items:center; justify-content:center; width:24px; height:24px;"
+                    title="Help"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
                 <button id="neo-min-btn"
-                    style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s;"
-                    title="Minimize"><i class="fa-solid fa-minus"></i></button>
+                    style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s; display:flex; align-items:center; justify-content:center; width:24px; height:24px;"
+                    title="Minimize"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
             </div>
         </div>
 
@@ -687,6 +647,10 @@
             <div id="neo-planned-actions" class="active-step-group">
                 <!-- Current Action card details -->
                 <div class="neo-step-item active">
+                    <!-- Block Badge -->
+                    <div id="neo-active-step-block-badge"
+                        style="font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; display: none;">
+                    </div>
                     <!-- Normal View inside active step -->
                     <div id="neo-active-step-normal-view" style="display:flex; align-items:center;">
                         <span class="neo-bp-col" id="neo-active-bp-col"
@@ -694,15 +658,14 @@
                         <div class="neo-step-indicator" style="color: var(--accent-primary); width:30px;">➔</div>
                         <div class="neo-step-content" id="neo-next-action" style="font-weight:600;"></div>
                         <button id="neo-edit-card-icon" title="Edit current instruction"
-                            style="background:transparent; border:none; color:var(--text-secondary); cursor:pointer; font-size:13px; margin-left:auto; transition:color 0.2s;"><i
-                                class="fa-solid fa-pen"></i></button>
+                            style="background:transparent; border:none; color:var(--text-secondary); cursor:pointer; font-size:13px; margin-left:auto; transition:color 0.2s; display:flex; align-items:center; justify-content:center;"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></button>
                     </div>
 
                     <!-- Edit Step Overlay inside card -->
                     <div id="neo-edit-overlay" style="display:none; margin-top:8px; flex-direction:column;">
                         <div
                             style="font-weight: 600; margin-bottom: 6px; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                            <i class="fa-solid fa-pen-to-square" style="color: var(--accent-purple);"></i> Edit
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit
                             Instruction Text
                         </div>
                         <input type="text" id="neo-edit-input" class="neo-input" placeholder=""
@@ -720,20 +683,9 @@
             <!-- Future Overlay -->
             <div id="neo-future-overlay" style="display:none; flex-direction:column; gap:8px; margin-top: 8px;">
                 <div id="neo-future-table" style="display:flex; flex-direction:column; width:100%;"></div>
-                <button class="neo-btn" id="neo-add-overlay-btn" title="Add new step at the end" style="width: 100%;"><i
-                        class="fa-solid fa-plus"></i> Add New Instruction</button>
+                <button class="neo-btn" id="neo-add-overlay-btn" title="Add new step at the end" style="width: 100%;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> Add New Instruction</button>
             </div>
 
-            <!-- History List block (visually hidden but in DOM and displayed:true for Selenide test assertions) -->
-            <div id="neo-history-container"
-                style="position: absolute; bottom: 50px; left: 20px; width: 200px; height: 50px; opacity: 0.01; pointer-events: none; z-index: -9999;">
-                <div
-                    style="font-size:10px; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px; font-weight:bold; letter-spacing:0.5px;">
-                    History (Click to Rewind)</div>
-                <ol id="neo-history-list"
-                    style="margin:0; padding-left:16px; font-size:12px; color:var(--text-secondary); display:flex; flex-direction:column; gap:4px; max-height:100px; overflow-y:auto;">
-                </ol>
-            </div>
 
         </div>
 
@@ -754,36 +706,30 @@
         <div id="neo-dump-container" style="display:none; padding:12px 16px 0 16px; background:var(--toolbar-bg);">
             <button id="neo-dump-btn" class="neo-btn"
                 style="width:100%; background:rgba(239, 68, 68, 0.12); color:#ef4444; border-color:rgba(239, 68, 68, 0.25);"
-                title="Dump context (DOM, History, Error) to file"><i class="fa-solid fa-download"></i> Dump Debug
+                title="Dump context (DOM, History, Error) to file"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Dump Debug
                 Context</button>
         </div>
 
         <!-- Toolbar controls (Standard Mode) -->
         <div class="neo-toolbar" id="neo-toolbar-controls" style="display: flex;">
-            <button class="neo-btn" id="neo-rewind-btn" title="Rewind 1 step back"><i
-                    class="fa-solid fa-backward-step"></i> Back</button>
-            <button class="neo-btn" id="neo-approve-btn" title="Run current active step only and pause"><i
-                    class="fa-solid fa-play"></i> Run</button>
+            <button class="neo-btn" id="neo-rewind-btn" title="Rewind 1 step back"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg> Back</button>
+            <button class="neo-btn" id="neo-approve-btn" title="Run current active step only and pause"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Run</button>
             <button class="neo-btn" id="neo-autoskip-btn" title="Fast-Forward [Alt+S]">
-                <i class="fa-solid fa-forward"></i>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="13 19 22 12 13 5 13 19"></polygon><polygon points="2 19 11 12 2 5 2 19"></polygon></svg>
                 <span id="neo-autoskip-icon"
                     style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; opacity: 0.01; pointer-events: none; z-index: -1;">⏩</span>
                 <span id="neo-autoskip-text"
                     style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; opacity: 0.01; pointer-events: none; z-index: -1;">Fast-Forward</span>
                 <span>Auto</span>
             </button>
-            <button class="neo-btn" id="neo-skip-btn" title="Skip current step and pause at next step"><i
-                    class="fa-solid fa-forward-step"></i> Skip</button>
-            <button class="neo-btn" id="neo-edit-btn" title="Toggle Edit instruction mode"><i
-                    class="fa-solid fa-pen-to-square"></i> Edit</button>
+            <button class="neo-btn" id="neo-skip-btn" title="Skip current step and pause at next step"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg> Skip</button>
+            <button class="neo-btn" id="neo-edit-btn" title="Toggle Edit instruction mode"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit</button>
         </div>
 
         <!-- Toolbar controls (Edit Mode) -->
         <div class="neo-toolbar" id="neo-edit-toolbar" style="display: none;">
-            <button class="neo-btn" id="neo-edit-cancel-btn" title="Cancel step editing"><i
-                    class="fa-solid fa-xmark"></i> Cancel</button>
-            <button class="neo-btn" id="neo-edit-submit-btn" title="Save changes and regenerate actions"><i
-                    class="fa-solid fa-check"></i> Save</button>
+            <button class="neo-btn" id="neo-edit-cancel-btn" title="Cancel step editing"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Cancel</button>
+            <button class="neo-btn" id="neo-edit-submit-btn" title="Save changes and regenerate actions"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polyline points="20 6 9 17 4 12"></polyline></svg> Save</button>
         </div>
 
         <!-- Save & Exit / Finished Overlay -->
@@ -840,7 +786,7 @@
             style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:10000; flex-direction:column; padding:18px; box-sizing:border-box; justify-content:center; border-radius:16px;">
             <div
                 style="color:var(--text-primary); font-weight:bold; margin-bottom:10px; font-size:14px; display:flex; align-items:center; gap:6px;">
-                <i class="fa-solid fa-gear"></i> Settings
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Settings
             </div>
             <div style="font-size:12px; color:var(--text-secondary); margin-bottom:15px; line-height:1.4;">Configure HUD
                 appearance. Settings persist across test runs.</div>
@@ -874,7 +820,7 @@
             style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:10000; flex-direction:column; padding:18px; box-sizing:border-box; justify-content:center; border-radius:16px;">
             <div
                 style="color:var(--accent-primary); font-weight:bold; margin-bottom:10px; font-size:14px; display:flex; align-items:center; gap:6px;">
-                <i class="fa-solid fa-circle-plus"></i> <span id="neo-add-overlay-title">Add Action At The End</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> <span id="neo-add-overlay-title">Add Action At The End</span>
             </div>
             <div style="font-size:11.5px; color:var(--text-secondary); margin-bottom:15px; line-height:1.4;"
                 id="neo-add-overlay-desc">This action will be appended to the end of the script.</div>
@@ -884,6 +830,20 @@
                 <button id="neo-add-cancel-btn" class="neo-btn" style="flex:unset; width:100px;">Cancel</button>
                 <button id="neo-add-submit-btn" class="neo-btn"
                     style="flex:unset; width:100px; background:var(--accent-primary); color:white; border-color:var(--accent-primary);">Insert</button>
+            </div>
+        </div>
+
+        <!-- Custom Confirm Overlay -->
+        <div id="neo-confirm-overlay"
+            style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:10002; flex-direction:column; padding:20px; box-sizing:border-box; justify-content:center; align-items:center; border-radius:16px; text-align:center;">
+            <div style="font-size:32px; margin-bottom:12px;">🔄</div>
+            <div style="font-weight:600; font-size:15px; color:var(--text-primary); margin-bottom:8px;">Rewind Execution?</div>
+            <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:20px; line-height:1.4;">
+                Are you sure you want to rewind execution back to this step?
+            </div>
+            <div style="display:flex; gap:10px; width:100%; justify-content:center;">
+                <button id="neo-confirm-cancel-btn" class="neo-btn" style="flex:unset; width:100px;">Cancel</button>
+                <button id="neo-confirm-submit-btn" class="neo-btn" style="flex:unset; width:100px; background:var(--accent-warning); color:white; border-color:var(--accent-warning);">Rewind</button>
             </div>
         </div>
     </div>

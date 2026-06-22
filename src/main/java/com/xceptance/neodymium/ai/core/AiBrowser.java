@@ -273,9 +273,17 @@ public class AiBrowser implements AutoCloseable {
 
         try {
             if (Neodymium.getData().exists("before")) {
+                if (config.aiInteractive())
+                {
+                    Neodymium.getOrCreateInteractiveHud().setCurrentBlock("before");
+                }
                 runResult.setBeforeResult(executeAndGetResult(Neodymium.getData().asString("before")));
             }
 
+            if (config.aiInteractive())
+            {
+                Neodymium.getOrCreateInteractiveHud().setCurrentBlock("steps");
+            }
             runResult.setStepsResult(execute(Neodymium.getData().asString("steps")));
 
         } catch (final Throwable t)
@@ -285,6 +293,10 @@ public class AiBrowser implements AutoCloseable {
         } finally {
             if (Neodymium.getData().exists("after")) {
                 try {
+                    if (config.aiInteractive())
+                    {
+                        Neodymium.getOrCreateInteractiveHud().setCurrentBlock("after");
+                    }
                     executeListAfterMode(Neodymium.getData().asString("after"), runResult);
                 } catch (Throwable afterError) {
                     if (testError != null) {

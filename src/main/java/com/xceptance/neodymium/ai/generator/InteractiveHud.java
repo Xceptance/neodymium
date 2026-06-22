@@ -39,8 +39,10 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
 import com.codeborne.selenide.Selenide;
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
 import com.xceptance.neodymium.util.Neodymium;
 
 /**
@@ -102,6 +104,7 @@ public final class InteractiveHud
     private String lastBreakpointsStr = "[]";
     private boolean lastHelpShown = false;
     private String lastStateSignature = "";
+    private String currentBlock = "steps";
     private Map<String, String> originalDataBindings;
 
     /**
@@ -225,10 +228,16 @@ public final class InteractiveHud
                 }
             }
         }
+        final List<String> beforeSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("before") ? Neodymium.getData().asString("before") : null);
+        final List<String> stepsSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("steps") ? Neodymium.getData().asString("steps") : null);
+        final List<String> afterSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("after") ? Neodymium.getData().asString("after") : null);
+        final int currentBlockIndex = performed != null ? performed.size() : 0;
+
         try
         {
             Selenide.executeJavaScript(HUD_JS, HUD_HTML, planned, performed, autoSkip,
-                    hudPromptChanged, isFinished, this.canEdit, currentUnresolvedStep, this.dataBindings, configMap, reasoning, isReplay, this.lastFullPromptOpen, this.lastBreakpointsStr, this.lastHelpShown, readSettings(), this.lastStateSignature);
+                    hudPromptChanged, isFinished, this.canEdit, currentUnresolvedStep, this.dataBindings, configMap, reasoning, isReplay, this.lastFullPromptOpen, this.lastBreakpointsStr, this.lastHelpShown, readSettings(), this.lastStateSignature,
+                    beforeSteps, stepsSteps, afterSteps, this.currentBlock, currentBlockIndex);
         }
         catch (final Exception e)
         {
@@ -260,7 +269,7 @@ public final class InteractiveHud
         final String step = currentUnresolvedStep != null ? currentUnresolvedStep : "";
         final String reason = reasoning != null ? reasoning : "";
         final String source = Neodymium.getTestdataSourceFile() != null ? Neodymium.getTestdataSourceFile() : "";
-        return String.format("%s|%s|%b|%b|%b|%s|%s|%s", plannedHash, performedHash, autoSkip, isFinished, isReplay, step, reason, source);
+        return String.format("%s|%s|%b|%b|%b|%s|%s|%s|%s", plannedHash, performedHash, autoSkip, isFinished, isReplay, step, reason, source, this.currentBlock);
     }
 
     /**
@@ -643,5 +652,55 @@ public final class InteractiveHud
             }
         }
         return null;
+    }
+
+    public void setCurrentBlock(final String currentBlock)
+    {
+        this.currentBlock = currentBlock;
+    }
+
+    private List<String> parseBlockSteps(final String rawValue)
+    {
+        if (rawValue == null || rawValue.strip().isEmpty())
+        {
+            return new ArrayList<>();
+        }
+        try
+        {
+            final List<String> list = new Gson().fromJson(rawValue,
+                    new TypeToken<List<String>>() {}.getType());
+            if (list != null)
+            {
+                final List<String> result = new ArrayList<>();
+                for (final String item : list)
+                {
+                    result.addAll(splitInstructions(item));
+                }
+                return result;
+            }
+        }
+        catch (final Exception e)
+        {
+            // Fall back to newline splitting
+        }
+        return splitInstructions(rawValue);
+    }
+
+    private List<String> splitInstructions(final String instructions)
+    {
+        if (instructions == null || instructions.strip().isEmpty())
+        {
+            return new ArrayList<>();
+        }
+        final List<String> result = new ArrayList<>();
+        instructions.strip().lines().forEach(line ->
+        {
+            final String trimmed = line.strip();
+            if (!trimmed.isEmpty() && !trimmed.startsWith("#") && !trimmed.startsWith("//"))
+            {
+                result.add(trimmed);
+            }
+        });
+        return result;
     }
 }
