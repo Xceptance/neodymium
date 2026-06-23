@@ -3207,113 +3207,122 @@ public class AiAgent {
             includeStepLines.add(step.trace);
         }
 
-        for (int i = 0; i < steps.size(); i++)
+        final List<String> previousStepsList = this.currentStepsList;
+        this.currentStepsList = includeStepsList;
+        try
         {
-            final YamlFileReader.Step step = steps.get(i);
-            final String stepText = AiBrowser.resolveTestDataToPrompt(step.text, result.getLookups());
-
-            final StepDetails stepDetails = new StepDetails(step.text);
-            result.getSteps().add(stepDetails);
-
-            boolean expectedFailureVal = false;
-            String bugIdVal = null;
-            final Matcher bugMatcher = BUG_TAG_PATTERN.matcher(stepText);
-            if (bugMatcher.find())
+            for (int i = 0; i < steps.size(); i++)
             {
-                expectedFailureVal = true;
-                bugIdVal = bugMatcher.group(1);
-                if (bugIdVal != null)
+                final YamlFileReader.Step step = steps.get(i);
+                final String stepText = AiBrowser.resolveTestDataToPrompt(step.text, result.getLookups());
+
+                final StepDetails stepDetails = new StepDetails(step.text);
+                result.getSteps().add(stepDetails);
+
+                boolean expectedFailureVal = false;
+                String bugIdVal = null;
+                final Matcher bugMatcher = BUG_TAG_PATTERN.matcher(stepText);
+                if (bugMatcher.find())
                 {
-                    bugIdVal = bugIdVal.trim();
+                    expectedFailureVal = true;
+                    bugIdVal = bugMatcher.group(1);
+                    if (bugIdVal != null)
+                    {
+                        bugIdVal = bugIdVal.trim();
+                    }
                 }
-            }
-            final boolean expectedFailure = expectedFailureVal;
-            final String bugId = bugIdVal;
+                final boolean expectedFailure = expectedFailureVal;
+                final String bugId = bugIdVal;
 
-            boolean optionalStepVal = false;
-            final Matcher optionalMatcher = OPTIONAL_TAG_PATTERN.matcher(stepText);
-            if (optionalMatcher.find())
-            {
-                optionalStepVal = true;
-            }
-            final boolean optionalStep = optionalStepVal;
-
-            Long customTimeoutMsVal = null;
-            final Matcher timeoutMatcher = TIMEOUT_TAG_PATTERN.matcher(stepText);
-            if (timeoutMatcher.find())
-            {
-                final long value = Long.parseLong(timeoutMatcher.group(1));
-                final String unit = timeoutMatcher.group(2);
-                if (unit != null && unit.equalsIgnoreCase("s"))
+                boolean optionalStepVal = false;
+                final Matcher optionalMatcher = OPTIONAL_TAG_PATTERN.matcher(stepText);
+                if (optionalMatcher.find())
                 {
-                    customTimeoutMsVal = value * 1000;
+                    optionalStepVal = true;
+                }
+                final boolean optionalStep = optionalStepVal;
+
+                Long customTimeoutMsVal = null;
+                final Matcher timeoutMatcher = TIMEOUT_TAG_PATTERN.matcher(stepText);
+                if (timeoutMatcher.find())
+                {
+                    final long value = Long.parseLong(timeoutMatcher.group(1));
+                    final String unit = timeoutMatcher.group(2);
+                    if (unit != null && unit.equalsIgnoreCase("s"))
+                    {
+                        customTimeoutMsVal = value * 1000;
+                    }
+                    else
+                    {
+                        customTimeoutMsVal = value;
+                    }
+                }
+                final Long customTimeoutMs = customTimeoutMsVal;
+
+                final String strippedStep = stripAllTags(stepText);
+
+                final List<String> futureInstructions = new ArrayList<>();
+                for (int j = i + 1; j < steps.size(); j++)
+                {
+                    futureInstructions.add(steps.get(j).text);
+                }
+
+                final String traceLine;
+                final String traceFile;
+                if (step.trace != null)
+                {
+                    final int arrowIdx = step.trace.indexOf(" -> ");
+                    final String immediateTrace = (arrowIdx != -1) ? step.trace.substring(0, arrowIdx) : step.trace;
+                    final int colonIdx = immediateTrace.lastIndexOf(':');
+                    if (colonIdx != -1)
+                    {
+                        traceFile = immediateTrace.substring(0, colonIdx);
+                        traceLine = immediateTrace.substring(colonIdx + 1);
+                     }
+                    else
+                    {
+                        traceFile = immediateTrace;
+                        traceLine = null;
+                    }
                 }
                 else
                 {
-                    customTimeoutMsVal = value;
-                }
-            }
-            final Long customTimeoutMs = customTimeoutMsVal;
-
-            final String strippedStep = stripAllTags(stepText);
-
-            final List<String> futureInstructions = new ArrayList<>();
-            for (int j = i + 1; j < steps.size(); j++)
-            {
-                futureInstructions.add(steps.get(j).text);
-            }
-
-            final String traceLine;
-            final String traceFile;
-            if (step.trace != null)
-            {
-                final int arrowIdx = step.trace.indexOf(" -> ");
-                final String immediateTrace = (arrowIdx != -1) ? step.trace.substring(0, arrowIdx) : step.trace;
-                final int colonIdx = immediateTrace.lastIndexOf(':');
-                if (colonIdx != -1)
-                {
-                    traceFile = immediateTrace.substring(0, colonIdx);
-                    traceLine = immediateTrace.substring(colonIdx + 1);
-                }
-                else
-                {
-                    traceFile = immediateTrace;
+                    traceFile = null;
                     traceLine = null;
                 }
-            }
-            else
-            {
-                traceFile = null;
-                traceLine = null;
-            }
 
-            final long stepStartTime = System.currentTimeMillis();
-            try
-            {
-                stepDetails.setExpandedInstruction(strippedStep);
-                executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs,
-                        performedInstructions, step.text, futureInstructions,
-                        traceLine, traceFile, stepDetails, result, includeStepsList, includeStepLines);
+                final long stepStartTime = System.currentTimeMillis();
+                try
+                {
+                    stepDetails.setExpandedInstruction(strippedStep);
+                    executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs,
+                            performedInstructions, step.text, futureInstructions,
+                            traceLine, traceFile, stepDetails, result, includeStepsList, includeStepLines);
+                }
+                catch (final HudActionException e)
+                {
+                    throw e;
+                }
+                catch (final AssertionError e)
+                {
+                    stepDetails.setFailureReason(e.getMessage());
+                    throw e;
+                }
+                catch (final Throwable t)
+                {
+                    stepDetails.setFailureReason(t.getMessage());
+                    throw new RuntimeException(t);
+                }
+                finally
+                {
+                    stepDetails.setDurationMs(System.currentTimeMillis() - stepStartTime);
+                }
+                performedInstructions.add(step.text);
             }
-            catch (final HudActionException e)
-            {
-                throw e;
-            }
-            catch (final AssertionError e)
-            {
-                stepDetails.setFailureReason(e.getMessage());
-                throw e;
-            }
-            catch (final Throwable t)
-            {
-                stepDetails.setFailureReason(t.getMessage());
-                throw new RuntimeException(t);
-            }
-            finally
-            {
-                stepDetails.setDurationMs(System.currentTimeMillis() - stepStartTime);
-            }
-            performedInstructions.add(step.text);
+        }
+        finally
+        {
+            this.currentStepsList = previousStepsList;
         }
     }
 
