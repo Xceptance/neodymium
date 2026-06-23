@@ -706,7 +706,55 @@
         // Keyboard shortcuts logic
         document.addEventListener('keydown', function (e) {
             if (e.repeat) return; // Prevent holding the key from triggering multiple times
-            // If typing in the input field, don't trigger shortcuts
+
+            var key = e.key ? e.key.toLowerCase() : '';
+
+            // Handle Escape for cancelling overlays
+            if (e.key === 'Escape') {
+                var editOverlay = document.getElementById('neo-edit-overlay');
+                if (editOverlay && editOverlay.style.display === 'flex') {
+                    var cancelBtn = document.getElementById('neo-edit-cancel-btn');
+                    if (cancelBtn) cancelBtn.click();
+                    e.preventDefault();
+                    return;
+                }
+                var addOverlay = document.getElementById('neo-add-overlay');
+                if (addOverlay && addOverlay.style.display === 'flex') {
+                    var addCancel = document.getElementById('neo-add-cancel-btn');
+                    if (addCancel) addCancel.click();
+                    e.preventDefault();
+                    return;
+                }
+            }
+
+            // Handle Alt+C (Cancel) and Alt+V (Save) for overlays
+            var isAltC = e.altKey && key === 'c';
+            var isAltV = e.altKey && key === 'v';
+            if (isAltC || isAltV) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (isAltC) {
+                    var editOverlay = document.getElementById('neo-edit-overlay');
+                    if (editOverlay && editOverlay.style.display === 'flex') {
+                        var cancelBtn = document.getElementById('neo-edit-cancel-btn');
+                        if (cancelBtn) cancelBtn.click();
+                    }
+                    var addOverlay = document.getElementById('neo-add-overlay');
+                    if (addOverlay && addOverlay.style.display === 'flex') {
+                        var addCancel = document.getElementById('neo-add-cancel-btn');
+                        if (addCancel) addCancel.click();
+                    }
+                } else if (isAltV) {
+                    var editOverlay = document.getElementById('neo-edit-overlay');
+                    if (editOverlay && editOverlay.style.display === 'flex') {
+                        var submitBtn = document.getElementById('neo-edit-submit-btn');
+                        if (submitBtn) submitBtn.click();
+                    }
+                }
+                return;
+            }
+
+            // If typing in the input field, don't trigger regular button shortcuts
             if (document.activeElement === document.getElementById('neo-add-input') ||
                 document.activeElement === document.getElementById('neo-edit-input')) {
                 if (e.key === 'Enter') {
@@ -719,11 +767,10 @@
                 return;
             }
 
-            var key = e.key ? e.key.toLowerCase() : '';
             var isAltA = e.altKey && key === 'a';
             var isCtrlEnter = e.ctrlKey && e.code === 'Enter';
 
-            if (isAltA || isCtrlEnter || (e.altKey && (key === 's' || key === 'h' || key === 'o'))) {
+            if (isAltA || isCtrlEnter || (e.altKey && (key === 's' || key === 'h' || key === 'o' || key === 'i' || key === 'm' || key === 'b' || key === 'k' || key === 'e' || key === 'n'))) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
@@ -758,6 +805,51 @@
                             if (settingsBtn) settingsBtn.click();
                         }
                     }
+                } else if (key === 'i') {
+                    var helpOverlay = document.getElementById('neo-help-overlay');
+                    if (helpOverlay) {
+                        if (helpOverlay.style.display === 'block') {
+                            helpOverlay.style.display = 'none';
+                        } else {
+                            helpOverlay.style.display = 'block';
+                        }
+                    }
+                } else if (key === 'm') {
+                    if (window.neoMinimizeHud) {
+                        window.neoMinimizeHud();
+                    }
+                } else if (key === 'b') {
+                    var rewindBtn = document.getElementById('neo-rewind-btn');
+                    if (rewindBtn && !rewindBtn.disabled) {
+                        rewindBtn.click();
+                    }
+                } else if (key === 'k') {
+                    var skipBtn = document.getElementById('neo-skip-btn');
+                    if (skipBtn && !skipBtn.disabled) {
+                        skipBtn.click();
+                    }
+                } else if (key === 'e') {
+                    var editBtn = document.getElementById('neo-edit-btn');
+                    if (editBtn && !editBtn.disabled) {
+                        var editOverlay = document.getElementById('neo-edit-overlay');
+                        if (editOverlay && editOverlay.style.display === 'flex') {
+                            var cancelBtn = document.getElementById('neo-edit-cancel-btn');
+                            if (cancelBtn) cancelBtn.click();
+                        } else {
+                            editBtn.click();
+                        }
+                    }
+                } else if (key === 'n') {
+                    var addBtn = document.getElementById('neo-add-overlay-btn');
+                    if (addBtn && !addBtn.disabled) {
+                        var addOverlay = document.getElementById('neo-add-overlay');
+                        if (addOverlay && addOverlay.style.display === 'flex') {
+                            var addCancel = document.getElementById('neo-add-cancel-btn');
+                            if (addCancel) addCancel.click();
+                        } else {
+                            addBtn.click();
+                        }
+                    }
                 }
             }
         }, true);
@@ -766,7 +858,7 @@
         document.addEventListener('keyup', function (e) {
             if (e.altKey && e.key) {
                 var key = e.key.toLowerCase();
-                if (key === 'a' || key === 's' || key === 'h' || key === 'o') {
+                if (key === 'a' || key === 's' || key === 'h' || key === 'o' || key === 'i' || key === 'm' || key === 'b' || key === 'k' || key === 'e' || key === 'n' || key === 'c' || key === 'v') {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
