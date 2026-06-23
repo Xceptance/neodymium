@@ -1002,7 +1002,7 @@
             function genItem(stepText, statusStr, isInteractiveStep, localIndex) {
                 var cleanText = getCleanStepText(stepText);
                 var stepIdx = isInteractiveStep ? localIndex : -1;
-                
+
                 if (isInteractiveStep) {
                     window.neoCurrentRenderedSteps[localIndex] = cleanText;
                 }
@@ -1013,14 +1013,14 @@
 
                 var classNames = 'neo-step-item';
                 var statusHtml = '';
-                
+
                 if (statusStr === 'active') {
                     classNames += ' active';
                 } else if (statusStr === 'done') {
                     classNames += ' completed';
                     if (isInteractiveStep) {
                         statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>' +
-                                     '<span class="rewind-hover-indicator" data-idx="' + localIndex + '" title="Rewind back to this step" style="cursor: pointer; color: var(--text-secondary); display: none; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg></span>';
+                            '<span class="rewind-hover-indicator" data-idx="' + localIndex + '" title="Rewind back to this step" style="cursor: pointer; color: var(--text-secondary); display: none; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg></span>';
                     } else {
                         statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>';
                     }
@@ -1046,7 +1046,7 @@
                 }
 
                 var dragHandleHtml = (isInteractiveStep && statusStr !== 'active') ? '<div class="neo-step-drag-handle" style="cursor: grab; margin-right: 8px; opacity: 0.3;" title="Drag to reorder">☰</div>' : '';
-                
+
                 var bpMarkerHtml = '';
                 if (isInteractiveStep || statusStr === 'active') {
                     bpMarkerHtml = '<span class="neo-bp-marker" data-idx="' + localIndex + '" style="opacity: ' + bpOpacity + '; cursor: pointer; font-size: 13px; font-weight: bold; margin-right: 8px; user-select: none;" title="Toggle breakpoint">' + bpDisplay + '</span>';
@@ -1111,7 +1111,7 @@
                     if (aList && aList.length > 0) {
                         var activeIdx = pList.length;
                         fullHtml += '<div id="neo-planned-actions" class="active-step-group">' + genItem(aList[0], 'active', true, activeIdx) + '</div>';
-                        
+
                         var futHtml = '';
                         for (var j = 1; j < aList.length; j++) {
                             futHtml += genItem(aList[j], 'pending', true, activeIdx + j);
@@ -1159,7 +1159,7 @@
                         var blk = blocks[b];
                         if (blk.raw.length > 0 || currentBlock === blk.name) {
                             var partition = getBlockPartition(blk.name, blk.raw);
-                            
+
                             var blockHtml = genHeadline(blk.title, blk.name);
                             var contentHtml = '';
 
@@ -1494,7 +1494,7 @@
             approveBtn.dataset.isFinished = 'true';
         } else {
             approveBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Run';
-            approveBtn.title = 'Run current active step only and pause';
+            approveBtn.title = 'Run current active step only and pause [Alt+A] [Ctrl+Enter] ';
             approveBtn.classList.remove('neo-btn-primary');
             approveBtn.style.background = ''; // use CSS styling
             approveBtn.dataset.isFinished = 'false';
