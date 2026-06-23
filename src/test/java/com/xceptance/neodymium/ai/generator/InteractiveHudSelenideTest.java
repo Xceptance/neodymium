@@ -1382,12 +1382,12 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         });
         Selenide.sleep(1000); // Give background thread time to start, capture context, and enter wait loop
 
-        // 4. Verify the HUD starts successfully, focus it, and trigger Approve using Alt+A
+        // 4. Verify the HUD starts successfully, focus it, and trigger Approve using Alt+R
         checkBgError();
         $("#neo-ai-hud").shouldBe(Condition.visible);
         $("#neo-ai-hud").click(); // Guarantee browser focus on HUD prior to keypress perform
-        Selenide.actions().keyDown(Keys.ALT).sendKeys("a").keyUp(Keys.ALT).perform(); // Trigger Alt+A shortcut
-        Selenide.sleep(1000); // Give background thread time to process Alt+A, execute, and enter next wait loop
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("r").keyUp(Keys.ALT).perform(); // Trigger Alt+R shortcut
+        Selenide.sleep(1000); // Give background thread time to process Alt+R, execute, and enter next wait loop
 
         // 5. Verify Step 1 executed successfully, and Step 2 is pending in the HUD
         checkBgError();
@@ -1587,6 +1587,354 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-ai-hud").shouldNotHave(Condition.cssClass("expanded"));
 
         // 9. Approve to exit cleanly
+        $("#neo-approve-btn").click();
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that pressing the Alt+I keyboard shortcut toggles the help overlay.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testHelpShortcut() throws Exception
+    {
+        // 1. Open SUT url
+        openTestUrl();
+
+        // 2. Initialize Playbook
+        final Playbook playbook = new Playbook("testHelpShortcut");
+        playbook.setRecording(false);
+
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Run background agent
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Wait for HUD
+        checkBgError();
+        waitHudReady();
+
+        // 5. Verify help overlay is hidden by default
+        $("#neo-help-overlay").shouldNotBe(Condition.visible);
+
+        // 6. Focus HUD and press Alt+I to open help overlay
+        $("#neo-ai-hud").click();
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("i").keyUp(Keys.ALT).perform();
+        $("#neo-help-overlay").shouldBe(Condition.visible);
+
+        // 7. Press Alt+I again to close it
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("i").keyUp(Keys.ALT).perform();
+        $("#neo-help-overlay").shouldNotBe(Condition.visible);
+
+        // 8. Approve and exit
+        $("#neo-approve-btn").click();
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that pressing the Alt+M keyboard shortcut minimizes the HUD.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testMinimizeShortcut() throws Exception
+    {
+        // 1. Open SUT url
+        openTestUrl();
+
+        // 2. Initialize Playbook
+        final Playbook playbook = new Playbook("testMinimizeShortcut");
+        playbook.setRecording(false);
+
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Run background agent
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Wait for HUD
+        checkBgError();
+        waitHudReady();
+
+        // 5. Focus HUD and press Alt+G to minimize
+        $("#neo-ai-hud").click();
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("g").keyUp(Keys.ALT).perform();
+
+        // 6. Verify HUD is minimized
+        $("#neo-ai-hud").shouldHave(Condition.cssValue("display", "none"));
+        $("#neo-min-circle").shouldBe(Condition.visible);
+
+        // 7. Restore and exit
+        $("#neo-min-circle").click();
+        $("#neo-approve-btn").click();
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that pressing the Alt+Z keyboard shortcut triggers the back (rewind) action.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testBackShortcut() throws Exception
+    {
+        // 1. Open SUT url
+        openTestUrl();
+
+        // 2. Initialize Playbook
+        final Playbook playbook = new Playbook("testBackShortcut");
+        playbook.setRecording(false);
+        
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        final PlaybookStep step2 = new PlaybookStep();
+        step2.setPromptLine("Click button 2");
+        step2.setActions(List.of(new Action("CLICK", "#btn2", "Click button 2")));
+        playbook.addStep(step2);
+        
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Run background agent
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1\nClick button 2");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Wait for HUD
+        checkBgError();
+        waitHudReady();
+
+        // 5. Approve step 1
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2000);
+
+        // 6. We are at step 2. Focus HUD and press Alt+Z to go back (rewind)
+        checkBgError();
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
+        
+        $("#neo-ai-hud").click();
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("z").keyUp(Keys.ALT).perform();
+
+        // 7. Verify it rewound to step 1
+        Selenide.sleep(2000);
+        checkBgError();
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 1"));
+
+        // 9. Approve and exit
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2000);
+        $("#neo-approve-btn").click();
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that pressing the Alt+K keyboard shortcut triggers the skip action.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testSkipShortcut() throws Exception
+    {
+        // 1. Open SUT url
+        openTestUrl();
+
+        // 2. Initialize Playbook
+        final Playbook playbook = new Playbook("testSkipShortcut");
+        playbook.setRecording(false);
+
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        final PlaybookStep step2 = new PlaybookStep();
+        step2.setPromptLine("Click button 2");
+        step2.setActions(List.of(new Action("CLICK", "#btn2", "Click button 2")));
+        playbook.addStep(step2);
+
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Run background agent
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1\nClick button 2");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Wait for HUD
+        checkBgError();
+        waitHudReady();
+
+        // 5. Focus HUD and press Alt+K to skip step 1
+        $("#neo-ai-hud").click();
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("k").keyUp(Keys.ALT).perform();
+        Selenide.sleep(2000);
+
+        // 6. Verify we skipped to step 2 and result remains unchanged
+        checkBgError();
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
+        $("#result").shouldHave(Condition.exactText("Initial State"));
+
+        // 7. Approve next step and clean exit
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2500);
+        $("#neo-exit-save-btn").click();
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that pressing the Alt+E keyboard shortcut toggles step edit mode.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testEditShortcut() throws Exception
+    {
+        // 1. Open SUT url
+        openTestUrl();
+
+        // 2. Initialize Playbook
+        final Playbook playbook = new Playbook("testEditShortcut");
+        playbook.setRecording(false);
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Run background agent
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Wait for HUD
+        checkBgError();
+        waitHudReady();
+
+        // 5. Verify edit overlay is hidden
+        $("#neo-edit-overlay").shouldNotBe(Condition.visible);
+
+        // 6. Focus HUD and press Alt+E to edit
+        $("#neo-ai-hud").click();
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("e").keyUp(Keys.ALT).perform();
+        $("#neo-edit-overlay").shouldBe(Condition.visible);
+
+        // 7. Press Escape to cancel editing and verify it closes
+        Selenide.actions().sendKeys(Keys.ESCAPE).perform();
+        $("#neo-edit-overlay").shouldNotBe(Condition.visible);
+
+        // 8. Approve and exit
+        $("#neo-approve-btn").click();
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that pressing the Alt+N keyboard shortcut toggles the add new step overlay.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testAddShortcut() throws Exception
+    {
+        // 1. Open SUT url
+        openTestUrl();
+
+        // 2. Initialize Playbook
+        final Playbook playbook = new Playbook("testAddShortcut");
+        playbook.setRecording(false);
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Run background agent
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Wait for HUD
+        checkBgError();
+        waitHudReady();
+
+        // 5. Expand the full prompt
+        $("#neo-full-prompt-btn").click();
+        
+        // 6. Verify add overlay is hidden
+        $("#neo-add-overlay").shouldNotBe(Condition.visible);
+
+        // 7. Focus HUD and press Alt+N to open Add overlay
+        $("#neo-ai-hud").click();
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("n").keyUp(Keys.ALT).perform();
+        $("#neo-add-overlay").shouldBe(Condition.visible);
+
+        // 8. Press Escape to close it
+        Selenide.actions().sendKeys(Keys.ESCAPE).perform();
+        $("#neo-add-overlay").shouldNotBe(Condition.visible);
+
+        // 9. Approve and exit
         $("#neo-approve-btn").click();
         joinBgThread();
     }

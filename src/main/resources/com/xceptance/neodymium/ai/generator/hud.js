@@ -767,15 +767,15 @@
                 return;
             }
 
-            var isAltA = e.altKey && key === 'a';
+            var isAltR = e.altKey && key === 'r';
             var isCtrlEnter = e.ctrlKey && e.code === 'Enter';
 
-            if (isAltA || isCtrlEnter || (e.altKey && (key === 's' || key === 'h' || key === 'o' || key === 'i' || key === 'm' || key === 'b' || key === 'k' || key === 'e' || key === 'n'))) {
+            if (isAltR || isCtrlEnter || (e.altKey && (key === 's' || key === 'h' || key === 'o' || key === 'i' || key === 'g' || key === 'z' || key === 'y' || key === 'k' || key === 'e' || key === 'n'))) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
 
-                if (isAltA || isCtrlEnter) {
+                if (isAltR || isCtrlEnter) {
                     var btn = document.getElementById('neo-approve-btn');
                     if (!btn.disabled) {
                         if (btn.dataset.isFinished === 'true') {
@@ -814,11 +814,11 @@
                             helpOverlay.style.display = 'block';
                         }
                     }
-                } else if (key === 'm') {
+                } else if (key === 'g') {
                     if (window.neoMinimizeHud) {
                         window.neoMinimizeHud();
                     }
-                } else if (key === 'b') {
+                } else if (key === 'z' || key === 'y') {
                     var rewindBtn = document.getElementById('neo-rewind-btn');
                     if (rewindBtn && !rewindBtn.disabled) {
                         rewindBtn.click();
@@ -858,7 +858,7 @@
         document.addEventListener('keyup', function (e) {
             if (e.altKey && e.key) {
                 var key = e.key.toLowerCase();
-                if (key === 'a' || key === 's' || key === 'h' || key === 'o' || key === 'i' || key === 'm' || key === 'b' || key === 'k' || key === 'e' || key === 'n' || key === 'c' || key === 'v') {
+                if (key === 'a' || key === 's' || key === 'h' || key === 'o' || key === 'i' || key === 'g' || key === 'j' || key === 'k' || key === 'e' || key === 'n' || key === 'c' || key === 'v') {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();

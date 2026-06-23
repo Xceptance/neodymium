@@ -622,7 +622,7 @@
                     title="Help [Alt+I]"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
                 <button id="neo-min-btn"
                     style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s; display:flex; align-items:center; justify-content:center; width:24px; height:24px;"
-                    title="Minimize [Alt+M]"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+                    title="Minimize [Alt+G]"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
             </div>
         </div>
 
@@ -682,8 +682,8 @@
 
         <!-- Toolbar controls (Standard Mode) -->
         <div class="neo-toolbar" id="neo-toolbar-controls" style="display: flex;">
-            <button class="neo-btn" id="neo-rewind-btn" title="Rewind 1 step back [Alt+B]"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg> Back</button>
-            <button class="neo-btn" id="neo-approve-btn" title="Run current active step only and pause [Alt+A / Ctrl+Enter]"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Run</button>
+            <button class="neo-btn" id="neo-rewind-btn" title="Rewind 1 step back [Alt+Z]"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg> Back</button>
+            <button class="neo-btn" id="neo-approve-btn" title="Run current active step only and pause [Alt+R / Ctrl+Enter]"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Run</button>
             <button class="neo-btn" id="neo-autoskip-btn" title="Auto/Fast-Forward [Alt+S]">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="13 19 22 12 13 5 13 19"></polygon><polygon points="2 19 11 12 2 5 2 19"></polygon></svg>
                 <span id="neo-autoskip-icon"
@@ -834,7 +834,13 @@
         <div style="margin-bottom:12px; line-height:1.5;">
             <strong>Shortcuts:</strong><br>
             <span
-                style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Alt+A</span>
+                style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Alt+Z</span>
+            : Rewind 1 step back<br>
+            <span
+                style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Alt+G</span>
+            : Minimize<br>
+            <span
+                style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Alt+R</span>
             or <span
                 style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Ctrl+Enter</span>
             : Approve current step<br>
