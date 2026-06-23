@@ -977,7 +977,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-ai-hud").shouldHave(Condition.cssClass("expanded")); // Assert that the HUD is expanded to show full prompt
 
         // 5. Locate the breakpoint toggle element for Step 1 (Index 0)
-        final com.codeborne.selenide.SelenideElement bpCol = $(".neo-bp-marker[data-idx='0']");
+        final com.codeborne.selenide.SelenideElement bpCol = $(".neo-bp-marker[data-idx='steps:0']");
         bpCol.shouldHave(Condition.text("⚪")); // Assert breakpoint is initially unset (White circle)
 
         // 6. Click the toggle element to set a Breakpoint on Step 1
@@ -1195,7 +1195,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-ai-hud").shouldBe(Condition.visible);
         $("#neo-full-prompt-btn").click();
 
-        $(".neo-bp-marker[data-idx='1']").click(); // Toggle breakpoint 🛑 on Step 2
+        $(".neo-bp-marker[data-idx='steps:1']").click(); // Toggle breakpoint 🛑 on Step 2
 
         Selenide.sleep(500); // Wait briefly for the state to synchronize in the browser sessionStorage
 
@@ -1285,10 +1285,10 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-ai-hud").shouldBe(Condition.visible);
         $("#neo-full-prompt-btn").click();
 
-        $(".neo-bp-marker[data-idx='1']").shouldHave(Condition.text("⚪")).click();
-        $(".neo-bp-marker[data-idx='1']").shouldHave(Condition.text("🛑"));
-        $(".neo-bp-marker[data-idx='3']").shouldHave(Condition.text("⚪")).click();
-        $(".neo-bp-marker[data-idx='3']").shouldHave(Condition.text("🛑"));
+        $(".neo-bp-marker[data-idx='steps:1']").shouldHave(Condition.text("⚪")).click();
+        $(".neo-bp-marker[data-idx='steps:1']").shouldHave(Condition.text("🛑"));
+        $(".neo-bp-marker[data-idx='steps:3']").shouldHave(Condition.text("⚪")).click();
+        $(".neo-bp-marker[data-idx='steps:3']").shouldHave(Condition.text("🛑"));
 
         Selenide.sleep(500); // Wait briefly for state synchronization
 
@@ -1449,6 +1449,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 4. Verify the HUD starts successfully in maximized mode
         checkBgError();
         waitHudReady();
+        $("#neo-reasoning-text").shouldNotHave(Condition.text("Loading reasoning"));
         $("#neo-ai-hud").shouldHave(Condition.cssValue("display", "flex"));
         $("#neo-min-circle").shouldHave(Condition.cssValue("display", "none")); // minimized trigger must be hidden
 
@@ -1685,6 +1686,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         // 4. Wait for HUD
         checkBgError();
         waitHudReady();
+        $("#neo-reasoning-text").shouldNotHave(Condition.text("Loading reasoning"));
 
         // 5. Focus HUD and press Alt+G to minimize
         $("#neo-ai-hud").click();
@@ -2187,7 +2189,7 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-full-prompt-btn").click();
 
         // 5. Toggle breakpoint ON for Step 2 (Index 1) and assert it is set
-        final com.codeborne.selenide.SelenideElement bpCol = $(".neo-bp-marker[data-idx='1']");
+        final com.codeborne.selenide.SelenideElement bpCol = $(".neo-bp-marker[data-idx='steps:1']");
         bpCol.shouldHave(Condition.text("⚪"));
         bpCol.click();
         bpCol.shouldHave(Condition.text("🛑"));
@@ -2901,6 +2903,73 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         checkBgError();
         $("#neo-ai-hud").shouldNotBe(Condition.visible);
         $("#result").shouldHave(Condition.exactText("Button 1 Clicked"));
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that setting a breakpoint on a step in the main steps section
+     * while the execution is still in the before section correctly pauses fast-forward
+     * once that step in the main section is reached.
+     */
+    @Test
+    public void testBreakpointInStepsWhileInBefore() throws Exception
+    {
+        openTestUrl();
+
+        // Setup test data
+        Neodymium.getData().put("before", "[\"Click button 1\", \"Click button 1\"]");
+        Neodymium.getData().put("steps", "[\"Click button 2\", \"Click button 2\"]");
+
+        // Define expected LLM mock calls
+        final MockLlmClient mockLlm = new MockLlmClient();
+        mockLlm.addResponse(AiMockResponse.builder().responseText("{\"r\":\"Click button 1\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn1\",\"desc\":\"Click button 1\"}]}").build());
+        mockLlm.addResponse(AiMockResponse.builder().responseText("{\"r\":\"Click button 1\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn1\",\"desc\":\"Click button 1\"}]}").build());
+        mockLlm.addResponse(AiMockResponse.builder().responseText("{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"desc\":\"Click button 2\"}]}").build());
+        mockLlm.addResponse(AiMockResponse.builder().responseText("{\"r\":\"Click button 2\",\"d\":true,\"a\":[{\"t\":\"CLICK\",\"tg\":\"#btn2\",\"desc\":\"Click button 2\"}]}").build());
+
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser(mockLlm))
+            {
+                ai.execute();
+            }
+            catch (final Throwable e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        checkBgError();
+        waitHudReady();
+
+        // 1. Expand the HUD full prompt to show all sections
+        $("#neo-full-prompt-btn").click();
+
+        // 2. Set a breakpoint on the second step of the steps section ("steps:1")
+        // while we are still on the first step of the before section
+        $(".neo-bp-marker[data-idx='steps:1']").shouldHave(Condition.text("⚪")).click();
+        $(".neo-bp-marker[data-idx='steps:1']").shouldHave(Condition.text("🛑"));
+
+        // Collapse the full prompt and activate fast-forward (auto-skip)
+        $("#neo-full-prompt-btn").click();
+        Selenide.sleep(1000);
+        $("#neo-autoskip-btn").click();
+
+        // 3. Fast-forward should execute both "before" steps and the first "steps" step,
+        // then pause at the second "steps" step because of the breakpoint we set.
+        $("#neo-ai-hud").shouldBe(Condition.visible, Duration.ofSeconds(30));
+        $("#neo-active-step-block-badge").shouldBe(Condition.visible).shouldHave(Condition.exactText("STEPS"), Duration.ofSeconds(30));
+        $("#neo-next-action").shouldHave(Condition.exactText("Click button 2"));
+
+        // Verify the first "steps" step ran (it clicked button 2 once, so result should be "Button 2 Clicked")
+        // and both "before" steps ran (clicked button 1 twice, result was "Button 1 Clicked")
+        $("#result").shouldHave(Condition.exactText("Button 2 Clicked"), Duration.ofSeconds(15));
+
+        // 4. Click approve to finish the last step
+        $("#neo-approve-btn").click();
+
+        checkBgError();
+        $("#neo-ai-hud").shouldNotBe(Condition.visible);
         joinBgThread();
     }
 }

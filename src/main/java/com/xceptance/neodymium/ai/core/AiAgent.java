@@ -369,9 +369,10 @@ public class AiAgent {
                     }
 
                     // Eager pre-execution check: check if the upcoming step index is in the active
-                    // breakpoints
-                    final List<Integer> breakpoints = Neodymium.getOrCreateInteractiveHud().getBreakpoints();
-                    if (breakpoints.contains(i)) {
+                    final String currentBlock = Neodymium.getOrCreateInteractiveHud().getCurrentBlock();
+                    final List<Integer> breakpoints = Neodymium.getOrCreateInteractiveHud().getBreakpointsForBlock(currentBlock);
+                    final int blockStepIndex = Neodymium.getOrCreateInteractiveHud().getCurrentBlockStepOffset() + i;
+                    if (breakpoints.contains(blockStepIndex)) {
                         if (this.autoSkip) {
                             logPauseReason("HUD Fast-Forward paused (e.g., Breakpoint reached or manual pause)");
                         }

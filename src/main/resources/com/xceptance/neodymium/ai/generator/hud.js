@@ -925,12 +925,12 @@
                 var handler = function (e) {
                     var marker = e.target.closest('.neo-bp-marker');
                     if (marker) {
-                        var idxInList = parseInt(marker.getAttribute('data-idx'));
-                        if (!isNaN(idxInList)) {
+                        var bpId = marker.getAttribute('data-idx');
+                        if (bpId) {
                             if (!window.neoBreakpoints) window.neoBreakpoints = [];
-                            var bpIdx = window.neoBreakpoints.indexOf(idxInList);
+                            var bpIdx = window.neoBreakpoints.indexOf(bpId);
                             if (bpIdx === -1) {
-                                window.neoBreakpoints.push(idxInList);
+                                window.neoBreakpoints.push(bpId);
                             } else {
                                 window.neoBreakpoints.splice(bpIdx, 1);
                             }
@@ -999,58 +999,60 @@
                 return '<div class="neo-block-headline" style="color: ' + colorVar + '; border-left-color: ' + colorVar + '; margin-top: 14px; margin-bottom: 8px;">' + title + '</div>';
             }
 
-            function genItem(stepText, statusStr, isInteractiveStep, localIndex) {
-                var cleanText = getCleanStepText(stepText);
-                var stepIdx = isInteractiveStep ? localIndex : -1;
-
-                if (isInteractiveStep) {
-                    window.neoCurrentRenderedSteps[localIndex] = cleanText;
-                }
-
-                var isBp = isInteractiveStep && window.neoBreakpoints && window.neoBreakpoints.indexOf(localIndex) !== -1;
-                var bpDisplay = isBp ? '🛑' : '⚪';
-                var bpOpacity = isBp ? '1' : '0.15';
-
-                var classNames = 'neo-step-item';
-                var statusHtml = '';
-
-                if (statusStr === 'active') {
-                    classNames += ' active';
-                } else if (statusStr === 'done') {
-                    classNames += ' completed';
-                    if (isInteractiveStep) {
-                        statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>' +
-                            '<span class="rewind-hover-indicator" data-idx="' + localIndex + '" title="Rewind back to this step" style="cursor: pointer; color: var(--text-secondary); display: none; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg></span>';
-                    } else {
-                        statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>';
-                    }
-                }
-
-                if (stepText.indexOf('// [SKIPPED]') !== -1) {
-                    classNames += ' skipped';
-                    cleanText = cleanText.replace('// [SKIPPED] ', '');
-                    stepText = stepText.replace('// [SKIPPED] ', '');
-                }
-
-                var editIconHtml = '';
-                if (canEdit && (isInteractiveStep || statusStr === 'active')) {
-                    editIconHtml = '<span class="neo-edit-step-icon" data-idx="' + localIndex + '" style="opacity: 0.5; cursor: pointer; padding: 2px 6px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;" title="Edit this step"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></span>';
-                }
-
-                var rightActionsHtml = '';
-                if (statusHtml || editIconHtml) {
-                    rightActionsHtml = '<div style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; height: 24px;">' +
-                        statusHtml +
-                        editIconHtml +
-                        '</div>';
-                }
-
-                var dragHandleHtml = (isInteractiveStep && statusStr !== 'active') ? '<div class="neo-step-drag-handle" style="cursor: grab; margin-right: 8px; opacity: 0.3;" title="Drag to reorder">☰</div>' : '';
-
-                var bpMarkerHtml = '';
-                if (isInteractiveStep || statusStr === 'active') {
-                    bpMarkerHtml = '<span class="neo-bp-marker" data-idx="' + localIndex + '" style="opacity: ' + bpOpacity + '; cursor: pointer; font-size: 13px; font-weight: bold; margin-right: 8px; user-select: none;" title="Toggle breakpoint">' + bpDisplay + '</span>';
-                } else if (statusStr !== 'done') {
+            function genItem(stepText, statusStr, isInteractiveStep, localIndex, blockName) {
+                 var actualBlock = blockName || 'steps';
+                 var cleanText = getCleanStepText(stepText);
+                 var stepIdx = isInteractiveStep ? localIndex : -1;
+                 var bpId = actualBlock + ':' + localIndex;
+ 
+                 if (isInteractiveStep) {
+                     window.neoCurrentRenderedSteps[localIndex] = cleanText;
+                 }
+ 
+                 var isBp = window.neoBreakpoints && window.neoBreakpoints.indexOf(bpId) !== -1;
+                 var bpDisplay = isBp ? '🛑' : '⚪';
+                 var bpOpacity = isBp ? '1' : '0.15';
+ 
+                 var classNames = 'neo-step-item';
+                 var statusHtml = '';
+ 
+                 if (statusStr === 'active') {
+                     classNames += ' active';
+                 } else if (statusStr === 'done') {
+                     classNames += ' completed';
+                     if (isInteractiveStep) {
+                         statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>' +
+                             '<span class="rewind-hover-indicator" data-idx="' + localIndex + '" title="Rewind back to this step" style="cursor: pointer; color: var(--text-secondary); display: none; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg></span>';
+                     } else {
+                         statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>';
+                     }
+                 }
+ 
+                 if (stepText.indexOf('// [SKIPPED]') !== -1) {
+                     classNames += ' skipped';
+                     cleanText = cleanText.replace('// [SKIPPED] ', '');
+                     stepText = stepText.replace('// [SKIPPED] ', '');
+                 }
+ 
+                 var editIconHtml = '';
+                 if (canEdit && (isInteractiveStep || statusStr === 'active')) {
+                     editIconHtml = '<span class="neo-edit-step-icon" data-idx="' + localIndex + '" style="opacity: 0.5; cursor: pointer; padding: 2px 6px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;" title="Edit this step"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></span>';
+                 }
+ 
+                 var rightActionsHtml = '';
+                 if (statusHtml || editIconHtml) {
+                     rightActionsHtml = '<div style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; height: 24px;">' +
+                         statusHtml +
+                         editIconHtml +
+                         '</div>';
+                 }
+ 
+                 var dragHandleHtml = (isInteractiveStep && statusStr !== 'active') ? '<div class="neo-step-drag-handle" style="cursor: grab; margin-right: 8px; opacity: 0.3;" title="Drag to reorder">☰</div>' : '';
+ 
+                 var bpMarkerHtml = '';
+                 if (statusStr === 'active' || statusStr === 'pending') {
+                     bpMarkerHtml = '<span class="neo-bp-marker" data-idx="' + bpId + '" style="opacity: ' + bpOpacity + '; cursor: pointer; font-size: 13px; font-weight: bold; margin-right: 8px; user-select: none;" title="Toggle breakpoint">' + bpDisplay + '</span>';
+                 } else if (statusStr !== 'done') {
                     bpMarkerHtml = '<span style="font-size: 12px; margin-right: 8px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.5;"><circle cx="12" cy="12" r="10"></circle></svg></span>';
                 }
 
@@ -1090,7 +1092,7 @@
             if (!window.neoFullPromptOpen) {
                 if (aList && aList.length > 0) {
                     var activeIdx = pList.length;
-                    container.innerHTML = '<div id="neo-planned-actions" class="active-step-group">' + genItem(aList[0], 'active', true, activeIdx) + '</div>';
+                    container.innerHTML = '<div id="neo-planned-actions" class="active-step-group">' + genItem(aList[0], 'active', true, activeIdx, 'steps') + '</div>';
                 } else {
                     container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">No active step</div>';
                 }
@@ -1102,7 +1104,7 @@
                 if (!hasMultiBlocks) {
                     var histHtml = '';
                     for (var i = 0; i < pList.length; i++) {
-                        histHtml += genItem(pList[i], 'done', true, i);
+                        histHtml += genItem(pList[i], 'done', true, i, 'steps');
                     }
                     if (histHtml !== '') {
                         fullHtml += '<div id="neo-history-table" style="display:flex; flex-direction:column; width:100%;">' + histHtml + '</div>';
@@ -1110,11 +1112,11 @@
 
                     if (aList && aList.length > 0) {
                         var activeIdx = pList.length;
-                        fullHtml += '<div id="neo-planned-actions" class="active-step-group">' + genItem(aList[0], 'active', true, activeIdx) + '</div>';
+                        fullHtml += '<div id="neo-planned-actions" class="active-step-group">' + genItem(aList[0], 'active', true, activeIdx, 'steps') + '</div>';
 
                         var futHtml = '';
                         for (var j = 1; j < aList.length; j++) {
-                            futHtml += genItem(aList[j], 'pending', true, activeIdx + j);
+                            futHtml += genItem(aList[j], 'pending', true, activeIdx + j, 'steps');
                         }
                         if (futHtml !== '') {
                             fullHtml += '<div id="neo-future-table" style="display:flex; flex-direction:column; width:100%;">' + futHtml + '</div>';
@@ -1166,7 +1168,7 @@
                             if (blk.name === currentBlock) {
                                 var blockHist = '';
                                 for (var i = 0; i < partition.completed.length; i++) {
-                                    blockHist += genItem(partition.completed[i], 'done', partition.isInteractive, i);
+                                    blockHist += genItem(partition.completed[i], 'done', partition.isInteractive, i, blk.name);
                                 }
                                 if (blockHist !== '') {
                                     contentHtml += '<div id="neo-history-table" style="display:flex; flex-direction:column; width:100%;">' + blockHist + '</div>';
@@ -1174,13 +1176,13 @@
 
                                 if (partition.active) {
                                     var activeIdx = partition.completed.length;
-                                    contentHtml += '<div id="neo-planned-actions" class="active-step-group">' + genItem(partition.active, 'active', true, activeIdx) + '</div>';
+                                    contentHtml += '<div id="neo-planned-actions" class="active-step-group">' + genItem(partition.active, 'active', true, activeIdx, blk.name) + '</div>';
                                 }
 
                                 var blockFut = '';
                                 var activeOffset = partition.active ? 1 : 0;
                                 for (var i = 0; i < partition.pending.length; i++) {
-                                    blockFut += genItem(partition.pending[i], 'pending', partition.isInteractive, partition.completed.length + activeOffset + i);
+                                    blockFut += genItem(partition.pending[i], 'pending', partition.isInteractive, partition.completed.length + activeOffset + i, blk.name);
                                 }
                                 if (blockFut !== '') {
                                     contentHtml += '<div id="neo-future-table" style="display:flex; flex-direction:column; width:100%;">' + blockFut + '</div>';
@@ -1195,10 +1197,10 @@
 
                                 var blockStepsHtml = '';
                                 for (var i = 0; i < partition.completed.length; i++) {
-                                    blockStepsHtml += genItem(partition.completed[i], 'done', partition.isInteractive, i);
+                                    blockStepsHtml += genItem(partition.completed[i], 'done', partition.isInteractive, i, blk.name);
                                 }
                                 for (var i = 0; i < partition.pending.length; i++) {
-                                    blockStepsHtml += genItem(partition.pending[i], 'pending', partition.isInteractive, partition.completed.length + i);
+                                    blockStepsHtml += genItem(partition.pending[i], 'pending', partition.isInteractive, partition.completed.length + i, blk.name);
                                 }
 
                                 if (blockStepsHtml !== '') {
@@ -1301,9 +1303,11 @@
     window.neoHudAction = window.neoHudAction || null;
     if (window.updateAutoSkipBtn) window.updateAutoSkipBtn();
 
-    if (window.neoHudAutoSkip && window.neoPlannedList && window.neoPlannedList.length > 0) {
+    if (window.neoHudAutoSkip && window.neoBreakpoints && window.neoPlannedList && window.neoPlannedList.length > 0) {
+        // Keep auto-skip check compatible with prefixed breakpoints
         var currentStepIdx = (window.neoPerformedList || []).length;
-        if (window.neoBreakpoints && window.neoBreakpoints.indexOf(currentStepIdx) !== -1) {
+        var bpId = (currentBlock || 'steps') + ':' + currentStepIdx;
+        if (window.neoBreakpoints && window.neoBreakpoints.indexOf(bpId) !== -1) {
             window.neoHudAutoSkip = false;
             if (window.updateAutoSkipBtn) window.updateAutoSkipBtn();
         }
@@ -1457,6 +1461,9 @@
                 } else {
                     pReasoning.innerText = "";
                 }
+            }
+            if (rText) {
+                rText.innerText = "";
             }
         } else if (reasoning && reasoning !== "No reasoning") {
             if (rContainer) {
