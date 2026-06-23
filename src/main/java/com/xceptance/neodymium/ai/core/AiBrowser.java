@@ -232,6 +232,10 @@ public class AiBrowser implements AutoCloseable {
             agent.execute(naturalLanguageInstructions, result);
         } catch (final Throwable t) {
             throw t;
+        } finally {
+            if (config.aiInteractive() && Neodymium.getInteractiveHud() != null) {
+                Neodymium.getInteractiveHud().incrementBlockStepOffset(result.getSteps().size());
+            }
         }
 
         return result;
@@ -284,7 +288,7 @@ public class AiBrowser implements AutoCloseable {
             {
                 Neodymium.getOrCreateInteractiveHud().setCurrentBlock("steps");
             }
-            runResult.setStepsResult(execute(Neodymium.getData().asString("steps")));
+            runResult.setStepsResult(executeAndGetResult(Neodymium.getData().asString("steps")));
 
         } catch (final Throwable t)
         {

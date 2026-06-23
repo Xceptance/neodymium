@@ -104,7 +104,8 @@ public final class InteractiveHud
     private String lastBreakpointsStr = "[]";
     private boolean lastHelpShown = false;
     private String lastStateSignature = "";
-    private String currentBlock = "steps";
+    private String currentBlock = null;
+    private int currentBlockStepOffset = 0;
     private Map<String, String> originalDataBindings;
 
     /**
@@ -231,7 +232,7 @@ public final class InteractiveHud
         final List<String> beforeSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("before") ? Neodymium.getData().asString("before") : null);
         final List<String> stepsSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("steps") ? Neodymium.getData().asString("steps") : null);
         final List<String> afterSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("after") ? Neodymium.getData().asString("after") : null);
-        final int currentBlockIndex = performed != null ? performed.size() : 0;
+        final int currentBlockIndex = this.currentBlockStepOffset + (performed != null ? performed.size() : 0);
 
         try
         {
@@ -439,7 +440,14 @@ public final class InteractiveHud
             final JsonArray arr = JsonParser.parseString(this.lastBreakpointsStr).getAsJsonArray();
             for (int i = 0; i < arr.size(); i++)
             {
-                list.add(arr.get(i).getAsInt());
+                try
+                {
+                    list.add(arr.get(i).getAsInt());
+                }
+                catch (final Exception e)
+                {
+                    // Ignore string values (e.g. block-prefixed breakpoints) in legacy integer list
+                }
             }
         }
         catch (final Exception e)
@@ -448,6 +456,47 @@ public final class InteractiveHud
         }
         return list;
     }
+
+    /**
+     * Gets the list of active breakpoint step indices for a specific block parsed from the JSON string.
+     *
+     * @param blockName the name of the block (e.g. "before", "steps", "after")
+     * @return the list of breakpoint step indices.
+     */
+    public List<Integer> getBreakpointsForBlock(final String blockName)
+    {
+        final List<Integer> list = new ArrayList<>();
+        if (this.lastBreakpointsStr == null || this.lastBreakpointsStr.isEmpty() || "[]".equals(this.lastBreakpointsStr) || blockName == null)
+        {
+            return list;
+        }
+        try
+        {
+            final JsonArray arr = JsonParser.parseString(this.lastBreakpointsStr).getAsJsonArray();
+            final String prefix = blockName + ":";
+            for (int i = 0; i < arr.size(); i++)
+            {
+                try
+                {
+                    final String val = arr.get(i).getAsString();
+                    if (val.startsWith(prefix))
+                    {
+                        list.add(Integer.parseInt(val.substring(prefix.length())));
+                    }
+                }
+                catch (final Exception e)
+                {
+                    // Ignore formatting errors
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            // ignore parsing errors
+        }
+        return list;
+    }
+
 
     /**
      * Resets the active HUD action variable to enable capturing subsequent user commands.
@@ -656,8 +705,28 @@ public final class InteractiveHud
 
     public void setCurrentBlock(final String currentBlock)
     {
-        this.currentBlock = currentBlock;
+        if (currentBlock != null && !currentBlock.equals(this.currentBlock))
+        {
+            this.currentBlock = currentBlock;
+            this.currentBlockStepOffset = 0;
+        }
     }
+
+    public String getCurrentBlock()
+    {
+        return this.currentBlock;
+    }
+
+    public void incrementBlockStepOffset(final int delta)
+    {
+        this.currentBlockStepOffset += delta;
+    }
+
+    public int getCurrentBlockStepOffset()
+    {
+        return this.currentBlockStepOffset;
+    }
+
 
     private List<String> parseBlockSteps(final String rawValue)
     {
