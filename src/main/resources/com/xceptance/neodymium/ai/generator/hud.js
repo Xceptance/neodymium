@@ -206,12 +206,18 @@
                 var newRight = startRight - dx;
                 var newBottom = startBottom - dy;
 
-                var w = moveTargets[0].offsetWidth || 40;
-                var h = moveTargets[0].offsetHeight || 40;
+                var zoomDec = window.neoZoomFactor || 1.0;
+                var isExpanded = moveTargets[0].classList.contains('expanded');
+                var w = moveTargets[0].offsetWidth || 390;
+                var h = isExpanded ? 425 : (moveTargets[0].offsetHeight || 425);
+
                 if (newRight < 20) newRight = 20;
                 if (newBottom < 20) newBottom = 20;
-                if (newRight + w > window.innerWidth - 20) newRight = window.innerWidth - w - 20;
-                if (newBottom + h > window.innerHeight - 20) newBottom = window.innerHeight - h - 20;
+
+                if (newRight + w * zoomDec > window.innerWidth - 20) newRight = window.innerWidth - (w * zoomDec) - 20;
+
+                var maxBottom = window.innerHeight - 20 - (h * zoomDec);
+                if (newBottom > maxBottom) newBottom = maxBottom;
 
                 moveTargets.forEach(function (target) {
                     target.style.right = newRight + 'px';
@@ -219,6 +225,10 @@
                     target.style.left = 'auto';
                     target.style.top = 'auto';
                 });
+
+                if (window.neoUpdateExpandedHeight) {
+                    window.neoUpdateExpandedHeight();
+                }
 
                 var helpOverlay = document.getElementById('neo-help-overlay');
                 if (helpOverlay) {
@@ -651,6 +661,26 @@
             });
         }
 
+        window.neoUpdateExpandedHeight = function () {
+            var hud = document.getElementById('neo-ai-hud');
+            if (!hud) return;
+            var container = document.getElementById('neodymium-ai-hud-container');
+            if (!container) return;
+            var zoomDec = window.neoZoomFactor || 1.0;
+            var isExpanded = hud.classList.contains('expanded');
+            if (isExpanded) {
+                var currentBottom = parseFloat(hud.style.bottom) || 20;
+                var calculatedHeight = (window.innerHeight - currentBottom - 20) / zoomDec;
+                var minHeight = 425;
+                if (calculatedHeight < minHeight) {
+                    calculatedHeight = minHeight;
+                }
+                container.style.setProperty('--expanded-height', calculatedHeight + 'px');
+            } else {
+                container.style.removeProperty('--expanded-height');
+            }
+        };
+
         window.neoApplySettings = function (settingsObj) {
             if (!settingsObj) return;
             var container = document.getElementById('neodymium-ai-hud-container');
@@ -659,6 +689,7 @@
             if (settingsObj.zoomFactor) {
                 var zoomDec = settingsObj.zoomFactor / 100.0;
                 container.style.zoom = zoomDec;
+                window.neoZoomFactor = zoomDec;
             }
             if (settingsObj.theme) {
                 if (settingsObj.theme === 'light') {
@@ -667,6 +698,7 @@
                     container.classList.remove('light-theme');
                 }
             }
+            window.neoUpdateExpandedHeight();
         };
 
 
@@ -691,7 +723,7 @@
             var isAltA = e.altKey && key === 'a';
             var isCtrlEnter = e.ctrlKey && e.code === 'Enter';
 
-            if (isAltA || isCtrlEnter || (e.altKey && (key === 's' || key === 'h'))) {
+            if (isAltA || isCtrlEnter || (e.altKey && (key === 's' || key === 'h' || key === 'o'))) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
@@ -715,6 +747,17 @@
                 } else if (key === 'h') {
                     var toggleBtn = document.getElementById('neo-full-prompt-btn');
                     if (toggleBtn) toggleBtn.click();
+                } else if (key === 'o') {
+                    var settingsOverlay = document.getElementById('neo-settings-overlay');
+                    if (settingsOverlay) {
+                        if (settingsOverlay.style.display === 'flex') {
+                            var settingsCancel = document.getElementById('neo-settings-cancel-btn');
+                            if (settingsCancel) settingsCancel.click();
+                        } else {
+                            var settingsBtn = document.getElementById('neo-settings-btn');
+                            if (settingsBtn) settingsBtn.click();
+                        }
+                    }
                 }
             }
         }, true);
@@ -723,7 +766,7 @@
         document.addEventListener('keyup', function (e) {
             if (e.altKey && e.key) {
                 var key = e.key.toLowerCase();
-                if (key === 'a' || key === 's' || key === 'h') {
+                if (key === 'a' || key === 's' || key === 'h' || key === 'o') {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
@@ -1104,6 +1147,7 @@
                 document.getElementById('neo-ai-hud').classList.add('expanded');
                 btn.innerHTML = '▼ Hide Full Prompt ▼';
             }
+            if (window.neoUpdateExpandedHeight) window.neoUpdateExpandedHeight();
             window.neoRenderFullPrompt();
             setTimeout(function () {
                 if (window.neoClampHudViewport) window.neoClampHudViewport();
@@ -1113,6 +1157,7 @@
         window.neoClampHudViewport = function () {
             var hud = document.getElementById('neo-ai-hud');
             if (hud && hud.style.display !== 'none') {
+                if (window.neoUpdateExpandedHeight) window.neoUpdateExpandedHeight();
                 var rect = hud.getBoundingClientRect();
                 var currentRight = parseFloat(hud.style.right) || 20;
                 var currentBottom = parseFloat(hud.style.bottom) || 20;
@@ -1327,7 +1372,24 @@
                 if (reasoning === "Loading reasoning...") {
                     rText.innerHTML = '<span style="color:#aaa; font-style:italic;">⏳ Loading reasoning from AI...</span>';
                 } else {
-                    rText.innerText = reasoning;
+                    var limit = 120;
+                    if (reasoning.length > limit) {
+                        rText.innerText = reasoning.substring(0, limit) + "...";
+                        var moreLink = document.createElement('a');
+                        moreLink.href = '#';
+                        moreLink.innerText = ' more';
+                        moreLink.style.color = 'var(--accent-purple)';
+                        moreLink.style.textDecoration = 'underline';
+                        moreLink.style.marginLeft = '5px';
+                        moreLink.style.cursor = 'pointer';
+                        moreLink.addEventListener('click', function (e) {
+                            e.preventDefault();
+                            rText.innerText = reasoning;
+                        });
+                        rText.appendChild(moreLink);
+                    } else {
+                        rText.innerText = reasoning;
+                    }
                 }
             }
         }

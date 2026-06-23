@@ -1474,6 +1474,124 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
     }
 
     /**
+     * Verifies that pressing the Alt+O keyboard shortcut toggles the settings overlay.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testSettingsShortcut() throws Exception
+    {
+        // 1. Open SUT url
+        openTestUrl();
+
+        // 2. Initialize Playbook
+        final Playbook playbook = new Playbook("testSettingsShortcut");
+        playbook.setRecording(false);
+
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setReasoning("Step 1");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Run background agent
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Wait for HUD
+        checkBgError();
+        waitHudReady();
+
+        // 5. Verify Settings overlay is initially hidden
+        $("#neo-settings-overlay").shouldNotBe(Condition.visible);
+
+        // 6. Focus HUD and press Alt+O to open
+        $("#neo-ai-hud").click();
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("o").keyUp(Keys.ALT).perform();
+
+        // 7. Verify Settings overlay is visible
+        $("#neo-settings-overlay").shouldBe(Condition.visible);
+
+        // 8. Press Alt+O again to close settings
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("o").keyUp(Keys.ALT).perform();
+        $("#neo-settings-overlay").shouldNotBe(Condition.visible);
+
+        // 9. Approve to exit cleanly
+        $("#neo-approve-btn").click();
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that pressing the Alt+H keyboard shortcut toggles the full prompt display.
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testToggleFullPromptShortcut() throws Exception
+    {
+        // 1. Open SUT url
+        openTestUrl();
+
+        // 2. Initialize Playbook
+        final Playbook playbook = new Playbook("testToggleFullPromptShortcut");
+        playbook.setRecording(false);
+
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setReasoning("Step 1");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Run background agent
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Wait for HUD
+        checkBgError();
+        waitHudReady();
+
+        // 5. Verify HUD is not expanded initially
+        $("#neo-ai-hud").shouldNotHave(Condition.cssClass("expanded"));
+
+        // 6. Focus HUD and press Alt+H to expand
+        $("#neo-ai-hud").click();
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("h").keyUp(Keys.ALT).perform();
+
+        // 7. Verify HUD is expanded
+        $("#neo-ai-hud").shouldHave(Condition.cssClass("expanded"));
+
+        // 8. Press Alt+H again to collapse
+        Selenide.actions().keyDown(Keys.ALT).sendKeys("h").keyUp(Keys.ALT).perform();
+        $("#neo-ai-hud").shouldNotHave(Condition.cssClass("expanded"));
+
+        // 9. Approve to exit cleanly
+        $("#neo-approve-btn").click();
+        joinBgThread();
+    }
+
+    /**
      * Tests that the HUD state, planning list, and history correctly persist and recover
      * across full page reloads.
      *

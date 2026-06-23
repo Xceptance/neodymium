@@ -102,7 +102,7 @@
         }
 
         #neo-ai-hud.expanded {
-            height: calc(100vh - 40px) !important;
+            height: var(--expanded-height, calc(100vh - 40px)) !important;
         }
 
         .neo-header {
@@ -616,7 +616,7 @@
                 <span id="neo-status-indicator" class="neo-status-badge">Pending</span>
                 <button id="neo-settings-btn"
                     style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s; display:flex; align-items:center; justify-content:center; width:24px; height:24px;"
-                    title="Settings"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
+                    title="Settings [Alt+O]"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
                 <button id="neo-info-btn"
                     style="background:transparent; color:var(--text-secondary); border:none; cursor:pointer; font-size:15px; padding:0; transition:color 0.2s; display:flex; align-items:center; justify-content:center; width:24px; height:24px;"
                     title="Help"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
@@ -628,7 +628,7 @@
 
         <!-- Full Prompt toggle bar -->
         <div class="neo-prompt-toggle-bar">
-            <button class="neo-prompt-toggle-btn" id="neo-full-prompt-btn">
+            <button class="neo-prompt-toggle-btn" id="neo-full-prompt-btn" title="Toggle Full Prompt [Alt+H]">
                 ▲ Show Full Prompt ▲
             </button>
         </div>
@@ -844,6 +844,12 @@
             <span
                 style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Alt+E</span>
             : Edit current step<br>
+            <span
+                style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Alt+H</span>
+            : Toggle Full Prompt<br>
+            <span
+                style="background:var(--btn-secondary-bg); padding:3px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; font-family:'JetBrains Mono'; font-size:11px;">Alt+O</span>
+            : Open Settings<br>
         </div>
         <div style="line-height:1.5;">
             <strong>Features:</strong><br>
