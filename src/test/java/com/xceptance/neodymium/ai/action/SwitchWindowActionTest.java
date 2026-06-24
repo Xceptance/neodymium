@@ -29,12 +29,15 @@ import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Validates the behavior of the SwitchWindowAction AI plugin.
+ * 
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
 public final class SwitchWindowActionTest extends BaseAiTest
 {
     @NeodymiumTest
-    public void testSwitchWindow()
+    public final void testSwitchWindow()
     {
         System.setProperty("neodymium.ai.offline", "true");
         try
