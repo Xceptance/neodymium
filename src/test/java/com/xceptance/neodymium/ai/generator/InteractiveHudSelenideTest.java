@@ -3131,6 +3131,75 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         Selenide.webdriver().driver().getWebDriver().close();
         Selenide.switchTo().window(originalHandle);
     }
+
+    /**
+     * Verifies that the HUD is still interactive and clickable even if the
+     * page body gets styled with "pointer-events: none".
+     *
+     * @throws Exception if the test execution fails
+     */
+    @Test
+    public void testHudInteractionWithBodyPointerEventsNone() throws Exception
+    {
+        openTestUrl();
+
+        // 1. Initialize the Playbook with a clean step sequence
+        final Playbook playbook = new Playbook("testHudInteractionWithBodyPointerEventsNone");
+        playbook.setRecording(false);
+
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Click button 1");
+        step1.setReasoning("Test step with body pointer-events none");
+        step1.setActions(List.of(new Action("CLICK", "#btn1", "Click button 1")));
+        playbook.addStep(step1);
+
+        Neodymium.setAiPlaybook(playbook);
+
+        // 2. Launch the AI agent in a background execution thread
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Click button 1");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 3. Verify HUD is injected and ready
+        checkBgError();
+        waitHudReady();
+
+        // 4. Force pointer-events: none on the document body
+        Selenide.executeJavaScript("document.body.style.pointerEvents = 'none';");
+
+        // 5. Verify the HUD container has pointer-events: auto (override)
+        $("#neodymium-ai-hud-container").shouldHave(Condition.cssValue("pointer-events", "auto"));
+
+        // 6. Verify we can interact with HUD elements (e.g., open Settings)
+        $("#neo-settings-btn").click();
+        $("#neo-settings-overlay").shouldBe(Condition.visible);
+
+        // 7. Close settings overlay
+        $("#neo-settings-cancel-btn").click();
+        $("#neo-settings-overlay").shouldNotBe(Condition.visible);
+
+        // Restore body pointer events so the SUT page click action can run successfully
+        Selenide.executeJavaScript("document.body.style.pointerEvents = '';");
+
+        // 8. Click the Approve button (which is inside the HUD)
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2500);
+
+        // 9. Verify the HUD closed cleanly and the action executed
+        checkBgError();
+        $("#neo-ai-hud").shouldNotBe(Condition.visible);
+        $("#result").shouldHave(Condition.exactText("Button 1 Clicked"));
+        joinBgThread();
+    }
 }
+
 
 
