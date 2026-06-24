@@ -1,4 +1,16 @@
 (function (hudHtml, planned, performed, autoSkip, hudPromptChanged, isFinished, canEdit, currentUnresolvedStep, dataBindings, configMap, reasoning, isReplay, lastFullPromptOpen, lastBreakpointsStr, lastHelpShown, settingsJson, stateSignature, beforeSteps, stepsSteps, afterSteps, currentBlock, currentBlockIndex) {
+    if (!window.neoFocusInterceptorInstalled) {
+        window.neoFocusInterceptorInstalled = true;
+        var originalFocus = HTMLElement.prototype.focus;
+        HTMLElement.prototype.focus = function () {
+            var hudContainer = document.getElementById('neodymium-ai-hud-container');
+            if (hudContainer && hudContainer.contains(document.activeElement) && !hudContainer.contains(this)) {
+                return;
+            }
+            return originalFocus.apply(this, arguments);
+        };
+    }
+
     var existingHud = document.getElementById('neodymium-ai-hud-container');
     window.neoCurrentUnresolvedStep = currentUnresolvedStep;
     window.neoDataBindings = dataBindings;
@@ -1051,59 +1063,59 @@
             }
 
             function genItem(stepText, statusStr, isInteractiveStep, localIndex, blockName) {
-                 var actualBlock = blockName || 'steps';
-                 var cleanText = getCleanStepText(stepText);
-                 var stepIdx = isInteractiveStep ? localIndex : -1;
-                 var bpId = actualBlock + ':' + localIndex;
- 
-                 if (isInteractiveStep) {
-                     window.neoCurrentRenderedSteps[localIndex] = cleanText;
-                 }
- 
-                 var isBp = window.neoBreakpoints && window.neoBreakpoints.indexOf(bpId) !== -1;
-                 var bpDisplay = isBp ? '🛑' : '⚪';
-                 var bpOpacity = isBp ? '1' : '0.15';
- 
-                 var classNames = 'neo-step-item';
-                 var statusHtml = '';
- 
-                 if (statusStr === 'active') {
-                     classNames += ' active';
-                 } else if (statusStr === 'done') {
-                     classNames += ' completed';
-                     if (isInteractiveStep) {
-                         statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>' +
-                             '<span class="rewind-hover-indicator" data-idx="' + localIndex + '" title="Rewind back to this step" style="cursor: pointer; color: var(--text-secondary); display: none; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg></span>';
-                     } else {
-                         statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>';
-                     }
-                 }
- 
-                 if (stepText.indexOf('// [SKIPPED]') !== -1) {
-                     classNames += ' skipped';
-                     cleanText = cleanText.replace('// [SKIPPED] ', '');
-                     stepText = stepText.replace('// [SKIPPED] ', '');
-                 }
- 
-                 var editIconHtml = '';
-                 if (canEdit && (isInteractiveStep || statusStr === 'active')) {
-                     editIconHtml = '<span class="neo-edit-step-icon" data-idx="' + localIndex + '" style="opacity: 0.5; cursor: pointer; padding: 2px 6px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;" title="Edit this step"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></span>';
-                 }
- 
-                 var rightActionsHtml = '';
-                 if (statusHtml || editIconHtml) {
-                     rightActionsHtml = '<div style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; height: 24px;">' +
-                         statusHtml +
-                         editIconHtml +
-                         '</div>';
-                 }
- 
-                 var dragHandleHtml = (isInteractiveStep && statusStr !== 'active') ? '<div class="neo-step-drag-handle" style="cursor: grab; margin-right: 8px; opacity: 0.3;" title="Drag to reorder">☰</div>' : '';
- 
-                 var bpMarkerHtml = '';
-                 if (statusStr === 'active' || statusStr === 'pending') {
-                     bpMarkerHtml = '<span class="neo-bp-marker" data-idx="' + bpId + '" style="opacity: ' + bpOpacity + '; cursor: pointer; font-size: 13px; font-weight: bold; margin-right: 8px; user-select: none;" title="Toggle breakpoint">' + bpDisplay + '</span>';
-                 } else if (statusStr !== 'done') {
+                var actualBlock = blockName || 'steps';
+                var cleanText = getCleanStepText(stepText);
+                var stepIdx = isInteractiveStep ? localIndex : -1;
+                var bpId = actualBlock + ':' + localIndex;
+
+                if (isInteractiveStep) {
+                    window.neoCurrentRenderedSteps[localIndex] = cleanText;
+                }
+
+                var isBp = window.neoBreakpoints && window.neoBreakpoints.indexOf(bpId) !== -1;
+                var bpDisplay = isBp ? '🛑' : '⚪';
+                var bpOpacity = isBp ? '1' : '0.15';
+
+                var classNames = 'neo-step-item';
+                var statusHtml = '';
+
+                if (statusStr === 'active') {
+                    classNames += ' active';
+                } else if (statusStr === 'done') {
+                    classNames += ' completed';
+                    if (isInteractiveStep) {
+                        statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>' +
+                            '<span class="rewind-hover-indicator" data-idx="' + localIndex + '" title="Rewind back to this step" style="cursor: pointer; color: var(--text-secondary); display: none; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg></span>';
+                    } else {
+                        statusHtml = '<span class="checkmark" style="color: var(--accent-success); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;">✔️</span>';
+                    }
+                }
+
+                if (stepText.indexOf('// [SKIPPED]') !== -1) {
+                    classNames += ' skipped';
+                    cleanText = cleanText.replace('// [SKIPPED] ', '');
+                    stepText = stepText.replace('// [SKIPPED] ', '');
+                }
+
+                var editIconHtml = '';
+                if (canEdit && (isInteractiveStep || statusStr === 'active')) {
+                    editIconHtml = '<span class="neo-edit-step-icon" data-idx="' + localIndex + '" style="opacity: 0.5; cursor: pointer; padding: 2px 6px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; box-sizing: border-box; font-size: 14px;" title="Edit this step"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></span>';
+                }
+
+                var rightActionsHtml = '';
+                if (statusHtml || editIconHtml) {
+                    rightActionsHtml = '<div style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; height: 24px;">' +
+                        statusHtml +
+                        editIconHtml +
+                        '</div>';
+                }
+
+                var dragHandleHtml = (isInteractiveStep && statusStr !== 'active') ? '<div class="neo-step-drag-handle" style="cursor: grab; margin-right: 8px; opacity: 0.3;" title="Drag to reorder">☰</div>' : '';
+
+                var bpMarkerHtml = '';
+                if (statusStr === 'active' || statusStr === 'pending') {
+                    bpMarkerHtml = '<span class="neo-bp-marker" data-idx="' + bpId + '" style="opacity: ' + bpOpacity + '; cursor: pointer; font-size: 13px; font-weight: bold; margin-right: 8px; user-select: none;" title="Toggle breakpoint">' + bpDisplay + '</span>';
+                } else if (statusStr !== 'done') {
                     bpMarkerHtml = '<span style="font-size: 12px; margin-right: 8px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.5;"><circle cx="12" cy="12" r="10"></circle></svg></span>';
                 }
 
@@ -1604,7 +1616,7 @@
             approveBtn.dataset.isFinished = 'true';
         } else {
             approveBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Run';
-            approveBtn.title = 'Run current active step only and pause [Alt+A] [Ctrl+Enter] ';
+            approveBtn.title = 'Run current active step only and pause [Alt+R] [Ctrl+Enter] ';
             approveBtn.classList.remove('neo-btn-primary');
             approveBtn.style.background = ''; // use CSS styling
             approveBtn.dataset.isFinished = 'false';
