@@ -108,6 +108,7 @@
         hudElement.addEventListener('click', function (e) { e.stopPropagation(); });
         hudElement.addEventListener('mousedown', function (e) { e.stopPropagation(); });
         hudElement.addEventListener('mouseup', function (e) { e.stopPropagation(); });
+        hudElement.addEventListener('wheel', function (e) { e.stopPropagation(); });
 
         window.neoMinimizeHud = function () {
             var mainHud = document.getElementById('neo-ai-hud');
@@ -368,14 +369,14 @@
             initialEditInput.addEventListener('change', validateEditInput);
         }
 
-        window.neoStartEditingStep = function (idx) {
+        window.neoStartEditingStep = function (idx, preserveExistingValue) {
             window.neoEditingStepIndex = idx;
             var elInput = document.getElementById('neo-edit-input');
             var stepText = (window.neoCurrentRenderedSteps && window.neoCurrentRenderedSteps[idx] !== undefined)
                 ? window.neoCurrentRenderedSteps[idx]
                 : (window.neoCurrentUnresolvedStep || (document.getElementById('neo-next-action') ? document.getElementById('neo-next-action').innerText : ''));
 
-            if (elInput) {
+            if (elInput && !preserveExistingValue) {
                 elInput.value = stepText;
             }
             validateEditInput();
@@ -445,6 +446,11 @@
 
             renderTable();
 
+            // Restore previous edited step element if any
+            if (window.neoLastEditedStepEl) {
+                window.neoLastEditedStepEl.setAttribute('draggable', 'true');
+            }
+
             // Move edit overlay to the step item container being edited
             var stepItemEl = null;
             var perfCount = (window.neoPerformedList || []).length;
@@ -461,6 +467,17 @@
                 // Fallback to active step card
                 stepItemEl = document.querySelector('.neo-step-item.active');
             }
+
+            // Temporarily disable draggable attribute on parent container to allow keyboard focus/text selection
+            if (stepItemEl) {
+                if (stepItemEl.getAttribute('draggable') === 'true') {
+                    stepItemEl.setAttribute('draggable', 'false');
+                    window.neoLastEditedStepEl = stepItemEl;
+                } else {
+                    window.neoLastEditedStepEl = null;
+                }
+            }
+
             var elOverlay = document.getElementById('neo-edit-overlay');
             if (stepItemEl && elOverlay) {
                 stepItemEl.appendChild(elOverlay);
@@ -493,6 +510,11 @@
         }
 
         document.getElementById('neo-edit-cancel-btn').addEventListener('click', function () {
+            if (window.neoLastEditedStepEl) {
+                window.neoLastEditedStepEl.setAttribute('draggable', 'true');
+                window.neoLastEditedStepEl = null;
+            }
+
             document.getElementById('bindingsDrawer').style.display = 'none';
             document.getElementById('neo-toolbar-controls').style.display = 'flex';
             document.getElementById('neo-edit-toolbar').style.display = 'none';
@@ -522,6 +544,12 @@
                 var elInput = document.getElementById('neo-edit-input');
                 var elOverlay = document.getElementById('neo-edit-overlay');
                 var newInstr = elInput ? elInput.value : '';
+
+                if (window.neoLastEditedStepEl) {
+                    window.neoLastEditedStepEl.setAttribute('draggable', 'true');
+                    window.neoLastEditedStepEl = null;
+                }
+
                 if (newInstr && newInstr.trim() !== '') {
                     var updatedBindings = {};
                     var inputs = document.querySelectorAll('.neo-binding-input');
@@ -901,12 +929,35 @@
         };
 
         window.neoRenderFullPrompt = function () {
+            var editOverlay = document.getElementById('neo-edit-overlay');
+            var isEditing = editOverlay && editOverlay.style.display === 'flex';
+            var addOverlay = document.getElementById('neo-add-overlay');
+            var isAdding = addOverlay && addOverlay.style.display === 'flex';
+            var hudContent = document.getElementById('neo-hud-content');
+            var scrollPos = hudContent ? hudContent.scrollTop : 0;
+
+            var activeEl = document.activeElement;
+            var activeId = activeEl ? activeEl.id : null;
+            var isEditInputActive = activeId === 'neo-edit-input';
+            var isAddInputActive = activeId === 'neo-add-input';
+            var activeBindingKey = (activeEl && activeEl.classList.contains('neo-binding-input')) ? activeEl.getAttribute('data-key') : null;
+            var selectionStart = (activeEl && (isEditInputActive || isAddInputActive || activeBindingKey)) ? activeEl.selectionStart : 0;
+            var selectionEnd = (activeEl && (isEditInputActive || isAddInputActive || activeBindingKey)) ? activeEl.selectionEnd : 0;
+
+            var editedTextVal = document.getElementById('neo-edit-input') ? document.getElementById('neo-edit-input').value : '';
+            var addTextVal = document.getElementById('neo-add-input') ? document.getElementById('neo-add-input').value : '';
+
+            var savedBindings = {};
+            var inputs = document.querySelectorAll('.neo-binding-input');
+            for (var k = 0; k < inputs.length; k++) {
+                savedBindings[inputs[k].getAttribute('data-key')] = inputs[k].value;
+            }
+
             // Safety: if the editing overlay is currently nested inside the container, append it back to #neo-ai-hud so it doesn't get destroyed.
-            var elOverlay = document.getElementById('neo-edit-overlay');
-            if (elOverlay && elOverlay.parentNode && elOverlay.parentNode !== document.getElementById('neo-ai-hud')) {
+            if (editOverlay && editOverlay.parentNode && editOverlay.parentNode !== document.getElementById('neo-ai-hud')) {
                 var rHud = document.getElementById('neo-ai-hud');
                 if (rHud) {
-                    rHud.appendChild(elOverlay);
+                    rHud.appendChild(editOverlay);
                 }
             }
 
@@ -1222,6 +1273,58 @@
                 container.innerHTML = fullHtml;
                 var addBtn = document.getElementById('neo-add-overlay-btn');
                 if (addBtn) addBtn.style.display = 'block';
+            }
+
+            // Restore scroll position
+            if (hudContent) {
+                hudContent.scrollTop = scrollPos;
+            }
+
+            // Restore editing state
+            if (isEditing) {
+                window.neoStartEditingStep(window.neoEditingStepIndex, true);
+                var elInput = document.getElementById('neo-edit-input');
+                if (elInput) {
+                    elInput.value = editedTextVal;
+                }
+                var newInputs = document.querySelectorAll('.neo-binding-input');
+                for (var j = 0; j < newInputs.length; j++) {
+                    var key = newInputs[j].getAttribute('data-key');
+                    if (savedBindings[key] !== undefined) {
+                        newInputs[j].value = savedBindings[key];
+                    }
+                }
+                if (isEditInputActive && elInput) {
+                    elInput.focus();
+                    elInput.setSelectionRange(selectionStart, selectionEnd);
+                } else if (activeBindingKey) {
+                    var inp = document.querySelector('.neo-binding-input[data-key="' + activeBindingKey + '"]');
+                    if (inp) {
+                        inp.focus();
+                        inp.setSelectionRange(selectionStart, selectionEnd);
+                    }
+                }
+            } else {
+                if (editOverlay) {
+                    var rHud = document.getElementById('neo-ai-hud');
+                    if (rHud && editOverlay.parentNode !== rHud) {
+                        rHud.appendChild(editOverlay);
+                    }
+                    editOverlay.style.display = 'none';
+                }
+            }
+
+            // Restore adding state
+            if (isAdding) {
+                if (addOverlay) addOverlay.style.display = 'flex';
+                var addInput = document.getElementById('neo-add-input');
+                if (addInput) {
+                    addInput.value = addTextVal;
+                    if (isAddInputActive) {
+                        addInput.focus();
+                        addInput.setSelectionRange(selectionStart, selectionEnd);
+                    }
+                }
             }
         };
 

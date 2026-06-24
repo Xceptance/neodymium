@@ -2972,6 +2972,165 @@ public final class InteractiveHudSelenideTest extends BaseAiTest
         $("#neo-ai-hud").shouldNotBe(Condition.visible);
         joinBgThread();
     }
+
+    /**
+     * Verifies that when the active WebDriver context is switched to a nested iframe,
+     * HUD operations are executed in the top-level frame context and the WebDriver focus
+     * is successfully returned to the nested iframe.
+     */
+    @Test
+    public void testIframeContextIsolation() throws Exception
+    {
+        // 1. Open the nested frames page
+        final String nestedFramesUrl = String.format("http://localhost:%d/NestedFrameTest/testNestedFrames.html", server.getPort());
+        open(nestedFramesUrl);
+
+        // 2. Initialize Playbook with steps targeting nested frames
+        final Playbook playbook = new Playbook("testIframeContextIsolation");
+        playbook.setRecording(false);
+
+        // Define Step 1: Type 'Hello' inside frame1
+        final PlaybookStep step1 = new PlaybookStep();
+        step1.setPromptLine("Type 'Hello' inside frame1");
+        step1.setReasoning("First iframe interaction");
+        final Action act1 = new Action("TYPE", "#input1", "Hello", "Type 'Hello' inside frame1");
+        act1.setFrameId("win_0:0");
+        step1.setActions(List.of(act1));
+        playbook.addStep(step1);
+
+        // Define Step 2: Click the Deep Button inside nested frame2
+        final PlaybookStep step2 = new PlaybookStep();
+        step2.setPromptLine("Click Deep Button");
+        step2.setReasoning("Second iframe interaction");
+        final Action act2 = new Action("CLICK", "#deep-btn", "Click Deep Button");
+        act2.setFrameId("win_0:0.0");
+        step2.setActions(List.of(act2));
+        playbook.addStep(step2);
+
+        Neodymium.setAiPlaybook(playbook);
+
+        // 3. Launch the agent in the background thread using a natural flow (runInteractiveInBg)
+        runInteractiveInBg(() ->
+        {
+            try (final AiBrowser ai = createTestAiBrowser())
+            {
+                ai.execute("Type 'Hello' inside frame1\nClick Deep Button");
+            }
+            catch (final Exception e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 4. Verify HUD is injected at the top-level frame and wait for step 1
+        checkBgError();
+        waitHudReady();
+
+        // Verify HUD exists in default content (top-level frame)
+        $("#neo-ai-hud").shouldBe(Condition.visible);
+
+        // Switch to frame1 and assert HUD is NOT there, proving it stayed on the top frame
+        Selenide.switchTo().frame("frame1");
+        $("#neo-ai-hud").shouldNot(Condition.exist);
+
+        // Switch to defaultContent, click Approve to run step 1
+        Selenide.switchTo().defaultContent();
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2500);
+
+        // 5. Verify Step 1 executed inside frame1 (input field has value 'Hello')
+        checkBgError();
+        Selenide.switchTo().frame("frame1");
+        $("#input1").shouldHave(Condition.value("Hello"));
+
+        // 6. Switch back to defaultContent, wait for step 2 in HUD, verify HUD is still at top level
+        Selenide.switchTo().defaultContent();
+        $("#neo-next-action").shouldHave(Condition.exactText("Click Deep Button"));
+
+        // Switch to nested frame2 and assert HUD is NOT there
+        Selenide.switchTo().frame("frame1");
+        Selenide.switchTo().frame("frame2");
+        $("#neo-ai-hud").shouldNot(Condition.exist);
+
+        // Switch back to defaultContent, click Approve to run step 2
+        Selenide.switchTo().defaultContent();
+        $("#neo-approve-btn").click();
+        Selenide.sleep(2500);
+
+        // 7. Verify Step 2 executed inside nested frame2 (result has "Button was clicked!")
+        checkBgError();
+        Selenide.switchTo().frame("frame1");
+        Selenide.switchTo().frame("frame2");
+        $("#result").shouldHave(Condition.exactText("Button was clicked!"));
+
+        // Explicitly check that we can switch context to nested frame2, call checkHudAction(),
+        // and focus is returned back to nested frame2 so we can still access the elements.
+        Neodymium.getOrCreateInteractiveHud().checkHudAction();
+        $("#deep-btn").should(Condition.exist);
+
+        // 8. Switch back to defaultContent, check that HUD closes cleanly
+        Selenide.switchTo().defaultContent();
+        $("#neo-ai-hud").shouldNotBe(Condition.visible);
+        joinBgThread();
+    }
+
+    /**
+     * Verifies that when the active WebDriver context is switched to a popup window,
+     * HUD operations are executed in the main window context and the WebDriver focus
+     * is successfully returned to the popup window.
+     */
+    @Test
+    public void testPopupWindowContextIsolation() throws Exception
+    {
+        openTestUrl();
+
+        final String originalHandle = Selenide.webdriver().driver().getWebDriver().getWindowHandle();
+
+        // Open a new popup window
+        Selenide.executeJavaScript("window.open('about:blank', 'popup_window');");
+        Selenide.sleep(1000);
+
+        final Set<String> handles = Selenide.webdriver().driver().getWebDriver().getWindowHandles();
+        assertTrue(handles.size() > 1, "A popup window should have been opened");
+
+        String popupHandle = null;
+        for (final String handle : handles)
+        {
+            if (!handle.equals(originalHandle))
+            {
+                popupHandle = handle;
+                break;
+            }
+        }
+        assertNotNull(popupHandle);
+
+        // Switch WebDriver focus to the popup window
+        Selenide.switchTo().window(popupHandle);
+
+        // Trigger HUD injection while focus is on the popup window
+        final InteractiveHud hud = new InteractiveHud();
+        hud.injectOrUpdateHud(List.of("Step 1"), List.of(), false, false, false, "Step 1", "Reasoning", false);
+
+        // Assert the HUD is NOT in the popup window
+        $("#neo-ai-hud").shouldNot(Condition.exist);
+
+        // Switch focus back to the main window and verify HUD exists there
+        Selenide.switchTo().window(originalHandle);
+        $("#neo-ai-hud").should(Condition.exist);
+
+        // Switch focus back to popup window
+        Selenide.switchTo().window(popupHandle);
+
+        // Trigger a checkHudAction call while on the popup window
+        hud.checkHudAction();
+
+        // Assert we are still on the popup window
+        assertTrue(Selenide.webdriver().driver().getWebDriver().getWindowHandle().equals(popupHandle));
+
+        // Clean up: close the popup and switch back to main
+        Selenide.webdriver().driver().getWebDriver().close();
+        Selenide.switchTo().window(originalHandle);
+    }
 }
 
 
