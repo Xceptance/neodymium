@@ -33,6 +33,9 @@ import java.util.Map;
 import java.util.Set;
 
 import org.aeonbits.owner.Accessible;
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
@@ -44,10 +47,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import com.xceptance.neodymium.util.Neodymium;
-
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
 
 /**
  * Manages the client-side interactive Heads-Up Display (HUD) injected into the active browser page.
@@ -305,18 +304,24 @@ public final class InteractiveHud
      */
     public String checkHudAction()
     {
+        try
+        {
+            final String readyState = Selenide.executeJavaScript("return document.readyState;");
+            if (!"complete".equals(readyState) && !"interactive".equals(readyState))
+            {
+                return null;
+            }
+        }
+        catch (final Exception e)
+        {
+            return null;
+        }
+
         return executeInTopFrame(() ->
         {
             ensureHudInSync();
             try
             {
-                final String readyState = Selenide.executeJavaScript("return document.readyState;");
-
-                if (!"complete".equals(readyState) && !"interactive".equals(readyState))
-                {
-                    return null;
-                }
-
                 final Boolean hudExists = Selenide.executeJavaScript("return document.getElementById('neo-ai-hud') !== null;");
 
                 if (Boolean.FALSE.equals(hudExists) && this.lastPlanned != null)
@@ -428,7 +433,6 @@ public final class InteractiveHud
             );
             if (currentSig == null || !currentSig.equals(this.lastStateSignature))
             {
-                System.err.println("HUD SIGNATURE MISMATCH! currentSig: '" + currentSig + "', lastStateSignature: '" + this.lastStateSignature + "'");
                 injectOrUpdateHud(this.lastPlanned, this.lastPerformed, this.lastAutoSkip, this.lastHudPromptChanged, this.lastIsFinished, this.lastCurrentUnresolvedStep, this.lastReasoning, this.lastIsReplay);
             }
         }
@@ -830,7 +834,7 @@ public final class InteractiveHud
         private final WebDriver driver;
         private final String originalWindowHandle;
         private final String mainWindowHandle;
-        private final List<String> framePath;
+        private final List<Integer> framePath;
 
         public FrameContext(final WebDriver driver)
         {
@@ -841,11 +845,40 @@ public final class InteractiveHud
             String mainHandle = null;
             try
             {
+                // Capture current window handle and URL
                 currentHandle = driver.getWindowHandle();
+                String currentUrl = null;
+                try {
+                    currentUrl = driver.getCurrentUrl();
+                } catch (Exception e) {
+                    // ignore URL retrieval failures
+                }
                 final Set<String> handles = driver.getWindowHandles();
-                if (!handles.isEmpty())
-                {
+                // Try to find a handle that matches the current test URL (excluding blank or devtools windows)
+                for (final String handle : handles) {
+                    if (handle.equals(currentHandle)) {
+                        continue;
+                    }
+                    try {
+                        driver.switchTo().window(handle);
+                        final String url = driver.getCurrentUrl();
+                        if (url != null && !url.isEmpty() && !url.toLowerCase().contains("devtools")) {
+                            mainHandle = handle;
+                            break;
+                        }
+                    } catch (final Exception e) {
+                        // ignore and continue searching
+                    }
+                }
+                // If no suitable main handle found, fallback to the first available handle
+                if (mainHandle == null && !handles.isEmpty()) {
                     mainHandle = handles.iterator().next();
+                }
+                // Restore original window for further operations
+                try {
+                    driver.switchTo().window(currentHandle);
+                } catch (final Exception e) {
+                    // ignore
                 }
             }
             catch (final Exception e)
@@ -867,52 +900,11 @@ public final class InteractiveHud
                 }
             }
 
-            try
-            {
-                final Object result = Selenide.executeJavaScript(
-                    "try {" +
-                    "  var currentWindow = window;" +
-                    "  var path = [];" +
-                    "  var depth = 0;" +
-                    "  while (currentWindow !== window.top) {" +
-                    "    var frameEl = currentWindow.frameElement;" +
-                    "    if (frameEl) {" +
-                    "      var tempId = 'neo-frame-' + Math.random().toString(36).substring(2, 11);" +
-                    "      frameEl.setAttribute('data-neo-temp-frame-id', tempId);" +
-                    "      path.push(tempId);" +
-                    "      depth++;" +
-                    "    } else {" +
-                    "      break;" +
-                    "    }" +
-                    "    currentWindow = currentWindow.parent;" +
-                    "  }" +
-                    "  return path.reverse();" +
-                    "} catch (e) {" +
-                    "  return [];" +
-                    "}"
-                );
-                if (result instanceof List)
-                {
-                    for (final Object item : (List<?>) result)
-                    {
-                        this.framePath.add(String.valueOf(item));
-                    }
-                }
-            }
-            catch (final Exception e)
-            {
-                // Ignore
-            }
+            final List<Integer> path = findFramePath(driver);
+            this.framePath.addAll(path);
 
-            boolean needsSwitch = false;
-            if (this.mainWindowHandle != null && this.originalWindowHandle != null && !this.originalWindowHandle.equals(this.mainWindowHandle))
-            {
-                needsSwitch = true;
-            }
-            if (!this.framePath.isEmpty())
-            {
-                needsSwitch = true;
-            }
+            final boolean needsSwitch = (this.mainWindowHandle != null && this.originalWindowHandle != null && !this.originalWindowHandle.equals(this.mainWindowHandle))
+                    || !this.framePath.isEmpty();
 
             if (needsSwitch)
             {
@@ -927,6 +919,129 @@ public final class InteractiveHud
             }
         }
 
+        private List<Integer> findFramePath(final WebDriver driver)
+        {
+            final List<Integer> path = new ArrayList<>();
+            try
+            {
+                final Object isTop = Selenide.executeJavaScript("return window === window.top;");
+                if (Boolean.TRUE.equals(isTop))
+                {
+                    return path;
+                }
+            }
+            catch (final Exception e)
+            {
+                // If checking top fails, proceed with search
+            }
+
+            final String marker = "neo-frame-marker-" + String.valueOf(Math.random()).substring(2);
+            try
+            {
+                Selenide.executeJavaScript("window.__neo_current_frame_marker = arguments[0];", marker);
+            }
+            catch (final Exception e)
+            {
+                return path;
+            }
+
+            try
+            {
+                driver.switchTo().defaultContent();
+                final Object topVal = Selenide.executeJavaScript("return window.__neo_current_frame_marker;");
+                if (marker.equals(topVal))
+                {
+                    try
+                    {
+                        Selenide.executeJavaScript("delete window.__neo_current_frame_marker;");
+                    }
+                    catch (final Exception e)
+                    {
+                        // Ignore
+                    }
+                    return path;
+                }
+
+                if (searchFrame(driver, marker, path))
+                {
+                    try
+                    {
+                        Selenide.executeJavaScript("delete window.__neo_current_frame_marker;");
+                    }
+                    catch (final Exception e)
+                    {
+                        // Ignore
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                // Ignore
+            }
+            return path;
+        }
+
+        private boolean searchFrame(final WebDriver driver, final String marker, final List<Integer> currentPath)
+        {
+            final List<WebElement> frames = driver.findElements(By.cssSelector("iframe, frame"));
+            final int numFrames = frames.size();
+            for (int i = 0; i < numFrames; i++)
+            {
+                try
+                {
+                    driver.switchTo().frame(i);
+                }
+                catch (final Exception e)
+                {
+                    continue;
+                }
+
+                currentPath.add(i);
+
+                try
+                {
+                    final Object val = Selenide.executeJavaScript("return window.__neo_current_frame_marker;");
+                    if (marker.equals(val))
+                    {
+                        return true;
+                    }
+                }
+                catch (final Exception e)
+                {
+                    // Ignore
+                }
+
+                if (searchFrame(driver, marker, currentPath))
+                {
+                    return true;
+                }
+
+                try
+                {
+                    driver.switchTo().parentFrame();
+                }
+                catch (final Exception e)
+                {
+                    try
+                    {
+                        driver.switchTo().defaultContent();
+                        for (final int idx : currentPath)
+                        {
+                            driver.switchTo().frame(idx);
+                        }
+                        driver.switchTo().parentFrame();
+                    }
+                    catch (final Exception ex)
+                    {
+                        // Ignore
+                    }
+                }
+
+                currentPath.remove(currentPath.size() - 1);
+            }
+            return false;
+        }
+
         @Override
         public void close()
         {
@@ -934,32 +1049,16 @@ public final class InteractiveHud
             {
                 try
                 {
-                    boolean needsRestore = false;
-                    if (this.originalWindowHandle != null && !this.originalWindowHandle.equals(this.mainWindowHandle))
-                    {
-                        needsRestore = true;
-                    }
-                    if (!this.framePath.isEmpty())
-                    {
-                        needsRestore = true;
-                    }
+                    final boolean needsRestore = (this.originalWindowHandle != null && !this.originalWindowHandle.equals(this.mainWindowHandle))
+                            || !this.framePath.isEmpty();
 
                     if (needsRestore)
                     {
                         driver.switchTo().window(this.mainWindowHandle);
                         driver.switchTo().defaultContent();
-                        for (final String tempId : this.framePath)
+                        for (final int index : this.framePath)
                         {
-                            final WebElement frameEl = driver.findElement(By.cssSelector("iframe[data-neo-temp-frame-id='" + tempId + "'], frame[data-neo-temp-frame-id='" + tempId + "']"));
-                            try
-                            {
-                                Selenide.executeJavaScript("arguments[0].removeAttribute('data-neo-temp-frame-id');", frameEl);
-                            }
-                            catch (final Exception e)
-                            {
-                                // Ignore
-                            }
-                            driver.switchTo().frame(frameEl);
+                            driver.switchTo().frame(index);
                         }
                     }
                 }
