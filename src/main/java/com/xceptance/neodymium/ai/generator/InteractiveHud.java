@@ -45,6 +45,10 @@ import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import com.xceptance.neodymium.util.Neodymium;
 
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+
 /**
  * Manages the client-side interactive Heads-Up Display (HUD) injected into the active browser page.
  * Enables live test playback reviews, manual interventions, breakpoint triggers, and step skips,
@@ -200,50 +204,54 @@ public final class InteractiveHud
         this.lastCurrentUnresolvedStep = currentUnresolvedStep;
         this.lastReasoning = reasoning;
         this.lastIsReplay = isReplay;
-        try
+
+        executeInTopFrame(() ->
         {
-            final String readyState = Selenide.executeJavaScript("return document.readyState;");
-            if (!"complete".equals(readyState) && !"interactive".equals(readyState))
+            try
+            {
+                final String readyState = Selenide.executeJavaScript("return document.readyState;");
+                if (!"complete".equals(readyState) && !"interactive".equals(readyState))
+                {
+                    return;
+                }
+            }
+            catch (final Exception e)
             {
                 return;
             }
-        }
-        catch (final Exception e)
-        {
-            return;
-        }
 
-        this.lastStateSignature = calculateStateSignature(planned, performed, autoSkip, isFinished, currentUnresolvedStep, reasoning, isReplay);
+            this.lastStateSignature = calculateStateSignature(planned, performed, autoSkip, isFinished, currentUnresolvedStep, reasoning, isReplay);
 
-        evaluateCanEdit();
-        final Map<String, String> configMap = new HashMap<>();
-        if (Neodymium.configuration() instanceof Accessible)
-        {
-            final Accessible AccessibleConf = Neodymium.configuration();
-            final Set<String> props = AccessibleConf.propertyNames();
-            if (props != null)
+            evaluateCanEdit();
+            final Map<String, String> configMap = new HashMap<>();
+            if (Neodymium.configuration() instanceof Accessible)
             {
-                for (final String p : props)
+                final Accessible AccessibleConf = Neodymium.configuration();
+                final Set<String> props = AccessibleConf.propertyNames();
+                if (props != null)
                 {
-                    configMap.put(p, AccessibleConf.getProperty(p));
+                    for (final String p : props)
+                    {
+                        configMap.put(p, AccessibleConf.getProperty(p));
+                    }
                 }
             }
-        }
-        final List<String> beforeSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("before") ? Neodymium.getData().asString("before") : null);
-        final List<String> stepsSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("steps") ? Neodymium.getData().asString("steps") : null);
-        final List<String> afterSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("after") ? Neodymium.getData().asString("after") : null);
-        final int currentBlockIndex = this.currentBlockStepOffset + (performed != null ? performed.size() : 0);
+            final List<String> beforeSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("before") ? Neodymium.getData().asString("before") : null);
+            final List<String> stepsSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("steps") ? Neodymium.getData().asString("steps") : null);
+            final List<String> afterSteps = parseBlockSteps(Neodymium.getData() != null && Neodymium.getData().exists("after") ? Neodymium.getData().asString("after") : null);
+            final int currentBlockIndex = this.currentBlockStepOffset + (performed != null ? performed.size() : 0);
 
-        try
-        {
-            Selenide.executeJavaScript(HUD_JS, HUD_HTML, planned, performed, autoSkip,
-                    hudPromptChanged, isFinished, this.canEdit, currentUnresolvedStep, this.dataBindings, configMap, reasoning, isReplay, this.lastFullPromptOpen, this.lastBreakpointsStr, this.lastHelpShown, readSettings(), this.lastStateSignature,
-                    beforeSteps, stepsSteps, afterSteps, this.currentBlock, currentBlockIndex);
-        }
-        catch (final Exception e)
-        {
-            LOG.warn("Failed to inject AI Generation HUD: {}", e.getMessage());
-        }
+            try
+            {
+                Selenide.executeJavaScript(HUD_JS, HUD_HTML, planned, performed, autoSkip,
+                        hudPromptChanged, isFinished, this.canEdit, currentUnresolvedStep, this.dataBindings, configMap, reasoning, isReplay, this.lastFullPromptOpen, this.lastBreakpointsStr, this.lastHelpShown, readSettings(), this.lastStateSignature,
+                        beforeSteps, stepsSteps, afterSteps, this.currentBlock, currentBlockIndex);
+            }
+            catch (final Exception e)
+            {
+                LOG.warn("Failed to inject AI Generation HUD: {}", e.getMessage());
+            }
+        });
     }
 
     private String readSettings() {
@@ -297,62 +305,65 @@ public final class InteractiveHud
      */
     public String checkHudAction()
     {
-        ensureHudInSync();
-        try
+        return executeInTopFrame(() ->
         {
-            final String readyState = Selenide.executeJavaScript("return document.readyState;");
+            ensureHudInSync();
+            try
+            {
+                final String readyState = Selenide.executeJavaScript("return document.readyState;");
 
-            if (!"complete".equals(readyState) && !"interactive".equals(readyState))
+                if (!"complete".equals(readyState) && !"interactive".equals(readyState))
+                {
+                    return null;
+                }
+
+                final Boolean hudExists = Selenide.executeJavaScript("return document.getElementById('neo-ai-hud') !== null;");
+
+                if (Boolean.FALSE.equals(hudExists) && this.lastPlanned != null)
+                {
+
+                    // The HUD was removed (e.g. page navigation), reinject it silently.
+                    injectOrUpdateHud(this.lastPlanned, this.lastPerformed, this.lastAutoSkip, this.lastHudPromptChanged, this.lastIsFinished, this.lastCurrentUnresolvedStep, this.lastReasoning, this.lastIsReplay);
+                }
+                else if (Boolean.TRUE.equals(hudExists))
+                {
+                    // If it exists, sync HUD interaction variables back into the local state
+                    final Object skipStatus = Selenide.executeJavaScript("return window.neoHudAutoSkip;");
+                    if (skipStatus != null)
+                    {
+                        this.lastAutoSkip = (Boolean) skipStatus;
+                    }
+                    final Object promptOpen = Selenide.executeJavaScript("return window.neoFullPromptOpen;");
+                    if (promptOpen != null)
+                    {
+                        this.lastFullPromptOpen = (Boolean) promptOpen;
+                    }
+                    
+                    final Object bps = Selenide.executeJavaScript("return window.neoBreakpoints ? JSON.stringify(window.neoBreakpoints) : null;");
+                    if (bps != null)
+                    {
+                        this.lastBreakpointsStr = (String) bps;
+                    }
+                    
+                    final Object helpShown = Selenide.executeJavaScript("return window.neoHelpShown;");
+                    if (helpShown != null)
+                    {
+                        this.lastHelpShown = (Boolean) helpShown;
+                    }
+                }
+
+                final Object status = Selenide.executeJavaScript("var val = window.neoHudAction; window.neoHudAction = null; return val;");
+                if (status != null)
+                {
+                    return String.valueOf(status);
+                }
+                return null;
+            }
+            catch (final Exception e)
             {
                 return null;
             }
-
-            final Boolean hudExists = Selenide.executeJavaScript("return document.getElementById('neo-ai-hud') !== null;");
-
-            if (Boolean.FALSE.equals(hudExists) && this.lastPlanned != null)
-            {
-
-                // The HUD was removed (e.g. page navigation), reinject it silently.
-                injectOrUpdateHud(this.lastPlanned, this.lastPerformed, this.lastAutoSkip, this.lastHudPromptChanged, this.lastIsFinished, this.lastCurrentUnresolvedStep, this.lastReasoning, this.lastIsReplay);
-            }
-            else if (Boolean.TRUE.equals(hudExists))
-            {
-                // If it exists, sync HUD interaction variables back into the local state
-                final Object skipStatus = Selenide.executeJavaScript("return window.neoHudAutoSkip;");
-                if (skipStatus != null)
-                {
-                    this.lastAutoSkip = (Boolean) skipStatus;
-                }
-                final Object promptOpen = Selenide.executeJavaScript("return window.neoFullPromptOpen;");
-                if (promptOpen != null)
-                {
-                    this.lastFullPromptOpen = (Boolean) promptOpen;
-                }
-                
-                final Object bps = Selenide.executeJavaScript("return window.neoBreakpoints ? JSON.stringify(window.neoBreakpoints) : null;");
-                if (bps != null)
-                {
-                    this.lastBreakpointsStr = (String) bps;
-                }
-                
-                final Object helpShown = Selenide.executeJavaScript("return window.neoHelpShown;");
-                if (helpShown != null)
-                {
-                    this.lastHelpShown = (Boolean) helpShown;
-                }
-            }
-
-            final Object status = Selenide.executeJavaScript("var val = window.neoHudAction; window.neoHudAction = null; return val;");
-            if (status != null)
-            {
-                return String.valueOf(status);
-            }
-            return null;
-        }
-        catch (final Exception e)
-        {
-            return null;
-        }
+        });
     }
 
     /**
@@ -362,21 +373,24 @@ public final class InteractiveHud
      */
     public Boolean checkAutoSkipStatus()
     {
-        ensureHudInSync();
-        try
+        return executeInTopFrame(() ->
         {
-            final Object status = Selenide.executeJavaScript("return window.neoHudAutoSkip;");
-            if (status == null)
+            ensureHudInSync();
+            try
+            {
+                final Object status = Selenide.executeJavaScript("return window.neoHudAutoSkip;");
+                if (status == null)
+                {
+                    return null;
+                }
+                this.lastAutoSkip = (Boolean) status;
+                return (Boolean) status;
+            }
+            catch (final Exception e)
             {
                 return null;
             }
-            this.lastAutoSkip = (Boolean) status;
-            return (Boolean) status;
-        }
-        catch (final Exception e)
-        {
-            return null;
-        }
+        });
     }
 
     private void ensureHudInSync()
@@ -414,6 +428,7 @@ public final class InteractiveHud
             );
             if (currentSig == null || !currentSig.equals(this.lastStateSignature))
             {
+                System.err.println("HUD SIGNATURE MISMATCH! currentSig: '" + currentSig + "', lastStateSignature: '" + this.lastStateSignature + "'");
                 injectOrUpdateHud(this.lastPlanned, this.lastPerformed, this.lastAutoSkip, this.lastHudPromptChanged, this.lastIsFinished, this.lastCurrentUnresolvedStep, this.lastReasoning, this.lastIsReplay);
             }
         }
@@ -503,14 +518,17 @@ public final class InteractiveHud
      */
     public void resetHudAction()
     {
-        try
+        executeInTopFrame(() ->
         {
-            Selenide.executeJavaScript("window.neoHudAction = null;");
-        }
-        catch (final Exception e)
-        {
-            // ignore
-        }
+            try
+            {
+                Selenide.executeJavaScript("window.neoHudAction = null;");
+            }
+            catch (final Exception e)
+            {
+                // ignore
+            }
+        });
     }
 
     /**
@@ -771,5 +789,201 @@ public final class InteractiveHud
             }
         });
         return result;
+    }
+
+    private interface Action<T>
+    {
+        T run();
+    }
+
+    private interface VoidAction
+    {
+        void run();
+    }
+
+    private <T> T executeInTopFrame(final Action<T> action)
+    {
+        try (final FrameContext fc = new FrameContext(Selenide.webdriver().driver().getWebDriver()))
+        {
+            return action.run();
+        }
+        catch (final Exception e)
+        {
+            return action.run();
+        }
+    }
+
+    private void executeInTopFrame(final VoidAction action)
+    {
+        try (final FrameContext fc = new FrameContext(Selenide.webdriver().driver().getWebDriver()))
+        {
+            action.run();
+        }
+        catch (final Exception e)
+        {
+            action.run();
+        }
+    }
+
+    public static class FrameContext implements AutoCloseable
+    {
+        private final WebDriver driver;
+        private final String originalWindowHandle;
+        private final String mainWindowHandle;
+        private final List<String> framePath;
+
+        public FrameContext(final WebDriver driver)
+        {
+            this.driver = driver;
+            this.framePath = new ArrayList<>();
+
+            String currentHandle = null;
+            String mainHandle = null;
+            try
+            {
+                currentHandle = driver.getWindowHandle();
+                final Set<String> handles = driver.getWindowHandles();
+                if (!handles.isEmpty())
+                {
+                    mainHandle = handles.iterator().next();
+                }
+            }
+            catch (final Exception e)
+            {
+                // Ignore
+            }
+            this.originalWindowHandle = currentHandle;
+            this.mainWindowHandle = mainHandle;
+
+            if (this.mainWindowHandle != null && this.originalWindowHandle != null && !this.originalWindowHandle.equals(this.mainWindowHandle))
+            {
+                try
+                {
+                    driver.switchTo().window(this.mainWindowHandle);
+                }
+                catch (final Exception e)
+                {
+                    // Ignore
+                }
+            }
+
+            try
+            {
+                final Object result = Selenide.executeJavaScript(
+                    "try {" +
+                    "  var currentWindow = window;" +
+                    "  var path = [];" +
+                    "  var depth = 0;" +
+                    "  while (currentWindow !== window.top) {" +
+                    "    var frameEl = currentWindow.frameElement;" +
+                    "    if (frameEl) {" +
+                    "      var tempId = 'neo-frame-' + Math.random().toString(36).substring(2, 11);" +
+                    "      frameEl.setAttribute('data-neo-temp-frame-id', tempId);" +
+                    "      path.push(tempId);" +
+                    "      depth++;" +
+                    "    } else {" +
+                    "      break;" +
+                    "    }" +
+                    "    currentWindow = currentWindow.parent;" +
+                    "  }" +
+                    "  return path.reverse();" +
+                    "} catch (e) {" +
+                    "  return [];" +
+                    "}"
+                );
+                if (result instanceof List)
+                {
+                    for (final Object item : (List<?>) result)
+                    {
+                        this.framePath.add(String.valueOf(item));
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                // Ignore
+            }
+
+            boolean needsSwitch = false;
+            if (this.mainWindowHandle != null && this.originalWindowHandle != null && !this.originalWindowHandle.equals(this.mainWindowHandle))
+            {
+                needsSwitch = true;
+            }
+            if (!this.framePath.isEmpty())
+            {
+                needsSwitch = true;
+            }
+
+            if (needsSwitch)
+            {
+                try
+                {
+                    driver.switchTo().defaultContent();
+                }
+                catch (final Exception e)
+                {
+                    // Ignore
+                }
+            }
+        }
+
+        @Override
+        public void close()
+        {
+            if (this.mainWindowHandle != null)
+            {
+                try
+                {
+                    boolean needsRestore = false;
+                    if (this.originalWindowHandle != null && !this.originalWindowHandle.equals(this.mainWindowHandle))
+                    {
+                        needsRestore = true;
+                    }
+                    if (!this.framePath.isEmpty())
+                    {
+                        needsRestore = true;
+                    }
+
+                    if (needsRestore)
+                    {
+                        driver.switchTo().window(this.mainWindowHandle);
+                        driver.switchTo().defaultContent();
+                        for (final String tempId : this.framePath)
+                        {
+                            final WebElement frameEl = driver.findElement(By.cssSelector("iframe[data-neo-temp-frame-id='" + tempId + "'], frame[data-neo-temp-frame-id='" + tempId + "']"));
+                            try
+                            {
+                                Selenide.executeJavaScript("arguments[0].removeAttribute('data-neo-temp-frame-id');", frameEl);
+                            }
+                            catch (final Exception e)
+                            {
+                                // Ignore
+                            }
+                            driver.switchTo().frame(frameEl);
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOG.warn("Failed to restore frame context on main window: " + e.getMessage());
+                }
+            }
+
+            if (this.originalWindowHandle != null && this.mainWindowHandle != null && !this.originalWindowHandle.equals(this.mainWindowHandle))
+            {
+                try
+                {
+                    final Set<String> handles = driver.getWindowHandles();
+                    if (handles.contains(this.originalWindowHandle))
+                    {
+                        driver.switchTo().window(this.originalWindowHandle);
+                    }
+                }
+                catch (final Exception e)
+                {
+                    // Ignore
+                }
+            }
+        }
     }
 }

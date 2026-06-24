@@ -1563,128 +1563,130 @@ public class AiAgent {
 
         LOG.info("Waiting for user action in HUD...");
         boolean handled = false;
-        for (int wait = 0; wait < 3600; wait++) {
-            if (Thread.currentThread().isInterrupted()) {
-                throw new RuntimeException("Thread was interrupted, halting agent execution.");
-            }
-            if (allowAutoSkip) {
-                final Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
-                if (s != null) {
-                    this.autoSkip = s;
+        try (final InteractiveHud.FrameContext fc = new InteractiveHud.FrameContext(com.codeborne.selenide.Selenide.webdriver().driver().getWebDriver())) {
+            for (int wait = 0; wait < 3600; wait++) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new RuntimeException("Thread was interrupted, halting agent execution.");
                 }
-                if (this.autoSkip) {
-                    return;
-                }
-            }
-
-            final String hudActionStr = Neodymium.getOrCreateInteractiveHud().checkHudAction();
-            if (hudActionStr != null) {
-
-                final JsonObject actionObj = JsonParser.parseString(hudActionStr)
-                        .getAsJsonObject();
-                final String actionType = actionObj.has("action") ? actionObj.get("action").getAsString() : "";
-
-                HudActionType typeEnum = null;
-                try {
-                    typeEnum = HudActionType.valueOf(actionType);
-                } catch (IllegalArgumentException e) {
-                    // Ignore unknown actions
-                }
-
-                if (typeEnum == HudActionType.APPROVE) {
-                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                    handled = true;
-                    break;
-                } else if (typeEnum == HudActionType.SKIP) {
-                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                    throw new HudActionException(HudActionType.SKIP, null, 0);
-                } else if (typeEnum == HudActionType.REWIND) {
-                    final int rIdx = actionObj.get("index").getAsInt();
-                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                    throw new HudActionException(HudActionType.REWIND, null, rIdx);
-                } else if (typeEnum == HudActionType.ADD) {
-                    final String instructionAdd = actionObj.get("instruction").getAsString();
-                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                    throw new HudActionException(HudActionType.ADD, instructionAdd, 0);
-                } else if (typeEnum == HudActionType.EDIT) {
-                    final String instructionEdit = actionObj.get("instruction").getAsString();
-                    final int eIdx = actionObj.has("index") ? actionObj.get("index").getAsInt() : 0;
-                    final Map<String, String> bindingsMap = new HashMap<>();
-                    if (actionObj.has("bindings")) {
-                        final JsonObject bObj = actionObj.getAsJsonObject("bindings");
-                        for (String key : bObj.keySet()) {
-                            bindingsMap.put(key, bObj.get(key).getAsString());
-                        }
+                if (allowAutoSkip) {
+                    final Boolean s = Neodymium.getOrCreateInteractiveHud().checkAutoSkipStatus();
+                    if (s != null) {
+                        this.autoSkip = s;
                     }
-                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                    throw new HudActionException(HudActionType.EDIT, instructionEdit, eIdx, bindingsMap);
-                } else if (typeEnum == HudActionType.APPEND) {
-                    final String instructionAppend = actionObj.get("instruction").getAsString();
-                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                    throw new HudActionException(HudActionType.APPEND, instructionAppend, 0);
-                } else if (typeEnum == HudActionType.REORDER) {
-                    final int fromIdx = actionObj.get("from").getAsInt();
-                    final int toIdx = actionObj.get("to").getAsInt();
-                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                    throw new HudActionException(HudActionType.REORDER, null, fromIdx, toIdx, null, null);
-                } else if (typeEnum == HudActionType.SETTINGS) {
-                    final String settingsPayload = actionObj.get("payload").getAsString();
-                    Neodymium.getOrCreateInteractiveHud().saveSettings(settingsPayload);
-                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                    continue; // Settings handled internally, keep waiting
-                } else if (typeEnum == HudActionType.SAVE_EXIT) {
-                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                    throw new HudActionException(HudActionType.SAVE_EXIT, null, 0);
-                } else if (typeEnum == HudActionType.DUMP) {
-                    Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                    if (this.autoSkip) {
+                        return;
+                    }
+                }
+
+                final String hudActionStr = Neodymium.getOrCreateInteractiveHud().checkHudAction();
+                if (hudActionStr != null) {
+
+                    final JsonObject actionObj = JsonParser.parseString(hudActionStr)
+                            .getAsJsonObject();
+                    final String actionType = actionObj.has("action") ? actionObj.get("action").getAsString() : "";
+
+                    HudActionType typeEnum = null;
                     try {
-                        String dom = pageAnalyzer.getPageContext(ContextLevel.VISUAL);
-                        String history = AiAgentPrompts.buildStepHistory(Neodymium.getAiPlaybook());
-
-                        StringBuilder rawDom = new StringBuilder();
-                        try {
-                            com.codeborne.selenide.Selenide.switchTo().defaultContent();
-                            rawDom.append("<!-- MAIN PAGE -->\n");
-                            rawDom.append((String) com.codeborne.selenide.Selenide
-                                    .executeJavaScript("return document.documentElement.outerHTML;"));
-
-                            com.codeborne.selenide.ElementsCollection frames = com.codeborne.selenide.Selenide
-                                    .$$("iframe, frame");
-                            for (int f = 0; f < frames.size(); f++) {
-                                try {
-                                    com.codeborne.selenide.Selenide.switchTo().frame(frames.get(f));
-                                    rawDom.append("\n\n<!-- IFRAME ").append(f).append(" -->\n");
-                                    rawDom.append((String) com.codeborne.selenide.Selenide
-                                            .executeJavaScript("return document.documentElement.outerHTML;"));
-                                } catch (Exception ignored) {
-                                } finally {
-                                    com.codeborne.selenide.Selenide.switchTo().defaultContent();
-                                }
-                            }
-                        } catch (Exception e) {
-                            rawDom.append("\nError extracting raw DOM: ").append(e.getMessage());
-                        }
-
-                        long timestamp = System.currentTimeMillis();
-                        String content = "======== AI DEBUG DUMP ========\n\n" +
-                                "--- SUT CONTEXT ---\n" + sutContext + "\n\n" +
-                                "--- HISTORY ---\n" + history + "\n\n" +
-                                "--- AI PARSED DOM ---\n" + dom + "\n";
-                        java.io.File txtFile = new java.io.File("tmp/neodymium-ai-dump-" + timestamp + ".txt");
-                        java.io.File htmlFile = new java.io.File("tmp/neodymium-ai-dump-" + timestamp + ".html");
-                        if (!txtFile.getParentFile().exists())
-                            txtFile.getParentFile().mkdirs();
-                        java.nio.file.Files.writeString(txtFile.toPath(), content);
-                        java.nio.file.Files.writeString(htmlFile.toPath(), rawDom.toString());
-                        LOG.info(
-                                "Debug context dumped to: " + txtFile.getAbsolutePath() + " and " + htmlFile.getName());
-                    } catch (Exception e) {
-                        LOG.error("Failed to dump context", e);
+                        typeEnum = HudActionType.valueOf(actionType);
+                    } catch (IllegalArgumentException e) {
+                        // Ignore unknown actions
                     }
-                    continue; // Keep waiting
+
+                    if (typeEnum == HudActionType.APPROVE) {
+                        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                        handled = true;
+                        break;
+                    } else if (typeEnum == HudActionType.SKIP) {
+                        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                        throw new HudActionException(HudActionType.SKIP, null, 0);
+                    } else if (typeEnum == HudActionType.REWIND) {
+                        final int rIdx = actionObj.get("index").getAsInt();
+                        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                        throw new HudActionException(HudActionType.REWIND, null, rIdx);
+                    } else if (typeEnum == HudActionType.ADD) {
+                        final String instructionAdd = actionObj.get("instruction").getAsString();
+                        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                        throw new HudActionException(HudActionType.ADD, instructionAdd, 0);
+                    } else if (typeEnum == HudActionType.EDIT) {
+                        final String instructionEdit = actionObj.get("instruction").getAsString();
+                        final int eIdx = actionObj.has("index") ? actionObj.get("index").getAsInt() : 0;
+                        final Map<String, String> bindingsMap = new HashMap<>();
+                        if (actionObj.has("bindings")) {
+                            final JsonObject bObj = actionObj.getAsJsonObject("bindings");
+                            for (String key : bObj.keySet()) {
+                                bindingsMap.put(key, bObj.get(key).getAsString());
+                            }
+                        }
+                        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                        throw new HudActionException(HudActionType.EDIT, instructionEdit, eIdx, bindingsMap);
+                    } else if (typeEnum == HudActionType.APPEND) {
+                        final String instructionAppend = actionObj.get("instruction").getAsString();
+                        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                        throw new HudActionException(HudActionType.APPEND, instructionAppend, 0);
+                    } else if (typeEnum == HudActionType.REORDER) {
+                        final int fromIdx = actionObj.get("from").getAsInt();
+                        final int toIdx = actionObj.get("to").getAsInt();
+                        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                        throw new HudActionException(HudActionType.REORDER, null, fromIdx, toIdx, null, null);
+                    } else if (typeEnum == HudActionType.SETTINGS) {
+                        final String settingsPayload = actionObj.get("payload").getAsString();
+                        Neodymium.getOrCreateInteractiveHud().saveSettings(settingsPayload);
+                        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                        continue; // Settings handled internally, keep waiting
+                    } else if (typeEnum == HudActionType.SAVE_EXIT) {
+                        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                        throw new HudActionException(HudActionType.SAVE_EXIT, null, 0);
+                    } else if (typeEnum == HudActionType.DUMP) {
+                        Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                        try {
+                            String dom = pageAnalyzer.getPageContext(ContextLevel.VISUAL);
+                            String history = AiAgentPrompts.buildStepHistory(Neodymium.getAiPlaybook());
+
+                            StringBuilder rawDom = new StringBuilder();
+                            try {
+                                com.codeborne.selenide.Selenide.switchTo().defaultContent();
+                                rawDom.append("<!-- MAIN PAGE -->\n");
+                                rawDom.append((String) com.codeborne.selenide.Selenide
+                                        .executeJavaScript("return document.documentElement.outerHTML;"));
+
+                                com.codeborne.selenide.ElementsCollection frames = com.codeborne.selenide.Selenide
+                                        .$$("iframe, frame");
+                                for (int f = 0; f < frames.size(); f++) {
+                                    try {
+                                        com.codeborne.selenide.Selenide.switchTo().frame(frames.get(f));
+                                        rawDom.append("\n\n<!-- IFRAME ").append(f).append(" -->\n");
+                                        rawDom.append((String) com.codeborne.selenide.Selenide
+                                                .executeJavaScript("return document.documentElement.outerHTML;"));
+                                    } catch (Exception ignored) {
+                                    } finally {
+                                        com.codeborne.selenide.Selenide.switchTo().defaultContent();
+                                    }
+                                }
+                            } catch (Exception e) {
+                                rawDom.append("\nError extracting raw DOM: ").append(e.getMessage());
+                            }
+
+                            long timestamp = System.currentTimeMillis();
+                            String content = "======== AI DEBUG DUMP ========\n\n" +
+                                    "--- SUT CONTEXT ---\n" + sutContext + "\n\n" +
+                                    "--- HISTORY ---\n" + history + "\n\n" +
+                                    "--- AI PARSED DOM ---\n" + dom + "\n";
+                            java.io.File txtFile = new java.io.File("tmp/neodymium-ai-dump-" + timestamp + ".txt");
+                            java.io.File htmlFile = new java.io.File("tmp/neodymium-ai-dump-" + timestamp + ".html");
+                            if (!txtFile.getParentFile().exists())
+                                txtFile.getParentFile().mkdirs();
+                            java.nio.file.Files.writeString(txtFile.toPath(), content);
+                            java.nio.file.Files.writeString(htmlFile.toPath(), rawDom.toString());
+                            LOG.info(
+                                    "Debug context dumped to: " + txtFile.getAbsolutePath() + " and " + htmlFile.getName());
+                        } catch (Exception e) {
+                            LOG.error("Failed to dump context", e);
+                        }
+                        continue; // Keep waiting
+                    }
                 }
+                sleep(1000);
             }
-            sleep(1000);
         }
         if (!handled) {
             throw new RuntimeException("User did not approve the actions within 1 hour. Halting execution.");

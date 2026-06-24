@@ -706,94 +706,96 @@ public class AiPromptGenerator {
                             if (!autoSkip) {
                                 LOG.info("Waiting for user action in HUD...");
                                 boolean handled = false;
-                                for (int wait = 0; wait < 3600; wait++) {
-                                    String hudActionStr = com.xceptance.neodymium.util.Neodymium
-                                            .getOrCreateInteractiveHud().checkHudAction();
-                                    if (hudActionStr != null) {
-                                        Boolean s = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                .checkAutoSkipStatus();
-                                        if (s != null) {
-                                            autoSkip = s;
-                                        }
-                                        com.google.gson.JsonObject actionObj = com.google.gson.JsonParser
-                                                .parseString(hudActionStr).getAsJsonObject();
-                                        String actionTypeStr = actionObj.has("action")
-                                                ? actionObj.get("action").getAsString()
-                                                : "";
-                                        com.xceptance.neodymium.ai.core.HudActionType actionType = null;
-                                        try {
-                                            actionType = com.xceptance.neodymium.ai.core.HudActionType
-                                                    .valueOf(actionTypeStr);
-                                        } catch (IllegalArgumentException e) {
-                                            // Ignore unknown actions
-                                        }
-
-                                        if (com.xceptance.neodymium.ai.core.HudActionType.APPROVE == actionType) {
-                                            handled = true;
-                                            break;
-                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.SKIP == actionType) {
-                                            shouldExecute = false;
-                                            handled = true;
-                                            break;
-                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.REWIND == actionType) {
-                                            int rIdx = actionObj.get("index").getAsInt();
-                                            playbook.getSteps().subList(rIdx, playbook.getSteps().size()).clear();
-                                            playbook.setCursor(rIdx);
-                                            actionsForLogging.subList(rIdx, actionsForLogging.size()).clear();
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                    .resetHudAction();
-                                            hudRewind = true;
-                                            handled = true;
-                                            break;
-                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.ADD == actionType) {
-                                            hudAddInstruction = actionObj.get("instruction").getAsString();
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                    .resetHudAction();
-                                            handled = true;
-                                            break;
-                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.EDIT == actionType) {
-                                            hudEditInstruction = actionObj.get("instruction").getAsString();
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                    .resetHudAction();
-                                            shouldExecute = false; // Don't execute the old action
-                                            handled = true;
-                                            break;
-                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.APPEND == actionType) {
-                                            hudAppendInstruction = actionObj.get("instruction").getAsString();
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                    .resetHudAction();
-                                            handled = true;
-                                            break;
-                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.REORDER == actionType) {
-                                            int fromIdx = actionObj.get("from").getAsInt();
-                                            int toIdx = actionObj.get("to").getAsInt();
-                                            if (fromIdx >= 0 && fromIdx < playbook.getSteps().size() && toIdx >= 0 && toIdx < playbook.getSteps().size()) {
-                                                com.xceptance.neodymium.ai.playbook.PlaybookStep stepToMove = playbook.getSteps().remove(fromIdx);
-                                                playbook.getSteps().add(toIdx, stepToMove);
-                                                Action actToMove = actionsForLogging.remove(fromIdx);
-                                                actionsForLogging.add(toIdx, actToMove);
-                                                playbook.setChanged(true);
+                                try (final com.xceptance.neodymium.ai.generator.InteractiveHud.FrameContext fc = new com.xceptance.neodymium.ai.generator.InteractiveHud.FrameContext(com.codeborne.selenide.Selenide.webdriver().driver().getWebDriver())) {
+                                    for (int wait = 0; wait < 3600; wait++) {
+                                        String hudActionStr = com.xceptance.neodymium.util.Neodymium
+                                                .getOrCreateInteractiveHud().checkHudAction();
+                                        if (hudActionStr != null) {
+                                            Boolean s = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                    .checkAutoSkipStatus();
+                                            if (s != null) {
+                                                autoSkip = s;
                                             }
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                                            hudReordered = true;
-                                            handled = true;
-                                            break;
-                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.SETTINGS == actionType) {
-                                            String payload = actionObj.has("payload") ? actionObj.get("payload").toString() : "{}";
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().saveSettings(payload);
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                                            continue;
-                                        } else if (com.xceptance.neodymium.ai.core.HudActionType.SAVE_EXIT == actionType) {
-                                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                    .resetHudAction();
-                                            hudSaveExit = true;
-                                            handled = true;
-                                            break;
+                                            com.google.gson.JsonObject actionObj = com.google.gson.JsonParser
+                                                    .parseString(hudActionStr).getAsJsonObject();
+                                            String actionTypeStr = actionObj.has("action")
+                                                    ? actionObj.get("action").getAsString()
+                                                    : "";
+                                            com.xceptance.neodymium.ai.core.HudActionType actionType = null;
+                                            try {
+                                                actionType = com.xceptance.neodymium.ai.core.HudActionType
+                                                        .valueOf(actionTypeStr);
+                                            } catch (IllegalArgumentException e) {
+                                                // Ignore unknown actions
+                                            }
+
+                                            if (com.xceptance.neodymium.ai.core.HudActionType.APPROVE == actionType) {
+                                                handled = true;
+                                                break;
+                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.SKIP == actionType) {
+                                                shouldExecute = false;
+                                                handled = true;
+                                                break;
+                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.REWIND == actionType) {
+                                                int rIdx = actionObj.get("index").getAsInt();
+                                                playbook.getSteps().subList(rIdx, playbook.getSteps().size()).clear();
+                                                playbook.setCursor(rIdx);
+                                                actionsForLogging.subList(rIdx, actionsForLogging.size()).clear();
+                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                        .resetHudAction();
+                                                hudRewind = true;
+                                                handled = true;
+                                                break;
+                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.ADD == actionType) {
+                                                hudAddInstruction = actionObj.get("instruction").getAsString();
+                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                        .resetHudAction();
+                                                handled = true;
+                                                break;
+                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.EDIT == actionType) {
+                                                hudEditInstruction = actionObj.get("instruction").getAsString();
+                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                        .resetHudAction();
+                                                shouldExecute = false; // Don't execute the old action
+                                                handled = true;
+                                                break;
+                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.APPEND == actionType) {
+                                                hudAppendInstruction = actionObj.get("instruction").getAsString();
+                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                        .resetHudAction();
+                                                handled = true;
+                                                break;
+                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.REORDER == actionType) {
+                                                int fromIdx = actionObj.get("from").getAsInt();
+                                                int toIdx = actionObj.get("to").getAsInt();
+                                                if (fromIdx >= 0 && fromIdx < playbook.getSteps().size() && toIdx >= 0 && toIdx < playbook.getSteps().size()) {
+                                                    com.xceptance.neodymium.ai.playbook.PlaybookStep stepToMove = playbook.getSteps().remove(fromIdx);
+                                                    playbook.getSteps().add(toIdx, stepToMove);
+                                                    Action actToMove = actionsForLogging.remove(fromIdx);
+                                                    actionsForLogging.add(toIdx, actToMove);
+                                                    playbook.setChanged(true);
+                                                }
+                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                                                hudReordered = true;
+                                                handled = true;
+                                                break;
+                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.SETTINGS == actionType) {
+                                                String payload = actionObj.has("payload") ? actionObj.get("payload").toString() : "{}";
+                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().saveSettings(payload);
+                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
+                                                continue;
+                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.SAVE_EXIT == actionType) {
+                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
+                                                        .resetHudAction();
+                                                hudSaveExit = true;
+                                                handled = true;
+                                                break;
+                                            }
                                         }
-                                    }
-                                    try {
-                                        Thread.sleep(1000);
-                                    } catch (InterruptedException ignored) {
+                                        try {
+                                            Thread.sleep(1000);
+                                        } catch (InterruptedException ignored) {
+                                        }
                                     }
                                 }
                                 if (!handled)
