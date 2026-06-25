@@ -1,0 +1,37 @@
+# AI-generated: Gemini 3.5 Flash
+# @author AI-generated: Gemini 3.5 Flash
+# @author Xceptance GmbH 2026
+
+search: &search |
+  Gib "${searchQuery}" in das Suchfeld ein.
+  Ein Suchvorschlag-Dropdown ist sichtbar und enthält mindestens 6 Einträge.
+  Klicke auf "View All", um alle Suchergebnisse zu sehen.
+  Eine Suchergebnisseite wird angezeigt und zeigt die Suchergebnisse für "${searchQuery}".
+  Ein Feld für die Anzahl der Suchergebnisse wird angezeigt.
+  Die Anzahl der Ergebnisse '${resultCount}' ist zu sehen.
+
+steps:
+  - Öffne ${verla.url}/verla-perfect/index.html
+  - Wähle "${country}" aus dem Länder-Dropdown.
+  - *search
+  - Auf der linken Seite wird eine Filterbox mit Kategorien, Farben, Preis und Angebot angezeigt.
+
+  - Öffne ${verla.url}/verla-normal/index.html
+  - *search
+
+  - Öffne ${verla.url}/verla-bad/index.html
+  - *search
+
+data:
+  - testId: "US"
+    country: "United States"
+    searchQuery: "minimalist"
+    resultCount: 33
+  - testId: "DE"
+    country: "Germany"
+    searchQuery: "sandfarben"
+    resultCount: 41
+  - testId: "FIN"
+    country: "Finland"
+    searchQuery: "moderni"
+    resultCount: 35

@@ -277,7 +277,7 @@ public class AiAgent {
 
             final String sourceFileVal;
             if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.sourceFile")) {
-                sourceFileVal = Neodymium.getTestdataSourceFile();
+                sourceFileVal = Neodymium.getData().asString("neodymium.sourceFile");
             } else {
                 sourceFileVal = null;
             }
@@ -765,7 +765,13 @@ public class AiAgent {
                         final String errorMsg = formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\n" + step.getExpectedErrorMessage());
                         if (DefinitiveAssertionError.class.getName().equals(errorType))
                         {
-                            throw new DefinitiveAssertionError(errorMsg);
+                            throw new DefinitiveAssertionError(
+                                    errorMsg,
+                                    instruction,
+                                    stepDetails.getOriginalUnsplitInstruction(),
+                                    currentLineNumber,
+                                    sourceFile,
+                                    true);
                         }
 
                         throw new AssertionError(errorMsg);
@@ -1191,7 +1197,19 @@ public class AiAgent {
                     else
                     {
                         recordVisualFailureIfRecording(unresolvedInstruction, e, playbook);
-                        throw e;
+                        if (((DefinitiveAssertionError) e).isFormatted())
+                        {
+                            throw e;
+                        }
+                        final DefinitiveAssertionError wrapped = new DefinitiveAssertionError(
+                                formatFailureMessage(instruction, stepDetails.getOriginalUnsplitInstruction(), currentLineNumber, sourceFile, ":\n") + e.getMessage(),
+                                instruction,
+                                stepDetails.getOriginalUnsplitInstruction(),
+                                currentLineNumber,
+                                sourceFile,
+                                true);
+                        wrapped.initCause(e);
+                        throw wrapped;
                     }
                 }
                 if (optionalStep) {
@@ -2615,10 +2633,113 @@ public class AiAgent {
     public static class DefinitiveAssertionError extends AssertionError
     {
         private static final long serialVersionUID = 1L;
+        private final boolean formatted;
+        private final String instruction;
+        private final String originalUnsplitInstruction;
+        private final String lineNumber;
+        private final String sourceFile;
 
+        /**
+         * Constructs a new DefinitiveAssertionError with the specified detail message.
+         *
+         * @param message the detail message
+         */
         public DefinitiveAssertionError(final String message)
         {
             super(message);
+            this.formatted = false;
+            this.instruction = null;
+            this.originalUnsplitInstruction = null;
+            this.lineNumber = null;
+            this.sourceFile = null;
+        }
+
+        /**
+         * Constructs a new DefinitiveAssertionError with the specified detail message and formatted status.
+         *
+         * @param message   the detail message
+         * @param formatted whether the message is already formatted with trace details
+         */
+        public DefinitiveAssertionError(final String message, final boolean formatted)
+        {
+            super(message);
+            this.formatted = formatted;
+            this.instruction = null;
+            this.originalUnsplitInstruction = null;
+            this.lineNumber = null;
+            this.sourceFile = null;
+        }
+
+        /**
+         * Constructs a new DefinitiveAssertionError with the specified detail message and full structured details.
+         *
+         * @param message                    the detail message
+         * @param instruction                the specific step instruction being executed
+         * @param originalUnsplitInstruction the original unsplit instruction
+         * @param lineNumber                 the line number where the failure occurred
+         * @param sourceFile                 the source file of the playbook
+         * @param formatted                  whether the message is already formatted with trace details
+         */
+        public DefinitiveAssertionError(final String message, final String instruction,
+                final String originalUnsplitInstruction, final String lineNumber,
+                final String sourceFile, final boolean formatted)
+        {
+            super(message);
+            this.formatted = formatted;
+            this.instruction = instruction;
+            this.originalUnsplitInstruction = originalUnsplitInstruction;
+            this.lineNumber = lineNumber;
+            this.sourceFile = sourceFile;
+        }
+
+        /**
+         * Returns whether the detail message is already formatted with trace details.
+         *
+         * @return true if the message is formatted, false otherwise
+         */
+        public boolean isFormatted()
+        {
+            return this.formatted;
+        }
+
+        /**
+         * Returns the instruction associated with this failure, or null if not available.
+         *
+         * @return the instruction
+         */
+        public String getInstruction()
+        {
+            return this.instruction;
+        }
+
+        /**
+         * Returns the original unsplit instruction associated with this failure, or null if not available.
+         *
+         * @return the original unsplit instruction
+         */
+        public String getOriginalUnsplitInstruction()
+        {
+            return this.originalUnsplitInstruction;
+        }
+
+        /**
+         * Returns the line number associated with this failure, or null if not available.
+         *
+         * @return the line number
+         */
+        public String getLineNumber()
+        {
+            return this.lineNumber;
+        }
+
+        /**
+         * Returns the source file associated with this failure, or null if not available.
+         *
+         * @return the source file
+         */
+        public String getSourceFile()
+        {
+            return this.sourceFile;
         }
     }
 
@@ -3089,113 +3210,122 @@ public class AiAgent {
             includeStepLines.add(step.trace);
         }
 
-        for (int i = 0; i < steps.size(); i++)
+        final List<String> previousStepsList = this.currentStepsList;
+        this.currentStepsList = includeStepsList;
+        try
         {
-            final YamlFileReader.Step step = steps.get(i);
-            final String stepText = AiBrowser.resolveTestDataToPrompt(step.text, result.getLookups());
-
-            final StepDetails stepDetails = new StepDetails(step.text);
-            result.getSteps().add(stepDetails);
-
-            boolean expectedFailureVal = false;
-            String bugIdVal = null;
-            final Matcher bugMatcher = BUG_TAG_PATTERN.matcher(stepText);
-            if (bugMatcher.find())
+            for (int i = 0; i < steps.size(); i++)
             {
-                expectedFailureVal = true;
-                bugIdVal = bugMatcher.group(1);
-                if (bugIdVal != null)
+                final YamlFileReader.Step step = steps.get(i);
+                final String stepText = AiBrowser.resolveTestDataToPrompt(step.text, result.getLookups());
+
+                final StepDetails stepDetails = new StepDetails(step.text);
+                result.getSteps().add(stepDetails);
+
+                boolean expectedFailureVal = false;
+                String bugIdVal = null;
+                final Matcher bugMatcher = BUG_TAG_PATTERN.matcher(stepText);
+                if (bugMatcher.find())
                 {
-                    bugIdVal = bugIdVal.trim();
+                    expectedFailureVal = true;
+                    bugIdVal = bugMatcher.group(1);
+                    if (bugIdVal != null)
+                    {
+                        bugIdVal = bugIdVal.trim();
+                    }
                 }
-            }
-            final boolean expectedFailure = expectedFailureVal;
-            final String bugId = bugIdVal;
+                final boolean expectedFailure = expectedFailureVal;
+                final String bugId = bugIdVal;
 
-            boolean optionalStepVal = false;
-            final Matcher optionalMatcher = OPTIONAL_TAG_PATTERN.matcher(stepText);
-            if (optionalMatcher.find())
-            {
-                optionalStepVal = true;
-            }
-            final boolean optionalStep = optionalStepVal;
-
-            Long customTimeoutMsVal = null;
-            final Matcher timeoutMatcher = TIMEOUT_TAG_PATTERN.matcher(stepText);
-            if (timeoutMatcher.find())
-            {
-                final long value = Long.parseLong(timeoutMatcher.group(1));
-                final String unit = timeoutMatcher.group(2);
-                if (unit != null && unit.equalsIgnoreCase("s"))
+                boolean optionalStepVal = false;
+                final Matcher optionalMatcher = OPTIONAL_TAG_PATTERN.matcher(stepText);
+                if (optionalMatcher.find())
                 {
-                    customTimeoutMsVal = value * 1000;
+                    optionalStepVal = true;
+                }
+                final boolean optionalStep = optionalStepVal;
+
+                Long customTimeoutMsVal = null;
+                final Matcher timeoutMatcher = TIMEOUT_TAG_PATTERN.matcher(stepText);
+                if (timeoutMatcher.find())
+                {
+                    final long value = Long.parseLong(timeoutMatcher.group(1));
+                    final String unit = timeoutMatcher.group(2);
+                    if (unit != null && unit.equalsIgnoreCase("s"))
+                    {
+                        customTimeoutMsVal = value * 1000;
+                    }
+                    else
+                    {
+                        customTimeoutMsVal = value;
+                    }
+                }
+                final Long customTimeoutMs = customTimeoutMsVal;
+
+                final String strippedStep = stripAllTags(stepText);
+
+                final List<String> futureInstructions = new ArrayList<>();
+                for (int j = i + 1; j < steps.size(); j++)
+                {
+                    futureInstructions.add(steps.get(j).text);
+                }
+
+                final String traceLine;
+                final String traceFile;
+                if (step.trace != null)
+                {
+                    final int arrowIdx = step.trace.indexOf(" -> ");
+                    final String immediateTrace = (arrowIdx != -1) ? step.trace.substring(0, arrowIdx) : step.trace;
+                    final int colonIdx = immediateTrace.lastIndexOf(':');
+                    if (colonIdx != -1)
+                    {
+                        traceFile = immediateTrace.substring(0, colonIdx);
+                        traceLine = immediateTrace.substring(colonIdx + 1);
+                     }
+                    else
+                    {
+                        traceFile = immediateTrace;
+                        traceLine = null;
+                    }
                 }
                 else
                 {
-                    customTimeoutMsVal = value;
-                }
-            }
-            final Long customTimeoutMs = customTimeoutMsVal;
-
-            final String strippedStep = stripAllTags(stepText);
-
-            final List<String> futureInstructions = new ArrayList<>();
-            for (int j = i + 1; j < steps.size(); j++)
-            {
-                futureInstructions.add(steps.get(j).text);
-            }
-
-            final String traceLine;
-            final String traceFile;
-            if (step.trace != null)
-            {
-                final int arrowIdx = step.trace.indexOf(" -> ");
-                final String immediateTrace = (arrowIdx != -1) ? step.trace.substring(0, arrowIdx) : step.trace;
-                final int colonIdx = immediateTrace.lastIndexOf(':');
-                if (colonIdx != -1)
-                {
-                    traceFile = immediateTrace.substring(0, colonIdx);
-                    traceLine = immediateTrace.substring(colonIdx + 1);
-                }
-                else
-                {
-                    traceFile = immediateTrace;
+                    traceFile = null;
                     traceLine = null;
                 }
-            }
-            else
-            {
-                traceFile = null;
-                traceLine = null;
-            }
 
-            final long stepStartTime = System.currentTimeMillis();
-            try
-            {
-                stepDetails.setExpandedInstruction(strippedStep);
-                executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs,
-                        performedInstructions, step.text, futureInstructions,
-                        traceLine, traceFile, stepDetails, result, includeStepsList, includeStepLines);
+                final long stepStartTime = System.currentTimeMillis();
+                try
+                {
+                    stepDetails.setExpandedInstruction(strippedStep);
+                    executeStep(i, strippedStep, expectedFailure, bugId, optionalStep, customTimeoutMs,
+                            performedInstructions, step.text, futureInstructions,
+                            traceLine, traceFile, stepDetails, result, includeStepsList, includeStepLines);
+                }
+                catch (final HudActionException e)
+                {
+                    throw e;
+                }
+                catch (final AssertionError e)
+                {
+                    stepDetails.setFailureReason(e.getMessage());
+                    throw e;
+                }
+                catch (final Throwable t)
+                {
+                    stepDetails.setFailureReason(t.getMessage());
+                    throw new RuntimeException(t);
+                }
+                finally
+                {
+                    stepDetails.setDurationMs(System.currentTimeMillis() - stepStartTime);
+                }
+                performedInstructions.add(step.text);
             }
-            catch (final HudActionException e)
-            {
-                throw e;
-            }
-            catch (final AssertionError e)
-            {
-                stepDetails.setFailureReason(e.getMessage());
-                throw e;
-            }
-            catch (final Throwable t)
-            {
-                stepDetails.setFailureReason(t.getMessage());
-                throw new RuntimeException(t);
-            }
-            finally
-            {
-                stepDetails.setDurationMs(System.currentTimeMillis() - stepStartTime);
-            }
-            performedInstructions.add(step.text);
+        }
+        finally
+        {
+            this.currentStepsList = previousStepsList;
         }
     }
 

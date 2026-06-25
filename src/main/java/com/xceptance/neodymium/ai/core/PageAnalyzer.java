@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chromium.HasCdp;
@@ -554,13 +555,52 @@ public class PageAnalyzer {
      * @return Base64 PNG string
      * @throws IOException
      */
-    public String captureScreenshot(final String title) throws IOException {
-        if (!hasActiveWebDriver()) {
+    public String captureScreenshot(final String title) throws IOException
+    {
+        if (!hasActiveWebDriver())
+        {
             return null;
         }
         LOG.debug("   📸 Capturing screenshot for: {}", title);
+        final WebDriver driver = WebDriverRunner.getWebDriver();
+        try
+        {
+            return captureScreenshotInternal(title);
+        }
+        catch (final Exception e)
+        {
+            if (isNoSuchWindowException(e))
+            {
+                LOG.warn("   ⚠️ Target window was closed during screenshot capture, switching to first available window");
+                try
+                {
+                    final Set<String> activeHandles = driver.getWindowHandles();
+                    if (!activeHandles.isEmpty())
+                    {
+                        final String fallback = activeHandles.iterator().next();
+                        driver.switchTo().window(fallback);
+                        driver.switchTo().defaultContent();
+                        return captureScreenshotInternal(title);
+                    }
+                }
+                catch (final Exception ex)
+                {
+                    LOG.warn("   ⚠️ Could not switch to fallback window or capture screenshot: {}", ex.getMessage());
+                }
+            }
+            else
+            {
+                LOG.warn("   ⚠️ Failed to capture screenshot: {}", e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    private String captureScreenshotInternal(final String title) throws Exception
+    {
         boolean hidden = false;
-        try {
+        try
+        {
             final String script =
                     "var callback = arguments[arguments.length - 1];\n" +
                     // Check if FontAwesome is already loaded; inject it if not
@@ -612,33 +652,60 @@ public class PageAnalyzer {
                     "}, 420);";
             final Object hudExists = Selenide.executeAsyncJavaScript(script);
             hidden = Boolean.TRUE.equals(hudExists);
-        } catch (final Exception e) {
+        }
+        catch (final Exception e)
+        {
             // Animation failed or timed out — fall back to simply hiding the HUD synchronously
-            try {
+            try
+            {
                 final Object hudExists = Selenide.executeJavaScript(
                         "var hud = document.getElementById('neodymium-ai-hud-container'); " +
                         "if (hud && hud.style.display !== 'none') { hud.style.display = 'none'; return true; } " +
                         "return false;");
                 hidden = Boolean.TRUE.equals(hudExists);
-            } catch (final Exception ignored) {
+            }
+            catch (final Exception ignored)
+            {
                 // Ignore if browser is not open or JS fails
             }
         }
 
-        try {
+        try
+        {
             return ScreenshotWriter.doScreenshot(
                     title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)),
                     ScreenshotWriter.getFormatedReportsPath(), false, false);
-        } finally {
-            if (hidden) {
-                try {
+        }
+        finally
+        {
+            if (hidden)
+            {
+                try
+                {
                     Selenide.executeJavaScript(
                             "var hud = document.getElementById('neodymium-ai-hud-container'); " +
                                     "if (hud) { hud.style.display = ''; }");
-                } catch (final Exception ignored) {
+                }
+                catch (final Exception ignored)
+                {
                 }
             }
         }
+    }
+
+    private boolean isNoSuchWindowException(final Exception e)
+    {
+        if (e instanceof NoSuchWindowException)
+        {
+            return true;
+        }
+        final String msg = e.getMessage();
+        if (msg != null)
+        {
+            final String lower = msg.toLowerCase();
+            return lower.contains("no such window") || lower.contains("window already closed") || lower.contains("target window already closed");
+        }
+        return false;
     }
 
     /**
@@ -843,19 +910,26 @@ public class PageAnalyzer {
                     // Generate a stable selector for this frame in the parent context
                     final String selector = com.codeborne.selenide.Selenide.executeJavaScript(
                             "var el = arguments[0];" +
-                                    "if (el.id) { return '#' + CSS.escape(el.id); }" +
-                                    "if (el.name) { return el.tagName.toLowerCase() + '[name=\\'' + el.name + '\\']'; }"
-                                    +
-                                    "var tag = el.tagName.toLowerCase();" +
-                                    "var parent = el.parentNode;" +
-                                    "if (parent) {" +
-                                    "  var siblings = Array.from(parent.children).filter(function(s) { return s.tagName === el.tagName; });"
-                                    +
-                                    "  if (siblings.length > 1) {" +
-                                    "    return tag + ':nth-of-type(' + (siblings.indexOf(el) + 1) + ')';" +
-                                    "  }" +
-                                    "}" +
-                                    "return tag;",
+                            "if (el.id) { return '#' + CSS.escape(el.id); }" +
+                            "if (el.name) { return el.tagName.toLowerCase() + '[name=\\'' + el.name + '\\']'; }" +
+                            "var path = [];" +
+                            "while (el && el.nodeType === 1) {" +
+                            "  if (el.id) {" +
+                            "    path.unshift('#' + CSS.escape(el.id));" +
+                            "    break;" +
+                            "  }" +
+                            "  var tag = el.tagName.toLowerCase();" +
+                            "  var parent = el.parentNode;" +
+                            "  if (parent) {" +
+                            "    var siblings = Array.from(parent.children).filter(function(s) { return s.tagName === el.tagName; });" +
+                            "    if (siblings.length > 1) {" +
+                            "      tag += ':nth-of-type(' + (siblings.indexOf(el) + 1) + ')';" +
+                            "    }" +
+                            "  }" +
+                            "  path.unshift(tag);" +
+                            "  el = el.parentNode;" +
+                            "}" +
+                            "return path.join(' > ');",
                             frames.get(i));
                     com.codeborne.selenide.Selenide.switchTo().frame(frames.get(i));
                     captureFrameTree(dom, level, windowHandle, framePath + " >>> " + selector, showFrameId);

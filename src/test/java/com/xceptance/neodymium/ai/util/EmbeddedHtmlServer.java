@@ -1670,8 +1670,17 @@ public final class EmbeddedHtmlServer
                 List<Product> filtered = catalogProducts.stream().filter(p -> {
                     if (!category.isEmpty() && !p.category.equalsIgnoreCase(category)) return false;
                     if (!subcat.isEmpty() && !p.subcategory.equalsIgnoreCase(subcat)) return false;
-                    if (!q.isEmpty() && !p.names.get("en").toLowerCase().contains(q) &&
-                        !p.descriptions.get("en").toLowerCase().contains(q)) return false;
+                    if (!q.isEmpty())
+                    {
+                        final boolean nameMatch = p.names.values().stream()
+                            .anyMatch((final String name) -> name.toLowerCase().contains(q));
+                        final boolean descMatch = p.descriptions.values().stream()
+                            .anyMatch((final String desc) -> desc.toLowerCase().contains(q));
+                        if (!nameMatch && !descMatch)
+                        {
+                            return false;
+                        }
+                    }
 
                     // Color filter
                     if (!activeColors.isEmpty())

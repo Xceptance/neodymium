@@ -120,13 +120,21 @@ public final class IncludeAction implements AiActionPlugin
 
             agent.executeIncludeSteps(includedSteps);
         }
-        catch (final Exception e)
+        catch (final Throwable t)
         {
             if (playbook != null)
             {
                 playbook.setCursor(cursorBefore);
             }
-            throw new ActionExecutionException("Failed executing included steps from path: " + path, e);
+            if (t instanceof DefinitiveAssertionError)
+            {
+                throw (DefinitiveAssertionError) t;
+            }
+            final Throwable cause = (t instanceof RuntimeException && t.getCause() != null) ? t.getCause() : t;
+            final DefinitiveAssertionError error = new DefinitiveAssertionError(
+                    "Failed executing included steps from path: " + path + "\n" + cause.getMessage(), true);
+            error.initCause(cause);
+            throw error;
         }
         finally
         {

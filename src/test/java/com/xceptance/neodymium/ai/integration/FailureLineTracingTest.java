@@ -26,7 +26,6 @@ import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
@@ -38,9 +37,12 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.xceptance.neodymium.ai.core.AiAgent.DefinitiveAssertionError;
 
 /**
  * Integration tests verifying that step failure messages accurately trace
@@ -65,21 +67,9 @@ public final class FailureLineTracingTest extends BaseAiTest
     @BeforeEach
     public final void setupUrl()
     {
+        useTempPlaybookDirectory();
         currentTestUrl = String.format("http://localhost:%d/FailureLineTracingTest/testFailure.html", server.getPort());
         Neodymium.getData().put("test.url", currentTestUrl);
-    }
-
-    /**
-     * Cleans up any recorded playbook JSON files generated for replay test cases.
-     */
-    @AfterEach
-    public final void cleanupRecordedPlaybook()
-    {
-        final File playbookFile = PlaybookManager.getPlaybookFile(Neodymium.getTestName());
-        if (playbookFile.exists())
-        {
-            playbookFile.delete();
-        }
     }
 
     /**
@@ -110,7 +100,15 @@ public final class FailureLineTracingTest extends BaseAiTest
         assertNotNull(msg);
         assertTrue(msg.contains("Verify that the title contains \"NonExistentTitle\""));
         assertTrue(msg.contains("main.yaml"));
-        assertTrue(msg.contains("line 2") || msg.contains("main.yaml:2"));
+        assertTrue(msg.contains("line 3") || msg.contains("main.yaml:3"));
+
+        final DefinitiveAssertionError defError = error instanceof DefinitiveAssertionError
+                ? (DefinitiveAssertionError) error
+                : (error.getCause() instanceof DefinitiveAssertionError ? (DefinitiveAssertionError) error.getCause() : null);
+        assertNotNull(defError);
+        assertEquals("Verify that the title contains \"NonExistentTitle\"", defError.getInstruction());
+        assertEquals("main.yaml:3", defError.getLineNumber());
+        assertTrue(defError.getSourceFile().endsWith("main.yaml"));
     }
 
     /**
@@ -156,7 +154,15 @@ public final class FailureLineTracingTest extends BaseAiTest
         assertNotNull(msg);
         assertTrue(msg.contains("Click on the 'Click Me' button"));
         assertTrue(msg.contains("main.yaml"));
-        assertTrue(msg.contains("line 2") || msg.contains("main.yaml:2"));
+        assertTrue(msg.contains("line 3") || msg.contains("main.yaml:3"));
+
+        final DefinitiveAssertionError defError = error instanceof DefinitiveAssertionError
+                ? (DefinitiveAssertionError) error
+                : (error.getCause() instanceof DefinitiveAssertionError ? (DefinitiveAssertionError) error.getCause() : null);
+        assertNotNull(defError);
+        assertEquals("Click on the 'Click Me' button", defError.getInstruction());
+        assertEquals("main.yaml:3", defError.getLineNumber());
+        assertTrue(defError.getSourceFile().endsWith("main.yaml"));
     }
 
     /**
@@ -192,6 +198,14 @@ public final class FailureLineTracingTest extends BaseAiTest
         assertTrue(msg.contains("Verify that the title contains \"NonExistentTitle\""));
         assertTrue(msg.contains("failure.steps"));
         assertTrue(msg.contains("line 2") || msg.contains("failure.steps:2"));
+
+        final DefinitiveAssertionError defError = error instanceof DefinitiveAssertionError
+                ? (DefinitiveAssertionError) error
+                : (error.getCause() instanceof DefinitiveAssertionError ? (DefinitiveAssertionError) error.getCause() : null);
+        assertNotNull(defError);
+        assertEquals("Verify that the title contains \"NonExistentTitle\"", defError.getInstruction());
+        assertEquals("failure.steps:2 -> main.yaml:3", defError.getLineNumber());
+        assertTrue(defError.getSourceFile().endsWith("main.yaml"));
     }
 
     /**
@@ -241,6 +255,14 @@ public final class FailureLineTracingTest extends BaseAiTest
         assertTrue(msg.contains("Click on the 'Click Me' button"));
         assertTrue(msg.contains("success_to_fail.steps"));
         assertTrue(msg.contains("line 1") || msg.contains("success_to_fail.steps:1"));
+
+        final DefinitiveAssertionError defError = error instanceof DefinitiveAssertionError
+                ? (DefinitiveAssertionError) error
+                : (error.getCause() instanceof DefinitiveAssertionError ? (DefinitiveAssertionError) error.getCause() : null);
+        assertNotNull(defError);
+        assertEquals("Click on the 'Click Me' button", defError.getInstruction());
+        assertEquals("success_to_fail.steps:1 -> main.yaml:3", defError.getLineNumber());
+        assertTrue(defError.getSourceFile().endsWith("main.yaml"));
     }
 
     private void setupTestPlaybook(final String content) throws IOException
