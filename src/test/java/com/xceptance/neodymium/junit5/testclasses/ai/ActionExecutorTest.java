@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
+import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 
@@ -419,5 +420,105 @@ public class ActionExecutorTest
         Assertions.assertEquals(2, tracker.switchedFrames.size());
         Assertions.assertEquals(0, tracker.switchedFrames.get(0));
         Assertions.assertEquals(2, tracker.switchedFrames.get(1));
+    }
+
+    /**
+     * Verifies that if switching to a target window throws NoSuchWindowException,
+     * the executor falls back to the first available open window.
+     */
+    @Test
+    public void testSwitchFrameContextToleratesClosedWindow() throws Exception
+    {
+        final Set<String> activeHandles = new LinkedHashSet<>();
+        activeHandles.add("closed_win");
+        activeHandles.add("real_win_0");
+
+        final ActionExecutor executor = new ActionExecutor(this);
+
+        final Class<?>[] webElementInterfaces = new Class<?>[] { WebElement.class };
+        final WebElement mockWebElement = (WebElement) Proxy.newProxyInstance(
+            WebElement.class.getClassLoader(),
+            webElementInterfaces,
+            (final Object proxy, final Method method, final Object[] args) -> null
+        );
+
+        final WebDriverInvocationTracker tracker = new WebDriverInvocationTracker(mockWebElement);
+        final WebDriver[] driverHolder = new WebDriver[1];
+
+        final Class<?>[] locatorInterfaces = new Class<?>[] { WebDriver.TargetLocator.class };
+        final WebDriver.TargetLocator mockLocator = (WebDriver.TargetLocator) Proxy.newProxyInstance(
+            WebDriver.TargetLocator.class.getClassLoader(),
+            locatorInterfaces,
+            (final Object proxy, final Method method, final Object[] args) -> {
+                final String methodName = method.getName();
+                if ("window".equals(methodName))
+                {
+                    final String target = (String) args[0];
+                    tracker.calls.add("window");
+                    tracker.switchedWindows.add(target);
+                    if ("closed_win".equals(target))
+                    {
+                        throw new NoSuchWindowException("target window already closed");
+                    }
+                    return driverHolder[0];
+                }
+                else if ("defaultContent".equals(methodName))
+                {
+                    tracker.calls.add("defaultContent");
+                    return driverHolder[0];
+                }
+                return null;
+            }
+        );
+
+        final Class<?>[] driverInterfaces = new Class<?>[] { WebDriver.class };
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            WebDriver.class.getClassLoader(),
+            driverInterfaces,
+            (final Object proxy, final Method method, final Object[] args) -> {
+                final String methodName = method.getName();
+                if ("getWindowHandles".equals(methodName))
+                {
+                    tracker.calls.add("getWindowHandles");
+                    final Set<String> currentOpen = new LinkedHashSet<>(activeHandles);
+                    if (tracker.switchedWindows.contains("closed_win"))
+                    {
+                        currentOpen.remove("closed_win");
+                    }
+                    return currentOpen;
+                }
+                else if ("switchTo".equals(methodName))
+                {
+                    tracker.calls.add("switchTo");
+                    return mockLocator;
+                }
+                return null;
+            }
+        );
+        driverHolder[0] = mockDriver;
+
+        final WebDriver originalDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        try
+        {
+            WebDriverRunner.setWebDriver(mockDriver);
+            final Method method = ActionExecutor.class.getDeclaredMethod("switchFrameContext", String.class);
+            method.setAccessible(true);
+            method.invoke(executor, "closed_win:main");
+        }
+        finally
+        {
+            if (originalDriver != null)
+            {
+                WebDriverRunner.setWebDriver(originalDriver);
+            }
+            else
+            {
+                WebDriverRunner.closeWebDriver();
+            }
+        }
+
+        Assertions.assertEquals(2, tracker.switchedWindows.size());
+        Assertions.assertEquals("closed_win", tracker.switchedWindows.get(0));
+        Assertions.assertEquals("real_win_0", tracker.switchedWindows.get(1));
     }
 }
