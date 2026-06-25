@@ -5,7 +5,9 @@
 steps: |
   Open ${verla.url}/verla-${quality}/index.html
   Locate the first product card and click its 'Add to Cart' or 'Add' button.
-  Click the size 'L' button
+  # Bad interface design has no size
+  When this string '${quality}' is not equal 'bad', click the size 'L' button
+  The mini cart quantity is now 1.
   Go to the cart using the mini cart.
   Click 'Checkout'
 
