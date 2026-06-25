@@ -911,14 +911,19 @@ public class ActionExecutor {
         {
             return;
         }
-        final String[] parts = targetFrameId.split(":");
-        if (parts.length != 2)
+        final String[] parts = targetFrameId.split(":", 2);
+        String windowHandle;
+        final String framePath;
+        if (parts.length == 2)
         {
-            return;
+            windowHandle = parts[0];
+            framePath = parts[1];
         }
-        
-        String windowHandle = parts[0];
-        final String framePath = parts[1];
+        else
+        {
+            windowHandle = parts[0];
+            framePath = "main";
+        }
         
         final WebDriver driver = WebDriverRunner.getWebDriver();
         try
@@ -955,19 +960,7 @@ public class ActionExecutor {
             
             if (!"main".equals(framePath))
             {
-                if (framePath.contains(" >>> "))
-                {
-                    final String[] selectors = framePath.split(" >>> ");
-                    for (final String selector : selectors)
-                    {
-                        if (!selector.equals("main") && !selector.isBlank())
-                        {
-                            final WebElement iframeElement = driver.findElement(By.cssSelector(selector));
-                            driver.switchTo().frame(iframeElement);
-                        }
-                    }
-                }
-                else
+                if (framePath.matches("^[0-9]+(\\.[0-9]+)*$"))
                 {
                     final String[] indices = framePath.split("\\.");
                     for (final String indexStr : indices)
@@ -976,6 +969,18 @@ public class ActionExecutor {
                         {
                             final int index = Integer.parseInt(indexStr);
                             driver.switchTo().frame(index);
+                        }
+                    }
+                }
+                else
+                {
+                    final String[] selectors = framePath.split(" >>> ");
+                    for (final String selector : selectors)
+                    {
+                        if (!selector.equals("main") && !selector.isBlank())
+                        {
+                            final WebElement iframeElement = driver.findElement(By.cssSelector(selector));
+                            driver.switchTo().frame(iframeElement);
                         }
                     }
                 }

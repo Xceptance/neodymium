@@ -843,19 +843,26 @@ public class PageAnalyzer {
                     // Generate a stable selector for this frame in the parent context
                     final String selector = com.codeborne.selenide.Selenide.executeJavaScript(
                             "var el = arguments[0];" +
-                                    "if (el.id) { return '#' + CSS.escape(el.id); }" +
-                                    "if (el.name) { return el.tagName.toLowerCase() + '[name=\\'' + el.name + '\\']'; }"
-                                    +
-                                    "var tag = el.tagName.toLowerCase();" +
-                                    "var parent = el.parentNode;" +
-                                    "if (parent) {" +
-                                    "  var siblings = Array.from(parent.children).filter(function(s) { return s.tagName === el.tagName; });"
-                                    +
-                                    "  if (siblings.length > 1) {" +
-                                    "    return tag + ':nth-of-type(' + (siblings.indexOf(el) + 1) + ')';" +
-                                    "  }" +
-                                    "}" +
-                                    "return tag;",
+                            "if (el.id) { return '#' + CSS.escape(el.id); }" +
+                            "if (el.name) { return el.tagName.toLowerCase() + '[name=\\'' + el.name + '\\']'; }" +
+                            "var path = [];" +
+                            "while (el && el.nodeType === 1) {" +
+                            "  if (el.id) {" +
+                            "    path.unshift('#' + CSS.escape(el.id));" +
+                            "    break;" +
+                            "  }" +
+                            "  var tag = el.tagName.toLowerCase();" +
+                            "  var parent = el.parentNode;" +
+                            "  if (parent) {" +
+                            "    var siblings = Array.from(parent.children).filter(function(s) { return s.tagName === el.tagName; });" +
+                            "    if (siblings.length > 1) {" +
+                            "      tag += ':nth-of-type(' + (siblings.indexOf(el) + 1) + ')';" +
+                            "    }" +
+                            "  }" +
+                            "  path.unshift(tag);" +
+                            "  el = el.parentNode;" +
+                            "}" +
+                            "return path.join(' > ');",
                             frames.get(i));
                     com.codeborne.selenide.Selenide.switchTo().frame(frames.get(i));
                     captureFrameTree(dom, level, windowHandle, framePath + " >>> " + selector, showFrameId);

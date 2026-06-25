@@ -18,21 +18,37 @@
  */
 package com.xceptance.neodymium.junit5.testclasses.ai;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 
-import java.lang.reflect.Field;
-import java.util.List;
-import java.util.Map;
-
+import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionRegistry;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 
-public class ActionExecutorTest {
+/**
+ * Test class for {@link ActionExecutor}.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
+ */
+public class ActionExecutorTest
+{
 
     private void resetRegistry() throws Exception {
         Field initializedField = ActionRegistry.class.getDeclaredField("initialized");
@@ -150,5 +166,258 @@ public class ActionExecutorTest {
         final ActionExecutor executor = new ActionExecutor(this);
         final String actual = executor.cleanElementText(null);
         Assertions.assertNull(actual);
+    }
+
+    /**
+     * Tracker object to collect interactions with the mocked Selenium WebDriver and TargetLocator.
+     *
+     * @author AI-generated: Gemini 3.5 Flash
+     * @author Xceptance GmbH 2026
+     */
+    private static final class WebDriverInvocationTracker
+    {
+        final List<String> calls = new ArrayList<>();
+        final List<String> switchedWindows = new ArrayList<>();
+        final List<Object> switchedFrames = new ArrayList<>();
+        final List<String> foundCssSelectors = new ArrayList<>();
+        final WebElement mockWebElement;
+
+        WebDriverInvocationTracker(final WebElement mockWebElement)
+        {
+            this.mockWebElement = mockWebElement;
+        }
+    }
+
+    /**
+     * Helper to invoke switchFrameContext on ActionExecutor with a mocked WebDriver setup.
+     *
+     * @param targetFrameId the raw target frame ID string
+     * @param activeHandles the set of active window handles to be returned by WebDriver
+     * @return the tracker recording all invocations
+     * @throws Exception if reflection fails
+     */
+        private WebDriverInvocationTracker invokeSwitchFrameContext(final String targetFrameId, final Set<String> activeHandles) throws Exception
+    {
+        final ActionExecutor executor = new ActionExecutor(this);
+
+        final Class<?>[] webElementInterfaces = new Class<?>[] { WebElement.class };
+        final WebElement mockWebElement = (WebElement) Proxy.newProxyInstance(
+            WebElement.class.getClassLoader(),
+            webElementInterfaces,
+            (final Object proxy, final Method method, final Object[] args) -> {
+                return null;
+            }
+        );
+
+        final WebDriverInvocationTracker tracker = new WebDriverInvocationTracker(mockWebElement);
+        final WebDriver[] driverHolder = new WebDriver[1];
+
+        final Class<?>[] locatorInterfaces = new Class<?>[] { WebDriver.TargetLocator.class };
+        final WebDriver.TargetLocator mockLocator = (WebDriver.TargetLocator) Proxy.newProxyInstance(
+            WebDriver.TargetLocator.class.getClassLoader(),
+            locatorInterfaces,
+            (final Object proxy, final Method method, final Object[] args) -> {
+                final String methodName = method.getName();
+                if ("window".equals(methodName))
+                {
+                    tracker.calls.add("window");
+                    tracker.switchedWindows.add((String) args[0]);
+                    return driverHolder[0];
+                }
+                else if ("defaultContent".equals(methodName))
+                {
+                    tracker.calls.add("defaultContent");
+                    return driverHolder[0];
+                }
+                else if ("frame".equals(methodName))
+                {
+                    tracker.calls.add("frame");
+                    tracker.switchedFrames.add(args[0]);
+                    return driverHolder[0];
+                }
+                return null;
+            }
+        );
+
+        final Class<?>[] driverInterfaces = new Class<?>[] { WebDriver.class };
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            WebDriver.class.getClassLoader(),
+            driverInterfaces,
+            (final Object proxy, final Method method, final Object[] args) -> {
+                final String methodName = method.getName();
+                if ("getWindowHandles".equals(methodName))
+                {
+                    tracker.calls.add("getWindowHandles");
+                    return activeHandles;
+                }
+                else if ("switchTo".equals(methodName))
+                {
+                    tracker.calls.add("switchTo");
+                    return mockLocator;
+                }
+                else if ("findElement".equals(methodName))
+                {
+                    tracker.calls.add("findElement");
+                    if (args[0] instanceof By)
+                    {
+                        final By by = (By) args[0];
+                        final String byStr = by.toString();
+                        if (byStr.startsWith("By.cssSelector: "))
+                        {
+                            tracker.foundCssSelectors.add(byStr.substring("By.cssSelector: ".length()));
+                        }
+                    }
+                    return mockWebElement;
+                }
+                return null;
+            }
+        );
+        driverHolder[0] = mockDriver;
+
+        final WebDriver originalDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        try
+        {
+            WebDriverRunner.setWebDriver(mockDriver);
+            final Method method = ActionExecutor.class.getDeclaredMethod("switchFrameContext", String.class);
+            method.setAccessible(true);
+            method.invoke(executor, targetFrameId);
+        }
+        finally
+        {
+            if (originalDriver != null)
+            {
+                WebDriverRunner.setWebDriver(originalDriver);
+            }
+            else
+            {
+                WebDriverRunner.closeWebDriver();
+            }
+        }
+
+        return tracker;
+    }
+
+    /**
+     * Verifies switching frame context with nested selector path containing colons, e.g. CSS :nth-of-type selector.
+     */
+    @Test
+    public void testSwitchFrameContextWithColonInCssSelector() throws Exception
+    {
+        final Set<String> activeHandles = new LinkedHashSet<>();
+        activeHandles.add("real_win_0");
+
+        final WebDriverInvocationTracker tracker = invokeSwitchFrameContext("win_0:main >>> iframe:nth-of-type(1)", activeHandles);
+
+        Assertions.assertEquals(1, tracker.switchedWindows.size());
+        Assertions.assertEquals("real_win_0", tracker.switchedWindows.get(0));
+        Assertions.assertEquals(1, tracker.foundCssSelectors.size());
+        Assertions.assertEquals("iframe:nth-of-type(1)", tracker.foundCssSelectors.get(0));
+        Assertions.assertEquals(1, tracker.switchedFrames.size());
+        Assertions.assertSame(tracker.mockWebElement, tracker.switchedFrames.get(0));
+    }
+
+    /**
+     * Verifies switching frame context with a single CSS selector (no nested parent contexts).
+     */
+    @Test
+    public void testSwitchFrameContextWithSingleCssSelector() throws Exception
+    {
+        final Set<String> activeHandles = new LinkedHashSet<>();
+        activeHandles.add("real_win_0");
+
+        final WebDriverInvocationTracker tracker = invokeSwitchFrameContext("win_0:iframe:nth-of-type(1)", activeHandles);
+
+        Assertions.assertEquals(1, tracker.switchedWindows.size());
+        Assertions.assertEquals("real_win_0", tracker.switchedWindows.get(0));
+        Assertions.assertEquals(1, tracker.foundCssSelectors.size());
+        Assertions.assertEquals("iframe:nth-of-type(1)", tracker.foundCssSelectors.get(0));
+        Assertions.assertEquals(1, tracker.switchedFrames.size());
+        Assertions.assertSame(tracker.mockWebElement, tracker.switchedFrames.get(0));
+    }
+
+    /**
+     * Verifies switching frame context with a target containing window and main context (no nested frames).
+     */
+    @Test
+    public void testSwitchFrameContextWindowAndMainOnly() throws Exception
+    {
+        final Set<String> activeHandles = new LinkedHashSet<>();
+        activeHandles.add("real_win_0");
+
+        final WebDriverInvocationTracker tracker = invokeSwitchFrameContext("win_0:main", activeHandles);
+
+        Assertions.assertEquals(1, tracker.switchedWindows.size());
+        Assertions.assertEquals("real_win_0", tracker.switchedWindows.get(0));
+        Assertions.assertTrue(tracker.switchedFrames.isEmpty());
+        Assertions.assertTrue(tracker.foundCssSelectors.isEmpty());
+    }
+
+    /**
+     * Verifies switching frame context with only a window identifier, defaulting the frame path to main.
+     */
+    @Test
+    public void testSwitchFrameContextWindowOnly() throws Exception
+    {
+        final Set<String> activeHandles = new LinkedHashSet<>();
+        activeHandles.add("real_win_0");
+        activeHandles.add("real_win_1");
+
+        final WebDriverInvocationTracker tracker = invokeSwitchFrameContext("win_1", activeHandles);
+
+        Assertions.assertEquals(1, tracker.switchedWindows.size());
+        Assertions.assertEquals("real_win_1", tracker.switchedWindows.get(0));
+        Assertions.assertTrue(tracker.switchedFrames.isEmpty());
+        Assertions.assertTrue(tracker.foundCssSelectors.isEmpty());
+    }
+
+    /**
+     * Verifies switching frame context with a custom mapped window handle name.
+     */
+    @Test
+    public void testSwitchFrameContextWithCustomWindowMapping() throws Exception
+    {
+        final Set<String> activeHandles = new LinkedHashSet<>();
+        activeHandles.add("real_win_0");
+
+        final WebDriverInvocationTracker tracker = invokeSwitchFrameContext("custom_stale_handle", activeHandles);
+
+        Assertions.assertEquals(1, tracker.switchedWindows.size());
+        Assertions.assertEquals("real_win_0", tracker.switchedWindows.get(0));
+        Assertions.assertTrue(tracker.switchedFrames.isEmpty());
+        Assertions.assertTrue(tracker.foundCssSelectors.isEmpty());
+    }
+
+    /**
+     * Verifies that blank target frame IDs return early and do not trigger any window switching operations.
+     */
+    @Test
+    public void testSwitchFrameContextWithEmptyAndNullTarget() throws Exception
+    {
+        final Set<String> activeHandles = new LinkedHashSet<>();
+        activeHandles.add("real_win_0");
+
+        final WebDriverInvocationTracker trackerNull = invokeSwitchFrameContext(null, activeHandles);
+        Assertions.assertTrue(trackerNull.calls.isEmpty());
+
+        final WebDriverInvocationTracker trackerEmpty = invokeSwitchFrameContext("", activeHandles);
+        Assertions.assertTrue(trackerEmpty.calls.isEmpty());
+    }
+
+    /**
+     * Verifies switching frame context when frame path specifies nested numeric frame indices.
+     */
+    @Test
+    public void testSwitchFrameContextWithNumericFrameIndices() throws Exception
+    {
+        final Set<String> activeHandles = new LinkedHashSet<>();
+        activeHandles.add("real_win_0");
+
+        final WebDriverInvocationTracker tracker = invokeSwitchFrameContext("win_0:0.2", activeHandles);
+
+        Assertions.assertEquals(1, tracker.switchedWindows.size());
+        Assertions.assertEquals("real_win_0", tracker.switchedWindows.get(0));
+        Assertions.assertEquals(2, tracker.switchedFrames.size());
+        Assertions.assertEquals(0, tracker.switchedFrames.get(0));
+        Assertions.assertEquals(2, tracker.switchedFrames.get(1));
     }
 }
