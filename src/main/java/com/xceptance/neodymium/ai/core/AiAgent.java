@@ -457,6 +457,7 @@ public class AiAgent {
                 final String strippedStep = stripAllTags(step);
 
                 final StepDetails stepDetails = result.getSteps().get(i);
+                stepDetails.setExecuted(true);
 
                 boolean isReplay = false;
                 final Playbook playbookForCheck = Neodymium.getAiPlaybook();

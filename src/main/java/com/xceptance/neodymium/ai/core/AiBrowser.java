@@ -420,7 +420,10 @@ public class AiBrowser implements AutoCloseable {
             {
                 for (final StepDetails step : result.getSteps())
                 {
-                    logSingleStep(step, stepIndex++);
+                    if (step.isExecuted())
+                    {
+                        logSingleStep(step, stepIndex++);
+                    }
                 }
             }
         }
@@ -440,7 +443,10 @@ public class AiBrowser implements AutoCloseable {
         {
             for (final StepDetails step : result.getSteps())
             {
-                logSingleStep(step, stepIndex++);
+                if (step.isExecuted())
+                {
+                    logSingleStep(step, stepIndex++);
+                }
             }
         }
         LOG.trace("=================================================");
