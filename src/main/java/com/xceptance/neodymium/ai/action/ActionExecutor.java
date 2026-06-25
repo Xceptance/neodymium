@@ -31,6 +31,7 @@ import java.util.regex.Pattern;
 
 import org.jspecify.annotations.Nullable;
 import org.openqa.selenium.By;
+import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
@@ -911,14 +912,18 @@ public class ActionExecutor {
         {
             return;
         }
-        final String[] parts = targetFrameId.split(":");
-        if (parts.length != 2)
+        final String[] parts = targetFrameId.split(":", 2);
+        final String rawWindowHandle = parts[0];
+        String windowHandle = rawWindowHandle;
+        final String framePath;
+        if (parts.length == 2)
         {
-            return;
+            framePath = parts[1];
         }
-        
-        String windowHandle = parts[0];
-        final String framePath = parts[1];
+        else
+        {
+            framePath = "main";
+        }
         
         final WebDriver driver = WebDriverRunner.getWebDriver();
         try
@@ -955,19 +960,7 @@ public class ActionExecutor {
             
             if (!"main".equals(framePath))
             {
-                if (framePath.contains(" >>> "))
-                {
-                    final String[] selectors = framePath.split(" >>> ");
-                    for (final String selector : selectors)
-                    {
-                        if (!selector.equals("main") && !selector.isBlank())
-                        {
-                            final WebElement iframeElement = driver.findElement(By.cssSelector(selector));
-                            driver.switchTo().frame(iframeElement);
-                        }
-                    }
-                }
-                else
+                if (framePath.matches("^[0-9]+(\\.[0-9]+)*$"))
                 {
                     final String[] indices = framePath.split("\\.");
                     for (final String indexStr : indices)
@@ -979,11 +972,60 @@ public class ActionExecutor {
                         }
                     }
                 }
+                else
+                {
+                    final String[] selectors = framePath.split(" >>> ");
+                    for (final String selector : selectors)
+                    {
+                        if (!selector.equals("main") && !selector.isBlank())
+                        {
+                            final WebElement iframeElement = driver.findElement(By.cssSelector(selector));
+                            driver.switchTo().frame(iframeElement);
+                        }
+                    }
+                }
             }
         }
         catch (final Exception e)
         {
-            logDebug("   ⚠️ Could not switch to frame {}: {}", targetFrameId, e.getMessage());
+            if (isNoSuchWindowException(e))
+            {
+                logDebug("   ⚠️ Target window was closed, falling back to first available window: {}", e.getMessage());
+                try
+                {
+                    final Set<String> activeHandlesFallback = driver.getWindowHandles();
+                    if (!activeHandlesFallback.isEmpty())
+                    {
+                        final String fallbackHandle = activeHandlesFallback.iterator().next();
+                        driver.switchTo().window(fallbackHandle);
+                        driver.switchTo().defaultContent();
+                        windowHandleMapping.put(rawWindowHandle, fallbackHandle);
+                    }
+                }
+                catch (final Exception ex)
+                {
+                    logDebug("   ⚠️ Could not switch to fallback window: {}", ex.getMessage());
+                }
+            }
+            else
+            {
+                logDebug("   ⚠️ Could not switch to frame {}: {}", targetFrameId, e.getMessage());
+            }
         }
+    }
+
+    private boolean isNoSuchWindowException(final Exception e)
+    {
+        if (e instanceof NoSuchWindowException)
+        {
+            return true;
+        }
+        final String msg = e.getMessage();
+        if (msg != null)
+        {
+            final String lower = msg.toLowerCase();
+            return lower.contains("no such window") || lower.contains("window already closed") || lower.contains("target window already closed");
+        }
+        return false;
     }
 }

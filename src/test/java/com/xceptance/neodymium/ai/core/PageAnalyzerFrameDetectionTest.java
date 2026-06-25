@@ -68,4 +68,23 @@ public class PageAnalyzerFrameDetectionTest extends BaseAiTest
         Assertions.assertTrue(dom.contains("frameId="), "DOM should contain frameId attribute for multi-frame page");
         Assertions.assertTrue(dom.contains("Frame:"), "DOM should contain Frame info headers for multi-frame page");
     }
+
+    /**
+     * Verifies that unique fully-qualified CSS paths are generated for multiple
+     * non-sibling frames inside different parent containers rather than generic selectors.
+     */
+    @NeodymiumTest
+    public final void testMultiFrameUniqueCssSelectors()
+    {
+        final String targetUrl = String.format("http://localhost:%d/NestedFrameTest/multiFrames.html", server.getPort());
+        Selenide.open(targetUrl);
+
+        final PageAnalyzer analyzer = new PageAnalyzer();
+        final String dom = analyzer.captureSimplifiedDom(ContextLevel.LEAN);
+
+        Assertions.assertNotNull(dom);
+        Assertions.assertTrue(dom.contains("frameId=\"win_0:main &gt;&gt;&gt; #container-1 &gt; iframe\""), "First iframe should have unique path under #container-1");
+        Assertions.assertTrue(dom.contains("frameId=\"win_0:main &gt;&gt;&gt; #container-2 &gt; iframe\""), "Second iframe should have unique path under #container-2");
+        Assertions.assertFalse(dom.contains("frameId=\"win_0:main &gt;&gt;&gt; iframe\""), "DOM should not contain generic non-unique iframe selectors");
+    }
 }
