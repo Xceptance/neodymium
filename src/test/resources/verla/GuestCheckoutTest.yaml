@@ -1,0 +1,38 @@
+# AI-generated: Gemini 2.5 Pro
+# @author AI-generated: Gemini 2.5 Pro
+# @author Xceptance GmbH 2026
+
+steps: |
+  Open ${verla.url}/verla-${quality}/index.html
+  Locate the first product card and click its 'Add to Cart' or 'Add' button.
+  Click the size 'L' button
+  Go to the cart using the mini cart.
+  Click 'Checkout'
+
+  The headline says now 'Checkout'
+  There are data input forms on the left and and order summary block on the right (visual).
+  Select 'United States' as country.
+  Enter 'Mario' as first name, 'Meier' as last, and the email address 'foo@varmail.net'.
+  Enter '123 Main St' as street address, 'Manchester' as city, and '12345' as postcode.
+  Enter state 'MA'.
+  Card number is '4111 1111 1111 1111', expiry data '12/29', and CVV is '111'.
+  Click 'Purchase'.
+  An order number is shown in the form 'V-[0-9]+-US'.
+  The total is mentioned and in USD.
+  The zip code says '12345'.
+  The text "Thank you for your purchase!" is shown.
+  There is a green check arrow in the middle of the screen (visual).
+
+data:
+  - testId: "perfect"
+    quality: "perfect"
+    email: "user-perfect@example.com"
+    guestEmail: "guest-perfect@example.com"
+  - testId: "normal"
+    quality: "normal"
+    email: "user-normal@example.com"
+    guestEmail: "guest-normal@example.com"
+  - testId: "bad"
+    quality: "bad"
+    email: "user-bad@example.com"
+    guestEmail: "guest-bad@example.com"

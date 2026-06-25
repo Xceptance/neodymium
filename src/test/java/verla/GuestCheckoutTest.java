@@ -37,14 +37,14 @@ import com.xceptance.neodymium.util.Neodymium;
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@DataFile("verla/CheckoutTest.yaml")
+@DataFile("verla/GuestCheckoutTest.yaml")
 @AiTestVerification({
     VerificationMode.LIVE_LLM,
     VerificationMode.REPLAY
 })
 @Tag("integration")
 @Tag("verla")
-public final class CheckoutTest extends BaseAiTest
+public final class GuestCheckoutTest extends BaseAiTest
 {
     /**
      * Setup method to inject the dynamic server port and set temporary playbook directory.
