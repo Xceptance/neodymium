@@ -1,0 +1,18 @@
+# Neodymium Test YAML Definition
+before:
+  - Open base URL and wait for page layout to load completely.
+  - _include: register.yaml
+
+steps: |
+  Hover on the user profile navigation link.
+  Click on the checkout button.
+  Enter '${streetAddress}' into the Street input field.
+
+after:
+  - _include: delete-account.yaml
+
+data:
+  - testId: "Checkout-092"
+    streetAddress: "123 Test Street"
+    email: "john.doe@example.com"
+    password: "securePassword123"

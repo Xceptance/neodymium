@@ -1,0 +1,95 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.xceptance.neodymium.ai.console;
+
+import java.io.IOException;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+
+import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.Selenide;
+import com.xceptance.neodymium.util.Neodymium;
+
+/**
+ * Base test class for Interactive Console Selenide integration tests.
+ * Establishes standalone server instances and Selenide view ports for headless validation.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
+ */
+public abstract class BaseConsoleTest
+{
+    protected InteractiveConsoleEngine engine;
+    protected InteractiveConsoleServer server;
+    private long originalTimeout;
+    private boolean originalHeadless;
+
+    @BeforeEach
+    public final void setupServer() throws IOException
+    {
+        Neodymium.clearThreadContext();
+
+        // Bind mock properties
+        System.setProperty("neodymium.ai.interactive", "true");
+        System.setProperty("neodymium.ai.interactive.allowHeadlessHUD", "true");
+
+        // Initialize engine and server on a random free port
+        this.engine = new InteractiveConsoleEngine("test-run-id");
+        this.server = new InteractiveConsoleServer(this.engine);
+
+        // Configure Selenide
+        this.originalTimeout = Configuration.timeout;
+        Configuration.timeout = 10000;
+        this.originalHeadless = Configuration.headless;
+        Configuration.headless = true;
+    }
+
+    @AfterEach
+    public final void tearDownServer()
+    {
+        Configuration.timeout = this.originalTimeout;
+        Configuration.headless = this.originalHeadless;
+
+        if (this.server != null)
+        {
+            this.server.stop();
+        }
+
+        try
+        {
+            Selenide.closeWebDriver();
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        System.clearProperty("neodymium.ai.interactive");
+        System.clearProperty("neodymium.ai.interactive.allowHeadlessHUD");
+        Neodymium.clearThreadContext();
+    }
+
+    /**
+     * Navigates Selenide to the root URL of the active console server.
+     */
+    protected final void openConsoleUrl()
+    {
+        Selenide.open(this.server.getLocalUrl());
+    }
+}

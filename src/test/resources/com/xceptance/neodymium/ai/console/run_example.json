@@ -1,0 +1,279 @@
+{
+  "runId": "run_2026-06-29_10-30-00",
+  "status": "running",
+  "pauseId": null,
+  "testName": "testCheckoutFlow",
+  "testId": "Checkout-092",
+  "browser": "Chrome 120 (Headless Linux)",
+  "startedAt": "2026-06-29T10:30:00+02:00",
+  "durationMs": 95400,
+  "yamlSource": "src/test/resources/checkout/checkout-flow.yaml",
+  "playbookFile": "src/test/resources/checkout/checkout-flow.json",
+  "activeBlock": "steps",
+  "reasoning": "Execution stopped: Encountered an error while trying to type into the Street input field.",
+  "reasoningFailed": true,
+  "autoRun": false,
+  "dataBindings": {
+    "testId": "Checkout-092",
+    "streetAddress": "123 Test Street",
+    "email": "john.doe@example.com",
+    "password": "securePassword123"
+  },
+  "blocks": {
+    "before": [
+      {
+        "index": 0,
+        "instruction": "Open base URL and wait for page layout to load completely.",
+        "status": "passed",
+        "source": "playbook",
+        "includeFile": null,
+        "includeLevel": 0,
+        "durationMs": 2400,
+        "reasoning": "Static base URL initialization.",
+        "actions": [],
+        "screenshot": null,
+        "errorMessage": null
+      },
+      {
+        "index": 1,
+        "instruction": "Hover on user navigation icon.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": "navigate-registration.yaml",
+        "includeLevel": 2,
+        "includeChain": ["register.yaml", "navigate-registration.yaml"],
+        "durationMs": 1100,
+        "thinkingTimeMs": 1500,
+        "inputTokens": 310,
+        "outputTokens": 45,
+        "simplifiedDom": "<body><div id='user-nav-icon'>Menu</div></body>",
+        "reasoning": "Located user navigation dropdown entry icon.",
+        "actions": [
+          { "type": "HOVER", "target": "#user-nav-icon", "status": "success" }
+        ],
+        "screenshot": "https://picsum.photos/300/200?random=1",
+        "errorMessage": null
+      },
+      {
+        "index": 2,
+        "instruction": "Click 'Register' link.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": "navigate-registration.yaml",
+        "includeLevel": 2,
+        "includeChain": ["register.yaml", "navigate-registration.yaml"],
+        "durationMs": 1300,
+        "thinkingTimeMs": 1500,
+        "inputTokens": 320,
+        "outputTokens": 50,
+        "simplifiedDom": "<body><a href='/register'>Register</a></body>",
+        "reasoning": "Clicked registration link in nav dropdown.",
+        "actions": [
+          { "type": "CLICK", "target": "a[href='/register']", "status": "success" }
+        ],
+        "screenshot": "https://picsum.photos/300/200?random=2",
+        "errorMessage": null
+      },
+      {
+        "index": 3,
+        "instruction": "Enter '${email}' into register email input.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": "register.yaml",
+        "includeLevel": 1,
+        "includeChain": ["register.yaml"],
+        "durationMs": 1900,
+        "thinkingTimeMs": 1500,
+        "inputTokens": 350,
+        "outputTokens": 60,
+        "simplifiedDom": "<body><input id='reg-email' type='text'/></body>",
+        "reasoning": "Typed the email variable into the text input.",
+        "actions": [
+          { "type": "CLICK", "target": "#reg-email", "status": "success" },
+          { "type": "TYPE", "target": "#reg-email", "value": "john.doe@example.com", "status": "success" }
+        ],
+        "screenshot": "https://picsum.photos/300/200?random=3",
+        "errorMessage": null
+      },
+      {
+        "index": 4,
+        "instruction": "Enter '${password}' into register password input.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": "register.yaml",
+        "includeLevel": 1,
+        "includeChain": ["register.yaml"],
+        "durationMs": 1700,
+        "thinkingTimeMs": 1500,
+        "inputTokens": 360,
+        "outputTokens": 55,
+        "simplifiedDom": "<body><input id='reg-password' type='password'/></body>",
+        "reasoning": "Typed register password parameter.",
+        "actions": [
+          { "type": "CLICK", "target": "#reg-password", "status": "success" },
+          { "type": "TYPE", "target": "#reg-password", "value": "securePassword123", "status": "success" }
+        ],
+        "screenshot": "https://picsum.photos/300/200?random=4",
+        "errorMessage": null
+      },
+      {
+        "index": 5,
+        "instruction": "Click register button.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": "register.yaml",
+        "includeLevel": 1,
+        "includeChain": ["register.yaml"],
+        "durationMs": 2100,
+        "thinkingTimeMs": 1500,
+        "inputTokens": 340,
+        "outputTokens": 40,
+        "simplifiedDom": "<body><button id='register-submit'>Submit</button></body>",
+        "reasoning": "Submitted registration form to server.",
+        "actions": [
+          { "type": "HOVER", "target": "#register-submit", "status": "success" },
+          { "type": "CLICK", "target": "#register-submit", "status": "success" }
+        ],
+        "screenshot": "https://picsum.photos/300/200?random=5",
+        "errorMessage": null
+      }
+    ],
+    "steps": [
+      {
+        "index": 6,
+        "instruction": "Hover on the user profile navigation link.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": null,
+        "includeLevel": 0,
+        "durationMs": 900,
+        "reasoning": "Ensured user profile dropdown container is fully open.",
+        "actions": [
+          { "type": "HOVER", "target": "#user-profile-link", "status": "success" }
+        ],
+        "screenshot": null,
+        "errorMessage": null
+      },
+      {
+        "index": 7,
+        "instruction": "Click on the checkout button.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": null,
+        "includeLevel": 0,
+        "durationMs": 3200,
+        "reasoning": "Located checkout button via AXTree and clicked it.",
+        "actions": [
+          { "type": "CLICK", "target": "#checkout-btn", "status": "success" }
+        ],
+        "screenshot": null,
+        "errorMessage": null
+      },
+      {
+        "index": 8,
+        "instruction": "Enter '${streetAddress}' into the Street input field.",
+        "status": "failed",
+        "source": "llm",
+        "includeFile": null,
+        "includeLevel": 0,
+        "durationMs": 10900,
+        "reasoning": "Action failed during execution. Target not interactable.",
+        "actions": [
+          { "type": "CLICK", "target": "#address-street", "status": "success" },
+          { "type": "TYPE", "target": "#address-street", "value": "123 Test Street", "status": "failed" }
+        ],
+        "screenshot": null,
+        "errorMessage": "ElementNotInteractableException: Element is obscured by overlay."
+      }
+    ],
+    "after": [
+      {
+        "index": 9,
+        "instruction": "Check if user is logged in.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": "delete-account.yaml",
+        "includeLevel": 1,
+        "durationMs": 800,
+        "reasoning": "Verified cookie token header exists.",
+        "actions": [],
+        "screenshot": null,
+        "errorMessage": null
+      },
+      {
+        "index": 10,
+        "instruction": "If not logged in:",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": "delete-account.yaml",
+        "includeLevel": 1,
+        "durationMs": 200,
+        "reasoning": "Condition false: user is logged in. Branch steps skipped.",
+        "actions": [],
+        "screenshot": null,
+        "errorMessage": null
+      },
+      {
+        "index": 11,
+        "instruction": "Click on user settings link.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": "delete-account.yaml",
+        "includeLevel": 1,
+        "durationMs": 1200,
+        "reasoning": "Redirected settings link action.",
+        "actions": [
+          { "type": "CLICK", "target": "a[href='/settings']", "status": "success" }
+        ],
+        "screenshot": null,
+        "errorMessage": null
+      },
+      {
+        "index": 12,
+        "instruction": "Click 'Delete Account' button.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": "delete-account.yaml",
+        "includeLevel": 1,
+        "durationMs": 1500,
+        "reasoning": "Clicked delete account element.",
+        "actions": [
+          { "type": "CLICK", "target": "#delete-account-btn", "status": "success" }
+        ],
+        "screenshot": null,
+        "errorMessage": null
+      },
+      {
+        "index": 13,
+        "instruction": "Confirm deletion of account.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": "delete-account.yaml",
+        "includeLevel": 1,
+        "durationMs": 1800,
+        "reasoning": "Approved confirm popup dialog.",
+        "actions": [
+          { "type": "CLICK", "target": "#confirm-delete-btn", "status": "success" }
+        ],
+        "screenshot": null,
+        "errorMessage": null
+      },
+      {
+        "index": 14,
+        "instruction": "Verify logout status page.",
+        "status": "passed",
+        "source": "llm",
+        "includeFile": "delete-account.yaml",
+        "includeLevel": 1,
+        "durationMs": 1000,
+        "reasoning": "Confirmed redirected to logout landing page.",
+        "actions": [
+          { "type": "HOVER", "target": "#logout-status-banner", "status": "success" },
+          { "type": "CLICK", "target": "#home-link", "status": "success" }
+        ],
+        "screenshot": null,
+        "errorMessage": null
+      }
+    ]
+  }
+}

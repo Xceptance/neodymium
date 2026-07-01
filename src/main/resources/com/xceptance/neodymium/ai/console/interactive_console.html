@@ -1,0 +1,2438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neodymium Interactive Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-page: #0b0c10;
+            --bg-surface: #14161f;
+            --bg-surface-hover: #1b1e2a;
+            --bg-active-step: rgba(59, 130, 246, 0.08);
+            --border-color: rgba(255, 255, 255, 0.08);
+            
+            --text-main: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #4b5563;
+            
+            --accent-primary: #3b82f6;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-danger: #ef4444;
+            --accent-purple: #a855f7;
+            --accent-healed: #14b8a6;
+            
+            --font-sans: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --border-radius: 12px;
+        }
+
+        :root.force-light {
+            --bg-page: #f3f4f6;
+            --bg-surface: #ffffff;
+            --bg-surface-hover: #f9fafb;
+            --bg-active-step: rgba(37, 99, 235, 0.05);
+            --border-color: rgba(0, 0, 0, 0.08);
+            
+            --text-main: #1f2937;
+            --text-secondary: #4b5563;
+            --text-muted: #9ca3af;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.25s, color 0.25s;
+        }
+
+        header {
+            padding: 12px 24px;
+            background-color: var(--bg-surface);
+            border-bottom: 1px solid var(--border-color);
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .hidden-details { display: none !important; }
+        .visible-details { display: block !important; }
+        #topDetailsPanel { transition: all 0.2s ease; }
+
+        .header-meta { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+        .header-browser-icon { font-size: 20px; color: var(--accent-primary); flex-shrink: 0; }
+        .header-meta h1 { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .header-meta span { font-size: 11px; color: var(--text-secondary); margin-left: 8px; white-space: nowrap; }
+
+        .header-controls { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+        #staleBanner {
+            display: none; background: rgba(245,158,11,0.12); border-bottom: 1px solid rgba(245,158,11,0.3);
+            padding: 10px 24px; font-size: 13px; color: var(--accent-warning);
+            align-items: center; gap: 12px;
+        }
+
+        #connectionDot {
+            width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted);
+            flex-shrink: 0; transition: background 0.3s;
+        }
+        #connectionDot.connected { background: var(--accent-success); }
+        #connectionDot.paused { background: var(--accent-warning); }
+        #connectionDot.error { background: var(--accent-danger); }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: 1.3fr 1fr;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-right: 1px solid var(--border-color);
+        }
+        .column:last-child { border-right: none; }
+
+        /* Sleek scrollbars for details and step list */
+        .scrollable-content::-webkit-scrollbar,
+        body::-webkit-scrollbar,
+        #bigScreenStepDetails::-webkit-scrollbar,
+        pre::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .scrollable-content::-webkit-scrollbar-track,
+        body::-webkit-scrollbar-track,
+        #bigScreenStepDetails::-webkit-scrollbar-track,
+        pre::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .scrollable-content::-webkit-scrollbar-thumb,
+        body::-webkit-scrollbar-thumb,
+        #bigScreenStepDetails::-webkit-scrollbar-thumb,
+        pre::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 4px;
+        }
+        .scrollable-content::-webkit-scrollbar-thumb:hover,
+        body::-webkit-scrollbar-thumb:hover,
+        #bigScreenStepDetails::-webkit-scrollbar-thumb:hover,
+        pre::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.24);
+        }
+        
+        :root.force-light .scrollable-content::-webkit-scrollbar-thumb,
+        :root.force-light body::-webkit-scrollbar-thumb,
+        :root.force-light #bigScreenStepDetails::-webkit-scrollbar-thumb,
+        :root.force-light pre::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.12);
+        }
+        :root.force-light .scrollable-content::-webkit-scrollbar-thumb:hover,
+        :root.force-light body::-webkit-scrollbar-thumb:hover,
+        :root.force-light #bigScreenStepDetails::-webkit-scrollbar-thumb:hover,
+        :root.force-light pre::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.24);
+        }
+
+        .scrollable-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .block-group { display: flex; flex-direction: column; gap: 12px; }
+        .block-header {
+            font-size: 11px; font-weight: 700; color: var(--text-secondary);
+            text-transform: uppercase; letter-spacing: 1px;
+            display: flex; align-items: center; gap: 8px;
+            margin-bottom: 4px; border-left: 3px solid var(--accent-primary); padding-left: 8px;
+        }
+
+        .step-card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: border-color 0.2s, background-color 0.2s;
+            position: relative;
+            margin: 0;
+        }
+        .step-card:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-card:hover {
+            background-color: var(--bg-surface-hover);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .step-card.active {
+            background-color: var(--bg-active-step);
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.1);
+        }
+        
+        .step-card.active.failed {
+            background-color: rgba(239, 68, 68, 0.05);
+            border-color: var(--accent-danger);
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.1);
+        }
+
+        .step-card.optional-step { border-style: dashed; border-color: var(--text-muted); }
+        .step-card.optional-step.active { border-style: solid; }
+
+        .step-card.selected-details {
+            border-color: var(--accent-purple) !important;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.15) !important;
+            background-color: rgba(168, 85, 247, 0.03);
+        }
+
+        .step-card.active.selected-details {
+            border-color: var(--accent-primary) !important;
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.2) !important;
+        }
+
+        .step-card.include-lvl-1 { border-left: 4px solid var(--border-color); }
+        .step-card.include-lvl-2 { border-left: 4px solid var(--border-color); margin-left: 12px; }
+        .step-card.include-lvl-3 { border-left: 4px solid var(--border-color); margin-left: 24px; }
+        .step-card.include-lvl-4 { border-left: 4px solid var(--border-color); margin-left: 36px; }
+        
+        .step-card.active.failed[class*="include-lvl-"] { border-left-color: var(--accent-danger); }
+        .step-card.planned { opacity: 0.45; }
+        .step-card.skipped {
+            opacity: 0.55;
+            border-style: dashed;
+            background-color: rgba(255, 255, 255, 0.02);
+            position: relative;
+            overflow: hidden;
+        }
+        .step-card.skipped::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1.5px;
+            background: var(--text-muted);
+            transform: rotate(-1.5deg);
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        .action-approve-checkbox {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent-primary);
+            flex-shrink: 0;
+        }
+
+        .step-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .step-status-icon {
+            width: 22px; height: 22px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; font-size: 14px;
+        }
+        .step-status-icon.pending-step {
+            cursor: pointer;
+        }
+        /* On hover of the status icon area, hide the pending circle and show the breakpoint octagon in grey */
+        .step-status-icon.pending-step:hover .pending-placeholder-icon {
+            display: none !important;
+        }
+        .step-status-icon.pending-step:hover .bp-svg.hover-only {
+            display: inline-block !important;
+            fill: var(--text-secondary) !important;
+            opacity: 0.7 !important;
+        }
+
+        .step-text-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        /* The whole step card is the click target; pointer cursor on the card itself */
+        .step-card { cursor: pointer; }
+        .step-text { 
+            font-size: 14px; font-weight: 500; line-height: 1.4; 
+            word-break: break-word;
+        }
+
+        /* Inline Edit Styling */
+        .step-edit-form {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .step-card.editing .step-text { display: none; }
+        .step-card.editing .step-edit-form { display: flex; }
+        
+        .inline-edit-textarea {
+            width: 100%;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--accent-primary);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            padding: 8px 12px;
+            border-radius: 6px;
+            resize: vertical;
+            min-height: 40px;
+            font-size: 13.5px;
+        }
+        .inline-edit-textarea:focus { outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3); }
+        .inline-edit-actions { display: flex; justify-content: flex-end; gap: 6px; }
+
+        .include-breadcrumb {
+            font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+            color: var(--text-secondary); background: rgba(255,255,255,0.05);
+            padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;
+        }
+        .include-breadcrumb i { color: #818cf8; }
+
+        .tag-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+        
+        .type-tag {
+            font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;
+        }
+        .type-playbook { background: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); }
+        .type-llm { background: rgba(129, 140, 248, 0.1); color: #818cf8; border: 1px solid rgba(129, 140, 248, 0.2); }
+        .type-healed { background: rgba(20, 184, 166, 0.1); color: var(--accent-healed); border: 1px solid rgba(20, 184, 166, 0.2); }
+        .type-branch { background: rgba(245, 158, 11, 0.1); color: var(--accent-warning); border: 1px solid rgba(245, 158, 11, 0.2); }
+
+        .step-edit-btn {
+            opacity: 0;
+            background: rgba(255,255,255,0.1);
+            border: none; color: var(--text-main);
+            width: 24px; height: 24px; border-radius: 4px;
+            cursor: pointer; transition: opacity 0.2s, background 0.2s;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .step-card:hover .step-edit-btn { opacity: 1; }
+        .step-edit-btn:hover { background: var(--accent-primary); }
+        @media (hover: none) { .step-edit-btn { opacity: 1; background: rgba(255,255,255,0.05); } }
+
+        .step-rewind-btn {
+            opacity: 0;
+            background: rgba(255,255,255,0.1);
+            border: none; color: var(--text-main);
+            width: 24px; height: 24px; border-radius: 4px;
+            cursor: pointer; transition: opacity 0.2s, background 0.2s;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .step-card:hover .step-rewind-btn { opacity: 1; }
+        .step-rewind-btn:hover { background: var(--accent-warning); }
+        @media (hover: none) { .step-rewind-btn { opacity: 1; background: rgba(255,255,255,0.05); } }
+
+        .step-reorder-handle {
+            opacity: 0;
+            background: rgba(255,255,255,0.1);
+            border: none; color: var(--text-secondary);
+            width: 24px; height: 24px; border-radius: 4px;
+            cursor: grab; transition: opacity 0.2s, background 0.2s;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .step-card:hover .step-reorder-handle { opacity: 1; }
+        .step-reorder-handle:hover { background: rgba(255,255,255,0.2); color: var(--text-main); }
+        .step-card.dragging { opacity: 0.4; border-style: dashed; }
+        
+        .drop-target-area {
+            height: 6px;
+            margin: 0;
+            background: transparent;
+            transition: background 0.15s, height 0.15s, border 0.15s;
+            border-radius: 6px;
+            z-index: 5;
+            border: 2px dashed transparent;
+            position: relative;
+        }
+        /* While dragging: expand all drop zones to be clearly visible as target areas */
+        .scrollable-content.dragging-active .drop-target-area {
+            height: 36px;
+            background: rgba(59, 130, 246, 0.04);
+            border-color: rgba(59, 130, 246, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .scrollable-content.dragging-active .drop-target-area::after {
+            content: '';
+            width: 60%;
+            height: 2px;
+            background: rgba(59, 130, 246, 0.25);
+            border-radius: 2px;
+        }
+        /* Actively hovered drop zone */
+        .drop-target-area.active {
+            background: rgba(59, 130, 246, 0.18) !important;
+            border-color: var(--accent-primary) !important;
+            height: 44px !important;
+        }
+        .drop-target-area.active::after {
+            background: var(--accent-primary) !important;
+            opacity: 0.6;
+        }
+        /* Suppress pointer cursor on step cards during drag so only drop-target-areas receive drops */
+        .scrollable-content.dragging-active .step-card {
+            pointer-events: none;
+        }
+        .scrollable-content.dragging-active .drop-target-area {
+            pointer-events: all;
+        }
+
+        .bp-svg {
+            width: 16px;
+            height: 16px;
+            fill: var(--text-secondary);
+            cursor: pointer;
+            display: none;
+            vertical-align: middle;
+            transition: fill 0.15s, opacity 0.15s;
+            opacity: 0;
+        }
+        /* hover-only: hidden by default, shown via parent :hover CSS. Always grey. */
+        .bp-svg.hover-only {
+            fill: var(--text-secondary);
+            opacity: 0;
+        }
+        /* When directly hovered within the status icon area, intensify grey slightly */
+        .bp-svg.hover-only:hover {
+            fill: var(--text-secondary) !important;
+            opacity: 0.9 !important;
+        }
+        /* Active (breakpoint set) – always visible and red */
+        .bp-svg.active {
+            fill: var(--accent-danger) !important;
+            display: inline-block !important;
+            opacity: 1 !important;
+        }
+
+        .step-accordion-details {
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 12px;
+            margin-top: 4px;
+        }
+        .step-accordion-details.open { display: flex; }
+
+        .acc-header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+        }
+        .acc-reasoning {
+            font-size: 13.5px; color: var(--text-main); line-height: 1.5;
+            display: flex; gap: 8px; align-items: flex-start;
+        }
+        .acc-reasoning i { color: var(--accent-purple); font-size: 16px; margin-top: 2px; }
+        
+        .acc-duration {
+            font-size: 12px; font-weight: 600; color: var(--text-secondary);
+        }
+
+        .acc-screenshot {
+            width: 100%; border-radius: 8px; border: 1px solid var(--border-color);
+            max-height: 240px; object-fit: cover; object-position: top; opacity: 0.85;
+        }
+
+        /* LLM Actions Sub-list – one clearly distinct card per action */
+        .llm-action-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        /* Legacy class kept for compatibility */
+        .llm-action-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 6px 10px; border-radius: 6px;
+            background: rgba(255,255,255,0.03);
+            font-size: 12.5px; font-family: var(--font-mono); color: var(--text-main);
+        }
+        .llm-action-item.success { border-left: 3px solid var(--accent-success); }
+        .llm-action-item.failed { border-left: 3px solid var(--accent-danger); background: rgba(239, 68, 68, 0.05); }
+        
+        .llm-action-icon { width: 16px; text-align: center; color: var(--text-secondary); }
+        .llm-action-desc { flex-grow: 1; }
+        .llm-action-target { color: var(--accent-primary); font-weight: 600; }
+        .llm-action-status { font-size: 14px; }
+        .llm-action-item.success .llm-action-status { color: var(--accent-success); }
+        .llm-action-item.failed .llm-action-status { color: var(--accent-danger); }
+        /* Redesigned individual action card */
+        .acc-action-card {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 10px 14px;
+            background: rgba(0,0,0,0.12);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .acc-action-card:last-child { border-bottom: none; }
+        .acc-action-card:nth-child(even) { background: rgba(255,255,255,0.015); }
+        .acc-action-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .acc-action-type-badge {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: rgba(59,130,246,0.12);
+            color: var(--accent-primary);
+            border: 1px solid rgba(59,130,246,0.2);
+            flex-shrink: 0;
+        }
+        .acc-action-duration {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .acc-action-target {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--text-main);
+            word-break: break-all;
+            padding-left: 2px;
+        }
+        .acc-action-value {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+            padding: 3px 8px;
+            margin-top: 2px;
+            border: 1px solid var(--border-color);
+        }
+        .acc-action-value code {
+            color: var(--accent-warning);
+        }
+
+        .error-message-box {
+            font-size: 12px; color: var(--accent-danger); padding: 6px 10px;
+            display: flex; align-items: center; justify-content: space-between;
+            background: rgba(239, 68, 68, 0.08); border-radius: 6px;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            font-family: var(--font-mono);
+        }
+        .copy-btn {
+            background: transparent; border: none; color: var(--accent-danger); cursor: pointer;
+            padding: 4px 6px; border-radius: 4px; transition: background 0.2s; font-size: 14px;
+        }
+        .copy-btn:hover { background: rgba(239, 68, 68, 0.15); }
+
+        .bottom-area {
+            background-color: var(--bg-surface);
+            border-top: 1px solid var(--border-color);
+            display: flex; flex-direction: column;
+            z-index: 10;
+        }
+
+        .current-reasoning-panel {
+            padding: 12px 24px;
+            background: rgba(168, 85, 247, 0.05);
+            border-bottom: 1px solid var(--border-color);
+            display: flex; align-items: center; gap: 12px;
+            font-size: 14px; font-weight: 500; color: var(--text-main);
+        }
+        .current-reasoning-panel i { color: var(--accent-purple); font-size: 18px; }
+        .current-reasoning-panel.failed { background: rgba(239, 68, 68, 0.05); color: var(--accent-danger); }
+        .current-reasoning-panel.failed i { color: var(--accent-danger); }
+
+        .toolbar-footer {
+            padding: 16px 24px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .btn-group { display: flex; gap: 8px; align-items: center; }
+
+        .btn {
+            font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+            padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.03); color: var(--text-secondary);
+            cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn:hover:not(:disabled) { background-color: rgba(255, 255, 255, 0.06); color: var(--text-main); border-color: var(--text-secondary); }
+        .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .btn-primary { color: var(--accent-primary); border-color: rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.05); }
+        .btn-primary:hover:not(:disabled) { background-color: var(--accent-primary) !important; color: white !important; }
+        .btn-success { color: var(--accent-success); border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); }
+        .btn-success:hover:not(:disabled) { background-color: var(--accent-success) !important; color: white !important; border-color: var(--accent-success) !important; }
+        .btn-danger { color: var(--accent-danger); border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05); }
+        .btn-danger:hover:not(:disabled) { background-color: var(--accent-danger) !important; color: white !important; border-color: var(--accent-danger) !important; }
+        .btn-icon { padding: 8px 10px; }
+        .btn-details-toggle {
+            background: transparent;
+            border: none;
+            color: var(--accent-primary);
+            font-size: 13.5px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+        .btn-details-toggle:hover {
+            color: var(--accent-primary-hover);
+        }
+
+        .btn-auto-blue {
+            color: var(--accent-primary) !important;
+            border-color: rgba(59, 130, 246, 0.3) !important;
+            background: rgba(59, 130, 246, 0.05) !important;
+        }
+        .btn-auto-blue:hover:not(:disabled) {
+            background-color: var(--accent-primary) !important;
+            color: white !important;
+            border-color: var(--accent-primary) !important;
+        }
+        
+        .btn-pause-orange {
+            color: var(--accent-warning) !important;
+            border-color: rgba(245, 158, 11, 0.3) !important;
+            background: rgba(245, 158, 11, 0.05) !important;
+        }
+        .btn-pause-orange:hover:not(:disabled) {
+            background-color: var(--accent-warning) !important;
+            color: white !important;
+            border-color: var(--accent-warning) !important;
+        }
+
+        .cancel-warning {
+            display: none; align-items: center; gap: 8px; font-size: 13px; color: var(--accent-danger); font-weight: 600;
+            background: rgba(239, 68, 68, 0.1); padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+        .panel-header { padding: 16px 24px; border-bottom: 1px solid var(--border-color); background: var(--bg-surface); }
+        .panel-header h2 { font-size: 14px; font-weight: 600; }
+
+        .screenshot-placeholder { padding: 60px; text-align: center; color: var(--text-muted); font-size: 13px; border: 1px dashed var(--border-color); border-radius: var(--border-radius); }
+
+        /* Modal Overlays with glassmorphism */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+            z-index: 1000; display: none; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .modal-content {
+            background: var(--bg-surface); border: 1px solid var(--border-color);
+            border-radius: var(--border-radius); padding: 24px; max-width: 480px; width: 100%;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;
+        }
+        .modal-header h3 { font-size: 15px; font-weight: 600; margin: 0; }
+        .close-btn {
+            background: transparent; border: none; color: var(--text-secondary);
+            font-size: 20px; cursor: pointer; line-height: 1;
+        }
+        .close-btn:hover { color: var(--text-main); }
+
+        .binding-badge {
+            cursor: pointer; background: rgba(59,130,246,0.15); color: var(--accent-primary);
+            padding: 4px 8px; border-radius: 4px; font-family: var(--font-mono); font-size: 11.5px;
+            transition: all 0.2s; border: 1px solid rgba(59,130,246,0.2);
+        }
+        .binding-badge:hover {
+            background: var(--accent-primary); color: white;
+        }
+
+        .binding-key, .editable-binding-key {
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .binding-key:hover, .editable-binding-key:hover {
+            color: var(--accent-primary) !important;
+            text-decoration: underline;
+        }
+
+        .help-hover-container {
+            position: relative;
+        }
+
+        #helpOverlay {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            left: auto;
+            bottom: auto;
+            width: 450px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            backdrop-filter: none;
+            padding: 16px;
+            display: none;
+            flex-direction: column;
+            text-align: left;
+            z-index: 1000;
+        }
+
+        .add-step-card-btn {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.02);
+            border: 2px dashed var(--border-color);
+            color: var(--text-secondary);
+            border-radius: var(--border-radius);
+            padding: 14px 18px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .add-step-card-btn:hover {
+            background: var(--bg-surface-hover);
+            border-color: var(--accent-primary);
+            color: var(--text-main);
+        }
+
+        @media (min-width: 901px) {
+            .step-accordion-details { display: none !important; }
+        }
+
+        @media (max-width: 900px) {
+            .workspace { grid-template-columns: 1fr; }
+            .column:last-child { display: none !important; }
+            .big-screen-only { display: none !important; }
+            #bigScreenStepDetails { display: none !important; }
+        }
+
+        @media (max-width: 600px) {
+            #screenshotOverlay {
+                padding: 0 !important;
+            }
+            #screenshotOverlay .modal-content {
+                width: 100vw !important;
+                height: 100vh !important;
+                max-width: 100vw !important;
+                max-height: 100vh !important;
+                border-radius: 0 !important;
+                margin: 0 !important;
+                padding: 12px !important;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+            }
+            #screenshotOverlay img {
+                width: 100% !important;
+                height: auto !important;
+                max-height: calc(100vh - 80px) !important;
+                object-fit: contain !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Stale tab warning -->
+    <div id="staleBanner">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span id="staleBannerMsg">This tab is connected to an old test run.</span>
+        <button class="btn btn-primary" onclick="refreshToCurrentRun()" style="padding: 5px 12px; font-size: 12px;">Refresh to current run</button>
+    </div>
+
+    <header>
+        <div class="header-meta">
+            <div id="connectionDot" title="Connecting..."></div>
+            <span class="header-browser-icon" id="browserIcon" title="Browser"><i class="fa-brands fa-chrome"></i></span>
+            <h1 id="testNameDisplay">Loading...</h1>
+            <span id="testIdDisplay"></span>
+        </div>
+        <button class="btn-details-toggle" id="btnToggleDetails" onclick="toggleTopDetails()" title="Toggle Details (Alt+D)" aria-label="Toggle Test Metadata Details" type="button">Details <i class="fa-solid fa-chevron-down" id="detailsChevron"></i></button>
+        <div class="header-controls">
+            <div class="help-hover-container">
+                <button class="btn btn-icon" id="btnHelp" onclick="toggleHelpOverlay()" title="Help (Alt+I)" aria-label="Keyboard Shortcuts and Help"><i class="fa-solid fa-circle-question"></i></button>
+                <div id="helpOverlay">
+                    <div class="modal-header">
+                        <h3>Keyboard Shortcuts & Info</h3>
+                        <button class="close-btn" onclick="closeOverlay('helpOverlay')" aria-label="Close Help">&times;</button>
+                    </div>
+                    <div style="margin: 12px 0; text-align: left; font-size: 13.5px; line-height: 1.5;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom:1px solid var(--border-color); text-align:left; color:var(--text-secondary);">
+                                    <th style="padding: 6px 8px;">Shortcut</th>
+                                    <th style="padding: 6px 8px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + R / Ctrl + Enter</td>
+                                    <td style="padding:6px 8px;">Run active step</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + K</td>
+                                    <td style="padding:6px 8px;">Skip active step</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + S</td>
+                                    <td style="padding:6px 8px;">Toggle Auto-run</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + E</td>
+                                    <td style="padding:6px 8px;">Edit step</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + N</td>
+                                    <td style="padding:6px 8px;">Add step</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + Z / Alt + Y</td>
+                                    <td style="padding:6px 8px;">Rewind execution</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + O</td>
+                                    <td style="padding:6px 8px;">Open Settings</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + I</td>
+                                    <td style="padding:6px 8px;">Open Shortcuts Info</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;">
+                            <p style="margin-bottom: 10px;"><strong style="color: var(--text-main);">Shortcuts:</strong></p>
+                            <ul style="list-style: none; padding: 0;">
+                                <li style="margin-bottom: 4px;"><kbd>Alt + R</kbd> - Run Step</li>
+                                <li style="margin-bottom: 4px;"><kbd>Alt + S</kbd> - Toggle Auto</li>
+                                <li style="margin-bottom: 4px;"><kbd>Alt + Z/Y</kbd> - Rewind</li>
+                                <li style="margin-bottom: 4px;"><kbd>Alt + K</kbd> - Skip</li>
+                                <li style="margin-bottom: 4px;"><kbd>Alt + N</kbd> - Add Step</li>
+                                <li style="margin-bottom: 4px;"><kbd>Alt + D</kbd> - Toggle Details</li>
+                                <li style="margin-bottom: 4px;"><kbd>Alt + E</kbd> - Edit Step</li>
+                            </ul>
+                            <p style="margin-top: 12px; font-style: italic;">Hover over steps to see drag handles and edit/rewind buttons.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="btn" id="btnSettings" onclick="openOverlay('settingsOverlay')" title="Settings (Alt+G)" aria-label="Open Settings (Alt+G)"><i class="fa-solid fa-gear" aria-hidden="true"></i></button>
+            <button class="btn" onclick="toggleTheme()" title="Toggle Theme" aria-label="Toggle Light/Dark Theme"><i class="fa-solid fa-circle-half-stroke"></i></button>
+        </div>
+    </header>
+    <div id="topDetailsPanel" class="hidden-details" style="padding:16px; background:var(--bg-surface); border-bottom:1px solid var(--border-color); width:100%;">
+        <div style="max-width: 1200px; margin: 0 auto; display: flex; gap: 24px;">
+            <div style="flex: 1;">
+                <div style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">JUnit 5 Tags:</div>
+                <div id="topJunitTags" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+            </div>
+            <div style="flex: 2;">
+                <div style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">Initial Dataset Parameters:</div>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
+                                <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600; width: 40%;">Parameter</th>
+                                <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topTestDataBody">
+                            <tr>
+                                <td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">No initial test data.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="workspace" role="main">
+        <div class="column" style="display:flex; flex-direction:column; justify-content:space-between; height:100%;" role="region" aria-label="Steps Timeline">
+            <div class="scrollable-content" id="timelineList" style="flex-grow:1;">
+                
+                <div class="block-group" id="beforeGroup" style="display:none;" role="group" aria-label="Before Execution Steps">
+                     <div class="block-header">Before Execution</div>
+                     <div id="beforeSteps"></div>
+                     <button class="add-step-card-btn" onclick="openAddStepOverlay('before')" title="Add Step (Alt+N)" aria-label="Add step to before block" style="margin-top: 4px; margin-bottom: 12px;"><i class="fa-solid fa-plus"></i> Add Step</button>
+                </div>
+
+                <div class="block-group" id="stepsGroup" style="display:none;" role="group" aria-label="Core Test Steps">
+                     <div class="block-header">Core Test Steps</div>
+                     <div id="stepsSteps"></div>
+                     <button class="add-step-card-btn" onclick="openAddStepOverlay('steps')" title="Add Step (Alt+N)" aria-label="Add step to steps block" style="margin-top: 4px; margin-bottom: 12px;"><i class="fa-solid fa-plus"></i> Add Step</button>
+                </div>
+
+                <div class="block-group" id="afterGroup" style="display:none;" role="group" aria-label="After Execution Steps">
+                     <div class="block-header">After Execution</div>
+                     <div id="afterSteps"></div>
+                     <button class="add-step-card-btn" onclick="openAddStepOverlay('after')" title="Add Step (Alt+N)" aria-label="Add step to after block" style="margin-top: 4px; margin-bottom: 12px;"><i class="fa-solid fa-plus"></i> Add Step</button>
+                </div>
+            </div>
+
+            <!-- Bottom Action Area inside Left Column -->
+            <div class="bottom-area" role="region" aria-label="Execution Controls">
+                <div class="current-reasoning-panel" id="reasoningPanel">
+                    <i class="fa-solid fa-brain" id="reasoningIcon" aria-hidden="true"></i>
+                    <span id="reasoningText">Connecting to interactive console…</span>
+                </div>
+                
+                <div class="toolbar-footer">
+                    <div class="btn-group">
+                        <button class="btn" id="btnBack" onclick="sendAction('REWIND')" title="Step Back (Alt+Z / Alt+Y)" aria-label="Rewind step back (Alt+Z or Alt+Y)" disabled><i class="fa-solid fa-backward-step" aria-hidden="true"></i> Back</button>
+                        <button class="btn btn-success" id="btnRun" onclick="sendAction('RUN')" title="Run Step (Alt+R / Ctrl+Enter)" aria-label="Run step (Alt+R or Ctrl+Enter)" disabled><i class="fa-solid fa-play" aria-hidden="true"></i> Run</button>
+                        <button class="btn" id="btnSkip" onclick="sendAction('SKIP')" title="Skip Step (Alt+K)" aria-label="Skip step (Alt+K)" disabled><i class="fa-solid fa-forward-step" aria-hidden="true"></i> Skip</button>
+                        <button class="btn" id="btnAuto" onclick="toggleAuto()" title="Auto-run (Alt+S)" aria-label="Toggle Auto-run (Alt+S)" disabled><i class="fa-solid fa-forward-fast" aria-hidden="true"></i> Auto</button>
+                    </div>
+                    
+                    <div class="btn-group">
+                        <div class="cancel-warning" id="cancelWarning" role="alert" aria-live="assertive">
+                            Are you sure? 
+                            <button class="btn" style="padding: 4px 8px; font-size: 11px;" onclick="sendAction('SAVE_EXIT')" aria-label="Confirm stop and exit">Yes, Stop</button>
+                            <button class="btn" style="padding: 4px 8px; font-size: 11px;" onclick="hideCancelWarning()" aria-label="Cancel stopping">No</button>
+                        </div>
+                        <button class="btn btn-danger" id="btnCancel" onclick="showCancelWarning()" title="Cancel test run (Escape)" aria-label="Cancel test run (Escape)"><i class="fa-solid fa-stop" aria-hidden="true"></i> Cancel test</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="column" role="region" aria-label="Step Details">
+            <div class="panel-header"><h2>Step Details</h2></div>
+            <div class="scrollable-content">
+                <!-- Step Details Card -->
+                <div id="bigScreenStepDetails" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                    <h3 style="font-size: 13px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-circle-info" style="color:var(--accent-primary)"></i> Step Execution Details
+                    </h3>
+                    <div id="bigScreenDetailsContent">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Overlays -->
+    <div id="settingsOverlay" class="modal-overlay" onclick="closeOverlay('settingsOverlay')" role="dialog" aria-labelledby="settingsTitle" aria-modal="true">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="settingsTitle">HUD Settings</h3>
+                <button class="close-btn" onclick="closeOverlay('settingsOverlay')" aria-label="Close Settings">&times;</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:16px; margin: 16px 0; text-align: left;">
+                <div>
+                    <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px;">Theme Preference</label>
+                    <select id="themeSelect" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:var(--text-main); padding:8px; border-radius:6px;">
+                        <option value="dark">Dark Theme</option>
+                        <option value="light">Light Theme</option>
+                        <option value="system">System Theme</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px;">Zoom Level (%)</label>
+                    <input type="number" id="zoomInput" value="100" min="50" max="200" step="5" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:var(--text-main); padding:8px; border-radius:6px; font-family:var(--font-mono);" />
+                </div>
+            </div>
+            <div class="inline-edit-actions">
+                <button class="btn" onclick="closeOverlay('settingsOverlay')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="helpOverlay" class="modal-overlay" onclick="closeOverlay('helpOverlay')">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>Keyboard Shortcuts & Info</h3>
+                <button class="close-btn" onclick="closeOverlay('helpOverlay')">&times;</button>
+            </div>
+            <div style="margin: 16px 0; text-align: left; font-size: 13.5px; line-height: 1.5;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom:1px solid var(--border-color); text-align:left; color:var(--text-secondary);">
+                            <th style="padding: 6px 8px;">Shortcut</th>
+                            <th style="padding: 6px 8px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + R / Ctrl + Enter</td>
+                            <td style="padding:6px 8px;">Run active step</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + K</td>
+                            <td style="padding:6px 8px;">Skip active step</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + S</td>
+                            <td style="padding:6px 8px;">Toggle Auto-run</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + E</td>
+                            <td style="padding:6px 8px;">Edit step</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + N</td>
+                            <td style="padding:6px 8px;">Add step</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + Z / Alt + Y</td>
+                            <td style="padding:6px 8px;">Rewind execution</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + O</td>
+                            <td style="padding:6px 8px;">Open Settings</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + I</td>
+                            <td style="padding:6px 8px;">Open Keyboard Shortcuts Info</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <button class="btn btn-primary" onclick="closeOverlay('helpOverlay')">Close</button>
+        </div>
+    </div>
+
+    <div id="domOverlay" class="modal-overlay" onclick="closeOverlay('domOverlay')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>Simplified DOM Content</h3>
+                <button class="close-btn" onclick="closeOverlay('domOverlay')">&times;</button>
+            </div>
+            <pre id="domPre" style="background: rgba(0,0,0,0.3); padding:12px; border-radius:6px; overflow:auto; max-height: 400px; font-family:var(--font-mono); font-size:12px; text-align:left; white-space: pre-wrap; word-break: break-all;"></pre>
+        </div>
+    </div>
+
+    <div id="screenshotOverlay" class="modal-overlay" onclick="closeOverlay('screenshotOverlay')">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 90%; width: 90%; height: 90%; display: flex; flex-direction: column;">
+            <div class="modal-header" style="flex-shrink: 0;">
+                <h3>Screenshot</h3>
+                <div style="display: flex; gap: 8px; align-items: center; margin-right: 16px;">
+                    <button class="btn btn-icon" onclick="zoomScreenshot(1.2)" title="Zoom In"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                    <button class="btn btn-icon" onclick="zoomScreenshot(0.8)" title="Zoom Out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                    <button class="btn" onclick="resetScreenshotZoom()" style="font-size: 11px; padding: 4px 8px;">Reset</button>
+                </div>
+                <button class="close-btn" onclick="closeOverlay('screenshotOverlay')">&times;</button>
+            </div>
+            <div id="screenshotViewport" style="flex-grow: 1; overflow: hidden; position: relative; background: rgba(0,0,0,0.4); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: grab;">
+                <img id="screenshotImg" src="" style="max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center center; transition: transform 0.1s ease-out; user-select: none; pointer-events: none;" />
+            </div>
+        </div>
+    </div>
+
+
+
+    <script>
+        // State variables
+        let currentState = null;
+        let currentPauseId = null;
+        let currentRunId = null;
+        let isAutoMode = false;
+        let eventSource = null;
+        let helpOverlayClicked = false;
+        let selectedStepIndexForDetails = null;
+        let autoStartStepIndex = null;
+
+        // -------------------------------------------------------------------------
+        // SSE Connection
+        // -------------------------------------------------------------------------
+        function connectSSE() {
+            if (eventSource) eventSource.close();
+            eventSource = new EventSource('/api/console/events');
+
+            eventSource.addEventListener('state', (e) => {
+                const data = JSON.parse(e.data);
+                applyState(data);
+            });
+
+            eventSource.addEventListener('pause', (e) => {
+                const data = JSON.parse(e.data);
+                currentPauseId = data.pauseId;
+                if (currentRunId && data.runId !== currentRunId) {
+                    showStaleBanner(data.runId);
+                } else {
+                    currentRunId = data.runId;
+                    setButtonsEnabled(true);
+                    checkActionApprovals();
+                    if (isAutoMode) {
+                        triggerAutoRunCheck();
+                    }
+                }
+            });
+
+            eventSource.onopen = () => setConnectionState('connected');
+            eventSource.onerror = () => {
+                setConnectionState('error');
+                setTimeout(connectSSE, 3000); // Retry in 3 seconds
+            };
+        }
+
+        // -------------------------------------------------------------------------
+        // Static JSON Fallback Load
+        // -------------------------------------------------------------------------
+        function tryStaticLoad() {
+            const params = new URLSearchParams(window.location.search);
+            const dataUrl = params.get('data') || '/run_data.json';
+            fetch(dataUrl)
+                .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                .then(data => {
+                    applyState(data);
+                    setConnectionState('connected');
+                    setButtonsEnabled(false);
+                    document.getElementById('reasoningText').textContent = '(Offline view — no live updates)';
+                })
+                .catch(() => {
+                    // Try direct run_example.json fallback if the server custom path failed
+                    fetch('run_example.json')
+                        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                        .then(data => {
+                            applyState(data);
+                            setConnectionState('connected');
+                            setButtonsEnabled(false);
+                            document.getElementById('reasoningText').textContent = '(Offline view — no live updates)';
+                        })
+                        .catch(() => {
+                            setConnectionState('error');
+                            document.getElementById('reasoningText').textContent = 'Could not load run data. Pass ?data=path/to/run.json';
+                        });
+                });
+        }
+
+        // Detect connection method on load
+        window.addEventListener('DOMContentLoaded', () => {
+            fetch('/api/console/events', { method: 'HEAD' })
+                .then(r => { if (r.ok || r.status === 200) connectSSE(); else tryStaticLoad(); })
+                .catch(() => tryStaticLoad());
+
+            // Initialize help tooltip hover
+            const btnHelp = document.getElementById('btnHelp');
+            const helpOverlay = document.getElementById('helpOverlay');
+            if (btnHelp && helpOverlay) {
+                const container = btnHelp.closest('.help-hover-container');
+                if (container) {
+                    container.addEventListener('mouseenter', () => {
+                        helpOverlay.style.display = 'flex';
+                    });
+                    container.addEventListener('mouseleave', () => {
+                        if (!helpOverlayClicked) {
+                            helpOverlay.style.display = 'none';
+                        }
+                    });
+                }
+            }
+            
+            // Load settings from localStorage
+            const savedTheme = localStorage.getItem('neodymium.hud.theme') || 'system';
+            const savedZoom = localStorage.getItem('neodymium.hud.zoom') || '100';
+            
+            const themeSelect = document.getElementById('themeSelect');
+            if (themeSelect) themeSelect.value = savedTheme;
+            applyTheme(savedTheme);
+            
+            const zoomInput = document.getElementById('zoomInput');
+            if (zoomInput) zoomInput.value = savedZoom;
+            const zoom = parseInt(savedZoom, 10);
+            if (!isNaN(zoom)) {
+                const factor = zoom / 100;
+                document.body.style.zoom = factor;
+                document.body.style.height = (100 / factor) + 'vh';
+            }
+
+            // Listen for system theme media query changes
+            window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+                const themeSelect = document.getElementById('themeSelect');
+                if (themeSelect && themeSelect.value === 'system') {
+                    applyTheme('system');
+                }
+            });
+
+            // Viewport drag/zoom event handlers
+            const viewport = document.getElementById('screenshotViewport');
+            if (viewport) {
+                viewport.addEventListener('mousedown', (e) => {
+                    isPanning = true;
+                    viewport.style.cursor = 'grabbing';
+                    startX = e.clientX - panX;
+                    startY = e.clientY - panY;
+                    e.preventDefault();
+                });
+                
+                window.addEventListener('mousemove', (e) => {
+                    if (!isPanning) return;
+                    panX = e.clientX - startX;
+                    panY = e.clientY - startY;
+                    updateScreenshotTransform();
+                });
+                
+                window.addEventListener('mouseup', () => {
+                    isPanning = false;
+                    if (viewport) viewport.style.cursor = 'grab';
+                });
+                
+                viewport.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const factor = e.deltaY < 0 ? 1.15 : 0.85;
+                    zoomScreenshot(factor);
+                }, { passive: false });
+
+                // Mobile touch support
+                viewport.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 1) {
+                        isPanning = true;
+                        startX = e.touches[0].clientX - panX;
+                        startY = e.touches[0].clientY - panY;
+                    }
+                });
+                viewport.addEventListener('touchmove', (e) => {
+                    if (!isPanning || e.touches.length !== 1) return;
+                    panX = e.touches[0].clientX - startX;
+                    panY = e.touches[0].clientY - startY;
+                    updateScreenshotTransform();
+                });
+                viewport.addEventListener('touchend', () => {
+                    isPanning = false;
+                });
+            }
+        });
+
+        // -------------------------------------------------------------------------
+        // State application / Dynamic rendering
+        // -------------------------------------------------------------------------
+        const activeBreakpoints = new Set();
+
+        function applyState(state) {
+            if (!state) return;
+            const isFirstLoad = currentState === null;
+            currentState = state;
+            currentRunId = state.runId;
+
+            // Header info
+            setTextIfChanged('testNameDisplay', state.testName || '—');
+            setTextIfChanged('testIdDisplay', state.testId ? `(ID: ${state.testId})` : '');
+            
+            // Set Browser Icon
+            const browserLower = (state.browser || '').toLowerCase();
+            const browserIcon = document.getElementById('browserIcon');
+            if (browserIcon) {
+                if (browserLower.includes('firefox')) {
+                    browserIcon.innerHTML = '<i class="fa-brands fa-firefox-browser"></i>';
+                } else if (browserLower.includes('safari') && !browserLower.includes('chrome')) {
+                    browserIcon.innerHTML = '<i class="fa-brands fa-safari"></i>';
+                } else if (browserLower.includes('edge')) {
+                    browserIcon.innerHTML = '<i class="fa-brands fa-edge"></i>';
+                } else {
+                    browserIcon.innerHTML = '<i class="fa-brands fa-chrome"></i>';
+                }
+            }
+
+            // Reasoning panel
+            const panel = document.getElementById('reasoningPanel');
+            const icon  = document.getElementById('reasoningIcon');
+            const text  = document.getElementById('reasoningText');
+            const newReasoning = state.reasoning || '';
+            if (text && text.textContent !== newReasoning) {
+                text.textContent = newReasoning;
+                panel.className = 'current-reasoning-panel' + (state.reasoningFailed ? ' failed' : '');
+                icon.className = state.reasoningFailed
+                    ? 'fa-solid fa-triangle-exclamation'
+                    : 'fa-solid fa-brain';
+            }
+
+            if (isFirstLoad) {
+                isAutoMode = state.autoRun || false;
+            }
+            syncAutoButton();
+
+            // Render block groups
+            renderBlock('before', state.blocks?.before || []);
+            renderBlock('steps',  state.blocks?.steps  || []);
+            renderBlock('after',  state.blocks?.after  || []);
+
+            // Render Data Bindings Table
+            const tbody = document.getElementById('dataBindingsTableBody');
+            if (tbody) {
+                const bindings = state.dataBindings || {};
+                const keys = Object.keys(bindings);
+                if (keys.length > 0) {
+                    tbody.innerHTML = keys.map(k => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td class="binding-key" onclick="insertVarInActiveTextarea('${escAttr(k)}')" style="padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">${escHtml(k)}</td>
+                            <td style="padding: 6px 8px; font-family: var(--font-mono); color: var(--text-main);">${escHtml(bindings[k])}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">No active variables.</td></tr>`;
+                }
+            }
+
+            // JUnit tags & Test Data key-value table
+            const topTags = document.getElementById('topJunitTags');
+            if (topTags && state.junitTags) {
+                topTags.innerHTML = state.junitTags.map(t => `<span style="background:rgba(59,130,246,0.15); color:var(--accent-primary); border:1px solid rgba(59,130,246,0.2); padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700;">${escHtml(t)}</span>`).join('');
+            }
+            const topTestDataBody = document.getElementById('topTestDataBody');
+            if (topTestDataBody && state.dataBindings) {
+                const bindings = state.dataBindings || {};
+                const keys = Object.keys(bindings);
+                if (keys.length > 0) {
+                    topTestDataBody.innerHTML = keys.map(k => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">${escHtml(k)}</td>
+                            <td style="padding: 6px 8px; font-family: var(--font-mono); color: var(--text-main);">${escHtml(bindings[k])}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    topTestDataBody.innerHTML = `<tr><td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">No initial test data.</td></tr>`;
+                }
+            }
+
+            // Handle default/latest screenshot display
+            let activeScreenshot = null;
+            const allSteps = [
+                ...(state.blocks?.before || []),
+                ...(state.blocks?.steps || []),
+                ...(state.blocks?.after || [])
+            ];
+            // Find active/failed/running step screenshot, or last executed one
+            const activeStep = allSteps.find(s => s.status === 'running' || s.status === 'failed');
+            if (activeStep && activeStep.screenshot) {
+                activeScreenshot = activeStep.screenshot;
+            } else {
+                const passedSteps = allSteps.filter(s => s.status === 'passed' && s.screenshot);
+                if (passedSteps.length > 0) {
+                    activeScreenshot = passedSteps[passedSteps.length - 1].screenshot;
+                }
+            }
+            if (activeScreenshot) {
+                showScreenshot(activeScreenshot);
+            }
+
+            // Auto-advance: always track the currently relevant step.
+            // Priority: running/failed step first, then next pending after the last passed one.
+            if (state && (state.blocks?.steps || []).length > 0) {
+                const steps = state.blocks.steps;
+                const activeStep = steps.find(s => s.status === 'running' || s.status === 'failed');
+                if (activeStep) {
+                    // A step is currently executing or errored – select it unconditionally
+                    selectedStepIndexForDetails = activeStep.index;
+                } else {
+                    // No running step: advance to the next pending step after the last completed one
+                    const lastPassedIdx = steps.findLastIndex(s => s.status === 'passed');
+                    if (lastPassedIdx !== -1 && lastPassedIdx < steps.length - 1) {
+                        // Next step after the last passed one becomes the selection
+                        selectedStepIndexForDetails = steps[lastPassedIdx + 1].index;
+                    } else if (selectedStepIndexForDetails === null) {
+                        // Nothing passed yet – default to the first step
+                        selectedStepIndexForDetails = steps[0].index;
+                    }
+                    // If the user manually selected a step that is now passed,
+                    // jump forward to the next one automatically
+                    if (selectedStepIndexForDetails !== null) {
+                        const selStep = steps.find(s => s.index === selectedStepIndexForDetails);
+                        if (selStep && selStep.status === 'passed' && lastPassedIdx < steps.length - 1) {
+                            selectedStepIndexForDetails = steps[lastPassedIdx + 1].index;
+                        }
+                    }
+                }
+            }
+
+            if (!currentPauseId) {
+                setButtonsEnabled(false);
+            } else {
+                setButtonsEnabled(true);
+                checkActionApprovals();
+            }
+
+            // Update details block for big screens
+            updateBigScreenDetails();
+        }
+
+        function checkActionApprovals() {
+            if (!currentPauseId) return;
+            const activeCard = document.querySelector('.step-card.active');
+            if (!activeCard) return;
+            const idx = parseInt(activeCard.getAttribute('data-step-idx'), 10);
+            const allSteps = [
+                ...(currentState?.blocks?.before || []),
+                ...(currentState?.blocks?.steps || []),
+                ...(currentState?.blocks?.after || [])
+            ];
+            const s = allSteps.find(st => st.index === idx);
+            const isThinking = s && s.status === 'running' && !s.reasoning;
+            
+            if (isThinking || isAutoMode) {
+                document.getElementById('btnRun').disabled = true;
+            } else {
+                document.getElementById('btnRun').disabled = false;
+            }
+
+            // Handle toolbar Back button disabled if index is 0 or auto is on
+            const isFirstStep = s && s.index === 0;
+            document.getElementById('btnBack').disabled = isFirstStep || isAutoMode;
+        }
+
+        function renderBlock(blockName, steps) {
+            const container = document.getElementById(blockName + 'Steps');
+            const group     = document.getElementById(blockName + 'Group');
+            if (!steps.length) { group.style.display = 'none'; return; }
+            group.style.display = 'flex';
+
+            const sig = steps.map(s => s.index + ':' + s.status + ':' + (s.actions?.length || 0) + ':' + (s.reasoning ? '1' : '0') + ':' + (activeBreakpoints.has(s.index) ? '1' : '0') + ':' + s.instruction + ':' + (s.index === selectedStepIndexForDetails ? 'sel' : '') + ':' + (currentPauseId ? 'p' : 'r')).join('|');
+            if (container.dataset.sig === sig) return;
+            container.dataset.sig = sig;
+
+            container.innerHTML = steps.map(renderStepCard).join('') + 
+                `<div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${steps[steps.length-1].index}, 'after')"></div>`;
+        }
+
+           function buildStepDetailsHtml(step) {
+            const isSkipped = step.status === 'skipped';
+            const isFailed  = step.status === 'failed';
+            
+            // Multi-action warning shown as small info note above the list
+            const warningBanner = (step.actions && step.actions.length > 1)
+                ? `<div class="substep-warning-info" style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;" title="Sub-steps cannot be skipped individually"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Sub-steps cannot be skipped individually</div>`
+                : '';
+
+            // Each action rendered as its own distinct card. Think time is NOT shown per action
+            // (thinking happens at step level, not per action). Only execution durationMs is shown.
+            const actionsHtml = step.actions && step.actions.length > 0
+                ? step.actions.map((a) => `
+                    <div class="acc-action-card">
+                        <div class="acc-action-header">
+                            <span class="acc-action-type-badge">${escHtml(a.type)}</span>
+                            ${a.durationMs ? `<span class="acc-action-duration"><i class="fa-solid fa-bolt" style="color:var(--accent-warning);"></i> ${(a.durationMs/1000).toFixed(2)}s</span>` : ''}
+                        </div>
+                        ${a.target ? `<div class="acc-action-target">${escHtml(a.target)}</div>` : ''}
+                        ${a.value ? `<div class="acc-action-value">Value: <code>${escHtml(a.value)}</code></div>` : ''}
+                    </div>
+                `).join('')
+                : '<div style="color:var(--text-muted); font-size:12px; padding:12px; text-align:center;">No actions performed yet.</div>';
+
+            const actionListBlock = isSkipped ? '' : `<div class="llm-action-list">${warningBanner}${actionsHtml}</div>`;
+
+            const errorBox = step.errorMessage ? `
+                <div class="error-message-box" style="margin-bottom:12px;">
+                    <span id="err-text-detail-${step.index}">${escHtml(step.errorMessage)}</span>
+                    <button class="copy-btn" onclick="copyError('err-text-detail-${step.index}')" title="Copy to clipboard" aria-label="Copy error message to clipboard"><i class="fa-regular fa-copy" aria-hidden="true"></i></button>
+                </div>` : '';
+            
+            const isThinking = step.status === 'running' && !step.reasoning;
+            const reasoningText = isThinking
+                ? `<div class="acc-reasoning" style="margin-bottom:12px;"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--accent-purple)" aria-hidden="true"></i> AI is thinking...</div>`
+                : step.reasoning ? `<div class="acc-reasoning" style="margin-bottom:12px; ${isFailed ? 'color:var(--accent-danger)' : ''}">
+                        <i class="fa-solid ${isFailed ? 'fa-triangle-exclamation' : 'fa-brain'}" style="margin-right:8px; ${isFailed ? 'color:var(--accent-danger)' : ''}" aria-hidden="true"></i>
+                        ${escHtml(step.reasoning)}</div>` : '';
+
+            const thinkingTimeBlock = (step.thinkingTimeMs !== undefined && step.thinkingTimeMs > 0)
+                ? `<div class="acc-thinking-time" title="Thinking duration">
+                       <i class="fa-solid fa-hourglass-half" aria-hidden="true"></i> Thinking: <strong>${(step.thinkingTimeMs / 1000).toFixed(1)}s</strong>
+                   </div>`
+                : '';
+
+            const durationBlock = step.durationMs ? `<div class="acc-duration" title="Execution duration">
+                    <i class="fa-solid fa-bolt" style="color:var(--accent-warning)" aria-hidden="true"></i> Exec: <strong>${(step.durationMs / 1000).toFixed(1)}s</strong>
+                </div>` : '';
+
+            const tokenBlock = (step.inputTokens || step.outputTokens)
+                ? `<div class="acc-tokens" title="Tokens used (Input / Output)">
+                       <i class="fa-solid fa-calculator" aria-hidden="true"></i> Tokens: In <strong>${step.inputTokens || 0}</strong> / Out <strong>${step.outputTokens || 0}</strong>
+                   </div>`
+                : '';
+
+            const domBlock = step.simplifiedDom
+                ? `<div class="acc-dom">
+                       <i class="fa-solid fa-code" aria-hidden="true"></i> DOM: 
+                       <a href="#" class="dom-overlay-link" onclick="openDomOverlay(event, \`${escAttr(step.simplifiedDom)}\`)" style="color:var(--accent-primary); text-decoration:underline;" title="View simplified DOM snapshot" aria-label="View simplified DOM content">View Content</a>
+                   </div>`
+                : '';
+
+            const screenshotBlock = step.screenshot
+                ? `<div class="acc-screenshot-block" style="margin-top:12px;">
+                       <i class="fa-solid fa-image" aria-hidden="true"></i> Screenshot: 
+                       <a href="#" class="screenshot-overlay-link" onclick="openScreenshotOverlay(event, '${escAttr(step.screenshot)}')" style="color:var(--accent-primary); text-decoration:underline;" title="View screenshot fullscreen" aria-label="View full screenshot image">View Fullscreen</a>
+                       <img class="acc-screenshot" src="${escAttr(step.screenshot)}" alt="Step screenshot"
+                            onclick="openScreenshotOverlay(event, '${escAttr(step.screenshot)}')" style="cursor:pointer; margin-top:8px; max-height:200px; width:100%; object-fit:cover; border-radius: 8px;" title="Click to view fullscreen">
+                   </div>`
+                : '';
+
+            return `
+                <div class="step-details-wrapper" style="display:flex; flex-direction:column; gap:12px;">
+                    <!-- Row 1: Actions (left) + Times (right) -->
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px;">
+                        <div style="flex-grow:1; min-width:0;">
+                            ${actionListBlock}
+                        </div>
+                    </div>
+                    <!-- Row 2: Other details -->
+                    <div style="display:flex; flex-direction:column; gap:8px; border-top:1px solid var(--border-color); padding-top:8px;">
+                        ${reasoningText}
+                        ${errorBox}
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-secondary); flex-wrap:wrap; gap:8px;">
+                            ${domBlock}
+                            ${tokenBlock}
+                        </div>
+                        ${screenshotBlock}
+                    </div>
+                </div>
+            `;
+        }
+
+        function generateEditableBindingsTable(bindings, textareaIdOrClass) {
+            const keys = Object.keys(bindings || {});
+            if (keys.length === 0) {
+                return '<div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 8px;">No variables available.</div>';
+            }
+            
+            return `
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">Insert/Edit Variables:</div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background: rgba(0,0,0,0.15);">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.02); text-align: left;">
+                            <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">Variable Name (click to insert)</th>
+                            <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600; width: 60%;">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${keys.map(k => `
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                <td class="editable-binding-key binding-badge" onclick="insertVarAtTarget('${escAttr(k)}', '${escAttr(textareaIdOrClass)}')" style="cursor: pointer; padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--accent-primary);" title="Click to insert \${${escHtml(k)}}">${escHtml(k)}</td>
+                                <td style="padding: 4px 8px;">
+                                    <input type="text" value="${escAttr(bindings[k] || '')}" oninput="updateDataBinding('${escAttr(k)}', this.value)" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px;" aria-label="Value for variable ${escHtml(k)}" />
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function updateDataBinding(key, val) {
+            if (currentState) {
+                if (!currentState.dataBindings) {
+                    currentState.dataBindings = {};
+                }
+                currentState.dataBindings[key] = val;
+                
+                // Also update top test data body if visible
+                const topTestDataBody = document.getElementById('topTestDataBody');
+                if (topTestDataBody) {
+                    const keys = Object.keys(currentState.dataBindings);
+                    topTestDataBody.innerHTML = keys.map(k => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">${escHtml(k)}</td>
+                            <td style="padding: 6px 8px; font-family: var(--font-mono); color: var(--text-main);">${escHtml(currentState.dataBindings[k])}</td>
+                        </tr>
+                    `).join('');
+                }
+            }
+        }
+
+        function insertVarAtTarget(varName, targetSelector) {
+            let textarea = null;
+            if (targetSelector.startsWith('#')) {
+                textarea = document.getElementById(targetSelector.substring(1));
+            } else {
+                const activeEditCard = document.querySelector('.step-card.editing');
+                if (activeEditCard) {
+                    textarea = activeEditCard.querySelector(targetSelector);
+                }
+            }
+            if (textarea) {
+                insertAtCursor(textarea, `\${${varName}}`);
+            }
+        }
+
+        function resolveVariables(text, bindings) {
+            if (!text || !bindings) return text || '';
+            let result = text;
+            for (const key in bindings) {
+                const placeholder = `\${${key}}`;
+                result = result.replaceAll(placeholder, bindings[key]);
+            }
+            return result;
+        }
+
+        function renderStepCard(step) {
+            const isSkipped = step.status === 'skipped';
+            const isActive  = step.status === 'running' || (step.status === 'failed');
+            const isFailed  = step.status === 'failed';
+            const lvlClass  = step.includeLevel > 0 ? ` include-lvl-${Math.min(step.includeLevel, 4)}` : '';
+            const skippedClass = isSkipped ? ' skipped' : '';
+            
+            const isSelected = step.index == selectedStepIndexForDetails;
+            const selectedClass = isSelected ? ' selected-details' : '';
+            const activeClass = isActive ? (isFailed ? ' active failed' : ' active') : '';
+
+            const bpActive = activeBreakpoints.has(step.index);
+            let statusIconMarkup = '';
+            
+            if (step.status === 'passed') {
+                statusIconMarkup = `<i class="fa-solid fa-circle-check" style="color:var(--accent-success)" aria-label="Passed"></i>`;
+            } else if (step.status === 'failed') {
+                statusIconMarkup = `<i class="fa-solid fa-circle-xmark" style="color:var(--accent-danger)" aria-label="Failed"></i>`;
+            } else if (step.status === 'skipped') {
+                statusIconMarkup = `<i class="fa-solid fa-circle-minus" style="color:var(--text-secondary)" aria-label="Skipped"></i>`;
+            } else if (step.status === 'running' && currentPauseId === null) {
+                statusIconMarkup = `<i class="fa-solid fa-circle-notch fa-spin" style="color:var(--accent-primary)" aria-label="Running"></i>`;
+            } else {
+                // Pending, or Running but Paused/waiting for input
+                if (bpActive) {
+                    const bpColor = 'var(--accent-danger)';
+                    statusIconMarkup = `
+                        <svg class="bp-svg active" viewBox="0 0 100 100" style="fill: ${bpColor};" aria-label="Breakpoint active" title="Breakpoint active (Click to remove)">
+                            <polygon points="30,5 70,5 95,30 95,70 70,95 30,95 5,70 5,30" />
+                        </svg>
+                    `;
+                } else {
+                    statusIconMarkup = `
+                        <i class="fa-regular fa-circle pending-placeholder-icon" style="color:var(--text-muted)" aria-label="Step pending" title="Step Pending"></i>
+                        <svg class="bp-svg hover-only" viewBox="0 0 100 100" aria-label="Toggle breakpoint" title="Toggle Breakpoint">
+                            <polygon points="30,5 70,5 95,30 95,70 70,95 30,95 5,70 5,30" />
+                        </svg>
+                    `;
+                }
+            }
+
+            const sourceTag = step.source === 'playbook'
+                ? `<div class="type-tag type-playbook"><i class="fa-solid fa-compact-disc" aria-hidden="true"></i> Playbook</div>`
+                : step.source === 'healed'
+                ? `<div class="type-tag type-healed"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> Healed</div>`
+                : `<div class="type-tag type-llm"><i class="fa-solid fa-robot" aria-hidden="true"></i> LLM Agent</div>`;
+
+            let includeBreadcrumb = '';
+            if (step.includeChain && step.includeChain.length > 0) {
+                const chainText = step.includeChain.join(' > ');
+                includeBreadcrumb = `<div class="include-breadcrumb" title="${escAttr(chainText)}"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(chainText)}</div>`;
+            } else if (step.includeFile) {
+                includeBreadcrumb = `<div class="include-breadcrumb"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(step.includeFile)}</div>`;
+            }
+
+            const isPausedRunning = step.status === 'running' && currentPauseId !== null;
+            const isPendingOrPausedRunning = !step.status || step.status === 'pending' || isPausedRunning;
+            const hasDetails = (step.actions && step.actions.length > 0) || step.errorMessage || step.durationMs || step.screenshot || step.thinkingTimeMs || step.simplifiedDom || step.reasoning;
+
+            const showEdit = step.status !== 'passed' && step.status !== 'skipped';
+            const editBtnHtml = showEdit 
+                ? `<button class="step-edit-btn" onclick="enableEdit(this)" title="Edit Step (Alt+E)" aria-label="Edit step instruction (Alt+E)"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>`
+                : '';
+
+            const rewindBtnHtml = `<button class="step-rewind-btn" onclick="triggerRewind(event, ${step.index})" title="Rewind execution back here" aria-label="Rewind execution back here"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>`;
+
+            const showReorder = step.status !== 'passed' && step.status !== 'skipped';
+            let reorderHandleHtml = '';
+            if (showReorder) {
+                reorderHandleHtml = `<div class="step-reorder-handle" draggable="true" ondragstart="handleDragStart(event, ${step.index})" title="Drag to reorder" aria-label="Drag handle to reorder step"><i class="fa-solid fa-grip-vertical"></i></div>`;
+            }
+
+            const statusIconContainerClass = isPendingOrPausedRunning ? 'step-status-icon pending-step' : 'step-status-icon';
+            const statusClickAttr = isPendingOrPausedRunning ? `onclick="toggleBp(event, ${step.index})"` : '';
+
+            const detailsHtml = hasDetails ? buildStepDetailsHtml(step) : '';
+            const accordionOpen = isActive ? ' open' : '';
+            
+            const selectedArrowMarkup = isSelected ? `<div class="selected-arrow big-screen-only" style="margin-left: 8px; color: var(--accent-purple); display: flex; align-items: center;"><i class="fa-solid fa-chevron-right"></i></div>` : '';
+
+            const resolvedInstruction = resolveVariables(step.instruction, currentState?.dataBindings);
+
+            return `
+                <div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${step.index}, 'before')"></div>
+                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}" data-step-idx="${step.index}" role="listitem" tabindex="0" aria-label="Step ${step.index}: ${escHtml(resolvedInstruction)}"
+                     onclick="handleStepClick(event, ${step.index})" ondragend="handleDragEnd(event)">
+                <div class="step-row">
+                    <div class="${statusIconContainerClass}" ${statusClickAttr}>${statusIconMarkup}</div>
+                    <div class="step-text-container">
+                        <div class="tag-row">${sourceTag}${includeBreadcrumb}</div>
+                        <div class="step-text">${escHtml(resolvedInstruction)}</div>
+                        <div class="step-edit-form">
+                            <textarea class="inline-edit-textarea" aria-label="Edit step instruction text">${escHtml(step.instruction)}</textarea>
+                            <div class="inline-edit-bindings" style="margin: 8px 0; display: flex; flex-direction: column; gap: 6px;"></div>
+                            <div class="inline-edit-actions">
+                                <button class="btn" style="padding: 4px 10px; font-size: 11px;" onclick="cancelEdit(this)" aria-label="Cancel editing step">Cancel</button>
+                                <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" onclick="saveEdit(this)" aria-label="Save step instruction">Save</button>
+                            </div>
+                        </div>
+                    </div>
+                    ${rewindBtnHtml}
+                    ${reorderHandleHtml}
+                    ${editBtnHtml}
+                    ${selectedArrowMarkup}
+                </div>
+                ${hasDetails ? `<div class="step-accordion-details${accordionOpen}">${detailsHtml}</div>` : ''}
+            </div>`;
+        }
+
+        // -------------------------------------------------------------------------
+        // Interactive Actions
+        // -------------------------------------------------------------------------
+        function sendAction(action, extra) {
+            if (!currentPauseId || !currentRunId) return;
+            const payload = { runId: currentRunId, pauseId: currentPauseId, action, ...extra };
+            setButtonsEnabled(false);
+            fetch('/api/console/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r => r.json()).then(res => {
+                if (res.error === 'stale-tab') {
+                    showStaleBanner(res.activeRunId);
+                }
+            }).catch(() => {
+                setButtonsEnabled(true);
+            });
+            currentPauseId = null;
+        }
+
+        function toggleAuto() {
+            if (isAutoMode) {
+                isAutoMode = false;
+                syncAutoButton();
+                autoStartStepIndex = null;
+                setButtonsEnabled(true);
+            } else {
+                if (!currentPauseId) return;
+                isAutoMode = true;
+                syncAutoButton();
+                setButtonsEnabled(true);
+                const allSteps = [
+                    ...(currentState?.blocks?.before || []),
+                    ...(currentState?.blocks?.steps || []),
+                    ...(currentState?.blocks?.after || [])
+                ];
+                const activeRunningStep = allSteps.find(s => s.status === 'running');
+                autoStartStepIndex = activeRunningStep ? activeRunningStep.index : null;
+                triggerAutoRunCheck();
+            }
+        }
+
+        function triggerAutoRunCheck() {
+            if (!isAutoMode || !currentPauseId) return;
+            const allSteps = [
+                ...(currentState?.blocks?.before || []),
+                ...(currentState?.blocks?.steps || []),
+                ...(currentState?.blocks?.after || [])
+            ];
+            
+            const hasFailedStep = allSteps.some(s => s.status === 'failed' || s.errorMessage);
+            const activeRunningStep = allSteps.find(s => s.status === 'running');
+            
+            const hitBreakpoint = activeRunningStep && 
+                                  activeBreakpoints.has(activeRunningStep.index) && 
+                                  activeRunningStep.index !== autoStartStepIndex;
+
+            if (hasFailedStep || hitBreakpoint) {
+                isAutoMode = false;
+                autoStartStepIndex = null;
+                syncAutoButton();
+                setButtonsEnabled(true);
+                return;
+            }
+            
+            setTimeout(() => {
+                if (isAutoMode && currentPauseId) {
+                    sendAction('RUN');
+                }
+            }, 500);
+        }
+
+        // -------------------------------------------------------------------------
+        // Event Handlers & Local UI helpers
+        // -------------------------------------------------------------------------
+        function handleStepClick(event, index) {
+            // Prevent toggling if clicking interactive controls or the breakpoint status icon
+            if (event.target.closest('button') || event.target.closest('textarea') || event.target.closest('.step-status-icon')) return;
+            
+            // Single click always selects – no toggle-off; a step stays selected once clicked
+            selectedStepIndexForDetails = index;
+
+            if (currentState) {
+                renderBlock('before', currentState.blocks?.before || []);
+                renderBlock('steps',  currentState.blocks?.steps  || []);
+                renderBlock('after',  currentState.blocks?.after  || []);
+            }
+            updateBigScreenDetails();
+
+            // On mobile: open the accordion immediately on the first click
+            if (window.innerWidth <= 900) {
+                const card = document.querySelector(`.step-card[data-step-idx='${index}']`);
+                if (card) {
+                    const acc = card.querySelector('.step-accordion-details');
+                    if (acc && !acc.classList.contains('open')) acc.classList.add('open');
+                }
+            }
+        }
+
+        function updateBigScreenDetails() {
+            const container = document.getElementById('bigScreenStepDetails');
+            const content = document.getElementById('bigScreenDetailsContent');
+            if (!container || !content) return;
+            
+            if (currentState) {
+                const allSteps = [
+                    ...(currentState.blocks?.before || []),
+                    ...(currentState.blocks?.steps || []),
+                    ...(currentState.blocks?.after || [])
+                ];
+                const activeStep = allSteps.find(s => s.status === 'running' || s.status === 'failed');
+                if (selectedStepIndexForDetails === null && activeStep) {
+                    selectedStepIndexForDetails = activeStep.index;
+                }
+                // Don't auto-switch if user has manually selected a step unless the selected step is gone
+                if (selectedStepIndexForDetails !== null) {
+                    const selStepExists = allSteps.some(s => s.index === selectedStepIndexForDetails);
+                    if (!selStepExists && activeStep) {
+                        selectedStepIndexForDetails = activeStep.index;
+                    }
+                }
+            }
+            
+            if (selectedStepIndexForDetails === null || !currentState) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            const allSteps = [
+                ...(currentState.blocks?.before || []),
+                ...(currentState.blocks?.steps || []),
+                ...(currentState.blocks?.after || [])
+            ];
+            const step = allSteps.find(s => s.index === selectedStepIndexForDetails);
+            if (!step) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            const sourceTag = step.source === 'playbook'
+                ? `<div class="type-tag type-playbook"><i class="fa-solid fa-compact-disc" aria-hidden="true"></i> Playbook</div>`
+                : step.source === 'healed'
+                ? `<div class="type-tag type-healed"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> Healed</div>`
+                : `<div class="type-tag type-llm"><i class="fa-solid fa-robot" aria-hidden="true"></i> LLM Agent</div>`;
+
+            let includeBreadcrumb = '';
+            if (step.includeChain && step.includeChain.length > 0) {
+                const chainText = step.includeChain.join(' > ');
+                includeBreadcrumb = `<div class="include-breadcrumb" title="${escAttr(chainText)}"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(chainText)}</div>`;
+            } else if (step.includeFile) {
+                includeBreadcrumb = `<div class="include-breadcrumb"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(step.includeFile)}</div>`;
+            }
+
+            const detailsHtml = buildStepDetailsHtml(step);
+            
+            content.innerHTML = `
+                <div style="font-weight: 600; font-size:14px; margin-bottom: 8px;">Step #${step.index}: ${escHtml(step.instruction)}</div>
+                <div style="margin-bottom:12px; display:flex; gap:6px; flex-wrap:wrap;">${sourceTag}${includeBreadcrumb}</div>
+                ${detailsHtml}
+            `;
+            container.style.display = 'flex';
+        }
+
+        function triggerRewind(event, index) {
+            if (event) event.stopPropagation();
+            if (!currentPauseId) return;
+            selectedStepIndexForDetails = index;
+            sendAction('REWIND', { targetIndex: index });
+        }
+
+        function pasteBinding(el, key) {
+            const card = el.closest('.step-card');
+            const textarea = card ? card.querySelector('.inline-edit-textarea') : document.getElementById('newStepInstruction');
+            if (!textarea) return;
+            const val = `\${${key}}`;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            textarea.value = textarea.value.substring(0, start) + val + textarea.value.substring(end);
+            textarea.focus();
+            textarea.setSelectionRange(start + val.length, start + val.length);
+        }
+
+        function enableEdit(btnElement) {
+            const card = btnElement.closest('.step-card');
+            card.classList.add('editing');
+            
+            const textarea = card.querySelector('.inline-edit-textarea');
+            const idx = parseInt(card.getAttribute('data-step-idx'), 10);
+            
+            let rawInstruction = '';
+            if (currentState && currentState.blocks) {
+                for (const blockName of ['before', 'steps', 'after']) {
+                    const stepObj = currentState.blocks[blockName]?.find(s => s.index === idx);
+                    if (stepObj) {
+                        rawInstruction = stepObj.instruction;
+                        break;
+                    }
+                }
+            }
+            textarea.value = rawInstruction;
+            textarea.focus();
+            
+            const bindingsDiv = card.querySelector('.inline-edit-bindings');
+            if (bindingsDiv && currentState?.dataBindings) {
+                bindingsDiv.innerHTML = '<div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">Available Variables (Click to paste):</div>' +
+                    Object.entries(currentState.dataBindings).map(([k, v]) => `
+                        <div class="binding-item" style="display:flex; justify-content:space-between; font-size:11px; padding:4px 6px; border-radius:4px; background:rgba(255,255,255,0.03); cursor:pointer; border:1px solid transparent;" onclick="pasteBinding(this, '${k}')" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='transparent'">
+                            <span style="color:var(--accent-primary); font-weight:600;">\${${k}}</span>
+                            <span style="color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:8px;">${escHtml(v)}</span>
+                        </div>
+                    `).join('');
+            }
+            
+            const acc = card.querySelector('.step-accordion-details');
+            if (acc && !acc.classList.contains('open')) acc.classList.add('open');
+        }
+
+        function cancelEdit(btnElement) {
+            const card = btnElement.closest('.step-card');
+            const idx = parseInt(card.getAttribute('data-step-idx'), 10);
+            let removed = false;
+            if (currentState && currentState.blocks) {
+                for (const blockName of ['before', 'steps', 'after']) {
+                    const list = currentState.blocks[blockName];
+                    if (list) {
+                        const indexInList = list.findIndex(s => s.index === idx && s.isTempAdd);
+                        if (indexInList !== -1) {
+                            list.splice(indexInList, 1);
+                            removed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (removed) {
+                applyState(currentState);
+            } else {
+                card.classList.remove('editing');
+            }
+        }
+
+        function saveEdit(btnElement) {
+            const card = btnElement.closest('.step-card');
+            const textarea = card.querySelector('.inline-edit-textarea');
+            const newVal = textarea.value.trim();
+            
+            const idx = parseInt(card.getAttribute('data-step-idx'), 10);
+            let isTemp = false;
+            let oldVal = '';
+            let blockName = 'steps';
+            
+            if (currentState && currentState.blocks) {
+                for (const bKey of ['before', 'steps', 'after']) {
+                    const list = currentState.blocks[bKey];
+                    if (list) {
+                        const found = list.find(s => s.index === idx);
+                        if (found) {
+                            isTemp = !!found.isTempAdd;
+                            oldVal = found.instruction;
+                            blockName = bKey;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (isTemp) {
+                if (newVal && currentPauseId) {
+                    sendAction('ADD', { instruction: newVal, block: blockName });
+                } else {
+                    cancelEdit(btnElement);
+                }
+            } else {
+                if (oldVal !== newVal && currentPauseId) {
+                    sendAction('EDIT', { index: idx, instruction: newVal });
+                }
+                card.classList.remove('editing');
+            }
+        }
+
+        function toggleBp(event, index) {
+            event.stopPropagation();
+            if (activeBreakpoints.has(index)) {
+                activeBreakpoints.delete(index);
+            } else {
+                activeBreakpoints.add(index);
+            }
+            applyState(currentState);
+        }
+
+        function copyError(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert("Error message copied to clipboard!");
+            });
+        }
+
+        function showScreenshot(src) {
+            // No-op fallback since DOM Snapshot card is removed. Lightbox handles clicks.
+        }
+
+        function setButtonsEnabled(enabled) {
+            const runBtn = document.getElementById('btnRun');
+            const skipBtn = document.getElementById('btnSkip');
+            const backBtn = document.getElementById('btnBack');
+            const autoBtn = document.getElementById('btnAuto');
+            
+            if (isAutoMode) {
+                if (runBtn) runBtn.disabled = true;
+                if (skipBtn) skipBtn.disabled = true;
+                if (backBtn) backBtn.disabled = true;
+                if (autoBtn) autoBtn.disabled = false;
+            } else {
+                if (runBtn) runBtn.disabled = !enabled;
+                if (skipBtn) skipBtn.disabled = !enabled;
+                if (backBtn) backBtn.disabled = !enabled;
+                if (autoBtn) autoBtn.disabled = !enabled;
+            }
+        }
+
+        function syncAutoButton() {
+            const btn = document.getElementById('btnAuto');
+            if (!btn) return;
+            if (isAutoMode) {
+                btn.classList.remove('btn-auto-blue');
+                btn.classList.add('btn-pause-orange');
+                btn.innerHTML = '<i class="fa-solid fa-pause" aria-hidden="true"></i> Pause';
+                btn.title = 'Pause Auto-run (Alt+S)';
+                btn.setAttribute('aria-label', 'Pause Auto-run (Alt+S)');
+            } else {
+                btn.classList.remove('btn-pause-orange');
+                btn.classList.add('btn-auto-blue');
+                btn.innerHTML = '<i class="fa-solid fa-forward-fast" aria-hidden="true"></i> Auto';
+                btn.title = 'Auto-run (Alt+S)';
+                btn.setAttribute('aria-label', 'Toggle Auto-run (Alt+S)');
+            }
+        }
+
+        function setConnectionState(state) {
+            const dot = document.getElementById('connectionDot');
+            if (!dot) return;
+            dot.className = '';
+            dot.classList.add(state);
+            dot.title = { connected: 'Connected', paused: 'Waiting for input', error: 'Disconnected' }[state] || state;
+        }
+
+        function showStaleBanner(activeRunId) {
+            const banner = document.getElementById('staleBanner');
+            const msg = document.getElementById('staleBannerMsg');
+            if (banner && msg) {
+                msg.textContent = `This tab is connected to run "${currentRunId || '?'}" but the active run is "${activeRunId}".`;
+                banner.style.display = 'flex';
+            }
+            setButtonsEnabled(false);
+        }
+
+        function refreshToCurrentRun() {
+            window.location.reload();
+        }
+
+        function showCancelWarning() {
+            document.getElementById('btnCancel').style.display = 'none';
+            document.getElementById('cancelWarning').style.display = 'flex';
+        }
+
+        document.getElementById('btnCancel').style.display = 'inline-flex';
+
+        function hideCancelWarning() {
+            document.getElementById('cancelWarning').style.display = 'none';
+            document.getElementById('btnCancel').style.display = 'inline-flex';
+        }
+
+        function toggleTheme() {
+            const themeSelect = document.getElementById('themeSelect');
+            if (themeSelect) {
+                if (themeSelect.value === 'dark') {
+                    themeSelect.value = 'light';
+                } else if (themeSelect.value === 'light') {
+                    themeSelect.value = 'system';
+                } else {
+                    themeSelect.value = 'dark';
+                }
+                saveSettings();
+            }
+        }
+
+        function applyTheme(theme) {
+            if (theme === 'light') {
+                document.documentElement.classList.add('force-light');
+            } else if (theme === 'dark') {
+                document.documentElement.classList.remove('force-light');
+            } else if (theme === 'system') {
+                const systemIsLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+                if (systemIsLight) {
+                    document.documentElement.classList.add('force-light');
+                } else {
+                    document.documentElement.classList.remove('force-light');
+                }
+            }
+        }
+
+        function setTextIfChanged(id, val) {
+            const el = document.getElementById(id);
+            if (el && el.textContent !== val) el.textContent = val;
+        }
+
+        function escHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        }
+        function escAttr(str) {
+            if (!str) return '';
+            return str.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+        }
+
+        // -------------------------------------------------------------------------
+        // Overlays & autocompletes
+        // -------------------------------------------------------------------------
+        function openOverlay(id) {
+            document.getElementById(id).style.display = 'flex';
+        }
+        function closeOverlay(id) {
+            document.getElementById(id).style.display = 'none';
+            if (id === 'helpOverlay') {
+                helpOverlayClicked = false;
+            }
+        }
+        function toggleHelpOverlay() {
+            const overlay = document.getElementById('helpOverlay');
+            if (helpOverlayClicked) {
+                overlay.style.display = 'none';
+                helpOverlayClicked = false;
+            } else {
+                overlay.style.display = 'flex';
+                helpOverlayClicked = true;
+            }
+        }
+        function openDomOverlay(event, domContent) {
+            if (event) event.preventDefault();
+            document.getElementById('domPre').textContent = domContent;
+            openOverlay('domOverlay');
+        }
+        let zoomScale = 1.0;
+        let panX = 0;
+        let panY = 0;
+        let isPanning = false;
+        let startX = 0;
+        let startY = 0;
+
+        function openScreenshotOverlay(event, src) {
+            if (event) event.preventDefault();
+            const img = document.getElementById('screenshotImg');
+            img.src = src;
+            resetScreenshotZoom();
+            openOverlay('screenshotOverlay');
+        }
+
+        function zoomScreenshot(factor) {
+            zoomScale = Math.max(0.5, Math.min(zoomScale * factor, 5.0));
+            updateScreenshotTransform();
+        }
+
+        function resetScreenshotZoom() {
+            zoomScale = 1.0;
+            panX = 0;
+            panY = 0;
+            updateScreenshotTransform();
+        }
+
+        function updateScreenshotTransform() {
+            const img = document.getElementById('screenshotImg');
+            if (img) {
+                img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+            }
+        }
+        function saveSettings() {
+            const theme = document.getElementById('themeSelect').value;
+            const zoom = parseInt(document.getElementById('zoomInput').value, 10);
+            localStorage.setItem('neodymium.hud.theme', theme);
+            localStorage.setItem('neodymium.hud.zoom', zoom);
+            applyTheme(theme);
+            if (!isNaN(zoom)) {
+                const factor = zoom / 100;
+                document.body.style.zoom = factor;
+                document.body.style.height = (100 / factor) + 'vh';
+            }
+            closeOverlay('settingsOverlay');
+        }
+        function toggleTopDetails() {
+            const panel = document.getElementById('topDetailsPanel');
+            const chevron = document.getElementById('detailsChevron');
+            if (!panel) return;
+            const isVisible = panel.classList.contains('visible-details');
+            if (!isVisible) {
+                panel.classList.remove('hidden-details');
+                panel.classList.add('visible-details');
+                if (chevron) chevron.style.transform = 'rotate(180deg)';
+            } else {
+                panel.classList.remove('visible-details');
+                panel.classList.add('hidden-details');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
+        }
+        function openAddStepOverlay(blockName) {
+            const finalBlock = blockName || currentState?.activeBlock || 'steps';
+            if (!currentState) {
+                currentState = { activeBlock: 'steps', blocks: { before: [], steps: [], after: [] } };
+            }
+            if (!currentState.blocks) currentState.blocks = {};
+            if (!currentState.blocks[finalBlock]) currentState.blocks[finalBlock] = [];
+            
+            const nextIdx = 1000 + Math.floor(Math.random() * 10000);
+            const tempStep = {
+                index: nextIdx,
+                instruction: '',
+                status: 'pending',
+                source: 'llm',
+                includeFile: null,
+                includeLevel: 0,
+                isTempAdd: true
+            };
+            
+            currentState.blocks[finalBlock].push(tempStep);
+            applyState(currentState);
+            
+            const card = document.querySelector(`.step-card[data-step-idx='${nextIdx}']`);
+            if (card) {
+                enableEdit(card.querySelector('.step-edit-btn') || card);
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        let draggedStepIndex = null;
+
+        function handleDragStart(event, index) {
+            draggedStepIndex = index;
+            event.dataTransfer.effectAllowed = 'move';
+            event.target.closest('.step-card').classList.add('dragging');
+            document.querySelector('.scrollable-content').classList.add('dragging-active');
+        }
+
+        function handleDragEnd(event) {
+            const draggedCard = document.querySelector('.step-card.dragging');
+            if (draggedCard) draggedCard.classList.remove('dragging');
+            document.querySelector('.scrollable-content').classList.remove('dragging-active');
+            
+            const dropTargets = document.querySelectorAll('.drop-target-area');
+            dropTargets.forEach(t => t.classList.remove('active'));
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            const target = event.target.closest('.drop-target-area');
+            if (target) {
+                target.classList.add('active');
+            }
+        }
+
+        function handleDragLeave(event) {
+            const target = event.target.closest('.drop-target-area');
+            if (target) {
+                target.classList.remove('active');
+            }
+        }
+
+        function handleDrop(event, targetIndex, position) {
+            event.preventDefault();
+            handleDragEnd(); // Cleanup classes
+
+            if (draggedStepIndex === null || draggedStepIndex === targetIndex) return;
+
+            // Find which block and relative indices
+            let blockName = null;
+            let list = null;
+            let fromRelIdx = -1;
+            let toRelIdx = -1;
+
+            for (const bKey of ['before', 'steps', 'after']) {
+                const arr = currentState.blocks[bKey];
+                if (arr) {
+                    const fIdx = arr.findIndex(s => s.index === draggedStepIndex);
+                    const tIdx = arr.findIndex(s => s.index === targetIndex);
+                    if (fIdx !== -1) {
+                        blockName = bKey;
+                        list = arr;
+                        fromRelIdx = fIdx;
+                        if (tIdx !== -1) toRelIdx = tIdx;
+                        break;
+                    }
+                }
+            }
+
+            if (!list || fromRelIdx === -1) return;
+
+            // If dropping on a card, handle before/after logic
+            let finalToIdx = toRelIdx;
+            if (position === 'after') finalToIdx++;
+            
+            // Adjust if moving forward in the same list
+            if (finalToIdx > fromRelIdx) finalToIdx--;
+
+            if (fromRelIdx === finalToIdx) return;
+
+            if (currentPauseId) {
+                sendAction('REORDER', { block: blockName, fromIndex: fromRelIdx, toIndex: finalToIdx });
+            } else {
+                const item = list.splice(fromRelIdx, 1)[0];
+                list.splice(finalToIdx, 0, item);
+                applyState(currentState);
+            }
+            draggedStepIndex = null;
+        }
+
+        function moveStep(event, index, direction) {
+            // Deprecated in favor of Drag & Drop, but kept for internal logic if needed
+            if (event) event.stopPropagation();
+            if (!currentState || !currentState.blocks) return;
+            
+            let blockName = null;
+            let list = null;
+            let relativeIndex = -1;
+            
+            for (const bKey of ['before', 'steps', 'after']) {
+                const arr = currentState.blocks[bKey];
+                if (arr) {
+                    const idx = arr.findIndex(s => s.index === index);
+                    if (idx !== -1) {
+                        blockName = bKey;
+                        list = arr;
+                        relativeIndex = idx;
+                        break;
+                    }
+                }
+            }
+            
+            if (!list || relativeIndex === -1) return;
+            
+            const targetRelativeIndex = relativeIndex + direction;
+            if (targetRelativeIndex < 0 || targetRelativeIndex >= list.length) return;
+            
+            if (currentPauseId) {
+                sendAction('REORDER', { block: blockName, fromIndex: relativeIndex, toIndex: targetRelativeIndex });
+            } else {
+                const temp = list[relativeIndex];
+                list[relativeIndex] = list[targetRelativeIndex];
+                list[targetRelativeIndex] = temp;
+                applyState(currentState);
+            }
+        }
+        function insertVarInActiveTextarea(varName) {
+            const activeEditCard = document.querySelector('.step-card.editing');
+            if (activeEditCard) {
+                const textarea = activeEditCard.querySelector('.inline-edit-textarea');
+                if (textarea) {
+                    insertAtCursor(textarea, `\${${varName}}`);
+                }
+            }
+        }
+        function insertAtCursor(inputElement, textToInsert) {
+            const start = inputElement.selectionStart;
+            const end = inputElement.selectionEnd;
+            const value = inputElement.value;
+            inputElement.value = value.substring(0, start) + textToInsert + value.substring(end);
+            inputElement.selectionStart = inputElement.selectionEnd = start + textToInsert.length;
+            inputElement.focus();
+        }
+        function submitAddStep() {
+            // Handled inline in saveEdit now
+        }
+
+        // Shortcuts keyboard listener
+        document.addEventListener('keydown', function(e) {
+            if (e.repeat) return;
+            const key = e.key ? e.key.toLowerCase() : '';
+            
+            if (e.key === 'Escape') {
+                ['settingsOverlay', 'helpOverlay', 'domOverlay', 'screenshotOverlay'].forEach(closeOverlay);
+                e.preventDefault();
+                return;
+            }
+            if (e.altKey && key === 'c') {
+                ['settingsOverlay', 'helpOverlay', 'domOverlay', 'screenshotOverlay'].forEach(closeOverlay);
+                e.preventDefault();
+                return;
+            }
+            if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+                return;
+            }
+            
+            if (e.altKey && key === 'r' || (e.ctrlKey && e.key === 'Enter')) {
+                e.preventDefault();
+                const runBtn = document.getElementById('btnRun');
+                if (runBtn && !runBtn.disabled) runBtn.click();
+            } else if (e.altKey && key === 'k') {
+                e.preventDefault();
+                const skipBtn = document.getElementById('btnSkip');
+                if (skipBtn && !skipBtn.disabled) skipBtn.click();
+            } else if (e.altKey && key === 's') {
+                e.preventDefault();
+                toggleAuto();
+            } else if (e.altKey && key === 'o') {
+                e.preventDefault();
+                const overlay = document.getElementById('settingsOverlay');
+                if (overlay.style.display === 'flex') {
+                    closeOverlay('settingsOverlay');
+                } else {
+                    openOverlay('settingsOverlay');
+                }
+            } else if (e.altKey && key === 'i') {
+                e.preventDefault();
+                toggleHelpOverlay();
+            } else if (e.altKey && (key === 'z' || key === 'y')) {
+                e.preventDefault();
+                const backBtn = document.getElementById('btnBack');
+                if (backBtn && !backBtn.disabled) backBtn.click();
+            } else if (e.altKey && key === 'n') {
+                e.preventDefault();
+                openAddStepOverlay();
+            } else if (e.altKey && key === 'e') {
+                e.preventDefault();
+                const activeCard = document.querySelector('.step-card.active');
+                if (activeCard) {
+                    const editBtn = activeCard.querySelector('.step-edit-btn');
+                    if (editBtn) editBtn.click();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
