@@ -1,36 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neodymium Interactive Console</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <style>
         :root {
             --bg-page: #0b0c10;
             --bg-surface: #14161f;
             --bg-surface-hover: #1b1e2a;
-            --bg-active-step: rgba(59, 130, 246, 0.08);
+            --bg-active-step: rgba(59, 130, 246, 0.10);
             --border-color: rgba(255, 255, 255, 0.08);
-            
+
             --text-main: #f3f4f6;
             --text-secondary: #9ca3af;
             --text-muted: #4b5563;
-            
+
             --accent-primary: #3b82f6;
             --accent-success: #10b981;
             --accent-warning: #f59e0b;
             --accent-danger: #ef4444;
             --accent-purple: #a855f7;
             --accent-healed: #14b8a6;
-            
+
             --font-sans: 'Outfit', sans-serif;
             --font-mono: 'JetBrains Mono', monospace;
             --border-radius: 12px;
+        }
+
+        /* Active step pulse animation */
+        @keyframes active-step-pulse {
+            0% {
+                box-shadow: inset 5px 0 0 var(--accent-primary), 0 0 18px rgba(59, 130, 246, 0.18);
+            }
+
+            50% {
+                box-shadow: inset 5px 0 0 var(--accent-primary), 0 0 30px rgba(59, 130, 246, 0.32);
+            }
+
+            100% {
+                box-shadow: inset 5px 0 0 var(--accent-primary), 0 0 18px rgba(59, 130, 246, 0.18);
+            }
+        }
+
+        @keyframes active-step-pulse-failed {
+            0% {
+                box-shadow: inset 5px 0 0 var(--accent-danger), 0 0 18px rgba(239, 68, 68, 0.18);
+            }
+
+            50% {
+                box-shadow: inset 5px 0 0 var(--accent-danger), 0 0 30px rgba(239, 68, 68, 0.32);
+            }
+
+            100% {
+                box-shadow: inset 5px 0 0 var(--accent-danger), 0 0 18px rgba(239, 68, 68, 0.18);
+            }
+        }
+
+        /* Thinking strip indicator pulse */
+        @keyframes thinking-icon-pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.6;
+                transform: scale(0.9);
+            }
         }
 
         :root.force-light {
@@ -39,13 +86,17 @@
             --bg-surface-hover: #f9fafb;
             --bg-active-step: rgba(37, 99, 235, 0.05);
             --border-color: rgba(0, 0, 0, 0.08);
-            
+
             --text-main: #1f2937;
             --text-secondary: #4b5563;
             --text-muted: #9ca3af;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
         body {
             background-color: var(--bg-page);
@@ -68,30 +119,125 @@
             justify-content: space-between;
         }
 
-        .hidden-details { display: none !important; }
-        .visible-details { display: block !important; }
-        #topDetailsPanel { transition: all 0.2s ease; }
+        .hidden-details {
+            display: none !important;
+        }
 
-        .header-meta { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
-        .header-browser-icon { font-size: 20px; color: var(--accent-primary); flex-shrink: 0; }
-        .header-meta h1 { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .header-meta span { font-size: 11px; color: var(--text-secondary); margin-left: 8px; white-space: nowrap; }
+        .visible-details {
+            display: block !important;
+        }
 
-        .header-controls { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+        #topDetailsPanel {
+            transition: all 0.2s ease;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        /* Header clickable test-name area that toggles details */
+        .header-meta-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            padding: 4px 8px;
+            margin: -4px -8px;
+            cursor: pointer;
+            text-align: left;
+            color: inherit;
+            font-family: inherit;
+            transition: background 0.15s;
+        }
+
+        .header-meta-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .header-meta-btn h1 {
+            font-size: 15px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .header-meta-btn .hdr-id {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-left: 4px;
+            white-space: nowrap;
+        }
+
+        .header-meta-btn .hdr-details-hint {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            flex-shrink: 0;
+            margin-left: 6px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 1px 6px;
+            white-space: nowrap;
+        }
+
+        /* Legacy header-meta kept for connection dot and browser icon wrappers */
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .header-browser-icon {
+            font-size: 20px;
+            color: var(--accent-primary);
+            flex-shrink: 0;
+        }
 
         #staleBanner {
-            display: none; background: rgba(245,158,11,0.12); border-bottom: 1px solid rgba(245,158,11,0.3);
-            padding: 10px 24px; font-size: 13px; color: var(--accent-warning);
-            align-items: center; gap: 12px;
+            display: none;
+            background: rgba(245, 158, 11, 0.12);
+            border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+            padding: 10px 24px;
+            font-size: 13px;
+            color: var(--accent-warning);
+            align-items: center;
+            gap: 12px;
         }
 
         #connectionDot {
-            width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted);
-            flex-shrink: 0; transition: background 0.3s;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            flex-shrink: 0;
+            transition: background 0.3s;
         }
-        #connectionDot.connected { background: var(--accent-success); }
-        #connectionDot.paused { background: var(--accent-warning); }
-        #connectionDot.error { background: var(--accent-danger); }
+
+        #connectionDot.connected {
+            background: var(--accent-success);
+        }
+
+        #connectionDot.paused {
+            background: var(--accent-warning);
+        }
+
+        #connectionDot.error {
+            background: var(--accent-danger);
+        }
 
         .workspace {
             display: grid;
@@ -106,7 +252,10 @@
             overflow: hidden;
             border-right: 1px solid var(--border-color);
         }
-        .column:last-child { border-right: none; }
+
+        .column:last-child {
+            border-right: none;
+        }
 
         /* Sleek scrollbars for details and step list */
         .scrollable-content::-webkit-scrollbar,
@@ -116,12 +265,14 @@
             width: 8px;
             height: 8px;
         }
+
         .scrollable-content::-webkit-scrollbar-track,
         body::-webkit-scrollbar-track,
         #bigScreenStepDetails::-webkit-scrollbar-track,
         pre::-webkit-scrollbar-track {
             background: transparent;
         }
+
         .scrollable-content::-webkit-scrollbar-thumb,
         body::-webkit-scrollbar-thumb,
         #bigScreenStepDetails::-webkit-scrollbar-thumb,
@@ -129,19 +280,21 @@
             background: rgba(255, 255, 255, 0.12);
             border-radius: 4px;
         }
+
         .scrollable-content::-webkit-scrollbar-thumb:hover,
         body::-webkit-scrollbar-thumb:hover,
         #bigScreenStepDetails::-webkit-scrollbar-thumb:hover,
         pre::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.24);
         }
-        
+
         :root.force-light .scrollable-content::-webkit-scrollbar-thumb,
         :root.force-light body::-webkit-scrollbar-thumb,
         :root.force-light #bigScreenStepDetails::-webkit-scrollbar-thumb,
         :root.force-light pre::-webkit-scrollbar-thumb {
             background: rgba(0, 0, 0, 0.12);
         }
+
         :root.force-light .scrollable-content::-webkit-scrollbar-thumb:hover,
         :root.force-light body::-webkit-scrollbar-thumb:hover,
         :root.force-light #bigScreenStepDetails::-webkit-scrollbar-thumb:hover,
@@ -157,12 +310,24 @@
             flex-direction: column;
         }
 
-        .block-group { display: flex; flex-direction: column; gap: 12px; }
+        .block-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
         .block-header {
-            font-size: 11px; font-weight: 700; color: var(--text-secondary);
-            text-transform: uppercase; letter-spacing: 1px;
-            display: flex; align-items: center; gap: 8px;
-            margin-bottom: 4px; border-left: 3px solid var(--accent-primary); padding-left: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+            border-left: 3px solid var(--accent-primary);
+            padding-left: 8px;
         }
 
         .step-card {
@@ -177,6 +342,7 @@
             position: relative;
             margin: 0;
         }
+
         .step-card:last-child {
             margin-bottom: 0;
         }
@@ -189,17 +355,47 @@
         .step-card.active {
             background-color: var(--bg-active-step);
             border-color: var(--accent-primary);
-            box-shadow: 0 0 12px rgba(59, 130, 246, 0.1);
-        }
-        
-        .step-card.active.failed {
-            background-color: rgba(239, 68, 68, 0.05);
-            border-color: var(--accent-danger);
-            box-shadow: 0 0 12px rgba(239, 68, 68, 0.1);
+            border-left-width: 6px !important;
+            border-left-color: var(--accent-primary) !important;
+            animation: active-step-pulse 2.2s ease-in-out infinite;
         }
 
-        .step-card.optional-step { border-style: dashed; border-color: var(--text-muted); }
-        .step-card.optional-step.active { border-style: solid; }
+        .step-card.active .step-text {
+            font-size: 15px !important;
+            font-weight: 700 !important;
+            color: var(--text-main);
+        }
+
+        .step-card.active.failed {
+            background-color: rgba(239, 68, 68, 0.07);
+            border-color: var(--accent-danger);
+            border-left-color: var(--accent-danger) !important;
+            animation: active-step-pulse-failed 2.2s ease-in-out infinite;
+        }
+
+        /* Passed steps are slightly dimmed to recede visually */
+        .step-card.passed-step {
+            opacity: 0.70;
+        }
+
+        /* Future/pending steps with no details: not selectable, no pointer cursor */
+        .step-card.no-details-pending {
+            cursor: default;
+        }
+
+        .step-card.no-details-pending:hover {
+            background-color: var(--bg-surface);
+            border-color: var(--border-color);
+        }
+
+        .step-card.optional-step {
+            border-style: dashed;
+            border-color: var(--text-muted);
+        }
+
+        .step-card.optional-step.active {
+            border-style: solid;
+        }
 
         .step-card.selected-details {
             border-color: var(--accent-purple) !important;
@@ -212,13 +408,33 @@
             box-shadow: 0 0 12px rgba(59, 130, 246, 0.2) !important;
         }
 
-        .step-card.include-lvl-1 { border-left: 4px solid var(--border-color); }
-        .step-card.include-lvl-2 { border-left: 4px solid var(--border-color); margin-left: 12px; }
-        .step-card.include-lvl-3 { border-left: 4px solid var(--border-color); margin-left: 24px; }
-        .step-card.include-lvl-4 { border-left: 4px solid var(--border-color); margin-left: 36px; }
-        
-        .step-card.active.failed[class*="include-lvl-"] { border-left-color: var(--accent-danger); }
-        .step-card.planned { opacity: 0.45; }
+        .step-card.include-lvl-1 {
+            border-left: 4px solid var(--border-color);
+        }
+
+        .step-card.include-lvl-2 {
+            border-left: 4px solid var(--border-color);
+            margin-left: 12px;
+        }
+
+        .step-card.include-lvl-3 {
+            border-left: 4px solid var(--border-color);
+            margin-left: 24px;
+        }
+
+        .step-card.include-lvl-4 {
+            border-left: 4px solid var(--border-color);
+            margin-left: 36px;
+        }
+
+        .step-card.active.failed[class*="include-lvl-"] {
+            border-left-color: var(--accent-danger);
+        }
+
+        .step-card.planned {
+            opacity: 0.45;
+        }
+
         .step-card.skipped {
             opacity: 0.55;
             border-style: dashed;
@@ -226,6 +442,7 @@
             position: relative;
             overflow: hidden;
         }
+
         .step-card.skipped::after {
             content: "";
             position: absolute;
@@ -238,6 +455,7 @@
             pointer-events: none;
             opacity: 0.7;
         }
+
         .action-approve-checkbox {
             cursor: pointer;
             width: 16px;
@@ -248,23 +466,35 @@
 
         .step-row {
             display: flex;
-            align-items: center;
-            gap: 12px;
+            align-items: flex-start;
+            /* keeps status icon and num badge top-aligned when text wraps */
+            gap: 8px;
             width: 100%;
         }
 
         .step-status-icon {
-            width: 22px; height: 22px;
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0; font-size: 14px;
+            width: 22px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 14px;
+            align-self: flex-start;
+            /* stay at top even during edit mode */
+            margin-top: 2px;
+            /* optically align with the first line of text */
         }
+
         .step-status-icon.pending-step {
             cursor: pointer;
         }
+
         /* On hover of the status icon area, hide the pending circle and show the breakpoint octagon in grey */
         .step-status-icon.pending-step:hover .pending-placeholder-icon {
             display: none !important;
         }
+
         .step-status-icon.pending-step:hover .bp-svg.hover-only {
             display: inline-block !important;
             fill: var(--text-secondary) !important;
@@ -280,10 +510,101 @@
         }
 
         /* The whole step card is the click target; pointer cursor on the card itself */
-        .step-card { cursor: pointer; }
-        .step-text { 
-            font-size: 14px; font-weight: 500; line-height: 1.4; 
+        .step-card {
+            cursor: pointer;
+        }
+
+        .step-text {
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.4;
             word-break: break-word;
+        }
+
+        /* Step number badge — inline in the step-row, shrinks to sit at top-left */
+        .step-num-badge {
+            font-size: 9px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            padding: 2px 5px;
+            line-height: 1.4;
+            flex-shrink: 0;
+            align-self: flex-start;
+            /* stays at top when step-text wraps */
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        /* Secondary details section (timing, tokens, DOM, screenshot) behind more-details toggle */
+        .step-secondary-details {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 10px;
+            margin-top: 4px;
+        }
+
+        .step-secondary-details.open {
+            display: flex;
+        }
+
+        .step-more-details-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-family: var(--font-sans);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+            align-self: flex-start;
+            margin-top: 6px;
+        }
+
+        .step-more-details-btn:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-main);
+        }
+
+        .step-more-details-btn.open {
+            color: var(--accent-primary);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        /* "▶ CURRENT" badge pinned top-right of the active card */
+        .active-step-badge {
+            position: absolute;
+            top: 10px;
+            right: 14px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            color: var(--accent-primary);
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 4px;
+            padding: 2px 7px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .step-card.active.failed .active-step-badge {
+            color: var(--accent-danger);
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.3);
         }
 
         /* Inline Edit Styling */
@@ -293,12 +614,18 @@
             gap: 8px;
             margin-top: 4px;
         }
-        .step-card.editing .step-text { display: none; }
-        .step-card.editing .step-edit-form { display: flex; }
-        
+
+        .step-card.editing .step-text {
+            display: none;
+        }
+
+        .step-card.editing .step-edit-form {
+            display: flex;
+        }
+
         .inline-edit-textarea {
             width: 100%;
-            background: rgba(0,0,0,0.2);
+            background: rgba(0, 0, 0, 0.2);
             border: 1px solid var(--accent-primary);
             color: var(--text-main);
             font-family: var(--font-sans);
@@ -308,65 +635,169 @@
             min-height: 40px;
             font-size: 13.5px;
         }
-        .inline-edit-textarea:focus { outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3); }
-        .inline-edit-actions { display: flex; justify-content: flex-end; gap: 6px; }
+
+        .inline-edit-textarea:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+
+        .inline-edit-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+        }
 
         .include-breadcrumb {
-            font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
-            color: var(--text-secondary); background: rgba(255,255,255,0.05);
-            padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;
+            font-family: var(--font-mono);
+            font-size: 10.5px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
-        .include-breadcrumb i { color: #818cf8; }
 
-        .tag-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
-        
-        .type-tag {
-            font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;
+        .include-breadcrumb i {
+            color: #818cf8;
         }
-        .type-playbook { background: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); }
-        .type-llm { background: rgba(129, 140, 248, 0.1); color: #818cf8; border: 1px solid rgba(129, 140, 248, 0.2); }
-        .type-healed { background: rgba(20, 184, 166, 0.1); color: var(--accent-healed); border: 1px solid rgba(20, 184, 166, 0.2); }
-        .type-branch { background: rgba(245, 158, 11, 0.1); color: var(--accent-warning); border: 1px solid rgba(245, 158, 11, 0.2); }
+
+        .tag-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 4px;
+        }
+
+        .type-tag {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .type-playbook {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .type-llm {
+            background: rgba(129, 140, 248, 0.1);
+            color: #818cf8;
+            border: 1px solid rgba(129, 140, 248, 0.2);
+        }
+
+        .type-healed {
+            background: rgba(20, 184, 166, 0.1);
+            color: var(--accent-healed);
+            border: 1px solid rgba(20, 184, 166, 0.2);
+        }
+
+        .type-branch {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--accent-warning);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
 
         .step-edit-btn {
             opacity: 0;
-            background: rgba(255,255,255,0.1);
-            border: none; color: var(--text-main);
-            width: 24px; height: 24px; border-radius: 4px;
-            cursor: pointer; transition: opacity 0.2s, background 0.2s;
-            display: flex; align-items: center; justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: var(--text-main);
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: opacity 0.2s, background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             flex-shrink: 0;
         }
-        .step-card:hover .step-edit-btn { opacity: 1; }
-        .step-edit-btn:hover { background: var(--accent-primary); }
-        @media (hover: none) { .step-edit-btn { opacity: 1; background: rgba(255,255,255,0.05); } }
+
+        .step-card:hover .step-edit-btn {
+            opacity: 1;
+        }
+
+        .step-edit-btn:hover {
+            background: var(--accent-primary);
+        }
+
+        @media (hover: none) {
+            .step-edit-btn {
+                opacity: 1;
+                background: rgba(255, 255, 255, 0.05);
+            }
+        }
 
         .step-rewind-btn {
             opacity: 0;
-            background: rgba(255,255,255,0.1);
-            border: none; color: var(--text-main);
-            width: 24px; height: 24px; border-radius: 4px;
-            cursor: pointer; transition: opacity 0.2s, background 0.2s;
-            display: flex; align-items: center; justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: var(--text-main);
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: opacity 0.2s, background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             flex-shrink: 0;
         }
-        .step-card:hover .step-rewind-btn { opacity: 1; }
-        .step-rewind-btn:hover { background: var(--accent-warning); }
-        @media (hover: none) { .step-rewind-btn { opacity: 1; background: rgba(255,255,255,0.05); } }
+
+        .step-card:hover .step-rewind-btn {
+            opacity: 1;
+        }
+
+        .step-rewind-btn:hover {
+            background: var(--accent-warning);
+        }
+
+        @media (hover: none) {
+            .step-rewind-btn {
+                opacity: 1;
+                background: rgba(255, 255, 255, 0.05);
+            }
+        }
 
         .step-reorder-handle {
             opacity: 0;
-            background: rgba(255,255,255,0.1);
-            border: none; color: var(--text-secondary);
-            width: 24px; height: 24px; border-radius: 4px;
-            cursor: grab; transition: opacity 0.2s, background 0.2s;
-            display: flex; align-items: center; justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: var(--text-secondary);
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: grab;
+            transition: opacity 0.2s, background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             flex-shrink: 0;
         }
-        .step-card:hover .step-reorder-handle { opacity: 1; }
-        .step-reorder-handle:hover { background: rgba(255,255,255,0.2); color: var(--text-main); }
-        .step-card.dragging { opacity: 0.4; border-style: dashed; }
-        
+
+        .step-card:hover .step-reorder-handle {
+            opacity: 1;
+        }
+
+        .step-reorder-handle:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: var(--text-main);
+        }
+
+        .step-card.dragging {
+            opacity: 0.4;
+            border-style: dashed;
+        }
+
         .drop-target-area {
             height: 6px;
             margin: 0;
@@ -377,6 +808,7 @@
             border: 2px dashed transparent;
             position: relative;
         }
+
         /* While dragging: expand all drop zones to be clearly visible as target areas */
         .scrollable-content.dragging-active .drop-target-area {
             height: 36px;
@@ -386,6 +818,7 @@
             align-items: center;
             justify-content: center;
         }
+
         .scrollable-content.dragging-active .drop-target-area::after {
             content: '';
             width: 60%;
@@ -393,22 +826,43 @@
             background: rgba(59, 130, 246, 0.25);
             border-radius: 2px;
         }
+
         /* Actively hovered drop zone */
         .drop-target-area.active {
             background: rgba(59, 130, 246, 0.18) !important;
             border-color: var(--accent-primary) !important;
             height: 44px !important;
         }
+
         .drop-target-area.active::after {
             background: var(--accent-primary) !important;
             opacity: 0.6;
         }
-        /* Suppress pointer cursor on step cards during drag so only drop-target-areas receive drops */
+
+        /* Suppress pointer events on step cards during drag; drop-target-areas still receive all events */
         .scrollable-content.dragging-active .step-card {
-            pointer-events: none;
+            pointer-events: none !important;
         }
+
         .scrollable-content.dragging-active .drop-target-area {
-            pointer-events: all;
+            pointer-events: all !important;
+        }
+
+        /* Compact action row chip styling */
+        .acc-action-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .acc-action-row+.acc-action-row {
+            margin-top: 3px;
         }
 
         .bp-svg {
@@ -421,16 +875,19 @@
             transition: fill 0.15s, opacity 0.15s;
             opacity: 0;
         }
+
         /* hover-only: hidden by default, shown via parent :hover CSS. Always grey. */
         .bp-svg.hover-only {
             fill: var(--text-secondary);
             opacity: 0;
         }
+
         /* When directly hovered within the status icon area, intensify grey slightly */
         .bp-svg.hover-only:hover {
             fill: var(--text-secondary) !important;
             opacity: 0.9 !important;
         }
+
         /* Active (breakpoint set) – always visible and red */
         .bp-svg.active {
             fill: var(--accent-danger) !important;
@@ -446,24 +903,46 @@
             padding-top: 12px;
             margin-top: 4px;
         }
-        .step-accordion-details.open { display: flex; }
+
+        .step-accordion-details.open {
+            display: flex;
+        }
 
         .acc-header {
-            display: flex; justify-content: space-between; align-items: flex-start;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
         }
+
         .acc-reasoning {
-            font-size: 13.5px; color: var(--text-main); line-height: 1.5;
-            display: flex; gap: 8px; align-items: flex-start;
+            font-size: 13.5px;
+            color: var(--text-main);
+            line-height: 1.5;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
         }
-        .acc-reasoning i { color: var(--accent-purple); font-size: 16px; margin-top: 2px; }
-        
+
+        .acc-reasoning i {
+            color: var(--accent-purple);
+            font-size: 16px;
+            margin-top: 2px;
+        }
+
         .acc-duration {
-            font-size: 12px; font-weight: 600; color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
         }
 
         .acc-screenshot {
-            width: 100%; border-radius: 8px; border: 1px solid var(--border-color);
-            max-height: 240px; object-fit: cover; object-position: top; opacity: 0.85;
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            max-height: 240px;
+            object-fit: cover;
+            object-position: top;
+            opacity: 0.85;
         }
 
         /* LLM Actions Sub-list – one clearly distinct card per action */
@@ -475,38 +954,80 @@
             overflow: hidden;
             border: 1px solid var(--border-color);
         }
+
         /* Legacy class kept for compatibility */
         .llm-action-item {
-            display: flex; align-items: center; gap: 10px;
-            padding: 6px 10px; border-radius: 6px;
-            background: rgba(255,255,255,0.03);
-            font-size: 12.5px; font-family: var(--font-mono); color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.03);
+            font-size: 12.5px;
+            font-family: var(--font-mono);
+            color: var(--text-main);
         }
-        .llm-action-item.success { border-left: 3px solid var(--accent-success); }
-        .llm-action-item.failed { border-left: 3px solid var(--accent-danger); background: rgba(239, 68, 68, 0.05); }
-        
-        .llm-action-icon { width: 16px; text-align: center; color: var(--text-secondary); }
-        .llm-action-desc { flex-grow: 1; }
-        .llm-action-target { color: var(--accent-primary); font-weight: 600; }
-        .llm-action-status { font-size: 14px; }
-        .llm-action-item.success .llm-action-status { color: var(--accent-success); }
-        .llm-action-item.failed .llm-action-status { color: var(--accent-danger); }
+
+        .llm-action-item.success {
+            border-left: 3px solid var(--accent-success);
+        }
+
+        .llm-action-item.failed {
+            border-left: 3px solid var(--accent-danger);
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        .llm-action-icon {
+            width: 16px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .llm-action-desc {
+            flex-grow: 1;
+        }
+
+        .llm-action-target {
+            color: var(--accent-primary);
+            font-weight: 600;
+        }
+
+        .llm-action-status {
+            font-size: 14px;
+        }
+
+        .llm-action-item.success .llm-action-status {
+            color: var(--accent-success);
+        }
+
+        .llm-action-item.failed .llm-action-status {
+            color: var(--accent-danger);
+        }
+
         /* Redesigned individual action card */
         .acc-action-card {
             display: flex;
             flex-direction: column;
             gap: 4px;
             padding: 10px 14px;
-            background: rgba(0,0,0,0.12);
+            background: rgba(0, 0, 0, 0.12);
             border-bottom: 1px solid var(--border-color);
         }
-        .acc-action-card:last-child { border-bottom: none; }
-        .acc-action-card:nth-child(even) { background: rgba(255,255,255,0.015); }
+
+        .acc-action-card:last-child {
+            border-bottom: none;
+        }
+
+        .acc-action-card:nth-child(even) {
+            background: rgba(255, 255, 255, 0.015);
+        }
+
         .acc-action-header {
             display: flex;
             align-items: center;
             gap: 10px;
         }
+
         .acc-action-type-badge {
             font-family: var(--font-mono);
             font-size: 11px;
@@ -515,11 +1036,12 @@
             letter-spacing: 0.8px;
             padding: 2px 7px;
             border-radius: 4px;
-            background: rgba(59,130,246,0.12);
+            background: rgba(59, 130, 246, 0.12);
             color: var(--accent-primary);
-            border: 1px solid rgba(59,130,246,0.2);
+            border: 1px solid rgba(59, 130, 246, 0.2);
             flex-shrink: 0;
         }
+
         .acc-action-duration {
             font-size: 11px;
             color: var(--text-muted);
@@ -529,6 +1051,7 @@
             gap: 4px;
             flex-shrink: 0;
         }
+
         .acc-action-target {
             font-family: var(--font-mono);
             font-size: 13px;
@@ -536,73 +1059,205 @@
             word-break: break-all;
             padding-left: 2px;
         }
+
         .acc-action-value {
             font-family: var(--font-mono);
             font-size: 12px;
             color: var(--text-secondary);
-            background: rgba(0,0,0,0.2);
+            background: rgba(0, 0, 0, 0.2);
             border-radius: 4px;
             padding: 3px 8px;
             margin-top: 2px;
             border: 1px solid var(--border-color);
         }
+
         .acc-action-value code {
             color: var(--accent-warning);
         }
 
         .error-message-box {
-            font-size: 12px; color: var(--accent-danger); padding: 6px 10px;
-            display: flex; align-items: center; justify-content: space-between;
-            background: rgba(239, 68, 68, 0.08); border-radius: 6px;
+            font-size: 12px;
+            color: var(--accent-danger);
+            padding: 6px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(239, 68, 68, 0.08);
+            border-radius: 6px;
             border: 1px solid rgba(239, 68, 68, 0.2);
             font-family: var(--font-mono);
         }
+
         .copy-btn {
-            background: transparent; border: none; color: var(--accent-danger); cursor: pointer;
-            padding: 4px 6px; border-radius: 4px; transition: background 0.2s; font-size: 14px;
+            background: transparent;
+            border: none;
+            color: var(--accent-danger);
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            font-size: 14px;
         }
-        .copy-btn:hover { background: rgba(239, 68, 68, 0.15); }
+
+        .copy-btn:hover {
+            background: rgba(239, 68, 68, 0.15);
+        }
 
         .bottom-area {
             background-color: var(--bg-surface);
             border-top: 1px solid var(--border-color);
-            display: flex; flex-direction: column;
+            display: flex;
+            flex-direction: column;
             z-index: 10;
         }
 
         .current-reasoning-panel {
-            padding: 12px 24px;
-            background: rgba(168, 85, 247, 0.05);
+            padding: 12px 20px;
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(59, 130, 246, 0.07));
+            border-top: 2px solid rgba(168, 85, 247, 0.4);
             border-bottom: 1px solid var(--border-color);
-            display: flex; align-items: center; gap: 12px;
-            font-size: 14px; font-weight: 500; color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
         }
-        .current-reasoning-panel i { color: var(--accent-purple); font-size: 18px; }
-        .current-reasoning-panel.failed { background: rgba(239, 68, 68, 0.05); color: var(--accent-danger); }
-        .current-reasoning-panel.failed i { color: var(--accent-danger); }
+
+        .current-reasoning-panel .reasoning-icon {
+            color: var(--accent-purple);
+            font-size: 18px;
+            flex-shrink: 0;
+            animation: thinking-icon-pulse 1.4s ease-in-out infinite;
+        }
+
+        .current-reasoning-panel.failed {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.05));
+            border-top-color: rgba(239, 68, 68, 0.5);
+            color: var(--accent-danger);
+        }
+
+        .current-reasoning-panel.failed .reasoning-icon {
+            color: var(--accent-danger);
+            animation: none;
+        }
+
+        .current-reasoning-panel.idle {
+            background: rgba(255, 255, 255, 0.02);
+            border-top-color: transparent;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .current-reasoning-panel.idle .reasoning-icon {
+            animation: none;
+            color: var(--text-muted);
+        }
+
+        .reasoning-timer {
+            margin-left: auto;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-purple);
+            font-family: var(--font-mono);
+            flex-shrink: 0;
+        }
+
+        .current-reasoning-panel.failed .reasoning-timer {
+            color: var(--accent-danger);
+        }
 
         .toolbar-footer {
             padding: 16px 24px;
-            display: flex; justify-content: space-between; align-items: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .btn-group { display: flex; gap: 8px; align-items: center; }
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
 
         .btn {
-            font-family: var(--font-sans); font-size: 13px; font-weight: 600;
-            padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color);
-            background: rgba(255, 255, 255, 0.03); color: var(--text-secondary);
-            cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
+            font-family: var(--font-sans);
+            font-size: 13px;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
-        .btn:hover:not(:disabled) { background-color: rgba(255, 255, 255, 0.06); color: var(--text-main); border-color: var(--text-secondary); }
-        .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-        .btn-primary { color: var(--accent-primary); border-color: rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.05); }
-        .btn-primary:hover:not(:disabled) { background-color: var(--accent-primary) !important; color: white !important; }
-        .btn-success { color: var(--accent-success); border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); }
-        .btn-success:hover:not(:disabled) { background-color: var(--accent-success) !important; color: white !important; border-color: var(--accent-success) !important; }
-        .btn-danger { color: var(--accent-danger); border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05); }
-        .btn-danger:hover:not(:disabled) { background-color: var(--accent-danger) !important; color: white !important; border-color: var(--accent-danger) !important; }
-        .btn-icon { padding: 8px 10px; }
+
+        .btn:hover:not(:disabled) {
+            background-color: rgba(255, 255, 255, 0.06);
+            color: var(--text-main);
+            border-color: var(--text-secondary);
+        }
+
+        .btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            color: var(--accent-primary);
+            border-color: rgba(59, 130, 246, 0.3);
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: var(--accent-primary) !important;
+            color: white !important;
+        }
+
+        /* Run button: solid filled, larger, unmistakable primary action */
+        .btn-success {
+            color: white;
+            border-color: var(--accent-success);
+            background: var(--accent-success);
+            font-size: 14px;
+            padding: 10px 22px;
+            box-shadow: 0 4px 16px rgba(16, 185, 129, 0.30);
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background-color: #059669 !important;
+            border-color: #059669 !important;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.50) !important;
+            color: white !important;
+        }
+
+        .btn-success:disabled {
+            box-shadow: none;
+            background: rgba(16, 185, 129, 0.3);
+            border-color: rgba(16, 185, 129, 0.2);
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .btn-danger {
+            color: var(--accent-danger);
+            border-color: rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background-color: var(--accent-danger) !important;
+            color: white !important;
+            border-color: var(--accent-danger) !important;
+        }
+
+        .btn-icon {
+            padding: 8px 10px;
+        }
+
         .btn-details-toggle {
             background: transparent;
             border: none;
@@ -614,6 +1269,7 @@
             gap: 4px;
             cursor: pointer;
         }
+
         .btn-details-toggle:hover {
             color: var(--accent-primary-hover);
         }
@@ -623,17 +1279,19 @@
             border-color: rgba(59, 130, 246, 0.3) !important;
             background: rgba(59, 130, 246, 0.05) !important;
         }
+
         .btn-auto-blue:hover:not(:disabled) {
             background-color: var(--accent-primary) !important;
             color: white !important;
             border-color: var(--accent-primary) !important;
         }
-        
+
         .btn-pause-orange {
             color: var(--accent-warning) !important;
             border-color: rgba(245, 158, 11, 0.3) !important;
             background: rgba(245, 158, 11, 0.05) !important;
         }
+
         .btn-pause-orange:hover:not(:disabled) {
             background-color: var(--accent-warning) !important;
             color: white !important;
@@ -641,51 +1299,174 @@
         }
 
         .cancel-warning {
-            display: none; align-items: center; gap: 8px; font-size: 13px; color: var(--accent-danger); font-weight: 600;
-            background: rgba(239, 68, 68, 0.1); padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2);
+            display: none;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--accent-danger);
+            font-weight: 600;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(239, 68, 68, 0.2);
         }
-        .panel-header { padding: 16px 24px; border-bottom: 1px solid var(--border-color); background: var(--bg-surface); }
-        .panel-header h2 { font-size: 14px; font-weight: 600; }
 
-        .screenshot-placeholder { padding: 60px; text-align: center; color: var(--text-muted); font-size: 13px; border: 1px dashed var(--border-color); border-radius: var(--border-radius); }
+        .panel-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-surface);
+        }
+
+        .panel-header h2 {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        /* Step progress pill — shown in header on desktop, full-width below header on mobile */
+        .progress-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-main);
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            border-radius: 20px;
+            padding: 5px 14px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .progress-pill .progress-bar-track {
+            width: 70px;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.10);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-pill .progress-bar-fill {
+            height: 100%;
+            background: var(--accent-primary);
+            border-radius: 3px;
+            transition: width 0.4s ease;
+        }
+
+        /* Full-width progress bar shown below header on mobile */
+        #progressBarMobile {
+            display: none;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.06);
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        #progressBarMobileFill {
+            height: 100%;
+            background: var(--accent-primary);
+            transition: width 0.4s ease;
+        }
+
+        #progressLabelMobile {
+            display: none;
+            padding: 5px 16px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--accent-primary);
+            background: rgba(59, 130, 246, 0.06);
+            border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+        }
+
+        .screenshot-placeholder {
+            padding: 60px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+            border: 1px dashed var(--border-color);
+            border-radius: var(--border-radius);
+        }
 
         /* Modal Overlays with glassmorphism */
         .modal-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
-            z-index: 1000; display: none; align-items: center; justify-content: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
             padding: 20px;
         }
+
         .modal-content {
-            background: var(--bg-surface); border: 1px solid var(--border-color);
-            border-radius: var(--border-radius); padding: 24px; max-width: 480px; width: 100%;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 24px;
+            max-width: 480px;
+            width: 100%;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            text-align: center;
         }
+
         .modal-header {
-            display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            margin-bottom: 16px;
         }
-        .modal-header h3 { font-size: 15px; font-weight: 600; margin: 0; }
+
+        .modal-header h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin: 0;
+        }
+
         .close-btn {
-            background: transparent; border: none; color: var(--text-secondary);
-            font-size: 20px; cursor: pointer; line-height: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+            line-height: 1;
         }
-        .close-btn:hover { color: var(--text-main); }
+
+        .close-btn:hover {
+            color: var(--text-main);
+        }
 
         .binding-badge {
-            cursor: pointer; background: rgba(59,130,246,0.15); color: var(--accent-primary);
-            padding: 4px 8px; border-radius: 4px; font-family: var(--font-mono); font-size: 11.5px;
-            transition: all 0.2s; border: 1px solid rgba(59,130,246,0.2);
-        }
-        .binding-badge:hover {
-            background: var(--accent-primary); color: white;
+            cursor: pointer;
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent-primary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 11.5px;
+            transition: all 0.2s;
+            border: 1px solid rgba(59, 130, 246, 0.2);
         }
 
-        .binding-key, .editable-binding-key {
+        .binding-badge:hover {
+            background: var(--accent-primary);
+            color: white;
+        }
+
+        .binding-key,
+        .editable-binding-key {
             cursor: pointer;
             transition: color 0.2s;
         }
-        .binding-key:hover, .editable-binding-key:hover {
+
+        .binding-key:hover,
+        .editable-binding-key:hover {
             color: var(--accent-primary) !important;
             text-decoration: underline;
         }
@@ -704,7 +1485,7 @@
             background: var(--bg-surface);
             border: 1px solid var(--border-color);
             border-radius: var(--border-radius);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
             backdrop-filter: none;
             padding: 16px;
             display: none;
@@ -729,27 +1510,110 @@
             justify-content: center;
             gap: 8px;
         }
+
         .add-step-card-btn:hover {
             background: var(--bg-surface-hover);
             border-color: var(--accent-primary);
             color: var(--text-main);
         }
 
+        /* Inline reasoning bubble — more prominent on active step */
+        .inline-reasoning-label {
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent-purple);
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .inline-reasoning-bubble {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 10px 14px;
+            background: rgba(168, 85, 247, 0.09);
+            border: 1px solid rgba(168, 85, 247, 0.25);
+            border-left: 4px solid rgba(168, 85, 247, 0.7);
+            border-radius: 0 8px 8px 0;
+            font-size: 13.5px;
+            font-style: italic;
+            color: var(--text-main);
+            line-height: 1.5;
+            margin-top: 8px;
+        }
+
+        .inline-reasoning-bubble.failed {
+            background: rgba(239, 68, 68, 0.09);
+            border-color: rgba(239, 68, 68, 0.25);
+            border-left-color: rgba(239, 68, 68, 0.7);
+            color: var(--accent-danger);
+            font-style: normal;
+        }
+
+        .inline-reasoning-bubble .reasoning-body {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .inline-reasoning-bubble .reasoning-body i {
+            color: var(--accent-purple);
+            font-size: 15px;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .inline-reasoning-bubble.failed .reasoning-body i {
+            color: var(--accent-danger);
+        }
+
+        .inline-reasoning-thinking .reasoning-body i {
+            animation: thinking-icon-pulse 1.4s ease-in-out infinite;
+        }
+
         @media (min-width: 901px) {
-            .step-accordion-details { display: none !important; }
+            .step-accordion-details {
+                display: none !important;
+            }
         }
 
         @media (max-width: 900px) {
-            .workspace { grid-template-columns: 1fr; }
-            .column:last-child { display: none !important; }
-            .big-screen-only { display: none !important; }
-            #bigScreenStepDetails { display: none !important; }
+            .workspace {
+                grid-template-columns: 1fr;
+            }
+
+            .column:last-child {
+                display: none !important;
+            }
+
+            .big-screen-only {
+                display: none !important;
+            }
+
+            #bigScreenStepDetails {
+                display: none !important;
+            }
+
+            /* On mobile: hide the header pill, show the bar below */
+            #progressPill {
+                display: none !important;
+            }
+
+            #progressBarMobile,
+            #progressLabelMobile {
+                display: block !important;
+            }
         }
 
         @media (max-width: 600px) {
             #screenshotOverlay {
                 padding: 0 !important;
             }
+
             #screenshotOverlay .modal-content {
                 width: 100vw !important;
                 height: 100vh !important;
@@ -763,6 +1627,7 @@
                 justify-content: center;
                 align-items: center;
             }
+
             #screenshotOverlay img {
                 width: 100% !important;
                 height: auto !important;
@@ -772,42 +1637,66 @@
         }
     </style>
 </head>
+
 <body>
 
     <!-- Stale tab warning -->
     <div id="staleBanner">
         <i class="fa-solid fa-triangle-exclamation"></i>
         <span id="staleBannerMsg">This tab is connected to an old test run.</span>
-        <button class="btn btn-primary" onclick="refreshToCurrentRun()" style="padding: 5px 12px; font-size: 12px;">Refresh to current run</button>
+        <button class="btn btn-primary" onclick="refreshToCurrentRun()"
+            style="padding: 5px 12px; font-size: 12px;">Refresh to current run</button>
+    </div>
+    <!-- Mobile: progress label + bar shown below header -->
+    <div id="progressLabelMobile"></div>
+    <div id="progressBarMobile">
+        <div id="progressBarMobileFill" style="width:0%"></div>
     </div>
 
     <header>
         <div class="header-meta">
             <div id="connectionDot" title="Connecting..."></div>
-            <span class="header-browser-icon" id="browserIcon" title="Browser"><i class="fa-brands fa-chrome"></i></span>
-            <h1 id="testNameDisplay">Loading...</h1>
-            <span id="testIdDisplay"></span>
+            <span class="header-browser-icon" id="browserIcon" title="Browser"><i
+                    class="fa-brands fa-chrome"></i></span>
+            <!-- Test name/ID is now a button that toggles the details panel -->
+            <button class="header-meta-btn" id="btnToggleDetails" onclick="toggleTopDetails()"
+                title="Test Details (Alt+D)" aria-label="Toggle Test Metadata Details" type="button">
+                <h1 id="testNameDisplay">Loading...</h1>
+                <span class="hdr-id" id="testIdDisplay"></span>
+                <span class="hdr-details-hint"><i class="fa-solid fa-chevron-down" id="detailsChevron"></i>
+                    details</span>
+            </button>
         </div>
-        <button class="btn-details-toggle" id="btnToggleDetails" onclick="toggleTopDetails()" title="Toggle Details (Alt+D)" aria-label="Toggle Test Metadata Details" type="button">Details <i class="fa-solid fa-chevron-down" id="detailsChevron"></i></button>
+        <!-- Step progress pill (desktop) -->
+        <div class="progress-pill" id="progressPill" style="display:none;" title="Test execution progress">
+            <span id="progressLabel">Step 0 / 0</span>
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div>
+            </div>
+        </div>
         <div class="header-controls">
             <div class="help-hover-container">
-                <button class="btn btn-icon" id="btnHelp" onclick="toggleHelpOverlay()" title="Help (Alt+I)" aria-label="Keyboard Shortcuts and Help"><i class="fa-solid fa-circle-question"></i></button>
+                <button class="btn btn-icon" id="btnHelp" onclick="toggleHelpOverlay()" title="Help (Alt+I)"
+                    aria-label="Keyboard Shortcuts and Help"><i class="fa-solid fa-circle-question"></i></button>
                 <div id="helpOverlay">
                     <div class="modal-header">
                         <h3>Keyboard Shortcuts & Info</h3>
-                        <button class="close-btn" onclick="closeOverlay('helpOverlay')" aria-label="Close Help">&times;</button>
+                        <button class="close-btn" onclick="closeOverlay('helpOverlay')"
+                            aria-label="Close Help">&times;</button>
                     </div>
                     <div style="margin: 12px 0; text-align: left; font-size: 13.5px; line-height: 1.5;">
                         <table style="width: 100%; border-collapse: collapse;">
                             <thead>
-                                <tr style="border-bottom:1px solid var(--border-color); text-align:left; color:var(--text-secondary);">
+                                <tr
+                                    style="border-bottom:1px solid var(--border-color); text-align:left; color:var(--text-secondary);">
                                     <th style="padding: 6px 8px;">Shortcut</th>
                                     <th style="padding: 6px 8px;">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + R / Ctrl + Enter</td>
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + R / Ctrl + Enter
+                                    </td>
                                     <td style="padding:6px 8px;">Run active step</td>
                                 </tr>
                                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
@@ -831,56 +1720,83 @@
                                     <td style="padding:6px 8px;">Rewind execution</td>
                                 </tr>
                                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + D</td>
+                                    <td style="padding:6px 8px;">Toggle test details</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
                                     <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + O</td>
                                     <td style="padding:6px 8px;">Open Settings</td>
                                 </tr>
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                <tr>
                                     <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + I</td>
-                                    <td style="padding:6px 8px;">Open Shortcuts Info</td>
+                                    <td style="padding:6px 8px;">Toggle this panel</td>
                                 </tr>
                             </tbody>
                         </table>
-                        <div style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;">
-                            <p style="margin-bottom: 10px;"><strong style="color: var(--text-main);">Shortcuts:</strong></p>
-                            <ul style="list-style: none; padding: 0;">
-                                <li style="margin-bottom: 4px;"><kbd>Alt + R</kbd> - Run Step</li>
-                                <li style="margin-bottom: 4px;"><kbd>Alt + S</kbd> - Toggle Auto</li>
-                                <li style="margin-bottom: 4px;"><kbd>Alt + Z/Y</kbd> - Rewind</li>
-                                <li style="margin-bottom: 4px;"><kbd>Alt + K</kbd> - Skip</li>
-                                <li style="margin-bottom: 4px;"><kbd>Alt + N</kbd> - Add Step</li>
-                                <li style="margin-bottom: 4px;"><kbd>Alt + D</kbd> - Toggle Details</li>
-                                <li style="margin-bottom: 4px;"><kbd>Alt + E</kbd> - Edit Step</li>
-                            </ul>
-                            <p style="margin-top: 12px; font-style: italic;">Hover over steps to see drag handles and edit/rewind buttons.</p>
-                        </div>
+                        <p style="margin-top: 12px; font-size:12px; font-style: italic; color:var(--text-secondary);">
+                            Hover over steps to reveal drag handles, edit, and rewind buttons.</p>
                     </div>
                 </div>
             </div>
-            <button class="btn" id="btnSettings" onclick="openOverlay('settingsOverlay')" title="Settings (Alt+G)" aria-label="Open Settings (Alt+G)"><i class="fa-solid fa-gear" aria-hidden="true"></i></button>
-            <button class="btn" onclick="toggleTheme()" title="Toggle Theme" aria-label="Toggle Light/Dark Theme"><i class="fa-solid fa-circle-half-stroke"></i></button>
+            <button class="btn" id="btnSettings" onclick="openOverlay('settingsOverlay')" title="Settings (Alt+G)"
+                aria-label="Open Settings (Alt+G)"><i class="fa-solid fa-gear" aria-hidden="true"></i></button>
+            <button class="btn" onclick="toggleTheme()" title="Toggle Theme" aria-label="Toggle Light/Dark Theme"><i
+                    class="fa-solid fa-circle-half-stroke"></i></button>
         </div>
     </header>
-    <div id="topDetailsPanel" class="hidden-details" style="padding:16px; background:var(--bg-surface); border-bottom:1px solid var(--border-color); width:100%;">
-        <div style="max-width: 1200px; margin: 0 auto; display: flex; gap: 24px;">
-            <div style="flex: 1;">
-                <div style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">JUnit 5 Tags:</div>
-                <div id="topJunitTags" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+    <div id="topDetailsPanel" class="hidden-details"
+        style="padding:16px; background:var(--bg-surface); border-bottom:1px solid var(--border-color); width:100%;">
+        <div style="max-width: 1400px; margin: 0 auto; display: flex; gap: 24px; flex-wrap: wrap;">
+            <!-- Column 1: Tags + Source file -->
+            <div style="flex: 1; min-width: 160px;">
+                <div
+                    style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text-secondary); margin-bottom:6px;">
+                    Test Info</div>
+                <div id="topJunitTags" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;"></div>
+                <div id="topTestSource"
+                    style="font-size:11.5px; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all; display:none;">
+                </div>
             </div>
-            <div style="flex: 2;">
-                <div style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">Initial Dataset Parameters:</div>
-                <div style="overflow-x: auto;">
-                    <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
-                        <thead>
+            <!-- Column 2: Initial Dataset Parameters -->
+            <div style="flex: 2; min-width: 220px;">
+                <div
+                    style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text-secondary); margin-bottom:6px;">
+                    Initial Dataset Parameters</div>
+                <div style="overflow-x: auto; max-height: 180px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead style="position:sticky; top:0; background:var(--bg-surface);">
                             <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
-                                <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600; width: 40%;">Parameter</th>
-                                <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">Value</th>
+                                <th
+                                    style="padding: 5px 8px; color: var(--text-secondary); font-weight: 600; width: 40%;">
+                                    Parameter</th>
+                                <th style="padding: 5px 8px; color: var(--text-secondary); font-weight: 600;">Value</th>
                             </tr>
                         </thead>
                         <tbody id="topTestDataBody">
                             <tr>
-                                <td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">No initial test data.</td>
+                                <td colspan="2" style="padding: 10px; text-align: center; color: var(--text-muted);">No
+                                    initial test data.</td>
                             </tr>
                         </tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- Column 3: Live Variables — only shown when state.storedVariables has entries -->
+            <div id="topLiveVarsCol" style="flex: 2; min-width: 220px; display:none;">
+                <div
+                    style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text-secondary); margin-bottom:6px;">
+                    Stored Variables</div>
+                <div style="overflow-x: auto; max-height: 180px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead style="position:sticky; top:0; background:var(--bg-surface);">
+                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
+                                <th
+                                    style="padding: 5px 8px; color: var(--text-secondary); font-weight: 600; width: 40%;">
+                                    Variable</th>
+                                <th style="padding: 5px 8px; color: var(--text-secondary); font-weight: 600;">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topLiveVarsBody"></tbody>
                     </table>
                 </div>
             </div>
@@ -888,62 +1804,85 @@
     </div>
 
     <div class="workspace" role="main">
-        <div class="column" style="display:flex; flex-direction:column; justify-content:space-between; height:100%;" role="region" aria-label="Steps Timeline">
+        <div class="column" style="display:flex; flex-direction:column; justify-content:space-between; height:100%;"
+            role="region" aria-label="Steps Timeline">
             <div class="scrollable-content" id="timelineList" style="flex-grow:1;">
-                
-                <div class="block-group" id="beforeGroup" style="display:none;" role="group" aria-label="Before Execution Steps">
-                     <div class="block-header">Before Execution</div>
-                     <div id="beforeSteps"></div>
-                     <button class="add-step-card-btn" onclick="openAddStepOverlay('before')" title="Add Step (Alt+N)" aria-label="Add step to before block" style="margin-top: 4px; margin-bottom: 12px;"><i class="fa-solid fa-plus"></i> Add Step</button>
+
+                <div class="block-group" id="beforeGroup" style="display:none;" role="group"
+                    aria-label="Before Execution Steps">
+                    <div class="block-header">Before Execution</div>
+                    <div id="beforeSteps"></div>
+                    <button class="add-step-card-btn" onclick="openAddStepOverlay('before')" title="Add Step (Alt+N)"
+                        aria-label="Add step to before block" style="margin-top: 4px; margin-bottom: 12px;"><i
+                            class="fa-solid fa-plus"></i> Add Step</button>
                 </div>
 
-                <div class="block-group" id="stepsGroup" style="display:none;" role="group" aria-label="Core Test Steps">
-                     <div class="block-header">Core Test Steps</div>
-                     <div id="stepsSteps"></div>
-                     <button class="add-step-card-btn" onclick="openAddStepOverlay('steps')" title="Add Step (Alt+N)" aria-label="Add step to steps block" style="margin-top: 4px; margin-bottom: 12px;"><i class="fa-solid fa-plus"></i> Add Step</button>
+                <div class="block-group" id="stepsGroup" style="display:none;" role="group"
+                    aria-label="Core Test Steps">
+                    <div class="block-header">Core Test Steps</div>
+                    <div id="stepsSteps"></div>
+                    <button class="add-step-card-btn" onclick="openAddStepOverlay('steps')" title="Add Step (Alt+N)"
+                        aria-label="Add step to steps block" style="margin-top: 4px; margin-bottom: 12px;"><i
+                            class="fa-solid fa-plus"></i> Add Step</button>
                 </div>
 
-                <div class="block-group" id="afterGroup" style="display:none;" role="group" aria-label="After Execution Steps">
-                     <div class="block-header">After Execution</div>
-                     <div id="afterSteps"></div>
-                     <button class="add-step-card-btn" onclick="openAddStepOverlay('after')" title="Add Step (Alt+N)" aria-label="Add step to after block" style="margin-top: 4px; margin-bottom: 12px;"><i class="fa-solid fa-plus"></i> Add Step</button>
+                <div class="block-group" id="afterGroup" style="display:none;" role="group"
+                    aria-label="After Execution Steps">
+                    <div class="block-header">After Execution</div>
+                    <div id="afterSteps"></div>
+                    <button class="add-step-card-btn" onclick="openAddStepOverlay('after')" title="Add Step (Alt+N)"
+                        aria-label="Add step to after block" style="margin-top: 4px; margin-bottom: 12px;"><i
+                            class="fa-solid fa-plus"></i> Add Step</button>
                 </div>
             </div>
 
             <!-- Bottom Action Area inside Left Column -->
             <div class="bottom-area" role="region" aria-label="Execution Controls">
-                <div class="current-reasoning-panel" id="reasoningPanel">
-                    <i class="fa-solid fa-brain" id="reasoningIcon" aria-hidden="true"></i>
-                    <span id="reasoningText">Connecting to interactive console…</span>
-                </div>
-                
+
                 <div class="toolbar-footer">
                     <div class="btn-group">
-                        <button class="btn" id="btnBack" onclick="sendAction('REWIND')" title="Step Back (Alt+Z / Alt+Y)" aria-label="Rewind step back (Alt+Z or Alt+Y)" disabled><i class="fa-solid fa-backward-step" aria-hidden="true"></i> Back</button>
-                        <button class="btn btn-success" id="btnRun" onclick="sendAction('RUN')" title="Run Step (Alt+R / Ctrl+Enter)" aria-label="Run step (Alt+R or Ctrl+Enter)" disabled><i class="fa-solid fa-play" aria-hidden="true"></i> Run</button>
-                        <button class="btn" id="btnSkip" onclick="sendAction('SKIP')" title="Skip Step (Alt+K)" aria-label="Skip step (Alt+K)" disabled><i class="fa-solid fa-forward-step" aria-hidden="true"></i> Skip</button>
-                        <button class="btn" id="btnAuto" onclick="toggleAuto()" title="Auto-run (Alt+S)" aria-label="Toggle Auto-run (Alt+S)" disabled><i class="fa-solid fa-forward-fast" aria-hidden="true"></i> Auto</button>
+                        <button class="btn" id="btnBack" onclick="sendAction('REWIND')"
+                            title="Step Back (Alt+Z / Alt+Y)" aria-label="Rewind step back (Alt+Z or Alt+Y)" disabled><i
+                                class="fa-solid fa-backward-step" aria-hidden="true"></i> Back</button>
+                        <button class="btn btn-success" id="btnRun" onclick="sendAction('RUN')"
+                            title="Run Step (Alt+R / Ctrl+Enter)" aria-label="Run step (Alt+R or Ctrl+Enter)"
+                            disabled><i class="fa-solid fa-play" aria-hidden="true"></i> Run</button>
+                        <button class="btn" id="btnSkip" onclick="sendAction('SKIP')" title="Skip Step (Alt+K)"
+                            aria-label="Skip step (Alt+K)" disabled><i class="fa-solid fa-forward-step"
+                                aria-hidden="true"></i> Skip</button>
+                        <button class="btn" id="btnAuto" onclick="toggleAuto()" title="Auto-run (Alt+S)"
+                            aria-label="Toggle Auto-run (Alt+S)" disabled><i class="fa-solid fa-forward-fast"
+                                aria-hidden="true"></i> Auto</button>
                     </div>
-                    
+
                     <div class="btn-group">
                         <div class="cancel-warning" id="cancelWarning" role="alert" aria-live="assertive">
-                            Are you sure? 
-                            <button class="btn" style="padding: 4px 8px; font-size: 11px;" onclick="sendAction('SAVE_EXIT')" aria-label="Confirm stop and exit">Yes, Stop</button>
-                            <button class="btn" style="padding: 4px 8px; font-size: 11px;" onclick="hideCancelWarning()" aria-label="Cancel stopping">No</button>
+                            Are you sure?
+                            <button class="btn" style="padding: 4px 8px; font-size: 11px;"
+                                onclick="sendAction('SAVE_EXIT')" aria-label="Confirm stop and exit">Yes, Stop</button>
+                            <button class="btn" style="padding: 4px 8px; font-size: 11px;" onclick="hideCancelWarning()"
+                                aria-label="Cancel stopping">No</button>
                         </div>
-                        <button class="btn btn-danger" id="btnCancel" onclick="showCancelWarning()" title="Cancel test run (Escape)" aria-label="Cancel test run (Escape)"><i class="fa-solid fa-stop" aria-hidden="true"></i> Cancel test</button>
+                        <button class="btn btn-danger" id="btnCancel" onclick="showCancelWarning()"
+                            title="Cancel test run (Escape)" aria-label="Cancel test run (Escape)"><i
+                                class="fa-solid fa-stop" aria-hidden="true"></i> Cancel Test</button>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="column" role="region" aria-label="Step Details">
-            <div class="panel-header"><h2>Step Details</h2></div>
+            <div class="panel-header">
+                <h2>Step Details</h2>
+            </div>
             <div class="scrollable-content">
                 <!-- Step Details Card -->
-                <div id="bigScreenStepDetails" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
-                    <h3 style="font-size: 13px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
-                        <i class="fa-solid fa-circle-info" style="color:var(--accent-primary)"></i> Step Execution Details
+                <div id="bigScreenStepDetails"
+                    style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                    <h3
+                        style="font-size: 13px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-circle-info" style="color:var(--accent-primary)"></i> Step Execution
+                        Details
                     </h3>
                     <div id="bigScreenDetailsContent">
                         <!-- Populated dynamically via JS -->
@@ -954,24 +1893,30 @@
     </div>
 
     <!-- Modal Overlays -->
-    <div id="settingsOverlay" class="modal-overlay" onclick="closeOverlay('settingsOverlay')" role="dialog" aria-labelledby="settingsTitle" aria-modal="true">
+    <div id="settingsOverlay" class="modal-overlay" onclick="closeOverlay('settingsOverlay')" role="dialog"
+        aria-labelledby="settingsTitle" aria-modal="true">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <h3 id="settingsTitle">HUD Settings</h3>
-                <button class="close-btn" onclick="closeOverlay('settingsOverlay')" aria-label="Close Settings">&times;</button>
+                <button class="close-btn" onclick="closeOverlay('settingsOverlay')"
+                    aria-label="Close Settings">&times;</button>
             </div>
             <div style="display:flex; flex-direction:column; gap:16px; margin: 16px 0; text-align: left;">
                 <div>
-                    <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px;">Theme Preference</label>
-                    <select id="themeSelect" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:var(--text-main); padding:8px; border-radius:6px;">
+                    <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px;">Theme
+                        Preference</label>
+                    <select id="themeSelect"
+                        style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:var(--text-main); padding:8px; border-radius:6px;">
                         <option value="dark">Dark Theme</option>
                         <option value="light">Light Theme</option>
                         <option value="system">System Theme</option>
                     </select>
                 </div>
                 <div>
-                    <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px;">Zoom Level (%)</label>
-                    <input type="number" id="zoomInput" value="100" min="50" max="200" step="5" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:var(--text-main); padding:8px; border-radius:6px; font-family:var(--font-mono);" />
+                    <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px;">Zoom Level
+                        (%)</label>
+                    <input type="number" id="zoomInput" value="100" min="50" max="200" step="5"
+                        style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:var(--text-main); padding:8px; border-radius:6px; font-family:var(--font-mono);" />
                 </div>
             </div>
             <div class="inline-edit-actions">
@@ -990,7 +1935,8 @@
             <div style="margin: 16px 0; text-align: left; font-size: 13.5px; line-height: 1.5;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead>
-                        <tr style="border-bottom:1px solid var(--border-color); text-align:left; color:var(--text-secondary);">
+                        <tr
+                            style="border-bottom:1px solid var(--border-color); text-align:left; color:var(--text-secondary);">
                             <th style="padding: 6px 8px;">Shortcut</th>
                             <th style="padding: 6px 8px;">Action</th>
                         </tr>
@@ -1041,23 +1987,30 @@
                 <h3>Simplified DOM Content</h3>
                 <button class="close-btn" onclick="closeOverlay('domOverlay')">&times;</button>
             </div>
-            <pre id="domPre" style="background: rgba(0,0,0,0.3); padding:12px; border-radius:6px; overflow:auto; max-height: 400px; font-family:var(--font-mono); font-size:12px; text-align:left; white-space: pre-wrap; word-break: break-all;"></pre>
+            <pre id="domPre"
+                style="background: rgba(0,0,0,0.3); padding:12px; border-radius:6px; overflow:auto; max-height: 400px; font-family:var(--font-mono); font-size:12px; text-align:left; white-space: pre-wrap; word-break: break-all;"></pre>
         </div>
     </div>
 
     <div id="screenshotOverlay" class="modal-overlay" onclick="closeOverlay('screenshotOverlay')">
-        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 90%; width: 90%; height: 90%; display: flex; flex-direction: column;">
+        <div class="modal-content" onclick="event.stopPropagation()"
+            style="max-width: 90%; width: 90%; height: 90%; display: flex; flex-direction: column;">
             <div class="modal-header" style="flex-shrink: 0;">
                 <h3>Screenshot</h3>
                 <div style="display: flex; gap: 8px; align-items: center; margin-right: 16px;">
-                    <button class="btn btn-icon" onclick="zoomScreenshot(1.2)" title="Zoom In"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
-                    <button class="btn btn-icon" onclick="zoomScreenshot(0.8)" title="Zoom Out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
-                    <button class="btn" onclick="resetScreenshotZoom()" style="font-size: 11px; padding: 4px 8px;">Reset</button>
+                    <button class="btn btn-icon" onclick="zoomScreenshot(1.2)" title="Zoom In"><i
+                            class="fa-solid fa-magnifying-glass-plus"></i></button>
+                    <button class="btn btn-icon" onclick="zoomScreenshot(0.8)" title="Zoom Out"><i
+                            class="fa-solid fa-magnifying-glass-minus"></i></button>
+                    <button class="btn" onclick="resetScreenshotZoom()"
+                        style="font-size: 11px; padding: 4px 8px;">Reset</button>
                 </div>
                 <button class="close-btn" onclick="closeOverlay('screenshotOverlay')">&times;</button>
             </div>
-            <div id="screenshotViewport" style="flex-grow: 1; overflow: hidden; position: relative; background: rgba(0,0,0,0.4); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: grab;">
-                <img id="screenshotImg" src="" style="max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center center; transition: transform 0.1s ease-out; user-select: none; pointer-events: none;" />
+            <div id="screenshotViewport"
+                style="flex-grow: 1; overflow: hidden; position: relative; background: rgba(0,0,0,0.4); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: grab;">
+                <img id="screenshotImg" src=""
+                    style="max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center center; transition: transform 0.1s ease-out; user-select: none; pointer-events: none;" />
             </div>
         </div>
     </div>
@@ -1162,15 +2115,15 @@
                     });
                 }
             }
-            
+
             // Load settings from localStorage
             const savedTheme = localStorage.getItem('neodymium.hud.theme') || 'system';
             const savedZoom = localStorage.getItem('neodymium.hud.zoom') || '100';
-            
+
             const themeSelect = document.getElementById('themeSelect');
             if (themeSelect) themeSelect.value = savedTheme;
             applyTheme(savedTheme);
-            
+
             const zoomInput = document.getElementById('zoomInput');
             if (zoomInput) zoomInput.value = savedZoom;
             const zoom = parseInt(savedZoom, 10);
@@ -1198,19 +2151,19 @@
                     startY = e.clientY - panY;
                     e.preventDefault();
                 });
-                
+
                 window.addEventListener('mousemove', (e) => {
                     if (!isPanning) return;
                     panX = e.clientX - startX;
                     panY = e.clientY - startY;
                     updateScreenshotTransform();
                 });
-                
+
                 window.addEventListener('mouseup', () => {
                     isPanning = false;
                     if (viewport) viewport.style.cursor = 'grab';
                 });
-                
+
                 viewport.addEventListener('wheel', (e) => {
                     e.preventDefault();
                     const factor = e.deltaY < 0 ? 1.15 : 0.85;
@@ -1251,7 +2204,7 @@
             // Header info
             setTextIfChanged('testNameDisplay', state.testName || '—');
             setTextIfChanged('testIdDisplay', state.testId ? `(ID: ${state.testId})` : '');
-            
+
             // Set Browser Icon
             const browserLower = (state.browser || '').toLowerCase();
             const browserIcon = document.getElementById('browserIcon');
@@ -1269,15 +2222,66 @@
 
             // Reasoning panel
             const panel = document.getElementById('reasoningPanel');
-            const icon  = document.getElementById('reasoningIcon');
-            const text  = document.getElementById('reasoningText');
+            const icon = document.getElementById('reasoningIcon');
+            const text = document.getElementById('reasoningText');
+            const timer = document.getElementById('reasoningTimer');
             const newReasoning = state.reasoning || '';
             if (text && text.textContent !== newReasoning) {
                 text.textContent = newReasoning;
-                panel.className = 'current-reasoning-panel' + (state.reasoningFailed ? ' failed' : '');
-                icon.className = state.reasoningFailed
+                const isFailed = !!state.reasoningFailed;
+                const isThinking = !newReasoning && !isFailed;
+                panel.className = 'current-reasoning-panel' +
+                    (isFailed ? ' failed' : '') +
+                    (isThinking ? ' idle' : '');
+                icon.className = (isFailed
                     ? 'fa-solid fa-triangle-exclamation'
-                    : 'fa-solid fa-brain';
+                    : 'fa-solid fa-brain') + ' reasoning-icon';
+                // Show timer only while AI is actively thinking (has reasoning, not failed, not idle)
+                if (timer) timer.style.display = (!isThinking && !isFailed) ? '' : 'none';
+            }
+
+            // Update progress pill (desktop) and mobile bar.
+            // currentStep = doneSteps + 1 when a step is actively running; otherwise = doneSteps.
+            const allStepsForProgress = [
+                ...(state.blocks?.before || []),
+                ...(state.blocks?.steps || []),
+                ...(state.blocks?.after || [])
+            ];
+            const totalSteps = allStepsForProgress.length;
+            const doneSteps = allStepsForProgress.filter(s => s.status === 'passed' || s.status === 'skipped' || s.status === 'failed').length;
+            const hasRunning = allStepsForProgress.some(s => s.status === 'running');
+            const currentStep = doneSteps + (hasRunning ? 1 : 0);
+            const pill = document.getElementById('progressPill');
+            const pLabel = document.getElementById('progressLabel');
+            const pFill = document.getElementById('progressBarFill');
+            if (pill && totalSteps > 0) {
+                pill.style.display = '';
+                pLabel.textContent = `Step ${currentStep} / ${totalSteps}`;
+                pFill.style.width = Math.round((currentStep / totalSteps) * 100) + '%';
+            }
+            // Mobile progress
+            const mLabel = document.getElementById('progressLabelMobile');
+            const mFill = document.getElementById('progressBarMobileFill');
+            if (mLabel && totalSteps > 0) {
+                mLabel.textContent = `Step ${currentStep} of ${totalSteps}`;
+                mFill.style.width = Math.round((currentStep / totalSteps) * 100) + '%';
+            }
+            // Test source file
+            const topTestSource = document.getElementById('topTestSource');
+            if (topTestSource) {
+                topTestSource.textContent = state.testFile || '';
+                topTestSource.style.display = state.testFile ? '' : 'none';
+            }
+            // Stored Variables: only show the column when state.storedVariables has entries
+            const topLiveVarsCol = document.getElementById('topLiveVarsCol');
+            const topLiveVarsBody = document.getElementById('topLiveVarsBody');
+            const storedVars = state.storedVariables || {};
+            const storedKeys = Object.keys(storedVars);
+            if (topLiveVarsCol) topLiveVarsCol.style.display = storedKeys.length > 0 ? '' : 'none';
+            if (topLiveVarsBody && storedKeys.length > 0) {
+                topLiveVarsBody.innerHTML = storedKeys
+                    .map(k => `<tr style="border-bottom:1px solid rgba(255,255,255,0.03);"><td style="padding:5px 8px;font-family:var(--font-mono);font-weight:600;color:var(--text-secondary);">${escHtml(k)}</td><td style="padding:5px 8px;font-family:var(--font-mono);color:var(--text-main);">${escHtml(storedVars[k])}</td></tr>`)
+                    .join('');
             }
 
             if (isFirstLoad) {
@@ -1287,8 +2291,8 @@
 
             // Render block groups
             renderBlock('before', state.blocks?.before || []);
-            renderBlock('steps',  state.blocks?.steps  || []);
-            renderBlock('after',  state.blocks?.after  || []);
+            renderBlock('steps', state.blocks?.steps || []);
+            renderBlock('after', state.blocks?.after || []);
 
             // Render Data Bindings Table
             const tbody = document.getElementById('dataBindingsTableBody');
@@ -1387,6 +2391,19 @@
 
             // Update details block for big screens
             updateBigScreenDetails();
+
+            // On the very first state load: open the active step's accordion on mobile
+            // (on desktop the right panel handles it; on mobile the accordion is the only detail view)
+            if (isFirstLoad) {
+                requestAnimationFrame(() => {
+                    const activeCard = document.querySelector('.step-card.active');
+                    if (activeCard) {
+                        const acc = activeCard.querySelector('.step-accordion-details');
+                        if (acc) acc.classList.add('open');
+                        activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                });
+            }
         }
 
         function checkActionApprovals() {
@@ -1401,7 +2418,7 @@
             ];
             const s = allSteps.find(st => st.index === idx);
             const isThinking = s && s.status === 'running' && !s.reasoning;
-            
+
             if (isThinking || isAutoMode) {
                 document.getElementById('btnRun').disabled = true;
             } else {
@@ -1415,7 +2432,7 @@
 
         function renderBlock(blockName, steps) {
             const container = document.getElementById(blockName + 'Steps');
-            const group     = document.getElementById(blockName + 'Group');
+            const group = document.getElementById(blockName + 'Group');
             if (!steps.length) { group.style.display = 'none'; return; }
             group.style.display = 'flex';
 
@@ -1423,101 +2440,125 @@
             if (container.dataset.sig === sig) return;
             container.dataset.sig = sig;
 
-            container.innerHTML = steps.map(renderStepCard).join('') + 
-                `<div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${steps[steps.length-1].index}, 'after')"></div>`;
+            container.innerHTML = steps.map(renderStepCard).join('') +
+                `<div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${steps[steps.length - 1].index}, 'after')"></div>`;
         }
 
-           function buildStepDetailsHtml(step) {
+        function buildStepDetailsHtml(step, isActiveStep) {
             const isSkipped = step.status === 'skipped';
-            const isFailed  = step.status === 'failed';
-            
-            // Multi-action warning shown as small info note above the list
-            const warningBanner = (step.actions && step.actions.length > 1)
-                ? `<div class="substep-warning-info" style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;" title="Sub-steps cannot be skipped individually"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Sub-steps cannot be skipped individually</div>`
-                : '';
+            const isFailed = step.status === 'failed';
+            const isPassed = step.status === 'passed';
 
-            // Each action rendered as its own distinct card. Think time is NOT shown per action
-            // (thinking happens at step level, not per action). Only execution durationMs is shown.
+            // ---- Actions: compact one-line chips ----
             const actionsHtml = step.actions && step.actions.length > 0
-                ? step.actions.map((a) => `
-                    <div class="acc-action-card">
-                        <div class="acc-action-header">
-                            <span class="acc-action-type-badge">${escHtml(a.type)}</span>
-                            ${a.durationMs ? `<span class="acc-action-duration"><i class="fa-solid fa-bolt" style="color:var(--accent-warning);"></i> ${(a.durationMs/1000).toFixed(2)}s</span>` : ''}
-                        </div>
-                        ${a.target ? `<div class="acc-action-target">${escHtml(a.target)}</div>` : ''}
-                        ${a.value ? `<div class="acc-action-value">Value: <code>${escHtml(a.value)}</code></div>` : ''}
-                    </div>
-                `).join('')
-                : '<div style="color:var(--text-muted); font-size:12px; padding:12px; text-align:center;">No actions performed yet.</div>';
+                ? step.actions.map((a) => {
+                    const parts = [];
+                    if (a.target) parts.push(`<span style="color:var(--text-main);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;">${escHtml(a.target)}</span>`);
+                    if (a.value) parts.push(`<span style="color:var(--text-secondary);font-size:11px;">= <code style="background:rgba(255,255,255,0.06);padding:0 4px;border-radius:3px;">${escHtml(a.value)}</code></span>`);
+                    if (a.durationMs) parts.push(`<span style="color:var(--text-muted);font-size:10px;margin-left:auto;white-space:nowrap;"><i class="fa-solid fa-bolt" style="color:var(--accent-warning);"></i> ${(a.durationMs / 1000).toFixed(2)}s</span>`);
+                    return `<div class="acc-action-row">
+                        <span class="acc-action-type-badge">${escHtml(a.type)}</span>
+                        ${parts.join('')}
+                    </div>`;
+                }).join('')
+                : '<div style="color:var(--text-muted); font-size:12px; padding:8px 0;">No actions recorded yet.</div>';
 
-            const actionListBlock = isSkipped ? '' : `<div class="llm-action-list">${warningBanner}${actionsHtml}</div>`;
+            const actionsLabel = isActiveStep
+                ? `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><i class="fa-solid fa-list-check" style="color:var(--accent-primary);"></i> Actions to perform</div>`
+                : `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><i class="fa-solid fa-list-check"></i> Actions performed</div>`;
+
+            const actionListBlock = isSkipped ? '' : `<div class="llm-action-list">${actionsLabel}${actionsHtml}</div>`;
 
             const errorBox = step.errorMessage ? `
                 <div class="error-message-box" style="margin-bottom:12px;">
                     <span id="err-text-detail-${step.index}">${escHtml(step.errorMessage)}</span>
-                    <button class="copy-btn" onclick="copyError('err-text-detail-${step.index}')" title="Copy to clipboard" aria-label="Copy error message to clipboard"><i class="fa-regular fa-copy" aria-hidden="true"></i></button>
+                    <button class="copy-btn" onclick="copyError('err-text-detail-${step.index}')" title="Copy to clipboard"><i class="fa-regular fa-copy" aria-hidden="true"></i></button>
                 </div>` : '';
-            
-            const isThinking = step.status === 'running' && !step.reasoning;
-            const reasoningText = isThinking
-                ? `<div class="acc-reasoning" style="margin-bottom:12px;"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--accent-purple)" aria-hidden="true"></i> AI is thinking...</div>`
-                : step.reasoning ? `<div class="acc-reasoning" style="margin-bottom:12px; ${isFailed ? 'color:var(--accent-danger)' : ''}">
-                        <i class="fa-solid ${isFailed ? 'fa-triangle-exclamation' : 'fa-brain'}" style="margin-right:8px; ${isFailed ? 'color:var(--accent-danger)' : ''}" aria-hidden="true"></i>
-                        ${escHtml(step.reasoning)}</div>` : '';
 
-            const thinkingTimeBlock = (step.thinkingTimeMs !== undefined && step.thinkingTimeMs > 0)
-                ? `<div class="acc-thinking-time" title="Thinking duration">
-                       <i class="fa-solid fa-hourglass-half" aria-hidden="true"></i> Thinking: <strong>${(step.thinkingTimeMs / 1000).toFixed(1)}s</strong>
-                   </div>`
+            // Right-column panel compact reasoning (not shown for active steps; the card has the bubble)
+            const isThinking = step.status === 'running' && !step.reasoning;
+            const reasoningText = !isActiveStep && (isThinking || step.reasoning)
+                ? (isThinking
+                    ? `<div class="acc-reasoning" style="margin-bottom:12px;"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--accent-purple)" aria-hidden="true"></i> AI is thinking...</div>`
+                    : `<div class="acc-reasoning" style="margin-bottom:12px; ${isFailed ? 'color:var(--accent-danger)' : ''}">
+                        <i class="fa-solid ${isFailed ? 'fa-triangle-exclamation' : 'fa-brain'}" style="margin-right:8px;" aria-hidden="true"></i>${escHtml(step.reasoning)}</div>`)
                 : '';
 
-            const durationBlock = step.durationMs ? `<div class="acc-duration" title="Execution duration">
-                    <i class="fa-solid fa-bolt" style="color:var(--accent-warning)" aria-hidden="true"></i> Exec: <strong>${(step.durationMs / 1000).toFixed(1)}s</strong>
-                </div>` : '';
-
+            // Timing meta — only show execution time for steps that have finished
+            const thinkingTimeBlock = (step.thinkingTimeMs !== undefined && step.thinkingTimeMs > 0)
+                ? `<span title="Thinking duration"><i class="fa-solid fa-hourglass-half" style="color:var(--accent-purple);" aria-hidden="true"></i> ${(step.thinkingTimeMs / 1000).toFixed(1)}s</span>`
+                : '';
+            const durationBlock = (isPassed || isFailed || isSkipped) && step.durationMs
+                ? `<span title="Execution duration"><i class="fa-solid fa-bolt" style="color:var(--accent-warning);" aria-hidden="true"></i> ${(step.durationMs / 1000).toFixed(1)}s</span>`
+                : '';
             const tokenBlock = (step.inputTokens || step.outputTokens)
-                ? `<div class="acc-tokens" title="Tokens used (Input / Output)">
-                       <i class="fa-solid fa-calculator" aria-hidden="true"></i> Tokens: In <strong>${step.inputTokens || 0}</strong> / Out <strong>${step.outputTokens || 0}</strong>
-                   </div>`
+                ? `<span title="Tokens (Input / Output)"><i class="fa-solid fa-calculator" style="color:var(--text-muted);" aria-hidden="true"></i> ${step.inputTokens || 0} / ${step.outputTokens || 0}</span>`
+                : '';
+            const timingRow = (thinkingTimeBlock || durationBlock || tokenBlock)
+                ? `<div style="display:flex;gap:12px;align-items:center;font-size:11px;color:var(--text-secondary);flex-wrap:wrap;">${thinkingTimeBlock}${durationBlock}${tokenBlock}</div>`
                 : '';
 
             const domBlock = step.simplifiedDom
-                ? `<div class="acc-dom">
-                       <i class="fa-solid fa-code" aria-hidden="true"></i> DOM: 
-                       <a href="#" class="dom-overlay-link" onclick="openDomOverlay(event, \`${escAttr(step.simplifiedDom)}\`)" style="color:var(--accent-primary); text-decoration:underline;" title="View simplified DOM snapshot" aria-label="View simplified DOM content">View Content</a>
-                   </div>`
+                ? `<div class="acc-dom" style="font-size:12px;"><i class="fa-solid fa-code" aria-hidden="true"></i> DOM: <a href="#" onclick="openDomOverlay(event, \`${escAttr(step.simplifiedDom)}\`)" style="color:var(--accent-primary);text-decoration:underline;">View Content</a></div>`
                 : '';
-
             const screenshotBlock = step.screenshot
                 ? `<div class="acc-screenshot-block" style="margin-top:12px;">
-                       <i class="fa-solid fa-image" aria-hidden="true"></i> Screenshot: 
-                       <a href="#" class="screenshot-overlay-link" onclick="openScreenshotOverlay(event, '${escAttr(step.screenshot)}')" style="color:var(--accent-primary); text-decoration:underline;" title="View screenshot fullscreen" aria-label="View full screenshot image">View Fullscreen</a>
+                       <div style="font-size:12px;"><i class="fa-solid fa-image" aria-hidden="true"></i> Screenshot: <a href="#" onclick="openScreenshotOverlay(event,'${escAttr(step.screenshot)}')" style="color:var(--accent-primary);text-decoration:underline;">View Fullscreen</a></div>
                        <img class="acc-screenshot" src="${escAttr(step.screenshot)}" alt="Step screenshot"
-                            onclick="openScreenshotOverlay(event, '${escAttr(step.screenshot)}')" style="cursor:pointer; margin-top:8px; max-height:200px; width:100%; object-fit:cover; border-radius: 8px;" title="Click to view fullscreen">
+                            onclick="openScreenshotOverlay(event,'${escAttr(step.screenshot)}')" style="cursor:pointer;margin-top:8px;max-height:200px;width:100%;object-fit:cover;border-radius:8px;">
+                   </div>`
+                : '';
+            // Breadcrumb block (include file / chain)
+            const breadcrumbBlock = step.includeFile || (step.includeChain && step.includeChain.length > 0)
+                ? (() => {
+                    if (step.includeChain && step.includeChain.length > 0) {
+                        const ct = step.includeChain.join(' > ');
+                        return `<div class="include-breadcrumb" title="${escAttr(ct)}"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(ct)}</div>`;
+                    }
+                    return `<div class="include-breadcrumb"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(step.includeFile)}</div>`;
+                })()
+                : '';
+
+            const hasSecondary = timingRow || domBlock || screenshotBlock || breadcrumbBlock;
+
+            if (isActiveStep) {
+                // Active step: primary (actions) always open;
+                // secondary (timing/DOM/screenshot/breadcrumb) behind a More details toggle.
+                const secondaryHtml = hasSecondary ? `
+                    <button class="step-more-details-btn" onclick="toggleStepSecondary(event, this)" aria-expanded="false">
+                        <i class="fa-solid fa-chevron-right" style="font-size:9px;transition:transform 0.2s;"></i>
+                        <span class="toggle-label"> More details</span>
+                    </button>
+                    <div class="step-secondary-details">
+                        ${breadcrumbBlock}
+                        ${timingRow}
+                        ${domBlock}
+                        ${screenshotBlock}
+                    </div>` : '';
+
+                return `<div class="step-details-wrapper" style="display:flex;flex-direction:column;gap:10px;">
+                    ${actionListBlock}
+                    ${secondaryHtml}
+                </div>`;
+            }
+
+            // Non-active (passed / failed / skipped): full layout
+            // Top header row: breadcrumb left, timings right
+            const headerRow = (breadcrumbBlock || timingRow)
+                ? `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+                       <div>${breadcrumbBlock}</div>
+                       <div>${timingRow}</div>
                    </div>`
                 : '';
 
-            return `
-                <div class="step-details-wrapper" style="display:flex; flex-direction:column; gap:12px;">
-                    <!-- Row 1: Actions (left) + Times (right) -->
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px;">
-                        <div style="flex-grow:1; min-width:0;">
-                            ${actionListBlock}
-                        </div>
-                    </div>
-                    <!-- Row 2: Other details -->
-                    <div style="display:flex; flex-direction:column; gap:8px; border-top:1px solid var(--border-color); padding-top:8px;">
-                        ${reasoningText}
-                        ${errorBox}
-                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-secondary); flex-wrap:wrap; gap:8px;">
-                            ${domBlock}
-                            ${tokenBlock}
-                        </div>
-                        ${screenshotBlock}
-                    </div>
-                </div>
-            `;
+            return `<div class="step-details-wrapper" style="display:flex;flex-direction:column;gap:10px;">
+                ${headerRow}
+                ${actionListBlock}
+                ${reasoningText}
+                ${errorBox}
+                <div style="display:flex;gap:12px;flex-wrap:wrap;">${domBlock}</div>
+                ${screenshotBlock}
+            </div>`;
         }
 
         function generateEditableBindingsTable(bindings, textareaIdOrClass) {
@@ -1525,7 +2566,7 @@
             if (keys.length === 0) {
                 return '<div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 8px;">No variables available.</div>';
             }
-            
+
             return `
                 <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">Insert/Edit Variables:</div>
                 <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background: rgba(0,0,0,0.15);">
@@ -1555,7 +2596,7 @@
                     currentState.dataBindings = {};
                 }
                 currentState.dataBindings[key] = val;
-                
+
                 // Also update top test data body if visible
                 const topTestDataBody = document.getElementById('topTestDataBody');
                 if (topTestDataBody) {
@@ -1597,18 +2638,33 @@
 
         function renderStepCard(step) {
             const isSkipped = step.status === 'skipped';
-            const isActive  = step.status === 'running' || (step.status === 'failed');
-            const isFailed  = step.status === 'failed';
-            const lvlClass  = step.includeLevel > 0 ? ` include-lvl-${Math.min(step.includeLevel, 4)}` : '';
+            const isPassed = step.status === 'passed';
+            const isActive = step.status === 'running' || (step.status === 'failed');
+            const isFailed = step.status === 'failed';
+            const lvlClass = step.includeLevel > 0 ? ` include-lvl-${Math.min(step.includeLevel, 4)}` : '';
             const skippedClass = isSkipped ? ' skipped' : '';
-            
+            const passedClass = isPassed ? ' passed-step' : '';
+
+            // Determine whether this step has any displayable information.
+            // Used both to conditionally render the accordion and to guard against
+            // selecting future steps that have nothing to show yet.
+            const hasDetails = (step.actions && step.actions.length > 0)
+                || step.errorMessage
+                || step.durationMs
+                || step.screenshot
+                || step.thinkingTimeMs
+                || step.simplifiedDom
+                || step.reasoning;
+            const isPendingNoDetails = (!step.status || step.status === 'pending') && !hasDetails;
+            const noDetailsPendingClass = isPendingNoDetails ? ' no-details-pending' : '';
+
             const isSelected = step.index == selectedStepIndexForDetails;
             const selectedClass = isSelected ? ' selected-details' : '';
             const activeClass = isActive ? (isFailed ? ' active failed' : ' active') : '';
 
             const bpActive = activeBreakpoints.has(step.index);
             let statusIconMarkup = '';
-            
+
             if (step.status === 'passed') {
                 statusIconMarkup = `<i class="fa-solid fa-circle-check" style="color:var(--accent-success)" aria-label="Passed"></i>`;
             } else if (step.status === 'failed') {
@@ -1636,12 +2692,16 @@
                 }
             }
 
-            const sourceTag = step.source === 'playbook'
-                ? `<div class="type-tag type-playbook"><i class="fa-solid fa-compact-disc" aria-hidden="true"></i> Playbook</div>`
+            // Playbook steps: no type-tag in the card (shown as a note in reasoning area instead)
+            const isPlaybook = step.source === 'playbook';
+            const sourceTag = isPlaybook
+                ? ''
                 : step.source === 'healed'
-                ? `<div class="type-tag type-healed"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> Healed</div>`
-                : `<div class="type-tag type-llm"><i class="fa-solid fa-robot" aria-hidden="true"></i> LLM Agent</div>`;
+                    ? `<div class="type-tag type-healed"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> Healed</div>`
+                    : `<div class="type-tag type-llm"><i class="fa-solid fa-robot" aria-hidden="true"></i> LLM Agent</div>`;
 
+            // Build breadcrumb string but do NOT put it in the tag-row;
+            // it will appear in the secondary details section.
             let includeBreadcrumb = '';
             if (step.includeChain && step.includeChain.length > 0) {
                 const chainText = step.includeChain.join(' > ');
@@ -1652,15 +2712,20 @@
 
             const isPausedRunning = step.status === 'running' && currentPauseId !== null;
             const isPendingOrPausedRunning = !step.status || step.status === 'pending' || isPausedRunning;
-            const hasDetails = (step.actions && step.actions.length > 0) || step.errorMessage || step.durationMs || step.screenshot || step.thinkingTimeMs || step.simplifiedDom || step.reasoning;
+            // hasDetails is declared above (needed for noDetailsPendingClass) — do not redeclare here.
 
             const showEdit = step.status !== 'passed' && step.status !== 'skipped';
-            const editBtnHtml = showEdit 
+            const editBtnHtml = showEdit
                 ? `<button class="step-edit-btn" onclick="enableEdit(this)" title="Edit Step (Alt+E)" aria-label="Edit step instruction (Alt+E)"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>`
                 : '';
 
-            const rewindBtnHtml = `<button class="step-rewind-btn" onclick="triggerRewind(event, ${step.index})" title="Rewind execution back here" aria-label="Rewind execution back here"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>`;
+            // Rewind only makes sense for steps that have already been executed (passed/failed/skipped).
+            // Showing it on future/active steps is confusing and not actionable.
+            const rewindBtnHtml = isPassed || isFailed || isSkipped
+                ? `<button class="step-rewind-btn" onclick="triggerRewind(event, ${step.index})" title="Rewind execution back here" aria-label="Rewind execution back here"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>`
+                : '';
 
+            // Only non-passed, non-skipped steps can be reordered.
             const showReorder = step.status !== 'passed' && step.status !== 'skipped';
             let reorderHandleHtml = '';
             if (showReorder) {
@@ -1670,22 +2735,86 @@
             const statusIconContainerClass = isPendingOrPausedRunning ? 'step-status-icon pending-step' : 'step-status-icon';
             const statusClickAttr = isPendingOrPausedRunning ? `onclick="toggleBp(event, ${step.index})"` : '';
 
-            const detailsHtml = hasDetails ? buildStepDetailsHtml(step) : '';
+            const detailsHtml = hasDetails ? buildStepDetailsHtml(step, isActive) : '';
             const accordionOpen = isActive ? ' open' : '';
-            
+
             const selectedArrowMarkup = isSelected ? `<div class="selected-arrow big-screen-only" style="margin-left: 8px; color: var(--accent-purple); display: flex; align-items: center;"><i class="fa-solid fa-chevron-right"></i></div>` : '';
 
             const resolvedInstruction = resolveVariables(step.instruction, currentState?.dataBindings);
 
+            // Build inline reasoning / playbook note for active step
+            let inlineReasoningHtml = '';
+            if (isActive) {
+                if (isPlaybook) {
+                    // Playbook steps: show a note instead of AI reasoning
+                    inlineReasoningHtml = `<div class="inline-reasoning-bubble" style="background:rgba(99,102,241,0.07);border-left-color:rgba(99,102,241,0.5);">
+                        <div class="inline-reasoning-label" style="color:#818cf8;"><i class="fa-solid fa-compact-disc" aria-hidden="true"></i> From Playbook</div>
+                        <div class="reasoning-body">
+                            <i class="fa-solid fa-book-open" style="color:#818cf8;" aria-hidden="true"></i>
+                            <span style="color:var(--text-secondary);">This step is defined in a playbook and will be executed as recorded.</span>
+                        </div>
+                    </div>`;
+                } else {
+                    const isThinking = step.status === 'running' && !step.reasoning;
+                    if (isThinking) {
+                        inlineReasoningHtml = `<div class="inline-reasoning-bubble inline-reasoning-thinking">
+                            <div class="inline-reasoning-label"><i class="fa-solid fa-brain" aria-hidden="true"></i> AI Thinking</div>
+                            <div class="reasoning-body">
+                                <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
+                                <span>The AI is analyzing the current page state, reading visible elements, and deciding what action to take next. This may take a few seconds depending on page complexity and model response time.</span>
+                            </div>
+                        </div>`;
+                    } else if (step.reasoning) {
+                        const reasoningId = `reasoning-${step.index}`;
+                        const escaped = escHtml(step.reasoning);
+                        const isLong = step.reasoning.length > 220;
+                        const preview = isLong ? escHtml(step.reasoning.substring(0, 220)) + '…' : escaped;
+                        inlineReasoningHtml = `<div class="inline-reasoning-bubble${isFailed ? ' failed' : ''}">
+                            <div class="inline-reasoning-label"><i class="fa-solid ${isFailed ? 'fa-triangle-exclamation' : 'fa-brain'}" aria-hidden="true"></i> ${isFailed ? 'Failure Reason' : 'AI Reasoning'}</div>
+                            <div class="reasoning-body">
+                                <i class="fa-solid ${isFailed ? 'fa-triangle-exclamation' : 'fa-quote-left'}" aria-hidden="true"></i>
+                                <span>
+                                    <span id="${reasoningId}-preview">${preview}</span>
+                                    ${isLong ? `<span id="${reasoningId}-full" style="display:none;">${escaped}</span>
+                                    <button onclick="toggleTextExpand(event,'${reasoningId}')" class="step-more-details-btn" style="margin-top:4px;">
+                                        <i class="fa-solid fa-chevron-right" style="font-size:9px;"></i> Show more
+                                    </button>` : ''}
+                                </span>
+                            </div>
+                        </div>`;
+                    }
+                }
+            }
+
+            // "▶ CURRENT" / "✕ FAILED" badge for the active step
+            const activeBadge = isActive
+                ? `<div class="active-step-badge">${isFailed ? '<i class="fa-solid fa-xmark"></i> FAILED' : '<i class="fa-solid fa-play"></i> CURRENT'}</div>`
+                : '';
+
+            // Truncate long step instructions in the card; user can expand.
+            const STEP_TRUNCATE = 140;
+            const instrFull = escHtml(resolvedInstruction);
+            const isInstrLong = resolvedInstruction.length > STEP_TRUNCATE;
+            const instrPreview = isInstrLong ? escHtml(resolvedInstruction.substring(0, STEP_TRUNCATE)) + '…' : instrFull;
+            const instrId = `instr-${step.index}`;
+            const stepTextContent = isInstrLong
+                ? `<span id="${instrId}-preview">${instrPreview}</span><span id="${instrId}-full" style="display:none;">${instrFull}</span>
+                   <button onclick="toggleTextExpand(event,'${instrId}')" class="step-more-details-btn" style="margin-top:4px;padding:2px 7px;font-size:10px;">
+                       <i class="fa-solid fa-chevron-right" style="font-size:8px;"></i> Show more
+                   </button>`
+                : instrFull;
+
             return `
                 <div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${step.index}, 'before')"></div>
-                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}" data-step-idx="${step.index}" role="listitem" tabindex="0" aria-label="Step ${step.index}: ${escHtml(resolvedInstruction)}"
+                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}${passedClass}${noDetailsPendingClass}" data-step-idx="${step.index}" role="listitem" tabindex="0" aria-label="Step ${step.index}: ${escHtml(resolvedInstruction)}"
                      onclick="handleStepClick(event, ${step.index})" ondragend="handleDragEnd(event)">
+                ${activeBadge}
                 <div class="step-row">
+                    <div class="step-num-badge">#${step.index + 1}</div>
                     <div class="${statusIconContainerClass}" ${statusClickAttr}>${statusIconMarkup}</div>
                     <div class="step-text-container">
-                        <div class="tag-row">${sourceTag}${includeBreadcrumb}</div>
-                        <div class="step-text">${escHtml(resolvedInstruction)}</div>
+                        <div class="tag-row">${sourceTag}</div>
+                        <div class="step-text">${stepTextContent}</div>
                         <div class="step-edit-form">
                             <textarea class="inline-edit-textarea" aria-label="Edit step instruction text">${escHtml(step.instruction)}</textarea>
                             <div class="inline-edit-bindings" style="margin: 8px 0; display: flex; flex-direction: column; gap: 6px;"></div>
@@ -1700,6 +2829,7 @@
                     ${editBtnHtml}
                     ${selectedArrowMarkup}
                 </div>
+                ${inlineReasoningHtml ? `<div style="padding-top:4px;">${inlineReasoningHtml}</div>` : ''}
                 ${hasDetails ? `<div class="step-accordion-details${accordionOpen}">${detailsHtml}</div>` : ''}
             </div>`;
         }
@@ -1707,6 +2837,35 @@
         // -------------------------------------------------------------------------
         // Interactive Actions
         // -------------------------------------------------------------------------
+        function toggleStepSecondary(event, btn) {
+            event.stopPropagation();
+            const secondary = btn.nextElementSibling;
+            if (!secondary) return;
+            const isOpen = secondary.classList.toggle('open');
+            btn.classList.toggle('open', isOpen);
+            btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            const chevron = btn.querySelector('i');
+            if (chevron) chevron.style.transform = isOpen ? 'rotate(90deg)' : '';
+            // Use the named span for safe text toggle (avoids whitespace text node issues)
+            const label = btn.querySelector('.toggle-label');
+            if (label) label.textContent = isOpen ? ' Less details' : ' More details';
+        }
+
+        function toggleTextExpand(event, id) {
+            event.stopPropagation();
+            const preview = document.getElementById(id + '-preview');
+            const full = document.getElementById(id + '-full');
+            const btn = event.currentTarget;
+            if (!preview || !full) return;
+            const expanding = full.style.display === 'none';
+            preview.style.display = expanding ? 'none' : '';
+            full.style.display = expanding ? '' : 'none';
+            const chevron = btn.querySelector('i');
+            if (chevron) chevron.style.transform = expanding ? 'rotate(90deg)' : '';
+            const textNode = [...btn.childNodes].find(n => n.nodeType === Node.TEXT_NODE);
+            if (textNode) textNode.textContent = expanding ? ' Show less' : ' Show more';
+        }
+
         function sendAction(action, extra) {
             if (!currentPauseId || !currentRunId) return;
             const payload = { runId: currentRunId, pauseId: currentPauseId, action, ...extra };
@@ -1754,13 +2913,13 @@
                 ...(currentState?.blocks?.steps || []),
                 ...(currentState?.blocks?.after || [])
             ];
-            
+
             const hasFailedStep = allSteps.some(s => s.status === 'failed' || s.errorMessage);
             const activeRunningStep = allSteps.find(s => s.status === 'running');
-            
-            const hitBreakpoint = activeRunningStep && 
-                                  activeBreakpoints.has(activeRunningStep.index) && 
-                                  activeRunningStep.index !== autoStartStepIndex;
+
+            const hitBreakpoint = activeRunningStep &&
+                activeBreakpoints.has(activeRunningStep.index) &&
+                activeRunningStep.index !== autoStartStepIndex;
 
             if (hasFailedStep || hitBreakpoint) {
                 isAutoMode = false;
@@ -1769,7 +2928,7 @@
                 setButtonsEnabled(true);
                 return;
             }
-            
+
             setTimeout(() => {
                 if (isAutoMode && currentPauseId) {
                     sendAction('RUN');
@@ -1783,14 +2942,36 @@
         function handleStepClick(event, index) {
             // Prevent toggling if clicking interactive controls or the breakpoint status icon
             if (event.target.closest('button') || event.target.closest('textarea') || event.target.closest('.step-status-icon')) return;
-            
+
+            // Do not allow selecting future (pending) steps that carry no information yet.
+            // These steps have nothing useful to show, so clicking them would only confuse the user.
+            if (currentState) {
+                const allSteps = [
+                    ...(currentState.blocks?.before || []),
+                    ...(currentState.blocks?.steps || []),
+                    ...(currentState.blocks?.after || [])
+                ];
+                const clickedStep = allSteps.find(s => s.index === index);
+                if (clickedStep) {
+                    const isPending = !clickedStep.status || clickedStep.status === 'pending';
+                    const hasDetails = (clickedStep.actions && clickedStep.actions.length > 0)
+                        || clickedStep.errorMessage
+                        || clickedStep.durationMs
+                        || clickedStep.screenshot
+                        || clickedStep.thinkingTimeMs
+                        || clickedStep.simplifiedDom
+                        || clickedStep.reasoning;
+                    if (isPending && !hasDetails) return;
+                }
+            }
+
             // Single click always selects – no toggle-off; a step stays selected once clicked
             selectedStepIndexForDetails = index;
 
             if (currentState) {
                 renderBlock('before', currentState.blocks?.before || []);
-                renderBlock('steps',  currentState.blocks?.steps  || []);
-                renderBlock('after',  currentState.blocks?.after  || []);
+                renderBlock('steps', currentState.blocks?.steps || []);
+                renderBlock('after', currentState.blocks?.after || []);
             }
             updateBigScreenDetails();
 
@@ -1808,7 +2989,7 @@
             const container = document.getElementById('bigScreenStepDetails');
             const content = document.getElementById('bigScreenDetailsContent');
             if (!container || !content) return;
-            
+
             if (currentState) {
                 const allSteps = [
                     ...(currentState.blocks?.before || []),
@@ -1827,12 +3008,12 @@
                     }
                 }
             }
-            
+
             if (selectedStepIndexForDetails === null || !currentState) {
                 container.style.display = 'none';
                 return;
             }
-            
+
             const allSteps = [
                 ...(currentState.blocks?.before || []),
                 ...(currentState.blocks?.steps || []),
@@ -1843,12 +3024,12 @@
                 container.style.display = 'none';
                 return;
             }
-            
+
             const sourceTag = step.source === 'playbook'
                 ? `<div class="type-tag type-playbook"><i class="fa-solid fa-compact-disc" aria-hidden="true"></i> Playbook</div>`
                 : step.source === 'healed'
-                ? `<div class="type-tag type-healed"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> Healed</div>`
-                : `<div class="type-tag type-llm"><i class="fa-solid fa-robot" aria-hidden="true"></i> LLM Agent</div>`;
+                    ? `<div class="type-tag type-healed"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> Healed</div>`
+                    : `<div class="type-tag type-llm"><i class="fa-solid fa-robot" aria-hidden="true"></i> LLM Agent</div>`;
 
             let includeBreadcrumb = '';
             if (step.includeChain && step.includeChain.length > 0) {
@@ -1859,7 +3040,7 @@
             }
 
             const detailsHtml = buildStepDetailsHtml(step);
-            
+
             content.innerHTML = `
                 <div style="font-weight: 600; font-size:14px; margin-bottom: 8px;">Step #${step.index}: ${escHtml(step.instruction)}</div>
                 <div style="margin-bottom:12px; display:flex; gap:6px; flex-wrap:wrap;">${sourceTag}${includeBreadcrumb}</div>
@@ -1890,10 +3071,10 @@
         function enableEdit(btnElement) {
             const card = btnElement.closest('.step-card');
             card.classList.add('editing');
-            
+
             const textarea = card.querySelector('.inline-edit-textarea');
             const idx = parseInt(card.getAttribute('data-step-idx'), 10);
-            
+
             let rawInstruction = '';
             if (currentState && currentState.blocks) {
                 for (const blockName of ['before', 'steps', 'after']) {
@@ -1906,7 +3087,7 @@
             }
             textarea.value = rawInstruction;
             textarea.focus();
-            
+
             const bindingsDiv = card.querySelector('.inline-edit-bindings');
             if (bindingsDiv && currentState?.dataBindings) {
                 bindingsDiv.innerHTML = '<div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">Available Variables (Click to paste):</div>' +
@@ -1917,7 +3098,7 @@
                         </div>
                     `).join('');
             }
-            
+
             const acc = card.querySelector('.step-accordion-details');
             if (acc && !acc.classList.contains('open')) acc.classList.add('open');
         }
@@ -1950,12 +3131,12 @@
             const card = btnElement.closest('.step-card');
             const textarea = card.querySelector('.inline-edit-textarea');
             const newVal = textarea.value.trim();
-            
+
             const idx = parseInt(card.getAttribute('data-step-idx'), 10);
             let isTemp = false;
             let oldVal = '';
             let blockName = 'steps';
-            
+
             if (currentState && currentState.blocks) {
                 for (const bKey of ['before', 'steps', 'after']) {
                     const list = currentState.blocks[bKey];
@@ -1970,7 +3151,7 @@
                     }
                 }
             }
-            
+
             if (isTemp) {
                 if (newVal && currentPauseId) {
                     sendAction('ADD', { instruction: newVal, block: blockName });
@@ -2011,7 +3192,7 @@
             const skipBtn = document.getElementById('btnSkip');
             const backBtn = document.getElementById('btnBack');
             const autoBtn = document.getElementById('btnAuto');
-            
+
             if (isAutoMode) {
                 if (runBtn) runBtn.disabled = true;
                 if (skipBtn) skipBtn.disabled = true;
@@ -2113,7 +3294,7 @@
 
         function escHtml(str) {
             if (!str) return '';
-            return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
         function escAttr(str) {
             if (!str) return '';
@@ -2215,7 +3396,7 @@
             }
             if (!currentState.blocks) currentState.blocks = {};
             if (!currentState.blocks[finalBlock]) currentState.blocks[finalBlock] = [];
-            
+
             const nextIdx = 1000 + Math.floor(Math.random() * 10000);
             const tempStep = {
                 index: nextIdx,
@@ -2226,10 +3407,10 @@
                 includeLevel: 0,
                 isTempAdd: true
             };
-            
+
             currentState.blocks[finalBlock].push(tempStep);
             applyState(currentState);
-            
+
             const card = document.querySelector(`.step-card[data-step-idx='${nextIdx}']`);
             if (card) {
                 enableEdit(card.querySelector('.step-edit-btn') || card);
@@ -2242,33 +3423,32 @@
         function handleDragStart(event, index) {
             draggedStepIndex = index;
             event.dataTransfer.effectAllowed = 'move';
-            event.target.closest('.step-card').classList.add('dragging');
-            document.querySelector('.scrollable-content').classList.add('dragging-active');
+            event.dataTransfer.setData('text/plain', String(index)); // required for Firefox
+            const card = event.target.closest('.step-card');
+            if (card) card.classList.add('dragging');
+            const sc = document.querySelector('.scrollable-content');
+            if (sc) sc.classList.add('dragging-active');
         }
 
         function handleDragEnd(event) {
-            const draggedCard = document.querySelector('.step-card.dragging');
-            if (draggedCard) draggedCard.classList.remove('dragging');
-            document.querySelector('.scrollable-content').classList.remove('dragging-active');
-            
-            const dropTargets = document.querySelectorAll('.drop-target-area');
-            dropTargets.forEach(t => t.classList.remove('active'));
+            event.stopPropagation();
+            document.querySelectorAll('.step-card.dragging').forEach(c => c.classList.remove('dragging'));
+            const sc = document.querySelector('.scrollable-content');
+            if (sc) sc.classList.remove('dragging-active');
+            document.querySelectorAll('.drop-target-area').forEach(t => t.classList.remove('active'));
         }
 
         function handleDragOver(event) {
             event.preventDefault();
+            event.stopPropagation();
             event.dataTransfer.dropEffect = 'move';
-            const target = event.target.closest('.drop-target-area');
-            if (target) {
-                target.classList.add('active');
-            }
+            // Use currentTarget since ondragover is on the drop-target-area itself
+            event.currentTarget.classList.add('active');
         }
 
         function handleDragLeave(event) {
-            const target = event.target.closest('.drop-target-area');
-            if (target) {
-                target.classList.remove('active');
-            }
+            event.stopPropagation();
+            event.currentTarget.classList.remove('active');
         }
 
         function handleDrop(event, targetIndex, position) {
@@ -2303,7 +3483,7 @@
             // If dropping on a card, handle before/after logic
             let finalToIdx = toRelIdx;
             if (position === 'after') finalToIdx++;
-            
+
             // Adjust if moving forward in the same list
             if (finalToIdx > fromRelIdx) finalToIdx--;
 
@@ -2323,11 +3503,11 @@
             // Deprecated in favor of Drag & Drop, but kept for internal logic if needed
             if (event) event.stopPropagation();
             if (!currentState || !currentState.blocks) return;
-            
+
             let blockName = null;
             let list = null;
             let relativeIndex = -1;
-            
+
             for (const bKey of ['before', 'steps', 'after']) {
                 const arr = currentState.blocks[bKey];
                 if (arr) {
@@ -2340,12 +3520,12 @@
                     }
                 }
             }
-            
+
             if (!list || relativeIndex === -1) return;
-            
+
             const targetRelativeIndex = relativeIndex + direction;
             if (targetRelativeIndex < 0 || targetRelativeIndex >= list.length) return;
-            
+
             if (currentPauseId) {
                 sendAction('REORDER', { block: blockName, fromIndex: relativeIndex, toIndex: targetRelativeIndex });
             } else {
@@ -2377,10 +3557,10 @@
         }
 
         // Shortcuts keyboard listener
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', function (e) {
             if (e.repeat) return;
             const key = e.key ? e.key.toLowerCase() : '';
-            
+
             if (e.key === 'Escape') {
                 ['settingsOverlay', 'helpOverlay', 'domOverlay', 'screenshotOverlay'].forEach(closeOverlay);
                 e.preventDefault();
@@ -2394,7 +3574,7 @@
             if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
                 return;
             }
-            
+
             if (e.altKey && key === 'r' || (e.ctrlKey && e.key === 'Enter')) {
                 e.preventDefault();
                 const runBtn = document.getElementById('btnRun');
@@ -2435,4 +3615,5 @@
         });
     </script>
 </body>
+
 </html>
