@@ -542,7 +542,13 @@ public final class YamlFileReader
     private static Object loadIncludeData(final String path, final File baseDir, final String classpathResourcePath)
     {
         File includedFile = null;
-        if (baseDir != null)
+        
+        File directFile = new File(path);
+        if (directFile.isAbsolute() || directFile.exists())
+        {
+            includedFile = directFile;
+        }
+        else if (baseDir != null)
         {
             includedFile = new File(baseDir, path);
         }
@@ -693,7 +699,20 @@ public final class YamlFileReader
     private static List<Step> loadIncludedSteps(final String path, final File baseDir, final String classpathResourcePath, final List<File> inclusionStack)
     {
         File includedFile = null;
-        if (baseDir != null)
+        
+        File directFile = new File(path);
+        if (directFile.isAbsolute() || directFile.exists())
+        {
+            try
+            {
+                includedFile = directFile.getCanonicalFile();
+            }
+            catch (final IOException e)
+            {
+                includedFile = directFile;
+            }
+        }
+        else if (baseDir != null)
         {
             try
             {

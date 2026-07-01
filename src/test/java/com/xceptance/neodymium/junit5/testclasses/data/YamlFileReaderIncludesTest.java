@@ -477,6 +477,43 @@ public final class YamlFileReaderIncludesTest
     }
 
     @Test
+    @DisplayName("Verify that inline AI includes resolve correctly even if a test data file exists")
+    public final void testInlineIncludeWithTestDataFile() throws IOException
+    {
+        // Setup: A "test data file" exists (simulate it via neodymium.sourceFile)
+        File testDataFile = new File(this.tempDir, "testdata/YamlFileReaderIncludesTest.yaml");
+        testDataFile.getParentFile().mkdirs();
+        Files.writeString(testDataFile.toPath(), "steps:\n  - Do nothing", StandardCharsets.UTF_8);
+        
+        // This simulates the test having a data file
+        Neodymium.getData().put("neodymium.sourceFile", testDataFile.getAbsolutePath());
+        
+        // The inline string has an include path relative to project root
+        File inlineIncludeFile = new File(this.tempDir, "src/test/java/utils/login.steps");
+        inlineIncludeFile.getParentFile().mkdirs();
+        Files.writeString(inlineIncludeFile.toPath(), "- Click inline login", StandardCharsets.UTF_8);
+        
+        // We use absolute path to ensure it exists for the purpose of the test, 
+        // but if it's absolute, it always worked. The bug happens with relative paths like 'src/test/java/...'
+        // Let's create a temporary relative path that actually exists in the current working directory.
+        // But we can't reliably create a file in the real CWD of the test framework cleanly. 
+        // Instead, we can use a relative path that we know exists in the workspace, or we can just 
+        // trust that if we provide an absolute path it works, and if we provide a relative path that exists
+        // it should work. Let's create a file in CWD temporarily.
+        File tempInline = new File("temp-inline-login.steps");
+        Files.writeString(tempInline.toPath(), "- Click inline login", StandardCharsets.UTF_8);
+        
+        try {
+            // When ai.execute runs, it passes the relative path
+            final List<YamlFileReader.Step> steps = YamlFileReader.loadInclude("temp-inline-login.steps");
+            assertEquals(1, steps.size());
+            assertEquals("Click inline login", steps.get(0).text);
+        } finally {
+            tempInline.delete();
+        }
+    }
+
+    @Test
     @DisplayName("Verify circular inclusion detection works with differing relative paths pointing to the same file")
     public final void testCircularInclusionDifferentRelativePaths() throws IOException
     {
