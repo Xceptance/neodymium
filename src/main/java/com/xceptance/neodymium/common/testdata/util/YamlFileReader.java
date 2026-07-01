@@ -41,10 +41,9 @@ import java.util.regex.Pattern;
 
 import org.yaml.snakeyaml.Yaml;
 
-import com.xceptance.neodymium.util.Neodymium;
-
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Utility class to read and parse YAML test scripts with support for dynamic and static inclusions,
@@ -542,15 +541,29 @@ public final class YamlFileReader
     private static Object loadIncludeData(final String path, final File baseDir, final String classpathResourcePath)
     {
         File includedFile = null;
-        
+
         File directFile = new File(path);
         if (directFile.isAbsolute() || directFile.exists())
         {
             includedFile = directFile;
         }
-        else if (baseDir != null)
+        else
         {
-            includedFile = new File(baseDir, path);
+            final String[] sourceRoots = { "src/test/java", "src/test/resources", "src/main/java", "src/main/resources" };
+            for (final String root : sourceRoots)
+            {
+                File f = new File(root, path);
+                if (f.exists())
+                {
+                    includedFile = f;
+                    break;
+                }
+            }
+
+            if (includedFile == null && baseDir != null)
+            {
+                includedFile = new File(baseDir, path);
+            }
         }
 
         if (includedFile != null && includedFile.exists())
@@ -699,7 +712,7 @@ public final class YamlFileReader
     private static List<Step> loadIncludedSteps(final String path, final File baseDir, final String classpathResourcePath, final List<File> inclusionStack)
     {
         File includedFile = null;
-        
+
         File directFile = new File(path);
         if (directFile.isAbsolute() || directFile.exists())
         {
@@ -712,15 +725,36 @@ public final class YamlFileReader
                 includedFile = directFile;
             }
         }
-        else if (baseDir != null)
+        else
         {
-            try
+            final String[] sourceRoots = { "src/test/java", "src/test/resources", "src/main/java", "src/main/resources" };
+            for (final String root : sourceRoots)
             {
-                includedFile = new File(baseDir, path).getCanonicalFile();
+                File f = new File(root, path);
+                if (f.exists())
+                {
+                    try
+                    {
+                        includedFile = f.getCanonicalFile();
+                    }
+                    catch (final IOException e)
+                    {
+                        includedFile = f;
+                    }
+                    break;
+                }
             }
-            catch (final IOException e)
+
+            if (includedFile == null && baseDir != null)
             {
-                includedFile = new File(baseDir, path);
+                try
+                {
+                    includedFile = new File(baseDir, path).getCanonicalFile();
+                }
+                catch (final IOException e)
+                {
+                    includedFile = new File(baseDir, path);
+                }
             }
         }
 
