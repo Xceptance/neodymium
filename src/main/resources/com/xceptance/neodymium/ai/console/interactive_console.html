@@ -466,8 +466,8 @@
 
         .step-row {
             display: flex;
-            align-items: flex-start;
-            /* keeps status icon and num badge top-aligned when text wraps */
+            align-items: center;
+            /* vertically center all inline elements */
             gap: 8px;
             width: 100%;
         }
@@ -480,10 +480,6 @@
             justify-content: center;
             flex-shrink: 0;
             font-size: 14px;
-            align-self: flex-start;
-            /* stay at top even during edit mode */
-            margin-top: 2px;
-            /* optically align with the first line of text */
         }
 
         .step-status-icon.pending-step {
@@ -517,10 +513,13 @@
         .step-text {
             font-size: 14px;
             font-weight: 500;
-            line-height: 1.4;
+            line-height: 1;
             word-break: break-word;
+            padding-bottom: 10px;
+
         }
 
+        /* Step number badge — inline in the step-row, shrinks to sit at top-left */
         /* Step number badge — inline in the step-row, shrinks to sit at top-left */
         .step-num-badge {
             font-size: 9px;
@@ -533,10 +532,39 @@
             padding: 2px 5px;
             line-height: 1.4;
             flex-shrink: 0;
-            align-self: flex-start;
-            /* stays at top when step-text wraps */
             white-space: nowrap;
-            pointer-events: none;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 24px;
+            height: 18px;
+        }
+
+        .step-card.selected .step-num-badge {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--accent-primary);
+            color: var(--text-main);
+            cursor: text;
+        }
+
+        .step-num-badge input {
+            background: transparent;
+            border: none;
+            color: inherit;
+            font: inherit;
+            width: 100%;
+            text-align: center;
+            outline: none;
+            padding: 0;
+            margin: 0;
+            -moz-appearance: textfield;
+        }
+
+        .step-num-badge input::-webkit-outer-spin-button,
+        .step-num-badge input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
 
         /* Secondary details section (timing, tokens, DOM, screenshot) behind more-details toggle */
@@ -599,12 +627,21 @@
             align-items: center;
             gap: 4px;
             white-space: nowrap;
+            z-index: 2;
+            /* above card hover overlay */
+            pointer-events: none;
+            /* don't block hover on card */
         }
 
         .step-card.active.failed .active-step-badge {
             color: var(--accent-danger);
             background: rgba(239, 68, 68, 0.12);
             border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        /* On active cards, push the step-row's right edge away from the absolute CURRENT badge */
+        .step-card.active .step-row {
+            padding-right: 86px;
         }
 
         /* Inline Edit Styling */
@@ -768,29 +805,91 @@
             }
         }
 
+        /* Reorder handle: grip icon for dragging steps */
         .step-reorder-handle {
-            opacity: 0;
             background: rgba(255, 255, 255, 0.1);
-            border: none;
+            border: 1px solid var(--border-color);
             color: var(--text-secondary);
             width: 24px;
             height: 24px;
             border-radius: 4px;
             cursor: grab;
-            transition: opacity 0.2s, background 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
+            font-size: 14px;
+            transition: opacity 0.2s, background 0.15s, color 0.15s;
             flex-shrink: 0;
         }
 
-        .step-card:hover .step-reorder-handle {
+        /* Reorder Controls Wrapper — now visible on hover and selection */
+        .step-reorder-controls {
+            opacity: 0;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+            transition: opacity 0.2s;
+            margin-right: 4px;
+        }
+
+        .step-card:hover .step-reorder-controls,
+        .step-card.selected .step-reorder-controls {
             opacity: 1;
+        }
+
+        .step-index-input {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            width: 32px;
+            height: 22px;
+            border-radius: 4px;
+            font-size: 11px;
+            text-align: center;
+            font-family: var(--font-mono);
+            -moz-appearance: textfield;
+        }
+
+        .step-index-input::-webkit-outer-spin-button,
+        .step-index-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .step-index-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            background: rgba(59, 130, 246, 0.1);
         }
 
         .step-reorder-handle:hover {
             background: rgba(255, 255, 255, 0.2);
             color: var(--text-main);
+        }
+
+        .step-reorder-handle:active {
+            cursor: grabbing;
+        }
+
+        .step-reorder-handle i {
+            display: block;
+            /* Ensure visibility */
+        }
+
+        /* Flash animation for moved rows */
+        @keyframes row-flash {
+            0% {
+                background-color: rgba(59, 130, 246, 0.4);
+            }
+
+            100% {
+                background-color: transparent;
+            }
+        }
+
+        .moved-row-flash {
+            animation: row-flash 0.8s ease-out;
         }
 
         .step-card.dragging {
@@ -839,9 +938,14 @@
             opacity: 0.6;
         }
 
-        /* Suppress pointer events on step cards during drag; drop-target-areas still receive all events */
-        .scrollable-content.dragging-active .step-card {
+        /* During drag: suppress pointer events on OTHER cards; keep the dragged card interactive */
+        .scrollable-content.dragging-active .step-card:not(.dragging) {
             pointer-events: none !important;
+        }
+
+        /* The card being dragged stays interactive so dragend fires correctly */
+        .scrollable-content.dragging-active .step-card.dragging {
+            pointer-events: auto !important;
         }
 
         .scrollable-content.dragging-active .drop-target-area {
@@ -1042,6 +1146,32 @@
             flex-shrink: 0;
         }
 
+        /* Action type-specific badge colors */
+        .acc-action-type-badge[data-type="STORE"] {
+            background: rgba(20, 184, 166, 0.15);
+            color: #2dd4bf;
+            border-color: rgba(20, 184, 166, 0.3);
+        }
+
+        .acc-action-type-badge[data-type="ASSERT"] {
+            background: rgba(234, 179, 8, 0.12);
+            color: #facc15;
+            border-color: rgba(234, 179, 8, 0.3);
+        }
+
+        .acc-action-type-badge[data-type="CLICK"],
+        .acc-action-type-badge[data-type="HOVER"] {
+            background: rgba(59, 130, 246, 0.12);
+            color: var(--accent-primary);
+            border-color: rgba(59, 130, 246, 0.2);
+        }
+
+        .acc-action-type-badge[data-type="TYPE"] {
+            background: rgba(168, 85, 247, 0.12);
+            color: var(--accent-purple);
+            border-color: rgba(168, 85, 247, 0.25);
+        }
+
         .acc-action-duration {
             font-size: 11px;
             color: var(--text-muted);
@@ -1168,10 +1298,23 @@
         }
 
         .toolbar-footer {
-            padding: 16px 24px;
+            padding: 10px 24px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            gap: 12px;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.25), 0 -1px 0 rgba(255, 255, 255, 0.05);
+            background: var(--bg-surface);
+            z-index: 10;
+        }
+
+        /* Push action group left, cancel group right with a clear visual divider */
+        .toolbar-footer>.btn-group:first-child {
+            flex: 1;
+        }
+
+        .toolbar-footer>.btn-group:last-child {
+            padding-left: 16px;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .btn-group {
@@ -1511,6 +1654,18 @@
             gap: 8px;
         }
 
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
         .add-step-card-btn:hover {
             background: var(--bg-surface-hover);
             border-color: var(--accent-primary);
@@ -1635,6 +1790,39 @@
                 object-fit: contain !important;
             }
         }
+
+        /* Mobile QR overlay */
+        #mobileQrOverlay .modal-content {
+            max-width: 340px;
+            text-align: center;
+        }
+
+        #mobileQrCanvas {
+            margin: 16px auto 0;
+            display: block;
+            border-radius: 8px;
+            background: #fff;
+            padding: 12px;
+        }
+
+        #mobileQrUrl {
+            margin-top: 10px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+            word-break: break-all;
+        }
+
+        /* Only show the mobile-qr button on desktop; the QR is useless on mobile itself */
+        .btn-mobile-qr {
+            display: none;
+        }
+
+        @media (min-width: 901px) {
+            .btn-mobile-qr {
+                display: inline-flex;
+            }
+        }
     </style>
 </head>
 
@@ -1738,6 +1926,9 @@
                     </div>
                 </div>
             </div>
+            <button class="btn btn-mobile-qr" onclick="openMobileQr()" title="Open on mobile"
+                aria-label="Show QR code to open on mobile device"><i class="fa-solid fa-mobile-screen-button"
+                    aria-hidden="true"></i></button>
             <button class="btn" id="btnSettings" onclick="openOverlay('settingsOverlay')" title="Settings (Alt+G)"
                 aria-label="Open Settings (Alt+G)"><i class="fa-solid fa-gear" aria-hidden="true"></i></button>
             <button class="btn" onclick="toggleTheme()" title="Toggle Theme" aria-label="Toggle Light/Dark Theme"><i
@@ -1754,7 +1945,7 @@
                     Test Info</div>
                 <div id="topJunitTags" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;"></div>
                 <div id="topTestSource"
-                    style="font-size:11.5px; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all; display:none;">
+                    style="font-size:11px; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all; display:none; padding:6px 8px; background:rgba(0,0,0,0.15); border:1px solid var(--border-color); border-radius:5px; line-height:1.5;">
                 </div>
             </div>
             <!-- Column 2: Initial Dataset Parameters -->
@@ -1806,7 +1997,7 @@
     <div class="workspace" role="main">
         <div class="column" style="display:flex; flex-direction:column; justify-content:space-between; height:100%;"
             role="region" aria-label="Steps Timeline">
-            <div class="scrollable-content" id="timelineList" style="flex-grow:1;">
+            <div class="scrollable-content" id="timelineList" style="flex-grow:1;" ondragover="handleContainerDragOver(event)">
 
                 <div class="block-group" id="beforeGroup" style="display:none;" role="group"
                     aria-label="Before Execution Steps">
@@ -1893,6 +2084,21 @@
     </div>
 
     <!-- Modal Overlays -->
+    <!-- Mobile QR Overlay -->
+    <div id="mobileQrOverlay" class="modal-overlay" onclick="closeOverlay('mobileQrOverlay')" role="dialog"
+        aria-labelledby="mobileQrTitle" aria-modal="true">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width:340px;text-align:center;">
+            <div class="modal-header">
+                <h3 id="mobileQrTitle"><i class="fa-solid fa-mobile-screen-button"
+                        style="color:var(--accent-primary);"></i> Open on Mobile</h3>
+                <button class="close-btn" onclick="closeOverlay('mobileQrOverlay')" aria-label="Close">&times;</button>
+            </div>
+            <p style="font-size:13px;color:var(--text-secondary);margin:12px 0 4px;">Scan with your phone to open this
+                test in the interactive console.</p>
+            <canvas id="mobileQrCanvas" width="220" height="220"></canvas>
+            <div id="mobileQrUrl"></div>
+        </div>
+    </div>
     <div id="settingsOverlay" class="modal-overlay" onclick="closeOverlay('settingsOverlay')" role="dialog"
         aria-labelledby="settingsTitle" aria-modal="true">
         <div class="modal-content" onclick="event.stopPropagation()">
@@ -2027,6 +2233,9 @@
         let helpOverlayClicked = false;
         let selectedStepIndexForDetails = null;
         let autoStartStepIndex = null;
+        // Flat ordered list of all step indices across all blocks (before + steps + after).
+        // Used by the ↑/↓ reorder buttons to know if a step is first/last.
+        let allStepIndices = [];
 
         // -------------------------------------------------------------------------
         // SSE Connection
@@ -2266,22 +2475,50 @@
                 mLabel.textContent = `Step ${currentStep} of ${totalSteps}`;
                 mFill.style.width = Math.round((currentStep / totalSteps) * 100) + '%';
             }
-            // Test source file
+            // Rebuild the flat step index list for the ↑/↓ reorder buttons
+            allStepIndices = [
+                ...(state.blocks?.before || []),
+                ...(state.blocks?.steps || []),
+                ...(state.blocks?.after || [])
+            ].map(s => s.index);
+
+            // Test source files (Java + YAML + Playbook)
             const topTestSource = document.getElementById('topTestSource');
             if (topTestSource) {
-                topTestSource.textContent = state.testFile || '';
-                topTestSource.style.display = state.testFile ? '' : 'none';
+                const files = [];
+                if (state.testFile) files.push({ label: 'Java Test', value: state.testFile, icon: 'fa-file-code' });
+                if (state.yamlSource) files.push({ label: 'YAML Source', value: state.yamlSource, icon: 'fa-file-lines' });
+                if (state.playbookFile) files.push({ label: 'Playbook', value: state.playbookFile, icon: 'fa-file-contract' });
+
+                if (files.length > 0) {
+                    topTestSource.innerHTML = files.map(f => `
+                        <div style="margin-bottom:8px;">
+                            <span style="color:var(--text-muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;">
+                                <i class="fa-solid ${f.icon}" style="margin-right:4px;"></i>${f.label}
+                            </span>
+                            <div style="font-size:11px; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all;">${escHtml(f.value)}</div>
+                        </div>
+                    `).join('');
+                    topTestSource.style.display = '';
+                } else {
+                    topTestSource.innerHTML = '';
+                    topTestSource.style.display = 'none';
+                }
             }
             // Stored Variables: only show the column when state.storedVariables has entries
             const topLiveVarsCol = document.getElementById('topLiveVarsCol');
             const topLiveVarsBody = document.getElementById('topLiveVarsBody');
             const storedVars = state.storedVariables || {};
             const storedKeys = Object.keys(storedVars);
-            if (topLiveVarsCol) topLiveVarsCol.style.display = storedKeys.length > 0 ? '' : 'none';
-            if (topLiveVarsBody && storedKeys.length > 0) {
-                topLiveVarsBody.innerHTML = storedKeys
-                    .map(k => `<tr style="border-bottom:1px solid rgba(255,255,255,0.03);"><td style="padding:5px 8px;font-family:var(--font-mono);font-weight:600;color:var(--text-secondary);">${escHtml(k)}</td><td style="padding:5px 8px;font-family:var(--font-mono);color:var(--text-main);">${escHtml(storedVars[k])}</td></tr>`)
-                    .join('');
+            if (topLiveVarsCol) topLiveVarsCol.style.display = (storedKeys.length > 0) ? 'block' : 'none';
+            if (topLiveVarsBody) {
+                if (storedKeys.length > 0) {
+                    topLiveVarsBody.innerHTML = storedKeys
+                        .map(k => `<tr style="border-bottom:1px solid rgba(255,255,255,0.03);"><td style="padding:5px 8px;font-family:var(--font-mono);font-weight:600;color:var(--text-secondary);">${escHtml(k)}</td><td style="padding:5px 8px;font-family:var(--font-mono);color:var(--text-main);">${escHtml(storedVars[k])}</td></tr>`)
+                        .join('');
+                } else {
+                    topLiveVarsBody.innerHTML = '';
+                }
             }
 
             if (isFirstLoad) {
@@ -2318,19 +2555,20 @@
             }
             const topTestDataBody = document.getElementById('topTestDataBody');
             if (topTestDataBody && state.dataBindings) {
-                const bindings = state.dataBindings || {};
-                const keys = Object.keys(bindings);
+                const keys = Object.keys(state.dataBindings);
                 if (keys.length > 0) {
                     topTestDataBody.innerHTML = keys.map(k => `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                            <td style="padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">${escHtml(k)}</td>
-                            <td style="padding: 6px 8px; font-family: var(--font-mono); color: var(--text-main);">${escHtml(bindings[k])}</td>
+                            <td style="padding: 5px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">${escHtml(k)}</td>
+                            <td style="padding: 5px 8px; font-family: var(--font-mono); color: var(--text-main);">${escHtml(state.dataBindings[k])}</td>
                         </tr>
                     `).join('');
                 } else {
                     topTestDataBody.innerHTML = `<tr><td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">No initial test data.</td></tr>`;
                 }
             }
+
+            restoreFocus();
 
             // Handle default/latest screenshot display
             let activeScreenshot = null;
@@ -2433,15 +2671,32 @@
         function renderBlock(blockName, steps) {
             const container = document.getElementById(blockName + 'Steps');
             const group = document.getElementById(blockName + 'Group');
-            if (!steps.length) { group.style.display = 'none'; return; }
-            group.style.display = 'flex';
+            if (!container || !group) return;
 
-            const sig = steps.map(s => s.index + ':' + s.status + ':' + (s.actions?.length || 0) + ':' + (s.reasoning ? '1' : '0') + ':' + (activeBreakpoints.has(s.index) ? '1' : '0') + ':' + s.instruction + ':' + (s.index === selectedStepIndexForDetails ? 'sel' : '') + ':' + (currentPauseId ? 'p' : 'r')).join('|');
+            // Simple signature to avoid unnecessary re-renders
+            const sig = JSON.stringify(steps.map(s => s.index + s.status + s.instruction));
             if (container.dataset.sig === sig) return;
             container.dataset.sig = sig;
 
-            container.innerHTML = steps.map(renderStepCard).join('') +
-                `<div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${steps[steps.length - 1].index}, 'after')"></div>`;
+            if (steps.length === 0) {
+                // If the block is empty, we show a drop zone so steps can be dragged into it
+                container.innerHTML = `<div class="drop-target-area empty-block-zone" data-block="${blockName}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, -1, 'after', '${blockName}')">
+                    <span style="opacity: 0.5; font-size: 12px;">Drop steps here</span>
+                </div>`;
+                // Keep the group visible if it's the main 'steps' block, even if empty, 
+                // or if it's explicitly needed. For now, let's keep all groups visible if we want to drop into them.
+                group.style.display = 'flex'; 
+                return;
+            }
+
+            group.style.display = 'flex';
+            container.innerHTML = steps.map(renderStepCard).join('');
+            
+            // Only add a final zone to the 'after' block to avoid redundant targets,
+            // as every card already has a zone 'before' it.
+            if (blockName === 'after') {
+                container.innerHTML += `<div class="drop-target-area final-drop-zone" data-block="${blockName}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, -1, 'after', '${blockName}')"></div>`;
+            }
         }
 
         function buildStepDetailsHtml(step, isActiveStep) {
@@ -2457,7 +2712,7 @@
                     if (a.value) parts.push(`<span style="color:var(--text-secondary);font-size:11px;">= <code style="background:rgba(255,255,255,0.06);padding:0 4px;border-radius:3px;">${escHtml(a.value)}</code></span>`);
                     if (a.durationMs) parts.push(`<span style="color:var(--text-muted);font-size:10px;margin-left:auto;white-space:nowrap;"><i class="fa-solid fa-bolt" style="color:var(--accent-warning);"></i> ${(a.durationMs / 1000).toFixed(2)}s</span>`);
                     return `<div class="acc-action-row">
-                        <span class="acc-action-type-badge">${escHtml(a.type)}</span>
+                        <span class="acc-action-type-badge" data-type="${escAttr(a.type)}">${escHtml(a.type)}</span>
                         ${parts.join('')}
                     </div>`;
                 }).join('')
@@ -2492,10 +2747,10 @@
                 ? `<span title="Execution duration"><i class="fa-solid fa-bolt" style="color:var(--accent-warning);" aria-hidden="true"></i> ${(step.durationMs / 1000).toFixed(1)}s</span>`
                 : '';
             const tokenBlock = (step.inputTokens || step.outputTokens)
-                ? `<span title="Tokens (Input / Output)"><i class="fa-solid fa-calculator" style="color:var(--text-muted);" aria-hidden="true"></i> ${step.inputTokens || 0} / ${step.outputTokens || 0}</span>`
+                ? `<span title="Tokens (Input / Output)"><i class="fa-solid fa-calculator" style="color:var(--text-muted);" aria-hidden="true"></i> Tokens: ${step.inputTokens || 0} in / ${step.outputTokens || 0} out</span>`
                 : '';
             const timingRow = (thinkingTimeBlock || durationBlock || tokenBlock)
-                ? `<div style="display:flex;gap:12px;align-items:center;font-size:11px;color:var(--text-secondary);flex-wrap:wrap;">${thinkingTimeBlock}${durationBlock}${tokenBlock}</div>`
+                ? `<div style="display:flex;gap:12px;align-items:center;font-size:11px;color:var(--text-secondary);flex-wrap:wrap;justify-content:flex-end;">${thinkingTimeBlock}${durationBlock}${tokenBlock}</div>`
                 : '';
 
             const domBlock = step.simplifiedDom
@@ -2547,17 +2802,21 @@
             const headerRow = (breadcrumbBlock || timingRow)
                 ? `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
                        <div>${breadcrumbBlock}</div>
-                       <div>${timingRow}</div>
+                       <div style="margin-left:auto;">${timingRow}</div>
                    </div>`
                 : '';
+            // Indent content below breadcrumb header
+            const bodyIndent = headerRow ? 'padding-left:12px;border-left:2px solid rgba(255,255,255,0.07);' : '';
 
             return `<div class="step-details-wrapper" style="display:flex;flex-direction:column;gap:10px;">
                 ${headerRow}
-                ${actionListBlock}
-                ${reasoningText}
-                ${errorBox}
-                <div style="display:flex;gap:12px;flex-wrap:wrap;">${domBlock}</div>
-                ${screenshotBlock}
+                <div style="${bodyIndent}display:flex;flex-direction:column;gap:10px;">
+                    ${actionListBlock}
+                    ${reasoningText}
+                    ${errorBox}
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;">${domBlock}</div>
+                    ${screenshotBlock}
+                </div>
             </div>`;
         }
 
@@ -2725,11 +2984,19 @@
                 ? `<button class="step-rewind-btn" onclick="triggerRewind(event, ${step.index})" title="Rewind execution back here" aria-label="Rewind execution back here"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>`
                 : '';
 
-            // Only non-passed, non-skipped steps can be reordered.
+            // Reorder system overhaul: Drag handle only in controls
             const showReorder = step.status !== 'passed' && step.status !== 'skipped';
             let reorderHandleHtml = '';
             if (showReorder) {
-                reorderHandleHtml = `<div class="step-reorder-handle" draggable="true" ondragstart="handleDragStart(event, ${step.index})" title="Drag to reorder" aria-label="Drag handle to reorder step"><i class="fa-solid fa-grip-vertical"></i></div>`;
+                reorderHandleHtml = `
+                    <div class="step-reorder-controls">
+                        <div class="step-reorder-handle" draggable="true"
+                             ondragstart="handleDragStart(event, ${step.index})"
+                             ondragend="handleDragEnd(event)"
+                             title="Drag handle to reorder step" aria-label="Drag handle to reorder step">
+                             <i class="fa-solid fa-grip"></i>
+                        </div>
+                    </div>`;
             }
 
             const statusIconContainerClass = isPendingOrPausedRunning ? 'step-status-icon pending-step' : 'step-status-icon';
@@ -2810,7 +3077,15 @@
                      onclick="handleStepClick(event, ${step.index})" ondragend="handleDragEnd(event)">
                 ${activeBadge}
                 <div class="step-row">
-                    <div class="step-num-badge">#${step.index + 1}</div>
+                    <div class="step-num-badge">
+                        ${isSelected ? `
+                            <input type="number" value="${allStepIndices.indexOf(step.index) + 1}"
+                                   min="1" max="${allStepIndices.length}"
+                                   onkeydown="handleStepInputKeyDown(event, ${step.index})"
+                                   onblur="reorderStepDirect(event, ${step.index})"
+                                   aria-label="Step position. Type a new number to move this step. Use Ctrl + Up/Down arrows to move.">
+                        ` : `#${step.index + 1}`}
+                    </div>
                     <div class="${statusIconContainerClass}" ${statusClickAttr}>${statusIconMarkup}</div>
                     <div class="step-text-container">
                         <div class="tag-row">${sourceTag}</div>
@@ -2943,8 +3218,8 @@
             // Prevent toggling if clicking interactive controls or the breakpoint status icon
             if (event.target.closest('button') || event.target.closest('textarea') || event.target.closest('.step-status-icon')) return;
 
-            // Do not allow selecting future (pending) steps that carry no information yet.
-            // These steps have nothing useful to show, so clicking them would only confuse the user.
+            // Allow selecting any step, including future ones.
+            // Selection is now the primary trigger for reorder editing.
             if (currentState) {
                 const allSteps = [
                     ...(currentState.blocks?.before || []),
@@ -2952,17 +3227,7 @@
                     ...(currentState.blocks?.after || [])
                 ];
                 const clickedStep = allSteps.find(s => s.index === index);
-                if (clickedStep) {
-                    const isPending = !clickedStep.status || clickedStep.status === 'pending';
-                    const hasDetails = (clickedStep.actions && clickedStep.actions.length > 0)
-                        || clickedStep.errorMessage
-                        || clickedStep.durationMs
-                        || clickedStep.screenshot
-                        || clickedStep.thinkingTimeMs
-                        || clickedStep.simplifiedDom
-                        || clickedStep.reasoning;
-                    if (isPending && !hasDetails) return;
-                }
+                // No more blocking of pending steps selection
             }
 
             // Single click always selects – no toggle-off; a step stays selected once clicked
@@ -3420,30 +3685,178 @@
 
         let draggedStepIndex = null;
 
+        // -------------------------------------------------------------------------
+        // Reorder System Overhaul Logic
+        // -------------------------------------------------------------------------
+        let lastFocusedStepIndex = null;
+        let lastFocusedElementClass = null;
+
+        function announceMove(message) {
+            const region = document.getElementById('ariaLiveRegion');
+            if (region) region.textContent = message;
+        }
+
+        function flashMovedRow(stepIndex) {
+            setTimeout(() => {
+                const card = document.querySelector(`.step-card[data-step-idx="${stepIndex}"]`);
+                if (card) {
+                    card.classList.add('moved-row-flash');
+                    setTimeout(() => card.classList.remove('moved-row-flash'), 2000);
+                }
+            }, 50);
+        }
+
+        function restoreFocus() {
+            if (lastFocusedStepIndex !== null) {
+                const card = document.querySelector(`.step-card[data-step-idx="${lastFocusedStepIndex}"]`);
+                if (card) {
+                    const input = card.querySelector('.step-num-badge input');
+                    if (input) input.focus();
+                }
+            }
+        }
+
+        function resolveBlock(targetFlatIdx) {
+            if (!currentState || !currentState.blocks) return null;
+            let currentFlat = 0;
+            for (const bKey of ['before', 'steps', 'after']) {
+                const arr = currentState.blocks[bKey] || [];
+                if (targetFlatIdx < currentFlat + arr.length) {
+                    return { block: bKey, relIdx: targetFlatIdx - currentFlat };
+                }
+                currentFlat += arr.length;
+            }
+            // If it's the very end
+            return { block: 'after', relIdx: (currentState.blocks.after || []).length };
+        }
+
+        function reorderStepDirect(event, fromStepIndex) {
+            const input = event.target;
+            const newPos = parseInt(input.value, 10);
+            if (isNaN(newPos) || !currentState) return;
+
+            const totalCount = allStepIndices.length;
+            if (newPos < 1 || newPos > totalCount) {
+                input.value = allStepIndices.indexOf(fromStepIndex) + 1;
+                return;
+            }
+
+            const currentPos = allStepIndices.indexOf(fromStepIndex) + 1;
+            if (newPos === currentPos) return;
+
+            // Find source block and relative index
+            let fromBlock = null;
+            let fromRelIdx = -1;
+            for (const bKey of ['before', 'steps', 'after']) {
+                const arr = currentState.blocks[bKey];
+                if (arr) {
+                    const idx = arr.findIndex(s => s.index === fromStepIndex);
+                    if (idx !== -1) { fromBlock = bKey; fromRelIdx = idx; break; }
+                }
+            }
+            if (!fromBlock || fromRelIdx === -1) return;
+
+            // Find target block and relative index
+            const targetFlatIdx = newPos - 1;
+            const target = resolveBlock(targetFlatIdx);
+            if (!target) return;
+
+            // Store focus intent
+            lastFocusedStepIndex = fromStepIndex;
+
+            announceMove(`Moved step to position ${newPos} of ${totalCount}`);
+            flashMovedRow(fromStepIndex);
+            
+            sendAction('REORDER', { 
+                fromBlock: fromBlock, 
+                fromIndex: fromRelIdx, 
+                toBlock: target.block, 
+                toIndex: target.relIdx 
+            });
+        }
+
+        function handleStepInputKeyDown(event, stepIndex) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                reorderStepDirect(event, stepIndex);
+                return;
+            }
+
+            if (event.ctrlKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                event.preventDefault();
+                const direction = event.key === 'ArrowUp' ? 'up' : 'down';
+                const currentPos = allStepIndices.indexOf(stepIndex) + 1;
+                const newPos = direction === 'up' ? currentPos - 1 : currentPos + 1;
+
+                if (newPos >= 1 && newPos <= allStepIndices.length) {
+                    // Update input value and trigger move
+                    event.target.value = newPos;
+                    reorderStepDirect(event, stepIndex);
+                }
+            }
+        }
+
+        function reorderStep(event, stepIndex, direction) {
+            // Legacy wrapper - redirects to the same logic
+            const currentPos = allStepIndices.indexOf(stepIndex) + 1;
+            const newPos = direction === 'up' ? currentPos - 1 : currentPos + 1;
+            if (newPos >= 1 && newPos <= allStepIndices.length) {
+                reorderStepDirect({ target: { value: newPos } }, stepIndex);
+            }
+        }
+
         function handleDragStart(event, index) {
             draggedStepIndex = index;
             event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('text/plain', String(index)); // required for Firefox
-            const card = event.target.closest('.step-card');
+            event.dataTransfer.setData('text/plain', String(index));
+            // Find the card from the handle
+            const card = event.currentTarget.closest('.step-card');
             if (card) card.classList.add('dragging');
             const sc = document.querySelector('.scrollable-content');
             if (sc) sc.classList.add('dragging-active');
         }
 
         function handleDragEnd(event) {
-            event.stopPropagation();
+            if (event && event.stopPropagation) event.stopPropagation();
             document.querySelectorAll('.step-card.dragging').forEach(c => c.classList.remove('dragging'));
             const sc = document.querySelector('.scrollable-content');
             if (sc) sc.classList.remove('dragging-active');
             document.querySelectorAll('.drop-target-area').forEach(t => t.classList.remove('active'));
+            draggedStepIndex = null;
+            stopAutoScroll();
         }
 
         function handleDragOver(event) {
             event.preventDefault();
-            event.stopPropagation();
+            // Allow bubbling for container auto-scroll
             event.dataTransfer.dropEffect = 'move';
-            // Use currentTarget since ondragover is on the drop-target-area itself
-            event.currentTarget.classList.add('active');
+            const targetArea = event.currentTarget;
+            targetArea.classList.add('active');
+
+            if (draggedStepIndex !== null) {
+                const tempIndices = [...allStepIndices];
+                const oldIdx = tempIndices.indexOf(draggedStepIndex);
+                if (oldIdx === -1) return;
+
+                const dropZones = [...document.querySelectorAll('.drop-target-area')];
+                const zoneIdx = dropZones.indexOf(targetArea);
+                if (zoneIdx === -1) return;
+
+                // Move item in temp list to calculate new indices for preview
+                tempIndices.splice(oldIdx, 1);
+                let targetIdx = zoneIdx;
+                if (targetIdx > oldIdx) targetIdx--;
+                tempIndices.splice(targetIdx, 0, draggedStepIndex);
+
+                // Update all input fields to show what the new indices WOULD be
+                tempIndices.forEach((stepIdx, i) => {
+                    const card = document.querySelector(`.step-card[data-step-idx="${stepIdx}"]`);
+                    if (card) {
+                        const input = card.querySelector('.step-num-badge input');
+                        if (input) input.value = i + 1;
+                    }
+                });
+            }
         }
 
         function handleDragLeave(event) {
@@ -3451,52 +3864,110 @@
             event.currentTarget.classList.remove('active');
         }
 
-        function handleDrop(event, targetIndex, position) {
+        let autoScrollInterval = null;
+        function handleContainerDragOver(event) {
             event.preventDefault();
-            handleDragEnd(); // Cleanup classes
+            const sc = event.currentTarget;
+            const rect = sc.getBoundingClientRect();
+            const threshold = 60; // Distance from top/bottom to start scrolling
+            const maxSpeed = 20;
 
-            if (draggedStepIndex === null || draggedStepIndex === targetIndex) return;
+            let speed = 0;
+            if (event.clientY < rect.top + threshold) {
+                speed = -maxSpeed * (1 - (event.clientY - rect.top) / threshold);
+            } else if (event.clientY > rect.bottom - threshold) {
+                speed = maxSpeed * (1 - (rect.bottom - event.clientY) / threshold);
+            }
 
-            // Find which block and relative indices
-            let blockName = null;
-            let list = null;
+            if (speed !== 0) {
+                if (!autoScrollInterval) {
+                    autoScrollInterval = setInterval(() => {
+                        sc.scrollTop += speed;
+                    }, 20);
+                }
+            } else {
+                stopAutoScroll();
+            }
+        }
+
+        function stopAutoScroll() {
+            if (autoScrollInterval) {
+                clearInterval(autoScrollInterval);
+                autoScrollInterval = null;
+            }
+        }
+
+        function handleDrop(event, targetStepIndex, position, targetBlockName) {
+            event.preventDefault();
+
+            if (draggedStepIndex === null) {
+                handleDragEnd();
+                return;
+            }
+
+            // Find source block and relative index
+            let fromBlock = null;
             let fromRelIdx = -1;
-            let toRelIdx = -1;
-
             for (const bKey of ['before', 'steps', 'after']) {
                 const arr = currentState.blocks[bKey];
                 if (arr) {
-                    const fIdx = arr.findIndex(s => s.index === draggedStepIndex);
-                    const tIdx = arr.findIndex(s => s.index === targetIndex);
-                    if (fIdx !== -1) {
-                        blockName = bKey;
-                        list = arr;
-                        fromRelIdx = fIdx;
-                        if (tIdx !== -1) toRelIdx = tIdx;
-                        break;
+                    const idx = arr.findIndex(s => s.index === draggedStepIndex);
+                    if (idx !== -1) { fromBlock = bKey; fromRelIdx = idx; break; }
+                }
+            }
+            
+            if (!fromBlock || fromRelIdx === -1) {
+                handleDragEnd();
+                return;
+            }
+
+            // Find target block and relative index
+            let targetBlock = null;
+            let targetRelIdx = -1;
+
+            if (targetStepIndex === -1 && targetBlockName) {
+                // Final drop zone of a specific block
+                targetBlock = targetBlockName;
+                targetRelIdx = (currentState.blocks[targetBlock] || []).length;
+            } else {
+                // Drop on or before a specific step
+                for (const bKey of ['before', 'steps', 'after']) {
+                    const arr = currentState.blocks[bKey];
+                    if (arr) {
+                        const tIdx = arr.findIndex(s => s.index === targetStepIndex);
+                        if (tIdx !== -1) {
+                            targetBlock = bKey;
+                            targetRelIdx = tIdx;
+                            if (position === 'after') targetRelIdx++;
+                            break;
+                        }
                     }
                 }
             }
 
-            if (!list || fromRelIdx === -1) return;
+            if (!targetBlock || targetRelIdx === -1) {
+                handleDragEnd();
+                return;
+            }
 
-            // If dropping on a card, handle before/after logic
-            let finalToIdx = toRelIdx;
-            if (position === 'after') finalToIdx++;
-
-            // Adjust if moving forward in the same list
-            if (finalToIdx > fromRelIdx) finalToIdx--;
-
-            if (fromRelIdx === finalToIdx) return;
-
+            // Send to server
             if (currentPauseId) {
-                sendAction('REORDER', { block: blockName, fromIndex: fromRelIdx, toIndex: finalToIdx });
+                sendAction('REORDER', { 
+                    fromBlock: fromBlock, 
+                    fromIndex: fromRelIdx, 
+                    toBlock: targetBlock, 
+                    toIndex: targetRelIdx 
+                });
             } else {
-                const item = list.splice(fromRelIdx, 1)[0];
-                list.splice(finalToIdx, 0, item);
+                // Local reorder if not paused
+                const item = currentState.blocks[fromBlock].splice(fromRelIdx, 1)[0];
+                let adjustedToIdx = targetRelIdx;
+                if (fromBlock === targetBlock && adjustedToIdx > fromRelIdx) adjustedToIdx--;
+                currentState.blocks[targetBlock].splice(adjustedToIdx, 0, item);
                 applyState(currentState);
             }
-            draggedStepIndex = null;
+            
+            handleDragEnd(); 
         }
 
         function moveStep(event, index, direction) {
@@ -3613,7 +4084,124 @@
                 }
             }
         });
+
+        // -------------------------------------------------------------------------
+        // -------------------------------------------------------------------------
+        // Mobile QR Code Overlay — uses qrcode-generator (loaded lazily from CDN)
+        // -------------------------------------------------------------------------
+        let _qrLoaded = false;
+
+        function loadQrLib() {
+            if (_qrLoaded && window.qrcode) return Promise.resolve();
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                // qrcode-generator: tiny, stable, no bundler needed (plain UMD file, not npm)
+                s.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+                s.onload = () => { _qrLoaded = true; resolve(); };
+                s.onerror = () => reject(new Error('cdn_fail'));
+                document.head.appendChild(s);
+            });
+        }
+
+        /**
+         * Use WebRTC ICE candidate discovery to find the machine's LAN IP address.
+         * This is the only browser-side way to get the actual network interface IP
+         * without a server-side API call. Works on all modern browsers.
+         * Returns null if no LAN IP can be found within 1.5 s.
+         */
+        function getLanIp() {
+            return new Promise((resolve) => {
+                const found = new Set();
+                let pc;
+                try {
+                    pc = new RTCPeerConnection({ iceServers: [] });
+                    pc.createDataChannel('');
+                    pc.createOffer()
+                        .then(o => pc.setLocalDescription(o))
+                        .catch(() => resolve(null));
+                    pc.onicecandidate = (e) => {
+                        if (!e || !e.candidate) {
+                            // ICE gathering complete
+                            pc.close();
+                            resolve(found.size ? [...found][0] : null);
+                            return;
+                        }
+                        // Extract IPv4 addresses from the SDP candidate line
+                        const m = /(\d{1,3}(?:\.\d{1,3}){3})/.exec(e.candidate.candidate);
+                        if (m && !m[1].startsWith('127.') && !m[1].startsWith('169.254.')) {
+                            found.add(m[1]);
+                        }
+                    };
+                } catch (err) { resolve(null); return; }
+                // Timeout after 1.5 s in case ICE gathering hangs
+                setTimeout(() => { try { pc.close(); } catch (e) { } resolve(found.size ? [...found][0] : null); }, 1500);
+            });
+        }
+
+        async function openMobileQr() {
+            openOverlay('mobileQrOverlay');
+            const urlEl = document.getElementById('mobileQrUrl');
+            const canvas = document.getElementById('mobileQrCanvas');
+            if (!canvas || !urlEl) return;
+
+            const hostname = window.location.hostname;
+            const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('127.');
+
+            // Show "Detecting LAN IP…" while we probe
+            urlEl.textContent = isLocal ? 'Detecting local network IP…' : window.location.href;
+
+            let scanUrl = window.location.href;
+            if (isLocal) {
+                const lanIp = await getLanIp();
+                if (lanIp) {
+                    // Replace localhost/127.x.x.x with the discovered LAN IP
+                    scanUrl = window.location.href.replace(hostname, lanIp);
+                    urlEl.textContent = scanUrl;
+                } else {
+                    // Could not detect — show raw URL with a note
+                    scanUrl = window.location.href;
+                    urlEl.textContent = scanUrl +
+                        '\n\n⚠ Replace "' + hostname + '" with your machine\'s LAN IP before scanning.';
+                }
+            }
+
+            // Draw QR
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            try {
+                await loadQrLib();
+                // qrcode-generator API: qrcode(typeNumber, errorCorrectionLevel)
+                const qr = window.qrcode(0, 'M');
+                qr.addData(scanUrl);
+                qr.make();
+
+                const count = qr.getModuleCount();
+                const cellSize = Math.floor(canvas.width / (count + 2));
+                const offset = Math.floor((canvas.width - cellSize * count) / 2);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#000000';
+                for (let row = 0; row < count; row++) {
+                    for (let col = 0; col < count; col++) {
+                        if (qr.isDark(row, col)) {
+                            ctx.fillRect(offset + col * cellSize, offset + row * cellSize, cellSize, cellSize);
+                        }
+                    }
+                }
+            } catch (e) {
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#333';
+                ctx.font = '12px monospace';
+                ctx.fillText('QR unavailable', 10, 110);
+                urlEl.textContent += '\n(QR library could not be loaded — use the URL above directly)';
+            }
+        }
     </script>
+    <div id="ariaLiveRegion" class="visually-hidden" aria-live="assertive"></div>
 </body>
 
 </html>
