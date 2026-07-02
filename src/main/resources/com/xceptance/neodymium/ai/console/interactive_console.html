@@ -98,6 +98,12 @@
             padding: 0;
         }
 
+        html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
             background-color: var(--bg-page);
             color: var(--text-main);
@@ -105,6 +111,7 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            height: 100dvh;
             overflow: hidden;
             transition: background-color 0.25s, color 0.25s;
         }
@@ -1765,6 +1772,50 @@
         }
 
         @media (max-width: 600px) {
+            header {
+                padding: 8px 12px;
+                gap: 8px;
+            }
+
+            .header-meta {
+                gap: 8px;
+            }
+
+            .header-meta-btn {
+                gap: 6px;
+            }
+
+            .header-meta-btn h1 {
+                font-size: 14px;
+            }
+
+            .header-controls {
+                gap: 4px;
+            }
+
+            .toolbar-footer {
+                padding: 8px 12px;
+                gap: 8px;
+            }
+
+            .toolbar-footer>.btn-group:last-child {
+                padding-left: 0;
+                border-left: none;
+            }
+
+            .btn-group {
+                gap: 6px;
+            }
+
+            .btn {
+                padding: 8px 10px;
+                font-size: 12px;
+            }
+
+            .btn-success {
+                padding: 8px 14px;
+            }
+
             #screenshotOverlay {
                 padding: 0 !important;
             }
@@ -1788,6 +1839,21 @@
                 height: auto !important;
                 max-height: calc(100vh - 80px) !important;
                 object-fit: contain !important;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .btn {
+                padding: 8px;
+            }
+
+            .toolbar-footer {
+                padding: 6px 8px;
+                gap: 4px;
+            }
+
+            .btn-group {
+                gap: 4px;
             }
         }
 
@@ -1850,9 +1916,9 @@
             <button class="header-meta-btn" id="btnToggleDetails" onclick="toggleTopDetails()"
                 title="Test Details (Alt+D)" aria-label="Toggle Test Metadata Details" type="button">
                 <h1 id="testNameDisplay">Loading...</h1>
-                <span class="hdr-id" id="testIdDisplay"></span>
+                <span class="hdr-id big-screen-only" id="testIdDisplay"></span>
                 <span class="hdr-details-hint"><i class="fa-solid fa-chevron-down" id="detailsChevron"></i>
-                    details</span>
+                    <span class="big-screen-only">details</span></span>
             </button>
         </div>
         <!-- Step progress pill (desktop) -->
@@ -2034,16 +2100,16 @@
                     <div class="btn-group">
                         <button class="btn" id="btnBack" onclick="sendAction('REWIND')"
                             title="Step Back (Alt+Z / Alt+Y)" aria-label="Rewind step back (Alt+Z or Alt+Y)" disabled><i
-                                class="fa-solid fa-backward-step" aria-hidden="true"></i> Back</button>
+                                class="fa-solid fa-backward-step" aria-hidden="true"></i> <span class="big-screen-only">Back</span></button>
                         <button class="btn btn-success" id="btnRun" onclick="sendAction('RUN')"
                             title="Run Step (Alt+R / Ctrl+Enter)" aria-label="Run step (Alt+R or Ctrl+Enter)"
-                            disabled><i class="fa-solid fa-play" aria-hidden="true"></i> Run</button>
+                            disabled><i class="fa-solid fa-play" aria-hidden="true"></i> <span class="big-screen-only">Run</span></button>
                         <button class="btn" id="btnSkip" onclick="sendAction('SKIP')" title="Skip Step (Alt+K)"
                             aria-label="Skip step (Alt+K)" disabled><i class="fa-solid fa-forward-step"
-                                aria-hidden="true"></i> Skip</button>
+                                aria-hidden="true"></i> <span class="big-screen-only">Skip</span></button>
                         <button class="btn" id="btnAuto" onclick="toggleAuto()" title="Auto-run (Alt+S)"
                             aria-label="Toggle Auto-run (Alt+S)" disabled><i class="fa-solid fa-forward-fast"
-                                aria-hidden="true"></i> Auto</button>
+                                aria-hidden="true"></i> <span class="big-screen-only">Auto</span></button>
                     </div>
 
                     <div class="btn-group">
@@ -2056,7 +2122,7 @@
                         </div>
                         <button class="btn btn-danger" id="btnCancel" onclick="showCancelWarning()"
                             title="Cancel test run (Escape)" aria-label="Cancel test run (Escape)"><i
-                                class="fa-solid fa-stop" aria-hidden="true"></i> Cancel Test</button>
+                                class="fa-solid fa-stop" aria-hidden="true"></i> <span class="big-screen-only">Cancel Test</span></button>
                     </div>
                 </div>
             </div>
@@ -2339,7 +2405,7 @@
             if (!isNaN(zoom)) {
                 const factor = zoom / 100;
                 document.body.style.zoom = factor;
-                document.body.style.height = (100 / factor) + 'vh';
+                document.body.style.height = (100 / factor) + 'dvh';
             }
 
             // Listen for system theme media query changes
@@ -3645,7 +3711,7 @@
             if (!isNaN(zoom)) {
                 const factor = zoom / 100;
                 document.body.style.zoom = factor;
-                document.body.style.height = (100 / factor) + 'vh';
+                document.body.style.height = (100 / factor) + 'dvh';
             }
             closeOverlay('settingsOverlay');
         }
