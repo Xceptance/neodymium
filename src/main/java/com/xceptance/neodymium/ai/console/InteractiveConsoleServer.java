@@ -85,6 +85,7 @@ public final class InteractiveConsoleServer {
     private static final int DEFAULT_START_PORT = 18090;
 
     private final HttpServer server;
+    private final InteractiveConsoleEngine engine;
     private final int port;
 
     /**
@@ -97,6 +98,7 @@ public final class InteractiveConsoleServer {
      * @throws IOException if no free port can be found or the server cannot start
      */
     public InteractiveConsoleServer(final InteractiveConsoleEngine engine) throws IOException {
+        this.engine = engine;
         this.server = createServer(engine);
         this.port = this.server.getAddress().getPort();
     }
@@ -109,7 +111,7 @@ public final class InteractiveConsoleServer {
      * @return the local URL, e.g. {@code http://localhost:18090}
      */
     public String getLocalUrl() {
-        return "http://localhost:" + this.port;
+        return "http://" + (engine != null ? engine.getLanIp() : "localhost") + ":" + this.port;
     }
 
     /**

@@ -20,8 +20,14 @@ package com.xceptance.neodymium.ai.console;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -81,6 +87,9 @@ public final class InteractiveConsoleEngine
      */
     private final AtomicReference<String> currentPauseId = new AtomicReference<>(null);
 
+    /** The actual LAN IP of this machine, detected on startup. */
+    private final String lanIp;
+
     /**
      * The pending action deposited by a POST handler, picked up by the waiting
      * test-runner thread. {@code null} while paused and awaiting input.
@@ -110,6 +119,21 @@ public final class InteractiveConsoleEngine
     public InteractiveConsoleEngine(final String runId)
     {
         this.runId = runId;
+
+        String detectedIp = "localhost";
+        try
+        {
+            final InetAddress addr = getActualLocalIP();
+            if (addr != null)
+            {
+                detectedIp = addr.getHostAddress();
+            }
+        }
+        catch (final SocketException e)
+        {
+            LOG.warn("Failed to detect LAN IP for Interactive Console: {}", e.getMessage());
+        }
+        this.lanIp = detectedIp;
     }
 
     // -------------------------------------------------------------------------
@@ -127,6 +151,16 @@ public final class InteractiveConsoleEngine
     }
 
     /**
+     * Returns the detected LAN IP of this machine.
+     *
+     * @return the LAN IP string
+     */
+    public String getLanIp()
+    {
+        return this.lanIp;
+    }
+
+    /**
      * Pushes a new state snapshot to all connected SSE clients.
      * Call this whenever the test runner's state changes (new step started,
      * step completed, error, etc.) so the UI updates instantly.
@@ -138,7 +172,12 @@ public final class InteractiveConsoleEngine
         String minified;
         try
         {
-            minified = GSON.toJson(JsonParser.parseString(stateJson));
+            final JsonObject state = JsonParser.parseString(stateJson).getAsJsonObject();
+
+            // Inject the LAN IP so the UI can use it for QR codes/links
+            state.addProperty("lanIp", this.lanIp);
+
+            minified = GSON.toJson(state);
         }
         catch (final Exception e)
         {
@@ -466,5 +505,52 @@ public final class InteractiveConsoleEngine
                 out.write(bytes);
             }
         }
+    }
+
+    /**
+     * Utility to find the actual local IP address of this machine, filtering out loopback and virtual interfaces.
+     *
+     * @return the actual LAN IP address, or {@code null} if not found
+     * @throws SocketException if an I/O error occurs
+     */
+    private static InetAddress getActualLocalIP() throws SocketException
+    {
+        final Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+
+        for (final NetworkInterface netInterface : Collections.list(interfaces))
+        {
+            // 1. Skip loopback (127.0.0.1) and inactive interfaces
+            if (netInterface.isLoopback() || !netInterface.isUp())
+            {
+                continue;
+            }
+
+            // 2. Filter out common virtual interfaces (Docker, WSL, VirtualBox, VPNs)
+            final String displayName = netInterface.getDisplayName().toLowerCase();
+            final String name = netInterface.getName().toLowerCase();
+            if (displayName.contains("docker") || name.contains("docker") ||
+                displayName.contains("vbox") || name.contains("vbox") ||
+                displayName.contains("virtual") || name.contains("wsl") ||
+                displayName.contains("vnic") || displayName.contains("vethernet"))
+            {
+                continue;
+            }
+
+            // 3. Look through the IP addresses assigned to this valid interface
+            final Enumeration<InetAddress> addresses = netInterface.getInetAddresses();
+            for (final InetAddress address : Collections.list(addresses))
+            {
+                // We usually want an IPv4 address for local networks
+                if (address instanceof Inet4Address)
+                {
+                    // Double check it's not a loopback address
+                    if (!address.isLoopbackAddress())
+                    {
+                        return address;
+                    }
+                }
+            }
+        }
+        return null;
     }
 }

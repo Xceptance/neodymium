@@ -4177,8 +4177,15 @@
 
             let scanUrl = window.location.href;
             if (isLocal) {
-                const lanIp = await getLanIp();
-                if (lanIp) {
+                // Prefer the LAN IP detected by the Java server if available (injected into currentState)
+                let lanIp = (currentState && currentState.lanIp && currentState.lanIp !== 'localhost') ? currentState.lanIp : null;
+
+                // Fallback to WebRTC probe if server-side detection failed
+                if (!lanIp) {
+                    lanIp = await getLanIp();
+                }
+
+                if (lanIp && lanIp !== 'localhost' && !lanIp.startsWith('127.')) {
                     // Replace localhost/127.x.x.x with the discovered LAN IP
                     scanUrl = window.location.href.replace(hostname, lanIp);
                     urlEl.textContent = scanUrl;
