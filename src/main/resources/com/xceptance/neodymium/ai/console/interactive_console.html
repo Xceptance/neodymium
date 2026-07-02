@@ -2673,8 +2673,14 @@
             const group = document.getElementById(blockName + 'Group');
             if (!container || !group) return;
 
-            // Simple signature to avoid unnecessary re-renders
-            const sig = JSON.stringify(steps.map(s => s.index + s.status + s.instruction));
+            // Enhanced signature to include selection, breakpoints, and other UI state
+            const sig = JSON.stringify({
+                steps: steps.map(s => s.index + s.status + s.instruction),
+                selected: selectedStepIndexForDetails,
+                breakpoints: Array.from(activeBreakpoints),
+                paused: currentPauseId !== null,
+                bindings: currentState?.dataBindings
+            });
             if (container.dataset.sig === sig) return;
             container.dataset.sig = sig;
 
