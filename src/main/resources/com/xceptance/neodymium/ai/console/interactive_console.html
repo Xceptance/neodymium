@@ -3238,6 +3238,7 @@
 
             // Single click always selects – no toggle-off; a step stays selected once clicked
             selectedStepIndexForDetails = index;
+            lastFocusedStepIndex = index; // Store for restoreFocus()
 
             if (currentState) {
                 renderBlock('before', currentState.blocks?.before || []);
@@ -3245,6 +3246,9 @@
                 renderBlock('after', currentState.blocks?.after || []);
             }
             updateBigScreenDetails();
+            
+            // Focus the input field (if rendered for the selected step)
+            restoreFocus();
 
             // On mobile: open the accordion immediately on the first click
             if (window.innerWidth <= 900) {
@@ -3767,8 +3771,9 @@
             const target = resolveBlock(targetFlatIdx);
             if (!target) return;
 
-            // Store focus intent
-            lastFocusedStepIndex = fromStepIndex;
+            // Store focus intent and update selection to the new position
+            lastFocusedStepIndex = targetFlatIdx;
+            selectedStepIndexForDetails = targetFlatIdx;
 
             announceMove(`Moved step to position ${newPos} of ${totalCount}`);
             flashMovedRow(fromStepIndex);
@@ -3803,11 +3808,19 @@
         }
 
         function reorderStep(event, stepIndex, direction) {
-            // Legacy wrapper - redirects to the same logic
             const currentPos = allStepIndices.indexOf(stepIndex) + 1;
             const newPos = direction === 'up' ? currentPos - 1 : currentPos + 1;
             if (newPos >= 1 && newPos <= allStepIndices.length) {
-                reorderStepDirect({ target: { value: newPos } }, stepIndex);
+                // Try to find the actual input element to keep the UI in sync
+                const card = document.querySelector(`.step-card[data-step-idx="${stepIndex}"]`);
+                const input = card ? card.querySelector('.step-num-badge input') : null;
+                if (input) {
+                    input.value = newPos;
+                    reorderStepDirect({ target: input }, stepIndex);
+                } else {
+                    // Fallback to mock target if input is not found
+                    reorderStepDirect({ target: { value: newPos } }, stepIndex);
+                }
             }
         }
 
@@ -4087,6 +4100,12 @@
                 if (activeCard) {
                     const editBtn = activeCard.querySelector('.step-edit-btn');
                     if (editBtn) editBtn.click();
+                }
+            } else if (e.ctrlKey && (key === 'arrowup' || key === 'arrowdown')) {
+                // Global reorder shortcut when a step is selected but input is not focused
+                if (selectedStepIndexForDetails !== null) {
+                    e.preventDefault();
+                    reorderStep(e, selectedStepIndexForDetails, key === 'arrowup' ? 'up' : 'down');
                 }
             }
         });
