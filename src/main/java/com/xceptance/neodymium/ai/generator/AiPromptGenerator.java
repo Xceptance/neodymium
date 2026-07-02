@@ -546,18 +546,6 @@ public class AiPromptGenerator {
         boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
         boolean autoSkip = false;
         for (int i = 0; i < maxSteps && !entireGoalAchieved; i++) {
-            if (isInteractive) {
-                Boolean currentAutoSkipStatus = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                        .checkAutoSkipStatus();
-                if (currentAutoSkipStatus != null) {
-                    autoSkip = currentAutoSkipStatus;
-                }
-                List<String> performedStrs = new java.util.ArrayList<>();
-                for (Action a : actionsForLogging)
-                    performedStrs.add(a.getDescription());
-                Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(null, performedStrs, autoSkip, false, false,
-                        "");
-            }
             executionLog.startStep(i + 1, maxSteps, "Exploration Step");
             executionLog.startAttempt("Exploration Attempt");
             LOG.info("\n\uD83D\uDC63 --- EXPLORATION STEP {} \u2192 Analyzing DOM and asking AI... ---", i + 1);
@@ -672,217 +660,23 @@ public class AiPromptGenerator {
                     for (int pIdx = 0; pIdx < proposedActions.size(); pIdx++) {
                         Action nextAction = proposedActions.get(pIdx);
 
-                        boolean shouldExecute = true;
-                        boolean hudRewind = false;
-                        boolean hudReordered = false;
-                        String hudAddInstruction = null;
-                        String hudAppendInstruction = null;
-                        String hudEditInstruction = null;
-                        boolean hudSaveExit = false;
-
-                        if (isInteractive) {
-                            java.util.Map<String, String> hudBindings = new java.util.HashMap<>(knownBindings);
-                            String systemPromptBase = AiAgentPrompts.getSystemHealingPrompt();
-                            systemPromptBase = AiAgentPrompts.injectPluginMetadata(systemPromptBase);
-                            List<String> plannedStrs = new ArrayList<>();
-                            for (int aIdx = pIdx; aIdx < proposedActions.size(); aIdx++) {
-                                Action act = proposedActions.get(aIdx);
-                                if (act.getDataBindings() != null)
-                                    hudBindings.putAll(act.getDataBindings());
-                                String resolvedStr = interpolateBindings(act.getDescription(), act.getDataBindings(),
-                                        hudBindings);
-                                plannedStrs.add(resolvedStr != null ? resolvedStr : act.getDescription());
-                            }
-                            List<String> performedStrs = new ArrayList<>();
-                            for (Action a : actionsForLogging) {
-                                String resolvedStr = interpolateBindings(a.getDescription(), a.getDataBindings(),
-                                        knownBindings);
-                                performedStrs.add(resolvedStr != null ? resolvedStr : a.getDescription());
-                            }
-                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(
-                                    plannedStrs, performedStrs, autoSkip, false, false,
-                                    plannedStrs != null && !plannedStrs.isEmpty() ? plannedStrs.get(0) : "");
-
-                            if (!autoSkip) {
-                                LOG.info("Waiting for user action in HUD...");
-                                boolean handled = false;
-                                try (final com.xceptance.neodymium.ai.generator.InteractiveHud.FrameContext fc = new com.xceptance.neodymium.ai.generator.InteractiveHud.FrameContext(com.codeborne.selenide.Selenide.webdriver().driver().getWebDriver())) {
-                                    for (int wait = 0; wait < 3600; wait++) {
-                                        String hudActionStr = com.xceptance.neodymium.util.Neodymium
-                                                .getOrCreateInteractiveHud().checkHudAction();
-                                        if (hudActionStr != null) {
-                                            Boolean s = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                    .checkAutoSkipStatus();
-                                            if (s != null) {
-                                                autoSkip = s;
-                                            }
-                                            com.google.gson.JsonObject actionObj = com.google.gson.JsonParser
-                                                    .parseString(hudActionStr).getAsJsonObject();
-                                            String actionTypeStr = actionObj.has("action")
-                                                    ? actionObj.get("action").getAsString()
-                                                    : "";
-                                            com.xceptance.neodymium.ai.core.HudActionType actionType = null;
-                                            try {
-                                                actionType = com.xceptance.neodymium.ai.core.HudActionType
-                                                        .valueOf(actionTypeStr);
-                                            } catch (IllegalArgumentException e) {
-                                                // Ignore unknown actions
-                                            }
-
-                                            if (com.xceptance.neodymium.ai.core.HudActionType.APPROVE == actionType) {
-                                                handled = true;
-                                                break;
-                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.SKIP == actionType) {
-                                                shouldExecute = false;
-                                                handled = true;
-                                                break;
-                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.REWIND == actionType) {
-                                                int rIdx = actionObj.get("index").getAsInt();
-                                                playbook.getSteps().subList(rIdx, playbook.getSteps().size()).clear();
-                                                playbook.setCursor(rIdx);
-                                                actionsForLogging.subList(rIdx, actionsForLogging.size()).clear();
-                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                        .resetHudAction();
-                                                hudRewind = true;
-                                                handled = true;
-                                                break;
-                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.ADD == actionType) {
-                                                hudAddInstruction = actionObj.get("instruction").getAsString();
-                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                        .resetHudAction();
-                                                handled = true;
-                                                break;
-                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.EDIT == actionType) {
-                                                hudEditInstruction = actionObj.get("instruction").getAsString();
-                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                        .resetHudAction();
-                                                shouldExecute = false; // Don't execute the old action
-                                                handled = true;
-                                                break;
-                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.APPEND == actionType) {
-                                                hudAppendInstruction = actionObj.get("instruction").getAsString();
-                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                        .resetHudAction();
-                                                handled = true;
-                                                break;
-                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.REORDER == actionType) {
-                                                int fromIdx = actionObj.get("from").getAsInt();
-                                                int toIdx = actionObj.get("to").getAsInt();
-                                                if (fromIdx >= 0 && fromIdx < playbook.getSteps().size() && toIdx >= 0 && toIdx < playbook.getSteps().size()) {
-                                                    com.xceptance.neodymium.ai.playbook.PlaybookStep stepToMove = playbook.getSteps().remove(fromIdx);
-                                                    playbook.getSteps().add(toIdx, stepToMove);
-                                                    Action actToMove = actionsForLogging.remove(fromIdx);
-                                                    actionsForLogging.add(toIdx, actToMove);
-                                                    playbook.setChanged(true);
-                                                }
-                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                                                hudReordered = true;
-                                                handled = true;
-                                                break;
-                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.SETTINGS == actionType) {
-                                                String payload = actionObj.has("payload") ? actionObj.get("payload").toString() : "{}";
-                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().saveSettings(payload);
-                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                                                continue;
-                                            } else if (com.xceptance.neodymium.ai.core.HudActionType.SAVE_EXIT == actionType) {
-                                                com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                                                        .resetHudAction();
-                                                hudSaveExit = true;
-                                                handled = true;
-                                                break;
-                                            }
-                                        }
-                                        try {
-                                            Thread.sleep(1000);
-                                        } catch (InterruptedException ignored) {
-                                        }
-                                    }
-                                }
-                                if (!handled)
-                                    throw new RuntimeException(
-                                            "User did not approve the actions within 1 hour. Halting exploration.");
-                            }
-                            com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud().resetHudAction();
-                        }
-
-                        if (hudRewind) {
-                            statusMessage = "Rewound execution to a previous step.";
-                            failedAttempts = 0;
-                            break;
-                        }
-                        if (hudSaveExit) {
-                            entireGoalAchieved = true;
-                            break;
-                        }
-                        if (hudReordered) {
-                            statusMessage = "Reordered execution steps.";
-                            failedAttempts = 0;
-                            break;
-                        }
-                        if (hudAddInstruction != null || hudEditInstruction != null || hudAppendInstruction != null) {
-                            String manualInstr = hudAddInstruction != null ? hudAddInstruction : (hudAppendInstruction != null ? hudAppendInstruction : hudEditInstruction);
-                            LOG.info("User requested manual instruction: {}", manualInstr);
-                            String fallbackPrompt = "The user manually requested this action: '" + manualInstr + "'. " +
-                                    "Return exactly ONE action JSON object matching this instruction, adhering to your system ActionType rules. "
-                                    +
-                                    "No markdown, just raw JSON.";
-
-                            try {
-                                String systemPromptBase = AiAgentPrompts.getSystemPromptBase();
-                                systemPromptBase = AiAgentPrompts.injectPluginMetadata(systemPromptBase);
-                                String fallbackResponse = llmClient.chat(systemPromptBase, fallbackPrompt);
-                                String cleanJson = fallbackResponse.trim();
-                                if (cleanJson.startsWith("```json"))
-                                    cleanJson = cleanJson.substring(7);
-                                else if (cleanJson.startsWith("```"))
-                                    cleanJson = cleanJson.substring(3);
-                                if (cleanJson.endsWith("```"))
-                                    cleanJson = cleanJson.substring(0, cleanJson.length() - 3);
-                                com.google.gson.JsonObject fallbackObj = com.google.gson.JsonParser
-                                        .parseString(cleanJson).getAsJsonObject();
-                                Action fallbackAction = parseAndValidateAction(fallbackObj, knownBindings);
-
-                                executeAction(actionExecutor, fallbackAction);
-                                com.xceptance.neodymium.ai.playbook.PlaybookStep pbStep = new com.xceptance.neodymium.ai.playbook.PlaybookStep();
-                                pbStep.setPromptLine(fallbackAction.getDescription());
-                                pbStep.setReasoning(hudAddInstruction != null ? "Manually added by user: " + manualInstr
-                                        : "Manually edited by user: " + manualInstr);
-                                pbStep.setActions(java.util.Collections.singletonList(fallbackAction));
-                                playbook.addStep(pbStep);
-                                actionsForLogging.add(fallbackAction);
-                                executionLog.logActions(java.util.Collections.singletonList(fallbackAction));
-                                statusMessage = "Manually executed: " + fallbackAction.getDescription();
-                                failedAttempts = 0;
-                            } catch (Throwable t) {
-                                LOG.warn("Failed to add/edit manual action", t);
-                                statusMessage = "Failed to add/edit manual action: " + t.getMessage();
-                                failedAttempts++;
-                            }
-                            break;
-                        }
-
                         logProposedAction(nextAction, knownBindings);
-                        if (shouldExecute && nextAction.getDataBindings() != null)
+                        if (nextAction.getDataBindings() != null)
                             knownBindings.putAll(nextAction.getDataBindings());
 
                         try {
-                            if (shouldExecute) {
-                                executeAction(actionExecutor, nextAction);
-                                com.xceptance.neodymium.ai.playbook.PlaybookStep pbStep = new com.xceptance.neodymium.ai.playbook.PlaybookStep();
-                                pbStep.setPromptLine(nextAction.getDescription());
-                                pbStep.setReasoning(reasoning);
-                                pbStep.setActions(java.util.Collections.singletonList(nextAction));
-                                playbook.addStep(pbStep);
-                                actionsForLogging.add(nextAction);
-                                executionLog.logActions(java.util.Collections.singletonList(nextAction));
+                            executeAction(actionExecutor, nextAction);
+                            com.xceptance.neodymium.ai.playbook.PlaybookStep pbStep = new com.xceptance.neodymium.ai.playbook.PlaybookStep();
+                            pbStep.setPromptLine(nextAction.getDescription());
+                            pbStep.setReasoning(reasoning);
+                            pbStep.setActions(java.util.Collections.singletonList(nextAction));
+                            playbook.addStep(pbStep);
+                            actionsForLogging.add(nextAction);
+                            executionLog.logActions(java.util.Collections.singletonList(nextAction));
 
-                                statusMessage = nextAction.getDescription() + " (Target: " + nextAction.getTarget()
-                                        + ")";
-                                failedAttempts = 0;
-                            } else {
-                                statusMessage = "Skipped by user: " + nextAction.getDescription();
-                                failedAttempts = 0;
-                            }
+                            statusMessage = nextAction.getDescription() + " (Target: " + nextAction.getTarget()
+                                    + ")";
+                            failedAttempts = 0;
                         } catch (Throwable e) {
                             LOG.warn("Action failed: {}", e.getMessage(), e);
                             statusMessage = nextAction.getDescription() + " -> FAILED: " + e.getMessage();

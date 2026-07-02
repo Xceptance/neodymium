@@ -2063,7 +2063,8 @@
     <div class="workspace" role="main">
         <div class="column" style="display:flex; flex-direction:column; justify-content:space-between; height:100%;"
             role="region" aria-label="Steps Timeline">
-            <div class="scrollable-content" id="timelineList" style="flex-grow:1;" ondragover="handleContainerDragOver(event)">
+            <div class="scrollable-content" id="timelineList" style="flex-grow:1;"
+                ondragover="handleContainerDragOver(event)">
 
                 <div class="block-group" id="beforeGroup" style="display:none;" role="group"
                     aria-label="Before Execution Steps">
@@ -2100,16 +2101,16 @@
                     <div class="btn-group">
                         <button class="btn" id="btnBack" onclick="sendAction('REWIND')"
                             title="Step Back (Alt+Z / Alt+Y)" aria-label="Rewind step back (Alt+Z or Alt+Y)" disabled><i
-                                class="fa-solid fa-backward-step" aria-hidden="true"></i> <span class="big-screen-only">Back</span></button>
+                                class="fa-solid fa-backward-step" aria-hidden="true"></i> <span>Back</span></button>
                         <button class="btn btn-success" id="btnRun" onclick="sendAction('RUN')"
                             title="Run Step (Alt+R / Ctrl+Enter)" aria-label="Run step (Alt+R or Ctrl+Enter)"
-                            disabled><i class="fa-solid fa-play" aria-hidden="true"></i> <span class="big-screen-only">Run</span></button>
+                            disabled><i class="fa-solid fa-play" aria-hidden="true"></i> <span>Run</span></button>
                         <button class="btn" id="btnSkip" onclick="sendAction('SKIP')" title="Skip Step (Alt+K)"
                             aria-label="Skip step (Alt+K)" disabled><i class="fa-solid fa-forward-step"
-                                aria-hidden="true"></i> <span class="big-screen-only">Skip</span></button>
+                                aria-hidden="true"></i> <span>Skip</span></button>
                         <button class="btn" id="btnAuto" onclick="toggleAuto()" title="Auto-run (Alt+S)"
                             aria-label="Toggle Auto-run (Alt+S)" disabled><i class="fa-solid fa-forward-fast"
-                                aria-hidden="true"></i> <span class="big-screen-only">Auto</span></button>
+                                aria-hidden="true"></i> <span>Auto</span></button>
                     </div>
 
                     <div class="btn-group">
@@ -2122,7 +2123,8 @@
                         </div>
                         <button class="btn btn-danger" id="btnCancel" onclick="showCancelWarning()"
                             title="Cancel test run (Escape)" aria-label="Cancel test run (Escape)"><i
-                                class="fa-solid fa-stop" aria-hidden="true"></i> <span class="big-screen-only">Cancel Test</span></button>
+                                class="fa-solid fa-stop" aria-hidden="true"></i> <span>Cancel
+                                Test</span></button>
                     </div>
                 </div>
             </div>
@@ -2757,13 +2759,13 @@
                 </div>`;
                 // Keep the group visible if it's the main 'steps' block, even if empty, 
                 // or if it's explicitly needed. For now, let's keep all groups visible if we want to drop into them.
-                group.style.display = 'flex'; 
+                group.style.display = 'flex';
                 return;
             }
 
             group.style.display = 'flex';
             container.innerHTML = steps.map(renderStepCard).join('');
-            
+
             // Only add a final zone to the 'after' block to avoid redundant targets,
             // as every card already has a zone 'before' it.
             if (blockName === 'after') {
@@ -2777,14 +2779,15 @@
             const isPassed = step.status === 'passed';
 
             // ---- Actions: compact one-line chips ----
-            const actionsHtml = step.actions && step.actions.length > 0
-                ? step.actions.map((a) => {
+            const actionsList = Array.isArray(step.actions) ? step.actions : [];
+            const actionsHtml = actionsList.length > 0
+                ? actionsList.map((a) => {
                     const parts = [];
                     if (a.target) parts.push(`<span style="color:var(--text-main);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;">${escHtml(a.target)}</span>`);
                     if (a.value) parts.push(`<span style="color:var(--text-secondary);font-size:11px;">= <code style="background:rgba(255,255,255,0.06);padding:0 4px;border-radius:3px;">${escHtml(a.value)}</code></span>`);
                     if (a.durationMs) parts.push(`<span style="color:var(--text-muted);font-size:10px;margin-left:auto;white-space:nowrap;"><i class="fa-solid fa-bolt" style="color:var(--accent-warning);"></i> ${(a.durationMs / 1000).toFixed(2)}s</span>`);
                     return `<div class="acc-action-row">
-                        <span class="acc-action-type-badge" data-type="${escAttr(a.type)}">${escHtml(a.type)}</span>
+                        <span class="acc-action-type-badge" data-type="${escAttr(a.type || 'unknown')}">${escHtml(a.type || 'unknown')}</span>
                         ${parts.join('')}
                     </div>`;
                 }).join('')
@@ -2836,10 +2839,11 @@
                    </div>`
                 : '';
             // Breadcrumb block (include file / chain)
-            const breadcrumbBlock = step.includeFile || (step.includeChain && step.includeChain.length > 0)
+            const includeChain = Array.isArray(step.includeChain) ? step.includeChain : [];
+            const breadcrumbBlock = step.includeFile || (includeChain.length > 0)
                 ? (() => {
-                    if (step.includeChain && step.includeChain.length > 0) {
-                        const ct = step.includeChain.join(' > ');
+                    if (includeChain.length > 0) {
+                        const ct = includeChain.join(' > ');
                         return `<div class="include-breadcrumb" title="${escAttr(ct)}"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(ct)}</div>`;
                     }
                     return `<div class="include-breadcrumb"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(step.includeFile)}</div>`;
@@ -2968,25 +2972,29 @@
         }
 
         function renderStepCard(step) {
-            const isSkipped = step.status === 'skipped';
-            const isPassed = step.status === 'passed';
-            const isActive = step.status === 'running' || (step.status === 'failed');
-            const isFailed = step.status === 'failed';
-            const lvlClass = step.includeLevel > 0 ? ` include-lvl-${Math.min(step.includeLevel, 4)}` : '';
+            if (!step) return '';
+            const status = step.status || 'pending';
+            const isSkipped = status === 'skipped';
+            const isPassed = status === 'passed';
+            const isActive = status === 'running' || status === 'failed';
+            const isFailed = status === 'failed';
+            const includeLevel = typeof step.includeLevel === 'number' ? step.includeLevel : 0;
+            const lvlClass = includeLevel > 0 ? ` include-lvl-${Math.min(includeLevel, 4)}` : '';
             const skippedClass = isSkipped ? ' skipped' : '';
             const passedClass = isPassed ? ' passed-step' : '';
 
             // Determine whether this step has any displayable information.
             // Used both to conditionally render the accordion and to guard against
             // selecting future steps that have nothing to show yet.
-            const hasDetails = (step.actions && step.actions.length > 0)
+            const actionsList = Array.isArray(step.actions) ? step.actions : [];
+            const hasDetails = (actionsList.length > 0)
                 || step.errorMessage
                 || step.durationMs
                 || step.screenshot
                 || step.thinkingTimeMs
                 || step.simplifiedDom
                 || step.reasoning;
-            const isPendingNoDetails = (!step.status || step.status === 'pending') && !hasDetails;
+            const isPendingNoDetails = (status === 'pending') && !hasDetails;
             const noDetailsPendingClass = isPendingNoDetails ? ' no-details-pending' : '';
 
             const isSelected = step.index == selectedStepIndexForDetails;
@@ -3034,8 +3042,9 @@
             // Build breadcrumb string but do NOT put it in the tag-row;
             // it will appear in the secondary details section.
             let includeBreadcrumb = '';
-            if (step.includeChain && step.includeChain.length > 0) {
-                const chainText = step.includeChain.join(' > ');
+            const includeChain = Array.isArray(step.includeChain) ? step.includeChain : [];
+            if (includeChain.length > 0) {
+                const chainText = includeChain.join(' > ');
                 includeBreadcrumb = `<div class="include-breadcrumb" title="${escAttr(chainText)}"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(chainText)}</div>`;
             } else if (step.includeFile) {
                 includeBreadcrumb = `<div class="include-breadcrumb"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(step.includeFile)}</div>`;
@@ -3312,7 +3321,7 @@
                 renderBlock('after', currentState.blocks?.after || []);
             }
             updateBigScreenDetails();
-            
+
             // Focus the input field (if rendered for the selected step)
             restoreFocus();
 
@@ -3635,6 +3644,11 @@
 
         function escHtml(str) {
             if (!str) return '';
+
+            if (Array.isArray(str)) {
+                return str.map(escHtml);
+            }
+
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
         function escAttr(str) {
@@ -3843,12 +3857,12 @@
 
             announceMove(`Moved step to position ${newPos} of ${totalCount}`);
             flashMovedRow(fromStepIndex);
-            
-            sendAction('REORDER', { 
-                fromBlock: fromBlock, 
-                fromIndex: fromRelIdx, 
-                toBlock: target.block, 
-                toIndex: target.relIdx 
+
+            sendAction('REORDER', {
+                fromBlock: fromBlock,
+                fromIndex: fromRelIdx,
+                toBlock: target.block,
+                toIndex: target.relIdx
             });
         }
 
@@ -4000,7 +4014,7 @@
                     if (idx !== -1) { fromBlock = bKey; fromRelIdx = idx; break; }
                 }
             }
-            
+
             if (!fromBlock || fromRelIdx === -1) {
                 handleDragEnd();
                 return;
@@ -4037,11 +4051,11 @@
 
             // Send to server
             if (currentPauseId) {
-                sendAction('REORDER', { 
-                    fromBlock: fromBlock, 
-                    fromIndex: fromRelIdx, 
-                    toBlock: targetBlock, 
-                    toIndex: targetRelIdx 
+                sendAction('REORDER', {
+                    fromBlock: fromBlock,
+                    fromIndex: fromRelIdx,
+                    toBlock: targetBlock,
+                    toIndex: targetRelIdx
                 });
             } else {
                 // Local reorder if not paused
@@ -4051,8 +4065,8 @@
                 currentState.blocks[targetBlock].splice(adjustedToIdx, 0, item);
                 applyState(currentState);
             }
-            
-            handleDragEnd(); 
+
+            handleDragEnd();
         }
 
         function moveStep(event, index, direction) {

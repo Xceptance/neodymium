@@ -58,6 +58,12 @@ public final class AiExecutionResult
     private int pesapCallCount;
 
     private long durationMs;
+    private final long startTime;
+
+    public final AiBrowser getAiBrowser()
+    {
+        return this.aiBrowser;
+    }
 
     public AiExecutionResult(final Map<String, String> testDataSnapshot, final AiBrowser aiBrowser)
     {
@@ -66,6 +72,19 @@ public final class AiExecutionResult
         this.escalations = Collections.synchronizedList(new ArrayList<>());
         this.testDataSnapshot = Collections.unmodifiableMap(new HashMap<>(testDataSnapshot));
         this.aiBrowser = aiBrowser;
+        this.startTime = System.currentTimeMillis();
+    }
+
+    public AiExecutionResult(final Map<String, String> testDataSnapshot, final AiBrowser aiBrowser, final String rawInstructions)
+    {
+        this(testDataSnapshot, aiBrowser);
+        if (rawInstructions != null) {
+            for (final String line : rawInstructions.split("\n")) {
+                if (!line.trim().isEmpty()) {
+                    this.steps.add(new StepDetails(line.trim()));
+                }
+            }
+        }
     }
 
     /**
@@ -292,6 +311,11 @@ public final class AiExecutionResult
     public final void setDurationMs(final long durationMs)
     {
         this.durationMs = durationMs;
+    }
+
+    public final long getStartTime()
+    {
+        return this.startTime;
     }
 
     public final boolean isSuccess()
