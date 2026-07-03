@@ -147,17 +147,61 @@ public class PageAnalyzer {
                     // Never extract elements located inside the Neodymium AI Interactive HUD itself
                     if (el.closest && el.closest('.neodymium-ai-hud')) return false;
 
-                    const style = window.getComputedStyle(el);
-                    if (style.display === 'none' || style.visibility === 'hidden') return false;
+                    var tagName = el.tagName ? el.tagName.toLowerCase() : '';
+                    var type = el.getAttribute ? el.getAttribute('type') : null;
+                    var isCheckableInput = tagName === 'input' && (type === 'radio' || type === 'checkbox');
 
-                    const rect = el.getBoundingClientRect();
-                    return rect.width > 0 && rect.height > 0;
+                    var style = window.getComputedStyle(el);
+                    if (style.display === 'none' || style.visibility === 'hidden') {
+                        if (isCheckableInput) {
+                            var label = (el.labels && el.labels.length > 0) ? el.labels[0] : (el.closest ? el.closest('label') : null);
+                            if (label && isVisible(label)) return true;
+                        }
+                        return false;
+                    }
+
+                    var rect = el.getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0) return true;
+
+                    if (isCheckableInput) {
+                        var label = (el.labels && el.labels.length > 0) ? el.labels[0] : (el.closest ? el.closest('label') : null);
+                        if (label && isVisible(label)) return true;
+                    }
+
+                    return false;
                 }
 
                 // Standard truncation helper to keep token sizes predictable and clean
                 function truncate(s, max) {
                     if (!s) return s;
                     return s.length <= max ? s : s.substring(0, max) + '…';
+                }
+
+                // Helper to check if an element is checked/selected (including custom attributes)
+                function isChecked(el) {
+                    var classChecked = false;
+                    if (el.classList && typeof el.classList.contains === 'function') {
+                        classChecked = el.classList.contains('checked') || el.classList.contains('active');
+                    }
+                    return !!(
+                        el.checked || 
+                        el.hasAttribute('checked') || 
+                        el.getAttribute('aria-checked') === 'true' || 
+                        el.hasAttribute('data-checked') || 
+                        classChecked
+                    );
+                }
+
+                // Helper to extract the input value, filtering out text entry fields to protect privacy and token counts
+                function getElementValue(el, label) {
+                    var tag = el.tagName ? el.tagName.toLowerCase() : '';
+                    var type = (el.getAttribute('type') || 'text').toLowerCase();
+                    var isTextEntry = tag === 'input' && 
+                        ['text', 'password', 'email', 'tel', 'url', 'search', 'number', 'date', 'datetime-local', 'month', 'time', 'week'].indexOf(type) !== -1;
+                    if (isTextEntry) {
+                        return null;
+                    }
+                    return truncate(el.value || el.getAttribute('value'), MAX_VALUE);
                 }
 
                 // Deep DOM query selector supporting crawling through Shadow DOM roots recursively
@@ -310,6 +354,8 @@ public class PageAnalyzer {
                                 name: el.getAttribute('name'),
                                 href: truncate(el.getAttribute('href'), MAX_HREF),
                                 type: el.getAttribute('type'),
+                                role: el.getAttribute('role'),
+                                checked: isChecked(el) ? 'true' : null,
                                 placeholder: el.getAttribute('placeholder'),
                                 ariaLabel: el.getAttribute('aria-label'),
                                 pattern: el.getAttribute('pattern'),
@@ -324,7 +370,7 @@ public class PageAnalyzer {
                                 readonly: el.hasAttribute('readonly') ? 'true' : null,
                                 disabled: el.hasAttribute('disabled') ? 'true' : null,
                                 multiple: el.hasAttribute('multiple') ? 'true' : null,
-                                value: label !== 'input' ? truncate(el.getAttribute('value'), MAX_VALUE) : null,
+                                value: getElementValue(el, label),
                                 options: options,
                                 selector: generateSelector(el),
                                 automationId: autoId,
@@ -365,6 +411,8 @@ public class PageAnalyzer {
                                 name: el.getAttribute('name'),
                                 href: truncate(el.getAttribute('href'), MAX_HREF),
                                 type: el.getAttribute('type'),
+                                role: el.getAttribute('role'),
+                                checked: isChecked(el) ? 'true' : null,
                                 placeholder: el.getAttribute('placeholder'),
                                 ariaLabel: el.getAttribute('aria-label'),
                                 pattern: el.getAttribute('pattern'),
@@ -379,7 +427,7 @@ public class PageAnalyzer {
                                 readonly: el.hasAttribute('readonly') ? 'true' : null,
                                 disabled: el.hasAttribute('disabled') ? 'true' : null,
                                 multiple: el.hasAttribute('multiple') ? 'true' : null,
-                                value: label !== 'input' ? truncate(el.getAttribute('value'), MAX_VALUE) : null,
+                                value: getElementValue(el, label),
                                 options: options,
                                 selector: generateSelector(el),
                                 automationId: autoId,
@@ -910,12 +958,19 @@ public class PageAnalyzer {
                     // Generate a stable selector for this frame in the parent context
                     final String selector = com.codeborne.selenide.Selenide.executeJavaScript(
                             "var el = arguments[0];" +
-                            "if (el.id) { return '#' + CSS.escape(el.id); }" +
-                            "if (el.name) { return el.tagName.toLowerCase() + '[name=\\'' + el.name + '\\']'; }" +
+                            "function escapeId(str) {" +
+                            "  if (typeof CSS !== 'undefined' && CSS.escape) { return CSS.escape(str); }" +
+                            "  return str.replace(/([!\"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])/g, '\\\\$1');" +
+                            "}" +
+                            "function escapeAttr(str) {" +
+                            "  return str.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"\\\\'\");" +
+                            "}" +
+                            "if (el.id) { return '#' + escapeId(el.id); }" +
+                            "if (el.name) { return el.tagName.toLowerCase() + '[name=\\'' + escapeAttr(el.name) + '\\']'; }" +
                             "var path = [];" +
                             "while (el && el.nodeType === 1) {" +
                             "  if (el.id) {" +
-                            "    path.unshift('#' + CSS.escape(el.id));" +
+                            "    path.unshift('#' + escapeId(el.id));" +
                             "    break;" +
                             "  }" +
                             "  var tag = el.tagName.toLowerCase();" +
@@ -936,23 +991,29 @@ public class PageAnalyzer {
                     com.codeborne.selenide.Selenide.switchTo().parentFrame();
                 } catch (final Exception e) {
                     LOG.debug("Could not switch to frame: {}", e.getMessage());
-                    com.codeborne.selenide.Selenide.switchTo().defaultContent();
-                    // Recover path
-                    if (!"main".equals(framePath)) {
-                        if (framePath.contains(" >>> ")) {
-                            final String[] selectors = framePath.split(" >>> ");
-                            for (final String sel : selectors) {
-                                if (!sel.equals("main") && !sel.isBlank()) {
-                                    final WebElement iframeElement = com.codeborne.selenide.Selenide.$(sel);
-                                    com.codeborne.selenide.Selenide.switchTo().frame(iframeElement);
+                    try {
+                        com.codeborne.selenide.Selenide.switchTo().defaultContent();
+                        // Recover path
+                        if (!"main".equals(framePath)) {
+                            if (framePath.contains(" >>> ")) {
+                                final String[] selectors = framePath.split(" >>> ");
+                                for (final String sel : selectors) {
+                                    if (!sel.equals("main") && !sel.isBlank()) {
+                                        final WebElement iframeElement = com.codeborne.selenide.Selenide.$(sel);
+                                        com.codeborne.selenide.Selenide.switchTo().frame(iframeElement);
+                                    }
+                                }
+                            } else {
+                                final String[] indices = framePath.substring(5).split("\\."); // remove "main."
+                                for (final String indexStr : indices) {
+                                    if (!indexStr.equals("main") && !indexStr.isBlank()) {
+                                        com.codeborne.selenide.Selenide.switchTo().frame(Integer.parseInt(indexStr));
+                                    }
                                 }
                             }
-                        } else {
-                            final String[] indices = framePath.substring(5).split("\\."); // remove "main."
-                            for (final String indexStr : indices) {
-                                com.codeborne.selenide.Selenide.switchTo().frame(Integer.parseInt(indexStr));
-                            }
                         }
+                    } catch (final Exception ex) {
+                        LOG.warn("Failed to recover frame path context: {}", ex.getMessage());
                     }
                 }
             }
@@ -1004,6 +1065,8 @@ public class PageAnalyzer {
         appendAttribute(dom, "id", el.get("id"));
         appendAttribute(dom, "name", el.get("name"));
         appendAttribute(dom, "type", el.get("type"));
+        appendAttribute(dom, "role", el.get("role"));
+        appendAttribute(dom, "checked", el.get("checked"));
 
         final String text = (String) el.get("text");
 
@@ -1284,20 +1347,45 @@ public class PageAnalyzer {
         String domId = "";
         String domName = "";
         String domPlaceholder = "";
+        String domTagName = "";
+        boolean hasExplicitAriaLabel = false;
 
         try {
             final Map<String, Object> resolveParams = Map.of("backendNodeId", backendDOMNodeId);
             final Map<String, Object> resolvedNode = cdpDriver.executeCdpCommand("DOM.resolveNode", resolveParams);
             if (resolvedNode != null && resolvedNode.containsKey("object")) {
                 final Map<String, Object> objectInfo = (Map<String, Object>) resolvedNode.get("object");
+                final String description = (String) objectInfo.get("description");
+                if (description != null && !description.isEmpty())
+                {
+                    int endIdx = description.length();
+                    for (int i = 0; i < description.length(); i++)
+                    {
+                        final char c = description.charAt(i);
+                        if (c == '.' || c == '#' || c == '[')
+                        {
+                            endIdx = i;
+                            break;
+                        }
+                    }
+                    domTagName = description.substring(0, endIdx).toLowerCase();
+                }
                 final String objectId = (String) objectInfo.get("objectId");
                 if (objectId != null) {
                     final String functionDeclaration = """
                             function() {
                                 function getFallbackLabel(el) {
-                                    var iconEl = el.querySelector('[class*="bi-"], [class*="fa-"], [class*="icon-"]');
+                                    var tag = el.tagName.toLowerCase();
+                                    var role = el.getAttribute('role') || '';
+                                    var isInteractiveLeaf = tag === 'button' || tag === 'a' || tag === 'option' ||
+                                        role === 'button' || role === 'link' || role === 'checkbox' || role === 'radio' || role === 'switch' || role === 'tab' || role === 'menuitem';
+
+                                    var iconEl = null;
+                                    if (isInteractiveLeaf) {
+                                        iconEl = el.querySelector('[class*="bi-"], [class*="fa-"], [class*="icon-"]');
+                                    }
                                     var elClassStr = typeof el.className === 'string' ? el.className : (el.getAttribute && el.getAttribute('class') || '');
-                                    if (!iconEl && (elClassStr.includes('bi-') || elClassStr.includes('fa-') || elClassStr.includes('icon-'))) {
+                                    if (isInteractiveLeaf && !iconEl && (elClassStr.includes('bi-') || elClassStr.includes('fa-') || elClassStr.includes('icon-'))) {
                                         iconEl = el;
                                     }
                                     if (iconEl) {
@@ -1363,7 +1451,9 @@ public class PageAnalyzer {
                                     fallbackLabel: getFallbackLabel(this),
                                     domId: this.id || '',
                                     domName: this.getAttribute('name') || '',
-                                    domPlaceholder: this.getAttribute('placeholder') || ''
+                                    domPlaceholder: this.getAttribute('placeholder') || '',
+                                    tagName: this.tagName.toLowerCase(),
+                                    hasAriaLabel: !!(this.getAttribute('aria-label') || this.getAttribute('aria-labelledby'))
                                 };
                             }
                             """;
@@ -1381,9 +1471,18 @@ public class PageAnalyzer {
                             final Object stampedValueObj = resultVal.get("value");
                             if (stampedValueObj instanceof final Map<?, ?> resultMap) {
                                 refId = String.valueOf(resultMap.get("refId"));
+                                final Object domTagNameVal = resultMap.get("tagName");
+                                if (domTagNameVal != null && !String.valueOf(domTagNameVal).isEmpty()) {
+                                    domTagName = String.valueOf(domTagNameVal).toLowerCase();
+                                }
+                                final Object domHasAriaLabelVal = resultMap.get("hasAriaLabel");
+                                if (domHasAriaLabelVal != null) {
+                                    hasExplicitAriaLabel = Boolean.parseBoolean(String.valueOf(domHasAriaLabelVal));
+                                }
                                 final String fallbackLabel = String.valueOf(resultMap.get("fallbackLabel"));
                                 if (fallbackLabel != null && !fallbackLabel.isEmpty()
                                         && !"null".equals(fallbackLabel)) {
+                                    hasExplicitAriaLabel = true;
                                     final String cleanName = name == null ? ""
                                             : name.replace('\u00a0', ' ').strip().replaceAll("\\s+", " ");
                                     if (cleanName.isEmpty()) {
@@ -1419,8 +1518,33 @@ public class PageAnalyzer {
         name = cleanAccessibleText(name);
         value = cleanAccessibleText(value);
 
+        final String tag = !domTagName.isEmpty() ? domTagName : role;
+
+        // Clean name for container elements to avoid inheriting "Close" from child buttons
+        String cleanLabel = name;
+        final boolean isContainer = "section".equals(tag) || "dialog".equals(tag) || "form".equals(tag) || "nav".equals(tag) || "aside".equals(tag);
+        if (isContainer && !cleanLabel.isEmpty())
+        {
+            final String lowerLabel = cleanLabel.toLowerCase();
+            if (lowerLabel.equals("close") || lowerLabel.equals("close icon"))
+            {
+                cleanLabel = "";
+            }
+            else if (lowerLabel.endsWith(" close"))
+            {
+                cleanLabel = cleanLabel.substring(0, cleanLabel.length() - 6).strip();
+            }
+            else if (lowerLabel.endsWith(" close icon"))
+            {
+                cleanLabel = cleanLabel.substring(0, cleanLabel.length() - 11).strip();
+            }
+        }
+
         dom.append("  ".repeat(depth));
-        dom.append("<").append(role);
+        dom.append("<").append(tag);
+        if (!domTagName.isEmpty() && !role.equals(domTagName)) {
+            dom.append(" role=\"").append(escapeAttributeValue(role)).append("\"");
+        }
         if (!refId.isEmpty()) {
             dom.append(" data-neo-ref=\"").append(escapeAttributeValue(refId)).append("\"");
         }
@@ -1431,11 +1555,11 @@ public class PageAnalyzer {
 
         if (!domName.isEmpty()) {
             dom.append(" name=\"").append(escapeAttributeValue(domName)).append("\"");
-            if (!name.isEmpty()) {
-                dom.append(" aria-label=\"").append(escapeAttributeValue(name)).append("\"");
+            if (hasExplicitAriaLabel && !cleanLabel.isEmpty()) {
+                dom.append(" aria-label=\"").append(escapeAttributeValue(cleanLabel)).append("\"");
             }
-        } else if (!name.isEmpty()) {
-            dom.append(" aria-label=\"").append(escapeAttributeValue(name)).append("\"");
+        } else if (hasExplicitAriaLabel && !cleanLabel.isEmpty()) {
+            dom.append(" aria-label=\"").append(escapeAttributeValue(cleanLabel)).append("\"");
         }
 
         if (!value.isEmpty()) {
@@ -1477,10 +1601,14 @@ public class PageAnalyzer {
             }
         }
 
+        final String textContent = (!hasExplicitAriaLabel && !cleanLabel.isEmpty()) ? cleanLabel : "";
+
         if (hasSerializedChildren) {
             dom.append(">\n");
             dom.append(childrenContent);
-            dom.append("  ".repeat(depth)).append("</").append(role).append(">\n");
+            dom.append("  ".repeat(depth)).append("</").append(tag).append(">\n");
+        } else if (!textContent.isEmpty()) {
+            dom.append(">").append(escapeHtmlText(textContent)).append("</").append(tag).append(">\n");
         } else {
             dom.append("/>\n");
         }

@@ -392,7 +392,7 @@ public class ActionParser {
             }
 
             final String target = obj.has("tg") && !obj.get("tg").isJsonNull()
-                                                                                       ? obj.get("tg").getAsString()
+                                                                                       ? safeGetAsString(obj.get("tg"))
                                                                                        : null;
 
             final List<String> valueList;
@@ -405,13 +405,13 @@ public class ActionParser {
                     final List<String> list = new ArrayList<>();
                     for (final JsonElement item : arr)
                     {
-                        list.add(item.getAsString());
+                        list.add(safeGetAsString(item));
                     }
                     valueList = list;
                 }
                 else
                 {
-                    valueList = List.of(valElem.getAsString());
+                    valueList = List.of(safeGetAsString(valElem));
                 }
             }
             else
@@ -420,10 +420,10 @@ public class ActionParser {
             }
 
             final String description = obj.has("desc") && !obj.get("desc").isJsonNull()
-                                                                                                 ? obj.get("desc").getAsString()
+                                                                                                 ? safeGetAsString(obj.get("desc"))
                                                                                                  : "";
             final String elementDetails = obj.has("ed") && !obj.get("ed").isJsonNull()
-                                                                                                       ? obj.get("ed").getAsString()
+                                                                                                       ? safeGetAsString(obj.get("ed"))
                                                                                                        : null;
             final boolean adjust = obj.has("ad") && !obj.get("ad").isJsonNull() && obj.get("ad").getAsBoolean();
 
@@ -433,16 +433,16 @@ public class ActionParser {
             
             if (obj.has("frameId") && !obj.get("frameId").isJsonNull())
             {
-                action.setFrameId(obj.get("frameId").getAsString());
+                action.setFrameId(safeGetAsString(obj.get("frameId")));
             }
             else if (obj.has("fr") && !obj.get("fr").isJsonNull())
             {
-                action.setFrameId(obj.get("fr").getAsString());
+                action.setFrameId(safeGetAsString(obj.get("fr")));
             }
 
             if (obj.has("r") && !obj.get("r").isJsonNull())
             {
-                action.setReasoning(obj.get("r").getAsString());
+                action.setReasoning(safeGetAsString(obj.get("r")));
             }
 
             if (obj.has("ec") && obj.get("ec").isJsonObject()) {
@@ -450,7 +450,7 @@ public class ActionParser {
                 java.util.Map<String, String> ctxMap = new java.util.HashMap<>();
                 for (java.util.Map.Entry<String, JsonElement> entry : ctxObj.entrySet()) {
                     if (!entry.getValue().isJsonNull()) {
-                        ctxMap.put(entry.getKey(), entry.getValue().getAsString());
+                        ctxMap.put(entry.getKey(), safeGetAsString(entry.getValue()));
                     }
                 }
                 action.setElementContext(ctxMap);
@@ -509,5 +509,14 @@ public class ActionParser {
             LOG.warn("Failed to parse action: {}", e.getMessage());
             return null;
         }
+    }
+
+    private String safeGetAsString(final JsonElement element)
+    {
+        if (element == null || element.isJsonNull())
+        {
+            return null;
+        }
+        return element.isJsonPrimitive() ? element.getAsString() : element.toString();
     }
 }

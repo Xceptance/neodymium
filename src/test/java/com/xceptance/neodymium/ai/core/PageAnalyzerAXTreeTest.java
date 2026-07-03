@@ -168,10 +168,10 @@ class PageAnalyzerAXTreeTest
         assertTrue(result.contains("Page URL: https://example.com/test-axtree"));
         assertTrue(result.contains("Page Title: Mock AXTree Test Page"));
         assertTrue(result.contains("=== Accessibility Tree (AXTree) ==="));
-        assertTrue(result.contains("<button data-neo-ref=\"xc_ax_ref_1001\" aria-label=\"Click Me\"/>"));
-        assertTrue(result.contains("<link data-neo-ref=\"xc_ax_ref_1002\" aria-label=\"Go to Google\" value=\"https://google.com\"/>"));
-        assertTrue(result.contains("<textbox data-neo-ref=\"xc_ax_ref_1003\" aria-label=\"Username\" required=\"true\" placeholder=\"Enter Username\"/>"));
-        assertTrue(result.contains("<checkbox data-neo-ref=\"xc_ax_ref_1005\" aria-label=\"Flat String Checkbox\"/>"));
+        assertTrue(result.contains("<button data-neo-ref=\"xc_ax_ref_1001\">Click Me</button>"));
+        assertTrue(result.contains("<link data-neo-ref=\"xc_ax_ref_1002\" value=\"https://google.com\">Go to Google</link>"));
+        assertTrue(result.contains("<textbox data-neo-ref=\"xc_ax_ref_1003\" required=\"true\" placeholder=\"Enter Username\">Username</textbox>"));
+        assertTrue(result.contains("<checkbox data-neo-ref=\"xc_ax_ref_1005\">Flat String Checkbox</checkbox>"));
         
         // Assert that Node 4 with generic/ignored role is correctly filtered out
         assertTrue(!result.contains("generic") && !result.contains("some container"));
@@ -486,5 +486,180 @@ class PageAnalyzerAXTreeTest
 
         assertTrue(result.contains(expected), "AXTree serialization should be visual-flow ordered, nested with 2-spaces indentation, and populated with DOM attributes.\nActual result:\n" + result);
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void captureSimplifiedDom_withCdpSupport_resolvesHtmlTagNameAndRoleAttribute()
+    {
+        final Class<?>[] interfaces = new Class<?>[] { WebDriver.class, HasCdp.class };
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            PageAnalyzerAXTreeTest.class.getClassLoader(),
+            interfaces,
+            (proxy, method, args) -> {
+                final String methodName = method.getName();
+                if ("getCurrentUrl".equals(methodName))
+                {
+                    return "https://example.com/test-axtree-tagname";
+                }
+                if ("getTitle".equals(methodName))
+                {
+                    return "Mock TagName Page";
+                }
+                if ("executeCdpCommand".equals(methodName))
+                {
+                    final String command = (String) args[0];
+                    final Map<String, Object> params = (Map<String, Object>) args[1];
+
+                    if ("Accessibility.getFullAXTree".equals(command))
+                    {
+                        final List<Map<String, Object>> nodes = new ArrayList<>();
+
+                        // Section element acting as a dialog
+                        final Map<String, Object> sectionDialog = new HashMap<>();
+                        sectionDialog.put("ignored", false);
+                        sectionDialog.put("backendDOMNodeId", 4001);
+                        sectionDialog.put("role", Map.of("value", "dialog"));
+                        nodes.add(sectionDialog);
+
+                        return Map.of("nodes", nodes);
+                    }
+                    else if ("DOM.resolveNode".equals(command))
+                    {
+                        final Number backendNodeId = (Number) params.get("backendNodeId");
+                        return Map.of("object", Map.of(
+                            "objectId", "obj-id-" + backendNodeId,
+                            "description", "section.chakra-modal__content.css-1roe7al"
+                        ));
+                    }
+                    else if ("Runtime.callFunctionOn".equals(command))
+                    {
+                        final String objectId = (String) params.get("objectId");
+                        return Map.of("result", Map.of("value", Map.of(
+                            "refId", "xc_ref_section",
+                            "fallbackLabel", "",
+                            "domId", "chakra-modal-:r70:",
+                            "domName", "",
+                            "domPlaceholder", "",
+                            "tagName", "section"
+                        )));
+                    }
+                }
+                return null;
+            }
+        );
+
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final PageAnalyzer analyzer = new PageAnalyzer();
+        final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
+
+        assertNotNull(result);
+        assertTrue(result.contains("<section role=\"dialog\" data-neo-ref=\"xc_ref_section\" id=\"chakra-modal-:r70:\"/>"),
+            "Expected output to contain <section role=\"dialog\".../> but was:\n" + result);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void captureSimplifiedDom_withCdpSupport_cleansContainerNamesEndingWithClose()
+    {
+        final Class<?>[] interfaces = new Class<?>[] { WebDriver.class, HasCdp.class };
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            PageAnalyzerAXTreeTest.class.getClassLoader(),
+            interfaces,
+            (proxy, method, args) -> {
+                final String methodName = method.getName();
+                if ("getCurrentUrl".equals(methodName))
+                {
+                    return "https://example.com/test-axtree-clean-name";
+                }
+                if ("getTitle".equals(methodName))
+                {
+                    return "Mock Clean Name Page";
+                }
+                if ("executeCdpCommand".equals(methodName))
+                {
+                    final String command = (String) args[0];
+                    final Map<String, Object> params = (Map<String, Object>) args[1];
+
+                    if ("Accessibility.getFullAXTree".equals(command))
+                    {
+                        final List<Map<String, Object>> nodes = new ArrayList<>();
+
+                        // Node 1: Section with name "Close"
+                        final Map<String, Object> section1 = new HashMap<>();
+                        section1.put("ignored", false);
+                        section1.put("backendDOMNodeId", 5001);
+                        section1.put("role", "dialog");
+                        section1.put("name", "Close");
+                        nodes.add(section1);
+
+                        // Node 2: Section with name "My Modal Close"
+                        final Map<String, Object> section2 = new HashMap<>();
+                        section2.put("ignored", false);
+                        section2.put("backendDOMNodeId", 5002);
+                        section2.put("role", "dialog");
+                        section2.put("name", "My Modal Close");
+                        nodes.add(section2);
+
+                        // Node 3: Button with name "Close" (should NOT be cleaned)
+                        final Map<String, Object> button = new HashMap<>();
+                        button.put("ignored", false);
+                        button.put("backendDOMNodeId", 5003);
+                        button.put("role", "button");
+                        button.put("name", "Close");
+                        nodes.add(button);
+
+                        return Map.of("nodes", nodes);
+                    }
+                    else if ("DOM.resolveNode".equals(command))
+                    {
+                        final Number backendNodeId = (Number) params.get("backendNodeId");
+                        String tag = "section";
+                        if (backendNodeId.intValue() == 5003) {
+                            tag = "button";
+                        }
+                        return Map.of("object", Map.of(
+                            "objectId", "obj-id-" + backendNodeId,
+                            "description", tag
+                        ));
+                    }
+                    else if ("Runtime.callFunctionOn".equals(command))
+                    {
+                        final String objectId = (String) params.get("objectId");
+                        String tag = "section";
+                        if (objectId.endsWith("5003")) {
+                            tag = "button";
+                        }
+                        return Map.of("result", Map.of("value", Map.of(
+                            "refId", "xc_ref_" + objectId.substring(7),
+                            "fallbackLabel", "",
+                            "domId", "",
+                            "domName", "",
+                            "domPlaceholder", "",
+                            "tagName", tag
+                        )));
+                    }
+                }
+                return null;
+            }
+        );
+
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final PageAnalyzer analyzer = new PageAnalyzer();
+        final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
+
+        assertNotNull(result);
+        // Section 1 should have no aria-label
+        assertTrue(result.contains("<section role=\"dialog\" data-neo-ref=\"xc_ref_5001\"/>"),
+            "Expected section 1 to have no aria-label but was:\n" + result);
+        // Section 2 should have name cleaned to "My Modal" as inner text
+        assertTrue(result.contains("<section role=\"dialog\" data-neo-ref=\"xc_ref_5002\">My Modal</section>"),
+            "Expected section 2 to have text content \"My Modal\" but was:\n" + result);
+        // Button should still have name "Close" as inner text
+        assertTrue(result.contains("<button data-neo-ref=\"xc_ref_5003\">Close</button>"),
+            "Expected button to keep text content \"Close\" but was:\n" + result);
+    }
 }
+
 
