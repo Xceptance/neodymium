@@ -79,7 +79,7 @@ public final class InteractiveConsoleEngine
     private static final Gson GSON = new Gson();
 
     /** A unique identifier for the currently active test run. */
-    private final String runId;
+    private String runId;
 
     /**
      * The UUID generated on each pause, consumed by the first valid POST action.
@@ -148,6 +148,11 @@ public final class InteractiveConsoleEngine
     public String getRunId()
     {
         return this.runId;
+    }
+
+    public void setRunId(final String runId)
+    {
+        this.runId = runId;
     }
 
     /**
@@ -499,10 +504,13 @@ public final class InteractiveConsoleEngine
         {
             final byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-            exchange.sendResponseHeaders(statusCode, bytes.length);
-            try (final OutputStream out = exchange.getResponseBody())
-            {
-                out.write(bytes);
+            final boolean isHead = "HEAD".equalsIgnoreCase(exchange.getRequestMethod());
+            exchange.sendResponseHeaders(statusCode, isHead ? -1 : bytes.length);
+            if (!isHead) {
+                try (final OutputStream out = exchange.getResponseBody())
+                {
+                    out.write(bytes);
+                }
             }
         }
     }

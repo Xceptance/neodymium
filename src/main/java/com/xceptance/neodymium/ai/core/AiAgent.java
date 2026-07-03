@@ -53,9 +53,9 @@ import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
 import com.xceptance.neodymium.ai.playbook.Playbook;
+import com.xceptance.neodymium.ai.playbook.PlaybookManager;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 import com.xceptance.neodymium.ai.util.ScreenshotHasher;
-import com.xceptance.neodymium.ai.playbook.PlaybookManager;
 import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.Neodymium;
@@ -82,8 +82,8 @@ public class AiAgent {
 
     private static final Logger LOG = LoggerFactory.getLogger(AiAgent.class);
 
-    private InteractiveConsoleEngine consoleEngine;
-    private InteractiveConsoleServer consoleServer;
+    private static InteractiveConsoleEngine consoleEngine;
+    private static InteractiveConsoleServer consoleServer;
     private String currentRunId;
     private String currentPauseId;
 
@@ -255,14 +255,18 @@ public class AiAgent {
         this.hudPromptChanged = false;
         this.hudSaveExit = false;
 
-        if (Neodymium.aiConfiguration().aiInteractive() && this.consoleServer == null) {
+        if (Neodymium.aiConfiguration().aiInteractive()) {
             this.currentRunId = "run-" + System.currentTimeMillis();
-            this.consoleEngine = new InteractiveConsoleEngine(this.currentRunId);
-            try {
-                this.consoleServer = new InteractiveConsoleServer(this.consoleEngine);
-                this.consoleServer.openBrowser();
-            } catch (IOException e) {
-                LOG.error("Failed to start Interactive Console Server: {}", e.getMessage());
+            if (consoleServer == null) {
+                consoleEngine = new InteractiveConsoleEngine(this.currentRunId);
+                try {
+                    consoleServer = new InteractiveConsoleServer(consoleEngine);
+                    consoleServer.openBrowser();
+                } catch (IOException e) {
+                    LOG.error("Failed to start Interactive Console Server: {}", e.getMessage());
+                }
+            } else {
+                consoleEngine.setRunId(this.currentRunId);
             }
         }
 
@@ -765,15 +769,14 @@ public class AiAgent {
 
                 while (true) {
                     if (isInteractive && !hasApprovedCurrentStep) {
-                        final List<String> plannedStrs = new ArrayList<>();
-                        plannedStrs.add(instruction);
-                        if (futureInstructions != null) {
-                            plannedStrs.addAll(futureInstructions);
+                        if (isPlaybookReplay(instruction, unresolvedInstruction, playbook, stepDetails)) {
+                            stepDetails.setSource("playbook");
+                            updateConsoleState(result, null);
+                            sleep(1500); // Provide delay so user can read "This comes from a playbook"
+                        } else {
+                            stepDetails.setSource(null);
+                            updateConsoleState(result, "Thinking...");
                         }
-
-                        // Show HUD immediately so the user doesn't wait forever, indicating reasoning
-                        // is loading
-                        updateConsoleState(result, "Loading reasoning...");
                     }
 
                     // Clear actions of the current step if this is a continuation turn during
@@ -1532,17 +1535,31 @@ public class AiAgent {
             state.addProperty("testFile", Neodymium.getData().asString("neodymium.testFile", null));
             state.addProperty("yamlSource", Neodymium.getData().asString("neodymium.yamlSource", null));
             state.add("dataBindings", Neodymium.getData().getDataAsJsonObject());
-            state.add("storedVariables", Neodymium.getData().getDataAsJsonObject());
-
-            if (Neodymium.getData().exists("neodymium.junit.tags")) {
-                try {
-                    final List<String> tags = new Gson().fromJson(Neodymium.getData().asString("neodymium.junit.tags"),
-                            new TypeToken<List<String>>() {
-                            }.getType());
-                    state.add("junitTags", new Gson().toJsonTree(tags));
-                } catch (final Exception e) {
-                    // Ignore
+            
+            final JsonObject storedVars = new JsonObject();
+            if (this.actionExecutor != null) {
+                for (final java.util.Map.Entry<String, String> entry : this.actionExecutor.getExecutionVariables().entrySet()) {
+                    storedVars.addProperty(entry.getKey(), entry.getValue());
                 }
+            }
+            state.add("storedVariables", storedVars);
+
+            try {
+                final String testName = Neodymium.getTestName();
+                if (testName != null && testName.contains(" :: ")) {
+                    final String className = testName.split(" :: ")[0];
+                    final Class<?> testClass = Class.forName(className);
+                    final org.junit.jupiter.api.Tag[] tags = testClass.getAnnotationsByType(org.junit.jupiter.api.Tag.class);
+                    if (tags != null && tags.length > 0) {
+                        final JsonArray tagsArray = new JsonArray();
+                        for (final org.junit.jupiter.api.Tag tag : tags) {
+                            tagsArray.add(tag.value());
+                        }
+                        state.add("junitTags", tagsArray);
+                    }
+                }
+            } catch (final Exception e) {
+                // Ignore
             }
         }
 
@@ -1621,6 +1638,38 @@ public class AiAgent {
         this.consoleEngine.pushState(new Gson().toJson(state));
     }
 
+    private final Map<String, String> screenshotUrlCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private String getScreenshotUrl(final String base64) {
+        if (base64 == null || base64.isEmpty()) return null;
+        if (base64.startsWith("/api/console/screenshot") || base64.startsWith("data:image")) return base64;
+
+        return screenshotUrlCache.computeIfAbsent(base64, b64 -> {
+            try {
+                final java.io.File dir = new java.io.File("target/ai-console-screenshots");
+                if (!dir.exists()) dir.mkdirs();
+                final String fileName = java.util.UUID.randomUUID().toString() + ".png";
+                final java.io.File file = new java.io.File(dir, fileName);
+                
+                // Remove prefix if present
+                String cleanB64 = b64;
+                if (cleanB64.startsWith("data:image")) {
+                    int commaIndex = cleanB64.indexOf(',');
+                    if (commaIndex > -1) {
+                        cleanB64 = cleanB64.substring(commaIndex + 1);
+                    }
+                }
+                
+                final byte[] decodedBytes = java.util.Base64.getDecoder().decode(cleanB64);
+                java.nio.file.Files.write(file.toPath(), decodedBytes);
+                return "/api/console/screenshot?file=" + fileName;
+            } catch (Exception e) {
+                LOG.warn("Failed to save screenshot to disk", e);
+                return b64.startsWith("data:image") ? b64 : "data:image/png;base64," + b64;
+            }
+        });
+    }
+
     private JsonArray renderBlockSteps(final AiExecutionResult result, final String blockName, final int startIdx) {
         final JsonArray stepsArray = new JsonArray();
         if (result == null)
@@ -1630,7 +1679,8 @@ public class AiAgent {
         for (final StepDetails step : result.getSteps()) {
             final JsonObject stepObj = new JsonObject();
             stepObj.addProperty("index", idx++);
-            stepObj.addProperty("instruction", step.getRawInstruction());
+            stepObj.addProperty("instruction", step.getExpandedInstruction() != null ? step.getExpandedInstruction() : step.getRawInstruction());
+            stepObj.addProperty("rawInstruction", step.getRawInstruction());
 
             String status = "pending";
             if (step.getFailureReason() != null) {
@@ -1684,9 +1734,14 @@ public class AiAgent {
             if (reasoning != null && !reasoning.isEmpty()) {
                 stepObj.addProperty("reasoning", reasoning);
             }
+            if (step.getScreenshot() != null) {
+                stepObj.addProperty("screenshot", getScreenshotUrl(step.getScreenshot()));
+            }
             if (!step.getLlmCalls().isEmpty()) {
                 final LlmCallDetails lastCall = step.getLlmCalls().get(step.getLlmCalls().size() - 1);
-                stepObj.addProperty("screenshot", lastCall.getBase64Screenshot());
+                if (step.getScreenshot() == null) {
+                    stepObj.addProperty("screenshot", getScreenshotUrl(lastCall.getBase64Screenshot()));
+                }
                 stepObj.addProperty("simplifiedDom", lastCall.getHtmlDomContext());
                 stepObj.addProperty("inputTokens", lastCall.getInputTokens());
                 stepObj.addProperty("outputTokens", lastCall.getOutputTokens());
@@ -1697,6 +1752,14 @@ public class AiAgent {
         return stepsArray;
     }
 
+    private boolean isPlaybookReplay(final String instruction, final String unresolvedInstruction, final Playbook playbook, final StepDetails stepDetails) {
+        if (playbook == null || playbook.getCurrentStep() == null) return false;
+        final boolean isNoReplay = (unresolvedInstruction != null && unresolvedInstruction.toLowerCase().contains("(no-replay)")) || (stepDetails != null && stepDetails.getOriginalUnsplitInstruction() != null && stepDetails.getOriginalUnsplitInstruction().toLowerCase().contains("(no-replay)"));
+        if (isNoReplay) return false;
+        final PlaybookStep step = playbook.getCurrentStep();
+        return !playbook.isRecording() || (step.getPromptLine() != null && step.getPromptLine().equals(instruction) && !step.getActions().isEmpty() && !step.failed());
+    }
+
     private List<Action> getStepActions(final int stepIndex, final String instruction,
             final String unresolvedInstruction, final Playbook playbook,
             final boolean expectedFailure, final String bugId, final List<Action> accumulatedActions,
@@ -1705,15 +1768,8 @@ public class AiAgent {
         PlaybookStep step = playbook.getCurrentStep();
         boolean visualMatchSucceeded = false;
 
-        final boolean isNoReplay = (unresolvedInstruction != null
-                && unresolvedInstruction.toLowerCase().contains("(no-replay)"))
-                || (stepDetails != null && stepDetails.getOriginalUnsplitInstruction() != null
-                        && stepDetails.getOriginalUnsplitInstruction().toLowerCase().contains("(no-replay)"));
-
         // 1. Are we replaying a playbook?
-        if (!isNoReplay && (playbook.isRecording() == false
-                || (step.getPromptLine() != null && step.getPromptLine().equals(instruction)
-                        && !step.getActions().isEmpty() && !step.failed()))) {
+        if (isPlaybookReplay(instruction, unresolvedInstruction, playbook, stepDetails)) {
             if (playbook.isRecording() == false && step.isExpectedFailure()) {
                 llmClient.getAiStats().recordReplay();
                 stepDetails.setReplayed(true);
@@ -1748,6 +1804,7 @@ public class AiAgent {
                                     distance, step.getScreenshotHash(), currentHash);
 
                             if (distance <= 15) {
+                                stepDetails.setScreenshot(currentScreenshot);
                                 LOG.info(
                                         "    ✅ Visual match succeeded (Hamming distance {} <= 15). Proceeding with recorded actions.",
                                         distance);
@@ -1781,6 +1838,15 @@ public class AiAgent {
                                     "Error during visual hash verification: " + e.getMessage(), e);
                         }
                     } else {
+                        if (Neodymium.aiConfiguration().aiInteractive())
+                        {
+                            try {
+                                stepDetails.setScreenshot(pageAnalyzer.captureScreenshot("Interactive Replay: " + instruction));
+                            } catch (Exception e) {
+                                LOG.warn("Failed to capture interactive replay screenshot", e);
+                            }
+                        }
+
                         final ContextLevel levelToUse = step.getHealedContextLevel() != null
                                 ? step.getHealedContextLevel()
                                 : ContextLevel.LEAN;

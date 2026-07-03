@@ -30,13 +30,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.yaml.snakeyaml.Yaml;
-import java.util.Map;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -44,6 +44,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Lightweight standalone HTTP server for the Interactive Console.
@@ -114,11 +115,6 @@ public final class InteractiveConsoleServer {
         return "http://" + (engine != null ? engine.getLanIp() : "localhost") + ":" + this.port;
     }
 
-    /**
-     * Attempts to open the Interactive Console in the system's default browser.
-     * Logs an info message regardless of whether the browser launch succeeded,
-     * so the user can always copy the URL manually.
-     */
     public void openBrowser() {
         final String url = getLocalUrl();
         LOG.info("========================================================================");
@@ -126,6 +122,29 @@ public final class InteractiveConsoleServer {
         LOG.info("  (Also accessible on your local network via your machine's IP)");
         LOG.info("========================================================================");
 
+        try {
+            final com.codeborne.selenide.SelenideConfig config = new com.codeborne.selenide.SelenideConfig();
+            String browser = Neodymium.getBrowserName();
+            if (browser == null || browser.isEmpty()) {
+                browser = "chrome";
+            }
+            config.browser(browser);
+            config.headless(false); // force non-headless
+
+            if (browser.toLowerCase().contains("chrome")) {
+                final org.openqa.selenium.chrome.ChromeOptions options = new org.openqa.selenium.chrome.ChromeOptions();
+                options.addArguments("--app=" + url);
+                config.browserCapabilities(options);
+            }
+            
+            final com.codeborne.selenide.SelenideDriver driver = new com.codeborne.selenide.SelenideDriver(config);
+            driver.open(url);
+            return;
+        } catch (final Exception e) {
+            LOG.warn("Could not open browser via Selenide: {}. Falling back to Desktop.", e.getMessage());
+        }
+
+        // Fallback if selnide failed.
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
             try {
                 Desktop.getDesktop().browse(new URI(url));
@@ -135,6 +154,7 @@ public final class InteractiveConsoleServer {
             }
         }
 
+        // Fallback for the fallback
         try {
             final String os = System.getProperty("os.name", "").toLowerCase();
             if (os.contains("win")) {
@@ -189,9 +209,10 @@ public final class InteractiveConsoleServer {
         // Wire engine handlers
         httpServer.createContext("/api/console/events", engine.createSseHandler());
         httpServer.createContext("/api/console/action", engine.createActionHandler());
+        httpServer.createContext("/api/console/screenshot", new ScreenshotFileHandler());
 
-        // Serve the HTML template at the root
-        httpServer.createContext("/", new HtmlHandler());
+        // Serve the HTML template and static assets at the root
+        httpServer.createContext("/", new StaticResourceHandler());
 
         httpServer.setExecutor(Executors.newCachedThreadPool(runnable -> {
             final Thread t = new Thread(runnable, "InteractiveConsole-HTTP");
@@ -209,14 +230,26 @@ public final class InteractiveConsoleServer {
     // -------------------------------------------------------------------------
 
     /**
-     * Serves the {@code interactive_console.html} resource from the classpath.
+     * Serves the static resources from the classpath.
      */
-    private static final class HtmlHandler implements com.sun.net.httpserver.HttpHandler {
+    private static final class StaticResourceHandler implements com.sun.net.httpserver.HttpHandler {
         @Override
         public void handle(final HttpExchange exchange) throws IOException {
-            // Only handle the root path; return 404 for anything else not mapped.
             final String path = exchange.getRequestURI().getPath();
-            if (!"/".equals(path) && !"/index.html".equals(path)) {
+            
+            String resourcePath;
+            String contentType;
+
+            if ("/".equals(path) || "/index.html".equals(path)) {
+                resourcePath = HTML_RESOURCE;
+                contentType = "text/html; charset=UTF-8";
+            } else if ("/interactive_console.css".equals(path)) {
+                resourcePath = "com/xceptance/neodymium/ai/console/interactive_console.css";
+                contentType = "text/css; charset=UTF-8";
+            } else if ("/interactive_console.js".equals(path)) {
+                resourcePath = "com/xceptance/neodymium/ai/console/interactive_console.js";
+                contentType = "application/javascript; charset=UTF-8";
+            } else {
                 final byte[] msg = "Not Found".getBytes(StandardCharsets.UTF_8);
                 exchange.sendResponseHeaders(404, msg.length);
                 try (final OutputStream out = exchange.getResponseBody()) {
@@ -225,11 +258,9 @@ public final class InteractiveConsoleServer {
                 return;
             }
 
-            try (final InputStream is = InteractiveConsoleServer.class.getClassLoader()
-                    .getResourceAsStream(HTML_RESOURCE)) {
+            try (final InputStream is = InteractiveConsoleServer.class.getClassLoader().getResourceAsStream(resourcePath)) {
                 if (is == null) {
-                    final byte[] msg = ("Resource not found on classpath: " + HTML_RESOURCE)
-                            .getBytes(StandardCharsets.UTF_8);
+                    final byte[] msg = ("Resource not found on classpath: " + resourcePath).getBytes(StandardCharsets.UTF_8);
                     exchange.sendResponseHeaders(500, msg.length);
                     try (final OutputStream out = exchange.getResponseBody()) {
                         out.write(msg);
@@ -238,10 +269,13 @@ public final class InteractiveConsoleServer {
                 }
 
                 final byte[] bytes = is.readAllBytes();
-                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
-                exchange.sendResponseHeaders(200, bytes.length);
-                try (final OutputStream out = exchange.getResponseBody()) {
-                    out.write(bytes);
+                exchange.getResponseHeaders().set("Content-Type", contentType);
+                final boolean isHead = "HEAD".equalsIgnoreCase(exchange.getRequestMethod());
+                exchange.sendResponseHeaders(200, isHead ? -1 : bytes.length);
+                if (!isHead) {
+                    try (final OutputStream out = exchange.getResponseBody()) {
+                        out.write(bytes);
+                    }
                 }
             }
         }
@@ -250,6 +284,42 @@ public final class InteractiveConsoleServer {
     // -------------------------------------------------------------------------
     // Static JSON file handler
     // -------------------------------------------------------------------------
+
+    static class ScreenshotFileHandler implements com.sun.net.httpserver.HttpHandler {
+        @Override
+        public void handle(final HttpExchange exchange) throws IOException {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, OPTIONS");
+                exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+                exchange.sendResponseHeaders(204, -1);
+                return;
+            }
+
+            final String query = exchange.getRequestURI().getQuery();
+            if (query != null && query.startsWith("file=")) {
+                final String fileName = query.substring(5);
+                if (fileName.contains("/") || fileName.contains("\\") || fileName.contains("..")) {
+                    exchange.sendResponseHeaders(403, -1);
+                    return;
+                }
+                final Path file = Paths.get("target/ai-console-screenshots", fileName);
+                if (Files.exists(file)) {
+                    exchange.getResponseHeaders().set("Content-Type", "image/png");
+                    final byte[] bytes = Files.readAllBytes(file);
+                    final boolean isHead = "HEAD".equalsIgnoreCase(exchange.getRequestMethod());
+                    exchange.sendResponseHeaders(200, isHead ? -1 : bytes.length);
+                    if (!isHead) {
+                        try (final OutputStream os = exchange.getResponseBody()) {
+                            os.write(bytes);
+                        }
+                    }
+                    return;
+                }
+            }
+            exchange.sendResponseHeaders(404, -1);
+        }
+    }
 
     /**
      * Serves a single static JSON file from disk at {@code GET /run_data.json}.
@@ -268,9 +338,12 @@ public final class InteractiveConsoleServer {
             exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
             exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
             final byte[] bytes = Files.readAllBytes(this.jsonPath);
-            exchange.sendResponseHeaders(200, bytes.length);
-            try (final OutputStream out = exchange.getResponseBody()) {
-                out.write(bytes);
+            final boolean isHead = "HEAD".equalsIgnoreCase(exchange.getRequestMethod());
+            exchange.sendResponseHeaders(200, isHead ? -1 : bytes.length);
+            if (!isHead) {
+                try (final OutputStream out = exchange.getResponseBody()) {
+                    out.write(bytes);
+                }
             }
         }
     }
@@ -300,9 +373,12 @@ public final class InteractiveConsoleServer {
                 }
 
                 final byte[] bytes = is.readAllBytes();
-                exchange.sendResponseHeaders(200, bytes.length);
-                try (final OutputStream out = exchange.getResponseBody()) {
-                    out.write(bytes);
+                final boolean isHead = "HEAD".equalsIgnoreCase(exchange.getRequestMethod());
+                exchange.sendResponseHeaders(200, isHead ? -1 : bytes.length);
+                if (!isHead) {
+                    try (final OutputStream out = exchange.getResponseBody()) {
+                        out.write(bytes);
+                    }
                 }
             }
         }

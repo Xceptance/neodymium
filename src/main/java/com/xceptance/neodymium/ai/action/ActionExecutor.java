@@ -228,6 +228,10 @@ public class ActionExecutor {
         return executionVariables.get(key);
     }
 
+    public Map<String, String> getExecutionVariables() {
+        return executionVariables;
+    }
+
     private String interpolate(String text) {
         if (text == null || text.isBlank() || !text.contains("${")) {
             return text;

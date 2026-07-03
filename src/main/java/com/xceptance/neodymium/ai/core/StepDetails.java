@@ -54,6 +54,7 @@ public final class StepDetails
     private String includeFile;
     private List<String> includeChain;
     private long thinkingTimeMs;
+    private String screenshot;
 
     public StepDetails(final String rawInstruction)
     {
@@ -337,5 +338,15 @@ public final class StepDetails
     public final void setThinkingTimeMs(final long thinkingTimeMs)
     {
         this.thinkingTimeMs = thinkingTimeMs;
+    }
+
+    public final String getScreenshot()
+    {
+        return this.screenshot;
+    }
+
+    public final void setScreenshot(final String screenshot)
+    {
+        this.screenshot = screenshot;
     }
 }
