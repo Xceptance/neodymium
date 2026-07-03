@@ -252,7 +252,7 @@ public class Action
         this.frameId = frameId;
     }
     
-    public boolean getAdjust()
+    public boolean isAdjust()
     {
         return adjust;
     }

@@ -164,7 +164,7 @@ class ActionParserEscalateTest
         assertEquals("testuser", action.getValues().get(0));
         assertEquals("type username", action.getDescription());
         assertEquals("Username input field", action.getElementDetails());
-        assertTrue(action.getAdjust());
+        assertTrue(action.isAdjust());
     }
 
     @Test

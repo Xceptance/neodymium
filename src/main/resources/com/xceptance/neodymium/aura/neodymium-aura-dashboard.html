@@ -612,26 +612,41 @@
         </div>
 
         <!-- HISTORY & REPORTS VIEW -->
-        <div id="reportViewContainer" style="display: none; flex-direction: column; flex-grow: 1; padding: 16px; overflow: hidden; gap: 16px; height: 100%;">
-            <div class="panel" style="flex-grow: 1; padding: 16px; display: flex; flex-direction: column; min-height: 0;">
-                <h3 style="margin-bottom: 12px; color: var(--text-primary);">Run History</h3>
-                <div style="flex-grow: 1; overflow-y: auto;">
-                    <table class="history-table">
-                        <thead>
-                            <tr>
-                                <th>Status</th>
-                                <th>Date & Time</th>
-                                <th style="text-align: center;">Total</th>
-                                <th style="text-align: center; color: var(--success);">Passed</th>
-                                <th style="text-align: center; color: var(--danger);">Failed</th>
-                                <th style="text-align: center;">Report</th>
-                                <th style="text-align: right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="allureHistoryList">
-                            <!-- Populated by JS -->
-                        </tbody>
-                    </table>
+        <div id="reportViewContainer" class="workspace-layout" style="display: none;">
+            <!-- Left Side: History List -->
+            <div class="left-area" style="width: 320px; flex-shrink: 0;">
+                <div class="panel" style="height: 100%;">
+                    <div class="panel-header">
+                        <span>Run History</span>
+                        <button class="btn btn-secondary" onclick="loadHistory()" style="padding: 4px 8px;"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i></button>
+                    </div>
+                    <div style="flex-grow: 1; overflow-y: auto; padding: 0;">
+                        <table class="history-table" style="font-size: 13px;">
+                            <tbody id="allureHistoryList">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Interactive Console -->
+            <div class="right-area" style="flex-grow: 1; min-width: 0;">
+                <div class="panel" style="height: 100%;">
+                    <div class="panel-header">
+                        <span>Interactive Test Report</span>
+                        <div id="historyReportActions" style="display: none;">
+                            <button class="btn btn-secondary" id="btnOpenAllure" style="padding: 4px 8px; margin-right: 8px;">Open Allure Report</button>
+                            <button class="btn btn-secondary" id="btnOpenLog" style="padding: 4px 8px;">View Log</button>
+                        </div>
+                    </div>
+                    <div style="flex: 1; position: relative;">
+                        <iframe id="historyConsoleIframe" style="width: 100%; height: 100%; border: none;"></iframe>
+                        <div id="historyPlaceholder" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; background: var(--bg-main); color: var(--text-secondary);">
+                            <i class="fa-solid fa-clock-rotate-left" style="font-size: 32px; margin-bottom: 16px; opacity: 0.5;"></i>
+                            <p>Select a run from the history to view its interactive report.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -643,6 +658,15 @@
                 <button class="btn-edit" onclick="closeReportView()"><i class="fa-solid fa-arrow-left"></i> Back</button>
             </div>
             <iframe class="report-iframe" id="reportIframe" src="about:blank"></iframe>
+        </div>
+
+        <!-- INTERACTIVE CONSOLE VIEW -->
+        <div id="interactiveConsoleView" class="iframe-view-pane">
+            <div class="neo-report-header">
+                <div style="font-weight: 600;"><i class="fa-solid fa-terminal" style="color: var(--accent);"></i> Interactive Console</div>
+                <button class="btn-edit" onclick="closeInteractiveConsoleView()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+            </div>
+            <iframe class="report-iframe" id="interactiveConsoleIframe" src="about:blank"></iframe>
         </div>
 
     </div>
@@ -799,9 +823,12 @@
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('reportViewContainer').style.display = 'none';
             document.getElementById('reportView').style.display = 'none';
+            const icView = document.getElementById('interactiveConsoleView');
+            if (icView) icView.style.display = 'none';
+            
             document.getElementById(viewId).style.display = 'flex';
 
-            if (viewId !== 'reportView') {
+            if (viewId !== 'reportView' && viewId !== 'interactiveConsoleView') {
                 lastActiveView = viewId;
             }
 
@@ -814,7 +841,7 @@
             } else if (viewId === 'reportViewContainer') {
                 if (navWorkspace) navWorkspace.classList.remove('active');
                 if (navReports) navReports.classList.add('active');
-            } else if (viewId === 'reportView') {
+            } else if (viewId === 'reportView' || viewId === 'interactiveConsoleView') {
                 if (lastActiveView === 'reportViewContainer') {
                     if (navWorkspace) navWorkspace.classList.remove('active');
                     if (navReports) navReports.classList.add('active');
@@ -1064,66 +1091,104 @@
             }
         }
 
+        let currentReportId = null;
+
         function renderHistoryTable() {
             let rowsHtml = '';
-            
+
             if (activeRunStats.running) {
                 const statusBadge = `<span style="background: rgba(59,130,246,0.1); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;"><i class="fa-solid fa-circle-notch spinner" style="margin-right: 4px;"></i> Running</span>`;
                 const formattedTime = activeRunStats.startTime ? activeRunStats.startTime.toLocaleString() : new Date().toLocaleString();
-                const reportIcon = `<i class="fa-solid fa-ban report-link-inactive" title="Running - No Report Yet"></i>`;
-                const logIcon = `<i class="fa-solid fa-ban report-link-inactive" title="Running - No Log Yet"></i>`;
                 
                 rowsHtml += `
                     <tr class="history-row" style="cursor: default; border-left: 3px solid var(--accent);">
-                        <td style="padding: 10px 12px;">${statusBadge}</td>
-                        <td style="padding: 10px 12px; font-weight: 500;">${formattedTime}</td>
-                        <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono);">${activeRunStats.total}</td>
-                        <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--success);">${activeRunStats.passed}</td>
-                        <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--danger);">${activeRunStats.failed}</td>
-                        <td style="padding: 10px 12px; text-align: center;">${reportIcon} &nbsp; ${logIcon}</td>
-                        <td style="padding: 10px 12px; text-align: right;"></td>
+                        <td style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: 500; margin-bottom: 4px;">${formattedTime}</div>
+                                <div>${statusBadge}</div>
+                            </div>
+                        </td>
                     </tr>
                 `;
             }
-            
+
             if (historyCached.length === 0 && !activeRunStats.running) {
-                rowsHtml += `<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No historical reports.</td></tr>`;
+                rowsHtml += `<tr><td style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No historical reports.</td></tr>`;
             } else {
                 rowsHtml += historyCached.map(item => {
                     const isSuccess = item.status === 'Passed';
-                    const statusBadge = isSuccess 
-                        ? `<span class="badge-success">Passed</span>` 
+                    const statusBadge = isSuccess
+                        ? `<span class="badge-success">Passed</span>`
                         : `<span class="badge-failed">Failed</span>`;
-                    
+
                     const formattedTime = formatHistoryTimestamp(item.timestamp || item.id.substring(0, 15));
-                    const hasReport = item.hasReport === 'true';
                     
-                    const reportIcon = hasReport 
-                        ? `<i class="fa-solid fa-chart-column report-link-active" title="Open Report" onclick="openReportView('${item.id}')"></i>` 
-                        : `<i class="fa-solid fa-ban report-link-inactive" title="No Report Available"></i>`;
-                    
-                    const logIcon = hasReport 
-                        ? `<i class="fa-solid fa-file-lines report-link-active" title="Open Execution Log" onclick="openLogModal('${item.id}')"></i>` 
-                        : `<i class="fa-solid fa-ban report-link-inactive" title="No Log Available"></i>`;
+                    const isSelected = item.id === currentReportId;
+                    const selectedStyle = isSelected ? 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);' : '';
                     
                     return `
-                        <tr class="history-row" style="cursor: default;">
-                            <td style="padding: 10px 12px;">${statusBadge}</td>
-                            <td style="padding: 10px 12px; font-weight: 500;">${formattedTime}</td>
-                            <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono);">${item.total || '-'}</td>
-                            <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--success);">${item.passed || '-'}</td>
-                            <td style="padding: 10px 12px; text-align: center; font-family: var(--font-mono); color: var(--danger);">${item.failed || '-'}</td>
-                            <td style="padding: 10px 12px; text-align: center;">${reportIcon} &nbsp; ${logIcon}</td>
-                            <td style="padding: 10px 12px; text-align: right;" onclick="event.stopPropagation();">
-                                <button class="delete-report-btn" onclick="deleteReport('${item.id}')" title="Delete Report">
-                                    <i class="fa-solid fa-trash-can" style="font-size: 12px;"></i>
-                                </button>
+                        <tr class="history-row" style="cursor: pointer; ${selectedStyle}" onclick="openInteractiveReport('${item.id}', ${item.hasReport === 'true'}, ${item.hasInteractiveReport === 'true'})">
+                            <td style="padding: 10px 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <div>
+                                        <div style="font-weight: 500; margin-bottom: 6px;">${formattedTime}</div>
+                                        <div style="display: flex; gap: 8px; align-items: center;">
+                                            ${statusBadge}
+                                            <span style="color: var(--text-muted); font-size: 11px;">
+                                                <i class="fa-solid fa-flask" aria-hidden="true"></i> ${item.total || '-'}
+                                                <i class="fa-solid fa-check" style="color: var(--success); margin-left: 4px;" aria-hidden="true"></i> ${item.passed || '-'}
+                                                <i class="fa-solid fa-xmark" style="color: var(--danger); margin-left: 4px;" aria-hidden="true"></i> ${item.failed || '-'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button class="delete-report-btn" onclick="event.stopPropagation(); deleteReport('${item.id}')" title="Delete Report">
+                                        <i class="fa-solid fa-trash-can" style="font-size: 12px;"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     `;
                 }).join('');
             }
             allureHistoryList.innerHTML = rowsHtml;
+        }
+
+        function openInteractiveReport(reportId, hasReport, hasInteractive) {
+            currentReportId = reportId;
+            renderHistoryTable(); // Update selection styling
+            
+            document.getElementById('historyPlaceholder').style.display = 'none';
+            const iframe = document.getElementById('historyConsoleIframe');
+            
+            if (hasInteractive) {
+                const dataUrl = '/api/allure/report/' + reportId + '/console-execution.json';
+                iframe.src = '/interactive_console.html?dataUrl=' + encodeURIComponent(dataUrl);
+            } else {
+                iframe.src = 'about:blank';
+                document.getElementById('historyPlaceholder').style.display = 'flex';
+                document.getElementById('historyPlaceholder').innerHTML = `
+                    <i class="fa-solid fa-triangle-exclamation" style="font-size: 32px; margin-bottom: 16px; opacity: 0.5;"></i>
+                    <p>No interactive console data available for this run.</p>
+                `;
+            }
+            
+            const actionsDiv = document.getElementById('historyReportActions');
+            actionsDiv.style.display = 'flex';
+            
+            const btnAllure = document.getElementById('btnOpenAllure');
+            const btnLog = document.getElementById('btnOpenLog');
+            
+            if (hasReport) {
+                btnAllure.disabled = false;
+                btnLog.disabled = false;
+                btnAllure.onclick = () => openReportView(reportId);
+                btnLog.onclick = () => openLogModal(reportId);
+            } else {
+                btnAllure.disabled = true;
+                btnLog.disabled = true;
+                btnAllure.onclick = null;
+                btnLog.onclick = null;
+            }
         }
 
         async function deleteReport(reportId) {
@@ -1687,9 +1752,17 @@
         }
 
         function closeReportView() {
-            document.body.classList.remove('report-active');
-            showView(lastActiveView || 'dashboardView');
-            reportIframe.src = 'about:blank';
+            document.getElementById('reportIframe').src = 'about:blank';
+            showView('reportViewContainer');
+        }
+
+        function openInteractiveConsoleViewLive(url) {
+            document.getElementById('historyPlaceholder').style.display = 'none';
+            document.getElementById('historyReportActions').style.display = 'none';
+            document.getElementById('historyConsoleIframe').src = url;
+            currentReportId = null;
+            renderHistoryTable(); // Clear selection styling
+            showView('reportViewContainer');
         }
 
         async function runCurrentFile() {
@@ -1953,6 +2026,9 @@
                         data.events.forEach(event => {
                             if (event.type === 'reportReady') {
                                 openReportView(event.reportId);
+                            }
+                            if (event.type === 'interactiveConsoleReady') {
+                                openInteractiveConsoleViewLive(event.url);
                             }
                         });
                     }

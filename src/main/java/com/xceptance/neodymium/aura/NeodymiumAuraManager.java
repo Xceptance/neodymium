@@ -64,6 +64,7 @@ import org.slf4j.LoggerFactory;
 import com.xceptance.neodymium.ai.core.LlmClient;
 import com.xceptance.neodymium.ai.core.AiStats;
 import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -96,6 +97,7 @@ public final class NeodymiumAuraManager
     private static final AtomicBoolean runningQueue = new AtomicBoolean(false);
     private static final AtomicBoolean manuallyStopped = new AtomicBoolean(false);
     private static final AtomicReference<String> activeFile = new AtomicReference<>("");
+    private static final AtomicReference<InteractiveConsoleEngine> currentConsoleEngine = new AtomicReference<>(null);
 
     private static final ScheduledExecutorService shutdownScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
         final Thread t = new Thread(runnable, "Aura-Shutdown-Scheduler");
@@ -391,6 +393,27 @@ public final class NeodymiumAuraManager
                 {
                     handleAllureHistory(exchange);
                 }
+                else if ("/interactive_console.html".equals(path) && "GET".equalsIgnoreCase(method))
+                {
+                    final InputStream is = NeodymiumAuraManager.class.getClassLoader()
+                        .getResourceAsStream("com/xceptance/neodymium/ai/console/interactive_console.html");
+                    if (is == null) { sendError(exchange, 404, "Not found"); return; }
+                    sendResponse(exchange, 200, "text/html; charset=UTF-8", is.readAllBytes());
+                }
+                else if ("/interactive_console.css".equals(path) && "GET".equalsIgnoreCase(method))
+                {
+                    final InputStream is = NeodymiumAuraManager.class.getClassLoader()
+                        .getResourceAsStream("com/xceptance/neodymium/ai/console/interactive_console.css");
+                    if (is == null) { sendError(exchange, 404, "Not found"); return; }
+                    sendResponse(exchange, 200, "text/css", is.readAllBytes());
+                }
+                else if ("/interactive_console.js".equals(path) && "GET".equalsIgnoreCase(method))
+                {
+                    final InputStream is = NeodymiumAuraManager.class.getClassLoader()
+                        .getResourceAsStream("com/xceptance/neodymium/ai/console/interactive_console.js");
+                    if (is == null) { sendError(exchange, 404, "Not found"); return; }
+                    sendResponse(exchange, 200, "application/javascript", is.readAllBytes());
+                }
                 else if (path.startsWith("/api/allure/report/"))
                 {
                     handleServeReportFile(exchange, path);
@@ -414,6 +437,48 @@ public final class NeodymiumAuraManager
                 else if ("/api/disconnect".equals(path) && "POST".equalsIgnoreCase(method))
                 {
                     handleDisconnect(exchange);
+                }
+                else if ("/api/console/events".equals(path))
+                {
+                    final InteractiveConsoleEngine engine = currentConsoleEngine.get();
+                    if (engine != null) { engine.createSseHandler().handle(exchange); }
+                    else { sendError(exchange, 404, "No active console engine"); }
+                }
+                else if ("/api/console/action".equals(path) && "POST".equalsIgnoreCase(method))
+                {
+                    final InteractiveConsoleEngine engine = currentConsoleEngine.get();
+                    if (engine != null) { engine.createActionHandler().handle(exchange); }
+                    else { sendError(exchange, 404, "No active console engine"); }
+                }
+                else if ("/api/console/internal/pushState".equals(path) && "POST".equalsIgnoreCase(method))
+                {
+                    final InteractiveConsoleEngine engine = currentConsoleEngine.get();
+                    if (engine != null) {
+                        final String body = new String(exchange.getRequestBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                        engine.pushState(body);
+                        sendResponse(exchange, 200, "application/json", "{\"status\":\"ok\"}".getBytes());
+                    }
+                    else { sendError(exchange, 404, "No active console engine"); }
+                }
+                else if ("/api/console/internal/broadcast".equals(path) && "POST".equalsIgnoreCase(method))
+                {
+                    final InteractiveConsoleEngine engine = currentConsoleEngine.get();
+                    if (engine != null) {
+                        final String body = new String(exchange.getRequestBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                        final com.google.gson.JsonObject json = gson.fromJson(body, com.google.gson.JsonObject.class);
+                        engine.broadcastSseEvent(json.get("event").getAsString(), json.get("payload").getAsString());
+                        sendResponse(exchange, 200, "application/json", "{\"status\":\"ok\"}".getBytes());
+                    }
+                    else { sendError(exchange, 404, "No active console engine"); }
+                }
+                else if ("/api/console/internal/waitForAction".equals(path) && "GET".equalsIgnoreCase(method))
+                {
+                    final InteractiveConsoleEngine engine = currentConsoleEngine.get();
+                    if (engine != null) {
+                        final com.google.gson.JsonObject action = engine.waitForAction();
+                        sendResponse(exchange, 200, "application/json", action != null ? action.toString().getBytes() : "{}".getBytes());
+                    }
+                    else { sendError(exchange, 404, "No active console engine"); }
                 }
                 else
                 {
@@ -807,6 +872,9 @@ public final class NeodymiumAuraManager
                         final File indexHtml = new File(dir, "index.html");
                         final boolean hasReport = indexHtml.exists() && indexHtml.isFile();
 
+                        final File consoleJson = new File(dir, "console-execution.json");
+                        final boolean hasInteractiveReport = consoleJson.exists() && consoleJson.isFile();
+
                         final Map<String, String> item = new HashMap<>();
                         item.put("id", dir.getName());
                         item.put("status", status);
@@ -815,6 +883,7 @@ public final class NeodymiumAuraManager
                         item.put("passed", passed);
                         item.put("failed", failed);
                         item.put("hasReport", String.valueOf(hasReport));
+                        item.put("hasInteractiveReport", String.valueOf(hasInteractiveReport));
                         historyList.add(item);
                     }
                 }
@@ -1166,6 +1235,12 @@ public final class NeodymiumAuraManager
                     broadcastLog("\n[INFO] Spawning Maven Subprocess for YAML test: " + file + " [Datasets: " + ids + "]...");
 
                     final List<String> command = new ArrayList<>();
+                    
+                    final String runId = "run-" + System.currentTimeMillis();
+                    final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(runId);
+                    currentConsoleEngine.set(engine);
+                    broadcastInteractiveConsoleReady("/interactive_console.html");
+                    
                     final String os = System.getProperty("os.name").toLowerCase();
                     if (os.contains("win"))
                     {
@@ -1194,6 +1269,9 @@ public final class NeodymiumAuraManager
                     command.add("-Dneodymium.ai.interactive=" + req.interactive);
                     command.add("-Dvideo.enableFilming=" + req.video);
                     command.add("-Dneodymium.webDriver.keepBrowserOpen=" + req.keepOpen);
+                    command.add("-Dneodymium.managerActive=true");
+                    command.add("-Dneodymium.managerRunId=" + runId);
+                    command.add("-Dneodymium.managerUrl=http://localhost:18091");
                     command.add("-Dfile.encoding=UTF-8");
                     command.add("-Dsun.stdout.encoding=UTF-8");
                     command.add("-Dsun.stderr.encoding=UTF-8");
@@ -1239,7 +1317,14 @@ public final class NeodymiumAuraManager
                             broadcastLog(line);
                             LOGGER.info("[Aura Subprocess] {}", stripAnsi(line));
 
-                            final Matcher m = STATS_PATTERN.matcher(line);
+                            final String cleanLine = stripAnsi(line);
+                            final Matcher consoleMatcher = java.util.regex.Pattern.compile("Interactive Console:\\s*(http://.*)").matcher(cleanLine);
+                            // Only broadcast if not already broadcasted by the manager itself
+                            if (consoleMatcher.find() && !"true".equals(System.getProperty("neodymium.managerActive"))) {
+                                broadcastInteractiveConsoleReady(consoleMatcher.group(1));
+                            }
+
+                            final Matcher m = STATS_PATTERN.matcher(cleanLine);
                             if (m.find())
                             {
                                 fileTestsRun.set(Integer.parseInt(m.group(1)));
@@ -1445,6 +1530,14 @@ public final class NeodymiumAuraManager
             final File logFile = new File(destDir, "execution.log");
             Files.write(logFile.toPath(), currentRunLogs, StandardCharsets.UTF_8);
 
+            final File consoleExecutionFile = new File("target/console-execution.json");
+            if (consoleExecutionFile.exists())
+            {
+                final File destConsoleFile = new File(destDir, "console-execution.json");
+                Files.copy(consoleExecutionFile.toPath(), destConsoleFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                LOGGER.info("[Aura Server] Archived console-execution.json to {}", destDir.getName());
+            }
+
             LOGGER.info("[Aura Server] Allure report copied to history: {}", destDir.getName());
             broadcastLog("[INFO] Allure report copied to history: " + destDir.getName());
             broadcastReportReady(destDir.getName());
@@ -1518,6 +1611,14 @@ public final class NeodymiumAuraManager
         final Map<String, Object> event = new HashMap<>();
         event.put("type", "reportReady");
         event.put("reportId", reportId);
+        currentRunEvents.add(event);
+    }
+
+    private static void broadcastInteractiveConsoleReady(final String url)
+    {
+        final Map<String, Object> event = new HashMap<>();
+        event.put("type", "interactiveConsoleReady");
+        event.put("url", url);
         currentRunEvents.add(event);
     }
 

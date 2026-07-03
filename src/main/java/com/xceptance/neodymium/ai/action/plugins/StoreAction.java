@@ -80,7 +80,7 @@ public final class StoreAction implements AiActionPlugin
         if (values != null && values.size() >= 2)
         {
             final String literalValue = values.get(1);
-            if (action.getAdjust())
+            if (action.isAdjust())
             {
                 valueToStore = AiAssertions.normalizeNumericOrPrice(literalValue);
             }
@@ -98,7 +98,7 @@ public final class StoreAction implements AiActionPlugin
             if (text != null)
             {
                 final String trimmedText = text.trim();
-                if (action.getAdjust())
+                if (action.isAdjust())
                 {
                     valueToStore = AiAssertions.normalizeNumericOrPrice(trimmedText);
                 }

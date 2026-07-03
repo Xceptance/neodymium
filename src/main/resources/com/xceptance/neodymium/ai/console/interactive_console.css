@@ -1874,3 +1874,63 @@
                 display: inline-flex;
             }
         }
+/* Hide edit icon and reorder controls in edit mode */
+.step-card.editing .step-edit-btn,
+.step-card.editing .step-reorder-controls {
+    display: none !important;
+}
+
+/* Disable drag handles cursor when in edit mode */
+.steps-block-content.drag-disabled .step-reorder-handle {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.final-save-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 9999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.final-save-overlay.active {
+    display: flex;
+}
+
+.final-save-box {
+    background: #1e1e1e;
+    padding: 30px;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid #333;
+    max-width: 500px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.final-save-box h2 {
+    margin-top: 0;
+    color: #4CAF50;
+    font-size: 24px;
+}
+
+.final-save-box p {
+    font-size: 16px;
+    color: #ccc;
+    margin-bottom: 25px;
+}
+
+.final-save-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.final-save-buttons .btn {
+    padding: 10px 20px;
+    font-size: 16px;
+}

@@ -1,12 +1,13 @@
 package com.xceptance.neodymium.junit5.teststart;
 
-import com.xceptance.neodymium.ai.core.AiBrowser;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumRandom;
+import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSeed;
+
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
-import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSeed;
+import com.xceptance.neodymium.ai.core.AiBrowser;
+import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.NeodymiumRandom;
 
 public class NeodymiumBeforeTestExecutionCallback implements BeforeTestExecutionCallback
 {
@@ -18,6 +19,9 @@ public class NeodymiumBeforeTestExecutionCallback implements BeforeTestExecution
         
         // exact unified test name calculation
         Neodymium.setTestName(context.getRequiredTestClass().getCanonicalName() + " :: " + context.getDisplayName());
+
+        Neodymium.setTestClass(context.getRequiredTestClass());
+        Neodymium.setTestMethod(context.getRequiredTestMethod());
 
         // Initialize AiBrowser
         Neodymium.setAiBrowser(new AiBrowser(context.getRequiredTestInstance()));

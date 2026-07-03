@@ -43,44 +43,62 @@ import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URI;
 
 /**
+ * 
  * Core engine for the Interactive Console.
+ * 
  *
- * <p>Exposes two HTTP endpoints intended to be registered on either an
- * {@link InteractiveConsoleServer} (standalone mode) or the Neodymium Aura Manager's
- * existing {@link HttpServer} (managed mode):</p>
- *
- * <ul>
- *   <li>{@code GET /api/console/events} — Server-Sent Events (SSE) stream pushing live
- *       state JSON to all connected browser clients. Clients should open this with
- *       {@code new EventSource('/api/console/events')}.</li>
- *   <li>{@code POST /api/console/action} — Receives a user-triggered command from
- *       a browser client. The body must be a JSON object containing at minimum:
- *       {@code "runId"}, {@code "pauseId"}, and {@code "action"}.</li>
+ * <p>
+ * Exposes two HTTP endpoints intended to be registered on either an
+ * link InteractiveConsoleServer} (standalone mode) or the Neodymium Aura Manage
+ * 's
+ * ng {@link HttpServer} (managed mode):
+ * </p>
+ * 
+ * l>
+ * {@code GET /api/console/events} — Server-Sent Events (SSE) stream pushing
+ * live
+ * state JSON to all connected browser clients. Clients should open this with
+ * {@code new EventSource('/api/console/events')}.</li>
+ * <li>{@code POST /api/console/action} — Receives a user-triggered command from
+ * a browser client. The body must be a JSON object containing at minimum:
+ * 
+ * {@code "runId"}, {@code "pauseId"}, and {@cod
+ * "action"}.</li>
  * </ul>
  *
  * <h2>Multi-tab / Multi-device Safety</h2>
- * <p>Every time the Java test runner pauses and calls {@link #waitForAction(long)},
- * a fresh {@code pauseId} UUID is broadcast to all SSE clients. The first POST
+ * 
+ * <p>
+ * Every time the Java test runner pauses and calls {@link #waitForA
+ * tion(long)},
+ * a fresh {@code pauseId} UUID is broadcast to
+ * all SSE clients. The first POST
  * carrying the correct {@code runId} and {@code pauseId} wins; duplicate POSTs
- * for the same pause are silently rejected with HTTP 200 (action already handled).
- * POSTs for a different {@code runId} are rejected with HTTP 409 and a stale-tab
- * hint the browser UI can render as a warning.</p>
- *
- * @author AI-generated: Claude Sonnet 4.5
+ * for the same pause are silently rejected with HTTP 200 (action already
+ * handled).
+ * POSTs for a different {@code runId} are rejected with HTTP 409 and a
+ * stale-tab
+ * hint the browser UI can render as a warning.
+ * </p>
+ * * @author AI-generated: Claude Sonnet 4.5
+ * 
  * @author Xceptance GmbH 2026
  */
-public final class InteractiveConsoleEngine
-{
+public final class InteractiveConsoleEngine {
     private static final Logger LOG = LoggerFactory.getLogger(InteractiveConsoleEngine.class);
 
     private static final long DEFAULT_TIMEOUT_MS = TimeUnit.HOURS.toMillis(1);
     private static final Gson GSON = new Gson();
 
     /** A unique identifier for the currently active test run. */
-    private String runId;
 
+    private String runId;
     /**
      * The UUID generated on each pause, consumed by the first valid POST action.
      * {@code null} when not paused.
@@ -114,23 +132,19 @@ public final class InteractiveConsoleEngine
     /**
      * Creates a new engine for the given run ID.
      *
-     * @param runId a unique identifier for the test run (e.g. {@code "run_2026-06-29_10-00-00"})
+     * @param runId a unique identifier for the test run (e.g.
+     *              {@code "run_2026-06-29_10-00-00"})
      */
-    public InteractiveConsoleEngine(final String runId)
-    {
+    public InteractiveConsoleEngine(final String runId) {
         this.runId = runId;
 
         String detectedIp = "localhost";
-        try
-        {
+        try {
             final InetAddress addr = getActualLocalIP();
-            if (addr != null)
-            {
+            if (addr != null) {
                 detectedIp = addr.getHostAddress();
             }
-        }
-        catch (final SocketException e)
-        {
+        } catch (final SocketException e) {
             LOG.warn("Failed to detect LAN IP for Interactive Console: {}", e.getMessage());
         }
         this.lanIp = detectedIp;
@@ -145,13 +159,11 @@ public final class InteractiveConsoleEngine
      *
      * @return the run ID
      */
-    public String getRunId()
-    {
+    public String getRunId() {
         return this.runId;
     }
 
-    public void setRunId(final String runId)
-    {
+    public void setRunId(final String runId) {
         this.runId = runId;
     }
 
@@ -160,8 +172,8 @@ public final class InteractiveConsoleEngine
      *
      * @return the LAN IP string
      */
-    public String getLanIp()
-    {
+
+    public String getLanIp() {
         return this.lanIp;
     }
 
@@ -170,26 +182,45 @@ public final class InteractiveConsoleEngine
      * Call this whenever the test runner's state changes (new step started,
      * step completed, error, etc.) so the UI updates instantly.
      *
+     * 
      * @param stateJson the full current state as a JSON string
      */
-    public void pushState(final String stateJson)
-    {
+    public void pushState(final String stateJson) {
         String minified;
-        try
-        {
+        try {
             final JsonObject state = JsonParser.parseString(stateJson).getAsJsonObject();
 
             // Inject the LAN IP so the UI can use it for QR codes/links
             state.addProperty("lanIp", this.lanIp);
+            //
 
             minified = GSON.toJson(state);
-        }
-        catch (final Exception e)
-        {
+        } catch (final Exception e) {
             minified = stateJson.replace("\r", "").replace("\n", "");
         }
+        
+        if ("true".equals(System.getProperty("neodymium.managerActive"))) {
+            try {
+                final String managerUrl = System.getProperty("neodymium.managerUrl");
+                final HttpClient client = HttpClient.newHttpClient();
+                final HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(managerUrl + "/api/console/internal/pushState"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(minified, StandardCharsets.UTF_8))
+                    .build();
+                client.send(request, HttpResponse.BodyHandlers.discarding());
+            } catch (Exception e) {
+                LOG.error("Failed to proxy state to Aura Manager", e);
+            }
+            return;
+        }
+
         this.currentStateJson = minified;
         broadcastSseEvent("state", minified);
+    }
+    
+    public String getCurrentStateJson() {
+        return this.currentStateJson;
     }
 
     /**
@@ -212,6 +243,33 @@ public final class InteractiveConsoleEngine
      */
     public JsonObject waitForAction(final long timeoutMs) throws InterruptedException
     {
+        if ("true".equals(System.getProperty("neodymium.managerActive"))) {
+            try {
+                final String managerUrl = System.getProperty("neodymium.managerUrl");
+                final HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(10))
+                    .build();
+                final HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(managerUrl + "/api/console/internal/waitForAction"))
+                    .timeout(java.time.Duration.ofMillis(timeoutMs + 5000))
+                    .GET()
+                    .build();
+                LOG.info("[InteractiveConsole] Proxying waitForAction to Manager at {}", managerUrl);
+                final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 200) {
+                    final JsonObject action = JsonParser.parseString(response.body()).getAsJsonObject();
+                    LOG.info("[InteractiveConsole] Action received from Manager: {}", action);
+                    return action;
+                } else {
+                    throw new RuntimeException("Manager returned error status: " + response.statusCode());
+                }
+            } catch (InterruptedException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to proxy waitForAction to Aura Manager", e);
+            }
+        }
+
         // Generate a fresh pause token and clear any stale pending action.
         final String pauseId = UUID.randomUUID().toString();
         this.currentPauseId.set(pauseId);
@@ -249,7 +307,8 @@ public final class InteractiveConsoleEngine
      * Convenience overload using the default 1-hour timeout.
      *
      * @return the raw action JSON from the browser
-     * @throws InterruptedException if the thread is interrupted
+     * @throws InterruptedException
+     *             if the thread is interrupted
      */
     public JsonObject waitForAction() throws InterruptedException
     {
@@ -262,10 +321,12 @@ public final class InteractiveConsoleEngine
 
     /**
      * Returns an {@link HttpHandler} for the SSE endpoint ({@code GET /api/console/events}).
-     *
-     * <p>Register this on your server:</p>
+     * <p>
+     * Register this on your server:
+     * </p>
+     * 
      * <pre>
-     *   server.createContext("/api/console/events", engine.createSseHandler());
+     * server.createContext("/api/console/events", engine.createSseHandler());
      * </pre>
      *
      * @return the SSE handler
@@ -277,10 +338,12 @@ public final class InteractiveConsoleEngine
 
     /**
      * Returns an {@link HttpHandler} for the action endpoint ({@code POST /api/console/action}).
-     *
-     * <p>Register this on your server:</p>
+     * <p>
+     * Register this on your server:
+     * </p>
+     * 
      * <pre>
-     *   server.createContext("/api/console/action", engine.createActionHandler());
+     * server.createContext("/api/console/action", engine.createActionHandler());
      * </pre>
      *
      * @return the action POST handler
@@ -298,12 +361,32 @@ public final class InteractiveConsoleEngine
      * Broadcasts a single SSE event to all currently connected clients.
      * Disconnected clients are silently removed from the list.
      *
-     * @param eventType the SSE {@code event:} field value
-     * @param data      the SSE {@code data:} field value (typically a JSON string)
+     * @param eventName the SSE {@code event:} field value
+     * @param payloadJson      the SSE {@code data:} field value (typically a JSON string)
      */
-    private void broadcastSseEvent(final String eventType, final String data)
+    public void broadcastSseEvent(final String eventName, final String payloadJson)
     {
-        final String sseFrame = "event: " + eventType + "\ndata: " + data + "\n\n";
+        if ("true".equals(System.getProperty("neodymium.managerActive"))) {
+            try {
+                final String managerUrl = System.getProperty("neodymium.managerUrl");
+                final JsonObject envelope = new JsonObject();
+                envelope.addProperty("event", eventName);
+                envelope.addProperty("payload", payloadJson);
+                
+                final HttpClient client = HttpClient.newHttpClient();
+                final HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(managerUrl + "/api/console/internal/broadcast"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(envelope), StandardCharsets.UTF_8))
+                    .build();
+                client.send(request, HttpResponse.BodyHandlers.discarding());
+            } catch (Exception e) {
+                LOG.error("Failed to proxy SSE broadcast to Aura Manager", e);
+            }
+            return;
+        }
+
+        final String sseFrame = "event: " + eventName + "\ndata: " + payloadJson + "\n\n";
         final byte[] bytes = sseFrame.getBytes(StandardCharsets.UTF_8);
 
         final List<OutputStream> dead = new ArrayList<>();
@@ -406,7 +489,10 @@ public final class InteractiveConsoleEngine
     /**
      * HTTP handler that receives a user action from a browser client via POST.
      *
-     * <p>Expected JSON body:</p>
+     * <p>
+     * Expected JSON body:
+     * </p>
+     * 
      * <pre>
      * {
      *   "runId":  "run_2026-06-29_...",   // must match the engine's runId
@@ -416,76 +502,68 @@ public final class InteractiveConsoleEngine
      * }
      * </pre>
      *
-     * <p>Possible response codes:</p>
+     * <p>
+     * Possible response codes:
+     * </p>
      * <ul>
-     *   <li>{@code 200} — Action accepted (or already handled — idempotent).</li>
-     *   <li>{@code 400} — Malformed request body.</li>
-     *   <li>{@code 409} — The {@code runId} does not match the currently active run.
-     *       The UI should display a stale-tab warning.</li>
+     * <li>{@code 200} — Action accepted (or already handled — idempotent).</li>
+     * <li>{@code 400} — Malformed request body.</li>
+     * <li>{@code 409} — The {@code runId} does not match the currently active run.
+     * The UI should display a stale-tab warning.</li>
      * </ul>
      */
-    private final class ActionHandler implements HttpHandler
-    {
+    private final class ActionHandler implements HttpHandler {
         @Override
-        public void handle(final HttpExchange exchange) throws IOException
-        {
+        public void handle(final HttpExchange exchange) throws IOException {
             exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
             exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, OPTIONS");
             exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
 
-            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod()))
-            {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(204, -1);
                 return;
             }
 
             final String body;
-            try
-            {
+            try {
                 body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            }
-            catch (final IOException e)
-            {
+            } catch (final IOException e) {
                 sendJson(exchange, 400, "{\"error\":\"Could not read request body\"}");
                 return;
             }
 
             final JsonObject req;
-            try
-            {
+            try {
                 req = JsonParser.parseString(body).getAsJsonObject();
-            }
-            catch (final Exception e)
-            {
+            } catch (final Exception e) {
                 sendJson(exchange, 400, "{\"error\":\"Invalid JSON body\"}");
                 return;
             }
 
             // Validate runId — protect against stale tabs from previous test runs.
             final String incomingRunId = req.has("runId") ? req.get("runId").getAsString() : null;
-            if (!runId.equals(incomingRunId))
-            {
+            if (!runId.equals(incomingRunId)) {
                 final String hint = "{\"error\":\"stale-tab\",\"activeRunId\":\"" + runId
-                    + "\",\"message\":\"This tab is connected to an old test run. Refresh to the current run.\"}";
+                        + "\",\"message\":\"This tab is connected to an old test run. Refresh to the current run.\"}";
                 sendJson(exchange, 409, hint);
                 return;
             }
 
-            // Validate pauseId — protect against double-clicks / simultaneous multi-tab clicks.
+            // Validate pauseId — protect against double-clicks / simultaneous multi-tab
+            // clicks.
             final String incomingPauseId = req.has("pauseId") ? req.get("pauseId").getAsString() : null;
             final String activePauseId = currentPauseId.get();
 
-            if (activePauseId == null || !activePauseId.equals(incomingPauseId))
-            {
-                // The pause token was already consumed or the runner is not paused — idempotent OK.
+            if (activePauseId == null || !activePauseId.equals(incomingPauseId)) {
+                // The pause token was already consumed or the runner is not paused — idempotent
+                // OK.
                 sendJson(exchange, 200, "{\"status\":\"already-handled\"}");
                 return;
             }
 
             // Deposit the action and wake up the waiting test-runner thread.
             pendingAction.set(req);
-            synchronized (lock)
-            {
+            synchronized (lock) {
                 lock.notifyAll();
             }
 
@@ -500,15 +578,13 @@ public final class InteractiveConsoleEngine
          * @param json       the JSON string to send as the response body
          * @throws IOException if writing fails
          */
-        private void sendJson(final HttpExchange exchange, final int statusCode, final String json) throws IOException
-        {
+        private void sendJson(final HttpExchange exchange, final int statusCode, final String json) throws IOException {
             final byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
             final boolean isHead = "HEAD".equalsIgnoreCase(exchange.getRequestMethod());
             exchange.sendResponseHeaders(statusCode, isHead ? -1 : bytes.length);
             if (!isHead) {
-                try (final OutputStream out = exchange.getResponseBody())
-                {
+                try (final OutputStream out = exchange.getResponseBody()) {
                     out.write(bytes);
                 }
             }
@@ -516,20 +592,18 @@ public final class InteractiveConsoleEngine
     }
 
     /**
-     * Utility to find the actual local IP address of this machine, filtering out loopback and virtual interfaces.
+     * Utility to find the actual local IP address of this machine, filtering out
+     * loopback and virtual interfaces.
      *
      * @return the actual LAN IP address, or {@code null} if not found
      * @throws SocketException if an I/O error occurs
      */
-    private static InetAddress getActualLocalIP() throws SocketException
-    {
+    private static InetAddress getActualLocalIP() throws SocketException {
         final Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
 
-        for (final NetworkInterface netInterface : Collections.list(interfaces))
-        {
+        for (final NetworkInterface netInterface : Collections.list(interfaces)) {
             // 1. Skip loopback (127.0.0.1) and inactive interfaces
-            if (netInterface.isLoopback() || !netInterface.isUp())
-            {
+            if (netInterface.isLoopback() || !netInterface.isUp()) {
                 continue;
             }
 
@@ -537,23 +611,19 @@ public final class InteractiveConsoleEngine
             final String displayName = netInterface.getDisplayName().toLowerCase();
             final String name = netInterface.getName().toLowerCase();
             if (displayName.contains("docker") || name.contains("docker") ||
-                displayName.contains("vbox") || name.contains("vbox") ||
-                displayName.contains("virtual") || name.contains("wsl") ||
-                displayName.contains("vnic") || displayName.contains("vethernet"))
-            {
+                    displayName.contains("vbox") || name.contains("vbox") ||
+                    displayName.contains("virtual") || name.contains("wsl") ||
+                    displayName.contains("vnic") || displayName.contains("vethernet")) {
                 continue;
             }
 
             // 3. Look through the IP addresses assigned to this valid interface
             final Enumeration<InetAddress> addresses = netInterface.getInetAddresses();
-            for (final InetAddress address : Collections.list(addresses))
-            {
+            for (final InetAddress address : Collections.list(addresses)) {
                 // We usually want an IPv4 address for local networks
-                if (address instanceof Inet4Address)
-                {
+                if (address instanceof Inet4Address) {
                     // Double check it's not a loopback address
-                    if (!address.isLoopbackAddress())
-                    {
+                    if (!address.isLoopbackAddress()) {
                         return address;
                     }
                 }

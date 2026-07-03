@@ -1,5 +1,6 @@
 package com.xceptance.neodymium.util;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -10,6 +11,7 @@ import java.util.WeakHashMap;
 
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.lang3.StringUtils;
+import org.jspecify.annotations.NonNull;
 import org.openqa.selenium.By;
 import org.openqa.selenium.Dimension;
 import org.openqa.selenium.WebDriver;
@@ -84,6 +86,10 @@ public class Neodymium
     private final TestData data = new TestData();
 
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "neodymium.temporaryConfigFile";
+
+    private Class<?> testClass;
+
+    private Method requiredTestMethod;
 
     /**
      * Constructor
@@ -957,6 +963,21 @@ public class Neodymium
     public static void reloadConfiguration()
     {
         getContext().configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
+    }
+
+    public static void setTestClass(@NonNull Class<?> testClass)
+    {
+        getContext().testClass = testClass;
+    }
+
+    public static void setTestMethod(@NonNull Method requiredTestMethod)
+    {
+        getContext().requiredTestMethod = requiredTestMethod;
+    }
+
+    public static Class<?> getTestClass()
+    {
+        return getContext().testClass;
     }
 
 }

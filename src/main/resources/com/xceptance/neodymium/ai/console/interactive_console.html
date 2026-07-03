@@ -418,6 +418,18 @@
     <script src="/interactive_console.js"></script>
 
     <div id="ariaLiveRegion" class="visually-hidden" aria-live="assertive"></div>
+
+    <!-- Final Save Overlay -->
+    <div id="finalSaveOverlay" class="final-save-overlay" role="dialog" aria-modal="true" aria-labelledby="finalSaveTitle">
+        <div class="final-save-box">
+            <h2 id="finalSaveTitle"><i class="fa-solid fa-circle-check"></i> Test Finished</h2>
+            <p>You have made changes to the test steps during execution. Would you like to save these changes?</p>
+            <div class="final-save-buttons">
+                <button class="btn btn-primary" onclick="sendAction('SAVE_EXIT')">Save Changes</button>
+                <button class="btn btn-danger" onclick="sendAction('DISCARD')">Discard</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
