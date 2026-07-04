@@ -957,6 +957,7 @@ public class AiAgent
                 // AI-generated: Gemini 3.5 Flash - Reset compound step tracking on each attempt
                 final List<Action> accumulatedActions = new ArrayList<>();
                 stepDetails.getActions().clear();
+                stepDetails.setFailureReason(null);
                 this.lastLlmDone = true;
                 updateConsoleState(result, null);
 
@@ -1312,6 +1313,7 @@ public class AiAgent
                             logPauseReason("Action Failed with Error: " + e.getMessage());
                         }
                         this.autoSkip = false;
+                        stepDetails.setFailureReason("Max retries reached: " + e.getMessage());
                         updateConsoleState(result, "Max retries reached: " + e.getMessage());
                         waitForHudAction(false); // Never auto-skip errors
                         errorCount = 0;
@@ -1343,6 +1345,7 @@ public class AiAgent
                             logPauseReason("Action Failed: " + e.getMessage());
                         }
                         this.autoSkip = false;
+                        stepDetails.setFailureReason("Action Failed: " + e.getMessage());
                         updateConsoleState(result, "Action Failed: " + e.getMessage());
                         waitForHudAction(false); // Never auto-skip errors
                     }
@@ -1389,6 +1392,7 @@ public class AiAgent
                             logPauseReason("Assertion Failed: " + e.getMessage());
                         }
                         this.autoSkip = false;
+                        stepDetails.setFailureReason(e.getMessage());
                         updateConsoleState(result, "Assertion Failed: " + e.getMessage());
                         waitForHudAction(false); // Never auto-skip errors
                     }
@@ -1490,6 +1494,7 @@ public class AiAgent
                                 logPauseReason("Assertion Failed: " + e.getMessage());
                             }
                             this.autoSkip = false;
+                            stepDetails.setFailureReason(e.getMessage());
                             updateConsoleState(result, "Assertion Failed: " + e.getMessage());
                             waitForHudAction(false); // Never auto-skip errors
                         }
@@ -1521,6 +1526,7 @@ public class AiAgent
                         logPauseReason("Assertion Failed: " + e.getMessage());
                     }
                     this.autoSkip = false;
+                    stepDetails.setFailureReason(e.getMessage());
                     updateConsoleState(result, "Assertion Failed: " + e.getMessage());
                     waitForHudAction(false); // Never auto-skip errors
                 }
@@ -1577,6 +1583,7 @@ public class AiAgent
                         logPauseReason("Unexpected Error: " + e.getMessage());
                     }
                     this.autoSkip = false;
+                    stepDetails.setFailureReason("Unexpected Error: " + e.getMessage());
                     updateConsoleState(result, "Unexpected Error: " + e.getMessage());
                     waitForHudAction(false); // Never auto-skip errors
                 }
