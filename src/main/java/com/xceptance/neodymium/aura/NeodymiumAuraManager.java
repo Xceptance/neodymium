@@ -18,27 +18,21 @@
  */
 package com.xceptance.neodymium.aura;
 
-import com.google.gson.Gson;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-import com.sun.net.httpserver.HttpsServer;
-import com.sun.net.httpserver.HttpsConfigurator;
-import java.security.KeyStore;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
 import java.awt.Desktop;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.security.KeyStore;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -59,20 +53,30 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.xceptance.neodymium.ai.core.LlmClient;
-import com.xceptance.neodymium.ai.core.AiStats;
-import com.xceptance.neodymium.util.Neodymium;
+import org.yaml.snakeyaml.Yaml;
+
+import com.google.gson.Gson;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsServer;
+import com.xceptance.neodymium.ai.action.ActionRegistry;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import com.xceptance.neodymium.ai.core.AiStats;
+import com.xceptance.neodymium.ai.core.LlmClient;
+import com.xceptance.neodymium.util.Neodymium;
+
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.data.message.AiMessage;
-import org.yaml.snakeyaml.Yaml;
-import java.io.FileInputStream;
-import java.lang.reflect.Method;
-import com.xceptance.neodymium.ai.action.ActionRegistry;
 
 /**
  * Neodymium Aura Manager: A lightweight standalone web server to browse,
@@ -106,6 +110,8 @@ public final class NeodymiumAuraManager
         return t;
     });
     private static ScheduledFuture<?> pendingShutdown = null;
+
+    private static int port;
 
     private NeodymiumAuraManager()
     {
@@ -143,7 +149,7 @@ public final class NeodymiumAuraManager
     {
         validateEnvironment();
         
-        int port = startPort;
+        port = startPort;
         HttpServer server = null;
         if (enforcePort)
         {
@@ -1271,7 +1277,7 @@ public final class NeodymiumAuraManager
                     command.add("-Dneodymium.webDriver.keepBrowserOpen=" + req.keepOpen);
                     command.add("-Dneodymium.managerActive=true");
                     command.add("-Dneodymium.managerRunId=" + runId);
-                    command.add("-Dneodymium.managerUrl=http://localhost:18091");
+                    command.add("-Dneodymium.managerUrl=http://localhost:" + port);
                     command.add("-Dfile.encoding=UTF-8");
                     command.add("-Dsun.stdout.encoding=UTF-8");
                     command.add("-Dsun.stderr.encoding=UTF-8");

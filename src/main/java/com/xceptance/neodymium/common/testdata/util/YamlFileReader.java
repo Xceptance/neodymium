@@ -916,15 +916,19 @@ public final class YamlFileReader
             return;
         }
         final StringBuilder sb = new StringBuilder();
+        final StringBuilder rawSb = new StringBuilder();
         for (final Step step : steps)
         {
             sb.append(step.text).append("\n");
+            rawSb.append(step.rawText).append("\n");
         }
         if (sb.length() > 0)
         {
             sb.setLength(sb.length() - 1);
+            rawSb.setLength(rawSb.length() - 1);
         }
         finalRow.put(key, sb.toString());
+        finalRow.put("raw_" + key, rawSb.toString());
     }
 
     private static String resolveVariables(final String text, final Map<String, ?> variables, final Map<String, ?> meta)
@@ -1116,7 +1120,7 @@ public final class YamlFileReader
          * The text of the step.
          */
         public String text;
-
+        public String rawText;
         /**
          * The location trace of the step.
          */
@@ -1131,6 +1135,7 @@ public final class YamlFileReader
         public Step(final String text, final String trace)
         {
             this.text = text;
+            this.rawText = text;
             this.trace = trace;
         }
     }

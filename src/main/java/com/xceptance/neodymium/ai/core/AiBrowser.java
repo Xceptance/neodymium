@@ -265,10 +265,12 @@ public class AiBrowser implements AutoCloseable {
 
         // Pre-initialize results with instructions so they are visible as pending in the console
         if (Neodymium.getData().exists("before")) {
-            runResult.setBeforeResult(new AiExecutionResult(Neodymium.getData(), this, Neodymium.getData().asString("before")));
+            String key = Neodymium.getData().exists("raw_before") ? "raw_before" : "before";
+            runResult.setBeforeResult(new AiExecutionResult(Neodymium.getData(), this, Neodymium.getData().asString(key)));
         }
         if (Neodymium.getData().exists("steps")) {
-            runResult.setStepsResult(new AiExecutionResult(Neodymium.getData(), this, Neodymium.getData().asString("steps")));
+            String key = Neodymium.getData().exists("raw_steps") ? "raw_steps" : "steps";
+            runResult.setStepsResult(new AiExecutionResult(Neodymium.getData(), this, Neodymium.getData().asString(key)));
         }
 
         try {
@@ -276,13 +278,16 @@ public class AiBrowser implements AutoCloseable {
                 agent.setCurrentBlock("before");
                 // We use the already created result if it exists
                 final AiExecutionResult res = runResult.getBeforeResult();
-                agent.execute(Neodymium.getData().asString("before"), res);
+                String key = Neodymium.getData().exists("raw_before") ? "raw_before" : "before";
+                agent.execute(Neodymium.getData().asString(key), res);
             }
 
-            agent.setCurrentBlock("steps");
-            final AiExecutionResult res = runResult.getStepsResult();
-            agent.execute(Neodymium.getData().asString("steps"), res);
-
+            if (Neodymium.getData().exists("steps")) {
+                agent.setCurrentBlock("steps");
+                final AiExecutionResult res = runResult.getStepsResult();
+                String key = Neodymium.getData().exists("raw_steps") ? "raw_steps" : "steps";
+                agent.execute(Neodymium.getData().asString(key), res);
+            }
         } catch (final Throwable t)
         {
             testError = t;
