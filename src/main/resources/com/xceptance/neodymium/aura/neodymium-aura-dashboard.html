@@ -162,6 +162,28 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            transition: width 0.3s ease;
+        }
+
+        .col-minimized {
+            width: 60px !important;
+            min-width: 60px !important;
+            flex-grow: 0 !important;
+        }
+        .col-minimized .panel-header span,
+        .col-minimized .run-details-text,
+        .col-minimized .test-name-text,
+        .col-minimized .delete-report-btn,
+        .col-minimized .test-status-content,
+        .col-minimized .run-status-content {
+            display: none !important;
+        }
+        .col-minimized .run-min-text {
+            display: block !important;
+        }
+        .col-minimized .history-row td {
+            padding: 10px 8px !important;
+            text-align: center;
         }
 
         .panel-header {
@@ -614,7 +636,7 @@
         <!-- HISTORY & REPORTS VIEW -->
         <div id="reportViewContainer" class="workspace-layout" style="display: none;">
             <!-- Left Side: History List -->
-            <div class="left-area" style="width: 320px; flex-shrink: 0;">
+            <div class="left-area" id="colRuns" style="width: 320px; flex-shrink: 0;">
                 <div class="panel" style="height: 100%;">
                     <div class="panel-header">
                         <span>Run History</span>
@@ -630,8 +652,28 @@
                 </div>
             </div>
 
+            <div class="resizer-h" id="historyResizer1" style="display: none;"></div>
+
+            <!-- Middle Side: Tests List -->
+            <div class="left-area" id="colTests" style="width: 280px; flex-shrink: 0; display: none;">
+                <div class="panel" style="height: 100%;">
+                    <div class="panel-header">
+                        <span>Test Cases</span>
+                    </div>
+                    <div style="flex-grow: 1; overflow-y: auto; padding: 0;">
+                        <table class="history-table" style="font-size: 13px;">
+                            <tbody id="historyTestsList">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="resizer-h" id="historyResizer2" style="display: none;"></div>
+
             <!-- Right Side: Interactive Console -->
-            <div class="right-area" style="flex-grow: 1; min-width: 0;">
+            <div class="right-area" id="colReport" style="flex-grow: 1; min-width: 0;">
                 <div class="panel" style="height: 100%;">
                     <div class="panel-header">
                         <span>Interactive Test Report</span>
@@ -764,6 +806,8 @@
         // Layout Resizers
         let isResizingH = false;
         let isResizingV = false;
+        let isResizingH1 = false;
+        let isResizingH2 = false;
 
         document.getElementById('sidebarResizer').addEventListener('mousedown', function(e) {
             isResizingH = true;
@@ -774,6 +818,18 @@
         document.getElementById('consoleResizer').addEventListener('mousedown', function(e) {
             isResizingV = true;
             document.body.style.cursor = 'ns-resize';
+            e.preventDefault();
+        });
+
+        document.getElementById('historyResizer1').addEventListener('mousedown', function(e) {
+            isResizingH1 = true;
+            document.body.style.cursor = 'ew-resize';
+            e.preventDefault();
+        });
+
+        document.getElementById('historyResizer2').addEventListener('mousedown', function(e) {
+            isResizingH2 = true;
+            document.body.style.cursor = 'ew-resize';
             e.preventDefault();
         });
 
@@ -798,12 +854,34 @@
                     }
                 }
             }
+            if (isResizingH1) {
+                const colRuns = document.getElementById('colRuns');
+                const workspaceRect = document.querySelector('.workspace-layout').getBoundingClientRect();
+                const newWidth = e.clientX - workspaceRect.left - 16;
+                if (newWidth > 200 && newWidth < workspaceRect.width * 0.4) {
+                    colRuns.style.width = newWidth + 'px';
+                }
+            }
+            if (isResizingH2) {
+                const colTests = document.getElementById('colTests');
+                const colRuns = document.getElementById('colRuns');
+                const colRunsWidth = colRuns.getBoundingClientRect().width;
+                const workspaceRect = document.querySelector('.workspace-layout').getBoundingClientRect();
+                
+                // Client X - Workspace Left - 16 (padding) - colRunsWidth - resizer1 width (approx 8)
+                const newWidth = e.clientX - workspaceRect.left - 16 - colRunsWidth - 16; 
+                if (newWidth > 200 && newWidth < workspaceRect.width * 0.4) {
+                    colTests.style.width = newWidth + 'px';
+                }
+            }
         });
 
         document.addEventListener('mouseup', function(e) {
-            if (isResizingH || isResizingV) {
+            if (isResizingH || isResizingV || isResizingH1 || isResizingH2) {
                 isResizingH = false;
                 isResizingV = false;
+                isResizingH1 = false;
+                isResizingH2 = false;
                 document.body.style.cursor = 'default';
             }
         });
@@ -1103,10 +1181,11 @@
                 rowsHtml += `
                     <tr class="history-row" style="cursor: default; border-left: 3px solid var(--accent);">
                         <td style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
-                            <div>
+                            <div class="run-details-text">
                                 <div style="font-weight: 500; margin-bottom: 4px;">${formattedTime}</div>
                                 <div>${statusBadge}</div>
                             </div>
+                            <div class="run-status-content" style="display: none;"><i class="fa-solid fa-circle-notch spinner" style="color: var(--accent);"></i></div>
                         </td>
                     </tr>
                 `;
@@ -1120,26 +1199,36 @@
                     const statusBadge = isSuccess
                         ? `<span class="badge-success">Passed</span>`
                         : `<span class="badge-failed">Failed</span>`;
+                    
+                    const minIcon = isSuccess
+                        ? `<i class="fa-solid fa-check-circle" style="color: var(--success); font-size: 18px;" title="Passed"></i>`
+                        : `<i class="fa-solid fa-times-circle" style="color: var(--danger); font-size: 18px;" title="Failed"></i>`;
 
                     const formattedTime = formatHistoryTimestamp(item.timestamp || item.id.substring(0, 15));
                     
                     const isSelected = item.id === currentReportId;
                     const selectedStyle = isSelected ? 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);' : '';
                     
+                    const timeOnly = formattedTime.includes(',') ? formattedTime.split(',')[1].trim() : formattedTime;
+                    
                     return `
-                        <tr class="history-row" style="cursor: pointer; ${selectedStyle}" onclick="openInteractiveReport('${item.id}', ${item.hasReport === 'true'}, ${item.hasInteractiveReport === 'true'})">
+                        <tr class="history-row" style="cursor: pointer; ${selectedStyle}" onclick="selectHistoryRun('${item.id}', ${item.hasReport === 'true'})">
                             <td style="padding: 10px 12px;">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                                    <div>
+                                    <div class="run-details-text" style="width: 100%;">
                                         <div style="font-weight: 500; margin-bottom: 6px;">${formattedTime}</div>
-                                        <div style="display: flex; gap: 8px; align-items: center;">
-                                            ${statusBadge}
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>${statusBadge}</div>
                                             <span style="color: var(--text-muted); font-size: 11px;">
-                                                <i class="fa-solid fa-flask" aria-hidden="true"></i> ${item.total || '-'}
-                                                <i class="fa-solid fa-check" style="color: var(--success); margin-left: 4px;" aria-hidden="true"></i> ${item.passed || '-'}
-                                                <i class="fa-solid fa-xmark" style="color: var(--danger); margin-left: 4px;" aria-hidden="true"></i> ${item.failed || '-'}
+                                                <i class="fa-solid fa-flask" aria-hidden="true" title="Total"></i> ${item.total || '-'}
+                                                <i class="fa-solid fa-check" style="color: var(--success); margin-left: 4px;" aria-hidden="true" title="Passed"></i> ${item.passed || '-'}
+                                                <i class="fa-solid fa-xmark" style="color: var(--danger); margin-left: 4px;" aria-hidden="true" title="Failed"></i> ${item.failed || '-'}
                                             </span>
                                         </div>
+                                    </div>
+                                    <div class="run-status-content" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;">
+                                        <div class="run-min-text" style="display: none; font-size: 10px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">${timeOnly}</div>
+                                        ${minIcon}
                                     </div>
                                     <button class="delete-report-btn" onclick="event.stopPropagation(); deleteReport('${item.id}')" title="Delete Report">
                                         <i class="fa-solid fa-trash-can" style="font-size: 12px;"></i>
@@ -1153,41 +1242,117 @@
             allureHistoryList.innerHTML = rowsHtml;
         }
 
-        function openInteractiveReport(reportId, hasReport, hasInteractive) {
+        let currentTestFile = null;
+
+        function selectHistoryRun(reportId, hasReport) {
             currentReportId = reportId;
+            currentTestFile = null;
             renderHistoryTable(); // Update selection styling
             
+            const run = historyCached.find(r => r.id === reportId);
+            
+            // Show Tests column, remove minified class from runs
+            const colRuns = document.getElementById('colRuns');
+            colRuns.classList.remove('col-minimized');
+            colRuns.style.width = '320px';
+            
+            const colTests = document.getElementById('colTests');
+            const historyResizer2 = document.getElementById('historyResizer2');
+            colTests.classList.remove('col-minimized');
+            colTests.style.display = 'flex';
+            colTests.style.width = '280px';
+            historyResizer2.style.display = 'block';
+            
+            // Hide report details until test is selected
+            document.getElementById('colReport').classList.add('mobile-view');
+            document.getElementById('historyPlaceholder').style.display = 'flex';
+            document.getElementById('historyPlaceholder').innerHTML = `
+                <i class="fa-solid fa-arrow-left" style="font-size: 32px; margin-bottom: 16px; opacity: 0.5;"></i>
+                <p>Select a test case from the list.</p>
+            `;
+            document.getElementById('historyConsoleIframe').src = 'about:blank';
+
+            // Render Tests
+            const testsList = document.getElementById('historyTestsList');
+            if (!run || !run.tests || run.tests.length === 0) {
+                testsList.innerHTML = `<tr><td style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No tests available.</td></tr>`;
+            } else {
+                testsList.innerHTML = run.tests.map(t => {
+                    const tSuccess = t.status === 'Passed';
+                    const tBadge = tSuccess
+                        ? `<i class="fa-solid fa-check" style="color: var(--success); margin-left: 6px;" title="Passed"></i>`
+                        : `<i class="fa-solid fa-xmark" style="color: var(--danger); margin-left: 6px;" title="Failed"></i>`;
+                    
+                    let browserIcon = 'fa-globe';
+                    if (t.browser) {
+                        const b = t.browser.toLowerCase();
+                        if (b.includes('chrome')) browserIcon = 'fa-brands fa-chrome';
+                        else if (b.includes('firefox')) browserIcon = 'fa-brands fa-firefox';
+                        else if (b.includes('edge')) browserIcon = 'fa-brands fa-edge';
+                        else if (b.includes('safari')) browserIcon = 'fa-brands fa-safari';
+                        else browserIcon = 'fa-solid fa-globe';
+                    } else {
+                        browserIcon = 'fa-solid fa-globe';
+                    }
+                    
+                    const durationText = t.durationMs ? (t.durationMs / 1000).toFixed(1) + 's' : '';
+
+                    return `
+                        <tr class="history-row" style="cursor: pointer;" onclick="loadInteractiveTest('${reportId}', '${t.file}', this)">
+                            <td class="test-row-content" style="padding: 10px 12px; font-size: 12px; word-break: break-all;">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 4px;">
+                                    <div class="test-name-content" style="display: flex;">
+                                        <i class="fa-solid fa-file-code" style="color:var(--text-secondary); margin-right: 6px; margin-top: 2px;"></i> <span class="test-name-text" style="font-weight: 500;">${t.name}</span>
+                                    </div>
+                                    <div class="test-status-content">${tBadge}</div>
+                                </div>
+                                <div class="test-name-text" style="display: flex; gap: 12px; color: var(--text-muted); font-size: 11px; margin-left: 20px;">
+                                    <span title="${t.browser || 'Browser'}"><i class="${browserIcon}"></i> ${t.browser || ''}</span>
+                                    ${durationText ? `<span title="Duration"><i class="fa-regular fa-clock"></i> ${durationText}</span>` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            const actionsDiv = document.getElementById('historyReportActions');
+            if (hasReport) {
+                actionsDiv.style.display = 'flex';
+                actionsDiv.innerHTML = `<button class="btn btn-outline" style="width: 100%" onclick="window.open('/api/allure/report/${reportId}/index.html', '_blank')"><i class="fa-solid fa-chart-bar"></i> Open Allure Report</button>`;
+            } else {
+                actionsDiv.style.display = 'none';
+            }
+        }
+
+        function loadInteractiveTest(reportId, testFile, rowElement) {
+            currentTestFile = testFile;
+
+            // Highlight selection
+            const tbody = document.getElementById('historyTestsList');
+
+            if (tbody) {
+                Array.from(tbody.querySelectorAll('.history-row')).forEach(row => {
+                    row.style.backgroundColor = '';
+                    row.style.borderLeft = '';
+                });
+            }
+            if (rowElement) {
+                rowElement.style.backgroundColor = 'var(--bg-hover)';
+                rowElement.style.borderLeft = '3px solid var(--accent)';
+            }
+
             document.getElementById('historyPlaceholder').style.display = 'none';
             const iframe = document.getElementById('historyConsoleIframe');
-            
-            if (hasInteractive) {
-                const dataUrl = '/api/allure/report/' + reportId + '/console-execution.json';
-                iframe.src = '/interactive_console.html?dataUrl=' + encodeURIComponent(dataUrl);
-            } else {
-                iframe.src = 'about:blank';
-                document.getElementById('historyPlaceholder').style.display = 'flex';
-                document.getElementById('historyPlaceholder').innerHTML = `
-                    <i class="fa-solid fa-triangle-exclamation" style="font-size: 32px; margin-bottom: 16px; opacity: 0.5;"></i>
-                    <p>No interactive console data available for this run.</p>
-                `;
-            }
-            
-            const actionsDiv = document.getElementById('historyReportActions');
-            actionsDiv.style.display = 'flex';
-            
-            const btnAllure = document.getElementById('btnOpenAllure');
-            const btnLog = document.getElementById('btnOpenLog');
-            
-            if (hasReport) {
-                btnAllure.disabled = false;
-                btnLog.disabled = false;
-                btnAllure.onclick = () => openReportView(reportId);
-                btnLog.onclick = () => openLogModal(reportId);
-            } else {
-                btnAllure.disabled = true;
-                btnLog.disabled = true;
-                btnAllure.onclick = null;
-                btnLog.onclick = null;
+            const dataUrl = '/api/allure/report/' + reportId + '/' + testFile;
+            iframe.src = '/interactive_console.html?dataUrl=' + encodeURIComponent(dataUrl);
+
+            // Add mobile class for narrow view initially
+            const rightArea = document.getElementById('colReport');
+            if (rightArea) {
+                rightArea.classList.add('mobile-view');
+                rightArea.style.flexGrow = '0';
+                rightArea.style.width = '420px';
             }
         }
 
@@ -1765,6 +1930,59 @@
             showView('reportViewContainer');
         }
 
+        async function runTestByFile(testFile) {
+            const fileDatasets = [{ file: testFile, id: null }];
+            
+            const headless = document.getElementById('optHeadless').checked;
+            const video = document.getElementById('optVideo').checked;
+            const keepOpen = document.getElementById('optKeepOpen').checked;
+            const interactive = document.getElementById('optInteractive').checked;
+            const allure = document.getElementById('optAllure').checked;
+            const history = document.getElementById('optHistory').checked;
+            
+            isRunning = true;
+            consoleOpened = true;
+            lastLogIndex = 0;
+            lastEventIndex = 0;
+            
+            activeRunStats.running = true;
+            activeRunStats.startTime = new Date();
+            activeRunStats.total = 0;
+            activeRunStats.passed = 0;
+            activeRunStats.failed = 0;
+            renderHistoryTable();
+
+            runSpinner.style.display = 'inline-block';
+            updateCenterLayout();
+            runSpinner.style.display = 'inline-block';
+            terminalConsole.innerHTML = 'Connecting to run stream...\n';
+            hasShownStartMessage = false;
+            
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ datasets: fileDatasets, headless, video, keepOpen, interactive, allure, history })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    showToast("Execution failed to start: " + data.error, "error");
+                    isRunning = false;
+                    activeRunStats.running = false;
+                    renderHistoryTable();
+                    consoleOpened = false;
+                    updateCenterLayout();
+                }
+            } catch (e) {
+                showToast("Failed to start run: " + e.message, "error");
+                isRunning = false;
+                activeRunStats.running = false;
+                renderHistoryTable();
+                consoleOpened = false;
+                updateCenterLayout();
+            }
+        }
+
         async function runCurrentFile() {
             if (!activeEditingFile) return;
             
@@ -1781,6 +1999,8 @@
             
             isRunning = true;
             consoleOpened = true;
+            lastLogIndex = 0;
+            lastEventIndex = 0;
             
             activeRunStats.running = true;
             activeRunStats.startTime = new Date();
@@ -1832,6 +2052,8 @@
             
             isRunning = true;
             consoleOpened = true;
+            lastLogIndex = 0;
+            lastEventIndex = 0;
             
             activeRunStats.running = true;
             activeRunStats.startTime = new Date();
@@ -2129,6 +2351,27 @@
                 navigator.sendBeacon('/api/disconnect?clientId=' + encodeURIComponent(clientId));
             }
         }
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.action === 'stepSelected') {
+                const rightArea = document.getElementById('colReport');
+                if (rightArea && rightArea.classList.contains('mobile-view')) {
+                    rightArea.classList.remove('mobile-view');
+                    rightArea.style.flexGrow = '1';
+                    rightArea.style.width = 'auto';
+                }
+                const colTests = document.getElementById('colTests');
+                if (colTests) {
+                    colTests.classList.add('col-minimized');
+                }
+            } else if (event.data && event.data.action === 'rerunTest') {
+                if (event.data.testId) {
+                    const testFile = event.data.testId.split('.')[0] + '.yaml'; // Fallback mapping, though we really need exact mapping.
+                    runTestByFile(testFile);
+                    showToast("Triggered rerun for " + testFile, "info");
+                }
+            }
+        });
+
         window.addEventListener('pagehide', sendDisconnect);
         window.addEventListener('unload', sendDisconnect);
 

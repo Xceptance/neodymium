@@ -55,7 +55,17 @@ function connectSSE() {
 // -------------------------------------------------------------------------
 function tryStaticLoad() {
     const params = new URLSearchParams(window.location.search);
-    const dataUrl = params.get('data') || '/run_data.json';
+    const dataUrl = params.get('dataUrl') || params.get('data') || '/run_data.json';
+    
+    // Extract history run ID if loaded from history
+    if (dataUrl.includes('/api/allure/report/')) {
+        const parts = dataUrl.split('/');
+        // /api/allure/report/<runId>/...
+        if (parts.length > 4) {
+            window.historyRunId = parts[4];
+        }
+    }
+    
     fetch(dataUrl)
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(data => {
@@ -83,9 +93,14 @@ function tryStaticLoad() {
 
 // Detect connection method on load
 window.addEventListener('DOMContentLoaded', () => {
-    fetch('/api/console/events', { method: 'HEAD' })
-        .then(r => { if (r.ok || r.status === 200) connectSSE(); else tryStaticLoad(); })
-        .catch(() => tryStaticLoad());
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('dataUrl') || params.has('data')) {
+        tryStaticLoad();
+    } else {
+        fetch('/api/console/events', { method: 'HEAD' })
+            .then(r => { if (r.ok || r.status === 200) connectSSE(); else tryStaticLoad(); })
+            .catch(() => tryStaticLoad());
+    }
 
     // Initialize help tooltip hover
     const btnHelp = document.getElementById('btnHelp');
@@ -235,12 +250,16 @@ function applyState(state) {
         if (timer) timer.style.display = (!isThinking && !isFailed) ? '' : 'none';
     }
 
+    const beforeSteps = state.blocks?.before || [];
+    const mainSteps = state.blocks?.steps || state.steps || [];
+    const afterSteps = state.blocks?.after || [];
+
     // Update progress pill (desktop) and mobile bar.
     // currentStep = doneSteps + 1 when a step is actively running; otherwise = doneSteps.
     const allStepsForProgress = [
-        ...(state.blocks?.before || []),
-        ...(state.blocks?.steps || []),
-        ...(state.blocks?.after || [])
+        ...beforeSteps,
+        ...mainSteps,
+        ...afterSteps
     ];
     const totalSteps = allStepsForProgress.length;
     const doneSteps = allStepsForProgress.filter(s => s.status === 'passed' || s.status === 'skipped' || s.status === 'failed').length;
@@ -263,9 +282,9 @@ function applyState(state) {
     }
     // Rebuild the flat step index list for the ↑/↓ reorder buttons
     allStepIndices = [
-        ...(state.blocks?.before || []),
-        ...(state.blocks?.steps || []),
-        ...(state.blocks?.after || [])
+        ...beforeSteps,
+        ...mainSteps,
+        ...afterSteps
     ].map(s => s.index);
 
     // Test source files (Java + YAML + Playbook)
@@ -319,9 +338,9 @@ function applyState(state) {
     syncAutoButton();
 
     // Render block groups
-    renderBlock('before', state.blocks?.before || []);
-    renderBlock('steps', state.blocks?.steps || []);
-    renderBlock('after', state.blocks?.after || []);
+    renderBlock('before', beforeSteps);
+    renderBlock('steps', mainSteps);
+    renderBlock('after', afterSteps);
 
     // Render Data Bindings Table
     const tbody = document.getElementById('dataBindingsTableBody');
@@ -366,9 +385,9 @@ function applyState(state) {
     // Handle default/latest screenshot display
     let activeScreenshot = null;
     const allSteps = [
-        ...(state.blocks?.before || []),
-        ...(state.blocks?.steps || []),
-        ...(state.blocks?.after || [])
+        ...beforeSteps,
+        ...mainSteps,
+        ...afterSteps
     ];
     // Find active/failed/running step screenshot, or last executed one
     const activeStep = allSteps.find(s => s.status === 'running' || s.status === 'failed');
@@ -386,8 +405,8 @@ function applyState(state) {
 
     // Auto-advance: always track the currently relevant step.
     // Priority: running/failed step first, then next pending after the last passed one.
-    if (state && (state.blocks?.steps || []).length > 0) {
-        const steps = state.blocks.steps;
+    if (state && mainSteps.length > 0) {
+        const steps = mainSteps;
         const activeStep = steps.find(s => s.status === 'running' || s.status === 'failed');
         if (activeStep) {
             // A step is currently executing or errored – select it unconditionally
@@ -556,11 +575,16 @@ function buildStepDetailsHtml(step, isActiveStep) {
     const domBlock = step.simplifiedDom
         ? `<div class="acc-dom" style="font-size:12px;"><i class="fa-solid fa-code" aria-hidden="true"></i> DOM: <a href="#" onclick="openDomOverlay(event, \`${escAttr(step.simplifiedDom)}\`)" style="color:var(--accent-primary);text-decoration:underline;">View Content</a></div>`
         : '';
-    const screenshotBlock = step.screenshot
+    let screenshotUrl = step.screenshot;
+    const effRunId = window.historyRunId || currentRunId;
+    if (screenshotUrl && screenshotUrl.includes('/api/console/screenshot') && effRunId) {
+        screenshotUrl += (screenshotUrl.includes('?') ? '&' : '?') + 'runId=' + encodeURIComponent(effRunId);
+    }
+    const screenshotBlock = screenshotUrl
         ? `<div class="acc-screenshot-block" style="margin-top:12px;">
-                       <div style="font-size:12px;"><i class="fa-solid fa-image" aria-hidden="true"></i> Screenshot: <a href="#" onclick="openScreenshotOverlay(event,'${escAttr(step.screenshot)}')" style="color:var(--accent-primary);text-decoration:underline;">View Fullscreen</a></div>
-                       <img class="acc-screenshot" src="${escAttr(step.screenshot)}" alt="Step screenshot"
-                            onclick="openScreenshotOverlay(event,'${escAttr(step.screenshot)}')" style="cursor:pointer;margin-top:8px;max-height:200px;width:100%;object-fit:cover;border-radius:8px;">
+                       <div style="font-size:12px;"><i class="fa-solid fa-image" aria-hidden="true"></i> Screenshot: <a href="#" onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="color:var(--accent-primary);text-decoration:underline;">View Fullscreen</a></div>
+                       <img class="acc-screenshot" src="${escAttr(screenshotUrl)}" alt="Step screenshot"
+                            onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="cursor:pointer;margin-top:8px;max-height:200px;width:100%;object-fit:cover;border-radius:8px;">
                    </div>`
         : '';
     // Breadcrumb block (include file / chain)
@@ -1052,6 +1076,10 @@ function handleStepClick(event, index) {
     }
     updateBigScreenDetails();
 
+    if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ action: 'stepSelected' }, '*');
+    }
+
     // Focus the input field (if rendered for the selected step)
     restoreFocus();
 
@@ -1288,18 +1316,41 @@ function setButtonsEnabled(enabled) {
         }
     });
 
-    if (isAutoMode) {
-        if (runBtn) runBtn.disabled = true;
-        if (skipBtn) skipBtn.disabled = true;
-        if (backBtn) backBtn.disabled = true;
-        if (autoBtn) autoBtn.disabled = isEditing;
-        if (btnCancel) btnCancel.disabled = isEditing;
+    const btnRerun = document.getElementById('btnRerun');
+    if (!enabled && currentState && currentState.status !== 'running') {
+        if (runBtn) runBtn.style.display = 'none';
+        if (skipBtn) skipBtn.style.display = 'none';
+        if (backBtn) backBtn.style.display = 'none';
+        if (autoBtn) autoBtn.style.display = 'none';
+        if (btnCancel) btnCancel.style.display = 'none';
+        if (btnRerun) btnRerun.style.display = 'inline-flex';
     } else {
-        if (runBtn) runBtn.disabled = !enabled || isEditing;
-        if (skipBtn) skipBtn.disabled = !enabled || isEditing;
-        if (backBtn) backBtn.disabled = !enabled || isEditing;
-        if (autoBtn) autoBtn.disabled = !enabled || isEditing;
-        if (btnCancel) btnCancel.disabled = isEditing;
+        if (runBtn) runBtn.style.display = '';
+        if (skipBtn) skipBtn.style.display = '';
+        if (backBtn) backBtn.style.display = '';
+        if (autoBtn) autoBtn.style.display = '';
+        if (btnCancel) btnCancel.style.display = '';
+        if (btnRerun) btnRerun.style.display = 'none';
+
+        if (isAutoMode) {
+            if (runBtn) runBtn.disabled = true;
+            if (skipBtn) skipBtn.disabled = true;
+            if (backBtn) backBtn.disabled = true;
+            if (autoBtn) autoBtn.disabled = isEditing;
+            if (btnCancel) btnCancel.disabled = isEditing;
+        } else {
+            if (runBtn) runBtn.disabled = !enabled || isEditing;
+            if (skipBtn) skipBtn.disabled = !enabled || isEditing;
+            if (backBtn) backBtn.disabled = !enabled || isEditing;
+            if (autoBtn) autoBtn.disabled = !enabled || isEditing;
+            if (btnCancel) btnCancel.disabled = isEditing;
+        }
+    }
+}
+
+function triggerRerun() {
+    if (window.parent && window.parent !== window && currentState && currentState.testId) {
+        window.parent.postMessage({ action: 'rerunTest', testId: currentState.testId }, '*');
     }
 }
 

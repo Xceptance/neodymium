@@ -821,7 +821,15 @@ public class AiAgent
                 try
                 {
                     final String stateJson = consoleEngine.getCurrentStateJson();
-                    final java.io.File out = new java.io.File("target/console-execution.json");
+                    String testName = "test-" + System.currentTimeMillis();
+                    try {
+                        String name = Neodymium.getTestName();
+                        if (name != null && !name.trim().isEmpty()) {
+                            testName = name;
+                        }
+                    } catch (Exception ignore) {}
+                    testName = testName.replaceAll("[^a-zA-Z0-9_-]", "");
+                    final java.io.File out = new java.io.File("target/console-execution-" + testName + ".json");
                     if (!out.getParentFile().exists()) 
                     { 
                         out.getParentFile().mkdirs(); 

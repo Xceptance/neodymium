@@ -199,6 +199,8 @@ public final class InteractiveConsoleEngine {
             minified = stateJson.replace("\r", "").replace("\n", "");
         }
         
+        this.currentStateJson = minified;
+        
         if ("true".equals(System.getProperty("neodymium.managerActive"))) {
             try {
                 final String managerUrl = System.getProperty("neodymium.managerUrl");
@@ -215,7 +217,6 @@ public final class InteractiveConsoleEngine {
             return;
         }
 
-        this.currentStateJson = minified;
         broadcastSseEvent("state", minified);
     }
     
@@ -429,10 +430,24 @@ public final class InteractiveConsoleEngine {
         @Override
         public void handle(final HttpExchange exchange) throws IOException
         {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod()))
+            {
+                exchange.sendResponseHeaders(204, -1);
+                return;
+            }
+            if ("HEAD".equalsIgnoreCase(exchange.getRequestMethod()))
+            {
+                exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=UTF-8");
+                exchange.sendResponseHeaders(200, -1);
+                return;
+            }
+
             exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=UTF-8");
             exchange.getResponseHeaders().set("Cache-Control", "no-cache");
             exchange.getResponseHeaders().set("Connection", "keep-alive");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
             exchange.sendResponseHeaders(200, 0); // 0 = chunked / streaming
 
             final OutputStream out = exchange.getResponseBody();

@@ -375,36 +375,46 @@ public final class NeodymiumAuraManager {
                     } else {
                         sendError(exchange, 404, "No active console engine");
                     }
+                } else if ("/api/console/screenshot".equals(path) && "GET".equalsIgnoreCase(method)) {
+                    handleConsoleScreenshot(exchange);
                 } else if ("/api/console/internal/pushState".equals(path) && "POST".equalsIgnoreCase(method)) {
-                    final InteractiveConsoleEngine engine = currentConsoleEngine.get();
-                    if (engine != null) {
-                        final String body = new String(exchange.getRequestBody().readAllBytes(),
-                                java.nio.charset.StandardCharsets.UTF_8);
-                        engine.pushState(body);
-                        sendResponse(exchange, 200, "application/json", "{\"status\":\"ok\"}".getBytes());
-                    } else {
-                        sendError(exchange, 404, "No active console engine");
+                    InteractiveConsoleEngine engine = currentConsoleEngine.get();
+                    if (engine == null) {
+                        engine = new InteractiveConsoleEngine("initializing");
+                        currentConsoleEngine.set(engine);
                     }
-                } else if ("/api/console/internal/broadcast".equals(path) && "POST".equalsIgnoreCase(method)) {
-                    final InteractiveConsoleEngine engine = currentConsoleEngine.get();
-                    if (engine != null) {
-                        final String body = new String(exchange.getRequestBody().readAllBytes(),
-                                java.nio.charset.StandardCharsets.UTF_8);
+                    final String body = new String(exchange.getRequestBody().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    try {
                         final com.google.gson.JsonObject json = gson.fromJson(body, com.google.gson.JsonObject.class);
-                        engine.broadcastSseEvent(json.get("event").getAsString(), json.get("payload").getAsString());
-                        sendResponse(exchange, 200, "application/json", "{\"status\":\"ok\"}".getBytes());
-                    } else {
-                        sendError(exchange, 404, "No active console engine");
+                        if (json != null && json.has("runId")) {
+                            engine.setRunId(json.get("runId").getAsString());
+                        }
+                    } catch (Exception e) {
+                        // ignore parsing error
                     }
+                    engine.pushState(body);
+                    sendResponse(exchange, 200, "application/json", "{\"status\":\"ok\"}".getBytes());
+                } else if ("/api/console/internal/broadcast".equals(path) && "POST".equalsIgnoreCase(method)) {
+                    InteractiveConsoleEngine engine = currentConsoleEngine.get();
+                    if (engine == null) {
+                        engine = new InteractiveConsoleEngine("initializing");
+                        currentConsoleEngine.set(engine);
+                    }
+                    final String body = new String(exchange.getRequestBody().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    final com.google.gson.JsonObject json = gson.fromJson(body, com.google.gson.JsonObject.class);
+                    engine.broadcastSseEvent(json.get("event").getAsString(), json.get("payload").getAsString());
+                    sendResponse(exchange, 200, "application/json", "{\"status\":\"ok\"}".getBytes());
                 } else if ("/api/console/internal/waitForAction".equals(path) && "GET".equalsIgnoreCase(method)) {
-                    final InteractiveConsoleEngine engine = currentConsoleEngine.get();
-                    if (engine != null) {
-                        final com.google.gson.JsonObject action = engine.waitForAction();
-                        sendResponse(exchange, 200, "application/json",
-                                action != null ? action.toString().getBytes() : "{}".getBytes());
-                    } else {
-                        sendError(exchange, 404, "No active console engine");
+                    InteractiveConsoleEngine engine = currentConsoleEngine.get();
+                    if (engine == null) {
+                        engine = new InteractiveConsoleEngine("initializing");
+                        currentConsoleEngine.set(engine);
                     }
+                    final com.google.gson.JsonObject action = engine.waitForAction();
+                    sendResponse(exchange, 200, "application/json",
+                            action != null ? action.toString().getBytes() : "{}".getBytes());
                 } else {
                     sendError(exchange, 404, "Endpoint not found");
                 }
@@ -423,6 +433,51 @@ public final class NeodymiumAuraManager {
             }
             final byte[] bytes = is.readAllBytes();
             sendResponse(exchange, 200, "text/html; charset=UTF-8", bytes);
+        }
+
+        private void handleConsoleScreenshot(final HttpExchange exchange) throws IOException {
+            final String query = exchange.getRequestURI().getQuery();
+            String file = null;
+            String runId = null;
+            if (query != null) {
+                for (final String param : query.split("&")) {
+                    final String[] pair = param.split("=");
+                    if (pair.length > 1) {
+                        if ("file".equals(pair[0])) file = pair[1];
+                        if ("runId".equals(pair[0])) runId = pair[1];
+                    }
+                }
+            }
+
+            if (file == null || file.contains("/") || file.contains("\\") || file.contains("..")) {
+                sendError(exchange, 403, "Access denied: invalid file");
+                return;
+            }
+
+            File targetFile = null;
+            if (runId != null && !runId.isEmpty()) {
+                final File historyDir = new File("allure-reports-history", runId).getCanonicalFile();
+                targetFile = new File(historyDir, "screenshots/" + file).getCanonicalFile();
+                if (!targetFile.getPath().startsWith(historyDir.getPath())) {
+                    sendError(exchange, 403, "Access denied");
+                    return;
+                }
+            }
+            if (targetFile == null || !targetFile.exists()) {
+                final File activeDir = new File("target/ai-console-screenshots").getCanonicalFile();
+                targetFile = new File(activeDir, file).getCanonicalFile();
+                if (!targetFile.getPath().startsWith(activeDir.getPath())) {
+                    sendError(exchange, 403, "Access denied");
+                    return;
+                }
+            }
+
+            if (targetFile.exists() && targetFile.isFile()) {
+                final byte[] bytes = Files.readAllBytes(targetFile.toPath());
+                sendResponse(exchange, 200, "image/png", bytes);
+            } else {
+                sendError(exchange, 404, "File not found");
+            }
         }
 
         private void handleListFiles(final HttpExchange exchange) throws IOException {
@@ -681,7 +736,7 @@ public final class NeodymiumAuraManager {
 
         private void handleAllureHistory(final HttpExchange exchange) throws IOException {
             final File historyDir = new File("allure-reports-history").getAbsoluteFile();
-            final List<Map<String, String>> historyList = new ArrayList<>();
+            final List<Map<String, Object>> historyList = new ArrayList<>();
 
             if (historyDir.exists() && historyDir.isDirectory()) {
                 final File[] dirs = historyDir.listFiles(File::isDirectory);
@@ -726,18 +781,80 @@ public final class NeodymiumAuraManager {
                         final File indexHtml = new File(dir, "index.html");
                         final boolean hasReport = indexHtml.exists() && indexHtml.isFile();
 
-                        final File consoleJson = new File(dir, "console-execution.json");
-                        final boolean hasInteractiveReport = consoleJson.exists() && consoleJson.isFile();
+                        final List<Map<String, String>> tests = new ArrayList<>();
+                        final File[] consoleFiles = dir.listFiles((d, name) -> name.startsWith("console-execution") && name.endsWith(".json"));
+                        boolean hasInteractiveReport = false;
+                        if (consoleFiles != null) {
+                            for (final File cf : consoleFiles) {
+                                hasInteractiveReport = true;
+                                String testName = cf.getName().substring("console-execution".length());
+                                if (testName.startsWith("-")) testName = testName.substring(1);
+                                if (testName.endsWith(".json")) testName = testName.substring(0, testName.length() - 5);
+                                if (testName.isEmpty()) testName = "Default";
+                                
+                                String testStatus = "Unknown";
+                                final Map<String, String> testMap = new HashMap<>();
+                                
+                                // Try to extract official name and status from the JSON file
+                                try {
+                                    final String content = Files.readString(cf.toPath(), StandardCharsets.UTF_8);
+                                    final Map<String, Object> map = gson.fromJson(content, Map.class);
+                                    if (map != null) {
+                                        if (map.containsKey("testName")) {
+                                            testName = String.valueOf(map.get("testName"));
+                                        }
+                                        if (map.containsKey("status")) {
+                                            testStatus = String.valueOf(map.get("status"));
+                                        } else {
+                                            // Fallback: check reasoningFailed or if any step failed
+                                            boolean hasFailedStep = false;
+                                            if (map.containsKey("reasoningFailed") && Boolean.TRUE.equals(map.get("reasoningFailed"))) {
+                                                hasFailedStep = true;
+                                            }
+                                            if (!hasFailedStep && map.containsKey("steps")) {
+                                                final List<Map<String, Object>> steps = (List<Map<String, Object>>) map.get("steps");
+                                                if (steps != null) {
+                                                    for (Map<String, Object> step : steps) {
+                                                        if ("failed".equals(step.get("status"))) {
+                                                            hasFailedStep = true;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            testStatus = hasFailedStep ? "Failed" : "Passed";
+                                        }
+                                        if (map.containsKey("browser")) {
+                                            testMap.put("browser", String.valueOf(map.get("browser")));
+                                        }
+                                        if (map.containsKey("stats")) {
+                                            final Map<String, Object> stats = (Map<String, Object>) map.get("stats");
+                                            if (stats != null && stats.containsKey("durationMs")) {
+                                                testMap.put("durationMs", String.valueOf(stats.get("durationMs")));
+                                            }
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    // ignore and use fallback
+                                }
+                                
+                                testMap.put("name", testName);
+                                testMap.put("file", cf.getName());
+                                testMap.put("status", testStatus);
+                                tests.add(testMap);
+                            }
+                        }
 
-                        final Map<String, String> item = new HashMap<>();
+                        final Map<String, Object> item = new HashMap<>();
                         item.put("id", dir.getName());
                         item.put("status", status);
                         item.put("timestamp", timestamp);
                         item.put("total", total);
                         item.put("passed", passed);
                         item.put("failed", failed);
-                        item.put("hasReport", String.valueOf(hasReport));
-                        item.put("hasInteractiveReport", String.valueOf(hasInteractiveReport));
+                        item.put("hasReport", hasReport);
+                        item.put("hasInteractiveReport", hasInteractiveReport);
+                        item.put("tests", tests);
                         historyList.add(item);
                     }
                 }
@@ -1287,12 +1404,21 @@ public final class NeodymiumAuraManager {
             final File logFile = new File(destDir, "execution.log");
             Files.write(logFile.toPath(), currentRunLogs, StandardCharsets.UTF_8);
 
-            final File consoleExecutionFile = new File("target/console-execution.json");
-            if (consoleExecutionFile.exists()) {
-                final File destConsoleFile = new File(destDir, "console-execution.json");
-                Files.copy(consoleExecutionFile.toPath(), destConsoleFile.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING);
-                LOGGER.info("[Aura Server] Archived console-execution.json to {}", destDir.getName());
+            final File targetDir = new File("target");
+            final File[] consoleFiles = targetDir.listFiles((dir, name) -> name.startsWith("console-execution") && name.endsWith(".json"));
+            if (consoleFiles != null) {
+                for (final File consoleFile : consoleFiles) {
+                    final File destConsoleFile = new File(destDir, consoleFile.getName());
+                    Files.copy(consoleFile.toPath(), destConsoleFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+                LOGGER.info("[Aura Server] Archived {} console-execution JSONs to {}", consoleFiles.length, destDir.getName());
+            }
+
+            final File screenshotsDir = new File("target/ai-console-screenshots");
+            if (screenshotsDir.exists() && screenshotsDir.isDirectory()) {
+                final File destScreenshots = new File(destDir, "screenshots");
+                copyDirectory(screenshotsDir, destScreenshots);
+                LOGGER.info("[Aura Server] Archived screenshots to {}", destDir.getName());
             }
 
             LOGGER.info("[Aura Server] Allure report copied to history: {}", destDir.getName());
