@@ -56,7 +56,7 @@ function connectSSE() {
 function tryStaticLoad() {
     const params = new URLSearchParams(window.location.search);
     const dataUrl = params.get('dataUrl') || params.get('data') || '/run_data.json';
-    
+
     // Extract history run ID if loaded from history
     if (dataUrl.includes('/api/allure/report/')) {
         const parts = dataUrl.split('/');
@@ -65,7 +65,7 @@ function tryStaticLoad() {
             window.historyRunId = parts[4];
         }
     }
-    
+
     fetch(dataUrl)
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(data => {
@@ -696,7 +696,7 @@ function updateDataBinding(key, val) {
         // Also update top test data body if visible
         const topTestDataBody = document.getElementById('topTestDataBody');
         if (topTestDataBody) {
-            const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath'];
+            const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps'];
             const keys = Object.keys(currentState.dataBindings).filter(k => !excludedKeys.includes(k));
             topTestDataBody.innerHTML = keys.map(k => `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
@@ -1317,7 +1317,7 @@ function setButtonsEnabled(enabled) {
     const autoBtn = document.getElementById('btnAuto');
     const btnCancel = document.getElementById('btnCancel');
     const isEditing = document.querySelector('.step-card.editing') !== null;
-    
+
     // Disable Drag/Drop if editing
     const blocks = document.querySelectorAll('.steps-block-content');
     blocks.forEach(block => {

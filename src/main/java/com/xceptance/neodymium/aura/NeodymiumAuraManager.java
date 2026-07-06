@@ -50,6 +50,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -104,6 +105,10 @@ public final class NeodymiumAuraManager {
     private static final AtomicBoolean runningQueue = new AtomicBoolean(false);
     private static final AtomicBoolean manuallyStopped = new AtomicBoolean(false);
     private static final AtomicReference<String> activeFile = new AtomicReference<>("");
+    /** Wall-clock start time in ms of the current (or most recent) queue run. */
+    private static final AtomicLong runStartTimeMs = new AtomicLong(0);
+    /** The RunRequest that initiated the most recent queue execution, used for archiving metadata. */
+    private static final AtomicReference<RunRequest> lastRunRequest = new AtomicReference<>(null);
     private static final AtomicReference<InteractiveConsoleEngine> currentConsoleEngine = new AtomicReference<>(null);
 
     private static final ScheduledExecutorService shutdownScheduler = Executors
@@ -198,8 +203,7 @@ public final class NeodymiumAuraManager {
                         try {
                             httpsServer = HttpsServer.create(new InetSocketAddress("0.0.0.0", httpsPort), 0);
                         } catch (final IOException e) {
-                            throw new IOException("Failed to start Neodymium Aura Manager secure server: Port "
-                                    + httpsPort + " is already in use.", e);
+                            throw new IOException("Failed to start Neodymium Aura Manager secure server: Port " + httpsPort + " is already in use.", e);
                         }
                     } else {
                         while (httpsPort < port + 100) {
@@ -767,6 +771,10 @@ public final class NeodymiumAuraManager {
                         String total = "-";
                         String passed = "-";
                         String failed = "-";
+                        long durationMs = 0L;
+                        boolean headless = false;
+                        boolean allureEnabled = true;
+                        boolean videoEnabled = false;
                         final File metadataFile = new File(dir, "metadata.json");
                         if (metadataFile.exists() && metadataFile.isFile()) {
                             try {
@@ -790,6 +798,22 @@ public final class NeodymiumAuraManager {
                                     if (map.containsKey("failed")) {
                                         failed = String.valueOf(
                                                 Math.round(Double.parseDouble(String.valueOf(map.get("failed")))));
+                                    }
+                                    if (map.containsKey("durationMs")) {
+                                        try {
+                                            durationMs = Math.round(Double.parseDouble(String.valueOf(map.get("durationMs"))));
+                                        } catch (final NumberFormatException ignore) {
+                                            // keep default
+                                        }
+                                    }
+                                    if (map.containsKey("headless")) {
+                                        headless = Boolean.parseBoolean(String.valueOf(map.get("headless")));
+                                    }
+                                    if (map.containsKey("allureEnabled")) {
+                                        allureEnabled = Boolean.parseBoolean(String.valueOf(map.get("allureEnabled")));
+                                    }
+                                    if (map.containsKey("videoEnabled")) {
+                                        videoEnabled = Boolean.parseBoolean(String.valueOf(map.get("videoEnabled")));
                                     }
                                 }
                             } catch (final Exception e) {
@@ -827,7 +851,33 @@ public final class NeodymiumAuraManager {
                                             testName = String.valueOf(map.get("testName"));
                                         }
                                         if (map.containsKey("status")) {
-                                            testStatus = String.valueOf(map.get("status"));
+                                            final String rawStatus = String.valueOf(map.get("status"));
+                                            // Only accept terminal values — the JSON always contains
+                                            // "running" while executing, which we must not use as
+                                            // the final outcome. Fall through to the step-checker below.
+                                            if ("Passed".equals(rawStatus) || "Failed".equals(rawStatus)) {
+                                                testStatus = rawStatus;
+                                            } else {
+                                                // Non-terminal status: derive from step results
+                                                boolean hasFailedStep = false;
+                                                if (map.containsKey("reasoningFailed")
+                                                        && Boolean.TRUE.equals(map.get("reasoningFailed"))) {
+                                                    hasFailedStep = true;
+                                                }
+                                                if (!hasFailedStep && map.containsKey("steps")) {
+                                                    final List<Map<String, Object>> steps =
+                                                            (List<Map<String, Object>>) map.get("steps");
+                                                    if (steps != null) {
+                                                        for (final Map<String, Object> step : steps) {
+                                                            if ("failed".equals(step.get("status"))) {
+                                                                hasFailedStep = true;
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                testStatus = hasFailedStep ? "Failed" : "Passed";
+                                            }
                                         } else {
                                             // Fallback: check reasoningFailed or if any step failed
                                             boolean hasFailedStep = false;
@@ -858,6 +908,22 @@ public final class NeodymiumAuraManager {
                                                 testMap.put("durationMs", String.valueOf(stats.get("durationMs")));
                                             }
                                         }
+                                        // testId — the clean dataset identifier (e.g. "Dataset2"), stored directly
+                                        if (map.containsKey("testId") && map.get("testId") != null) {
+                                            testMap.put("testId", String.valueOf(map.get("testId")));
+                                        }
+                                        // yamlLabel — clean name derived from the YAML source filename
+                                        // stored as-is from the source file path, no ugly test name parsing
+                                        if (map.containsKey("yamlSource") && map.get("yamlSource") != null) {
+                                            final String src = String.valueOf(map.get("yamlSource"));
+                                            final String base = new File(src).getName();
+                                            testMap.put("yamlLabel", base.endsWith(".yaml")
+                                                    ? base.substring(0, base.length() - 5) : base);
+                                        }
+                                        // playbookMode — "llm" | "playbook" | "healing"
+                                        if (map.containsKey("playbookMode") && map.get("playbookMode") != null) {
+                                            testMap.put("playbookMode", String.valueOf(map.get("playbookMode")));
+                                        }
                                     }
                                 } catch (Exception e) {
                                     // ignore and use fallback
@@ -866,6 +932,9 @@ public final class NeodymiumAuraManager {
                                 testMap.put("name", testName);
                                 testMap.put("file", cf.getName());
                                 testMap.put("status", testStatus);
+                                // Check whether a per-test log was written during archiving
+                                final String safeLogName = testName.replaceAll("[^a-zA-Z0-9_\\-]", "_") + ".log";
+                                testMap.put("hasLog", String.valueOf(new File(dir, safeLogName).exists()));
                                 tests.add(testMap);
                             }
                         }
@@ -877,12 +946,23 @@ public final class NeodymiumAuraManager {
                         item.put("total", total);
                         item.put("passed", passed);
                         item.put("failed", failed);
+                        item.put("durationMs", durationMs);
+                        item.put("headless", headless);
+                        item.put("allureEnabled", allureEnabled);
+                        item.put("videoEnabled", videoEnabled);
                         item.put("hasReport", hasReport);
                         item.put("hasInteractiveReport", hasInteractiveReport);
                         item.put("tests", tests);
                         historyList.add(item);
                     }
                 }
+            }
+
+            // Assign run numbers: the list is sorted newest-first (by directory name desc).
+            // Run number 1 is the oldest run; the newest run gets the highest number.
+            final int total2 = historyList.size();
+            for (int idx = 0; idx < total2; idx++) {
+                historyList.get(idx).put("runNumber", total2 - idx);
             }
 
             sendJsonResponse(exchange, 200, gson.toJson(historyList));
@@ -917,7 +997,10 @@ public final class NeodymiumAuraManager {
             }
 
             LOGGER.info("[Aura Server] Spawning thread to compile Allure report...");
-            final Thread thread = new Thread(() -> generateAllureReport(List.of(), true));
+
+            String body = readBody(exchange);
+            final RunRequest req = gson.fromJson(body, RunRequest.class);
+            final Thread thread = new Thread(() -> generateAllureReport(List.of(), true, req));
             thread.setName("NeodymiumAuraManualAllureCompiler");
             thread.start();
 
@@ -1124,6 +1207,9 @@ public final class NeodymiumAuraManager {
                 manuallyStopped.set(false);
                 currentRunLogs.clear();
                 currentRunEvents.clear();
+                // Record start time and request for metadata archiving
+                runStartTimeMs.set(System.currentTimeMillis());
+                lastRunRequest.set(req);
 
                 final List<Map.Entry<String, List<String>>> entries = new ArrayList<>(datasetsByFile.entrySet());
                 for (int i = 0; i < entries.size(); i++) {
@@ -1321,7 +1407,7 @@ public final class NeodymiumAuraManager {
                 {
                     LOGGER.info("[Aura Server] Auto-generating Allure report as requested.");
                     final List<String> uniqueFiles = new ArrayList<>(datasetsByFile.keySet());
-                    generateAllureReport(uniqueFiles, req.history);
+                    generateAllureReport(uniqueFiles, req.history, req);
                 }
 
                 LOGGER.info("[Aura Server] Queue execution completed. Total: {}, Passed: {}, Failed: {}",
@@ -1356,7 +1442,7 @@ public final class NeodymiumAuraManager {
         thread.start();
     }
 
-    private static void generateAllureReport(final List<String> files, final boolean addToHistory) {
+    private static void generateAllureReport(final List<String> files, final boolean addToHistory, final RunRequest req) {
         broadcastLog("\n[INFO] Compiling Allure report...");
         final List<String> command = new ArrayList<>();
         final String os = System.getProperty("os.name").toLowerCase();
@@ -1393,7 +1479,7 @@ public final class NeodymiumAuraManager {
                 LOGGER.info("[Aura Server] Allure report successfully compiled.");
                 broadcastLog("[INFO] Allure report successfully compiled.");
                 if (addToHistory) {
-                    copyAllureReportToHistory(files);
+                    copyAllureReportToHistory(files, req);
                 }
             } else {
                 LOGGER.error("[Aura Server] Allure report compilation failed with exit code: {}", exitCode);
@@ -1406,7 +1492,15 @@ public final class NeodymiumAuraManager {
         }
     }
 
-    private static void copyAllureReportToHistory(final List<String> files) {
+    /**
+     * Copies the compiled Allure report to the history directory and writes
+     * run metadata (status, timing, test counts, run options) as well as
+     * per-test-case log files split from the combined execution log.
+     *
+     * @param files the YAML test files that were part of this run
+     * @param req   the original run request carrying headless/allure/video flags
+     */
+    private static void copyAllureReportToHistory(final List<String> files, final RunRequest req) {
         final File srcDir = new File("target/site/allure-maven-plugin");
         if (!srcDir.exists() || !srcDir.isDirectory()) {
             LOGGER.error("[Aura Server] Allure report source directory not found: {}", srcDir.getAbsolutePath());
@@ -1428,18 +1522,31 @@ public final class NeodymiumAuraManager {
         try {
             copyDirectory(srcDir, destDir);
 
-            // Write metadata.json
+            // Write metadata.json with full run details including timing and run options
             final File metadataFile = new File(destDir, "metadata.json");
             final String status = manuallyStopped.get() ? "Aborted" : (globalFailed.get() == 0 ? "Passed" : "Failed");
+            final long durationMs = System.currentTimeMillis() - runStartTimeMs.get();
+            final boolean headless = req != null && req.headless;
+            final boolean allureEnabled = req != null && req.allure;
+            final boolean videoEnabled = req != null && req.video;
             final String metadataContent = String.format(
-                    "{\n  \"status\": \"%s\",\n  \"timestamp\": \"%s\",\n  \"total\": %d,\n  \"passed\": %d,\n  \"failed\": %d\n}",
-                    status, timestamp, globalTestsRun.get(), globalPassed.get(), globalFailed.get());
+                    "{%n  \"status\": \"%s\",%n  \"timestamp\": \"%s\",%n  \"total\": %d,%n  \"passed\": %d,%n  \"failed\": %d,%n  \"durationMs\": %d,%n  \"headless\": %b,%n  \"allureEnabled\": %b,%n  \"videoEnabled\": %b%n}",
+                    status, timestamp, globalTestsRun.get(), globalPassed.get(), globalFailed.get(),
+                    durationMs, headless, allureEnabled, videoEnabled);
             Files.writeString(metadataFile.toPath(), metadataContent, StandardCharsets.UTF_8);
 
+            // Write the combined execution log for the full run
             final File logFile = new File(destDir, "execution.log");
+            final List<String> logSnapshot;
             synchronized (currentRunLogs) {
-                Files.write(logFile.toPath(), currentRunLogs, StandardCharsets.UTF_8);
+                logSnapshot = new ArrayList<>(currentRunLogs);
             }
+            Files.write(logFile.toPath(), logSnapshot, StandardCharsets.UTF_8);
+
+            // Write per-test-case log files by splitting the combined log at Surefire test boundaries.
+            // Surefire emits "Running <ClassName>" at the start of each test class; we use these
+            // markers to segment the combined log into individual per-test log files.
+            writePerTestLogs(destDir, logSnapshot);
 
             final File targetDir = new File("target/allure-results");
             final File[] consoleFiles = targetDir
@@ -1466,6 +1573,88 @@ public final class NeodymiumAuraManager {
         } catch (final IOException e) {
             LOGGER.error("[Aura Server] Failed to copy Allure report to history", e);
             broadcastLog("[ERROR] Failed to copy Allure report to history: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Splits the combined run execution log into individual per-test-case log files.
+     * <p>
+     * Maven Surefire emits a {@code "Running <FullClassName>"} line at the start of each
+     * test class. This method uses those boundaries to partition the combined log and writes
+     * one {@code <sanitizedTestName>.log} file per test into {@code destDir}.
+     * </p>
+     * <p>
+     * The sanitized file name is derived from the test name stored in the
+     * {@code console-execution-*.json} files already present in {@code destDir}, matched by
+     * the Surefire class name that appears in the log boundary line. This allows the frontend
+     * to fetch individual logs via the existing
+     * {@code /api/allure/report/<runId>/<testName>.log} endpoint.
+     * </p>
+     *
+     * @param destDir     the history report directory where log files are written
+     * @param logSnapshot an immutable snapshot of all log lines for this run
+     */
+    private static void writePerTestLogs(final File destDir, final List<String> logSnapshot) {
+        // Pattern matches Surefire's "Running com.example.SomeTest" boundary lines
+        final Pattern surefireBoundary = Pattern.compile("^Running\\s+(\\S+)$");
+
+        // Build a map from Surefire class name fragment → human test name from console JSON files
+        // Key: last part of the class name (e.g. "Aura_my_test_yaml_Test" → testName from JSON)
+        final Map<String, String> classToTestName = new HashMap<>();
+        final File[] consoleFiles = destDir
+                .listFiles((d, name) -> name.startsWith("console-execution") && name.endsWith(".json"));
+        if (consoleFiles != null) {
+            for (final File cf : consoleFiles) {
+                try {
+                    final String content = Files.readString(cf.toPath(), StandardCharsets.UTF_8);
+                    final Map<?, ?> map = gson.fromJson(content, Map.class);
+                    if (map != null && map.containsKey("testName")) {
+                        final String testName = String.valueOf(map.get("testName"));
+                        // The Surefire class name ends with the generated class suffix; we match loosely
+                        // by stripping the package prefix from the Running-line and comparing suffixes.
+                        final String cfBase = cf.getName()
+                                .replace("console-execution-", "")
+                                .replace(".json", "");
+                        classToTestName.put(cfBase, testName);
+                    }
+                } catch (final Exception ignore) {
+                    // ignore, best-effort only
+                }
+            }
+        }
+
+        // Walk through log lines and collect segments between test boundaries
+        final Map<String, List<String>> segmentsByClass = new LinkedHashMap<>();
+        String currentClass = null;
+
+        for (final String line : logSnapshot) {
+            final Matcher m = surefireBoundary.matcher(line.trim());
+            if (m.find()) {
+                // Extract the simple class name (last segment after the last dot)
+                final String fqcn = m.group(1);
+                currentClass = fqcn.contains(".") ? fqcn.substring(fqcn.lastIndexOf('.') + 1) : fqcn;
+                segmentsByClass.computeIfAbsent(currentClass, k -> new ArrayList<>());
+            }
+            if (currentClass != null) {
+                segmentsByClass.get(currentClass).add(line);
+            }
+        }
+
+        // Write one .log file per detected class/test segment
+        for (final Map.Entry<String, List<String>> entry : segmentsByClass.entrySet()) {
+            final String classKey = entry.getKey();
+            final List<String> lines = entry.getValue();
+
+            // Resolve the human-readable test name; fall back to the class key itself
+            final String testName = classToTestName.getOrDefault(classKey, classKey);
+            final String safeLogName = testName.replaceAll("[^a-zA-Z0-9_\\-]", "_") + ".log";
+            final File logFile = new File(destDir, safeLogName);
+            try {
+                Files.write(logFile.toPath(), lines, StandardCharsets.UTF_8);
+                LOGGER.info("[Aura Server] Wrote per-test log: {}", safeLogName);
+            } catch (final IOException e) {
+                LOGGER.warn("[Aura Server] Failed to write per-test log {}: {}", safeLogName, e.getMessage());
+            }
         }
     }
 

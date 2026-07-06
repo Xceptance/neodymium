@@ -1949,6 +1949,25 @@ public class AiAgent
             state.addProperty("playbookFile", pbFile != null ? pbFile.getAbsolutePath() : null);
         }
 
+        // Encode how this test was executed so the dashboard can display an accurate badge:
+        //  "llm"      — no playbook was involved; all actions were driven by the AI in real time
+        //  "playbook" — a playbook was replayed and all steps matched without any LLM healing
+        //  "healing"  — a playbook was used, but at least one step required LLM re-execution
+        final String playbookMode;
+        if (playbook == null || playbook.isRecording())
+        {
+            playbookMode = "llm";
+        }
+        else if (playbook.isChanged())
+        {
+            playbookMode = "healing";
+        }
+        else
+        {
+            playbookMode = "playbook";
+        }
+        state.addProperty("playbookMode", playbookMode);
+
         final JsonObject blocks = new JsonObject();
 
         AiTestRunResult runResult = null;

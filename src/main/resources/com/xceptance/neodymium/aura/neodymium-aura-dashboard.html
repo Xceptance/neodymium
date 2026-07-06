@@ -722,8 +722,82 @@
             margin: 0 -4px;
         }
 
-        .resizer-h:hover {
-            background: var(--border);
+        .resizer-h:hover, .resizer-h.dragging {
+            background: var(--accent);
+            opacity: 0.5;
+        }
+
+        /* ── Mini-runs vertical bar (State 4) ──────────────────────────────── */
+        .col-runs-mini {
+            width: 48px;
+            flex-shrink: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            overflow-y: auto;
+            overflow-x: hidden;
+            border-right: 1px solid var(--border);
+            background: var(--bg-panel);
+            gap: 4px;
+            padding: 8px 0;
+        }
+
+        .col-runs-mini-header {
+            font-size: 8px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .6px;
+            color: var(--text-secondary);
+            padding: 4px 0 6px;
+            text-align: center;
+        }
+
+        .mini-run-chip {
+            width: 38px;
+            padding: 5px 2px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            text-align: center;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.15s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            color: var(--text-secondary);
+        }
+
+        .mini-run-chip .chip-number {
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .mini-run-chip .chip-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .mini-run-chip.passed .chip-dot  { background: var(--success); }
+        .mini-run-chip.failed .chip-dot  { background: var(--danger); }
+
+        .mini-run-chip.selected {
+            border-color: var(--accent);
+            background: rgba(59, 130, 246, 0.12);
+            color: var(--accent);
+        }
+
+        .mini-run-chip:hover:not(.selected) {
+            background: var(--bg-hover);
+        }
+
+        /* ── Smooth column transitions ───────────────────────────────────────── */
+        #colRuns, #colTests, #colReport {
+            transition: width 0.2s ease;
         }
 
         .resizer-v {
@@ -812,6 +886,284 @@
 
         .delete-report-btn:hover {
             color: var(--danger);
+        }
+
+        /* Redesigned run history row layout */
+        .run-row-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .run-number {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            min-width: 28px;
+        }
+
+        .run-timestamp {
+            font-weight: 600;
+            font-size: 12px;
+            flex-grow: 1;
+        }
+
+        .run-duration-chip {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+            background: var(--bg-main);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1px 6px;
+            white-space: nowrap;
+        }
+
+        .run-stats-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+            margin-left: 36px;
+            font-size: 11px;
+        }
+
+        .run-stat-passed {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .run-stat-failed {
+            color: var(--danger);
+            font-weight: 600;
+        }
+
+        .run-actions-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 36px;
+        }
+
+        .run-action-btn {
+            background: var(--bg-main);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+
+        .run-action-btn:hover:not(:disabled) {
+            background: var(--border);
+        }
+
+        .run-action-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .run-action-btn.danger:hover {
+            color: var(--danger);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        .run-allure-note {
+            margin-left: 36px;
+            font-size: 10px;
+            color: var(--text-secondary);
+            font-style: italic;
+            margin-top: 2px;
+        }
+
+        /* Mini history widget inside test details */
+        .mini-history-strip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-main);
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            min-height: 32px;
+        }
+
+        .mini-history-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-right: 2px;
+        }
+
+        .mini-run-bubble {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 6px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+
+        .mini-run-bubble.passed {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.25);
+        }
+
+        .mini-run-bubble.failed {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--danger);
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+
+        .mini-run-bubble.selected {
+            box-shadow: 0 0 0 2px var(--accent);
+        }
+
+        .mini-run-bubble:hover {
+            filter: brightness(1.2);
+        }
+
+        .mini-run-bubble .bubble-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .mini-run-bubble.passed .bubble-dot {
+            background: var(--success);
+        }
+
+        .mini-run-bubble.failed .bubble-dot {
+            background: var(--danger);
+        }
+
+        .mini-log-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 10px;
+            padding: 1px 2px;
+            transition: color 0.15s;
+        }
+
+        .mini-log-btn:hover {
+            color: var(--accent);
+        }
+
+        /* Test case card redesign */
+        .test-card {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .test-card:hover {
+            background: var(--bg-hover);
+        }
+
+        .test-card.selected {
+            background: var(--bg-hover);
+            border-left: 3px solid var(--accent);
+        }
+
+        .test-card-title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .test-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .test-status-dot.passed {
+            background: var(--success);
+        }
+
+        .test-status-dot.failed {
+            background: var(--danger);
+        }
+
+        .test-card-label {
+            font-weight: 600;
+            font-size: 12px;
+            line-height: 1.3;
+            flex-grow: 1;
+            color: var(--text-primary);
+        }
+
+        .test-card-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-left: 16px;
+            flex-wrap: wrap;
+        }
+
+        .test-card-meta .meta-sep {
+            color: var(--border);
+        }
+
+        /* Playbook mode badge */
+        .pb-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 5px;
+            border-radius: 3px;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .pb-badge.llm {
+            background: rgba(139, 92, 246, 0.12);
+            color: #a78bfa;
+            border-color: rgba(139, 92, 246, 0.25);
+        }
+
+        .pb-badge.playbook {
+            background: rgba(59, 130, 246, 0.12);
+            color: var(--accent);
+            border-color: rgba(59, 130, 246, 0.25);
+        }
+
+        .pb-badge.healing {
+            background: rgba(245, 158, 11, 0.12);
+            color: #fbbf24;
+            border-color: rgba(245, 158, 11, 0.25);
+        }
+
+        .test-card-actions {
+            margin-left: 16px;
+            margin-top: 5px;
         }
 
         /* Toast Notification Styles */
@@ -1128,6 +1480,14 @@
 
         <!-- HISTORY & REPORTS VIEW -->
         <div id="reportViewContainer" class="workspace-layout" style="display: none;">
+
+            <!-- Mini-runs status bar: shown in State 4 (after step is selected in details iframe).
+                 A narrow vertical strip with one chip per run: run number + pass/fail dot. -->
+            <div id="colRunsMini" class="col-runs-mini">
+                <div class="col-runs-mini-header">Runs</div>
+                <!-- Populated by JS via refreshMiniRunsBar() -->
+            </div>
+
             <!-- Left Side: History List -->
             <div class="left-area" id="colRuns" style="width: 320px; flex-shrink: 0;">
                 <div class="panel" style="height: 100%;">
@@ -1154,29 +1514,28 @@
                     <div class="panel-header">
                         <span>Test Cases</span>
                     </div>
-                    <div style="flex-grow: 1; overflow-y: auto; padding: 0;">
-                        <table class="history-table" style="font-size: 13px;">
-                            <tbody id="historyTestsList">
-                                <!-- Populated by JS -->
-                            </tbody>
-                        </table>
+                    <div style="flex-grow: 1; overflow-y: auto; padding: 0;" id="historyTestsList">
+                        <!-- Populated by JS -->
                     </div>
                 </div>
             </div>
 
             <div class="resizer-h" id="historyResizer2" style="display: none;"></div>
 
+            <!-- Mini-tests status bar: shown in State 4 alongside colRunsMini.
+                 Mirrors the colRunsMini pattern for test cases. -->
+            <div id="colTestsMini" class="col-runs-mini">
+                <div class="col-runs-mini-header">Tests</div>
+                <!-- Populated by JS via refreshMiniTestsBar() -->
+            </div>
+
+            <div class="resizer-h" id="historyResizer3" style="display: none;"></div>
+
             <!-- Right Side: Interactive Console -->
             <div class="right-area" id="colReport" style="flex-grow: 1; min-width: 0;">
-                <div class="panel" style="height: 100%;">
+                <div class="panel" style="height: 100%; display: flex; flex-direction: column;">
                     <div class="panel-header">
                         <span>Test Case Details</span>
-                        <div id="historyReportActions" style="display: none;">
-                            <button class="btn btn-secondary" id="btnOpenAllure"
-                                style="padding: 4px 8px; margin-right: 8px;">Open Allure Report</button>
-                            <button class="btn btn-secondary" id="btnOpenLog" style="padding: 4px 8px;">View
-                                Log</button>
-                        </div>
                     </div>
                     <div style="flex: 1; position: relative;">
                         <iframe id="historyConsoleIframe" style="width: 100%; height: 100%; border: none;"></iframe>
@@ -1481,6 +1840,9 @@
             loadFiles();
             loadHistory();
             startPolling();
+            initResizers();
+            // Start history view in State 1 (full-width runs list)
+            applyHistoryState(1);
 
             document.getElementById('chatInput').addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
@@ -1646,6 +2008,262 @@
         let historyCached = [];
         let activeRunStats = { total: 0, passed: 0, failed: 0, running: false, startTime: null };
 
+        // ── History navigation state machine ─────────────────────────────────
+        // State 1: full-width runs list only
+        // State 2: runs (fixed) | tests (flex-grow)
+        // State 3: runs (fixed) | tests (fixed) | details (flex-grow)
+        // State 4: mini-runs bar (48px) | tests (fixed) | details (flex-grow, wide)
+        let historyNavState = 1;
+        let savedRunsWidth  = 280;   // remembered when collapsing to mini-bar
+        let savedTestsWidth = 240;   // remembered across state transitions
+
+        /**
+         * Applies one of the four layout states to the history view columns.
+         * All column show/hide and width management is centralised here to
+         * avoid scattered inline style mutations across multiple functions.
+         *
+         * @param {number} n - target state (1–4)
+         */
+        function applyHistoryState(n) {
+            historyNavState = n;
+            const colRuns      = document.getElementById('colRuns');
+            const colTests     = document.getElementById('colTests');
+            const colReport    = document.getElementById('colReport');
+            const colRunsMini  = document.getElementById('colRunsMini');
+            const colTestsMini = document.getElementById('colTestsMini');
+            const r1           = document.getElementById('historyResizer1');
+            const r2           = document.getElementById('historyResizer2');
+            const r3           = document.getElementById('historyResizer3');
+            if (!colRuns || !colTests || !colReport) return;
+
+            // Reset all columns to a clean slate before applying state
+            [colRuns, colTests, colReport].forEach(el => {
+                el.style.display    = '';
+                el.style.flexGrow   = '0';
+                el.style.flexShrink = '1';
+                el.style.minWidth   = '0';
+                el.style.width      = '';
+                el.style.flex       = '';
+            });
+            if (colRunsMini)  colRunsMini.style.display  = 'none';
+            if (colTestsMini) colTestsMini.style.display = 'none';
+            if (r1) r1.style.display = 'none';
+            if (r2) r2.style.display = 'none';
+            if (r3) r3.style.display = 'none';
+
+            switch (n) {
+                case 1:
+                    // Full-width runs list — tests and details hidden
+                    colRuns.style.flex  = '1 1 0';
+                    colTests.style.display  = 'none';
+                    colReport.style.display = 'none';
+                    break;
+
+                case 2:
+                    // Runs | Tests — equal 50/50 split, draggable to rebalance
+                    colRuns.style.flex   = '1 1 0';
+                    colTests.style.flex  = '1 1 0';
+                    colTests.style.display  = 'flex';
+                    colReport.style.display = 'none';
+                    if (r1) r1.style.display = 'block';
+                    break;
+
+                case 3:
+                    // Runs | Tests | Details — equal three-way split
+                    colRuns.style.flex   = '1 1 0';
+                    colTests.style.flex  = '1 1 0';
+                    colTests.style.display  = 'flex';
+                    colReport.style.flex = '1 1 0';
+                    if (r1) r1.style.display = 'block';
+                    if (r2) r2.style.display = 'block';
+                    break;
+
+                case 4:
+                    // Mini-runs (48px) | Mini-tests (48px) | Details (full flex-grow)
+                    colRuns.style.display       = 'none';
+                    colTests.style.display      = 'none';
+                    if (colRunsMini)  colRunsMini.style.display  = 'flex';
+                    if (colTestsMini) colTestsMini.style.display = 'flex';
+                    colReport.style.flex        = '1 1 0';
+                    if (r3) r3.style.display = 'block';
+                    refreshMiniRunsBar();
+                    refreshMiniTestsBar();
+                    break;
+            }
+        }
+
+        /**
+         * Populates the mini-runs vertical chip bar with one chip per archived run.
+         * The currently loaded run is highlighted with an accent border.
+         */
+        function refreshMiniRunsBar() {
+            const bar = document.getElementById('colRunsMini');
+            if (!bar) return;
+            const header = bar.querySelector('.col-runs-mini-header');
+            bar.innerHTML = '';
+            if (header) bar.appendChild(header);
+            historyCached.forEach(run => {
+                const isPassed  = run.status === 'Passed';
+                const isCurrent = run.id === currentReportId;
+                const chip = document.createElement('div');
+                chip.className = 'mini-run-chip ' + (isPassed ? 'passed' : 'failed') + (isCurrent ? ' selected' : '');
+                chip.title = '#' + (run.runNumber || '?') + ' \u00b7 ' + (run.status || '') + (run.durationMs ? ' \u00b7 ' + (run.durationMs / 1000).toFixed(1) + 's' : '');
+                chip.innerHTML = `<span class="chip-number">#${run.runNumber || '?'}</span><span class="chip-dot"></span>`;
+                chip.addEventListener('click', () => onMiniRunChipClick(run.id));
+                bar.appendChild(chip);
+            });
+        }
+
+        /**
+         * Populates the mini-tests vertical chip bar (State 4) with one chip per test
+         * in the currently loaded run. Clicking a chip re-opens that test in State 3.
+         */
+        function refreshMiniTestsBar() {
+            const bar = document.getElementById('colTestsMini');
+            if (!bar) return;
+            const header = bar.querySelector('.col-runs-mini-header');
+            bar.innerHTML = '';
+            if (header) bar.appendChild(header);
+            const run = historyCached.find(r => r.id === currentReportId);
+            const tests = (run && run.tests) ? run.tests : [];
+            tests.forEach(t => {
+                const isPassed  = t.status === 'Passed';
+                const isCurrent = t.file === currentTestFile;
+                const chip = document.createElement('div');
+                chip.className = 'mini-run-chip ' + (isPassed ? 'passed' : 'failed') + (isCurrent ? ' selected' : '');
+                // Short label: use yamlLabel or testId if available, otherwise first 6 chars of name
+                const shortLabel = t.yamlLabel || t.testId || (t.name ? t.name.substring(0, 6) : '?');
+                chip.title = (t.yamlLabel || t.name || t.testId || '') + ' \u00b7 ' + (t.status || '');
+                chip.innerHTML = `<span class="chip-number" style="font-size:8px;word-break:break-all;line-height:1.1;">${shortLabel}</span><span class="chip-dot"></span>`;
+                chip.addEventListener('click', () => {
+                    if (isCurrent) {
+                        // Same test: expand back to State 3
+                        applyHistoryState(3);
+                    } else {
+                        // Different test: load it and go to State 3
+                        loadInteractiveTest(currentReportId, t.file, t.name, null);
+                    }
+                });
+                bar.appendChild(chip);
+            });
+        }
+
+        /**
+         * Handles a click on a mini-run chip in the State-4 sidebar.
+         * - Same run as currently loaded → expand back to State 3.
+         * - Different run → switch to State 2 for that run (user can then select a test).
+         *
+         * @param {string} runId - the ID of the clicked run
+         */
+        function onMiniRunChipClick(runId) {
+            if (runId === currentReportId) {
+                // Same run: restore to State 3 (full runs panel back)
+                applyHistoryState(3);
+            } else {
+                // Different run: go to State 2 and load its tests
+                selectHistoryRun(runId);
+            }
+        }
+
+        /**
+         * Initialises drag-to-resize behaviour for both history column resizers.
+         * Dragging a resizer below its auto-collapse threshold triggers a state
+         * transition instead of rendering an unusably narrow column.
+         *
+         * Thresholds:
+         *   historyResizer1 (colRuns)  < 160px → State 4 (from State 3) / State 1 (from State 2)
+         *   historyResizer2 (colTests) < 140px → State 4 mini-tests bar (from State 3)
+         *   historyResizer3            free drag only (details pane, no collapse)
+         */
+        function initResizers() {
+            setupResizer('historyResizer1', 'colRuns', 160, () => {
+                if (historyNavState === 3) {
+                    applyHistoryState(4);
+                } else if (historyNavState === 2) {
+                    applyHistoryState(1);
+                }
+            }, null);
+
+            setupResizer('historyResizer2', 'colTests', 140, () => {
+                if (historyNavState === 3) {
+                    applyHistoryState(4);
+                }
+                // In State 2: tests column is flex-grow so dragging left will shrink it naturally
+            }, null);
+
+            // Resizer3 sits between the mini-bars block and colReport in State 4.
+            // No auto-collapse: the details pane must always remain visible.
+            setupResizer('historyResizer3', 'colReport', 300, null, null);
+        }
+
+        /**
+         * Sets up mousedown drag behaviour on a resizer element, resizing the
+         * target column. Triggers onCollapse when width drops below minWidth.
+         *
+         * @param {string}   resizerId  - ID of the resizer div
+         * @param {string}   colId      - ID of the column being resized (left of resizer)
+         * @param {number}   minWidth   - auto-collapse threshold in pixels
+         * @param {Function} onCollapse - called when width drops below minWidth
+         * @param {Function} onResize   - called on every valid resize with new width
+         */
+        function setupResizer(resizerId, colId, minWidth, onCollapse, onResize) {
+            const resizer = document.getElementById(resizerId);
+            const col     = document.getElementById(colId);
+            if (!resizer || !col) return;
+
+            let startX = 0;
+            let startW = 0;
+            let collapsed = false;
+
+            resizer.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                startX    = e.clientX;
+                startW    = col.offsetWidth;
+                collapsed = false;
+                resizer.classList.add('dragging');
+                document.body.style.cursor    = 'col-resize';
+                document.body.style.userSelect = 'none';
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+
+            function onMouseMove(e) {
+                const newW = startW + (e.clientX - startX);
+                if (onCollapse && newW < minWidth) {
+                    if (!collapsed) {
+                        collapsed = true;
+                        cleanup();
+                        onCollapse(newW);
+                    }
+                } else if (newW >= (onCollapse ? minWidth : 0)) {
+                    col.style.width      = newW + 'px';
+                    col.style.flexShrink = '0';
+                    col.style.flex       = 'none';
+                    if (onResize) onResize(newW);
+                }
+            }
+
+            function onMouseUp() { cleanup(); }
+
+            function cleanup() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                resizer.classList.remove('dragging');
+                document.body.style.cursor     = '';
+                document.body.style.userSelect = '';
+            }
+        }
+
+        // ── postMessage listener ─────────────────────────────────────────────
+        // interactive_console.js already fires postMessage({ action: 'stepSelected' })
+        // whenever the user clicks a step card (line 1092). We intercept it here
+        // to trigger the State-3 → State-4 transition (widen details pane).
+        window.addEventListener('message', (e) => {
+            if (e.data && e.data.action === 'stepSelected' && historyNavState === 3) {
+                applyHistoryState(4);
+            }
+        });
+
         function formatHistoryTimestamp(ts) {
             if (!ts || ts.length < 15) return ts;
             try {
@@ -1678,6 +2296,16 @@
 
         let currentReportId = null;
 
+        /** Converts a duration in milliseconds to a human-readable string like "3m 12s" or "45s". */
+        function formatDuration(ms) {
+            if (!ms || ms <= 0) return '';
+            const totalSec = Math.round(ms / 1000);
+            if (totalSec < 60) return totalSec + 's';
+            const min = Math.floor(totalSec / 60);
+            const sec = totalSec % 60;
+            return sec > 0 ? min + 'm ' + sec + 's' : min + 'm';
+        }
+
         function renderHistoryTable() {
             let rowsHtml = '';
 
@@ -1687,12 +2315,12 @@
 
                 rowsHtml += `
                     <tr class="history-row" style="cursor: pointer; border-left: 3px solid var(--accent);" onclick="openCurrentRunView()">
-                        <td style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
-                            <div class="run-details-text">
-                                <div style="font-weight: 500; margin-bottom: 4px;">${formattedTime}</div>
-                                <div>${statusBadge}</div>
+                        <td style="padding: 10px 12px;">
+                            <div class="run-row-header">
+                                <span class="run-number">#—</span>
+                                <span class="run-timestamp">${formattedTime}</span>
+                                ${statusBadge}
                             </div>
-                            <div class="run-status-content" style="display: none;"><i class="fa-solid fa-circle-notch spinner" style="color: var(--accent);"></i></div>
                         </td>
                     </tr>
                 `;
@@ -1705,42 +2333,58 @@
                     const isSuccess = item.status === 'Passed';
                     const statusBadge = isSuccess
                         ? `<span class="badge-success">Passed</span>`
-                        : `<span class="badge-failed">Failed</span>`;
-
-                    const minIcon = isSuccess
-                        ? `<i class="fa-solid fa-check-circle" style="color: var(--success); font-size: 18px;" title="Passed"></i>`
-                        : `<i class="fa-solid fa-times-circle" style="color: var(--danger); font-size: 18px;" title="Failed"></i>`;
+                        : `<span class="badge-failed">${item.status || 'Failed'}</span>`;
 
                     const formattedTime = formatHistoryTimestamp(item.timestamp || item.id.substring(0, 15));
+                    const durationLabel = formatDuration(item.durationMs);
+                    const runNum = item.runNumber ? '#' + item.runNumber : '';
 
                     const isSelected = item.id === currentReportId;
                     const selectedStyle = isSelected ? 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);' : '';
 
-                    const timeOnly = formattedTime.includes(',') ? formattedTime.split(',')[1].trim() : formattedTime;
+                    // Inline action buttons: Allure Report (disabled when not available), View Log, Delete
+                    const hasReport = item.hasReport === 'true' || item.hasReport === true;
+                    const allureEnabled = item.allureEnabled === true || item.allureEnabled === 'true';
+                    const allureTitle = (!allureEnabled)
+                        ? 'title="Allure was disabled for this run"'
+                        : (!hasReport ? 'title="Allure report not available"' : '');
+                    const allureDisabled = (!hasReport || !allureEnabled) ? 'disabled' : '';
+                    const allureAction = hasReport
+                        ? `onclick="event.stopPropagation(); window.open('/api/allure/report/${item.id}/index.html', '_blank')"`
+                        : '';
+
+                    const allureNote = (!allureEnabled)
+                        ? `<div class="run-allure-note"><i class="fa-solid fa-circle-info"></i> Allure was disabled for this run</div>`
+                        : '';
+
+                    // Passed/failed counts as clear text
+                    const passedCount = parseInt(item.passed) || 0;
+                    const failedCount = parseInt(item.failed) || 0;
 
                     return `
-                        <tr class="history-row" style="cursor: pointer; ${selectedStyle}" onclick="selectHistoryRun('${item.id}', ${item.hasReport === 'true'})">
+                        <tr class="history-row" style="cursor: pointer; ${selectedStyle}" onclick="selectHistoryRun('${item.id}', ${hasReport})">
                             <td style="padding: 10px 12px;">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                                    <div class="run-details-text" style="width: 100%;">
-                                        <div style="font-weight: 500; margin-bottom: 6px;">${formattedTime}</div>
-                                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                                            <div>${statusBadge}</div>
-                                            <span style="color: var(--text-muted); font-size: 11px;">
-                                                <i class="fa-solid fa-flask" aria-hidden="true" title="Total"></i> ${item.total || '-'}
-                                                <i class="fa-solid fa-check" style="color: var(--success); margin-left: 4px;" aria-hidden="true" title="Passed"></i> ${item.passed || '-'}
-                                                <i class="fa-solid fa-xmark" style="color: var(--danger); margin-left: 4px;" aria-hidden="true" title="Failed"></i> ${item.failed || '-'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="run-status-content" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;">
-                                        <div class="run-min-text" style="display: none; font-size: 10px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">${timeOnly}</div>
-                                        ${minIcon}
-                                    </div>
-                                    <button class="delete-report-btn" onclick="event.stopPropagation(); deleteReport('${item.id}')" title="Delete Report">
-                                        <i class="fa-solid fa-trash-can" style="font-size: 12px;"></i>
+                                <div class="run-row-header">
+                                    <span class="run-number">${runNum}</span>
+                                    <span class="run-timestamp">${formattedTime}</span>
+                                    ${statusBadge}
+                                    ${durationLabel ? `<span class="run-duration-chip"><i class="fa-regular fa-clock"></i> ${durationLabel}</span>` : ''}
+                                </div>
+                                <div class="run-stats-row">
+                                    <span class="run-stat-passed"><i class="fa-solid fa-check" aria-hidden="true"></i> ${passedCount} passed</span>
+                                    <span class="run-stat-failed"><i class="fa-solid fa-xmark" aria-hidden="true"></i> ${failedCount} failed</span>
+                                </div>
+                                <div class="run-actions-row">
+                                    <button class="run-action-btn" ${allureDisabled} ${allureTitle} ${allureAction}>
+                                        <i class="fa-solid fa-chart-bar"></i> Allure Report
                                     </button>
                                 </div>
+                                <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+                                    <button class="run-action-btn danger" style="font-size: 10px; padding: 2px 6px; opacity: 0.65;" onclick="event.stopPropagation(); deleteReport('${item.id}')" title="Delete this run">
+                                        <i class="fa-solid fa-trash-can"></i> Delete
+                                    </button>
+                                </div>
+                                ${allureNote}
                             </td>
                         </tr>
                     `;
@@ -1758,20 +2402,10 @@
 
             const run = historyCached.find(r => r.id === reportId);
 
-            // Show Tests column, remove minified class from runs
-            const colRuns = document.getElementById('colRuns');
-            colRuns.classList.remove('col-minimized');
-            colRuns.style.width = '320px';
+            // Transition to State 2: runs (fixed) | tests (flex-grow)
+            applyHistoryState(2);
 
-            const colTests = document.getElementById('colTests');
-            const historyResizer2 = document.getElementById('historyResizer2');
-            colTests.classList.remove('col-minimized');
-            colTests.style.display = 'flex';
-            colTests.style.width = '280px';
-            historyResizer2.style.display = 'block';
-
-            // Hide report details until test is selected
-            document.getElementById('colReport').classList.add('mobile-view');
+            // Show the "select a test" placeholder in the details panel and blank the iframe
             document.getElementById('historyPlaceholder').style.display = 'flex';
             document.getElementById('historyPlaceholder').innerHTML = `
                 <i class="fa-solid fa-arrow-left" style="font-size: 32px; margin-bottom: 16px; opacity: 0.5;"></i>
@@ -1779,74 +2413,90 @@
             `;
             document.getElementById('historyConsoleIframe').src = 'about:blank';
 
-            // Render Tests
+            // Render Tests (same as before)
             const testsList = document.getElementById('historyTestsList');
             if (!run || !run.tests || run.tests.length === 0) {
-                testsList.innerHTML = `<tr><td style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No tests available.</td></tr>`;
+                testsList.innerHTML = `<div style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 24px;">No tests available.</div>`;
             } else {
                 testsList.innerHTML = run.tests.map(t => {
                     const tSuccess = t.status === 'Passed';
-                    const tBadge = tSuccess
-                        ? `<i class="fa-solid fa-check" style="color: var(--success); margin-left: 6px;" title="Passed"></i>`
-                        : `<i class="fa-solid fa-xmark" style="color: var(--danger); margin-left: 6px;" title="Failed"></i>`;
+                    const dotClass = tSuccess ? 'passed' : 'failed';
 
-                    let browserIcon = 'fa-globe';
+                    // Browser icon: BrowserDefault / Default → Chrome; unknown → generic globe
+                    let browserIcon = 'fa-solid fa-globe';
+                    let browserLabel = t.browser || '';
                     if (t.browser) {
                         const b = t.browser.toLowerCase();
-                        if (b.includes('chrome')) browserIcon = 'fa-brands fa-chrome';
-                        else if (b.includes('firefox')) browserIcon = 'fa-brands fa-firefox';
-                        else if (b.includes('edge')) browserIcon = 'fa-brands fa-edge';
-                        else if (b.includes('safari')) browserIcon = 'fa-brands fa-safari';
-                        else browserIcon = 'fa-solid fa-globe';
-                    } else {
-                        browserIcon = 'fa-solid fa-globe';
+                        if (b.includes('chrome') || b === 'browserdefault' || b === 'default') {
+                            browserIcon = 'fa-brands fa-chrome';
+                            if (b === 'browserdefault' || b === 'default') browserLabel = 'Chrome';
+                        } else if (b.includes('firefox')) {
+                            browserIcon = 'fa-brands fa-firefox-browser';
+                        } else if (b.includes('edge')) {
+                            browserIcon = 'fa-brands fa-edge';
+                        } else if (b.includes('safari')) {
+                            browserIcon = 'fa-brands fa-safari';
+                        }
                     }
 
-                    const durationText = t.durationMs ? (t.durationMs / 1000).toFixed(1) + 's' : '';
+                    // Test label: yamlLabel (YAML filename without .yaml) + dataset ID
+                    const label = t.yamlLabel || t.name || 'Test';
+                    const datasetPart = t.testId ? ` · ${t.testId}` : '';
 
-                    return `
-                        <tr class="history-row" style="cursor: pointer;" onclick="loadInteractiveTest('${reportId}', '${t.file}', this)">
-                            <td class="test-row-content" style="padding: 10px 12px; font-size: 12px; word-break: break-all;">
-                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 4px;">
-                                    <div class="test-name-content" style="display: flex;">
-                                        <i class="fa-solid fa-file-code" style="color:var(--text-secondary); margin-right: 6px; margin-top: 2px;"></i> <span class="test-name-text" style="font-weight: 500;">${t.name}</span>
-                                    </div>
-                                    <div class="test-status-content">${tBadge}</div>
-                                </div>
-                                <div class="test-name-text" style="display: flex; gap: 12px; color: var(--text-muted); font-size: 11px; margin-left: 20px;">
-                                    <span title="${t.browser || 'Browser'}"><i class="${browserIcon}"></i> ${t.browser || ''}</span>
-                                    ${durationText ? `<span title="Duration"><i class="fa-regular fa-clock"></i> ${durationText}</span>` : ''}
-                                </div>
-                            </td>
-                        </tr>
-                    `;
+                    // Duration
+                    const durText = t.durationMs ? (parseFloat(t.durationMs) / 1000).toFixed(1) + 's' : '';
+
+                    // Playbook mode badge
+                    const mode = t.playbookMode || 'llm';
+                    const pbLabel = mode === 'playbook' ? 'Playbook'
+                        : mode === 'healing' ? 'Healing'
+                            : 'AI';
+                    const pbIcon = mode === 'playbook' ? 'fa-solid fa-rotate'
+                        : mode === 'healing' ? 'fa-solid fa-wrench'
+                            : 'fa-solid fa-wand-magic-sparkles';
+                    const pbBadge = `<span class="pb-badge ${mode}"><i class="${pbIcon}"></i> ${pbLabel}</span>`;
+
+                    // Per-test log button
+                    const logBtn = (t.hasLog === 'true' || t.hasLog === true)
+                        ? `<button class="run-action-btn" style="font-size:10px; padding:2px 7px;" onclick="event.stopPropagation(); openTestLog('${reportId}', '${t.name}')" title="View test log"><i class="fa-solid fa-file-lines"></i> Log</button>`
+                        : '';
+
+                    return `<div class="test-card" data-test-name="${t.name}" onclick="loadInteractiveTest('${reportId}', '${t.file}', '${t.name}', this)">
+                        <div class="test-card-title-row">
+                            <span class="${tSuccess ? 'badge-success' : 'badge-failed'}">${tSuccess ? 'Passed' : 'Failed'}</span>
+                            <span class="test-card-label">${label}${datasetPart}</span>
+                        </div>
+                        <div class="test-card-meta">
+                            <span title="${t.browser || 'Browser'}"><i class="${browserIcon}"></i> ${browserLabel}</span>
+                            ${durText ? `<span><i class="fa-regular fa-clock"></i> ${durText}</span>` : ''}
+                            ${pbBadge}
+                        </div>
+                        ${logBtn ? `<div class="test-card-actions">${logBtn}</div>` : ''}
+                    </div>`;
                 }).join('');
-            }
-
-            const actionsDiv = document.getElementById('historyReportActions');
-            if (hasReport) {
-                actionsDiv.style.display = 'flex';
-                actionsDiv.innerHTML = `<button class="btn btn-outline" style="width: 100%" onclick="window.open('/api/allure/report/${reportId}/index.html', '_blank')"><i class="fa-solid fa-chart-bar"></i> Open Allure Report</button>`;
-            } else {
-                actionsDiv.style.display = 'none';
             }
         }
 
-        function loadInteractiveTest(reportId, testFile, rowElement) {
+        /**
+         * Loads the interactive replay for a specific test case in the details iframe.
+         * Also populates the mini history strip with status bubbles for this test
+         * across all archived runs.
+         *
+         * @param {string} reportId   - the run/report directory ID
+         * @param {string} testFile   - the console-execution JSON filename
+         * @param {string} testName   - human-readable test name (used for mini-widget matching)
+         * @param {Element} rowElement - the clicked table row for highlight
+         */
+        function loadInteractiveTest(reportId, testFile, testName, rowElement) {
             currentTestFile = testFile;
 
-            // Highlight selection
-            const tbody = document.getElementById('historyTestsList');
-
-            if (tbody) {
-                Array.from(tbody.querySelectorAll('.history-row')).forEach(row => {
-                    row.style.backgroundColor = '';
-                    row.style.borderLeft = '';
-                });
+            // Highlight selection in the test list using CSS class
+            const testsList = document.getElementById('historyTestsList');
+            if (testsList) {
+                testsList.querySelectorAll('.test-card').forEach(card => card.classList.remove('selected'));
             }
             if (rowElement) {
-                rowElement.style.backgroundColor = 'var(--bg-hover)';
-                rowElement.style.borderLeft = '3px solid var(--accent)';
+                rowElement.classList.add('selected');
             }
 
             document.getElementById('historyPlaceholder').style.display = 'none';
@@ -1854,12 +2504,104 @@
             const dataUrl = '/api/allure/report/' + reportId + '/' + testFile;
             iframe.src = '/interactive_console.html?dataUrl=' + encodeURIComponent(dataUrl);
 
-            // Add mobile class for narrow view initially
-            const rightArea = document.getElementById('colReport');
-            if (rightArea) {
-                rightArea.classList.add('mobile-view');
-                rightArea.style.flexGrow = '0';
-                rightArea.style.width = '420px';
+            // Transition to State 3: three-column layout with details visible
+            applyHistoryState(3);
+
+            // Populate the mini history strip with bubbles for this test across all runs
+            renderMiniHistoryStrip(testName, reportId);
+        }
+
+        /**
+         * Renders the mini history strip inside the Test Case Details panel.
+         * Shows a bubble per run where the given testName appeared, newest first.
+         * Clicking a bubble loads that run's replay.
+         *
+         * @param {string} testName      - the test name to match across runs
+         * @param {string} activeRunId   - the currently displayed run (highlighted bubble)
+         */
+        function renderMiniHistoryStrip(testName, activeRunId) {
+            const strip = document.getElementById('miniHistoryStrip');
+            const bubblesContainer = document.getElementById('miniHistoryBubbles');
+            if (!strip || !bubblesContainer) return;
+
+            // Collect all runs that contain this test name, newest first (historyCached is already desc)
+            const matchingRuns = [];
+            for (const run of historyCached) {
+                if (!run.tests) continue;
+                const match = run.tests.find(t => t.name === testName);
+                if (match) {
+                    matchingRuns.push({ run, test: match });
+                }
+            }
+
+            if (matchingRuns.length === 0) {
+                strip.style.display = 'none';
+                return;
+            }
+
+            strip.style.display = 'flex';
+
+            bubblesContainer.innerHTML = matchingRuns.map(({ run, test }) => {
+                const isPassed = test.status === 'Passed';
+                const statusClass = isPassed ? 'passed' : 'failed';
+                const runNum = run.runNumber ? '#' + run.runNumber : '';
+                const dur = test.durationMs ? (test.durationMs / 1000).toFixed(1) + 's' : '';
+                const isActive = run.id === activeRunId;
+                const selectedClass = isActive ? ' selected' : '';
+                // Log button shown inline in bubble if a per-test log exists
+                const logBtnHtml = (test.hasLog === 'true' || test.hasLog === true)
+                    ? `<button class="mini-log-btn" onclick="event.stopPropagation(); openTestLog('${run.id}', '${testName}')" title="View test log"><i class="fa-solid fa-file-lines"></i></button>`
+                    : '';
+
+                // Badge style: Passed (green) or Failed (red), matching run-row badge styling
+                const bubbleBadgeClass = isPassed ? 'badge-success' : 'badge-failed';
+                const bubbleBadgeLabel = isPassed ? 'Passed' : 'Failed';
+
+                return `<span class="mini-run-bubble ${statusClass}${selectedClass}"
+                            onclick="loadInteractiveTest('${run.id}', '${test.file}', '${testName}', null)"
+                            title="Run ${runNum} \u00b7 ${test.status}${dur ? ' \u00b7 ' + dur : ''}">
+                            <span class="run-number" style="font-size:10px;">${runNum}</span>
+                            <span class="${bubbleBadgeClass}" style="font-size:9px; padding:1px 4px;">${bubbleBadgeLabel}</span>
+                            ${dur ? `<span style="font-size:10px; opacity:0.75;">${dur}</span>` : ''}${logBtnHtml}
+                        </span>`;
+            }).join('');
+        }
+
+        /**
+         * Opens the per-test-case log file in the log modal.
+         * The file is fetched from /api/allure/report/{runId}/{sanitizedTestName}.log
+         *
+         * @param {string} runId    - the report directory ID
+         * @param {string} testName - the human-readable test name
+         */
+        async function openTestLog(runId, testName) {
+            const safeLogName = testName.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.log';
+            const modal = document.getElementById('logModal');
+            const content = document.getElementById('logModalContent');
+            const downloadBtn = document.getElementById('downloadLogBtn');
+            content.innerText = 'Loading...';
+            modal.style.display = 'flex';
+            try {
+                const res = await fetch(`/api/allure/report/${runId}/${safeLogName}`);
+                if (res.ok) {
+                    const text = await res.text();
+                    content.innerText = text || '(empty log)';
+                    downloadBtn.onclick = () => {
+                        const blob = new Blob([text], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = safeLogName;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    };
+                } else {
+                    content.innerText = 'Per-test log not available for this run.';
+                    downloadBtn.onclick = null;
+                }
+            } catch (e) {
+                content.innerText = 'Error loading test log: ' + e.message;
+                downloadBtn.onclick = null;
             }
         }
 
@@ -2430,7 +3172,9 @@
 
         function openInteractiveConsoleViewLive(url) {
             document.getElementById('historyPlaceholder').style.display = 'none';
-            document.getElementById('historyReportActions').style.display = 'none';
+            // Hide mini-history strip since no specific test is selected in live view
+            const miniStrip = document.getElementById('miniHistoryStrip');
+            if (miniStrip) miniStrip.style.display = 'none';
             document.getElementById('historyConsoleIframe').src = url;
             currentReportId = null;
             // Mark that we are now watching a live run — the poll not-running branch
