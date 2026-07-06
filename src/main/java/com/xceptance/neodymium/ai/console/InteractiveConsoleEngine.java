@@ -395,8 +395,10 @@ public final class InteractiveConsoleEngine {
         {
             try
             {
-                out.write(bytes);
-                out.flush();
+                synchronized (out) {
+                    out.write(bytes);
+                    out.flush();
+                }
             }
             catch (final IOException e)
             {
@@ -455,19 +457,21 @@ public final class InteractiveConsoleEngine {
 
             try
             {
-                // Immediately send the current state so the client is up-to-date on connect.
-                final String initial = "event: state\ndata: " + currentStateJson + "\n\n";
-                out.write(initial.getBytes(StandardCharsets.UTF_8));
-                out.flush();
-
-                // If a pause is already active, also send the pause event so a late-joining
-                // tab immediately knows the token it should use.
-                final String activePauseId = currentPauseId.get();
-                if (activePauseId != null)
-                {
-                    final String pause = "event: pause\ndata: " + buildPausePayload(activePauseId) + "\n\n";
-                    out.write(pause.getBytes(StandardCharsets.UTF_8));
+                synchronized (out) {
+                    // Immediately send the current state so the client is up-to-date on connect.
+                    final String initial = "event: state\ndata: " + currentStateJson + "\n\n";
+                    out.write(initial.getBytes(StandardCharsets.UTF_8));
                     out.flush();
+
+                    // If a pause is already active, also send the pause event so a late-joining
+                    // tab immediately knows the token it should use.
+                    final String activePauseId = currentPauseId.get();
+                    if (activePauseId != null)
+                    {
+                        final String pause = "event: pause\ndata: " + buildPausePayload(activePauseId) + "\n\n";
+                        out.write(pause.getBytes(StandardCharsets.UTF_8));
+                        out.flush();
+                    }
                 }
 
                 // Keep the connection open until the client disconnects (write will throw).
@@ -475,8 +479,10 @@ public final class InteractiveConsoleEngine {
                 {
                     // Send a keep-alive comment every 15 s to prevent proxy timeouts.
                     Thread.sleep(15_000);
-                    out.write(": keep-alive\n\n".getBytes(StandardCharsets.UTF_8));
-                    out.flush();
+                    synchronized (out) {
+                        out.write(": keep-alive\n\n".getBytes(StandardCharsets.UTF_8));
+                        out.flush();
+                    }
                 }
             }
             catch (final InterruptedException e)

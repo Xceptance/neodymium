@@ -1179,7 +1179,7 @@
                 const formattedTime = activeRunStats.startTime ? activeRunStats.startTime.toLocaleString() : new Date().toLocaleString();
                 
                 rowsHtml += `
-                    <tr class="history-row" style="cursor: default; border-left: 3px solid var(--accent);">
+                    <tr class="history-row" style="cursor: pointer; border-left: 3px solid var(--accent);" onclick="openCurrentRunView()">
                         <td style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
                             <div class="run-details-text">
                                 <div style="font-weight: 500; margin-bottom: 4px;">${formattedTime}</div>
@@ -1930,6 +1930,53 @@
             showView('reportViewContainer');
         }
 
+        function openCurrentRunView() {
+            // Show Tests column, remove minified class from runs
+            const colRuns = document.getElementById('colRuns');
+            colRuns.classList.remove('col-minimized');
+            colRuns.style.width = '320px';
+            
+            const colTests = document.getElementById('colTests');
+            const historyResizer2 = document.getElementById('historyResizer2');
+            colTests.classList.remove('col-minimized');
+            colTests.style.display = 'flex';
+            colTests.style.width = '280px';
+            historyResizer2.style.display = 'block';
+            
+            // Render Tests
+            const testsList = document.getElementById('historyTestsList');
+            let liveTests = activeRunStats.tests || [];
+            if (liveTests.length === 0 && activeRunStats.activeFile) {
+                liveTests = [{ file: activeRunStats.activeFile, id: null }];
+            }
+
+            if (liveTests.length === 0) {
+                testsList.innerHTML = `<tr><td style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No tests available.</td></tr>`;
+            } else {
+                testsList.innerHTML = liveTests.map(t => {
+                    const isActive = (t.file === activeRunStats.activeFile);
+                    const badge = isActive 
+                        ? `<i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent); margin-left: 6px;"></i>` 
+                        : '';
+                    const bg = isActive ? 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);' : '';
+                    
+                    return `
+                        <tr class="history-row" style="cursor: pointer; ${bg}" onclick="openInteractiveConsoleViewLive('/interactive_console.html')">
+                            <td style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
+                                <div class="run-details-text">
+                                    <div style="font-weight: 500; margin-bottom: 4px; word-break: break-all;">${t.file}</div>
+                                    <div>${t.id ? `<span class="tag tag-blue">${t.id}</span>` : ''}</div>
+                                </div>
+                                <div>${badge}</div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            openInteractiveConsoleViewLive('/interactive_console.html');
+        }
+
         async function runTestByFile(testFile) {
             const fileDatasets = [{ file: testFile, id: null }];
             
@@ -1942,6 +1989,7 @@
             
             isRunning = true;
             consoleOpened = true;
+            currentPollSession++;
             lastLogIndex = 0;
             lastEventIndex = 0;
             
@@ -1950,6 +1998,7 @@
             activeRunStats.total = 0;
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
+            activeRunStats.tests = fileDatasets;
             renderHistoryTable();
 
             runSpinner.style.display = 'inline-block';
@@ -1999,6 +2048,7 @@
             
             isRunning = true;
             consoleOpened = true;
+            currentPollSession++;
             lastLogIndex = 0;
             lastEventIndex = 0;
             
@@ -2007,6 +2057,7 @@
             activeRunStats.total = 0;
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
+            activeRunStats.tests = fileDatasets;
             renderHistoryTable();
 
             runSpinner.style.display = 'inline-block';
@@ -2052,6 +2103,7 @@
             
             isRunning = true;
             consoleOpened = true;
+            currentPollSession++;
             lastLogIndex = 0;
             lastEventIndex = 0;
             
@@ -2060,6 +2112,7 @@
             activeRunStats.total = 0;
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
+            activeRunStats.tests = selectedDatasets.map(d => ({ file: d.file, id: d.id }));
             renderHistoryTable();
 
             runSpinner.style.display = 'inline-block';
@@ -2223,6 +2276,8 @@
         let pollingIntervalId = null;
         let lastLogIndex = 0;
         let lastEventIndex = 0;
+        let currentPollSession = 0;
+        let serverSessionId = null;
 
         function startPolling() {
             if (pollingIntervalId) {
@@ -2232,8 +2287,11 @@
         }
 
         async function pollStatus() {
+            let thisSession = currentPollSession;
             try {
                 const response = await fetch('/api/status?clientId=' + encodeURIComponent(clientId) + '&lastIndex=' + lastLogIndex + '&lastEventIndex=' + lastEventIndex);
+                if (thisSession !== currentPollSession) return;
+                
                 if (response.ok) {
                     const data = await response.json();
                     
@@ -2260,6 +2318,14 @@
 
                     if (data.status) {
                         const statusData = data.status;
+                        
+                        if (serverSessionId === null) {
+                            serverSessionId = statusData.sessionId;
+                        } else if (serverSessionId !== statusData.sessionId) {
+                            window.location.reload();
+                            return;
+                        }
+                        
                         const statsPanel = document.getElementById('statsPanel');
                         if (statsPanel) {
                             statsPanel.style.display = (statusData.running || statusData.total > 0) ? 'block' : 'none';
@@ -2285,6 +2351,13 @@
                         try {
                             isRunning = statusData.running;
                             if (isRunning) {
+                                if (activeRunStats.activeFile !== statusData.activeFile) {
+                                    activeRunStats.activeFile = statusData.activeFile;
+                                    if (document.getElementById('colTests').style.display === 'flex' && currentReportId === null) {
+                                        openCurrentRunView();
+                                    }
+                                }
+
                                 if (runSpinner) runSpinner.style.display = 'inline-block';
                                 const sidebarBadge = document.getElementById('sidebarRunBadge');
                                 if (sidebarBadge) {
@@ -2299,6 +2372,14 @@
                                 
                                 activeRunStats.running = false;
                                 activeRunStats.startTime = null;
+
+                                // Return to dashboard view if stuck on interactive console
+                                const isInteractiveViewOpen = document.getElementById('interactiveConsoleView').style.display === 'flex';
+                                const isLiveReportViewOpen = document.getElementById('reportViewContainer').style.display === 'flex' && currentReportId === null;
+                                if (isInteractiveViewOpen || isLiveReportViewOpen) {
+                                    showView('dashboardView');
+                                }
+
                                 loadHistory();
                                 updateCenterLayout();
                             }
@@ -2328,6 +2409,7 @@
                     apiKeyBannerText.innerHTML = "Server is offline or unreachable.";
                 }
             } finally {
+                if (thisSession !== currentPollSession) return;
                 if (!disconnected) {
                     pollingIntervalId = setTimeout(pollStatus, 2000);
                 }

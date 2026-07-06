@@ -18,6 +18,13 @@
 
 <body>
 
+    <!-- Initial Loading Overlay -->
+    <div id="initialLoadingOverlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: var(--bg-base); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.3s, visibility 0.3s;">
+        <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 3rem; color: var(--accent-primary); margin-bottom: 1rem;"></i>
+        <h2 style="font-size: 1.25rem; font-weight: 500; color: var(--text-main); font-family: var(--font-main);">Connecting to Test Run...</h2>
+        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem; font-family: var(--font-main);">Waiting for data</p>
+    </div>
+
     <!-- Stale tab warning -->
     <div id="staleBanner">
         <i class="fa-solid fa-triangle-exclamation"></i>
@@ -39,7 +46,7 @@
             <!-- Test name/ID is now a button that toggles the details panel -->
             <button class="header-meta-btn" id="btnToggleDetails" onclick="toggleTopDetails()"
                 title="Test Details (Alt+D)" aria-label="Toggle Test Metadata Details" type="button">
-                <h1 id="testNameDisplay">Loading...</h1>
+                <h1 id="testNameDisplay">—</h1>
                 <span class="hdr-id big-screen-only" id="testIdDisplay"></span>
                 <span class="hdr-details-hint"><i class="fa-solid fa-chevron-down" id="detailsChevron"></i>
                     <span class="big-screen-only">details</span></span>

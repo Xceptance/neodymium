@@ -199,8 +199,20 @@ window.addEventListener('DOMContentLoaded', () => {
 const activeBreakpoints = new Set();
 
 function applyState(state) {
-    if (!state) return;
+    if (!state || Object.keys(state).length === 0) return;
     const isFirstLoad = currentState === null;
+
+    if (isFirstLoad) {
+        const overlay = document.getElementById('initialLoadingOverlay');
+        if (overlay) {
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.visibility = 'hidden';
+                overlay.style.display = 'none';
+            }, 300);
+        }
+    }
+
     currentPauseId = state.pauseId || null;
 
     // On a new test run, clear the selected step to fall back to default behavior
@@ -1374,10 +1386,41 @@ function syncAutoButton() {
 
 function setConnectionState(state) {
     const dot = document.getElementById('connectionDot');
-    if (!dot) return;
-    dot.className = '';
-    dot.classList.add(state);
-    dot.title = { connected: 'Connected', paused: 'Waiting for input', error: 'Disconnected' }[state] || state;
+    if (dot) {
+        dot.className = '';
+        dot.classList.add(state);
+        dot.title = { connected: 'Connected', paused: 'Waiting for input', error: 'Disconnected' }[state] || state;
+    }
+
+    if (state === 'error' && currentState === null) {
+        const overlay = document.getElementById('initialLoadingOverlay');
+        if (overlay) {
+            const h2 = overlay.querySelector('h2');
+            const p = overlay.querySelector('p');
+            if (h2) h2.textContent = 'Connection Error';
+            if (p) p.textContent = 'Retrying connection...';
+            const icon = overlay.querySelector('i');
+            if (icon) {
+                icon.classList.remove('fa-circle-notch', 'fa-spin');
+                icon.classList.add('fa-triangle-exclamation');
+                icon.style.color = 'var(--accent-danger)';
+            }
+        }
+    } else if (state === 'connected' && currentState === null) {
+        const overlay = document.getElementById('initialLoadingOverlay');
+        if (overlay) {
+            const h2 = overlay.querySelector('h2');
+            const p = overlay.querySelector('p');
+            if (h2) h2.textContent = 'Connected';
+            if (p) p.textContent = 'Waiting for test data...';
+            const icon = overlay.querySelector('i');
+            if (icon) {
+                icon.classList.remove('fa-triangle-exclamation');
+                icon.classList.add('fa-circle-notch', 'fa-spin');
+                icon.style.color = 'var(--accent-primary)';
+            }
+        }
+    }
 }
 
 function showStaleBanner(activeRunId) {

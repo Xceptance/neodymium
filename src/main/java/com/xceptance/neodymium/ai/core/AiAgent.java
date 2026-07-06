@@ -1890,6 +1890,7 @@ public class AiAgent
             return;
 
         final JsonObject state = new JsonObject();
+        state.addProperty("status", "running");
         state.addProperty("runId", this.currentRunId);
         state.addProperty("pauseId", this.currentPauseId);
         state.addProperty("testName", Neodymium.getTestName());

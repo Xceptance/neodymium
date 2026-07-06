@@ -36,6 +36,7 @@ import java.security.KeyStore;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -43,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -90,11 +90,13 @@ public final class NeodymiumAuraManager {
     private static final Pattern STATS_PATTERN = Pattern
             .compile("Tests run:\\s*(\\d+),\\s*Failures:\\s*(\\d+),\\s*Errors:\\s*(\\d+)");
     private static final Gson gson = new Gson();
+    
+    private static final String serverSessionId = UUID.randomUUID().toString();
 
     private static final Map<String, Long> activeClients = new ConcurrentHashMap<>();
     private static final Map<HttpServer, HttpsServer> httpsServers = new ConcurrentHashMap<>();
-    private static final CopyOnWriteArrayList<String> currentRunLogs = new CopyOnWriteArrayList<>();
-    private static final CopyOnWriteArrayList<Map<String, Object>> currentRunEvents = new CopyOnWriteArrayList<>();
+    private static final List<String> currentRunLogs = Collections.synchronizedList(new ArrayList<>());
+    private static final List<Map<String, Object>> currentRunEvents = Collections.synchronizedList(new ArrayList<>());
     private static final AtomicReference<Process> activeProcess = new AtomicReference<>(null);
     private static final AtomicInteger globalTestsRun = new AtomicInteger(0);
     private static final AtomicInteger globalPassed = new AtomicInteger(0);
@@ -131,6 +133,7 @@ public final class NeodymiumAuraManager {
             LOGGER.info("========================================================================");
 
             openBrowser(serverUrl);
+
         } catch (final Exception e) {
             LOGGER.error("Failed to start Neodymium Aura Manager", e);
             System.exit(1);
@@ -241,7 +244,11 @@ public final class NeodymiumAuraManager {
     }
 
     private static void validateEnvironment() {
-        final String javaHome = System.getenv("JAVA_HOME");
+        String javaHome = System.getenv("JAVA_HOME");
+        if (javaHome == null || javaHome.trim().isEmpty() || !new File(javaHome).isDirectory()) {
+            javaHome = System.getProperty("java.home");
+        }
+
         if (javaHome == null || javaHome.trim().isEmpty() || !new File(javaHome).isDirectory()) {
             LOGGER.error("========================================================================");
             LOGGER.error("  ERROR: JAVA_HOME environment variable is not set or invalid!");
@@ -443,8 +450,10 @@ public final class NeodymiumAuraManager {
                 for (final String param : query.split("&")) {
                     final String[] pair = param.split("=");
                     if (pair.length > 1) {
-                        if ("file".equals(pair[0])) file = pair[1];
-                        if ("runId".equals(pair[0])) runId = pair[1];
+                        if ("file".equals(pair[0]))
+                            file = pair[1];
+                        if ("runId".equals(pair[0]))
+                            runId = pair[1];
                     }
                 }
             }
@@ -706,6 +715,7 @@ public final class NeodymiumAuraManager {
 
             final Map<String, Object> status = new HashMap<>();
             status.put("type", "status");
+            status.put("sessionId", serverSessionId);
             status.put("total", globalTestsRun.get());
             status.put("passed", globalPassed.get());
             status.put("failed", globalFailed.get());
@@ -713,24 +723,33 @@ public final class NeodymiumAuraManager {
             status.put("activeFile", activeFile.get());
 
             final List<String> logs = new ArrayList<>();
-            final int currentLogSize = currentRunLogs.size();
-            for (int i = lastIndex; i < currentLogSize; i++) {
-                logs.add(currentRunLogs.get(i));
+            final int currentLogSize;
+            synchronized (currentRunLogs) {
+                currentLogSize = currentRunLogs.size();
+                for (int i = lastIndex; i < currentLogSize; i++) {
+                    logs.add(currentRunLogs.get(i));
+                }
             }
 
             final List<Map<String, Object>> events = new ArrayList<>();
-            final int currentEventSize = currentRunEvents.size();
-            for (int i = lastEventIndex; i < currentEventSize; i++) {
-                events.add(currentRunEvents.get(i));
+            final int currentEventSize;
+            synchronized (currentRunEvents) {
+                currentEventSize = currentRunEvents.size();
+                for (int i = lastEventIndex; i < currentEventSize; i++) {
+                    events.add(currentRunEvents.get(i));
+                }
             }
 
             final Map<String, Object> response = new HashMap<>();
             response.put("status", status);
             response.put("logs", logs);
-            response.put("newIndex", currentLogSize);
-            response.put("events", events);
-            response.put("newEventIndex", currentEventSize);
-
+            if (!events.isEmpty()) {
+                response.put("events", events);
+                response.put("newEventIndex", currentEventSize);
+            }
+            if (!logs.isEmpty()) {
+                response.put("newIndex", currentLogSize);
+            }
             sendJsonResponse(exchange, 200, gson.toJson(response));
         }
 
@@ -782,19 +801,23 @@ public final class NeodymiumAuraManager {
                         final boolean hasReport = indexHtml.exists() && indexHtml.isFile();
 
                         final List<Map<String, String>> tests = new ArrayList<>();
-                        final File[] consoleFiles = dir.listFiles((d, name) -> name.startsWith("console-execution") && name.endsWith(".json"));
+                        final File[] consoleFiles = dir
+                                .listFiles((d, name) -> name.startsWith("console-execution") && name.endsWith(".json"));
                         boolean hasInteractiveReport = false;
                         if (consoleFiles != null) {
                             for (final File cf : consoleFiles) {
                                 hasInteractiveReport = true;
                                 String testName = cf.getName().substring("console-execution".length());
-                                if (testName.startsWith("-")) testName = testName.substring(1);
-                                if (testName.endsWith(".json")) testName = testName.substring(0, testName.length() - 5);
-                                if (testName.isEmpty()) testName = "Default";
-                                
+                                if (testName.startsWith("-"))
+                                    testName = testName.substring(1);
+                                if (testName.endsWith(".json"))
+                                    testName = testName.substring(0, testName.length() - 5);
+                                if (testName.isEmpty())
+                                    testName = "Default";
+
                                 String testStatus = "Unknown";
                                 final Map<String, String> testMap = new HashMap<>();
-                                
+
                                 // Try to extract official name and status from the JSON file
                                 try {
                                     final String content = Files.readString(cf.toPath(), StandardCharsets.UTF_8);
@@ -808,11 +831,13 @@ public final class NeodymiumAuraManager {
                                         } else {
                                             // Fallback: check reasoningFailed or if any step failed
                                             boolean hasFailedStep = false;
-                                            if (map.containsKey("reasoningFailed") && Boolean.TRUE.equals(map.get("reasoningFailed"))) {
+                                            if (map.containsKey("reasoningFailed")
+                                                    && Boolean.TRUE.equals(map.get("reasoningFailed"))) {
                                                 hasFailedStep = true;
                                             }
                                             if (!hasFailedStep && map.containsKey("steps")) {
-                                                final List<Map<String, Object>> steps = (List<Map<String, Object>>) map.get("steps");
+                                                final List<Map<String, Object>> steps = (List<Map<String, Object>>) map
+                                                        .get("steps");
                                                 if (steps != null) {
                                                     for (Map<String, Object> step : steps) {
                                                         if ("failed".equals(step.get("status"))) {
@@ -837,7 +862,7 @@ public final class NeodymiumAuraManager {
                                 } catch (Exception e) {
                                     // ignore and use fallback
                                 }
-                                
+
                                 testMap.put("name", testName);
                                 testMap.put("file", cf.getName());
                                 testMap.put("status", testStatus);
@@ -1157,7 +1182,9 @@ public final class NeodymiumAuraManager {
                     final String runId = "run-" + System.currentTimeMillis();
                     final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(runId);
                     currentConsoleEngine.set(engine);
-                    broadcastInteractiveConsoleReady("/interactive_console.html");
+                    if (req.interactive) {
+                        broadcastInteractiveConsoleReady("/interactive_console.html");
+                    }
 
                     final String os = System.getProperty("os.name").toLowerCase();
                     if (os.contains("win")) {
@@ -1283,7 +1310,8 @@ public final class NeodymiumAuraManager {
                     activeProcess.set(null);
                 }
 
-                if (!manuallyStopped.get() && (req.allure || req.history)) {
+                if (!manuallyStopped.get() && (req.allure))
+                {
                     LOGGER.info("[Aura Server] Auto-generating Allure report as requested.");
                     final List<String> uniqueFiles = new ArrayList<>(datasetsByFile.keySet());
                     generateAllureReport(uniqueFiles, req.history);
@@ -1402,16 +1430,20 @@ public final class NeodymiumAuraManager {
             Files.writeString(metadataFile.toPath(), metadataContent, StandardCharsets.UTF_8);
 
             final File logFile = new File(destDir, "execution.log");
-            Files.write(logFile.toPath(), currentRunLogs, StandardCharsets.UTF_8);
+            synchronized (currentRunLogs) {
+                Files.write(logFile.toPath(), currentRunLogs, StandardCharsets.UTF_8);
+            }
 
             final File targetDir = new File("target");
-            final File[] consoleFiles = targetDir.listFiles((dir, name) -> name.startsWith("console-execution") && name.endsWith(".json"));
+            final File[] consoleFiles = targetDir
+                    .listFiles((dir, name) -> name.startsWith("console-execution") && name.endsWith(".json"));
             if (consoleFiles != null) {
                 for (final File consoleFile : consoleFiles) {
                     final File destConsoleFile = new File(destDir, consoleFile.getName());
                     Files.copy(consoleFile.toPath(), destConsoleFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 }
-                LOGGER.info("[Aura Server] Archived {} console-execution JSONs to {}", consoleFiles.length, destDir.getName());
+                LOGGER.info("[Aura Server] Archived {} console-execution JSONs to {}", consoleFiles.length,
+                        destDir.getName());
             }
 
             final File screenshotsDir = new File("target/ai-console-screenshots");
