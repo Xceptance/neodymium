@@ -1072,6 +1072,7 @@ public final class NeodymiumAuraManager {
         private void sendResponse(final HttpExchange exchange, final int status, final String contentType,
                 final byte[] bytes) throws IOException {
             exchange.getResponseHeaders().set("Content-Type", contentType);
+            exchange.getResponseHeaders().set("Cache-Control", "no-cache, no-store, must-revalidate");
             exchange.sendResponseHeaders(status, bytes.length);
             try (final OutputStream os = exchange.getResponseBody()) {
                 os.write(bytes);
@@ -1080,7 +1081,13 @@ public final class NeodymiumAuraManager {
 
         private void sendJsonResponse(final HttpExchange exchange, final int status, final String json)
                 throws IOException {
-            sendResponse(exchange, status, "application/json; charset=UTF-8", json.getBytes(StandardCharsets.UTF_8));
+            final byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+            exchange.getResponseHeaders().set("Cache-Control", "no-cache, no-store, must-revalidate");
+            exchange.sendResponseHeaders(status, bytes.length);
+            try (final OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
         }
 
         private void sendError(final HttpExchange exchange, final int status, final String message) throws IOException {
@@ -1434,7 +1441,7 @@ public final class NeodymiumAuraManager {
                 Files.write(logFile.toPath(), currentRunLogs, StandardCharsets.UTF_8);
             }
 
-            final File targetDir = new File("target");
+            final File targetDir = new File("target/allure-results");
             final File[] consoleFiles = targetDir
                     .listFiles((dir, name) -> name.startsWith("console-execution") && name.endsWith(".json"));
             if (consoleFiles != null) {

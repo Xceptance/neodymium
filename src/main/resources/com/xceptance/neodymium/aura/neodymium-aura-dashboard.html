@@ -1,10 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neodymium Aura Manager</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -26,7 +29,7 @@
             --transition: all 0.2s ease;
         }
 
-        
+
         :root.force-dark {
             --bg-main: #0e1015;
             --bg-sidebar: #131620;
@@ -40,6 +43,7 @@
             --sidebar-active: rgba(59, 130, 246, 0.08);
             --sidebar-active-text: #60a5fa;
         }
+
         @media (prefers-color-scheme: dark) {
             :root {
                 --bg-main: #0e1015;
@@ -56,9 +60,9 @@
             }
         }
 
-        
-        
-        
+
+
+
         :root.force-light {
             --bg-main: #f3f4f6;
             --bg-sidebar: #ffffff;
@@ -72,8 +76,12 @@
             --sidebar-active-text: #2563eb;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
             background-color: var(--bg-main);
             color: var(--text-primary);
@@ -97,21 +105,40 @@
             flex-shrink: 0;
         }
 
-        .logo { font-size: 24px; color: var(--accent); margin-bottom: 40px; }
+        .logo {
+            font-size: 24px;
+            color: var(--accent);
+            margin-bottom: 40px;
+        }
 
         .nav-item {
-            width: 44px; height: 44px;
-            display: flex; align-items: center; justify-content: center;
-            border-radius: 8px; color: var(--text-secondary);
-            font-size: 18px; margin-bottom: 12px; cursor: pointer;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 18px;
+            margin-bottom: 12px;
+            cursor: pointer;
             position: relative;
         }
-        .nav-item:hover { color: var(--text-primary); background-color: var(--bg-main); }
-        .nav-item.active { color: var(--sidebar-active-text); background-color: var(--sidebar-active); }
+
+        .nav-item:hover {
+            color: var(--text-primary);
+            background-color: var(--bg-main);
+        }
+
+        .nav-item.active {
+            color: var(--sidebar-active-text);
+            background-color: var(--sidebar-active);
+        }
 
         .nav-badge {
             position: absolute;
-            top: -5px; right: -5px;
+            top: -5px;
+            right: -5px;
             background: var(--accent);
             color: white;
             font-size: 10px;
@@ -123,9 +150,16 @@
             align-items: center;
             gap: 4px;
         }
-        
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .spinner { animation: spin 1s linear infinite; }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
 
         /* Main Container */
         .main-container {
@@ -134,7 +168,7 @@
             flex-direction: column;
             height: 100vh;
         }
-        
+
         .top-navbar {
             height: 48px;
             background: var(--bg-sidebar);
@@ -170,6 +204,7 @@
             min-width: 60px !important;
             flex-grow: 0 !important;
         }
+
         .col-minimized .panel-header span,
         .col-minimized .run-details-text,
         .col-minimized .test-name-text,
@@ -178,9 +213,11 @@
         .col-minimized .run-status-content {
             display: none !important;
         }
+
         .col-minimized .run-min-text {
             display: block !important;
         }
+
         .col-minimized .history-row td {
             padding: 10px 8px !important;
             text-align: center;
@@ -216,6 +253,7 @@
             flex-direction: column;
             min-height: 0;
         }
+
         .view-state.active {
             display: flex;
         }
@@ -236,14 +274,42 @@
         }
 
         /* Test List / File Container (mapping to old classes) */
-        .file-container { margin-bottom: 6px; }
-        .list-item { padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
-        .list-item:hover { background: var(--bg-main); }
-        .dataset-list { padding: 4px 12px 4px 24px; background: var(--bg-card); }
-        .dataset-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
-        .dataset-item:last-child { border-bottom: none; }
-        
-        .edit-icon-btn, .btn-edit {
+        .file-container {
+            margin-bottom: 6px;
+        }
+
+        .list-item {
+            padding: 6px 10px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+
+        .list-item:hover {
+            background: var(--bg-main);
+        }
+
+        .dataset-list {
+            padding: 4px 12px 4px 24px;
+            background: var(--bg-card);
+        }
+
+        .dataset-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .dataset-item:last-child {
+            border-bottom: none;
+        }
+
+        .edit-icon-btn,
+        .btn-edit {
             background: var(--bg-main);
             border: 1px solid var(--border);
             color: var(--text-primary);
@@ -255,72 +321,397 @@
             align-items: center;
             gap: 4px;
         }
-        .edit-icon-btn:hover, .btn-edit:hover { background: var(--border); }
+
+        .edit-icon-btn:hover,
+        .btn-edit:hover {
+            background: var(--border);
+        }
 
         /* Queue View */
-        .queue-list { display: flex; flex-direction: column; gap: 8px; }
-        .queue-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg-main); border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px; }
-        .queue-item.running { border-left: 3px solid var(--accent); }
-        
+        .queue-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .queue-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-main);
+            border: 1px solid var(--border);
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+
+        .queue-item.running {
+            border-left: 3px solid var(--accent);
+        }
+
         /* Editor */
-        .editor-container { flex-grow: 1; display: flex; flex-direction: column; min-height: 0; }
-        .editor-actions { display: flex; gap: 8px; }
-        .btn-editor { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
-        .btn-editor:hover { background: var(--bg-main); }
-        .btn-editor.save { color: var(--success); border-color: rgba(16, 185, 129, 0.3); }
-        .btn-editor.delete { color: var(--danger); border-color: rgba(239, 68, 68, 0.3); }
-        .editor-textarea { font-family: var(--font-mono); font-size: 13px; line-height: 1.6; color: var(--text-primary); padding: 16px; flex-grow: 1; outline: none; border: none; background: transparent; resize: none; }
+        .editor-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .editor-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-editor {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-editor:hover {
+            background: var(--bg-main);
+        }
+
+        .btn-editor.save {
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-editor.delete {
+            color: var(--danger);
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .editor-textarea {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            padding: 16px;
+            flex-grow: 1;
+            outline: none;
+            border: none;
+            background: transparent;
+            resize: none;
+        }
 
         /* Terminal Logs */
-        .terminal-panel { height: 100%; width: 100%; max-width: 100%; box-sizing: border-box; background: #1e1e1e; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: var(--font-mono); font-size: 12px; color: #d4d4d4; overflow-y: auto; overflow-x: hidden; flex-shrink: 0; display: flex; flex-direction: column; }
-        #terminalConsole { flex-grow: 1; overflow-y: auto; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
-        .log-line { white-space: pre-wrap; word-break: break-all; word-wrap: break-word; margin: 0; padding: 0; }
-        .log-error { color: #ef4444; }
-        .log-info { color: #d4d4d4; }
+        .terminal-panel {
+            height: 100%;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            background: #1e1e1e;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: #d4d4d4;
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #terminalConsole {
+            flex-grow: 1;
+            overflow-y: auto;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .log-line {
+            white-space: pre-wrap;
+            word-break: break-all;
+            word-wrap: break-word;
+            margin: 0;
+            padding: 0;
+        }
+
+        .log-error {
+            color: #ef4444;
+        }
+
+        .log-info {
+            color: #d4d4d4;
+        }
 
         /* Right Area */
-        .right-area { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; }
+        .right-area {
+            width: 340px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
 
-        .chat-container { flex-grow: 1; display: flex; flex-direction: column; min-height: 0; }
-        .chat-messages { flex-grow: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-        .chat-message { display: flex; flex-direction: column; gap: 4px; max-width: 90%; padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.4; }
-        .message-ai { background: var(--bg-main); border: 1px solid var(--border); align-self: flex-start; border-bottom-left-radius: 2px; }
-        .message-user { background: var(--accent); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
-        .chat-input { margin: 12px; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text-primary); font-family: inherit; outline: none; }
-        
-        .thinking-details { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; font-size: 11px; color: var(--text-secondary); }
-        .thinking-content { background-color: rgba(0,0,0,0.1); padding: 8px; margin-top: 6px; font-family: var(--font-mono); white-space: pre-wrap; max-height: 150px; overflow-y: auto; border-radius: 4px; }
+        .chat-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .chat-messages {
+            flex-grow: 1;
+            padding: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .chat-message {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-width: 90%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .message-ai {
+            background: var(--bg-main);
+            border: 1px solid var(--border);
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+        }
+
+        .message-user {
+            background: var(--accent);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+
+        .chat-input {
+            margin: 12px;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-main);
+            color: var(--text-primary);
+            font-family: inherit;
+            outline: none;
+        }
+
+        .thinking-details {
+            margin-top: 8px;
+            border-top: 1px solid var(--border);
+            padding-top: 8px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .thinking-content {
+            background-color: rgba(0, 0, 0, 0.1);
+            padding: 8px;
+            margin-top: 6px;
+            font-family: var(--font-mono);
+            white-space: pre-wrap;
+            max-height: 150px;
+            overflow-y: auto;
+            border-radius: 4px;
+        }
 
         /* Config Panel */
-        .config-container { flex-shrink: 0; }
-        .config-panel { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-        .config-row { display: flex; justify-content: space-between; align-items: center; }
-        .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
-        .switch input { opacity: 0; width: 100%; height: 100%; position: absolute; top: 0; left: 0; cursor: pointer; z-index: 2; margin: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; border-radius: 20px; transition: .2s; }
-        @media (prefers-color-scheme: dark) { .slider { background-color: #475569; } }
-        :root.force-dark .slider { background-color: #475569; }
-        .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; }
-        input:checked + .slider { background-color: var(--accent); }
-        input:checked + .slider:before { transform: translateX(16px); }
+        .config-container {
+            flex-shrink: 0;
+        }
 
-        .btn-primary { background: var(--accent); color: white; border: none; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px; }
-        .btn-primary:disabled { background: var(--bg-main); color: var(--text-secondary); border: 1px solid var(--border); cursor: not-allowed; }
-        .btn-danger { background: var(--danger); color: white; border: none; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px; }
+        .config-panel {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .config-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 18px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: pointer;
+            z-index: 2;
+            margin: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e1;
+            border-radius: 20px;
+            transition: .2s;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .slider {
+                background-color: #475569;
+            }
+        }
+
+        :root.force-dark .slider {
+            background-color: #475569;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 12px;
+            width: 12px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: .2s;
+        }
+
+        input:checked+.slider {
+            background-color: var(--accent);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(16px);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .btn-primary:disabled {
+            background: var(--bg-main);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
 
         /* Iframe view */
-        .iframe-view-pane { display: none; flex-direction: column; height: 100vh; }
-        .neo-report-header { background: var(--bg-card); padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-        .report-iframe { flex-grow: 1; border: none; width: 100%; }
+        .iframe-view-pane {
+            display: none;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .neo-report-header {
+            background: var(--bg-card);
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .report-iframe {
+            flex-grow: 1;
+            border: none;
+            width: 100%;
+        }
 
         /* Modal */
-        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
-        .modal-card { background: var(--bg-card); width: 400px; border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; }
-        .modal-header { padding: 16px; border-bottom: 1px solid var(--border); font-weight: 600; }
-        .modal-body { padding: 16px; }
-        .modal-input { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main); color: var(--text-primary); }
-        .modal-footer { padding: 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
-        
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-card {
+            background: var(--bg-card);
+            width: 400px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+        }
+
+        .modal-body {
+            padding: 16px;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-main);
+            color: var(--text-primary);
+        }
+
+        .modal-footer {
+            padding: 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
         /* Resizers */
         .resizer-h {
             width: 8px;
@@ -330,7 +721,11 @@
             z-index: 10;
             margin: 0 -4px;
         }
-        .resizer-h:hover { background: var(--border); }
+
+        .resizer-h:hover {
+            background: var(--border);
+        }
+
         .resizer-v {
             height: 8px;
             cursor: ns-resize;
@@ -339,13 +734,17 @@
             z-index: 10;
             margin: -4px 0;
         }
-        .resizer-v:hover { background: var(--border); }
-        
+
+        .resizer-v:hover {
+            background: var(--border);
+        }
+
         .history-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 13px;
         }
+
         .history-table th {
             padding: 10px 12px;
             font-weight: 600;
@@ -356,30 +755,52 @@
             letter-spacing: 0.5px;
             text-align: left;
         }
+
         .history-table td {
             padding: 10px 12px;
             border-bottom: 1px solid var(--border);
             color: var(--text-primary);
             vertical-align: middle;
         }
+
         .history-row {
             cursor: pointer;
             transition: background 0.15s ease;
         }
+
         .history-row:hover {
             background: var(--bg-main);
         }
+
         .report-link-active {
             color: var(--accent);
             font-size: 14px;
         }
+
         .report-link-inactive {
             color: var(--text-secondary);
             opacity: 0.4;
             font-size: 14px;
         }
-        .badge-success { background: rgba(16,185,129,0.1); color: var(--success); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; }
-        .badge-failed { background: rgba(239,68,68,0.1); color: var(--danger); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .badge-failed {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
         .delete-report-btn {
             background: transparent;
             border: none;
@@ -388,10 +809,11 @@
             padding: 4px;
             transition: color 0.15s ease;
         }
+
         .delete-report-btn:hover {
             color: var(--danger);
         }
-        
+
         /* Toast Notification Styles */
         .toast-container {
             position: fixed;
@@ -403,6 +825,7 @@
             gap: 10px;
             pointer-events: none;
         }
+
         .toast {
             padding: 12px 20px;
             border-radius: 8px;
@@ -412,7 +835,7 @@
             color: #f8fafc;
             font-size: 13px;
             font-weight: 500;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
             display: flex;
             align-items: center;
             gap: 8px;
@@ -421,24 +844,40 @@
             min-width: 250px;
             max-width: 400px;
         }
+
         .toast.success {
             border-left: 4px solid #10b981;
         }
+
         .toast.error {
             border-left: 4px solid #ef4444;
         }
+
         .toast.info {
             border-left: 4px solid #3b82f6;
         }
+
         @keyframes slideIn {
-            from { transform: translateX(100%) translateY(-10px); opacity: 0; }
-            to { transform: translateX(0) translateY(0); opacity: 1; }
+            from {
+                transform: translateX(100%) translateY(-10px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0) translateY(0);
+                opacity: 1;
+            }
         }
+
         @keyframes fadeOut {
-            to { opacity: 0; transform: translateY(-10px); }
+            to {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
         }
     </style>
 </head>
+
 <body>
     <div id="toastContainer" class="toast-container"></div>
 
@@ -446,7 +885,8 @@
         <div class="logo"><i class="fa-solid fa-atom"></i></div>
         <div class="nav-item active" id="navWorkspace" title="Workspace" onclick="showView('dashboardView')">
             <i class="fa-solid fa-laptop-code"></i>
-            <div class="nav-badge" id="sidebarRunBadge" style="display:none;"><i class="fa-solid fa-circle-notch spinner"></i></div>
+            <div class="nav-badge" id="sidebarRunBadge" style="display:none;"><i
+                    class="fa-solid fa-circle-notch spinner"></i></div>
         </div>
         <div class="nav-item" id="navReports" title="History & Reports" onclick="showView('reportViewContainer')">
             <i class="fa-solid fa-chart-bar"></i>
@@ -454,15 +894,22 @@
     </div>
 
     <div class="main-container">
-        
+
         <div class="top-navbar">
             <div style="font-weight: 500;">Neodymium Aura Dashboard</div>
             <div style="display:flex; gap: 16px; align-items:center;">
-                
-                <div style="display:flex; gap: 8px; background: var(--bg-main); padding: 4px; border-radius: 6px; border: 1px solid var(--border);">
-                    <button class="btn-edit" id="themeLight" onclick="changeTheme('light')" style="padding: 4px 8px; border:none;" title="Light Mode"><i class="fa-solid fa-sun"></i></button>
-                    <button class="btn-edit" id="themeDark" onclick="changeTheme('dark')" style="padding: 4px 8px; border:none;" title="Dark Mode"><i class="fa-solid fa-moon"></i></button>
-                    <button class="btn-edit" id="themeSystem" onclick="changeTheme('system')" style="padding: 4px 8px; border:none;" title="System Theme"><i class="fa-solid fa-desktop"></i></button>
+
+                <div
+                    style="display:flex; gap: 8px; background: var(--bg-main); padding: 4px; border-radius: 6px; border: 1px solid var(--border);">
+                    <button class="btn-edit" id="themeLight" onclick="changeTheme('light')"
+                        style="padding: 4px 8px; border:none;" title="Light Mode"><i
+                            class="fa-solid fa-sun"></i></button>
+                    <button class="btn-edit" id="themeDark" onclick="changeTheme('dark')"
+                        style="padding: 4px 8px; border:none;" title="Dark Mode"><i
+                            class="fa-solid fa-moon"></i></button>
+                    <button class="btn-edit" id="themeSystem" onclick="changeTheme('system')"
+                        style="padding: 4px 8px; border:none;" title="System Theme"><i
+                            class="fa-solid fa-desktop"></i></button>
                 </div>
             </div>
         </div>
@@ -470,23 +917,28 @@
         <!-- DASHBOARD VIEW -->
         <div id="dashboardView" style="display: flex; flex-grow: 1; min-height: 0;">
             <div class="workspace-layout">
-                
+
                 <!-- LEFT AREA -->
                 <div class="left-area" id="leftArea" style="resize: none;">
-                    
+
                     <!-- STATE: Selection & Queue -->
                     <div id="state-selection" class="view-state active">
                         <div class="selection-queue-grid">
-                            
+
                             <div class="panel">
                                 <div class="panel-header">
                                     <span>Test Selection</span>
-                                    <button class="btn-edit" onclick="loadFiles()" style="padding: 2px 6px; font-size: 10px;" title="Refresh Files"><i class="fa-solid fa-rotate-right"></i></button>
+                                    <button class="btn-edit" onclick="loadFiles()"
+                                        style="padding: 2px 6px; font-size: 10px;" title="Refresh Files"><i
+                                            class="fa-solid fa-rotate-right"></i></button>
                                 </div>
                                 <div class="content-scroll" id="yamlFileList">
                                     <!-- Populated by JS -->
                                 </div>
-                                <div style="padding: 12px; border-top: 1px solid var(--border);"><button id="openModalBtn" class="btn-edit" style="width: 100%; justify-content: center;" onclick="document.getElementById('createTestModal').style.display='flex'; document.getElementById('newTestName').focus();"><i class="fa-solid fa-plus"></i> Create New Test</button></div>
+                                <div style="padding: 12px; border-top: 1px solid var(--border);"><button
+                                        id="openModalBtn" class="btn-edit" style="width: 100%; justify-content: center;"
+                                        onclick="document.getElementById('createTestModal').style.display='flex'; document.getElementById('newTestName').focus();"><i
+                                            class="fa-solid fa-plus"></i> Create New Test</button></div>
                             </div>
 
                             <div class="panel">
@@ -506,21 +958,24 @@
                         <div class="panel editor-container" id="editorPanel">
                             <div class="panel-header">
                                 <div style="display:flex; align-items:center; gap:8px;">
-                                    <i class="fa-solid fa-file-lines" style="color:var(--text-secondary);"></i> 
+                                    <i class="fa-solid fa-file-lines" style="color:var(--text-secondary);"></i>
                                     <span id="editorFileName">test.yaml</span>
                                 </div>
                                 <div class="editor-actions">
-                                    <button class="btn-editor save" onclick="saveYamlFile()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
-                                    <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><i class="fa-solid fa-trash"></i> Delete</button>
-                                    <button class="btn-editor" onclick="closeEditor()"><i class="fa-solid fa-xmark"></i> Close</button>
+                                    <button class="btn-editor save" onclick="saveYamlFile()"><i
+                                            class="fa-solid fa-floppy-disk"></i> Save</button>
+                                    <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><i
+                                            class="fa-solid fa-trash"></i> Delete</button>
+                                    <button class="btn-editor" onclick="closeEditor()"><i class="fa-solid fa-xmark"></i>
+                                        Close</button>
                                 </div>
                             </div>
                             <textarea class="editor-textarea" id="editorContent" spellcheck="false"></textarea>
                         </div>
                     </div>
 
-                    
-                    <div class="panel" id="statsPanel" style="display: none; flex-shrink: 0; padding: 12px; margin-bottom: 16px;">
+
+                    <div class="panel" id="statsPanel" style="display: none; flex-shrink: 0; padding: 12px;">
                         <div style="display: flex; justify-content: space-between; font-weight: 600;">
                             <div>Total Run: <span id="statsTotalExecution" style="color:var(--accent);">0</span></div>
                             <div>Passed: <span id="statsPassed" style="color:var(--success);">0</span></div>
@@ -530,41 +985,56 @@
                     <!-- Terminal Panel -->
 
                     <div class="resizer-v" id="consoleResizer" style="display:none;"></div>
-                    <div class="panel" id="consolePanel" style="display:none; flex-shrink: 0; border:none; width: 100%; max-width: 100%; box-sizing: border-box;">
+                    <div class="panel" id="consolePanel"
+                        style="display:none; flex-shrink: 0; border:none; width: 100%; max-width: 100%; box-sizing: border-box;">
                         <div class="terminal-panel">
-                            <div style="font-size:11px; margin-bottom:8px; opacity: 0.7; display:flex; justify-content:space-between;">
-                                <span>TERMINAL OUTPUT <span id="runSpinner" style="display:none;"><i class="fa-solid fa-circle-notch spinner" style="margin-left:8px;"></i></span></span>
+                            <div
+                                style="font-size:11px; margin-bottom:8px; opacity: 0.7; display:flex; justify-content:space-between;">
+                                <span>TERMINAL OUTPUT <span id="runSpinner" style="display:none;"><i
+                                            class="fa-solid fa-circle-notch spinner"
+                                            style="margin-left:8px;"></i></span></span>
                                 <div style="display: flex; gap: 12px; align-items: center;">
-                                    <input type="checkbox" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" checked> <label for="aiOnlyCb">AI Only</label>
-                                    <input type="checkbox" id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)"> <label for="errorsOnlyCb">Errors Only</label>
+                                    <input type="checkbox" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" checked>
+                                    <label for="aiOnlyCb">AI Only</label>
+                                    <input type="checkbox" id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)">
+                                    <label for="errorsOnlyCb">Errors Only</label>
                                 </div>
                             </div>
                             <div id="terminalConsole">Console idle.</div>
                         </div>
                     </div>
-                    
+
                 </div>
-                
+
                 <!-- HORIZONTAL RESIZER -->
                 <div class="resizer-h" id="sidebarResizer"></div>
 
                 <!-- RIGHT AREA -->
                 <div class="right-area" id="rightArea">
-                    
+
                     <div class="panel chat-container">
                         <div class="panel-header" style="display:flex; justify-content:space-between;">
                             <div><i class="fa-solid fa-sparkles" style="color:var(--accent);"></i> Aura Assistant</div>
                             <div style="display: flex; align-items: center; gap: 4px;">
-                                <select id="chatSessionSelect" onchange="switchChatSession()" style="width: 110px; max-width: 110px; background:var(--bg-main); color:var(--text-primary); border:1px solid var(--border); font-size:11px; border-radius:4px; padding:2px; box-sizing: border-box; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"></select>
-                                <button class="btn-edit" onclick="createNewChatSession()" style="padding: 2px 6px; font-size: 10px;" title="New Chat"><i class="fa-solid fa-plus"></i></button>
-                                <button class="btn-edit" onclick="renameCurrentChatSession()" style="padding: 2px 6px; font-size: 10px;" title="Rename Chat"><i class="fa-solid fa-pen"></i></button>
-                                <button class="btn-edit" onclick="deleteCurrentChatSession()" style="padding: 2px 6px; font-size: 10px; color: var(--danger);" title="Delete Chat"><i class="fa-solid fa-trash"></i></button>
+                                <select id="chatSessionSelect" onchange="switchChatSession()"
+                                    style="width: 110px; max-width: 110px; background:var(--bg-main); color:var(--text-primary); border:1px solid var(--border); font-size:11px; border-radius:4px; padding:2px; box-sizing: border-box; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"></select>
+                                <button class="btn-edit" onclick="createNewChatSession()"
+                                    style="padding: 2px 6px; font-size: 10px;" title="New Chat"><i
+                                        class="fa-solid fa-plus"></i></button>
+                                <button class="btn-edit" onclick="renameCurrentChatSession()"
+                                    style="padding: 2px 6px; font-size: 10px;" title="Rename Chat"><i
+                                        class="fa-solid fa-pen"></i></button>
+                                <button class="btn-edit" onclick="deleteCurrentChatSession()"
+                                    style="padding: 2px 6px; font-size: 10px; color: var(--danger);"
+                                    title="Delete Chat"><i class="fa-solid fa-trash"></i></button>
                             </div>
                         </div>
-                        <div class="api-key-banner" id="apiKeyBanner" style="display: none; padding: 10px; background: rgba(239, 68, 68, 0.1); border-bottom: 1px solid var(--danger); color: var(--danger); font-size: 11px;">
+                        <div class="api-key-banner" id="apiKeyBanner"
+                            style="display: none; padding: 10px; background: rgba(239, 68, 68, 0.1); border-bottom: 1px solid var(--danger); color: var(--danger); font-size: 11px;">
                             <i class="fa-solid fa-triangle-exclamation"></i> <span id="apiKeyBannerText"></span>
                         </div>
-                        <div class="api-key-banner" id="warningBanner" style="display: none; padding: 10px; background: rgba(245, 158, 11, 0.1); border-bottom: 1px solid #f59e0b; color: #f59e0b; font-size: 11px;">
+                        <div class="api-key-banner" id="warningBanner"
+                            style="display: none; padding: 10px; background: rgba(245, 158, 11, 0.1); border-bottom: 1px solid #f59e0b; color: #f59e0b; font-size: 11px;">
                             <i class="fa-solid fa-triangle-exclamation"></i> <span id="warningBannerText"></span>
                         </div>
                         <div class="chat-messages" id="chatMessages"></div>
@@ -573,59 +1043,82 @@
 
                     <div class="panel config-container">
                         <div class="panel-header">Run Configuration</div>
-                        <div class="config-panel" style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
-                            
+                        <div class="config-panel"
+                            style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+
                             <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
-                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                <div class="config-row"
+                                    style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-weight: 500;">Headless Mode</span>
-                                    <label class="switch" for="optHeadless"><input type="checkbox" id="optHeadless" checked><span class="slider"></span></label>
+                                    <label class="switch" for="optHeadless"><input type="checkbox" id="optHeadless"
+                                            checked><span class="slider"></span></label>
                                 </div>
-                                <span style="font-size: 11px; color: var(--text-secondary);">Runs the browser in the background without a GUI.</span>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Runs the browser in the
+                                    background without a GUI.</span>
                             </div>
-                            
+
                             <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
-                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                <div class="config-row"
+                                    style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-weight: 500;">Record Video</span>
-                                    <label class="switch" for="optVideo"><input type="checkbox" id="optVideo"><span class="slider"></span></label>
+                                    <label class="switch" for="optVideo"><input type="checkbox" id="optVideo"><span
+                                            class="slider"></span></label>
                                 </div>
-                                <span style="font-size: 11px; color: var(--text-secondary);">Records execution video and attaches it to the Allure report.</span>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Records execution video and
+                                    attaches it to the Allure report.</span>
                             </div>
 
                             <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
-                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                <div class="config-row"
+                                    style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-weight: 500;">Keep Browser Open</span>
-                                    <label class="switch" for="optKeepOpen"><input type="checkbox" id="optKeepOpen"><span class="slider"></span></label>
+                                    <label class="switch" for="optKeepOpen"><input type="checkbox"
+                                            id="optKeepOpen"><span class="slider"></span></label>
                                 </div>
-                                <span style="font-size: 11px; color: var(--text-secondary);">Leaves the browser window open after execution finishes.</span>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Leaves the browser window
+                                    open after execution finishes.</span>
                             </div>
 
                             <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
-                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                <div class="config-row"
+                                    style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-weight: 500;">Interactive HUD</span>
-                                    <label class="switch" for="optInteractive"><input type="checkbox" id="optInteractive"><span class="slider"></span></label>
+                                    <label class="switch" for="optInteractive"><input type="checkbox"
+                                            id="optInteractive"><span class="slider"></span></label>
                                 </div>
-                                <span style="font-size: 11px; color: var(--text-secondary);">Enables interactive AI elements in the browser during execution.</span>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Enables interactive AI
+                                    elements in the browser during execution.</span>
                             </div>
 
                             <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
-                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                <div class="config-row"
+                                    style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-weight: 500;">Allure Report</span>
-                                    <label class="switch" for="optAllure"><input type="checkbox" id="optAllure" checked><span class="slider"></span></label>
+                                    <label class="switch" for="optAllure"><input type="checkbox" id="optAllure"
+                                            checked><span class="slider"></span></label>
                                 </div>
-                                <span style="font-size: 11px; color: var(--text-secondary);">Compiles and opens the visual test report after execution completes.</span>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Compiles and opens the
+                                    visual test report after execution completes.</span>
                             </div>
 
                             <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
-                                <div class="config-row" style="display: flex; justify-content: space-between; align-items: center;">
+                                <div class="config-row"
+                                    style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-weight: 500;">Save to History</span>
-                                    <label class="switch" for="optHistory"><input type="checkbox" id="optHistory" checked><span class="slider"></span></label>
+                                    <label class="switch" for="optHistory"><input type="checkbox" id="optHistory"
+                                            checked><span class="slider"></span></label>
                                 </div>
-                                <span style="font-size: 11px; color: var(--text-secondary);">Archives execution logs and reports in the history tab.</span>
+                                <span style="font-size: 11px; color: var(--text-secondary);">Archives execution logs and
+                                    reports in the history tab.</span>
                             </div>
 
-                            <button class="btn-primary" id="runQueueBtn" onclick="runQueue()"><i class="fa-solid fa-play"></i> Run Queue</button>
-                            <button class="btn-primary" id="runCurrentTestBtn" onclick="runCurrentFile()" style="display:none; background: var(--success);"><i class="fa-solid fa-play"></i> Run Open Test</button>
-                            <button class="btn-danger" id="stopQueueBtn" onclick="stopQueue()" style="display:none;"><i class="fa-solid fa-stop"></i> Stop Execution</button>
+                            <button class="btn-primary" id="runQueueBtn" onclick="runQueue()"><i
+                                    class="fa-solid fa-play"></i> Run Queue</button>
+                            <button class="btn-primary" id="runCurrentTestBtn" onclick="runCurrentFile()"
+                                style="display:none; background: var(--success);"><i class="fa-solid fa-play"></i> Run
+                                Open Test</button>
+                            <button class="btn-danger" id="stopQueueBtn" onclick="stopQueue()" style="display:none;"><i
+                                    class="fa-solid fa-stop"></i> Stop Execution</button>
                         </div>
                     </div>
                 </div>
@@ -640,7 +1133,8 @@
                 <div class="panel" style="height: 100%;">
                     <div class="panel-header">
                         <span>Run History</span>
-                        <button class="btn btn-secondary" onclick="loadHistory()" style="padding: 4px 8px;"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i></button>
+                        <button class="btn btn-secondary" onclick="loadHistory()" style="padding: 4px 8px;"><i
+                                class="fa-solid fa-arrows-rotate" aria-hidden="true"></i></button>
                     </div>
                     <div style="flex-grow: 1; overflow-y: auto; padding: 0;">
                         <table class="history-table" style="font-size: 13px;">
@@ -676,16 +1170,20 @@
             <div class="right-area" id="colReport" style="flex-grow: 1; min-width: 0;">
                 <div class="panel" style="height: 100%;">
                     <div class="panel-header">
-                        <span>Interactive Test Report</span>
+                        <span>Test Case Details</span>
                         <div id="historyReportActions" style="display: none;">
-                            <button class="btn btn-secondary" id="btnOpenAllure" style="padding: 4px 8px; margin-right: 8px;">Open Allure Report</button>
-                            <button class="btn btn-secondary" id="btnOpenLog" style="padding: 4px 8px;">View Log</button>
+                            <button class="btn btn-secondary" id="btnOpenAllure"
+                                style="padding: 4px 8px; margin-right: 8px;">Open Allure Report</button>
+                            <button class="btn btn-secondary" id="btnOpenLog" style="padding: 4px 8px;">View
+                                Log</button>
                         </div>
                     </div>
                     <div style="flex: 1; position: relative;">
                         <iframe id="historyConsoleIframe" style="width: 100%; height: 100%; border: none;"></iframe>
-                        <div id="historyPlaceholder" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; background: var(--bg-main); color: var(--text-secondary);">
-                            <i class="fa-solid fa-clock-rotate-left" style="font-size: 32px; margin-bottom: 16px; opacity: 0.5;"></i>
+                        <div id="historyPlaceholder"
+                            style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; background: var(--bg-main); color: var(--text-secondary);">
+                            <i class="fa-solid fa-clock-rotate-left"
+                                style="font-size: 32px; margin-bottom: 16px; opacity: 0.5;"></i>
                             <p>Select a run from the history to view its interactive report.</p>
                         </div>
                     </div>
@@ -696,8 +1194,10 @@
         <!-- REPORT IFRAME VIEW (Hidden until report opened) -->
         <div id="reportView" class="iframe-view-pane">
             <div class="neo-report-header">
-                <div style="font-weight: 600;"><i class="fa-solid fa-chart-column" style="color: var(--success);"></i> Allure Report: <span id="reportDisplayName"></span></div>
-                <button class="btn-edit" onclick="closeReportView()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+                <div style="font-weight: 600;"><i class="fa-solid fa-chart-column" style="color: var(--success);"></i>
+                    Allure Report: <span id="reportDisplayName"></span></div>
+                <button class="btn-edit" onclick="closeReportView()"><i class="fa-solid fa-arrow-left"></i>
+                    Back</button>
             </div>
             <iframe class="report-iframe" id="reportIframe" src="about:blank"></iframe>
         </div>
@@ -705,8 +1205,10 @@
         <!-- INTERACTIVE CONSOLE VIEW -->
         <div id="interactiveConsoleView" class="iframe-view-pane">
             <div class="neo-report-header">
-                <div style="font-weight: 600;"><i class="fa-solid fa-terminal" style="color: var(--accent);"></i> Interactive Console</div>
-                <button class="btn-edit" onclick="closeInteractiveConsoleView()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+                <div style="font-weight: 600;"><i class="fa-solid fa-terminal" style="color: var(--accent);"></i>
+                    Interactive Console</div>
+                <button class="btn-edit" onclick="closeInteractiveConsoleView()"><i class="fa-solid fa-arrow-left"></i>
+                    Back</button>
             </div>
             <iframe class="report-iframe" id="interactiveConsoleIframe" src="about:blank"></iframe>
         </div>
@@ -723,7 +1225,8 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-editor" id="closeModalBtn">Cancel</button>
-                <button class="btn-primary" style="margin-top:0;" id="submitCreateTestBtn" onclick="submitCreateTest()">Create Test</button>
+                <button class="btn-primary" style="margin-top:0;" id="submitCreateTestBtn"
+                    onclick="submitCreateTest()">Create Test</button>
             </div>
         </div>
     </div>
@@ -733,10 +1236,12 @@
         <div class="modal-card">
             <div class="modal-header">Delete Test Case</div>
             <div class="modal-body">
-                <p>Are you sure you want to delete <span id="deleteFileNameDisplay" style="font-weight: 600;"></span>?</p>
+                <p>Are you sure you want to delete <span id="deleteFileNameDisplay" style="font-weight: 600;"></span>?
+                </p>
             </div>
             <div class="modal-footer">
-                <button class="btn-editor" onclick="document.getElementById('deleteTestModal').style.display='none'">Cancel</button>
+                <button class="btn-editor"
+                    onclick="document.getElementById('deleteTestModal').style.display='none'">Cancel</button>
                 <button class="btn-danger" style="margin-top:0;" onclick="submitDeleteTest()">Confirm Delete</button>
             </div>
         </div>
@@ -747,10 +1252,12 @@
         <div class="modal-card" style="width: 80%; height: 80%; max-width: 1200px; max-height: 90vh;">
             <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <span>Execution Log</span>
-                <button class="btn-editor" id="downloadLogBtn" style="margin:0;"><i class="fa-solid fa-download"></i> Download</button>
+                <button class="btn-editor" id="downloadLogBtn" style="margin:0;"><i class="fa-solid fa-download"></i>
+                    Download</button>
             </div>
             <div class="modal-body" style="flex-grow: 1; overflow-y: auto; padding: 0; background: #1e1e1e;">
-                <pre id="logModalContent" style="margin: 0; padding: 16px; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; word-wrap: break-word; color: #d4d4d4;"></pre>
+                <pre id="logModalContent"
+                    style="margin: 0; padding: 16px; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; word-wrap: break-word; color: #d4d4d4;"></pre>
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" style="margin:0;" onclick="closeLogModal()">Close</button>
@@ -784,10 +1291,10 @@
         function initTheme() {
             const savedTheme = localStorage.getItem('aura_theme') || 'system';
             applyTheme(savedTheme);
-            
+
         }
 
-        
+
         function applyTheme(theme) {
             const root = document.documentElement;
             if (theme === 'dark') {
@@ -799,7 +1306,7 @@
             } else {
                 root.classList.remove('force-dark', 'force-light');
             }
-            
+
             localStorage.setItem('aura_theme', theme);
         }
 
@@ -809,36 +1316,36 @@
         let isResizingH1 = false;
         let isResizingH2 = false;
 
-        document.getElementById('sidebarResizer').addEventListener('mousedown', function(e) {
+        document.getElementById('sidebarResizer').addEventListener('mousedown', function (e) {
             isResizingH = true;
             document.body.style.cursor = 'ew-resize';
             e.preventDefault();
         });
 
-        document.getElementById('consoleResizer').addEventListener('mousedown', function(e) {
+        document.getElementById('consoleResizer').addEventListener('mousedown', function (e) {
             isResizingV = true;
             document.body.style.cursor = 'ns-resize';
             e.preventDefault();
         });
 
-        document.getElementById('historyResizer1').addEventListener('mousedown', function(e) {
+        document.getElementById('historyResizer1').addEventListener('mousedown', function (e) {
             isResizingH1 = true;
             document.body.style.cursor = 'ew-resize';
             e.preventDefault();
         });
 
-        document.getElementById('historyResizer2').addEventListener('mousedown', function(e) {
+        document.getElementById('historyResizer2').addEventListener('mousedown', function (e) {
             isResizingH2 = true;
             document.body.style.cursor = 'ew-resize';
             e.preventDefault();
         });
 
-        document.addEventListener('mousemove', function(e) {
+        document.addEventListener('mousemove', function (e) {
             if (isResizingH) {
                 const workspace = document.querySelector('.workspace-layout');
                 const workspaceRect = workspace.getBoundingClientRect();
                 // calculate right area width
-                const newWidth = workspaceRect.right - e.clientX - 16; 
+                const newWidth = workspaceRect.right - e.clientX - 16;
                 if (newWidth > 200 && newWidth < workspaceRect.width * 0.6) {
                     document.getElementById('rightArea').style.width = newWidth + 'px';
                 }
@@ -867,16 +1374,16 @@
                 const colRuns = document.getElementById('colRuns');
                 const colRunsWidth = colRuns.getBoundingClientRect().width;
                 const workspaceRect = document.querySelector('.workspace-layout').getBoundingClientRect();
-                
+
                 // Client X - Workspace Left - 16 (padding) - colRunsWidth - resizer1 width (approx 8)
-                const newWidth = e.clientX - workspaceRect.left - 16 - colRunsWidth - 16; 
+                const newWidth = e.clientX - workspaceRect.left - 16 - colRunsWidth - 16;
                 if (newWidth > 200 && newWidth < workspaceRect.width * 0.4) {
                     colTests.style.width = newWidth + 'px';
                 }
             }
         });
 
-        document.addEventListener('mouseup', function(e) {
+        document.addEventListener('mouseup', function (e) {
             if (isResizingH || isResizingV || isResizingH1 || isResizingH2) {
                 isResizingH = false;
                 isResizingV = false;
@@ -903,7 +1410,7 @@
             document.getElementById('reportView').style.display = 'none';
             const icView = document.getElementById('interactiveConsoleView');
             if (icView) icView.style.display = 'none';
-            
+
             document.getElementById(viewId).style.display = 'flex';
 
             if (viewId !== 'reportView' && viewId !== 'interactiveConsoleView') {
@@ -912,7 +1419,7 @@
 
             const navWorkspace = document.getElementById('navWorkspace');
             const navReports = document.getElementById('navReports');
-            
+
             if (viewId === 'dashboardView') {
                 if (navWorkspace) navWorkspace.classList.add('active');
                 if (navReports) navReports.classList.remove('active');
@@ -933,17 +1440,17 @@
         // DOM Elements
         const dashboardView = document.getElementById('dashboardView');
         const reportView = document.getElementById('reportView');
-        
+
         const editorFileName = document.getElementById('editorFileName');
         const editorContent = document.getElementById('editorContent');
         const reportDisplayName = document.getElementById('reportDisplayName');
         const reportIframe = document.getElementById('reportIframe');
-        
+
         const createTestModal = document.getElementById('createTestModal');
         const openModalBtn = document.getElementById('openModalBtn');
         const closeModalBtn = document.getElementById('closeModalBtn');
         const newTestName = document.getElementById('newTestName');
-        
+
         const runQueueBtn = document.getElementById('runQueueBtn');
         const stopQueueBtn = document.getElementById('stopQueueBtn');
         const queueListContainer = document.getElementById('queueListContainer');
@@ -955,7 +1462,7 @@
         const runSpinner = document.getElementById('runSpinner');
         const yamlFileList = document.getElementById('yamlFileList');
         const allureHistoryList = document.getElementById('allureHistoryList');
-        
+
         // State variables
         const clientId = 'c-' + Math.random().toString(36).substring(2) + '-' + Date.now().toString(36);
         let disconnected = false;
@@ -985,7 +1492,7 @@
             // Enforce mutual exclusivity: Headless Mode vs Interactive HUD
             const optHeadless = document.getElementById('optHeadless');
             const optInteractive = document.getElementById('optInteractive');
-            
+
             function showWarning(msg) {
                 const banner = document.getElementById('warningBanner');
                 const bannerText = document.getElementById('warningBannerText');
@@ -997,7 +1504,7 @@
                     }, 5000);
                 }
             }
-            
+
             if (optHeadless && optInteractive) {
                 optHeadless.addEventListener('change', () => {
                     if (optHeadless.checked && optInteractive.checked) {
@@ -1053,7 +1560,7 @@
         function toggleSelectAllDatasets(file, checked) {
             const fileDto = currentFilesListCached.find(f => f.file === file);
             if (!fileDto) return;
-            
+
             fileDto.datasets.forEach(d => {
                 if (checked) {
                     if (!isDatasetSelected(file, d.id)) {
@@ -1093,7 +1600,7 @@
             yamlFileList.innerHTML = files.map(item => {
                 const isExpanded = !!expandedFiles[item.file];
                 const allChecked = isAllDatasetsChecked(item);
-                
+
                 return `
                     <div class="file-container" style="display: flex; flex-direction: column; margin-bottom: 6px;">
                         <div class="list-item" style="position: relative; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0" onclick="toggleExpandFile('${item.file}')">
@@ -1115,8 +1622,8 @@
                         
                         <div class="dataset-list" id="datasets-${item.file}" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; padding-left: 24px; margin-top: 4px; gap: 4px;">
                             ${item.datasets.map(dataset => {
-                                const isChecked = isDatasetSelected(item.file, dataset.id);
-                                return `
+                    const isChecked = isDatasetSelected(item.file, dataset.id);
+                    return `
                                     <div class="dataset-item" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); justify-content: space-between; cursor: pointer;" onclick="const cb = this.querySelector('.dataset-select-cb'); cb.checked = !cb.checked; toggleSelectDataset('${item.file}', '${dataset.id}', cb.checked);">
                                         <div style="display: flex; align-items: center; min-width: 0; overflow: hidden;">
                                             <input type="checkbox" class="dataset-select-cb" data-file="${item.file}" data-id="${dataset.id}" 
@@ -1128,7 +1635,7 @@
                                         </div>
                                     </div>
                                 `;
-                            }).join('')}
+                }).join('')}
                         </div>
                     </div>
                 `;
@@ -1148,7 +1655,7 @@
                 const hour = parseInt(ts.substring(9, 11));
                 const minute = parseInt(ts.substring(11, 13));
                 const second = parseInt(ts.substring(13, 15));
-                
+
                 const date = new Date(year, month, day, hour, minute, second);
                 if (!isNaN(date.getTime())) {
                     return date.toLocaleString();
@@ -1177,7 +1684,7 @@
             if (activeRunStats.running) {
                 const statusBadge = `<span style="background: rgba(59,130,246,0.1); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;"><i class="fa-solid fa-circle-notch spinner" style="margin-right: 4px;"></i> Running</span>`;
                 const formattedTime = activeRunStats.startTime ? activeRunStats.startTime.toLocaleString() : new Date().toLocaleString();
-                
+
                 rowsHtml += `
                     <tr class="history-row" style="cursor: pointer; border-left: 3px solid var(--accent);" onclick="openCurrentRunView()">
                         <td style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
@@ -1199,18 +1706,18 @@
                     const statusBadge = isSuccess
                         ? `<span class="badge-success">Passed</span>`
                         : `<span class="badge-failed">Failed</span>`;
-                    
+
                     const minIcon = isSuccess
                         ? `<i class="fa-solid fa-check-circle" style="color: var(--success); font-size: 18px;" title="Passed"></i>`
                         : `<i class="fa-solid fa-times-circle" style="color: var(--danger); font-size: 18px;" title="Failed"></i>`;
 
                     const formattedTime = formatHistoryTimestamp(item.timestamp || item.id.substring(0, 15));
-                    
+
                     const isSelected = item.id === currentReportId;
                     const selectedStyle = isSelected ? 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);' : '';
-                    
+
                     const timeOnly = formattedTime.includes(',') ? formattedTime.split(',')[1].trim() : formattedTime;
-                    
+
                     return `
                         <tr class="history-row" style="cursor: pointer; ${selectedStyle}" onclick="selectHistoryRun('${item.id}', ${item.hasReport === 'true'})">
                             <td style="padding: 10px 12px;">
@@ -1248,21 +1755,21 @@
             currentReportId = reportId;
             currentTestFile = null;
             renderHistoryTable(); // Update selection styling
-            
+
             const run = historyCached.find(r => r.id === reportId);
-            
+
             // Show Tests column, remove minified class from runs
             const colRuns = document.getElementById('colRuns');
             colRuns.classList.remove('col-minimized');
             colRuns.style.width = '320px';
-            
+
             const colTests = document.getElementById('colTests');
             const historyResizer2 = document.getElementById('historyResizer2');
             colTests.classList.remove('col-minimized');
             colTests.style.display = 'flex';
             colTests.style.width = '280px';
             historyResizer2.style.display = 'block';
-            
+
             // Hide report details until test is selected
             document.getElementById('colReport').classList.add('mobile-view');
             document.getElementById('historyPlaceholder').style.display = 'flex';
@@ -1282,7 +1789,7 @@
                     const tBadge = tSuccess
                         ? `<i class="fa-solid fa-check" style="color: var(--success); margin-left: 6px;" title="Passed"></i>`
                         : `<i class="fa-solid fa-xmark" style="color: var(--danger); margin-left: 6px;" title="Failed"></i>`;
-                    
+
                     let browserIcon = 'fa-globe';
                     if (t.browser) {
                         const b = t.browser.toLowerCase();
@@ -1294,7 +1801,7 @@
                     } else {
                         browserIcon = 'fa-solid fa-globe';
                     }
-                    
+
                     const durationText = t.durationMs ? (t.durationMs / 1000).toFixed(1) + 's' : '';
 
                     return `
@@ -1417,7 +1924,7 @@
             if (statsQueueCount) {
                 statsQueueCount.innerText = `${selectedDatasets.length} Dataset${selectedDatasets.length === 1 ? '' : 's'}`;
             }
-            
+
             if (selectedDatasets.length === 0) {
                 queueListContainer.innerHTML = `
                     <div style="font-size: 13px; color: var(--text-secondary); font-style: italic; padding: 15px; border: 1px dashed var(--border-hover); border-radius: 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;">
@@ -1468,7 +1975,7 @@
             } catch (e) {
                 console.error("Failed to parse chat sessions", e);
             }
-            
+
             if (!chatSessions || chatSessions.length === 0) {
                 const defaultSession = {
                     id: 's-' + Math.random().toString(36).substring(2) + '-' + Date.now().toString(36),
@@ -1484,7 +1991,7 @@
                     currentSessionId = chatSessions[0].id;
                 }
             }
-            
+
             updateSessionDropdown();
             loadCurrentSessionHistory();
         }
@@ -1510,11 +2017,11 @@
         function loadCurrentSessionHistory() {
             const session = chatSessions.find(s => s.id === currentSessionId);
             conversationHistory = session ? session.history : [];
-            
+
             const chatMessages = document.getElementById('chatMessages');
             if (chatMessages) {
                 chatMessages.innerHTML = '';
-                
+
                 if (conversationHistory.length === 0) {
                     appendGreeting();
                 } else {
@@ -1523,16 +2030,16 @@
                         if (msg.thinking) {
                             const details = document.createElement('details');
                             details.className = 'thinking-details';
-                            
+
                             const summary = document.createElement('summary');
                             summary.innerHTML = '<i class="fa-solid fa-brain" aria-hidden="true"></i> AI Reasoning & Escalations';
                             details.appendChild(summary);
-                            
+
                             const content = document.createElement('pre');
                             content.className = 'thinking-content';
                             content.innerText = msg.thinking;
                             details.appendChild(content);
-                            
+
                             bubble.appendChild(details);
                         }
                     });
@@ -1642,21 +2149,21 @@
         function updateCenterLayout() {
             const hasEdit = (activeEditingFile !== null);
             const hasConsole = consoleOpened || isRunning;
-            
+
             const chatPanel = document.getElementById('chatPanel');
             const editorPanel = document.getElementById('editorPanel');
             const consolePanel = document.getElementById('consolePanel');
             const consoleResizer = document.getElementById('consoleResizer');
             const closeConsoleBtn = document.getElementById('closeConsoleBtn');
-            
+
             if (closeConsoleBtn) {
                 closeConsoleBtn.style.display = isRunning ? 'none' : 'inline-block';
             }
-            
+
             if (hasEdit) {
                 document.body.classList.add('workspace-split-mode');
                 switchState('editor');
-                
+
                 if (hasConsole) {
                     consoleResizer.style.display = 'block';
                     consolePanel.style.display = 'flex';
@@ -1669,7 +2176,7 @@
             } else {
                 document.body.classList.remove('workspace-split-mode');
                 switchState('selection');
-                
+
                 if (hasConsole) {
                     consoleResizer.style.display = 'block';
                     consolePanel.style.display = 'flex';
@@ -1688,20 +2195,20 @@
             const runCurrentTestBtn = document.getElementById('runCurrentTestBtn');
             const stopQueueBtn = document.getElementById('stopQueueBtn');
             if (!runQueueBtn || !runCurrentTestBtn || !stopQueueBtn) return;
-            
+
             const queueCount = selectedDatasets ? selectedDatasets.length : 0;
             runQueueBtn.innerHTML = `<i class="fa-solid fa-play"></i> Run Queue (${queueCount})`;
-            
+
             if (isRunning) {
                 runQueueBtn.style.display = 'none';
                 runCurrentTestBtn.style.display = 'none';
                 stopQueueBtn.style.display = 'flex';
                 return;
             }
-            
+
             stopQueueBtn.style.display = 'none';
             runQueueBtn.style.display = 'flex';
-            
+
             if (activeEditingFile) {
                 runCurrentTestBtn.style.display = 'flex';
                 runCurrentTestBtn.disabled = false;
@@ -1729,7 +2236,7 @@
             // Clone history before pushing user message
             const payloadHistory = [...conversationHistory];
             conversationHistory.push({ role: 'user', content: prompt });
-            
+
             // Auto-rename session on first message
             const session = chatSessions.find(s => s.id === currentSessionId);
             if (session && (session.name === 'New Chat' || session.name === 'Default Chat' || session.history.length === 1)) {
@@ -1746,7 +2253,7 @@
                         prompt: prompt,
                         activeFile: activeEditingFile,
                         history: payloadHistory
-                      })
+                    })
                 });
 
                 const data = await response.json();
@@ -1763,7 +2270,7 @@
                 }
 
                 const aiBubble = appendChatMessage('ai', data.message);
-                
+
                 const msgObj = { role: 'assistant', content: data.message };
                 if (data.thinking) {
                     msgObj.thinking = data.thinking;
@@ -1774,16 +2281,16 @@
                 if (data.thinking) {
                     const details = document.createElement('details');
                     details.className = 'thinking-details';
-                    
+
                     const summary = document.createElement('summary');
                     summary.innerHTML = '<i class="fa-solid fa-brain" aria-hidden="true"></i> AI Reasoning & Escalations';
                     details.appendChild(summary);
-                    
+
                     const content = document.createElement('pre');
                     content.className = 'thinking-content';
                     content.innerText = data.thinking;
                     details.appendChild(content);
-                    
+
                     aiBubble.appendChild(details);
                 }
 
@@ -1821,18 +2328,18 @@
             const chatMessages = document.getElementById('chatMessages');
             const bubble = document.createElement('div');
             bubble.className = `chat-message message-${sender}`;
-            
+
             const contentSpan = document.createElement('span');
             contentSpan.innerText = text;
             bubble.appendChild(contentSpan);
-            
+
             if (isThinking) {
                 const indicator = document.createElement('div');
                 indicator.className = 'typing-indicator';
                 indicator.innerHTML = '<span></span><span></span><span></span>';
                 bubble.appendChild(indicator);
             }
-            
+
             chatMessages.appendChild(bubble);
             chatMessages.scrollTop = chatMessages.scrollHeight;
             return bubble;
@@ -1911,7 +2418,7 @@
         function openReportView(reportId) {
             reportDisplayName.innerText = reportId;
             reportIframe.src = `/api/allure/report/${reportId}/index.html`;
-            
+
             document.body.classList.add('report-active');
             showView('reportView');
         }
@@ -1926,23 +2433,29 @@
             document.getElementById('historyReportActions').style.display = 'none';
             document.getElementById('historyConsoleIframe').src = url;
             currentReportId = null;
+            // Mark that we are now watching a live run — the poll not-running branch
+            // uses this flag to decide whether to redirect the user away afterwards.
+            wasInLiveRunView = true;
             renderHistoryTable(); // Clear selection styling
             showView('reportViewContainer');
         }
 
         function openCurrentRunView() {
+            // Mark that the user is now watching live execution output so that the
+            // poll not-running branch can redirect them back to the dashboard when done.
+            wasInLiveRunView = true;
             // Show Tests column, remove minified class from runs
             const colRuns = document.getElementById('colRuns');
             colRuns.classList.remove('col-minimized');
             colRuns.style.width = '320px';
-            
+
             const colTests = document.getElementById('colTests');
             const historyResizer2 = document.getElementById('historyResizer2');
             colTests.classList.remove('col-minimized');
             colTests.style.display = 'flex';
             colTests.style.width = '280px';
             historyResizer2.style.display = 'block';
-            
+
             // Render Tests
             const testsList = document.getElementById('historyTestsList');
             let liveTests = activeRunStats.tests || [];
@@ -1955,11 +2468,11 @@
             } else {
                 testsList.innerHTML = liveTests.map(t => {
                     const isActive = (t.file === activeRunStats.activeFile);
-                    const badge = isActive 
-                        ? `<i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent); margin-left: 6px;"></i>` 
+                    const badge = isActive
+                        ? `<i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent); margin-left: 6px;"></i>`
                         : '';
                     const bg = isActive ? 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);' : '';
-                    
+
                     return `
                         <tr class="history-row" style="cursor: pointer; ${bg}" onclick="openInteractiveConsoleViewLive('/interactive_console.html')">
                             <td style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
@@ -1979,20 +2492,20 @@
 
         async function runTestByFile(testFile) {
             const fileDatasets = [{ file: testFile, id: null }];
-            
+
             const headless = document.getElementById('optHeadless').checked;
             const video = document.getElementById('optVideo').checked;
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
             const allure = document.getElementById('optAllure').checked;
             const history = document.getElementById('optHistory').checked;
-            
+
             isRunning = true;
             consoleOpened = true;
             currentPollSession++;
             lastLogIndex = 0;
             lastEventIndex = 0;
-            
+
             activeRunStats.running = true;
             activeRunStats.startTime = new Date();
             activeRunStats.total = 0;
@@ -2006,7 +2519,7 @@
             runSpinner.style.display = 'inline-block';
             terminalConsole.innerHTML = 'Connecting to run stream...\n';
             hasShownStartMessage = false;
-            
+
             try {
                 const res = await fetch('/api/run', {
                     method: 'POST',
@@ -2034,24 +2547,24 @@
 
         async function runCurrentFile() {
             if (!activeEditingFile) return;
-            
+
             await saveYamlFile();
-            
+
             const fileDatasets = [{ file: activeEditingFile, id: null }];
-            
+
             const headless = document.getElementById('optHeadless').checked;
             const video = document.getElementById('optVideo').checked;
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
             const allure = document.getElementById('optAllure').checked;
             const history = document.getElementById('optHistory').checked;
-            
+
             isRunning = true;
             consoleOpened = true;
             currentPollSession++;
             lastLogIndex = 0;
             lastEventIndex = 0;
-            
+
             activeRunStats.running = true;
             activeRunStats.startTime = new Date();
             activeRunStats.total = 0;
@@ -2065,7 +2578,7 @@
             runSpinner.style.display = 'inline-block';
             terminalConsole.innerHTML = 'Connecting to run stream...\n';
             hasShownStartMessage = false;
-            
+
             try {
                 const res = await fetch('/api/run', {
                     method: 'POST',
@@ -2093,20 +2606,20 @@
 
         async function runQueue() {
             if (selectedDatasets.length === 0) return;
-            
+
             const headless = document.getElementById('optHeadless').checked;
             const video = document.getElementById('optVideo').checked;
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
             const allure = document.getElementById('optAllure').checked;
             const history = document.getElementById('optHistory').checked;
-            
+
             isRunning = true;
             consoleOpened = true;
             currentPollSession++;
             lastLogIndex = 0;
             lastEventIndex = 0;
-            
+
             activeRunStats.running = true;
             activeRunStats.startTime = new Date();
             activeRunStats.total = 0;
@@ -2120,7 +2633,7 @@
             runSpinner.style.display = 'inline-block';
             terminalConsole.innerHTML = 'Connecting to run stream...\n';
             hasShownStartMessage = false;
-            
+
             try {
                 const res = await fetch('/api/run', {
                     method: 'POST',
@@ -2156,24 +2669,24 @@
 
         function isAiLogLine(line) {
             if (!line) return false;
-            
+
             const lower = line.toLowerCase();
-            
+
             // Filter out Maven execution boilerplate
             const isMavenLog = lower.includes('[info] command: mvn') ||
-                               lower.includes('[info] --<') ||
-                               lower.includes('[info] building ') ||
-                               lower.includes('[info] --- maven-') ||
-                               lower.includes('[info] skip non existing resource') ||
-                               lower.includes('[info] deleting ');
+                lower.includes('[info] --<') ||
+                lower.includes('[info] building ') ||
+                lower.includes('[info] --- maven-') ||
+                lower.includes('[info] skip non existing resource') ||
+                lower.includes('[info] deleting ');
             if (isMavenLog) return false;
-            
+
             // Check if the line contains standard AI emojis or box drawing chars
             const emojiPattern = /[🤖🧠👣🔮⚙️✨🔍║│├└─═▶✅❌\?]/u;
             if (emojiPattern.test(line)) {
                 return true;
             }
-            
+
             // Check if the line contains AI keywords
             const aiKeywords = [
                 'aura',
@@ -2216,11 +2729,11 @@
                 'navigating to:',
                 'simplified dom size'
             ];
-            
+
             if (aiKeywords.some(keyword => lower.includes(keyword))) {
                 return true;
             }
-            
+
             return false;
         }
 
@@ -2239,10 +2752,10 @@
             logLines.forEach(line => {
                 const text = line.innerText;
                 const isErrorOrWarn = text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]');
-                
+
                 const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
                 const matchesAiFilter = !logFilterAiOnly || isAiLogLine(text);
-                
+
                 if (matchesErrorFilter && matchesAiFilter) {
                     line.style.display = 'block';
                 } else {
@@ -2261,14 +2774,14 @@
                 }
             }
             const isErrorOrWarn = line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[FATAL]');
-            
+
             const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
             const matchesAiFilter = !logFilterAiOnly || isAiLogLine(line);
-            
+
             const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
             const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
-            
+
             terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`);
             terminalConsole.scrollTop = terminalConsole.scrollHeight;
         }
@@ -2278,6 +2791,13 @@
         let lastEventIndex = 0;
         let currentPollSession = 0;
         let serverSessionId = null;
+        // Tracks whether the user was navigated into a live-run view (interactive console
+        // or the live report view) during an active run. Only when this is true should the
+        // poll's not-running branch redirect the user back to the dashboard view.
+        let wasInLiveRunView = false;
+        // Tracks the running state from the previous poll cycle so we can detect the
+        // running→stopped transition edge and avoid redundant loadHistory() calls.
+        let lastKnownRunning = false;
 
         function startPolling() {
             if (pollingIntervalId) {
@@ -2291,17 +2811,17 @@
             try {
                 const response = await fetch('/api/status?clientId=' + encodeURIComponent(clientId) + '&lastIndex=' + lastLogIndex + '&lastEventIndex=' + lastEventIndex);
                 if (thisSession !== currentPollSession) return;
-                
+
                 if (response.ok) {
                     const data = await response.json();
-                    
+
                     if (data.logs && data.logs.length > 0) {
                         data.logs.forEach(log => appendLog(log));
                     }
                     if (data.newIndex !== undefined) {
                         lastLogIndex = data.newIndex;
                     }
-                    
+
                     if (data.events && data.events.length > 0) {
                         data.events.forEach(event => {
                             if (event.type === 'reportReady') {
@@ -2318,14 +2838,14 @@
 
                     if (data.status) {
                         const statusData = data.status;
-                        
+
                         if (serverSessionId === null) {
                             serverSessionId = statusData.sessionId;
                         } else if (serverSessionId !== statusData.sessionId) {
                             window.location.reload();
                             return;
                         }
-                        
+
                         const statsPanel = document.getElementById('statsPanel');
                         if (statsPanel) {
                             statsPanel.style.display = (statusData.running || statusData.total > 0) ? 'block' : 'none';
@@ -2334,7 +2854,7 @@
                         document.getElementById('statsTotalExecution').innerText = `${statusData.total} Test${statusData.total === 1 ? '' : 's'}`;
                         document.getElementById('statsPassed').innerText = statusData.passed;
                         document.getElementById('statsFailed').innerText = statusData.failed;
-                        
+
                         activeRunStats.running = statusData.running;
                         activeRunStats.total = statusData.total;
                         activeRunStats.passed = statusData.passed;
@@ -2347,10 +2867,11 @@
                             renderHistoryTable();
                             window._lastStatsStr = currentStatsStr;
                         }
-                        
+
                         try {
                             isRunning = statusData.running;
                             if (isRunning) {
+                                lastKnownRunning = true;
                                 if (activeRunStats.activeFile !== statusData.activeFile) {
                                     activeRunStats.activeFile = statusData.activeFile;
                                     if (document.getElementById('colTests').style.display === 'flex' && currentReportId === null) {
@@ -2369,20 +2890,34 @@
                                 if (runSpinner) runSpinner.style.display = 'none';
                                 const sidebarBadge = document.getElementById('sidebarRunBadge');
                                 if (sidebarBadge) sidebarBadge.style.display = 'none';
-                                
+
                                 activeRunStats.running = false;
                                 activeRunStats.startTime = null;
 
-                                // Return to dashboard view if stuck on interactive console
-                                const isInteractiveViewOpen = document.getElementById('interactiveConsoleView').style.display === 'flex';
-                                const isLiveReportViewOpen = document.getElementById('reportViewContainer').style.display === 'flex' && currentReportId === null;
-                                if (isInteractiveViewOpen || isLiveReportViewOpen) {
-                                    showView('dashboardView');
+                                // Only redirect the user back to the dashboard view when they were
+                                // explicitly watching a live run (interactive console or live report
+                                // view). Browsing the history tab without a run in progress must
+                                // never trigger this redirect.
+                                if (wasInLiveRunView) {
+                                    const isInteractiveViewOpen = document.getElementById('interactiveConsoleView').style.display === 'flex';
+                                    const isLiveReportViewOpen = document.getElementById('reportViewContainer').style.display === 'flex' && currentReportId === null;
+                                    if (isInteractiveViewOpen || isLiveReportViewOpen) {
+                                        showView('dashboardView');
+                                    }
+                                    wasInLiveRunView = false;
                                 }
 
-                                loadHistory();
-                                updateCenterLayout();
+                                // Only reload history and update layout on the running→stopped
+                                // transition edge to avoid redundant /api/allure/history fetches
+                                // and unnecessary DOM updates on every idle poll cycle.
+                                if (lastKnownRunning) {
+                                    loadHistory();
+                                    updateCenterLayout();
+                                }
                             }
+                            // Update the edge-tracking flag after all branch processing,
+                            // so the next poll cycle can correctly detect transitions.
+                            lastKnownRunning = statusData.running;
                         } catch (err) {
                             console.error('Error updating UI state from status:', err);
                         }
@@ -2491,10 +3026,10 @@
             init();
             updateCenterLayout();
         };
-    
+
         // Initialize Theme
         initTheme();
-        
+
         // Ensure Enter works on chat input since we decoupled the original listener
         document.getElementById('chatInput').addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
@@ -2504,4 +3039,5 @@
         });
     </script>
 </body>
+
 </html>

@@ -21,6 +21,7 @@ public class NeodymiumAuraManagerUiTest {
     private HttpServer server;
     private int port;
     private File testFile;
+    private String testFileName;
 
     @BeforeEach
     public void setup() throws Exception {
@@ -33,7 +34,8 @@ public class NeodymiumAuraManagerUiTest {
         if (!resourcesDir.exists()) {
             resourcesDir.mkdirs();
         }
-        testFile = new File(resourcesDir, "dummy-test-run.yaml");
+        testFileName = "dummy-test-run-" + java.util.UUID.randomUUID().toString() + ".yaml";
+        testFile = new File(resourcesDir, testFileName);
         Files.writeString(testFile.toPath(), "steps: |\n  Open browser\n  Wait for 2 seconds\n");
     }
 
@@ -54,8 +56,11 @@ public class NeodymiumAuraManagerUiTest {
         // Wait for dashboard to load files
         $("body").shouldBe(Condition.visible);
         
-        // Check the checkbox for the dummy-test-run.yaml file
-        $$(".list-item").findBy(Condition.text("dummy-test-run.yaml")).$("input[type='checkbox']").shouldBe(Condition.visible).click();
+        // Open Workspace view
+        $("#navWorkspace").click();
+
+        // Check the checkbox for the dummy test file
+        $$(".list-item").findBy(Condition.text(testFileName)).$("input[type='checkbox']").shouldBe(Condition.visible).click();
         
         // Uncheck all global options to make it as fast as possible
         if ($("#optHeadless").exists() && !$("#optHeadless").isSelected()) {
@@ -83,10 +88,10 @@ public class NeodymiumAuraManagerUiTest {
         $("#statsPanel").shouldBe(Condition.visible);
         
         // Let's try to open another file in the editor to make a concurrent call to the server
-        $$(".list-item").findBy(Condition.text("dummy-test-run.yaml")).shouldBe(Condition.visible).click();
+        $$(".list-item").findBy(Condition.text(testFileName)).shouldBe(Condition.visible).click();
         
         // Wait for the edit button to appear inside the list item and click it
-        $$(".list-item").findBy(Condition.text("dummy-test-run.yaml")).$(".edit-icon-btn").shouldBe(Condition.visible).click();
+        $$(".list-item").findBy(Condition.text(testFileName)).$(".edit-icon-btn").shouldBe(Condition.visible).click();
         
         // The editor should load the file contents via an API call
         $("#editorContent").shouldHave(Condition.value("steps: |"));
@@ -105,8 +110,11 @@ public class NeodymiumAuraManagerUiTest {
         // Wait for dashboard to load files
         $("body").shouldBe(Condition.visible);
         
-        // Check the checkbox for the dummy-test-run.yaml file
-        $$(".list-item").findBy(Condition.text("dummy-test-run.yaml")).$("input[type='checkbox']").shouldBe(Condition.visible).click();
+        // Open Workspace view
+        $("#navWorkspace").click();
+
+        // Check the checkbox for the dummy test file
+        $$(".list-item").findBy(Condition.text(testFileName)).$("input[type='checkbox']").shouldBe(Condition.visible).click();
         
         // Ensure interactive mode is CHECKED
         // Note: Headless and Interactive are mutually exclusive in the UI. 
@@ -114,6 +122,14 @@ public class NeodymiumAuraManagerUiTest {
         if (!$("#optInteractive").isSelected()) {
             // Because it's a switch label, clicking the parent label works best
             $("label[for='optInteractive']").click();
+        }
+        if ($("#optAllure").exists() && $("#optAllure").isSelected())
+        {
+            $("#optAllure").click();
+        }
+        if ($("#optHistory").exists() && $("#optHistory").isSelected())
+        {
+            $("#optHistory").click();
         }
         
         // Ensure it actually got checked
@@ -143,5 +159,87 @@ public class NeodymiumAuraManagerUiTest {
         
         // Wait for run to finish
         $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(60));
+    }
+
+    @NeodymiumTest
+    public void testHistoryAfterNonInteractiveRun() {
+        Selenide.open("http://localhost:" + port + "/");
+        
+        $("body").shouldBe(Condition.visible);
+        
+        // Open Workspace view
+        $("#navWorkspace").click();
+
+        $$(".list-item").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(15));
+        
+        $$(".list-item").findBy(Condition.text(testFileName)).shouldBe(Condition.visible)
+            .$("input[type='checkbox']").shouldBe(Condition.visible).click();
+        
+        if ($("#optHeadless").exists() && !$("#optHeadless").isSelected()) {
+            $("label[for='optHeadless']").click();
+        }
+        if ($("#optAllure").exists() && !$("#optAllure").isSelected()) {
+            $("label[for='optAllure']").click();
+        }
+        if ($("#optHistory").exists() && !$("#optHistory").isSelected()) {
+            $("label[for='optHistory']").click();
+        }
+        if ($("#optInteractive").exists() && $("#optInteractive").isSelected()) {
+            $("label[for='optInteractive']").click();
+        }
+        if ($("#optHeadless").exists() && !$("#optHeadless").isSelected())
+        {
+            $("#optHeadless").click();
+        }
+
+        $("#runQueueBtn").shouldBe(Condition.visible).shouldNotBe(Condition.disabled).click();
+        
+        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(60));
+        
+        $("#navReports").click();
+        $("#allureHistoryList").$$(".history-row").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(10));
+        $("#allureHistoryList").$$(".history-row").first().click();
+        $("#historyTestsList").$$(".history-row").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(10));
+    }
+
+    @NeodymiumTest
+    public void testHistoryAfterInteractiveRun() {
+        Selenide.open("http://localhost:" + port + "/");
+        
+        $("body").shouldBe(Condition.visible);
+        
+        // Open Workspace view
+        $("#navWorkspace").click();
+
+        $$(".list-item").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(15));
+        
+        $$(".list-item").findBy(Condition.text(testFileName)).shouldBe(Condition.visible)
+            .$("input[type='checkbox']").shouldBe(Condition.visible).click();
+        
+        if (!$("#optInteractive").isSelected()) {
+            $("label[for='optInteractive']").click();
+        }
+        if (!$("#optAllure").isSelected()) {
+            $("label[for='optAllure']").click();
+        }
+        if (!$("#optHistory").isSelected()) {
+            $("label[for='optHistory']").click();
+        }
+        
+        $("#runQueueBtn").shouldBe(Condition.visible).shouldNotBe(Condition.disabled).click();
+        
+        $("#historyConsoleIframe").shouldHave(Condition.attributeMatching("src", ".*interactive_console\\.html.*"), java.time.Duration.ofSeconds(30));
+        Selenide.switchTo().frame("historyConsoleIframe");
+        $("#btnRun").shouldBe(Condition.visible, java.time.Duration.ofSeconds(30));
+        $("#btnRun").shouldNotHave(Condition.attribute("disabled"), java.time.Duration.ofSeconds(60)).click();
+        $("#btnAuto").shouldNotHave(Condition.attribute("disabled"), java.time.Duration.ofSeconds(60)).click();
+        Selenide.switchTo().defaultContent();
+        
+        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(60));
+        
+        $("#navReports").click();
+        $("#allureHistoryList").$$(".history-row").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(10));
+        $("#allureHistoryList").$$(".history-row").first().click();
+        $("#historyTestsList").$$(".history-row").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(10));
     }
 }

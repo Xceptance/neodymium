@@ -283,17 +283,24 @@ public class AiAgent
         this.hudPromptChanged = false;
         this.hudSaveExit = false;
 
+        this.currentRunId = "true".equals(System.getProperty("neodymium.managerActive")) 
+                ? System.getProperty("neodymium.managerRunId") 
+                : "run-" + System.currentTimeMillis();
+                
+        if (consoleEngine == null)
+        {
+            consoleEngine = new InteractiveConsoleEngine(this.currentRunId);
+        }
+        else
+        {
+            consoleEngine.setRunId(this.currentRunId);
+        }
+
         if (Neodymium.aiConfiguration().aiInteractive())
         {
-            this.currentRunId = "true".equals(System.getProperty("neodymium.managerActive")) 
-                    ? System.getProperty("neodymium.managerRunId") 
-                    : "run-" + System.currentTimeMillis();
-                    
-            if (consoleEngine == null)
+            if (!"true".equals(System.getProperty("neodymium.managerActive"))) 
             {
-                consoleEngine = new InteractiveConsoleEngine(this.currentRunId);
-                
-                if (!"true".equals(System.getProperty("neodymium.managerActive"))) 
+                if (consoleServer == null)
                 {
                     try
                     {
@@ -305,14 +312,10 @@ public class AiAgent
                         LOG.error("Failed to start Interactive Console Server: {}", e.getMessage());
                     }
                 }
-                else
-                {
-                    LOG.info("Interactive Console running in remote manager mode. Connected to {}", System.getProperty("neodymium.managerUrl"));
-                }
             }
             else
             {
-                consoleEngine.setRunId(this.currentRunId);
+                LOG.info("Interactive Console running in remote manager mode. Connected to {}", System.getProperty("neodymium.managerUrl"));
             }
         }
 
@@ -829,7 +832,11 @@ public class AiAgent
                         }
                     } catch (Exception ignore) {}
                     testName = testName.replaceAll("[^a-zA-Z0-9_-]", "");
-                    final java.io.File out = new java.io.File("target/console-execution-" + testName + ".json");
+                    if (testName.length() > 100) {
+                        testName = testName.substring(0, 100);
+                    }
+                    String allureDir = System.getProperty("allure.results.directory", "target/allure-results");
+                    final java.io.File out = new java.io.File(allureDir, "console-execution-" + testName + ".json");
                     if (!out.getParentFile().exists()) 
                     { 
                         out.getParentFile().mkdirs(); 
