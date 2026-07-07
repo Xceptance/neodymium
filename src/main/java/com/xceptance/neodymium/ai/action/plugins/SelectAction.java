@@ -73,7 +73,7 @@ public class SelectAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "SELECT: Select an option from a target dropdown element (requires 'tg' and 'v')."; }
+    public String getPromptInstructions() { return "SELECT: Select an option from a target dropdown element. The 'v' field MUST exactly match an option from the element's 'options' attribute. (requires 'tg' and 'v')."; }
 
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {
@@ -81,11 +81,21 @@ public class SelectAction implements AiActionPlugin {
             final SelenideElement element = executor.findElement(action);
             action.setElementContext(executor.extractElementContext(element));
             executor.scrollIntoView(element);
-            element.selectOption(action.getValue());
+            
+            String value = action.getValue();
+            try {
+                element.selectOption(value);
+            } catch (ElementNotFound e) {
+                try {
+                    element.selectOptionByValue(value);
+                } catch (ElementNotFound e2) {
+                    element.selectOptionContainingText(value);
+                }
+            }
         } catch (final org.openqa.selenium.ElementNotInteractableException e) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element not interactable for target '%s'", action.getTarget()), e);
         } catch (final com.codeborne.selenide.ex.ElementNotFound e) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Element not found for target '%s'", action.getTarget()), e);
+            throw new ActionExecutor.ActionExecutionException(String.format("Element not found for target '%s' or option '%s' not found", action.getTarget(), action.getValue()), e);
         } catch (final org.openqa.selenium.StaleElementReferenceException e) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element became stale for target '%s'", action.getTarget()), e);
         } catch (Throwable t) {
