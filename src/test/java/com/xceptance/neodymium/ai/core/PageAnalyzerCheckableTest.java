@@ -48,11 +48,13 @@ public class PageAnalyzerCheckableTest extends BaseAiTest
 
         Assertions.assertNotNull(dom);
 
-        // 1. Text input should have value="null" or omitted value
-        Assertions.assertTrue(dom.contains("<input id=\"username\" name=\"username\" type=\"text\""),
-            "DOM should contain the text input");
-        Assertions.assertFalse(dom.contains("mySecretUsername"),
-            "DOM should not leak text input value");
+        // 1. Text input should have value attribute captured, except for passwords
+        Assertions.assertTrue(dom.contains("<input id=\"username\" name=\"username\" type=\"text\" value=\"mySecretUsername\""),
+            "DOM should capture text input value");
+        Assertions.assertTrue(dom.contains("<input id=\"password\" name=\"password\" type=\"password\" value=\"***\""),
+            "DOM should obscure password input value");
+        Assertions.assertTrue(dom.contains("<textarea id=\"comments\" name=\"comments\" value=\"Some multiline comment\""),
+            "DOM should capture textarea value");
 
         // 2. Checkboxes should show proper checked and value attributes
         Assertions.assertTrue(dom.contains("<input id=\"subscribe\" name=\"subscribe\" type=\"checkbox\" checked=\"true\" value=\"newsletter\""),
