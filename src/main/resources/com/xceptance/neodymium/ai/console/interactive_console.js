@@ -43,6 +43,11 @@ function connectSSE() {
         }
     });
 
+    eventSource.addEventListener('dumpReady', (e) => {
+        const data = JSON.parse(e.data);
+        showDumpPopup(data);
+    });
+
     eventSource.onopen = () => setConnectionState('connected');
     eventSource.onerror = () => {
         setConnectionState('error');
@@ -1031,6 +1036,125 @@ function sendAction(action, extra) {
     currentPauseId = null;
 }
 
+/**
+ * Triggers a debug dump of the current AI context.
+ *
+ * This sends the DUMP action through the normal action channel. The backend
+ * handler catches DUMP, performs the dump (screenshot + DOM + step history),
+ * then recursively re-pauses – so the test stays paused and the user can
+ * still click Run or Skip after the dump completes.
+ */
+function triggerDump() {
+    closeKebabMenu();
+    if (!currentPauseId || !currentRunId) return;
+    // DUMP goes through sendAction; the backend re-pauses immediately after.
+    sendAction('DUMP');
+    // Briefly restore the buttons since the backend will re-pause and send a
+    // new pauseId via SSE, which will re-enable them.
+    setTimeout(() => setButtonsEnabled(true), 800);
+}
+
+/**
+ * Toggles the kebab debug dropdown open or closed.
+ * Closes automatically when the user clicks anywhere outside.
+ */
+function toggleKebabMenu(event) {
+    event.stopPropagation();
+    const dropdown = document.getElementById('kebabDropdown');
+    const btn = document.getElementById('btnKebab');
+    if (!dropdown) return;
+    const isOpen = dropdown.classList.contains('open');
+    if (isOpen) {
+        closeKebabMenu();
+    } else {
+        dropdown.classList.add('open');
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+        // Close on outside click
+        document.addEventListener('click', closeKebabMenu, { once: true });
+    }
+}
+
+function closeKebabMenu() {
+    const dropdown = document.getElementById('kebabDropdown');
+    const btn = document.getElementById('btnKebab');
+    if (dropdown) dropdown.classList.remove('open');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+/**
+ * Formats a byte count into a human-readable string (e.g. "12.4 KB").
+ *
+ * @param {number} bytes - the byte count
+ * @returns {string} formatted string
+ */
+function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+/**
+ * Populates and shows the dumpReady popup overlay.
+ *
+ * Called automatically when the backend fires the {@code dumpReady} SSE event
+ * after {@link AiAgent#performDebugDump()} completes. The popup lists both
+ * captured files with their absolute paths and byte sizes.
+ *
+ * @param {{ txtFile: string, htmlFile: string, txtSize: number, htmlSize: number }} data
+ */
+function showDumpPopup(data) {
+    const overlay = document.getElementById('dumpReadyOverlay');
+    const container = document.getElementById('dumpReadyFiles');
+    if (!overlay || !container) return;
+
+    container.innerHTML = `
+        <div class="dump-file-entry">
+            <div class="dump-file-label">
+                <span class="dump-file-type-badge txt">TXT</span>
+                <span class="dump-file-desc">AI context &amp; step history — what the LLM sees</span>
+            </div>
+            <div class="dump-file-path">
+                <span>${escapeHtml(data.txtFile)}</span>
+                <span class="dump-file-size">${formatBytes(data.txtSize)}</span>
+            </div>
+        </div>
+        <div class="dump-file-entry">
+            <div class="dump-file-label">
+                <span class="dump-file-type-badge html">HTML</span>
+                <span class="dump-file-desc">Raw DOM snapshot — main page &amp; all iframes</span>
+            </div>
+            <div class="dump-file-path">
+                <span>${escapeHtml(data.htmlFile)}</span>
+                <span class="dump-file-size">${formatBytes(data.htmlSize)}</span>
+            </div>
+        </div>
+    `;
+
+    overlay.classList.add('active');
+    // Dismiss on Escape
+    const onKey = (ev) => {
+        if (ev.key === 'Escape') {
+            closeDumpPopup();
+            document.removeEventListener('keydown', onKey);
+        }
+    };
+    document.addEventListener('keydown', onKey);
+}
+
+function closeDumpPopup() {
+    const overlay = document.getElementById('dumpReadyOverlay');
+    if (overlay) overlay.classList.remove('active');
+}
+
+/** Escapes special HTML characters to prevent XSS in file paths. */
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 function toggleAuto() {
     if (isAutoMode) {
         isAutoMode = false;
@@ -1381,6 +1505,8 @@ function setButtonsEnabled(enabled) {
             if (backBtn) backBtn.disabled = !enabled || isEditing;
             if (autoBtn) autoBtn.disabled = !enabled || isEditing;
             if (btnCancel) btnCancel.disabled = isEditing;
+            const kebabBtn = document.getElementById('btnKebab');
+            if (kebabBtn) kebabBtn.disabled = !enabled || isEditing;
         }
     }
 }

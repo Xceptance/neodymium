@@ -20,6 +20,8 @@ package com.xceptance.neodymium.ai.core;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -1883,11 +1885,131 @@ public class AiAgent
                 }
                 waitForHudAction(allowAutoSkip); // Wait again after settings change
             }
+            else if (typeEnum == HudActionType.DUMP)
+            {
+                // Perform a debug dump of the current AI context without consuming the pause:
+                // the method recursively re-pauses so the user can still click Run or Skip.
+                performDebugDump();
+                waitForHudAction(allowAutoSkip);
+            }
         }
         catch (InterruptedException e)
         {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Interrupted while waiting for console action", e);
+        }
+    }
+
+    /**
+     * Captures a full debug dump of the current test execution state to disk.
+     *
+     * <p>The dump consists of two files written to {@code target/ai-console-dump/}:
+     * <ul>
+     *   <li><b>neodymium-ai-dump-&lt;timestamp&gt;.txt</b> – the AI-parsed DOM context
+     *       and the full step history as seen by the LLM.</li>
+     *   <li><b>neodymium-ai-dump-&lt;timestamp&gt;.html</b> – the raw {@code outerHTML}
+     *       of the main page and every iframe, useful for offline analysis.</li>
+     * </ul>
+     *
+     * <p>This method is intentionally non-throwing: any failure is logged and swallowed
+     * so that the interactive session can continue uninterrupted.
+     */
+    private void performDebugDump()
+    {
+        LOG.info("[AI Console] Performing debug dump on user request...");
+        try
+        {
+            final long timestamp = System.currentTimeMillis();
+            final File dumpDir = new File("target/ai-console-dump");
+            if (!dumpDir.exists())
+            {
+                dumpDir.mkdirs();
+            }
+
+            // -- AI-parsed DOM context (what the LLM sees) --
+            String parsedDomContext = "";
+            try
+            {
+                parsedDomContext = this.pageAnalyzer.getPageContext(ContextLevel.LEAN);
+            }
+            catch (final Exception e)
+            {
+                parsedDomContext = "Error capturing parsed DOM context: " + e.getMessage();
+            }
+
+            // -- Step history (playbook state) --
+            final String stepHistory = AiAgentPrompts.buildStepHistory(Neodymium.getAiPlaybook());
+
+            // -- Raw DOM dump: main page + all iframes --
+            final StringBuilder rawDom = new StringBuilder();
+            try
+            {
+                com.codeborne.selenide.Selenide.switchTo().defaultContent();
+                rawDom.append("<!-- MAIN PAGE -->\n");
+                rawDom.append((String) com.codeborne.selenide.Selenide
+                        .executeJavaScript("return document.documentElement.outerHTML;"));
+
+                final com.codeborne.selenide.ElementsCollection frames =
+                        com.codeborne.selenide.Selenide.$$("iframe, frame");
+                for (int f = 0; f < frames.size(); f++)
+                {
+                    try
+                    {
+                        com.codeborne.selenide.Selenide.switchTo().frame(frames.get(f));
+                        rawDom.append("\n\n<!-- IFRAME ").append(f).append(" -->\n");
+                        rawDom.append((String) com.codeborne.selenide.Selenide
+                                .executeJavaScript("return document.documentElement.outerHTML;"));
+                    }
+                    catch (final Exception ignored)
+                    {
+                        // Frame may be cross-origin — skip silently.
+                    }
+                    finally
+                    {
+                        com.codeborne.selenide.Selenide.switchTo().defaultContent();
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                rawDom.append("\nError extracting raw DOM: ").append(e.getMessage());
+            }
+
+            // -- Write files --
+            final String txtContent = "======== AI DEBUG DUMP ========\n\n"
+                    + "--- HISTORY ---\n" + stepHistory + "\n\n"
+                    + "--- AI PARSED DOM ---\n" + parsedDomContext + "\n";
+
+            final File txtFile = new File(dumpDir, "neodymium-ai-dump-" + timestamp + ".txt");
+            final File htmlFile = new File(dumpDir, "neodymium-ai-dump-" + timestamp + ".html");
+            Files.writeString(txtFile.toPath(), txtContent, StandardCharsets.UTF_8);
+            Files.writeString(htmlFile.toPath(), rawDom.toString(), StandardCharsets.UTF_8);
+
+            LOG.info("[AI Console] Debug dump written to: {} and {}",
+                    txtFile.getAbsolutePath(), htmlFile.getName());
+
+            // Broadcast dump info to the console UI via SSE so the user sees a popup.
+            if (this.consoleEngine != null)
+            {
+                final com.google.gson.JsonObject dumpPayload = new com.google.gson.JsonObject();
+                dumpPayload.addProperty("txtFile", txtFile.getAbsolutePath());
+                dumpPayload.addProperty("htmlFile", htmlFile.getAbsolutePath());
+                dumpPayload.addProperty("txtSize", txtFile.length());
+                dumpPayload.addProperty("htmlSize", htmlFile.length());
+                dumpPayload.addProperty("timestamp", timestamp);
+                this.consoleEngine.broadcastSseEvent("dumpReady", dumpPayload.toString());
+            }
+
+            // Update status bar with compact file name.
+            if (this.consoleEngine != null && this.activeResult.get() != null)
+            {
+                updateConsoleState(this.activeResult.get(), "Dump captured → " + txtFile.getName());
+            }
+
+        }
+        catch (final Exception e)
+        {
+            LOG.error("[AI Console] Failed to write debug dump", e);
         }
     }
 

@@ -821,6 +821,22 @@ public final class NeodymiumAuraManager {
                             }
                         }
 
+                        // Read the stored run configuration for the Rerun button.
+                        // The value is a raw JSON object embedded in the metadata; pass it through as-is.
+                        String runConfigRaw = null;
+                        if (metadataFile.exists() && metadataFile.isFile()) {
+                            try {
+                                final String meta = Files.readString(metadataFile.toPath(), StandardCharsets.UTF_8);
+                                final com.google.gson.JsonObject metaObj = com.google.gson.JsonParser
+                                        .parseString(meta).getAsJsonObject();
+                                if (metaObj.has("runConfig") && !metaObj.get("runConfig").isJsonNull()) {
+                                    runConfigRaw = gson.toJson(metaObj.get("runConfig"));
+                                }
+                            } catch (final Exception e) {
+                                // ignore — runConfig simply won't be present for legacy runs
+                            }
+                        }
+
                         final File indexHtml = new File(dir, "index.html");
                         final boolean hasReport = indexHtml.exists() && indexHtml.isFile();
 
@@ -953,6 +969,11 @@ public final class NeodymiumAuraManager {
                         item.put("hasReport", hasReport);
                         item.put("hasInteractiveReport", hasInteractiveReport);
                         item.put("tests", tests);
+                        // Include the stored run configuration so the dashboard can expose Rerun buttons.
+                        // For legacy runs without runConfig this will be null; the UI handles that gracefully.
+                        if (runConfigRaw != null) {
+                            item.put("runConfig", gson.fromJson(runConfigRaw, Object.class));
+                        }
                         historyList.add(item);
                     }
                 }
@@ -1403,11 +1424,12 @@ public final class NeodymiumAuraManager {
                     activeProcess.set(null);
                 }
 
-                if (!manuallyStopped.get() && (req.allure))
+                if (!manuallyStopped.get() && req.allure)
                 {
                     LOGGER.info("[Aura Server] Auto-generating Allure report as requested.");
                     final List<String> uniqueFiles = new ArrayList<>(datasetsByFile.keySet());
-                    generateAllureReport(uniqueFiles, req.history, req);
+                    // History archiving is always enabled; the toggle has been removed from the UI.
+                    generateAllureReport(uniqueFiles, true, req);
                 }
 
                 LOGGER.info("[Aura Server] Queue execution completed. Total: {}, Passed: {}, Failed: {}",
@@ -1522,17 +1544,23 @@ public final class NeodymiumAuraManager {
         try {
             copyDirectory(srcDir, destDir);
 
-            // Write metadata.json with full run details including timing and run options
+            // Write metadata.json with full run details including timing, run options, and the
+            // original run configuration needed to replay the run (Rerun button).
             final File metadataFile = new File(destDir, "metadata.json");
             final String status = manuallyStopped.get() ? "Aborted" : (globalFailed.get() == 0 ? "Passed" : "Failed");
             final long durationMs = System.currentTimeMillis() - runStartTimeMs.get();
             final boolean headless = req != null && req.headless;
             final boolean allureEnabled = req != null && req.allure;
             final boolean videoEnabled = req != null && req.video;
+
+            // Serialize the original RunRequest as a compact JSON blob so the dashboard
+            // Rerun button can POST the exact same payload to /api/run.
+            final String runConfigJson = gson.toJson(req);
+
             final String metadataContent = String.format(
-                    "{%n  \"status\": \"%s\",%n  \"timestamp\": \"%s\",%n  \"total\": %d,%n  \"passed\": %d,%n  \"failed\": %d,%n  \"durationMs\": %d,%n  \"headless\": %b,%n  \"allureEnabled\": %b,%n  \"videoEnabled\": %b%n}",
+                    "{%n  \"status\": \"%s\",%n  \"timestamp\": \"%s\",%n  \"total\": %d,%n  \"passed\": %d,%n  \"failed\": %d,%n  \"durationMs\": %d,%n  \"headless\": %b,%n  \"allureEnabled\": %b,%n  \"videoEnabled\": %b,%n  \"runConfig\": %s%n}",
                     status, timestamp, globalTestsRun.get(), globalPassed.get(), globalFailed.get(),
-                    durationMs, headless, allureEnabled, videoEnabled);
+                    durationMs, headless, allureEnabled, videoEnabled, runConfigJson);
             Files.writeString(metadataFile.toPath(), metadataContent, StandardCharsets.UTF_8);
 
             // Write the combined execution log for the full run
@@ -2232,7 +2260,6 @@ public final class NeodymiumAuraManager {
         boolean headless;
         boolean interactive;
         boolean allure;
-        boolean history;
         boolean video;
         boolean keepOpen;
     }

@@ -259,6 +259,29 @@
                             title="Cancel test run (Escape)" aria-label="Cancel test run (Escape)"><i
                                 class="fa-solid fa-stop" aria-hidden="true"></i> <span>Cancel
                                 Test</span></button>
+
+                        <!-- Kebab menu: debug actions hidden beside the Cancel button -->
+                        <div class="kebab-menu-wrapper" id="kebabMenuWrapper">
+                            <button class="btn kebab-toggle" id="btnKebab"
+                                onclick="toggleKebabMenu(event)"
+                                title="More debug options"
+                                aria-label="More debug options"
+                                aria-haspopup="true"
+                                aria-expanded="false"
+                                disabled>
+                                <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
+                            </button>
+                            <div class="kebab-dropdown" id="kebabDropdown" role="menu">
+                                <button class="kebab-item" id="btnDump"
+                                    onclick="triggerDump()"
+                                    title="Capture AI context, DOM, and step history to target/ai-console-dump/"
+                                    aria-label="Create Data Dump"
+                                    role="menuitem">
+                                    <i class="fa-solid fa-bug" aria-hidden="true"></i>
+                                    Create Data Dump
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -437,6 +460,28 @@
             <div class="final-save-buttons">
                 <button class="btn btn-primary" onclick="sendAction('SAVE_EXIT')">Save Changes</button>
                 <button class="btn btn-danger" onclick="sendAction('DISCARD')">Discard</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Dump Ready Popup ───────────────────────────────────────────────
+         Shown via SSE dumpReady event from performDebugDump() in AiAgent.
+         Provides exact absolute file paths and sizes for both dump files.
+    ───────────────────────────────────────────────────────────────────── -->
+    <div id="dumpReadyOverlay" class="dump-ready-overlay" role="dialog" aria-modal="true" aria-labelledby="dumpReadyTitle">
+        <div class="dump-ready-box">
+            <div class="dump-ready-header">
+                <i class="fa-solid fa-bug dump-ready-icon" aria-hidden="true"></i>
+                <h2 id="dumpReadyTitle">Data Dump Created</h2>
+            </div>
+            <p class="dump-ready-subtitle">The following files were written to disk:</p>
+            <div class="dump-ready-files" id="dumpReadyFiles">
+                <!-- populated by JS -->
+            </div>
+            <div class="dump-ready-footer">
+                <button class="btn btn-primary" onclick="closeDumpPopup()" autofocus>
+                    <i class="fa-solid fa-check" aria-hidden="true"></i> Got it
+                </button>
             </div>
         </div>
     </div>

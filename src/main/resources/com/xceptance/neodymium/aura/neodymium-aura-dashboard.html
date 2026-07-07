@@ -722,7 +722,8 @@
             margin: 0 -4px;
         }
 
-        .resizer-h:hover, .resizer-h.dragging {
+        .resizer-h:hover,
+        .resizer-h.dragging {
             background: var(--accent);
             opacity: 0.5;
         }
@@ -782,8 +783,13 @@
             flex-shrink: 0;
         }
 
-        .mini-run-chip.passed .chip-dot  { background: var(--success); }
-        .mini-run-chip.failed .chip-dot  { background: var(--danger); }
+        .mini-run-chip.passed .chip-dot {
+            background: var(--success);
+        }
+
+        .mini-run-chip.failed .chip-dot {
+            background: var(--danger);
+        }
 
         .mini-run-chip.selected {
             border-color: var(--accent);
@@ -797,7 +803,9 @@
 
         /* Column transitions: opacity-only. Width transitions caused regression when
            switching between flex-based and pixel-based sizing across states. */
-        #colRuns, #colTests, #colReport {
+        #colRuns,
+        #colTests,
+        #colReport {
             transition: opacity 0.1s ease;
         }
 
@@ -805,11 +813,13 @@
            min-width:300px and resize:horizontal on .left-area survive the JS reset loop
            (only inline styles are cleared) and create hard floors that break flex proportions.
            These ID rules have higher specificity and zero those out. */
-        #colRuns, #colTests {
+        #colRuns,
+        #colTests {
             min-width: 0;
             max-width: none;
             resize: none;
         }
+
         #colReport {
             min-width: 0;
         }
@@ -1448,7 +1458,7 @@
                             <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
                                 <div class="config-row"
                                     style="display: flex; justify-content: space-between; align-items: center;">
-                                    <span style="font-weight: 500;">Interactive HUD</span>
+                                    <span style="font-weight: 500;">Interactive Mode</span>
                                     <label class="switch" for="optInteractive"><input type="checkbox"
                                             id="optInteractive"><span class="slider"></span></label>
                                 </div>
@@ -1467,16 +1477,6 @@
                                     visual test report after execution completes.</span>
                             </div>
 
-                            <div class="config-row-wrapper" style="display: flex; flex-direction: column; gap: 2px;">
-                                <div class="config-row"
-                                    style="display: flex; justify-content: space-between; align-items: center;">
-                                    <span style="font-weight: 500;">Save to History</span>
-                                    <label class="switch" for="optHistory"><input type="checkbox" id="optHistory"
-                                            checked><span class="slider"></span></label>
-                                </div>
-                                <span style="font-size: 11px; color: var(--text-secondary);">Archives execution logs and
-                                    reports in the history tab.</span>
-                            </div>
 
                             <button class="btn-primary" id="runQueueBtn" onclick="runQueue()"><i
                                     class="fa-solid fa-play"></i> Run Queue</button>
@@ -2001,6 +2001,14 @@
 
         let historyCached = [];
         let activeRunStats = { total: 0, passed: 0, failed: 0, running: false, startTime: null };
+        /**
+         * Tracks which test files have already completed in the current live run.
+         * Keyed by the full file path string. Updated whenever the backend's
+         * activeFile changes to a new entry, marking the previous file as done.
+         */
+        let liveCompletedFiles = new Set();
+        /** The last activeFile we saw from the poll — used to detect transitions. */
+        let liveLastActiveFile = null;
 
         // ── History navigation state machine ─────────────────────────────────
         // State 1: full-width runs list only
@@ -2008,7 +2016,7 @@
         // State 3: runs (fixed) | tests (fixed) | details (flex-grow)
         // State 4: mini-runs bar (48px) | tests (fixed) | details (flex-grow, wide)
         let historyNavState = 1;
-        let savedRunsWidth  = 280;   // remembered when collapsing to mini-bar
+        let savedRunsWidth = 280;   // remembered when collapsing to mini-bar
         let savedTestsWidth = 240;   // remembered across state transitions
 
         /**
@@ -2020,14 +2028,14 @@
          */
         function applyHistoryState(n) {
             historyNavState = n;
-            const colRuns      = document.getElementById('colRuns');
-            const colTests     = document.getElementById('colTests');
-            const colReport    = document.getElementById('colReport');
-            const colRunsMini  = document.getElementById('colRunsMini');
+            const colRuns = document.getElementById('colRuns');
+            const colTests = document.getElementById('colTests');
+            const colReport = document.getElementById('colReport');
+            const colRunsMini = document.getElementById('colRunsMini');
             const colTestsMini = document.getElementById('colTestsMini');
-            const r1           = document.getElementById('historyResizer1');
-            const r2           = document.getElementById('historyResizer2');
-            const r3           = document.getElementById('historyResizer3');
+            const r1 = document.getElementById('historyResizer1');
+            const r2 = document.getElementById('historyResizer2');
+            const r3 = document.getElementById('historyResizer3');
             if (!colRuns || !colTests || !colReport) return;
 
             // ── Reset: start from a fully clean slate ────────────────────────────
@@ -2036,15 +2044,15 @@
             // every flex/sizing inline style so the incoming state's values are the
             // sole source of truth.
             [colRuns, colTests, colReport].forEach(el => {
-                el.style.display    = 'none';
-                el.style.flex       = '';
-                el.style.flexGrow   = '';
+                el.style.display = 'none';
+                el.style.flex = '';
+                el.style.flexGrow = '';
                 el.style.flexShrink = '';
-                el.style.flexBasis  = '';
-                el.style.width      = '';
-                el.style.minWidth   = '';
+                el.style.flexBasis = '';
+                el.style.width = '';
+                el.style.minWidth = '';
             });
-            if (colRunsMini)  colRunsMini.style.display  = 'none';
+            if (colRunsMini) colRunsMini.style.display = 'none';
             if (colTestsMini) colTestsMini.style.display = 'none';
             if (r1) r1.style.display = 'none';
             if (r2) r2.style.display = 'none';
@@ -2054,28 +2062,28 @@
                 case 1:
                     // ── State 1: full-width runs list only ──────────────────────
                     colRuns.style.display = 'flex';
-                    colRuns.style.flex    = '1 1 0';
+                    colRuns.style.flex = '1 1 0';
                     // colTests and colReport remain display:none
                     break;
 
                 case 2:
                     // ── State 2: Runs | Tests — equal 50/50 split ───────────────
-                    colRuns.style.display  = 'flex';
-                    colRuns.style.flex     = '1 1 0';
+                    colRuns.style.display = 'flex';
+                    colRuns.style.flex = '1 1 0';
                     colTests.style.display = 'flex';
-                    colTests.style.flex    = '1 1 0';
+                    colTests.style.flex = '1 1 0';
                     // colReport remains display:none
                     if (r1) r1.style.display = 'block';
                     break;
 
                 case 3:
                     // ── State 3: Runs | Tests | Details — equal three-way split ─
-                    colRuns.style.display   = 'flex';
-                    colRuns.style.flex      = '1 1 0';
-                    colTests.style.display  = 'flex';
-                    colTests.style.flex     = '1 1 0';
+                    colRuns.style.display = 'flex';
+                    colRuns.style.flex = '1 1 0';
+                    colTests.style.display = 'flex';
+                    colTests.style.flex = '1 1 0';
                     colReport.style.display = 'flex';
-                    colReport.style.flex    = '1 1 0';
+                    colReport.style.flex = '1 1 0';
                     if (r1) r1.style.display = 'block';
                     if (r2) r2.style.display = 'block';
                     break;
@@ -2084,10 +2092,10 @@
                     // ── State 4: Mini-runs (48px) | Tests (flex:1) | Details (flex:2)
                     // colRuns full panel is hidden; colRunsMini strip takes its place.
                     // Tests keeps its normal proportional size; details gets more room.
-                    colTests.style.display  = 'flex';
-                    colTests.style.flex     = '1 1 0';
+                    colTests.style.display = 'flex';
+                    colTests.style.flex = '1 1 0';
                     colReport.style.display = 'flex';
-                    colReport.style.flex    = '2 1 0';
+                    colReport.style.flex = '2 1 0';
                     if (colRunsMini) colRunsMini.style.display = 'flex';
                     if (r2) r2.style.display = 'block';
                     refreshMiniRunsBar();
@@ -2106,7 +2114,7 @@
             bar.innerHTML = '';
             if (header) bar.appendChild(header);
             historyCached.forEach(run => {
-                const isPassed  = run.status === 'Passed';
+                const isPassed = run.status === 'Passed';
                 const isCurrent = run.id === currentReportId;
                 const chip = document.createElement('div');
                 chip.className = 'mini-run-chip ' + (isPassed ? 'passed' : 'failed') + (isCurrent ? ' selected' : '');
@@ -2130,7 +2138,7 @@
             const run = historyCached.find(r => r.id === currentReportId);
             const tests = (run && run.tests) ? run.tests : [];
             tests.forEach(t => {
-                const isPassed  = t.status === 'Passed';
+                const isPassed = t.status === 'Passed';
                 const isCurrent = t.file === currentTestFile;
                 const chip = document.createElement('div');
                 chip.className = 'mini-run-chip ' + (isPassed ? 'passed' : 'failed') + (isCurrent ? ' selected' : '');
@@ -2214,7 +2222,7 @@
          */
         function setupResizer(resizerId, colId, minWidth, rightSide, onCollapse, onResize) {
             const resizer = document.getElementById(resizerId);
-            const col     = document.getElementById(colId);
+            const col = document.getElementById(colId);
             if (!resizer || !col) return;
 
             let startX = 0;
@@ -2223,11 +2231,11 @@
 
             resizer.addEventListener('mousedown', (e) => {
                 e.preventDefault();
-                startX    = e.clientX;
-                startW    = col.offsetWidth;
+                startX = e.clientX;
+                startW = col.offsetWidth;
                 collapsed = false;
                 resizer.classList.add('dragging');
-                document.body.style.cursor     = 'col-resize';
+                document.body.style.cursor = 'col-resize';
                 document.body.style.userSelect = 'none';
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
@@ -2236,7 +2244,7 @@
             function onMouseMove(e) {
                 // rightSide=true: column is right of resizer — drag right shrinks it, drag left grows it
                 const delta = rightSide ? -(e.clientX - startX) : (e.clientX - startX);
-                const newW  = startW + delta;
+                const newW = startW + delta;
                 if (onCollapse && newW < minWidth) {
                     if (!collapsed) {
                         collapsed = true;
@@ -2244,7 +2252,7 @@
                         onCollapse(newW);
                     }
                 } else if (newW >= (onCollapse ? minWidth : 0)) {
-                    col.style.flex  = 'none';
+                    col.style.flex = 'none';
                     col.style.width = newW + 'px';
                     if (onResize) onResize(newW);
                 }
@@ -2256,7 +2264,7 @@
                 document.removeEventListener('mousemove', onMouseMove);
                 document.removeEventListener('mouseup', onMouseUp);
                 resizer.classList.remove('dragging');
-                document.body.style.cursor     = '';
+                document.body.style.cursor = '';
                 document.body.style.userSelect = '';
             }
         }
@@ -2385,6 +2393,7 @@
                                     <button class="run-action-btn" ${allureDisabled} ${allureTitle} ${allureAction}>
                                         <i class="fa-solid fa-chart-bar"></i> Allure Report
                                     </button>
+                                    ${item.runConfig && !isRunning ? `<button class="run-action-btn" onclick="event.stopPropagation(); rerunFullRun(${JSON.stringify(JSON.stringify(item.runConfig))})" title="Re-run this entire suite with the same configuration"><i class="fa-solid fa-rotate-right"></i> Rerun</button>` : ''}
                                 </div>
                                 <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
                                     <button class="run-action-btn danger" style="font-size: 10px; padding: 2px 6px; opacity: 0.65;" onclick="event.stopPropagation(); deleteReport('${item.id}')" title="Delete this run">
@@ -2468,6 +2477,42 @@
                         ? `<button class="run-action-btn" style="font-size:10px; padding:2px 7px;" onclick="event.stopPropagation(); openTestLog('${reportId}', '${t.name}')" title="View test log"><i class="fa-solid fa-file-lines"></i> Log</button>`
                         : '';
 
+                    const run = historyCached.find(r => r.id === reportId);
+                    // Build the rerun payload for a single-dataset re-run:
+                    // find the dataset entry from the run's stored runConfig that matches
+                    // this test's yamlSource file path, then build a single-item payload
+                    // reusing all the original run flags (headless, interactive, etc.).
+                    let rerunBtn = '';
+                    if (run && run.runConfig && !isRunning) {
+                        const rc = run.runConfig;
+                        // Derive the dataset file from yamlSource stored in the console-execution JSON
+                        // We match the run's datasets by file path against the test's yamlSource
+                        let matchedDataset = null;
+                        if (t.yamlLabel && rc.datasets) {
+                            matchedDataset = rc.datasets.find(d => {
+                                const fname = d.file ? d.file.replace(/\\/g, '/').split('/').pop() : '';
+                                return fname === t.yamlLabel + '.yaml' || fname === t.yamlLabel;
+                            });
+                        }
+                        if (!matchedDataset && rc.datasets && rc.datasets.length > 0) {
+                            // Fallback: use the first dataset if only one test file was in this run
+                            matchedDataset = rc.datasets[0];
+                        }
+                        if (matchedDataset) {
+                            // Build single-dataset payload: same flags but only this one dataset + testId
+                            const singlePayload = {
+                                datasets: [{ file: matchedDataset.file, id: t.testId || matchedDataset.id || null }],
+                                headless: rc.headless,
+                                interactive: rc.interactive,
+                                allure: rc.allure,
+                                video: rc.video,
+                                keepOpen: rc.keepOpen
+                            };
+                            const payloadStr = JSON.stringify(JSON.stringify(singlePayload));
+                            rerunBtn = `<button class="run-action-btn" style="font-size:10px; padding:2px 7px;" onclick="event.stopPropagation(); rerunSingleTest(${payloadStr})" title="Re-run this test case with the same configuration"><i class="fa-solid fa-rotate-right"></i> Rerun</button>`;
+                        }
+                    }
+
                     return `<div class="test-card" data-test-name="${t.name}" onclick="loadInteractiveTest('${reportId}', '${t.file}', '${t.name}', this)">
                         <div class="test-card-title-row">
                             <span class="${tSuccess ? 'badge-success' : 'badge-failed'}">${tSuccess ? 'Passed' : 'Failed'}</span>
@@ -2478,7 +2523,7 @@
                             ${durText ? `<span><i class="fa-regular fa-clock"></i> ${durText}</span>` : ''}
                             ${pbBadge}
                         </div>
-                        ${logBtn ? `<div class="test-card-actions">${logBtn}</div>` : ''}
+                        ${(logBtn || rerunBtn) ? `<div class="test-card-actions">${logBtn}${rerunBtn}</div>` : ''}
                     </div>`;
                 }).join('');
             }
@@ -3189,6 +3234,92 @@
             wasInLiveRunView = true;
             renderHistoryTable(); // Clear selection styling
             showView('reportViewContainer');
+            // Ensure all three columns are visible so the iframe (inside colReport)
+            // is actually rendered. Without this the live console loads into a
+            // display:none column and the HUD is never shown to the user.
+            requestAnimationFrame(() => {
+                applyHistoryState(3);
+                // Populate the tests column immediately — previously it was left empty
+                // until the next poll cycle detected an activeFile change.
+                renderLiveTestList();
+            });
+        }
+
+        /**
+         * Renders the live-run test list inside the "Tests" column.
+         *
+         * <p>Each entry falls into one of three visual states based on its position
+         * relative to the currently executing file:
+         * <ul>
+         *   <li><b>Done</b> (before current, or in liveCompletedFiles): faint check icon,
+         *       still clickable — navigates to the live console (best available view
+         *       during an active run).</li>
+         *   <li><b>Current</b> (activeFile match): accent border + spinner, clickable.</li>
+         *   <li><b>Pending</b> (after current, not yet started): greyed out,
+         *       cursor:default, not clickable.</li>
+         * </ul>
+         *
+         * <p>This function is safe to call at any time; it reads all state from the
+         * module-level variables {@code activeRunStats} and {@code liveCompletedFiles}.
+         */
+        function renderLiveTestList() {
+            const testsList = document.getElementById('historyTestsList');
+            if (!testsList) return;
+
+            let liveTests = activeRunStats.tests || [];
+            if (liveTests.length === 0 && activeRunStats.activeFile) {
+                liveTests = [{ file: activeRunStats.activeFile, id: null }];
+            }
+
+            if (liveTests.length === 0) {
+                testsList.innerHTML = `<div style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No tests available.</div>`;
+                return;
+            }
+
+            // Determine the index of the currently active file so we can classify
+            // all entries before it as "done" and all after it as "pending".
+            const activeFile = activeRunStats.activeFile || '';
+            const activeIdx = liveTests.findIndex(t => t.file === activeFile);
+
+            testsList.innerHTML = liveTests.map((t, idx) => {
+                const isDone    = liveCompletedFiles.has(t.file) || (activeIdx >= 0 && idx < activeIdx);
+                const isCurrent = t.file === activeFile;
+                const isPending = !isDone && !isCurrent;
+
+                // -- Visual state variables --
+                let cardStyle   = '';
+                let iconHtml    = '';
+                let onclick     = '';
+                let cursor      = 'pointer';
+
+                if (isCurrent) {
+                    cardStyle = 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);';
+                    iconHtml  = `<i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent); margin-left: 6px; flex-shrink: 0;"></i>`;
+                    onclick   = `onclick="openInteractiveConsoleViewLive('/interactive_console.html')"`;
+                } else if (isDone) {
+                    cardStyle = 'opacity: 0.80;';
+                    iconHtml  = `<i class="fa-solid fa-circle-check" style="color: var(--success, #22c55e); margin-left: 6px; flex-shrink: 0; font-size: 12px;"></i>`;
+                    onclick   = `onclick="openInteractiveConsoleViewLive('/interactive_console.html')"`;
+                } else {
+                    // pending
+                    cardStyle = 'opacity: 0.40; pointer-events: none;';
+                    iconHtml  = `<i class="fa-regular fa-clock" style="color: var(--text-secondary); margin-left: 6px; flex-shrink: 0; font-size: 12px;"></i>`;
+                    cursor    = 'default';
+                }
+
+                // Strip long leading paths — show only the last path segment for readability
+                const label = t.file ? t.file.replace(/\\/g, '/').split('/').pop() : t.file;
+
+                return `<div class="test-card" style="cursor: ${cursor}; ${cardStyle}" ${onclick}>
+                    <div class="test-card-title-row" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="test-card-label" style="word-break: break-all; flex: 1;" title="${t.file}">${label}</span>
+                        <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                            ${t.id ? `<span class="tag tag-blue">${t.id}</span>` : ''}
+                            ${iconHtml}
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
         }
 
         function openCurrentRunView() {
@@ -3207,37 +3338,10 @@
             colTests.style.width = '280px';
             historyResizer2.style.display = 'block';
 
-            // Render Tests
-            const testsList = document.getElementById('historyTestsList');
-            let liveTests = activeRunStats.tests || [];
-            if (liveTests.length === 0 && activeRunStats.activeFile) {
-                liveTests = [{ file: activeRunStats.activeFile, id: null }];
-            }
-
-            if (liveTests.length === 0) {
-                testsList.innerHTML = `<tr><td style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No tests available.</td></tr>`;
-            } else {
-                testsList.innerHTML = liveTests.map(t => {
-                    const isActive = (t.file === activeRunStats.activeFile);
-                    const badge = isActive
-                        ? `<i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent); margin-left: 6px;"></i>`
-                        : '';
-                    const bg = isActive ? 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);' : '';
-
-                    return `
-                        <tr class="history-row" style="cursor: pointer; ${bg}" onclick="openInteractiveConsoleViewLive('/interactive_console.html')">
-                            <td style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
-                                <div class="run-details-text">
-                                    <div style="font-weight: 500; margin-bottom: 4px; word-break: break-all;">${t.file}</div>
-                                    <div>${t.id ? `<span class="tag tag-blue">${t.id}</span>` : ''}</div>
-                                </div>
-                                <div>${badge}</div>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            }
-
+            // Render the test list, then open the live console iframe.
+            // renderLiveTestList() is kept separate so the poll can refresh
+            // the list on every activeFile transition without reopening the iframe.
+            renderLiveTestList();
             openInteractiveConsoleViewLive('/interactive_console.html');
         }
 
@@ -3249,7 +3353,6 @@
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
             const allure = document.getElementById('optAllure').checked;
-            const history = document.getElementById('optHistory').checked;
 
             isRunning = true;
             consoleOpened = true;
@@ -3263,6 +3366,9 @@
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
             activeRunStats.tests = fileDatasets;
+            // Reset per-file completion tracking for the fresh run.
+            liveCompletedFiles.clear();
+            liveLastActiveFile = null;
             renderHistoryTable();
 
             runSpinner.style.display = 'inline-block';
@@ -3275,7 +3381,7 @@
                 const res = await fetch('/api/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ datasets: fileDatasets, headless, video, keepOpen, interactive, allure, history })
+                    body: JSON.stringify({ datasets: fileDatasets, headless, video, keepOpen, interactive, allure })
                 });
                 const data = await res.json();
                 if (data.error) {
@@ -3308,7 +3414,6 @@
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
             const allure = document.getElementById('optAllure').checked;
-            const history = document.getElementById('optHistory').checked;
 
             isRunning = true;
             consoleOpened = true;
@@ -3322,6 +3427,9 @@
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
             activeRunStats.tests = fileDatasets;
+            // Reset per-file completion tracking for the fresh run.
+            liveCompletedFiles.clear();
+            liveLastActiveFile = null;
             renderHistoryTable();
 
             runSpinner.style.display = 'inline-block';
@@ -3334,7 +3442,7 @@
                 const res = await fetch('/api/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ datasets: fileDatasets, headless, video, keepOpen, interactive, allure, history })
+                    body: JSON.stringify({ datasets: fileDatasets, headless, video, keepOpen, interactive, allure })
                 });
                 const data = await res.json();
                 if (data.error) {
@@ -3363,7 +3471,6 @@
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
             const allure = document.getElementById('optAllure').checked;
-            const history = document.getElementById('optHistory').checked;
 
             isRunning = true;
             consoleOpened = true;
@@ -3377,6 +3484,9 @@
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
             activeRunStats.tests = selectedDatasets.map(d => ({ file: d.file, id: d.id }));
+            // Reset per-file completion tracking for the fresh run.
+            liveCompletedFiles.clear();
+            liveLastActiveFile = null;
             renderHistoryTable();
 
             runSpinner.style.display = 'inline-block';
@@ -3389,7 +3499,7 @@
                 const res = await fetch('/api/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ datasets: selectedDatasets, headless, video, keepOpen, interactive, allure, history })
+                    body: JSON.stringify({ datasets: selectedDatasets, headless, video, keepOpen, interactive, allure })
                 });
                 const data = await res.json();
                 if (data.error) {
@@ -3408,6 +3518,80 @@
                 consoleOpened = false;
                 updateCenterLayout();
             }
+        }
+
+        /**
+         * Re-runs a complete historical run using its stored run configuration.
+         * The runConfig is the exact RunRequest object serialized into metadata.json
+         * at archive time, so it faithfully reproduces all flags and datasets.
+         *
+         * @param {string} runConfigJson - JSON string of the stored RunRequest
+         */
+        async function rerunFullRun(runConfigJson) {
+            if (isRunning) return;
+            let payload;
+            try {
+                payload = JSON.parse(runConfigJson);
+            } catch (e) {
+                showToast('Invalid run configuration — cannot rerun.', 'error');
+                return;
+            }
+
+            isRunning = true;
+            consoleOpened = true;
+            currentPollSession++;
+            lastLogIndex = 0;
+            lastEventIndex = 0;
+
+            activeRunStats.running = true;
+            activeRunStats.startTime = new Date();
+            activeRunStats.total = 0;
+            activeRunStats.passed = 0;
+            activeRunStats.failed = 0;
+            activeRunStats.tests = (payload.datasets || []).map(d => ({ file: d.file, id: d.id }));
+            // Reset per-file completion tracking for the fresh re-run.
+            liveCompletedFiles.clear();
+            liveLastActiveFile = null;
+            renderHistoryTable();
+
+            runSpinner.style.display = 'inline-block';
+            updateCenterLayout();
+            terminalConsole.innerHTML = 'Connecting to run stream...\n';
+            hasShownStartMessage = false;
+
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.error) {
+                    showToast('Re-run failed to start: ' + data.error, 'error');
+                    isRunning = false;
+                    activeRunStats.running = false;
+                    renderHistoryTable();
+                    consoleOpened = false;
+                    updateCenterLayout();
+                }
+            } catch (e) {
+                showToast('Failed to start re-run: ' + e.message, 'error');
+                isRunning = false;
+                activeRunStats.running = false;
+                renderHistoryTable();
+                consoleOpened = false;
+                updateCenterLayout();
+            }
+        }
+
+        /**
+         * Re-runs a single test case using a pre-built single-dataset RunRequest.
+         * Called from the test card Rerun button in the history view.
+         *
+         * @param {string} payloadJson - JSON string of the single-dataset RunRequest
+         */
+        async function rerunSingleTest(payloadJson) {
+            await rerunFullRun(payloadJson);
         }
 
         async function stopQueue() {
@@ -3624,9 +3808,18 @@
                             if (isRunning) {
                                 lastKnownRunning = true;
                                 if (activeRunStats.activeFile !== statusData.activeFile) {
+                                    // When the backend moves to a new file, the previous one
+                                    // has completed — record it so the test list can grey
+                                    // pending entries and mark done entries with a check.
+                                    if (activeRunStats.activeFile) {
+                                        liveCompletedFiles.add(activeRunStats.activeFile);
+                                    }
                                     activeRunStats.activeFile = statusData.activeFile;
+                                    // Always refresh the live test list so state icons update.
+                                    // Only reopen the iframe via openCurrentRunView if the
+                                    // user is already watching the live view.
                                     if (document.getElementById('colTests').style.display === 'flex' && currentReportId === null) {
-                                        openCurrentRunView();
+                                        renderLiveTestList();
                                     }
                                 }
 

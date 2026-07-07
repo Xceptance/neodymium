@@ -1389,6 +1389,83 @@
             border-color: var(--accent-danger) !important;
         }
 
+        /* ── Kebab debug menu ─────────────────────────────────────────────────── */
+        .kebab-menu-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        /* Compact icon-only toggle; inherits .btn sizing but with tighter padding */
+        .kebab-toggle {
+            padding: 8px 10px;
+            min-width: unset;
+            color: var(--text-secondary);
+            border-color: transparent;
+            background: transparent;
+        }
+
+        .kebab-toggle:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.06) !important;
+            border-color: var(--border-color) !important;
+            color: var(--text-main) !important;
+        }
+
+        /* Dropdown: opens upward above the kebab button */
+        .kebab-dropdown {
+            display: none;
+            position: absolute;
+            bottom: calc(100% + 6px);
+            right: 0;
+            min-width: 180px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+            padding: 4px;
+            z-index: 200;
+            animation: fadeInUp 0.14s ease-out;
+        }
+
+        .kebab-dropdown.open {
+            display: block;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Individual menu items inside the kebab dropdown */
+        .kebab-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 7px;
+            background: transparent;
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            text-align: left;
+            transition: background 0.15s;
+        }
+
+        .kebab-item:hover {
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .kebab-item i {
+            font-size: 12px;
+            color: var(--accent-purple);
+            width: 14px;
+            text-align: center;
+        }
+
         .btn-icon {
             padding: 8px 10px;
         }
@@ -1936,6 +2013,147 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   DUMP READY POPUP
+   Shown via the dumpReady SSE event fired by AiAgent.performDebugDump().
+   Uses an amber/debug colour scheme to visually distinguish it from the
+   finalSaveOverlay (which is success-green).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dump-ready-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.80);
+    z-index: 10000; /* above everything, including the kebab dropdown */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    animation: dumpFadeIn 0.18s ease;
+}
+
+.dump-ready-overlay.active {
+    display: flex;
+}
+
+@keyframes dumpFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.dump-ready-box {
+    background: #1c1c1e;
+    padding: 28px 32px 24px;
+    border-radius: 12px;
+    border: 1px solid rgba(251, 191, 36, 0.35); /* amber glow border */
+    box-shadow: 0 0 0 1px rgba(251,191,36,0.1), 0 16px 40px rgba(0,0,0,0.6);
+    max-width: 600px;
+    width: calc(100% - 48px);
+    color: #e5e5e5;
+}
+
+.dump-ready-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.dump-ready-icon {
+    font-size: 22px;
+    color: #fbbf24; /* amber */
+    flex-shrink: 0;
+}
+
+.dump-ready-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #fbbf24;
+}
+
+.dump-ready-subtitle {
+    font-size: 13px;
+    color: #9ca3af;
+    margin: 0 0 16px 34px; /* indent to align under heading (icon width + gap) */
+}
+
+.dump-ready-files {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 22px;
+}
+
+.dump-file-entry {
+    background: #111113;
+    border: 1px solid #2a2a2e;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.dump-file-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dump-file-type-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+}
+
+.dump-file-type-badge.txt {
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.dump-file-type-badge.html {
+    background: rgba(249, 115, 22, 0.15);
+    color: #fb923c;
+    border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.dump-file-desc {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.dump-file-path {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: #d1d5db;
+    word-break: break-all;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+    padding: 5px 8px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.dump-file-size {
+    font-size: 10px;
+    color: #6b7280;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.dump-ready-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
    MODE: RESULTS (read-only history replay)
    Applied via <body class="mode-results"> when loaded from /api/allure/report/
    Hides all interactive/edit controls that are meaningless for reviewing
@@ -1948,6 +2166,7 @@ body.mode-results #progressBarMobile      { display: none !important; }
 body.mode-results #progressLabelMobile    { display: none !important; }
 body.mode-results .help-hover-container   { display: none !important; }
 body.mode-results #staleBanner            { display: none !important; }
+body.mode-results #kebabMenuWrapper       { display: none !important; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MODE: EMBEDDED (running inside the Aura dashboard iframe)

@@ -227,12 +227,12 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
     }
 
     /**
-     * State 4: colRuns full panel hidden; colTests (flex:1) and colReport (flex:2)
-     * share the remaining space in a 1:2 ratio. The mini-runs bar is 48 px wide.
-     *
-     * <p>We calculate the effective container as the total container minus the
-     * mini-bar width (48 px) and its gap (16 px) to get the width actually
-     * distributed between colTests and colReport.</p>
+     * o State 4: colRuns full panel hidden; colTests (flex:1) and colReport (flex:2) share the remaining space in a 1:2
+     * ratio. The mini-runs bar is 48 px wide.
+     * <p>
+     * We calculate the effective container as the total container minus the mini-bar width (48 px) and its gap (16 px)
+     * to get the width actually distributed between colTests and colReport.
+     * </p>
      */
     private void assertState4()
     {
@@ -269,10 +269,12 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
         sleep(400);
     }
 
-    private void goToState4()
+    private void clickTestStepDetails()
     {
-        js().executeScript("applyHistoryState(4);");
+        Selenide.switchTo().frame($("#historyConsoleIframe"));
+        $$(".step-card").first().shouldBe(Condition.visible).click();
         sleep(300);
+        Selenide.switchTo().defaultContent();
     }
 
     private void clickFirstMiniRunChip()
@@ -283,7 +285,7 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
 
     private void clickSecondOrFirstRun()
     {
-        final var rows = $$(".history-row");
+        final var rows = $$(".history-row .run-row-header");
         (rows.size() >= 2 ? rows.get(1) : rows.first()).shouldBe(Condition.visible).click();
         sleep(400);
     }
@@ -318,7 +320,7 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
         clickFirstTestCase();
         assertState3();
 
-        goToState4();
+        clickTestStepDetails();
         assertState4();
 
         // Return from State 4 → State 3 (core regression path)
@@ -332,14 +334,14 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
         clickFirstTestCase();
         assertState3();
 
-        goToState4();
+        clickTestStepDetails();
         assertState4();
 
         clickFirstMiniRunChip();
         assertState3();
 
         // ── Round 3: 3 → 4 → 3 → 4 → 3 (double bounce) ─────────────────
-        goToState4();
+        clickTestStepDetails();
         assertState4();
 
         clickFirstMiniRunChip();
