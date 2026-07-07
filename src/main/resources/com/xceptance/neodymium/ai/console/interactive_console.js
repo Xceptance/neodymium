@@ -94,6 +94,26 @@ function tryStaticLoad() {
 // Detect connection method on load
 window.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams(window.location.search);
+
+    // ── Mode detection ───────────────────────────────────────────────────────
+    // Two mutually-exclusive display modes alter what the console shows:
+    //
+    //  mode-results   → loaded from history (/api/allure/report/…); read-only.
+    //                   Hides: add-step buttons, bottom action bar, progress
+    //                   pill/bar, shortcuts & info icon.
+    //  mode-embedded  → running inside an iframe (window.parent !== window).
+    //                   Hides: status dot, settings button, theme toggle,
+    //                   mobile-QR button (all owned by the parent dashboard).
+    //
+    const dataUrl = params.get('dataUrl') || params.get('data') || '';
+    if (dataUrl.includes('/api/allure/report/')) {
+        document.body.classList.add('mode-results');
+    }
+    if (window.parent !== window) {
+        document.body.classList.add('mode-embedded');
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     if (params.has('dataUrl') || params.has('data')) {
         tryStaticLoad();
     } else {
@@ -509,12 +529,17 @@ function renderBlock(blockName, steps) {
     container.dataset.sig = sig;
 
     if (steps.length === 0) {
-        // If the block is empty, we show a drop zone so steps can be dragged into it
+        // In results/read-only mode: hide the block entirely \u2014 there are no steps
+        // to display and no drag target is needed.
+        // In interactive mode: show a drop zone so steps can be dragged into it.
+        if (document.body.classList.contains('mode-results')) {
+            group.style.display = 'none';
+            return;
+        }
+        // Interactive mode \u2014 show empty drop zone
         container.innerHTML = `<div class="drop-target-area empty-block-zone" data-block="${blockName}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, -1, 'after', '${blockName}')">
                     <span style="opacity: 0.5; font-size: 12px;">Drop steps here</span>
                 </div>`;
-        // Keep the group visible if it's the main 'steps' block, even if empty, 
-        // or if it's explicitly needed. For now, let's keep all groups visible if we want to drop into them.
         group.style.display = 'flex';
         return;
     }

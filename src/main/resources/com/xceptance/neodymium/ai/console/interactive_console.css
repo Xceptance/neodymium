@@ -1934,3 +1934,46 @@
     padding: 10px 20px;
     font-size: 16px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODE: RESULTS (read-only history replay)
+   Applied via <body class="mode-results"> when loaded from /api/allure/report/
+   Hides all interactive/edit controls that are meaningless for reviewing
+   a completed test run.
+   ═══════════════════════════════════════════════════════════════════════════ */
+body.mode-results .add-step-card-btn      { display: none !important; }
+body.mode-results .bottom-area            { display: none !important; }
+body.mode-results #progressPill           { display: none !important; }
+body.mode-results #progressBarMobile      { display: none !important; }
+body.mode-results #progressLabelMobile    { display: none !important; }
+body.mode-results .help-hover-container   { display: none !important; }
+body.mode-results #staleBanner            { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODE: EMBEDDED (running inside the Aura dashboard iframe)
+   Applied via <body class="mode-embedded"> when window.parent !== window.
+   Hides UI chrome that is already provided by the parent dashboard.
+   ═══════════════════════════════════════════════════════════════════════════ */
+body.mode-embedded #connectionDot  { display: none !important; }
+body.mode-embedded #btnSettings    { display: none !important; }
+body.mode-embedded #btnHelp        { display: none !important; }
+/* Theme toggle: the un-ID'd toggle button — select via aria-label */
+body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none !important; }
+body.mode-embedded .btn-mobile-qr  { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FIX: helpOverlay viewport anchoring
+   The inline help panel was using position:absolute relative to the header,
+   which caused it to scroll out of view. Switch to position:fixed so it
+   always stays anchored to the viewport. Add max-height + overflow-y so the
+   panel itself doesn't overflow on small screens.
+   ═══════════════════════════════════════════════════════════════════════════ */
+#helpOverlay {
+    position: fixed !important;
+    top: 48px !important;          /* just below the header bar */
+    right: 16px !important;
+    left: auto !important;
+    bottom: auto !important;
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+}

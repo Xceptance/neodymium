@@ -795,9 +795,23 @@
             background: var(--bg-hover);
         }
 
-        /* ── Smooth column transitions ───────────────────────────────────────── */
+        /* Column transitions: opacity-only. Width transitions caused regression when
+           switching between flex-based and pixel-based sizing across states. */
         #colRuns, #colTests, #colReport {
-            transition: width 0.2s ease;
+            transition: opacity 0.1s ease;
+        }
+
+        /* Override .left-area / .right-area class defaults for the history layout columns.
+           min-width:300px and resize:horizontal on .left-area survive the JS reset loop
+           (only inline styles are cleared) and create hard floors that break flex proportions.
+           These ID rules have higher specificity and zero those out. */
+        #colRuns, #colTests {
+            min-width: 0;
+            max-width: none;
+            resize: none;
+        }
+        #colReport {
+            min-width: 0;
         }
 
         .resizer-v {
@@ -1489,7 +1503,7 @@
             </div>
 
             <!-- Left Side: History List -->
-            <div class="left-area" id="colRuns" style="width: 320px; flex-shrink: 0;">
+            <div class="left-area" id="colRuns">
                 <div class="panel" style="height: 100%;">
                     <div class="panel-header">
                         <span>Run History</span>
@@ -1509,7 +1523,7 @@
             <div class="resizer-h" id="historyResizer1" style="display: none;"></div>
 
             <!-- Middle Side: Tests List -->
-            <div class="left-area" id="colTests" style="width: 280px; flex-shrink: 0; display: none;">
+            <div class="left-area" id="colTests" style="display: none;">
                 <div class="panel" style="height: 100%;">
                     <div class="panel-header">
                         <span>Test Cases</span>
@@ -1532,7 +1546,7 @@
             <div class="resizer-h" id="historyResizer3" style="display: none;"></div>
 
             <!-- Right Side: Interactive Console -->
-            <div class="right-area" id="colReport" style="flex-grow: 1; min-width: 0;">
+            <div class="right-area" id="colReport" style="display: none;">
                 <div class="panel" style="height: 100%; display: flex; flex-direction: column;">
                     <div class="panel-header">
                         <span>Test Case Details</span>
@@ -1687,17 +1701,9 @@
             e.preventDefault();
         });
 
-        document.getElementById('historyResizer1').addEventListener('mousedown', function (e) {
-            isResizingH1 = true;
-            document.body.style.cursor = 'ew-resize';
-            e.preventDefault();
-        });
+        // historyResizer1 and historyResizer2 are now handled exclusively by
+        // initResizers() / setupResizer(). No duplicate mousedown handlers here.
 
-        document.getElementById('historyResizer2').addEventListener('mousedown', function (e) {
-            isResizingH2 = true;
-            document.body.style.cursor = 'ew-resize';
-            e.preventDefault();
-        });
 
         document.addEventListener('mousemove', function (e) {
             if (isResizingH) {
@@ -1720,34 +1726,13 @@
                     }
                 }
             }
-            if (isResizingH1) {
-                const colRuns = document.getElementById('colRuns');
-                const workspaceRect = document.querySelector('.workspace-layout').getBoundingClientRect();
-                const newWidth = e.clientX - workspaceRect.left - 16;
-                if (newWidth > 200 && newWidth < workspaceRect.width * 0.4) {
-                    colRuns.style.width = newWidth + 'px';
-                }
-            }
-            if (isResizingH2) {
-                const colTests = document.getElementById('colTests');
-                const colRuns = document.getElementById('colRuns');
-                const colRunsWidth = colRuns.getBoundingClientRect().width;
-                const workspaceRect = document.querySelector('.workspace-layout').getBoundingClientRect();
-
-                // Client X - Workspace Left - 16 (padding) - colRunsWidth - resizer1 width (approx 8)
-                const newWidth = e.clientX - workspaceRect.left - 16 - colRunsWidth - 16;
-                if (newWidth > 200 && newWidth < workspaceRect.width * 0.4) {
-                    colTests.style.width = newWidth + 'px';
-                }
-            }
+            // isResizingH1 / isResizingH2 removed — handled by setupResizer()
         });
 
         document.addEventListener('mouseup', function (e) {
-            if (isResizingH || isResizingV || isResizingH1 || isResizingH2) {
+            if (isResizingH || isResizingV) {
                 isResizingH = false;
                 isResizingV = false;
-                isResizingH1 = false;
-                isResizingH2 = false;
                 document.body.style.cursor = 'default';
             }
         });
@@ -1771,6 +1756,15 @@
             if (icView) icView.style.display = 'none';
 
             document.getElementById(viewId).style.display = 'flex';
+
+            // Re-apply the current history nav state whenever the history tab becomes
+            // visible. This is necessary because applyHistoryState() is called at
+            // init() time when the container is still display:none, meaning the
+            // browser has not computed any layout — re-applying after the container
+            // is shown guarantees correct column widths.
+            if (viewId === 'reportViewContainer') {
+                requestAnimationFrame(() => applyHistoryState(historyNavState));
+            }
 
             if (viewId !== 'reportView' && viewId !== 'interactiveConsoleView') {
                 lastActiveView = viewId;
@@ -2036,14 +2030,19 @@
             const r3           = document.getElementById('historyResizer3');
             if (!colRuns || !colTests || !colReport) return;
 
-            // Reset all columns to a clean slate before applying state
+            // ── Reset: start from a fully clean slate ────────────────────────────
+            // Set display:none on ALL columns first so CSS class rules (.left-area
+            // { display:flex }) cannot accidentally make columns visible. Then clear
+            // every flex/sizing inline style so the incoming state's values are the
+            // sole source of truth.
             [colRuns, colTests, colReport].forEach(el => {
-                el.style.display    = '';
-                el.style.flexGrow   = '0';
-                el.style.flexShrink = '1';
-                el.style.minWidth   = '0';
-                el.style.width      = '';
+                el.style.display    = 'none';
                 el.style.flex       = '';
+                el.style.flexGrow   = '';
+                el.style.flexShrink = '';
+                el.style.flexBasis  = '';
+                el.style.width      = '';
+                el.style.minWidth   = '';
             });
             if (colRunsMini)  colRunsMini.style.display  = 'none';
             if (colTestsMini) colTestsMini.style.display = 'none';
@@ -2053,41 +2052,45 @@
 
             switch (n) {
                 case 1:
-                    // Full-width runs list — tests and details hidden
-                    colRuns.style.flex  = '1 1 0';
-                    colTests.style.display  = 'none';
-                    colReport.style.display = 'none';
+                    // ── State 1: full-width runs list only ──────────────────────
+                    colRuns.style.display = 'flex';
+                    colRuns.style.flex    = '1 1 0';
+                    // colTests and colReport remain display:none
                     break;
 
                 case 2:
-                    // Runs | Tests — equal 50/50 split, draggable to rebalance
-                    colRuns.style.flex   = '1 1 0';
-                    colTests.style.flex  = '1 1 0';
-                    colTests.style.display  = 'flex';
-                    colReport.style.display = 'none';
+                    // ── State 2: Runs | Tests — equal 50/50 split ───────────────
+                    colRuns.style.display  = 'flex';
+                    colRuns.style.flex     = '1 1 0';
+                    colTests.style.display = 'flex';
+                    colTests.style.flex    = '1 1 0';
+                    // colReport remains display:none
                     if (r1) r1.style.display = 'block';
                     break;
 
                 case 3:
-                    // Runs | Tests | Details — equal three-way split
-                    colRuns.style.flex   = '1 1 0';
-                    colTests.style.flex  = '1 1 0';
+                    // ── State 3: Runs | Tests | Details — equal three-way split ─
+                    colRuns.style.display   = 'flex';
+                    colRuns.style.flex      = '1 1 0';
                     colTests.style.display  = 'flex';
-                    colReport.style.flex = '1 1 0';
+                    colTests.style.flex     = '1 1 0';
+                    colReport.style.display = 'flex';
+                    colReport.style.flex    = '1 1 0';
                     if (r1) r1.style.display = 'block';
                     if (r2) r2.style.display = 'block';
                     break;
 
                 case 4:
-                    // Mini-runs (48px) | Mini-tests (48px) | Details (full flex-grow)
-                    colRuns.style.display       = 'none';
-                    colTests.style.display      = 'none';
-                    if (colRunsMini)  colRunsMini.style.display  = 'flex';
-                    if (colTestsMini) colTestsMini.style.display = 'flex';
-                    colReport.style.flex        = '1 1 0';
-                    if (r3) r3.style.display = 'block';
+                    // ── State 4: Mini-runs (48px) | Tests (flex:1) | Details (flex:2)
+                    // colRuns full panel is hidden; colRunsMini strip takes its place.
+                    // Tests keeps its normal proportional size; details gets more room.
+                    colTests.style.display  = 'flex';
+                    colTests.style.flex     = '1 1 0';
+                    colReport.style.display = 'flex';
+                    colReport.style.flex    = '2 1 0';
+                    if (colRunsMini) colRunsMini.style.display = 'flex';
+                    if (r2) r2.style.display = 'block';
                     refreshMiniRunsBar();
-                    refreshMiniTestsBar();
                     break;
             }
         }
@@ -2176,7 +2179,7 @@
          *   historyResizer3            free drag only (details pane, no collapse)
          */
         function initResizers() {
-            setupResizer('historyResizer1', 'colRuns', 160, () => {
+            setupResizer('historyResizer1', 'colRuns', 160, false, () => {
                 if (historyNavState === 3) {
                     applyHistoryState(4);
                 } else if (historyNavState === 2) {
@@ -2184,16 +2187,17 @@
                 }
             }, null);
 
-            setupResizer('historyResizer2', 'colTests', 140, () => {
+            setupResizer('historyResizer2', 'colTests', 140, false, () => {
                 if (historyNavState === 3) {
                     applyHistoryState(4);
                 }
                 // In State 2: tests column is flex-grow so dragging left will shrink it naturally
             }, null);
 
-            // Resizer3 sits between the mini-bars block and colReport in State 4.
+            // Resizer3 is to the RIGHT of the mini-bars and the LEFT edge of colReport.
+            // Dragging it LEFT enlarges colReport; pass rightSide=true to invert delta.
             // No auto-collapse: the details pane must always remain visible.
-            setupResizer('historyResizer3', 'colReport', 300, null, null);
+            setupResizer('historyResizer3', 'colReport', 300, true, null, null);
         }
 
         /**
@@ -2201,12 +2205,14 @@
          * target column. Triggers onCollapse when width drops below minWidth.
          *
          * @param {string}   resizerId  - ID of the resizer div
-         * @param {string}   colId      - ID of the column being resized (left of resizer)
+         * @param {string}   colId      - ID of the column being resized
          * @param {number}   minWidth   - auto-collapse threshold in pixels
-         * @param {Function} onCollapse - called when width drops below minWidth
-         * @param {Function} onResize   - called on every valid resize with new width
+         * @param {boolean}  rightSide  - true if the column is to the RIGHT of the resizer
+         *                               (inverts the delta direction)
+         * @param {Function} onCollapse - called when width drops below minWidth (or null)
+         * @param {Function} onResize   - called on every valid resize with new width (or null)
          */
-        function setupResizer(resizerId, colId, minWidth, onCollapse, onResize) {
+        function setupResizer(resizerId, colId, minWidth, rightSide, onCollapse, onResize) {
             const resizer = document.getElementById(resizerId);
             const col     = document.getElementById(colId);
             if (!resizer || !col) return;
@@ -2221,14 +2227,16 @@
                 startW    = col.offsetWidth;
                 collapsed = false;
                 resizer.classList.add('dragging');
-                document.body.style.cursor    = 'col-resize';
+                document.body.style.cursor     = 'col-resize';
                 document.body.style.userSelect = 'none';
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
             });
 
             function onMouseMove(e) {
-                const newW = startW + (e.clientX - startX);
+                // rightSide=true: column is right of resizer — drag right shrinks it, drag left grows it
+                const delta = rightSide ? -(e.clientX - startX) : (e.clientX - startX);
+                const newW  = startW + delta;
                 if (onCollapse && newW < minWidth) {
                     if (!collapsed) {
                         collapsed = true;
@@ -2236,9 +2244,8 @@
                         onCollapse(newW);
                     }
                 } else if (newW >= (onCollapse ? minWidth : 0)) {
-                    col.style.width      = newW + 'px';
-                    col.style.flexShrink = '0';
-                    col.style.flex       = 'none';
+                    col.style.flex  = 'none';
+                    col.style.width = newW + 'px';
                     if (onResize) onResize(newW);
                 }
             }
