@@ -29,6 +29,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -63,6 +64,7 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -98,6 +100,7 @@ public final class NeodymiumAuraManager {
     private static final Map<HttpServer, HttpsServer> httpsServers = new ConcurrentHashMap<>();
     private static final List<String> currentRunLogs = Collections.synchronizedList(new ArrayList<>());
     private static final List<Map<String, Object>> currentRunEvents = Collections.synchronizedList(new ArrayList<>());
+    private static final List<String> completedFiles = Collections.synchronizedList(new ArrayList<>());
     private static final AtomicReference<Process> activeProcess = new AtomicReference<>(null);
     private static final AtomicInteger globalTestsRun = new AtomicInteger(0);
     private static final AtomicInteger globalPassed = new AtomicInteger(0);
@@ -423,7 +426,22 @@ public final class NeodymiumAuraManager {
                         engine = new InteractiveConsoleEngine("initializing");
                         currentConsoleEngine.set(engine);
                     }
-                    final com.google.gson.JsonObject action = engine.waitForAction();
+                    final String query = exchange.getRequestURI().getQuery();
+                    String tempPauseId = null;
+                    if (query != null)
+                    {
+                        for (final String param : query.split("&"))
+                        {
+                            final String[] pair = param.split("=");
+                            if (pair.length > 1 && "pauseId".equals(pair[0]))
+                            {
+                                tempPauseId = URLDecoder.decode(pair[1], StandardCharsets.UTF_8);
+                                break;
+                            }
+                        }
+                    }
+                    final String pauseId = tempPauseId;
+                    final com.google.gson.JsonObject action = engine.waitForAction(pauseId);
                     sendResponse(exchange, 200, "application/json",
                             action != null ? action.toString().getBytes() : "{}".getBytes());
                 } else {
@@ -725,6 +743,44 @@ public final class NeodymiumAuraManager {
             status.put("failed", globalFailed.get());
             status.put("running", runningQueue.get());
             status.put("activeFile", activeFile.get());
+
+            String activeTestId = "";
+            final InteractiveConsoleEngine engine = currentConsoleEngine.get();
+            if (engine != null)
+            {
+                final String stateJson = engine.getCurrentStateJson();
+                if (stateJson != null)
+                {
+                    try
+                    {
+                        final JsonObject stateObj = gson.fromJson(stateJson, JsonObject.class);
+                        if (stateObj != null && stateObj.has("testId"))
+                        {
+                            activeTestId = stateObj.get("testId").getAsString();
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        // ignore
+                    }
+                }
+            }
+            status.put("activeTestId", activeTestId);
+
+            final List<Map<String, String>> datasetsList = new ArrayList<>();
+            final RunRequest lastReq = lastRunRequest.get();
+            if (lastReq != null && lastReq.datasets != null)
+            {
+                for (final DatasetSelection selection : lastReq.datasets)
+                {
+                    final Map<String, String> m = new HashMap<>();
+                    m.put("file", selection.file);
+                    m.put("id", selection.id);
+                    datasetsList.add(m);
+                }
+            }
+            status.put("tests", datasetsList);
+            status.put("completedFiles", new ArrayList<>(completedFiles));
 
             final List<String> logs = new ArrayList<>();
             final int currentLogSize;
@@ -1228,6 +1284,7 @@ public final class NeodymiumAuraManager {
                 manuallyStopped.set(false);
                 currentRunLogs.clear();
                 currentRunEvents.clear();
+                completedFiles.clear();
                 // Record start time and request for metadata archiving
                 runStartTimeMs.set(System.currentTimeMillis());
                 lastRunRequest.set(req);
@@ -1354,6 +1411,7 @@ public final class NeodymiumAuraManager {
                         broadcastLog("[ERROR] Failed to start process: " + e.getMessage());
                         globalTestsRun.incrementAndGet();
                         globalFailed.incrementAndGet();
+                        completedFiles.add(file);
                         continue;
                     }
 
@@ -1421,6 +1479,7 @@ public final class NeodymiumAuraManager {
                         }
                     }
 
+                    completedFiles.add(file);
                     activeProcess.set(null);
                 }
 

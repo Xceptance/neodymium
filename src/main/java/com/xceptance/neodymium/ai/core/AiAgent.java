@@ -19,19 +19,26 @@
 package com.xceptance.neodymium.ai.core;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.Yaml;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Assertions;
@@ -144,6 +151,8 @@ public class AiAgent
 
     private String currentBlock = "steps";
 
+    private Map<String, String> originalDataBindings;
+
     public void setCurrentBlock(final String currentBlock)
     {
         this.currentBlock = currentBlock;
@@ -255,6 +264,10 @@ public class AiAgent
     {
         activeAgent.set(this);
         activeResult.set(result);
+        if (Neodymium.getData() != null)
+        {
+            this.originalDataBindings = new HashMap<>(Neodymium.getData());
+        }
         // Dynamically reload the thread-local AI configuration to pick up any dynamic
         // system property changes
         Neodymium.reloadAiConfiguration();
@@ -761,38 +774,34 @@ public class AiAgent
             {
                 if (hudSaveExit)
                 {
-                    try
-                    {
-                        saveYamlAndExit(result.getSteps().size(), new java.util.ArrayList<>());
-                    }
-                    catch (Exception ex)
-                    {
-                        LOG.error("Failed to save YAML on Save & Exit", ex);
-                    }
+                    // Already saved in processHudActionException during execution loop
                 }
-                else if (hudPromptChanged && Neodymium.aiConfiguration().aiInteractive())
+                else if (Neodymium.aiConfiguration().aiInteractive())
                 {
                     LOG.info("Waiting for final user action to save or discard in Interactive Console...");
                     try
                     {
                         this.currentPauseId = "pause-final-" + System.currentTimeMillis();
-                        updateConsoleState(result, "Test execution finished! Do you want to save your modifications?");
+                        final String promptMessage = this.hudPromptChanged
+                                ? "Test execution finished! Do you want to save your modifications?"
+                                : "Test execution finished successfully!";
+                        updateConsoleState(result, promptMessage);
                         
-                        final com.google.gson.JsonObject actionObj = this.consoleEngine.waitForAction();
+                        final com.google.gson.JsonObject actionObj = this.consoleEngine.waitForAction(this.currentPauseId);
                         final String actionType = actionObj.has("action") ? actionObj.get("action").getAsString() : "";
                         this.currentPauseId = null;
                         
                         if ("SAVE_EXIT".equals(actionType))
                         {
-                            saveYamlAndExit(result.getSteps().size(), new java.util.ArrayList<>());
+                            saveYamlAndExit(result.getSteps().size(), performedInstructions);
                         }
                         else
                         {
                             playbook.setChanged(false);
-                            LOG.info("Playbook saving prevented because interactive modifications were discarded.");
+                            LOG.info("Playbook saving prevented or finished because interactive modifications were discarded or console closed.");
                         }
                     }
-                    catch (Exception ex)
+                    catch (final Exception ex)
                     {
                         playbook.setChanged(false);
                     }
@@ -2019,6 +2028,7 @@ public class AiAgent
         state.addProperty("testName", Neodymium.getTestName());
         state.addProperty("testId", Neodymium.getData() != null ? Neodymium.getData().get("testId") : null);
         state.addProperty("browser", Neodymium.getBrowserProfileName());
+        state.addProperty("hudPromptChanged", this.hudPromptChanged);
 
         Class<?> testClass = Neodymium.getTestClass();
         // Data and Files
@@ -3457,8 +3467,190 @@ public class AiAgent
             playbook.setChanged(true);
         }
 
-        // TODO: Re-implement YAML saving in new console if needed.
+        final String sourceFile = Neodymium.getTestdataSourceFile();
+        if (sourceFile == null)
+        {
+            LOG.info("Skip saving YAML: sourceFile is null.");
+            return false;
+        }
+
+        final String lower = sourceFile.toLowerCase();
+        final boolean canEdit = lower.endsWith(".yml") || lower.endsWith(".yaml");
+        if (!canEdit)
+        {
+            LOG.info("Skip saving YAML: canEdit is false (not a yaml/yml file).");
+            return false;
+        }
+
+        try
+        {
+            final Yaml yaml = new Yaml();
+            Object data = null;
+            File file = new File(sourceFile);
+            
+            // Handle relative paths pointing outside resource directories.
+            if (!file.exists() && !sourceFile.startsWith("src/test/resources/"))
+            {
+                file = new File("src/test/resources/" + (sourceFile.startsWith("/") ? sourceFile.substring(1) : sourceFile));
+            }
+
+            if (file.exists())
+            {
+                try (final InputStream is = new FileInputStream(file))
+                {
+                    data = yaml.load(is);
+                }
+            }
+
+            final String newSteps = String.join("\n", performedInstructions) + "\n";
+            Map<String, Object> targetDataset = null;
+
+            if (data instanceof Map)
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> root = (Map<String, Object>) data;
+                root.put("steps", newSteps);
+                
+                if (root.containsKey("data"))
+                {
+                    targetDataset = findTargetDataset(root.get("data"), this.originalDataBindings);
+                }
+                else
+                {
+                    targetDataset = root;
+                }
+            }
+            else if (data instanceof List)
+            {
+                targetDataset = findTargetDataset(data, this.originalDataBindings);
+                
+                final Map<String, Object> root = new LinkedHashMap<>();
+                root.put("steps", newSteps);
+                root.put("data", data);
+                data = root;
+            }
+            else
+            {
+                final Map<String, Object> root = new LinkedHashMap<>();
+                root.put("steps", newSteps);
+                data = root;
+            }
+
+            if (targetDataset != null && Neodymium.getData() != null)
+            {
+                for (final Map.Entry<String, String> entry : Neodymium.getData().entrySet())
+                {
+                    if (!entry.getKey().startsWith("neodymium.") && !entry.getKey().equals("steps"))
+                    {
+                        targetDataset.put(entry.getKey(), entry.getValue());
+                    }
+                }
+            }
+
+            final DumperOptions options = new DumperOptions();
+            options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+            options.setPrettyFlow(true);
+            final Yaml writerYaml = new Yaml(options);
+            
+            final Path parentDir = file.toPath().getParent();
+            if (parentDir != null && !Files.exists(parentDir))
+            {
+                Files.createDirectories(parentDir);
+            }
+
+            try (final FileWriter writer = new FileWriter(file))
+            {
+                writerYaml.dump(data, writer);
+            }
+            LOG.info("💾 Successfully updated YAML data file: {}", file.getAbsolutePath());
+        }
+        catch (final Exception e)
+        {
+            LOG.error("Failed to save YAML data file", e);
+        }
         return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> findTargetDataset(final Object yamlData, final Map<String, String> originalBindings)
+    {
+        if (originalBindings == null)
+        {
+            return null;
+        }
+        
+        if (yamlData instanceof Map)
+        {
+            final Map<String, Object> map = (Map<String, Object>) yamlData;
+            if (map.containsKey("data"))
+            {
+                return findTargetDataset(map.get("data"), originalBindings);
+            }
+            return map;
+        }
+        else if (yamlData instanceof List)
+        {
+            final List<?> list = (List<?>) yamlData;
+            
+            // 1. Attempt exact match using the unique test ID parameter.
+            final String testId = originalBindings.get("testId") != null ? originalBindings.get("testId") : originalBindings.get("TEST_ID");
+            if (testId != null)
+            {
+                for (final Object item : list)
+                {
+                    if (item instanceof Map)
+                    {
+                        final Map<String, Object> map = (Map<String, Object>) item;
+                        final String tId = map.get("testId") != null ? String.valueOf(map.get("testId")) : (map.get("TEST_ID") != null ? String.valueOf(map.get("TEST_ID")) : null);
+                        if (testId.equals(tId))
+                        {
+                            return map;
+                        }
+                    }
+                }
+            }
+            
+            // 2. Perform property-by-property equality evaluation for non-framework properties.
+            for (final Object item : list)
+            {
+                if (item instanceof Map)
+                {
+                    final Map<String, Object> map = (Map<String, Object>) item;
+                    boolean match = true;
+                    for (final Map.Entry<String, Object> entry : map.entrySet())
+                    {
+                        final String key = entry.getKey();
+                        if (key.startsWith("neodymium."))
+                        {
+                            continue;
+                        }
+                        if (!originalBindings.containsKey(key))
+                        {
+                            match = false;
+                            break;
+                        }
+                        final String originalVal = originalBindings.get(key);
+                        final String yamlVal = String.valueOf(entry.getValue());
+                        if (!yamlVal.equals(originalVal))
+                        {
+                            match = false;
+                            break;
+                        }
+                    }
+                    if (match)
+                    {
+                        return map;
+                    }
+                }
+            }
+            
+            // 3. Fallback to the first item if it is the only defined dataset.
+            if (list.size() == 1 && list.get(0) instanceof Map)
+            {
+                return (Map<String, Object>) list.get(0);
+            }
+        }
+        return null;
     }
 
     /**

@@ -44,7 +44,22 @@ public final class InteractiveConsoleStateTest extends BaseConsoleTest
 {
     private void jsClick(final SelenideElement element)
     {
-        com.codeborne.selenide.Selenide.executeJavaScript("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window}));", element);
+        for (int i = 0; i < 3; i++)
+        {
+            try
+            {
+                com.codeborne.selenide.Selenide.executeJavaScript("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window}));", element);
+                return;
+            }
+            catch (final org.openqa.selenium.StaleElementReferenceException e)
+            {
+                if (i == 2)
+                {
+                    throw e;
+                }
+                com.codeborne.selenide.Selenide.sleep(200);
+            }
+        }
     }
 
     @Test
@@ -215,6 +230,8 @@ public final class InteractiveConsoleStateTest extends BaseConsoleTest
             Selenide.actions().keyDown(Keys.ALT).sendKeys("n").keyUp(Keys.ALT).perform();
             final SelenideElement editingCard = $(".step-card.editing");
             editingCard.should(Condition.exist);
+            // Verify no step number badge is shown while adding/temporary
+            editingCard.$(".step-num-badge").shouldNot(Condition.exist);
             // Click badge inside the editing card to verify autocomplete
             jsClick(editingCard.$$(".binding-badge").findBy(Condition.text("testId")));
             editingCard.$(".inline-edit-textarea").shouldHave(Condition.value("${testId}"));

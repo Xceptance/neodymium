@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.openqa.selenium.JavascriptExecutor;
 
+import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
@@ -437,5 +438,75 @@ public class InteractiveConsoleStandaloneTest extends BaseAiTest
         {
             Assertions.fail("SSE endpoint HEAD request timed out: " + e.getMessage());
         }
+    }
+
+    /**
+     * Verifies that the final save overlay displays correctly when receiving a final pause event,
+     * showing distinct options depending on whether step edits were made.
+     *
+     * @throws InterruptedException
+     *             if the thread is interrupted
+     */
+    @NeodymiumTest
+    public void testFinalSaveOverlayShowsOnFinalPause() throws InterruptedException
+    {
+        // Case 1: Edits were made (hudPromptChanged is true)
+        final JsonObject stateWithEdits = new JsonObject();
+        stateWithEdits.addProperty("status", "running");
+        stateWithEdits.addProperty("runId", consoleEngine.getRunId());
+        stateWithEdits.addProperty("hudPromptChanged", true);
+        
+        consoleEngine.broadcastSseEvent("state", stateWithEdits.toString());
+        sleep(400);
+
+        final JsonObject pausePayload1 = new JsonObject();
+        pausePayload1.addProperty("pauseId", "pause-final-" + System.currentTimeMillis());
+        pausePayload1.addProperty("runId", consoleEngine.getRunId());
+
+        consoleEngine.broadcastSseEvent("pause", pausePayload1.toString());
+        sleep(600);
+
+        // Verify the overlay is active
+        $("#finalSaveOverlay").shouldHave(Condition.cssClass("active"));
+        $("#finalSaveText").shouldHave(Condition.text("You have made changes to the test steps during execution. Would you like to save these changes?"));
+        
+        // Verify we have both save and discard buttons
+        $("#finalSaveButtons").$$("button").shouldHave(CollectionCondition.size(2));
+        $("#finalSaveButtons").$$("button").get(0).shouldHave(Condition.text("Save Changes"));
+        $("#finalSaveButtons").$$("button").get(1).shouldHave(Condition.text("Discard"));
+
+        // Close the overlay to reset the state for the next check by clicking Discard
+        $("#finalSaveButtons").$$("button").get(1).click();
+        sleep(400);
+        $("#finalSaveOverlay").shouldNotHave(Condition.cssClass("active"));
+
+        // Case 2: No edits were made (hudPromptChanged is false)
+        final JsonObject stateNoEdits = new JsonObject();
+        stateNoEdits.addProperty("status", "running");
+        stateNoEdits.addProperty("runId", consoleEngine.getRunId());
+        stateNoEdits.addProperty("hudPromptChanged", false);
+
+        consoleEngine.broadcastSseEvent("state", stateNoEdits.toString());
+        sleep(400);
+
+        final JsonObject pausePayload2 = new JsonObject();
+        pausePayload2.addProperty("pauseId", "pause-final-" + System.currentTimeMillis());
+        pausePayload2.addProperty("runId", consoleEngine.getRunId());
+
+        consoleEngine.broadcastSseEvent("pause", pausePayload2.toString());
+        sleep(600);
+
+        // Verify the overlay is active with success text and single button
+        $("#finalSaveOverlay").shouldHave(Condition.cssClass("active"));
+        $("#finalSaveText").shouldHave(Condition.text("Test execution finished successfully!"));
+
+        // Verify we only have the "Close Console" button
+        $("#finalSaveButtons").$$("button").shouldHave(CollectionCondition.size(1));
+        $("#finalSaveButtons").$$("button").get(0).shouldHave(Condition.text("Close Console"));
+
+        // Close the console overlay
+        $("#finalSaveButtons").$$("button").get(0).click();
+        sleep(400);
+        $("#finalSaveOverlay").shouldNotHave(Condition.cssClass("active"));
     }
 }

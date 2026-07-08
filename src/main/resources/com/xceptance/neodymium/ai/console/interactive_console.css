@@ -1941,15 +1941,13 @@
             word-break: break-all;
         }
 
-        /* Only show the mobile-qr button on desktop; the QR is useless on mobile itself */
+        /* Only show the mobile-qr button on non-touch (desktop) devices */
         .btn-mobile-qr {
             display: none;
         }
 
-        @media (min-width: 901px) {
-            .btn-mobile-qr {
-                display: inline-flex;
-            }
+        body.no-touch .btn-mobile-qr {
+            display: inline-flex;
         }
 /* Hide edit icon and reorder controls in edit mode */
 .step-card.editing .step-edit-btn,
@@ -2167,6 +2165,9 @@ body.mode-results #progressLabelMobile    { display: none !important; }
 body.mode-results .help-hover-container   { display: none !important; }
 body.mode-results #staleBanner            { display: none !important; }
 body.mode-results #kebabMenuWrapper       { display: none !important; }
+body.mode-results .step-edit-btn          { display: none !important; }
+body.mode-results .step-reorder-controls  { display: none !important; }
+body.mode-results .step-rewind-btn         { display: none !important; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MODE: EMBEDDED (running inside the Aura dashboard iframe)
@@ -2178,7 +2179,6 @@ body.mode-embedded #btnSettings    { display: none !important; }
 body.mode-embedded #btnHelp        { display: none !important; }
 /* Theme toggle: the un-ID'd toggle button — select via aria-label */
 body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none !important; }
-body.mode-embedded .btn-mobile-qr  { display: none !important; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    FIX: helpOverlay viewport anchoring

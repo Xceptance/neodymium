@@ -39,7 +39,21 @@ function connectSSE() {
             checkActionApprovals();
             if (currentPauseId && currentPauseId.startsWith('pause-final-')) {
                 const finalSaveOverlay = document.getElementById('finalSaveOverlay');
+                const finalSaveText = document.getElementById('finalSaveText');
+                const finalSaveButtons = document.getElementById('finalSaveButtons');
                 if (finalSaveOverlay) {
+                    const editsMade = currentState && currentState.hudPromptChanged === true;
+                    if (finalSaveText) {
+                        finalSaveText.textContent = editsMade 
+                            ? "You have made changes to the test steps during execution. Would you like to save these changes?"
+                            : "Test execution finished successfully!";
+                    }
+                    if (finalSaveButtons) {
+                        finalSaveButtons.innerHTML = editsMade
+                            ? `<button class="btn btn-primary" onclick="sendAction('SAVE_EXIT')">Save Changes</button>
+                               <button class="btn btn-danger" onclick="sendAction('DISCARD')">Discard</button>`
+                            : `<button class="btn btn-primary" onclick="sendAction('DISCARD')">Close Console</button>`;
+                    }
                     finalSaveOverlay.classList.add('active');
                 }
             } else if (isAutoMode) {
@@ -104,6 +118,14 @@ function tryStaticLoad() {
 // Detect connection method on load
 window.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams(window.location.search);
+
+    // ── Touch capability / Mobile detection ──────────────────────────────────
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+    if (isTouchDevice) {
+        document.body.classList.add('has-touch');
+    } else {
+        document.body.classList.add('no-touch');
+    }
 
     // ── Mode detection ───────────────────────────────────────────────────────
     // Two mutually-exclusive display modes alter what the console shows:
@@ -270,6 +292,21 @@ function applyState(state) {
     // On a new test run, clear the selected step to fall back to default behavior
     if (currentState && currentState.runId !== state.runId) {
         selectedStepIndexForDetails = null;
+    }
+
+    // Preserve local temporary steps (isTempAdd) when applying a new state from the server
+    if (currentState && currentState.blocks && state && state.blocks) {
+        for (const blockName of ['before', 'steps', 'after']) {
+            const oldList = currentState.blocks[blockName] || [];
+            const newList = state.blocks[blockName] || [];
+            const tempSteps = oldList.filter(s => s.isTempAdd);
+            for (const tempStep of tempSteps) {
+                if (!newList.some(s => s.index === tempStep.index)) {
+                    newList.push(tempStep);
+                }
+            }
+            state.blocks[blockName] = newList;
+        }
     }
 
     currentState = state;
@@ -723,7 +760,8 @@ function buildStepDetailsHtml(step, isActiveStep) {
 }
 
 function generateEditableBindingsTable(bindings, textareaIdOrClass) {
-    const keys = Object.keys(bindings || {});
+    const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps'];
+    const keys = Object.keys(bindings || {}).filter(k => !excludedKeys.includes(k));
     if (keys.length === 0) {
         return '<div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 8px;">No variables available.</div>';
     }
@@ -990,21 +1028,29 @@ function renderStepCard(step) {
                    </button>`
         : instrFull;
 
-    return `
-                <div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${step.index}, 'before')"></div>
-                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}${passedClass}${noDetailsPendingClass}${editingClass}" data-step-idx="${step.index}" role="listitem" tabindex="0" aria-label="Step ${step.index}: ${escHtml(resolvedInstruction)}"
-                     onclick="handleStepClick(event, ${step.index})" ondragend="handleDragEnd(event)">
-                ${activeBadge}
-                <div class="step-row">
+    // Standalone variable for step number badge to avoid nesting template literals deeply
+    let stepNumBadgeHtml = '';
+    if (!step.isTempAdd) {
+        const badgeNum = allStepIndices.indexOf(step.index) + 1;
+        stepNumBadgeHtml = `
                     <div class="step-num-badge">
                         ${isSelected ? `
-                            <input type="number" value="${allStepIndices.indexOf(step.index) + 1}"
+                            <input type="number" value="${badgeNum}"
                                    min="1" max="${allStepIndices.length}"
                                    onkeydown="handleStepInputKeyDown(event, ${step.index})"
                                    onblur="reorderStepDirect(event, ${step.index})"
                                    aria-label="Step position. Type a new number to move this step. Use Ctrl + Up/Down arrows to move.">
-                        ` : `#${step.index + 1}`}
-                    </div>
+                        ` : `#${badgeNum}`}
+                    </div>`;
+    }
+
+    return `
+                <div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${step.index}, 'before')"></div>
+                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}${passedClass}${noDetailsPendingClass}${editingClass}" data-step-idx="${step.index}" role="listitem" tabindex="0" aria-label="${step.isTempAdd ? 'New Step' : 'Step ' + (allStepIndices.indexOf(step.index) + 1)}: ${escHtml(resolvedInstruction)}"
+                     onclick="handleStepClick(event, ${step.index})" ondragend="handleDragEnd(event)">
+                ${activeBadge}
+                <div class="step-row">
+                    ${stepNumBadgeHtml}
                     <div class="${statusIconContainerClass}" ${statusClickAttr}>${statusIconMarkup}</div>
                     <div class="step-text-container">
                         <div class="tag-row">${sourceTag}${thinkingBadge}</div>
@@ -1261,8 +1307,8 @@ function triggerAutoRunCheck() {
 // Event Handlers & Local UI helpers
 // -------------------------------------------------------------------------
 function handleStepClick(event, index) {
-    // Prevent toggling if clicking interactive controls or the breakpoint status icon
-    if (event.target.closest('button') || event.target.closest('textarea') || event.target.closest('.step-status-icon')) return;
+    // Prevent toggling if clicking interactive controls, inputs, variable bindings, or the breakpoint status icon
+    if (event.target.closest('button') || event.target.closest('textarea') || event.target.closest('input') || event.target.closest('.step-status-icon') || event.target.closest('.inline-edit-bindings')) return;
 
     // Allow selecting any step, including future ones.
     // Selection is now the primary trigger for reorder editing.
@@ -2313,10 +2359,14 @@ async function openMobileQr() {
     const hostname = window.location.hostname;
     const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('127.');
 
-    // Show "Detecting LAN IP…" while we probe
-    urlEl.textContent = isLocal ? 'Detecting local network IP…' : window.location.href;
-
     let scanUrl = window.location.href;
+    if (window.parent !== window) {
+        // We are inside the manager (iframe) — ensure the path points directly to /interactive_console.html
+        scanUrl = window.location.origin + '/interactive_console.html';
+    }
+
+    // Show "Detecting LAN IP…" while we probe
+    urlEl.textContent = isLocal ? 'Detecting local network IP…' : scanUrl;
     if (isLocal) {
         // Prefer the LAN IP detected by the Java server if available (injected into currentState)
         let lanIp = (currentState && currentState.lanIp && currentState.lanIp !== 'localhost') ? currentState.lanIp : null;

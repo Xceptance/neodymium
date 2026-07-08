@@ -1985,7 +1985,7 @@
         }
 
         let historyCached = [];
-        let activeRunStats = { total: 0, passed: 0, failed: 0, running: false, startTime: null };
+        let activeRunStats = { total: 0, passed: 0, failed: 0, running: false, startTime: null, activeTestId: null };
         /**
          * Tracks which test files have already completed in the current live run.
          * Keyed by the full file path string. Updated whenever the backend's
@@ -3264,14 +3264,24 @@
                 return;
             }
 
-            // Determine the index of the currently active file so we can classify
+            // Determine the index of the currently active test so we can classify
             // all entries before it as "done" and all after it as "pending".
             const activeFile = activeRunStats.activeFile || '';
-            const activeIdx = liveTests.findIndex(t => t.file === activeFile);
+            const activeTestId = activeRunStats.activeTestId || '';
+
+            let activeIdx = -1;
+            if (activeFile) {
+                if (activeTestId) {
+                    activeIdx = liveTests.findIndex(t => t.file === activeFile && String(t.id) === String(activeTestId));
+                }
+                if (activeIdx < 0) {
+                    activeIdx = liveTests.findIndex(t => t.file === activeFile);
+                }
+            }
 
             testsList.innerHTML = liveTests.map((t, idx) => {
+                const isCurrent = (activeIdx >= 0) ? (idx === activeIdx) : (t.file === activeFile);
                 const isDone = liveCompletedFiles.has(t.file) || (activeIdx >= 0 && idx < activeIdx);
-                const isCurrent = t.file === activeFile;
                 const isPending = !isDone && !isCurrent;
 
                 // -- Visual state variables --
@@ -3353,6 +3363,8 @@
             activeRunStats.total = 0;
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
+            activeRunStats.activeFile = null;
+            activeRunStats.activeTestId = null;
             activeRunStats.tests = fileDatasets;
             // Reset per-file completion tracking for the fresh run.
             liveCompletedFiles.clear();
@@ -3414,6 +3426,8 @@
             activeRunStats.total = 0;
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
+            activeRunStats.activeFile = null;
+            activeRunStats.activeTestId = null;
             activeRunStats.tests = fileDatasets;
             // Reset per-file completion tracking for the fresh run.
             liveCompletedFiles.clear();
@@ -3471,6 +3485,8 @@
             activeRunStats.total = 0;
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
+            activeRunStats.activeFile = null;
+            activeRunStats.activeTestId = null;
             activeRunStats.tests = selectedDatasets.map(d => ({ file: d.file, id: d.id }));
             // Reset per-file completion tracking for the fresh run.
             liveCompletedFiles.clear();
@@ -3536,6 +3552,8 @@
             activeRunStats.total = 0;
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
+            activeRunStats.activeFile = null;
+            activeRunStats.activeTestId = null;
             activeRunStats.tests = (payload.datasets || []).map(d => ({ file: d.file, id: d.id }));
             // Reset per-file completion tracking for the fresh re-run.
             liveCompletedFiles.clear();
@@ -3762,6 +3780,13 @@
                     if (data.status) {
                         const statusData = data.status;
 
+                        if (statusData.tests) {
+                            activeRunStats.tests = statusData.tests;
+                        }
+                        if (statusData.completedFiles) {
+                            liveCompletedFiles = new Set(statusData.completedFiles);
+                        }
+
                         if (serverSessionId === null) {
                             serverSessionId = statusData.sessionId;
                         } else if (serverSessionId !== statusData.sessionId) {
@@ -3795,14 +3820,15 @@
                             isRunning = statusData.running;
                             if (isRunning) {
                                 lastKnownRunning = true;
-                                if (activeRunStats.activeFile !== statusData.activeFile) {
+                                if (activeRunStats.activeFile !== statusData.activeFile || activeRunStats.activeTestId !== statusData.activeTestId) {
                                     // When the backend moves to a new file, the previous one
                                     // has completed — record it so the test list can grey
                                     // pending entries and mark done entries with a check.
-                                    if (activeRunStats.activeFile) {
+                                    if (activeRunStats.activeFile && activeRunStats.activeFile !== statusData.activeFile) {
                                         liveCompletedFiles.add(activeRunStats.activeFile);
                                     }
                                     activeRunStats.activeFile = statusData.activeFile;
+                                    activeRunStats.activeTestId = statusData.activeTestId;
                                     // Always refresh the live test list so state icons update.
                                     // Only reopen the iframe via openCurrentRunView if the
                                     // user is already watching the live view.

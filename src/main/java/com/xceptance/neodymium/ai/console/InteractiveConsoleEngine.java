@@ -47,6 +47,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.URI;
+import java.net.URLEncoder;
 
 /**
  * 
@@ -242,37 +243,51 @@ public final class InteractiveConsoleEngine {
      * @throws InterruptedException if the thread is interrupted while waiting
      * @throws RuntimeException     if no action is received within the timeout
      */
-    public JsonObject waitForAction(final long timeoutMs) throws InterruptedException
+    public JsonObject waitForAction(final String customPauseId, final long timeoutMs) throws InterruptedException
     {
-        if ("true".equals(System.getProperty("neodymium.managerActive"))) {
-            try {
+        if ("true".equals(System.getProperty("neodymium.managerActive")))
+        {
+            try
+            {
                 final String managerUrl = System.getProperty("neodymium.managerUrl");
                 final HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(java.time.Duration.ofSeconds(10))
                     .build();
+                String uriStr = managerUrl + "/api/console/internal/waitForAction";
+                if (customPauseId != null && !customPauseId.isEmpty())
+                {
+                    uriStr += "?pauseId=" + URLEncoder.encode(customPauseId, StandardCharsets.UTF_8);
+                }
                 final HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(managerUrl + "/api/console/internal/waitForAction"))
+                    .uri(URI.create(uriStr))
                     .timeout(java.time.Duration.ofMillis(timeoutMs + 5000))
                     .GET()
                     .build();
                 LOG.info("[InteractiveConsole] Proxying waitForAction to Manager at {}", managerUrl);
                 final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() == 200) {
+                if (response.statusCode() == 200)
+                {
                     final JsonObject action = JsonParser.parseString(response.body()).getAsJsonObject();
                     LOG.info("[InteractiveConsole] Action received from Manager: {}", action);
                     return action;
-                } else {
+                }
+                else
+                {
                     throw new RuntimeException("Manager returned error status: " + response.statusCode());
                 }
-            } catch (InterruptedException e) {
+            }
+            catch (InterruptedException e)
+            {
                 throw e;
-            } catch (Exception e) {
+            }
+            catch (Exception e)
+            {
                 throw new RuntimeException("Failed to proxy waitForAction to Aura Manager", e);
             }
         }
 
         // Generate a fresh pause token and clear any stale pending action.
-        final String pauseId = UUID.randomUUID().toString();
+        final String pauseId = (customPauseId != null && !customPauseId.isEmpty()) ? customPauseId : UUID.randomUUID().toString();
         this.currentPauseId.set(pauseId);
         this.pendingAction.set(null);
 
@@ -304,16 +319,19 @@ public final class InteractiveConsoleEngine {
         return action;
     }
 
-    /**
-     * Convenience overload using the default 1-hour timeout.
-     *
-     * @return the raw action JSON from the browser
-     * @throws InterruptedException
-     *             if the thread is interrupted
-     */
+    public JsonObject waitForAction(final String customPauseId) throws InterruptedException
+    {
+        return waitForAction(customPauseId, DEFAULT_TIMEOUT_MS);
+    }
+
+    public JsonObject waitForAction(final long timeoutMs) throws InterruptedException
+    {
+        return waitForAction(null, timeoutMs);
+    }
+
     public JsonObject waitForAction() throws InterruptedException
     {
-        return waitForAction(DEFAULT_TIMEOUT_MS);
+        return waitForAction(null, DEFAULT_TIMEOUT_MS);
     }
 
     // -------------------------------------------------------------------------
