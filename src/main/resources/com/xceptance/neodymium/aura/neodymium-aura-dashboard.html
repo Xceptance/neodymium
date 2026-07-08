@@ -1860,21 +1860,6 @@
                     }, 5000);
                 }
             }
-
-            if (optHeadless && optInteractive) {
-                optHeadless.addEventListener('change', () => {
-                    if (optHeadless.checked && optInteractive.checked) {
-                        optInteractive.checked = false;
-                        showWarning("Interactive mode automatically disabled because Headless mode was enabled.");
-                    }
-                });
-                optInteractive.addEventListener('change', () => {
-                    if (optInteractive.checked && optHeadless.checked) {
-                        optHeadless.checked = false;
-                        showWarning("Headless mode automatically disabled because Interactive mode requires a visible browser.");
-                    }
-                });
-            }
         }
 
         // Modal Controls
@@ -2051,6 +2036,9 @@
                 el.style.flexBasis = '';
                 el.style.width = '';
                 el.style.minWidth = '';
+                // Remove any col-minimized class that a prior code path may have added;
+                // it carries !important width rules that survive inline-style resets.
+                el.classList.remove('col-minimized');
             });
             if (colRunsMini) colRunsMini.style.display = 'none';
             if (colTestsMini) colTestsMini.style.display = 'none';
@@ -3282,29 +3270,29 @@
             const activeIdx = liveTests.findIndex(t => t.file === activeFile);
 
             testsList.innerHTML = liveTests.map((t, idx) => {
-                const isDone    = liveCompletedFiles.has(t.file) || (activeIdx >= 0 && idx < activeIdx);
+                const isDone = liveCompletedFiles.has(t.file) || (activeIdx >= 0 && idx < activeIdx);
                 const isCurrent = t.file === activeFile;
                 const isPending = !isDone && !isCurrent;
 
                 // -- Visual state variables --
-                let cardStyle   = '';
-                let iconHtml    = '';
-                let onclick     = '';
-                let cursor      = 'pointer';
+                let cardStyle = '';
+                let iconHtml = '';
+                let onclick = '';
+                let cursor = 'pointer';
 
                 if (isCurrent) {
                     cardStyle = 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);';
-                    iconHtml  = `<i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent); margin-left: 6px; flex-shrink: 0;"></i>`;
-                    onclick   = `onclick="openInteractiveConsoleViewLive('/interactive_console.html')"`;
+                    iconHtml = `<i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent); margin-left: 6px; flex-shrink: 0;"></i>`;
+                    onclick = `onclick="openInteractiveConsoleViewLive('/interactive_console.html')"`;
                 } else if (isDone) {
                     cardStyle = 'opacity: 0.80;';
-                    iconHtml  = `<i class="fa-solid fa-circle-check" style="color: var(--success, #22c55e); margin-left: 6px; flex-shrink: 0; font-size: 12px;"></i>`;
-                    onclick   = `onclick="openInteractiveConsoleViewLive('/interactive_console.html')"`;
+                    iconHtml = `<i class="fa-solid fa-circle-check" style="color: var(--success, #22c55e); margin-left: 6px; flex-shrink: 0; font-size: 12px;"></i>`;
+                    onclick = `onclick="openInteractiveConsoleViewLive('/interactive_console.html')"`;
                 } else {
                     // pending
                     cardStyle = 'opacity: 0.40; pointer-events: none;';
-                    iconHtml  = `<i class="fa-regular fa-clock" style="color: var(--text-secondary); margin-left: 6px; flex-shrink: 0; font-size: 12px;"></i>`;
-                    cursor    = 'default';
+                    iconHtml = `<i class="fa-regular fa-clock" style="color: var(--text-secondary); margin-left: 6px; flex-shrink: 0; font-size: 12px;"></i>`;
+                    cursor = 'default';
                 }
 
                 // Strip long leading paths — show only the last path segment for readability
@@ -3914,15 +3902,14 @@
         }
         window.addEventListener('message', (event) => {
             if (event.data && event.data.action === 'stepSelected') {
-                const rightArea = document.getElementById('colReport');
-                if (rightArea && rightArea.classList.contains('mobile-view')) {
-                    rightArea.classList.remove('mobile-view');
-                    rightArea.style.flexGrow = '1';
-                    rightArea.style.width = 'auto';
-                }
-                const colTests = document.getElementById('colTests');
-                if (colTests) {
-                    colTests.classList.add('col-minimized');
+                // A step was clicked inside the details iframe → transition to State 4
+                // (mini-runs bar | tests | wide details). Use the state machine exclusively;
+                // never manipulate col classes or inline styles here to avoid bypassing the reset.
+                // Guard: only transition if currently in State 3 — a delayed postMessage
+                // must not yank the layout back to 4 after the user has already navigated
+                // away (e.g. clicked a mini-run chip to go back to State 3 or 2).
+                if (historyNavState === 3) {
+                    applyHistoryState(4);
                 }
             } else if (event.data && event.data.action === 'rerunTest') {
                 if (event.data.testId) {

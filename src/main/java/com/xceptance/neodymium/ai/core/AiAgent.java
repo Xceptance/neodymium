@@ -1801,12 +1801,6 @@ public class AiAgent
             return;
         }
 
-        if (com.codeborne.selenide.Configuration.headless
-            && !Boolean.getBoolean("neodymium.ai.interactive.allowHeadlessHUD"))
-        {
-            throw new RuntimeException("Console prompted for manual user interaction but the test is running in HEADLESS mode.");
-        }
-
         LOG.info("Waiting for user action in Interactive Console...");
         try
         {

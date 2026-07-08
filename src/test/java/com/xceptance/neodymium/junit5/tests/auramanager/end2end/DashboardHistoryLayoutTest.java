@@ -191,11 +191,34 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
     // ── Per-state assertion methods ───────────────────────────────────────────
 
     /**
+     * Polls {@code historyNavState} up to {@code timeoutMs} milliseconds, waking every
+     * {@code intervalMs}, until it reaches {@code expected}. This absorbs the inherent
+     * async gap between the browser dispatching a click event, the JS onclick handler
+     * executing synchronously within that event, and the Java thread reading the result.
+     *
+     * <p>Using a tight poll (100 ms intervals) rather than a fixed {@code sleep} makes
+     * the tests run as fast as possible in the happy path while still being robust on
+     * slow CI machines or heavily loaded browsers.</p>
+     *
+     * @param expected   the expected state number (1–4)
+     * @param timeoutMs  maximum wait time in milliseconds
+     */
+    private void waitForNavState(final int expected, final long timeoutMs)
+    {
+        final long deadline = System.currentTimeMillis() + timeoutMs;
+        while (navState() != expected && System.currentTimeMillis() < deadline)
+        {
+            sleep(100);
+        }
+    }
+
+    /**
      * State 1: colRuns occupies 100 % (flex:1, solo); colTests and colReport hidden.
      */
     private void assertState1()
     {
-        Assertions.assertEquals(1, navState(), "Expected historyNavState == 1");
+        waitForNavState(1, 2000);
+        Assertions.assertEquals(1, navState(), "Expected historyNavState == 1 (waited up to 2 s)");
         final int cw = containerWidth();
         assertFlexShare("colRuns", cw, 1, 1);
         assertHidden("colTests");
@@ -207,7 +230,8 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
      */
     private void assertState2()
     {
-        Assertions.assertEquals(2, navState(), "Expected historyNavState == 2");
+        waitForNavState(2, 2000);
+        Assertions.assertEquals(2, navState(), "Expected historyNavState == 2 (waited up to 2 s)");
         final int cw = containerWidth();
         assertFlexShare("colRuns",  cw, 1, 2);
         assertFlexShare("colTests", cw, 1, 2);
@@ -219,7 +243,8 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
      */
     private void assertState3()
     {
-        Assertions.assertEquals(3, navState(), "Expected historyNavState == 3");
+        waitForNavState(3, 2000);
+        Assertions.assertEquals(3, navState(), "Expected historyNavState == 3 (waited up to 2 s)");
         final int cw = containerWidth();
         assertFlexShare("colRuns",   cw, 1, 3);
         assertFlexShare("colTests",  cw, 1, 3);
@@ -234,20 +259,40 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
      * to get the width actually distributed between colTests and colReport.
      * </p>
      */
+    /**
+     * State 4: colRuns full panel hidden; colTests (flex:1) and colReport (flex:2) share the remaining space in a 1:2
+     * ratio. The mini-runs bar is 48 px wide.
+     *
+     * <p>State 4 is triggered by a {@code postMessage} from the iframe step card click.
+     * The parent window listener is async, so we poll {@code navState()} up to 3 s
+     * before asserting to avoid a race where the assertion fires before the JS has run.</p>
+     *
+     * <p>
+     * We calculate the effective container as the total container minus the mini-bar width (48 px) and its gap (16 px)
+     * to get the width actually distributed between colTests and colReport.
+     * </p>
+     */
     private void assertState4()
     {
-        Assertions.assertEquals(4, navState(), "Expected historyNavState == 4");
-        final int fullCw  = containerWidth();
+        // Poll until the JS state machine has transitioned, or time out after 3 s.
+        final long deadline = System.currentTimeMillis() + 3000;
+        while (navState() != 4 && System.currentTimeMillis() < deadline)
+        {
+            sleep(100);
+        }
+
+        Assertions.assertEquals(4, navState(), "Expected historyNavState == 4 (waited up to 3 s for postMessage delivery)");
+        final int fullCw = containerWidth();
         // Deduct the mini-bar (48 px) and one gap (16 px) and the resizer (8 px)
         final int miniBarOverhead = 48 + 16 + 8;
         final int effectiveCw = Math.max(1, fullCw - miniBarOverhead);
 
         assertHidden("colRuns");
-        assertFlexShare("colTests",  effectiveCw, 1, 3);   // flex:1 of 1+2=3 total
+        assertFlexShare("colTests", effectiveCw, 1, 3);   // flex:1 of 1+2=3 total
         assertFlexShare("colReport", effectiveCw, 2, 3);   // flex:2 of 1+2=3 total
 
         // Additional sanity: colReport must be roughly twice colTests
-        final int testsW  = offsetWidth("colTests");
+        final int testsW = offsetWidth("colTests");
         final int reportW = offsetWidth("colReport");
         Assertions.assertTrue(
             reportW > testsW,
@@ -269,19 +314,49 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
         sleep(400);
     }
 
+    /**
+     * Enters the details iframe and clicks the first step card, which fires
+     * {@code postMessage({action:'stepSelected'})} to the parent window and triggers
+     * the State-3 → State-4 transition.
+     *
+     * <p>We wait explicitly for the iframe to be attached and for at least one
+     * {@code .step-card} to be visible before clicking. The parent's message listener
+     * is async, so after returning to the default context we poll {@code navState()}
+     * rather than sleeping a fixed amount.</p>
+     */
     private void clickTestStepDetails()
     {
+        // Wait for the iframe element to be present and src to be set
+        $("#historyConsoleIframe").shouldBe(Condition.visible);
+
+        // Switch into the iframe and wait for at least one step card to be rendered.
+        // The iframe loads the interactive console which fetches and renders the result JSON;
+        // this can take 1–3 s depending on the test data size.
         Selenide.switchTo().frame($("#historyConsoleIframe"));
-        $$(".step-card").first().shouldBe(Condition.visible).click();
-        sleep(300);
+        $$(".step-card").first().shouldBe(Condition.visible, java.time.Duration.ofSeconds(8));
+        $$(".step-card").first().click();
+        sleep(200); // brief wait so the postMessage has time to be dispatched
         Selenide.switchTo().defaultContent();
     }
 
-    private void clickFirstMiniRunChip()
+    /**
+     * Clicks the <em>selected</em> mini-run chip in the {@code colRunsMini} bar (State 4).
+     *
+     * <p>The selected chip is the one whose run ID matches {@code currentReportId}.
+     * {@code refreshMiniRunsBar()} marks it with the CSS class {@code .selected}. We must
+     * click <em>this specific chip</em> (not blindly the first chip) because the chips are
+     * ordered by {@code historyCached} iteration order, which may place the current run at
+     * any position. Clicking a non-current chip would call {@code selectHistoryRun()} and
+     * transition to State 2 instead of the expected State 3.</p>
+     */
+    private void clickCurrentMiniRunChip()
     {
-        $(".mini-run-chip").shouldBe(Condition.visible).click();
+        // The selected chip corresponds to the currently loaded run.
+        // Clicking it calls onMiniRunChipClick(currentReportId) → applyHistoryState(3).
+        $(".mini-run-chip.selected").shouldBe(Condition.visible).click();
         sleep(400);
     }
+
 
     private void clickSecondOrFirstRun()
     {
@@ -324,7 +399,7 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
         assertState4();
 
         // Return from State 4 → State 3 (core regression path)
-        clickFirstMiniRunChip();
+        clickCurrentMiniRunChip();
         assertState3();
 
         clickSecondOrFirstRun();
@@ -337,14 +412,14 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
         clickTestStepDetails();
         assertState4();
 
-        clickFirstMiniRunChip();
+        clickCurrentMiniRunChip();
         assertState3();
 
         // ── Round 3: 3 → 4 → 3 → 4 → 3 (double bounce) ─────────────────
         clickTestStepDetails();
         assertState4();
 
-        clickFirstMiniRunChip();
+        clickCurrentMiniRunChip();
         assertState3();
 
         // ── Round 4: back to State 2, then reset to State 1 ─────────────

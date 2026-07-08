@@ -26,6 +26,11 @@ function connectSSE() {
     eventSource.addEventListener('pause', (e) => {
         const data = JSON.parse(e.data);
         currentPauseId = data.pauseId;
+        // Mirror into currentState so local re-renders (toggleBp, handleStepClick, …)
+        // that call applyState(currentState) pick up the token via the 'pauseId' in state guard.
+        if (currentState) {
+            currentState.pauseId = data.pauseId;
+        }
         if (currentRunId && data.runId !== currentRunId) {
             showStaleBanner(data.runId);
         } else {
@@ -225,6 +230,19 @@ const activeBreakpoints = new Set();
 
 function applyState(state) {
     if (!state || Object.keys(state).length === 0) return;
+
+    // Capture editing state to prevent mid-flight re-renders from wiping out user input
+    let activeEditStepIdx = null;
+    let activeEditText = null;
+    const editingCard = document.querySelector('.step-card.editing');
+    if (editingCard) {
+        activeEditStepIdx = parseInt(editingCard.getAttribute('data-step-idx'), 10);
+        const ta = editingCard.querySelector('.inline-edit-textarea');
+        if (ta) activeEditText = ta.value;
+    }
+    window.currentlyEditingStepIndex = activeEditStepIdx;
+    window.currentEditText = activeEditText;
+
     const isFirstLoad = currentState === null;
 
     if (isFirstLoad) {
@@ -238,7 +256,16 @@ function applyState(state) {
         }
     }
 
-    currentPauseId = state.pauseId || null;
+    // Only update currentPauseId when the incoming state explicitly carries a
+    // pauseId field. The server never embeds pauseId in pushState() payloads —
+    // it is sent exclusively via the separate 'pause' SSE event. Local re-renders
+    // (toggleBp, handleStepClick, openAddStepOverlay …) pass currentState back
+    // into applyState; if we blindly overwrote currentPauseId here those calls
+    // would clear the token that was set by the pause event, causing sendAction()
+    // to silently drop the next Run/Skip click.
+    if ('pauseId' in state) {
+        currentPauseId = state.pauseId;
+    }
 
     // On a new test run, clear the selected step to fall back to default behavior
     if (currentState && currentState.runId !== state.runId) {
@@ -403,7 +430,7 @@ function applyState(state) {
     }
     const topTestDataBody = document.getElementById('topTestDataBody');
     if (topTestDataBody && state.dataBindings) {
-        const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after'];
+        const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps'];
         const keys = Object.keys(state.dataBindings).filter(k => !excludedKeys.includes(k));
         if (keys.length > 0) {
             topTestDataBody.innerHTML = keys.map(k => `
@@ -591,6 +618,13 @@ function buildStepDetailsHtml(step, isActiveStep) {
                     <button class="copy-btn" onclick="copyError('err-text-detail-${step.index}')" title="Copy to clipboard"><i class="fa-regular fa-copy" aria-hidden="true"></i></button>
                 </div>` : '';
 
+    // When a step fails, remind the user that individual sub-steps inside an
+    // include block cannot be skipped — the entire include block must be managed
+    // as a unit. Displayed for any failed step to guide the user on recovery.
+    const substepWarning = isFailed
+        ? `<div class="substep-warning-info" style="font-size:11px;padding:6px 10px;border-radius:6px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25);color:var(--accent-warning);"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Sub-steps cannot be skipped individually. Skip the parent include to skip this step.</div>`
+        : '';
+
     // Right-column panel compact reasoning (not shown for active steps; the card has the bubble)
     const isThinking = step.status === 'running' && !step.reasoning && currentPauseId === null;
     const reasoningText = !isActiveStep && (isThinking || step.reasoning)
@@ -602,7 +636,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
 
     // Timing meta — only show execution time for steps that have finished
     const thinkingTimeBlock = (step.thinkingTimeMs !== undefined && step.thinkingTimeMs > 0)
-        ? `<span title="Thinking duration"><i class="fa-solid fa-hourglass-half" style="color:var(--accent-purple);" aria-hidden="true"></i> ${(step.thinkingTimeMs / 1000).toFixed(1)}s</span>`
+        ? `<span class="acc-timing-detail" title="Thinking duration"><i class="fa-solid fa-hourglass-half" style="color:var(--accent-purple);" aria-hidden="true"></i> Thinking: ${(step.thinkingTimeMs / 1000).toFixed(1)}s</span>`
         : '';
     const durationBlock = (isPassed || isFailed || isSkipped) && step.durationMs
         ? `<span title="Execution duration"><i class="fa-solid fa-bolt" style="color:var(--accent-warning);" aria-hidden="true"></i> ${(step.durationMs / 1000).toFixed(1)}s</span>`
@@ -624,7 +658,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
     }
     const screenshotBlock = screenshotUrl
         ? `<div class="acc-screenshot-block" style="margin-top:12px;">
-                       <div style="font-size:12px;"><i class="fa-solid fa-image" aria-hidden="true"></i> Screenshot: <a href="#" onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="color:var(--accent-primary);text-decoration:underline;">View Fullscreen</a></div>
+                       <div style="font-size:12px;"><i class="fa-solid fa-image" aria-hidden="true"></i> Screenshot: <a href="#" class="screenshot-overlay-link" onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="color:var(--accent-primary);text-decoration:underline;">View Fullscreen</a></div>
                        <img class="acc-screenshot" src="${escAttr(screenshotUrl)}" alt="Step screenshot"
                             onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="cursor:pointer;margin-top:8px;max-height:200px;width:100%;object-fit:cover;border-radius:8px;">
                    </div>`
@@ -681,6 +715,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
                     ${actionListBlock}
                     ${reasoningText}
                     ${errorBox}
+                    ${substepWarning}
                     <div style="display:flex;gap:12px;flex-wrap:wrap;">${domBlock}</div>
                     ${screenshotBlock}
                 </div>
@@ -770,10 +805,13 @@ function renderStepCard(step) {
     const isPassed = status === 'passed';
     const isActive = status === 'running' || status === 'failed';
     const isFailed = status === 'failed';
+    const isEditing = window.currentlyEditingStepIndex === step.index;
+
     const includeLevel = typeof step.includeLevel === 'number' ? step.includeLevel : 0;
     const lvlClass = includeLevel > 0 ? ` include-lvl-${Math.min(includeLevel, 4)}` : '';
     const skippedClass = isSkipped ? ' skipped' : '';
     const passedClass = isPassed ? ' passed-step' : '';
+    const editingClass = isEditing ? ' editing' : '';
 
     // Determine whether this step has any displayable information.
     // Used both to conditionally render the accordion and to guard against
@@ -833,6 +871,12 @@ function renderStepCard(step) {
             ? `<div class="type-tag type-healed"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> Healed</div>`
             : `<div class="type-tag type-llm"><i class="fa-solid fa-robot" aria-hidden="true"></i> LLM Agent</div>`;
 
+    // Thinking-time badge — always visible in the step card header so that the
+    // CSS rule hiding accordions on wide screens does not obscure it.
+    const thinkingBadge = (step.thinkingTimeMs !== undefined && step.thinkingTimeMs > 0)
+        ? `<span class="acc-thinking-time" title="AI thinking time" style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(139,92,246,0.12);color:var(--accent-purple);margin-left:4px;"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i> Thinking: ${(step.thinkingTimeMs / 1000).toFixed(1)}s</span>`
+        : '';
+
     // Build breadcrumb string but do NOT put it in the tag-row;
     // it will appear in the secondary details section.
     let includeBreadcrumb = '';
@@ -855,7 +899,7 @@ function renderStepCard(step) {
 
     // Rewind only makes sense for steps that have already been executed (passed/failed/skipped).
     // Showing it on future/active steps is confusing and not actionable.
-    const rewindBtnHtml = isPassed || isFailed || isSkipped
+    const rewindBtnHtml = (isPassed || isFailed || isSkipped) && !showEdit
         ? `<button class="step-rewind-btn" onclick="triggerRewind(event, ${step.index})" title="Rewind execution back here" aria-label="Rewind execution back here"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>`
         : '';
 
@@ -948,7 +992,7 @@ function renderStepCard(step) {
 
     return `
                 <div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${step.index}, 'before')"></div>
-                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}${passedClass}${noDetailsPendingClass}" data-step-idx="${step.index}" role="listitem" tabindex="0" aria-label="Step ${step.index}: ${escHtml(resolvedInstruction)}"
+                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}${passedClass}${noDetailsPendingClass}${editingClass}" data-step-idx="${step.index}" role="listitem" tabindex="0" aria-label="Step ${step.index}: ${escHtml(resolvedInstruction)}"
                      onclick="handleStepClick(event, ${step.index})" ondragend="handleDragEnd(event)">
                 ${activeBadge}
                 <div class="step-row">
@@ -963,16 +1007,16 @@ function renderStepCard(step) {
                     </div>
                     <div class="${statusIconContainerClass}" ${statusClickAttr}>${statusIconMarkup}</div>
                     <div class="step-text-container">
-                        <div class="tag-row">${sourceTag}</div>
+                        <div class="tag-row">${sourceTag}${thinkingBadge}</div>
                         <div class="step-text">${stepTextContent}</div>
                         <div class="step-edit-form">
-                            <textarea class="inline-edit-textarea" aria-label="Edit step instruction text">${escHtml(step.rawInstruction || step.instruction)}</textarea>
-                            <div class="inline-edit-bindings" style="margin: 8px 0; display: flex; flex-direction: column; gap: 6px;"></div>
+                            <textarea class="inline-edit-textarea" aria-label="Edit step instruction text">${isEditing && window.currentEditText != null ? escHtml(window.currentEditText) : escHtml(step.rawInstruction || step.instruction)}</textarea>
                             <div class="inline-edit-actions">
                                 <button class="btn" style="padding: 4px 10px; font-size: 11px;" onclick="cancelEdit(this)" aria-label="Cancel editing step">Cancel</button>
                                 <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" onclick="saveEdit(this)" aria-label="Save step instruction">Save</button>
                             </div>
                         </div>
+                        <div class="inline-edit-bindings" style="${isEditing ? 'display:flex; flex-direction:column; gap:6px; margin:8px 0;' : 'display:none;'}">${generateEditableBindingsTable(currentState?.dataBindings, '.inline-edit-textarea')}</div>
                     </div>
                     ${rewindBtnHtml}
                     ${reorderHandleHtml}
@@ -1034,6 +1078,10 @@ function sendAction(action, extra) {
         setButtonsEnabled(true);
     });
     currentPauseId = null;
+    // Keep currentState in sync so local re-renders see no active pause token.
+    if (currentState) {
+        currentState.pauseId = null;
+    }
 }
 
 /**
@@ -1162,7 +1210,9 @@ function toggleAuto() {
         autoStartStepIndex = null;
         setButtonsEnabled(true);
     } else {
-        if (!currentPauseId) return;
+        // Arm auto-mode immediately even if the pause token hasn't arrived yet.
+        // triggerAutoRunCheck guards on currentPauseId internally; if the pause
+        // event arrives later it will call triggerAutoRunCheck() and fire then.
         isAutoMode = true;
         syncAutoButton();
         setButtonsEnabled(true);
@@ -1341,6 +1391,24 @@ function enableEdit(btnElement) {
     const card = btnElement.closest('.step-card');
     card.classList.add('editing');
 
+    // Explicitly show the bindings panel (which is a sibling of .step-edit-form,
+    // not inside it). This makes .binding-badge elements visible to WebDriver
+    // getText() in headless mode, independent of any CSS class cascade.
+    const bindingsDiv = card.querySelector('.inline-edit-bindings');
+    if (bindingsDiv) {
+        bindingsDiv.style.display = 'flex';
+        bindingsDiv.style.flexDirection = 'column';
+        bindingsDiv.style.gap = '6px';
+        bindingsDiv.style.margin = '8px 0';
+        if (currentState?.dataBindings) {
+            // Re-populate in case bindings changed since the card was last rendered.
+            bindingsDiv.innerHTML = generateEditableBindingsTable(
+                currentState.dataBindings,
+                '.inline-edit-textarea'
+            );
+        }
+    }
+
     const textarea = card.querySelector('.inline-edit-textarea');
     const idx = parseInt(card.getAttribute('data-step-idx'), 10);
 
@@ -1356,17 +1424,6 @@ function enableEdit(btnElement) {
     }
     textarea.value = rawInstruction;
     textarea.focus();
-
-    const bindingsDiv = card.querySelector('.inline-edit-bindings');
-    if (bindingsDiv && currentState?.dataBindings) {
-        bindingsDiv.innerHTML = '<div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">Available Variables (Click to paste):</div>' +
-            Object.entries(currentState.dataBindings).map(([k, v]) => `
-                        <div class="binding-item" style="display:flex; justify-content:space-between; font-size:11px; padding:4px 6px; border-radius:4px; background:rgba(255,255,255,0.03); cursor:pointer; border:1px solid transparent;" onclick="pasteBinding(this, '${k}')" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='transparent'">
-                            <span style="color:var(--accent-primary); font-weight:600;">\${${k}}</span>
-                            <span style="color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:8px;">${escHtml(v)}</span>
-                        </div>
-                    `).join('');
-    }
 
     const acc = card.querySelector('.step-accordion-details');
     if (acc && !acc.classList.contains('open')) acc.classList.add('open');
@@ -1394,6 +1451,9 @@ function cancelEdit(btnElement) {
         applyState(currentState);
     } else {
         card.classList.remove('editing');
+        // Hide the bindings panel that was shown by enableEdit.
+        const bindingsDiv = card.querySelector('.inline-edit-bindings');
+        if (bindingsDiv) bindingsDiv.style.display = 'none';
         setButtonsEnabled(true);
     }
 }
@@ -1645,6 +1705,11 @@ function escHtml(str) {
 }
 function escAttr(str) {
     if (!str) return '';
+
+    if (Array.isArray(str)) {
+        return str.map(escAttr);
+    }
+
     return str.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 }
 

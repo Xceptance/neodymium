@@ -13,7 +13,8 @@
           ],
           "description": "Call startManager with param ",
           "elementContext": {},
-          "replay": "",
+          "durationMs": 0,
+          "replay": "(Replay)",
           "adjust": false
         }
       ],
@@ -31,7 +32,8 @@
           "description": "Open http://127.0.0.1:18120 in the browser",
           "elementDetails": "http://127.0.0.1:18120",
           "elementContext": {},
-          "replay": "",
+          "durationMs": 0,
+          "replay": "(Replay)",
           "adjust": false
         }
       ],
@@ -52,7 +54,8 @@
             "id": "navReports",
             "tagName": "div"
           },
-          "replay": "",
+          "durationMs": 0,
+          "replay": "(Replay)",
           "frameId": "1F6C32146B6051944D7779FBE2E96B1B:main",
           "adjust": false
         }
@@ -62,24 +65,26 @@
     },
     {
       "promptLine": "Verify the History view is displayed",
-      "reasoning": "The instruction is to verify the \u0027History view\u0027 is displayed. I found a heading element with the text \u0027Run History\u0027 and data-neo-ref \u0027xc_ycdgoi\u0027, which confirms the History view is displayed.",
+      "reasoning": "The previous attempt failed to find the \u0027Run History heading\u0027. I have identified a stable data-neo-ref attribute for the \u0027Run History\u0027 text element in the DOM, which is `xc_ebk00`. I will use this to assert that the \u0027Run History\u0027 text is visible, confirming the History view is displayed.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "[data-neo-ref\u003d\u0027xc_ycdgoi\u0027]",
+          "target": "[data-neo-ref\u003d\u0027xc_ebk00\u0027]",
           "value": [
             "Run History"
           ],
-          "description": "Verify \u0027Run History\u0027 heading is displayed, indicating the History view.",
+          "description": "Verify \u0027Run History\u0027 heading is displayed",
           "elementDetails": "Run History heading",
           "elementContext": {},
+          "durationMs": 0,
           "replay": "",
-          "frameId": "1F6C32146B6051944D7779FBE2E96B1B:main",
+          "frameId": "win_0:main",
           "adjust": false
         }
       ],
+      "screenshotHash": "8001800000024000000040000000400000004000000040000000400000004000",
       "expectedFailure": false,
-      "healedContextLevel": "STANDARD"
+      "healedContextLevel": "VISUAL"
     },
     {
       "promptLine": "Click on the \"Workspace\" navigation item",
@@ -95,7 +100,8 @@
             "id": "navWorkspace",
             "tagName": "div"
           },
-          "replay": "",
+          "durationMs": 0,
+          "replay": "(Replay)",
           "frameId": "1F6C32146B6051944D7779FBE2E96B1B:main",
           "adjust": false
         }
@@ -116,7 +122,8 @@
           "description": "Verify the Workspace navigation item is visible, indicating the Workspace view is displayed.",
           "elementDetails": "Workspace navigation link",
           "elementContext": {},
-          "replay": "",
+          "durationMs": 0,
+          "replay": "(Replay)",
           "frameId": "1F6C32146B6051944D7779FBE2E96B1B:main",
           "adjust": false
         }
@@ -136,7 +143,8 @@
           ],
           "description": "Call stopManager with param ",
           "elementContext": {},
-          "replay": "",
+          "durationMs": 0,
+          "replay": "(Replay)",
           "adjust": false
         }
       ],

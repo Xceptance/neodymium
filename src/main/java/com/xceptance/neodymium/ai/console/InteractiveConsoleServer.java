@@ -911,12 +911,18 @@ public final class InteractiveConsoleServer
                     isPlaybook = true;
                 }
 
-                // Simulate AI thinking time if not a passed/skipped playbook step
+                // Simulate AI thinking time if not a passed/skipped playbook step.
+                // The delay can be overridden via the JVM property
+                // 'neodymium.ai.console.simulation.thinkMs' (default: 1500 ms).
+                // Tests set this to a smaller value to stay within their assertion timeouts
+                // while keeping a realistic feel for interactive/manual use.
                 if (!isPlaybook || isFailed)
                 {
+                    final long thinkMs = Long.parseLong(
+                        System.getProperty("neodymium.ai.console.simulation.thinkMs", "1500"));
                     try
                     {
-                        Thread.sleep(1500);
+                        Thread.sleep(thinkMs);
                     }
                     catch (final InterruptedException e)
                     {
