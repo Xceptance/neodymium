@@ -173,23 +173,68 @@ Once a divergence occurs, the runner switches permanently from `REPLAY` to `RECO
 
 ---
 
-## 4. Persistency Abstraction: `PlaybookStorage`
+## 4. Resource Decoupling: `PlaybookResourceManager`
 
-The session never interacts with files or file paths directly. All persistence goes through `PlaybookStorage`.
+To ensure playbooks and recordings can be loaded from and saved to anywhere (local files, classpath resources, database records, or remote API endpoints) without coupling the runner to disk file structures, all resource access is delegated to a **`PlaybookResourceManager`**:
 
 ```java
-public interface PlaybookStorage
+public interface PlaybookResourceManager
 {
-    Playbook loadPlaybook(String playbookId);
-    
-    PlaybookRecording loadRecording(String playbookId);
-    
-    void saveRecording(String playbookId, PlaybookRecording recording);
+    /**
+     * Opens an input stream to read a resource's raw content.
+     * 
+     * @param identifier the resource path, database key, or classpath URI
+     */
+    InputStream read(String identifier) throws IOException;
+
+    /**
+     * Writes raw content (e.g. serialized PlaybookRecording JSON) to a target identifier.
+     */
+    void write(String identifier, String content) throws IOException;
+
+    /**
+     * Resolves a relative resource identifier (like an include path) 
+     * against a parent playbook's identifier.
+     * 
+     * @param parentIdentifier the identifier of the parent playbook
+     * @param relativePath the relative target (e.g., "includes/login.md")
+     * @return the resolved absolute or fully qualified identifier
+     */
+    String resolveInclude(String parentIdentifier, String relativePath);
 }
 ```
 
-* **`LocalFilePlaybookStorage`**: Saves/loads from the developer's local workspace.
-* **`MemoryPlaybookStorage`**: Holds everything in a `ConcurrentHashMap` in memory. This enables 100% hermetic unit tests to validate the state machine, self-healing, and prompt compilation in parallel without disk side-effects.
+### Component Roles & Resource Resolution
+
+```mermaid
+graph TD
+    User[Developer Test] -->|Creates| Mgr[PlaybookResourceManager]:::concrete
+    
+    subgraph Playbook Parser / Loader
+        Mgr -->|Read main playbook| Parser[PlaybookParser]
+        Parser -->|Read includes| Parser
+        Parser -->|resolveRelativePath| Mgr
+    end
+    
+    subgraph Session & Recording
+        Session[AiSession] -->|Returns| Recording[PlaybookRecording]
+        RecordingRecorder[PlaybookRecorder Listener] -->|Writes JSON| Mgr
+    end
+```
+
+1. **Playbook Parser / Loader**:
+   * When loading a playbook (e.g. `Playbook.from("src/test/resources/my-playbook.md", resourceManager)`), the parser reads the source stream.
+   * When it encounters an include directive (e.g. `include: common/login.md`), the parser calls `resourceManager.resolveInclude("src/test/resources/my-playbook.md", "common/login.md")` to compute the path to the included file, and recursively reads its stream.
+2. **`PlaybookRecorder` (Event Listener)**:
+   * When execution completes, the recorder listener captures the returned `PlaybookRecording` and serializes it to JSON.
+   * It writes the output by calling `resourceManager.write("src/test/resources/my-playbook-recording.json", json)`.
+3. **Internal Session Assets**:
+   * The `AiSession` is initialized with the active `PlaybookResourceManager` so that pipeline steps can resolve and load external assets (like dynamic assertion data or region masks) relative to the active playbook directory.
+
+#### Common Implementations:
+* **`LocalFileResourceManager`**: Resolves includes and reads/writes using local file system absolute/relative path strings (default for local test cases).
+* **`ClasspathResourceManager`**: Resolves relative classpath paths and reads resources using Java's ClassLoader stream API (read-only).
+* **`InMemoryResourceManager`**: Resolves paths in a simple map structure (ideal for unit testing).
 
 ---
 
@@ -259,9 +304,11 @@ When the session is initialized in **Debug Mode**, the `StateMachineRunner` chec
 
 ---
 
-## 7. Session-Centric Architecture (`AiSession` Class Hierarchy)
+## 7. Session-Centric Architecture (`AiSession` Factory & Hierarchy)
 
 In v2, the **`AiSession`** acts as the lead coordinator. It is the single owner of the execution context, driver registry, storage handler, and structured test data. The execution engine runs *inside* the session.
+
+To keep the developer-facing API clean and prevent configuration errors, the concrete session subclasses (like `SelenideBrowserSession` or `RestApiSession`) are **package-private**. The end user interacts exclusively with the abstract `AiSession` using static factory methods:
 
 ```mermaid
 classDiagram
@@ -270,21 +317,79 @@ classDiagram
         -ExecutionContext context
         -StateMachineRunner runner
         -ExecutionEventBus eventBus
-        -PlaybookStorage storage
-        -SessionData dataHolder
-        +execute(Playbook playbook) void
+        -ExecutionMode mode
+        +selenide(ExecutionMode mode) AiSession$
+        +rest(ExecutionMode mode) AiSession$
+        +mock(ExecutionMode mode) AiSession$
+        +execute(Playbook playbook) PlaybookRecording
         +getDebugger() SessionDebugger
     }
     class SelenideBrowserSession {
-        +SelenideBrowserSession()
+        ~SelenideBrowserSession(ExecutionMode mode)
     }
     class RestApiSession {
-        +RestApiSession()
+        ~RestApiSession(ExecutionMode mode)
     }
 
     AiSession <|-- SelenideBrowserSession
     AiSession <|-- RestApiSession
 ```
+
+### The `ExecutionMode` Options
+The session is configured at startup with one of the following execution modes:
+1. **`LLM_ONLY`**: Executes steps live using the LLM. Bypasses recordings completely (does not read baselines and does not compile a recording object).
+2. **`REPLAY_ONLY`**: Strict replay mode. Replays cached recording actions. If the page diverges or an action fails, it halts immediately (no LLM, no self-healing, no fallback).
+3. **`RECORD`**: Generates actions live using the LLM and compiles/returns a new `PlaybookRecording`.
+4. **`REPLAY_AND_FIX`**: Replays the cached recording; if divergence or failure occurs, it flips to LLM self-healing on the fly, writing/merging the corrected actions into an updated `PlaybookRecording`.
+
+---
+
+### End-User Usage Examples
+
+#### 1. Standard Replay & Fix Execution
+Loads the playbook instructions (and its baseline recording) and executes in `REPLAY_AND_FIX` mode. The session itself does not save to disk; it returns the final `PlaybookRecording` or relies on a registered `PlaybookRecorder` listener:
+
+```java
+@Test
+public void testPurchaseFlow()
+{
+    // 1. Initialize session in REPLAY_AND_FIX mode
+    final AiSession session = AiSession.selenide(ExecutionMode.REPLAY_AND_FIX);
+
+    // 2. Load the playbook (resolves guest-purchase.md and its recording)
+    final Playbook playbook = Playbook.from("guest-purchase.md");
+
+    // 3. Execute and receive the updated recording
+    final PlaybookRecording updatedRecording = session.execute(playbook);
+}
+```
+
+#### 2. In-Memory Testing (No Disk I/O)
+For fast local testing, developers can execute a playbook in `RECORD` mode, hold the compiled `PlaybookRecording` in-memory, and immediately verify it against a strict `REPLAY_ONLY` session on a clean browser page:
+
+```java
+@Test
+public void testInMemoryReplay()
+{
+    // 1. Run live recording using LLM to generate actions
+    final Playbook playbook = Playbook.builder()
+        .step("Navigate to homepage")
+        .step("Click login button")
+        .build();
+
+    final PlaybookRecording recording = AiSession.selenide(ExecutionMode.RECORD)
+        .execute(playbook);
+
+    // 2. Attach recording in-memory to the playbook object
+    playbook.attachRecording(recording);
+
+    // 3. Replay strictly (will fail if selectors or page layout is inconsistent)
+    final AiSession replaySession = AiSession.selenide(ExecutionMode.REPLAY_ONLY);
+    replaySession.execute(playbook);
+}
+```
+
+---
 
 ### A. Layered Data Holder: `SessionData`
 To support dynamic runtime variables (like extracted order numbers or HUD edits) while preserving original inputs, the session maintains two distinct data layers:
@@ -546,6 +651,36 @@ Execution variables are not static. During a run:
 * **Dynamic Value Extraction**: If a step extracts a value (e.g. `"Store order number into variable ${orderId}"`), the execution updates the `SessionData` map at runtime.
 * **HUD Modification**: If a debugger pause occurs and the developer edits a variable, the `SessionDebugger` updates the `SessionData` map. 
 * **Causal Propagation**: Since subsequent steps evaluate their placeholders dynamically against the `SessionData` map right before execution, they automatically consume the mutated values.
+
+---
+
+### C. Dynamic Playbook Includes (Macro Expansion)
+In addition to pre-execution compile-time includes, a running session may encounter a **dynamic include instruction** during execution (e.g. an instruction to execute a reusable sub-playbook module like `"include: login-flow.md"` on the fly, or an LLM-generated macro action).
+
+To handle this dynamically without introducing storage path dependencies to the engine:
+1. The session asks its configured **`PlaybookResourceManager`** to resolve the relative include path against the current parent playbook ID.
+2. It opens the resolved stream and invokes the `PlaybookParser` on the fly to get the sub-steps.
+3. The session runner **splices these steps directly into the execution cursor** (pushing the new steps onto the active execution stack), ensuring they are evaluated in the correct sequence.
+
+```java
+public void executeDynamicInclude(final String relativePath, final ExecutionContext context) throws Exception
+{
+    // 1. Resolve relative path against parent ID
+    final String resolvedId = context.getResourceManager()
+        .resolveInclude(context.getCurrentPlaybookId(), relativePath);
+
+    // 2. Read and parse sub-steps dynamically
+    try (final InputStream stream = context.getResourceManager().read(resolvedId))
+    {
+        final List<PlaybookStep> subSteps = context.getParser().parse(stream);
+
+        // 3. Splice steps at the current runner cursor
+        context.getStepStack().spliceAtCursor(subSteps);
+    }
+}
+```
+
+This permits using nested playbooks as modular, reusable macros during runtime.
 
 ---
 
