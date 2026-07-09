@@ -231,6 +231,7 @@ public final class InteractiveConsoleServer
         httpServer.createContext("/api/console/events", engine.createSseHandler());
         httpServer.createContext("/api/console/action", engine.createActionHandler());
         httpServer.createContext("/api/console/screenshot", new ScreenshotFileHandler());
+        httpServer.createContext("/api/stop", new StopHandler());
 
         // Serve the HTML template and static assets at the root
         httpServer.createContext("/", new StaticResourceHandler());
@@ -249,6 +250,54 @@ public final class InteractiveConsoleServer
     // -------------------------------------------------------------------------
     // Inner handlers
     // -------------------------------------------------------------------------
+
+    /**
+     * Stop handler that terminates the local execution process.
+     */
+    private static final class StopHandler implements com.sun.net.httpserver.HttpHandler
+    {
+        @Override
+        public void handle(final HttpExchange exchange) throws IOException
+        {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, OPTIONS");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod()))
+            {
+                exchange.sendResponseHeaders(204, -1);
+                return;
+            }
+
+            if ("POST".equalsIgnoreCase(exchange.getRequestMethod()))
+            {
+                LOG.info("[InteractiveConsoleServer] User requested to stop active execution via /api/stop");
+                final byte[] response = "{\"success\":true}".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+                exchange.sendResponseHeaders(200, response.length);
+                try (final OutputStream os = exchange.getResponseBody())
+                {
+                    os.write(response);
+                }
+
+                new Thread(() -> {
+                    try
+                    {
+                        Thread.sleep(500);
+                    }
+                    catch (final InterruptedException e)
+                    {
+                        Thread.currentThread().interrupt();
+                    }
+                    System.exit(0);
+                }).start();
+            }
+            else
+            {
+                exchange.sendResponseHeaders(405, -1);
+            }
+        }
+    }
 
     /**
      * Serves the static resources from the classpath.

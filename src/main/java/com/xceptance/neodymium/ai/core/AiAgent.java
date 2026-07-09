@@ -44,6 +44,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Assertions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.opentest4j.TestAbortedException;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -146,6 +147,8 @@ public class AiAgent
     private boolean hudPromptChanged = false;
 
     private boolean hudSaveExit = false;
+
+    private boolean hudAborted = false;
 
     private int currentStepIdx = -1;
 
@@ -351,6 +354,8 @@ public class AiAgent
 
         final long startTimeMs = System.currentTimeMillis();
 
+        final List<String> performedInstructions = new ArrayList<>();
+
         try
         {
             final List<String> stepsList = new ArrayList<>(Arrays.asList(splitInstructions(instructions)));
@@ -451,7 +456,6 @@ public class AiAgent
             }
 
             final boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
-            final List<String> performedInstructions = new ArrayList<>();
             final Set<String> alreadySplitSteps = new HashSet<>();
             boolean abortedDueToExpectedFailure = false;
             String abortedBugId = null;
@@ -776,7 +780,7 @@ public class AiAgent
                 {
                     // Already saved in processHudActionException during execution loop
                 }
-                else if (Neodymium.aiConfiguration().aiInteractive())
+                else if (Neodymium.aiConfiguration().aiInteractive() && !hudAborted)
                 {
                     LOG.info("Waiting for final user action to save or discard in Interactive Console...");
                     try
@@ -1880,6 +1884,10 @@ public class AiAgent
                 this.hudSaveExit = true;
                 throw new HudActionException(HudActionType.SAVE_EXIT, null, 0);
             }
+            else if (typeEnum == HudActionType.ABORT)
+            {
+                throw new HudActionException(HudActionType.ABORT, null, 0);
+            }
             else if (typeEnum == HudActionType.SETTINGS)
             {
                 if (actionObj.has("autoSkip"))
@@ -2022,7 +2030,7 @@ public class AiAgent
             return;
 
         final JsonObject state = new JsonObject();
-        state.addProperty("status", "running");
+        state.addProperty("status", this.hudAborted ? "aborted" : "running");
         state.addProperty("runId", this.currentRunId);
         state.addProperty("pauseId", this.currentPauseId);
         state.addProperty("testName", Neodymium.getTestName());
@@ -2233,7 +2241,14 @@ public class AiAgent
             String status = "pending";
             if (step.getFailureReason() != null)
             {
-                status = "failed";
+                if ("Aborted".equals(step.getFailureReason()))
+                {
+                    status = "aborted";
+                }
+                else
+                {
+                    status = "failed";
+                }
                 stepObj.addProperty("errorMessage", step.getFailureReason());
             }
             else if (blockName.equals(this.currentBlock))
@@ -3457,7 +3472,23 @@ public class AiAgent
         return llmClient;
     }
 
-    private boolean saveYamlAndExit(final int currentIndex, final List<String> performedInstructions)
+    private String getTargetBlockKey(final Map<String, Object> targetMap, final String blockName)
+    {
+        if ("before".equals(blockName))
+        {
+            return targetMap.containsKey("_beforeEach") ? "_beforeEach" : "before";
+        }
+        else if ("after".equals(blockName))
+        {
+            return targetMap.containsKey("_afterEach") ? "_afterEach" : "after";
+        }
+        else
+        {
+            return targetMap.containsKey("_steps") ? "_steps" : "steps";
+        }
+    }
+
+    boolean saveYamlAndExit(final int currentIndex, final List<String> performedInstructions)
     {
         LOG.info("User requested Save & Exit. Halting execution and generating yaml.");
         final Playbook playbook = Neodymium.getAiPlaybook();
@@ -3509,7 +3540,6 @@ public class AiAgent
             {
                 @SuppressWarnings("unchecked")
                 final Map<String, Object> root = (Map<String, Object>) data;
-                root.put("steps", newSteps);
                 
                 if (root.containsKey("data"))
                 {
@@ -3525,24 +3555,41 @@ public class AiAgent
                 targetDataset = findTargetDataset(data, this.originalDataBindings);
                 
                 final Map<String, Object> root = new LinkedHashMap<>();
-                root.put("steps", newSteps);
                 root.put("data", data);
                 data = root;
             }
             else
             {
                 final Map<String, Object> root = new LinkedHashMap<>();
-                root.put("steps", newSteps);
                 data = root;
+                targetDataset = root;
+            }
+
+            // Write modified steps to the target dataset or root map depending on block type
+            if (targetDataset != null)
+            {
+                final String targetKey = getTargetBlockKey(targetDataset, this.currentBlock);
+                targetDataset.put(targetKey, newSteps);
+            }
+            else if (data instanceof Map)
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> root = (Map<String, Object>) data;
+                final String targetKey = getTargetBlockKey(root, this.currentBlock);
+                root.put(targetKey, newSteps);
             }
 
             if (targetDataset != null && Neodymium.getData() != null)
             {
                 for (final Map.Entry<String, String> entry : Neodymium.getData().entrySet())
                 {
-                    if (!entry.getKey().startsWith("neodymium.") && !entry.getKey().equals("steps"))
+                    final String key = entry.getKey();
+                    if (!key.startsWith("neodymium.") && !key.equals("steps") && !key.equals("_steps")
+                        && !key.equals("before") && !key.equals("_beforeEach") && !key.equals("beforeAll") && !key.equals("_beforeAll")
+                        && !key.equals("after") && !key.equals("_afterEach") && !key.equals("afterAll") && !key.equals("_afterAll")
+                        && !key.equals("onSuccess") && !key.equals("_onSuccess") && !key.equals("onFailure") && !key.equals("_onFailure"))
                     {
-                        targetDataset.put(entry.getKey(), entry.getValue());
+                        targetDataset.put(key, entry.getValue());
                     }
                 }
             }
@@ -3858,6 +3905,16 @@ public class AiAgent
             {
             }
             return i;
+        }
+        else if (HudActionType.ABORT == e.actionType)
+        {
+            this.hudAborted = true;
+            if (result != null && result.getSteps().size() > i)
+            {
+                result.getSteps().get(i).setFailureReason("Aborted");
+            }
+            updateConsoleState(result, "Test run aborted by user.");
+            throw new TestAbortedException("Test run aborted by user in Interactive Console");
         }
 
         return -2; // Unhandled or generic break;

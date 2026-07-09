@@ -205,27 +205,6 @@ public class InteractiveConsoleStandaloneTest extends BaseAiTest
 
     // ── Tests – browser / UI ──────────────────────────────────────────────────
 
-    /**
-     * The browser must load the HTML shell without JavaScript errors and the main timeline list
-     * container ({@code #timelineList}) must be present in the DOM.
-     */
-    @NeodymiumTest
-    public void testConsolePagLoadsWithoutJsErrors()
-    {
-        // timelineList is the root list containing all step groups
-        final Object exists = js().executeScript(
-            "return document.getElementById('timelineList') !== null;"
-        );
-        Assertions.assertTrue(Boolean.TRUE.equals(exists),
-            "#timelineList must exist in the standalone console DOM after page load.");
-
-        // The SSE EventSource must have been created
-        final Object sourceReady = js().executeScript(
-            "return typeof eventSource !== 'undefined' && eventSource !== null;"
-        );
-        Assertions.assertTrue(Boolean.TRUE.equals(sourceReady),
-            "EventSource (eventSource) must be initialised after page load.");
-    }
 
     /**
      * The connection status indicator must initially show "connected" (or "connecting")

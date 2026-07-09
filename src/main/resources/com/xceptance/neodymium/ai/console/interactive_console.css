@@ -435,6 +435,13 @@
             overflow: hidden;
         }
 
+        .step-card.aborted {
+            opacity: 0.6;
+            border-left: 4px solid var(--text-muted);
+            background-color: rgba(255, 255, 255, 0.02);
+            filter: grayscale(100%);
+        }
+
         .step-card.skipped::after {
             content: "";
             position: absolute;
@@ -2168,6 +2175,7 @@ body.mode-results #kebabMenuWrapper       { display: none !important; }
 body.mode-results .step-edit-btn          { display: none !important; }
 body.mode-results .step-reorder-controls  { display: none !important; }
 body.mode-results .step-rewind-btn         { display: none !important; }
+body.mode-results .btn-mobile-qr          { display: none !important; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MODE: EMBEDDED (running inside the Aura dashboard iframe)
@@ -2176,7 +2184,6 @@ body.mode-results .step-rewind-btn         { display: none !important; }
    ═══════════════════════════════════════════════════════════════════════════ */
 body.mode-embedded #connectionDot  { display: none !important; }
 body.mode-embedded #btnSettings    { display: none !important; }
-body.mode-embedded #btnHelp        { display: none !important; }
 /* Theme toggle: the un-ID'd toggle button — select via aria-label */
 body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none !important; }
 

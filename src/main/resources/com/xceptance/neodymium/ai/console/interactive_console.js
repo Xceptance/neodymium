@@ -363,7 +363,7 @@ function applyState(state) {
         ...afterSteps
     ];
     const totalSteps = allStepsForProgress.length;
-    const doneSteps = allStepsForProgress.filter(s => s.status === 'passed' || s.status === 'skipped' || s.status === 'failed').length;
+    const doneSteps = allStepsForProgress.filter(s => s.status === 'passed' || s.status === 'skipped' || s.status === 'failed' || s.status === 'aborted').length;
     const hasRunning = allStepsForProgress.some(s => s.status === 'running');
     const currentStep = doneSteps + (hasRunning ? 1 : 0);
     const pill = document.getElementById('progressPill');
@@ -850,6 +850,8 @@ function renderStepCard(step) {
     const skippedClass = isSkipped ? ' skipped' : '';
     const passedClass = isPassed ? ' passed-step' : '';
     const editingClass = isEditing ? ' editing' : '';
+    const isAborted = status === 'aborted';
+    const abortedClass = isAborted ? ' aborted' : '';
 
     // Determine whether this step has any displayable information.
     // Used both to conditionally render the accordion and to guard against
@@ -878,6 +880,8 @@ function renderStepCard(step) {
         statusIconMarkup = `<i class="fa-solid fa-circle-xmark" style="color:var(--accent-danger)" aria-label="Failed"></i>`;
     } else if (step.status === 'skipped') {
         statusIconMarkup = `<i class="fa-solid fa-circle-minus" style="color:var(--text-secondary)" aria-label="Skipped"></i>`;
+    } else if (step.status === 'aborted') {
+        statusIconMarkup = `<i class="fa-solid fa-circle-stop" style="color:var(--text-muted)" aria-label="Aborted"></i>`;
     } else if (step.status === 'running' && currentPauseId === null) {
         statusIconMarkup = `<i class="fa-solid fa-circle-notch fa-spin" style="color:var(--accent-primary)" aria-label="Running"></i>`;
     } else if (step.status === 'running') {
@@ -1046,7 +1050,7 @@ function renderStepCard(step) {
 
     return `
                 <div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${step.index}, 'before')"></div>
-                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}${passedClass}${noDetailsPendingClass}${editingClass}" data-step-idx="${step.index}" role="listitem" tabindex="0" aria-label="${step.isTempAdd ? 'New Step' : 'Step ' + (allStepIndices.indexOf(step.index) + 1)}: ${escHtml(resolvedInstruction)}"
+                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}${passedClass}${noDetailsPendingClass}${editingClass}${abortedClass}" data-step-idx="${step.index}" role="listitem" tabindex="0" aria-label="${step.isTempAdd ? 'New Step' : 'Step ' + (allStepIndices.indexOf(step.index) + 1)}: ${escHtml(resolvedInstruction)}"
                      onclick="handleStepClick(event, ${step.index})" ondragend="handleDragEnd(event)">
                 ${activeBadge}
                 <div class="step-row">
@@ -1704,6 +1708,20 @@ document.getElementById('btnCancel').style.display = 'inline-flex';
 function hideCancelWarning() {
     document.getElementById('cancelWarning').style.display = 'none';
     document.getElementById('btnCancel').style.display = 'inline-flex';
+}
+
+function triggerStop() {
+    hideCancelWarning();
+    if (currentPauseId) {
+        sendAction('ABORT');
+    } else {
+        setButtonsEnabled(false);
+        fetch('/api/stop', {
+            method: 'POST'
+        }).catch(err => {
+            console.error('Stop request failed', err);
+        });
+    }
 }
 
 function toggleTheme() {

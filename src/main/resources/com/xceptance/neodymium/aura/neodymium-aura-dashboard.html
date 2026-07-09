@@ -791,6 +791,10 @@
             background: var(--danger);
         }
 
+        .mini-run-chip.aborted .chip-dot {
+            background: #9ca3af;
+        }
+
         .mini-run-chip.selected {
             border-color: var(--accent);
             background: rgba(59, 130, 246, 0.12);
@@ -893,6 +897,15 @@
         .badge-failed {
             background: rgba(239, 68, 68, 0.1);
             color: var(--danger);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .badge-aborted {
+            background: rgba(156, 163, 175, 0.1);
+            color: #9ca3af;
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 11px;
@@ -1056,6 +1069,12 @@
             border-color: rgba(239, 68, 68, 0.25);
         }
 
+        .mini-run-bubble.aborted {
+            background: rgba(156, 163, 175, 0.12);
+            color: #9ca3af;
+            border-color: rgba(156, 163, 175, 0.25);
+        }
+
         .mini-run-bubble.selected {
             box-shadow: 0 0 0 2px var(--accent);
         }
@@ -1077,6 +1096,10 @@
 
         .mini-run-bubble.failed .bubble-dot {
             background: var(--danger);
+        }
+
+        .mini-run-bubble.aborted .bubble-dot {
+            background: #9ca3af;
         }
 
         .mini-log-btn {
@@ -1130,6 +1153,10 @@
 
         .test-status-dot.failed {
             background: var(--danger);
+        }
+
+        .test-status-dot.aborted {
+            background: #9ca3af;
         }
 
         .test-card-label {
@@ -1526,7 +1553,7 @@
             <div class="left-area" id="colTests" style="display: none;">
                 <div class="panel" style="height: 100%;">
                     <div class="panel-header">
-                        <span>Test Cases</span>
+                        <span id="historyTestsHeader">Test Cases</span>
                     </div>
                     <div style="flex-grow: 1; overflow-y: auto; padding: 0;" id="historyTestsList">
                         <!-- Populated by JS -->
@@ -1549,7 +1576,7 @@
             <div class="right-area" id="colReport" style="display: none;">
                 <div class="panel" style="height: 100%; display: flex; flex-direction: column;">
                     <div class="panel-header">
-                        <span>Test Case Details</span>
+                        <span id="historyDetailsHeader">Test Case Details</span>
                     </div>
                     <div style="flex: 1; position: relative;">
                         <iframe id="historyConsoleIframe" style="width: 100%; height: 100%; border: none;"></iframe>
@@ -2102,10 +2129,15 @@
             bar.innerHTML = '';
             if (header) bar.appendChild(header);
             historyCached.forEach(run => {
-                const isPassed = run.status === 'Passed';
+                let statusClass = 'failed';
+                if (run.status === 'Passed') {
+                    statusClass = 'passed';
+                } else if (run.status === 'Aborted') {
+                    statusClass = 'aborted';
+                }
                 const isCurrent = run.id === currentReportId;
                 const chip = document.createElement('div');
-                chip.className = 'mini-run-chip ' + (isPassed ? 'passed' : 'failed') + (isCurrent ? ' selected' : '');
+                chip.className = 'mini-run-chip ' + statusClass + (isCurrent ? ' selected' : '');
                 chip.title = '#' + (run.runNumber || '?') + ' \u00b7 ' + (run.status || '') + (run.durationMs ? ' \u00b7 ' + (run.durationMs / 1000).toFixed(1) + 's' : '');
                 chip.innerHTML = `<span class="chip-number">#${run.runNumber || '?'}</span><span class="chip-dot"></span>`;
                 chip.addEventListener('click', () => onMiniRunChipClick(run.id));
@@ -2126,10 +2158,15 @@
             const run = historyCached.find(r => r.id === currentReportId);
             const tests = (run && run.tests) ? run.tests : [];
             tests.forEach(t => {
-                const isPassed = t.status === 'Passed';
+                let statusClass = 'failed';
+                if (t.status === 'Passed') {
+                    statusClass = 'passed';
+                } else if (t.status === 'Aborted') {
+                    statusClass = 'aborted';
+                }
                 const isCurrent = t.file === currentTestFile;
                 const chip = document.createElement('div');
-                chip.className = 'mini-run-chip ' + (isPassed ? 'passed' : 'failed') + (isCurrent ? ' selected' : '');
+                chip.className = 'mini-run-chip ' + statusClass + (isCurrent ? ' selected' : '');
                 // Short label: use yamlLabel or testId if available, otherwise first 6 chars of name
                 const shortLabel = t.yamlLabel || t.testId || (t.name ? t.name.substring(0, 6) : '?');
                 chip.title = (t.yamlLabel || t.name || t.testId || '') + ' \u00b7 ' + (t.status || '');
@@ -2333,10 +2370,12 @@
                 rowsHtml += `<tr><td style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No historical reports.</td></tr>`;
             } else {
                 rowsHtml += historyCached.map(item => {
-                    const isSuccess = item.status === 'Passed';
-                    const statusBadge = isSuccess
-                        ? `<span class="badge-success">Passed</span>`
-                        : `<span class="badge-failed">${item.status || 'Failed'}</span>`;
+                    let statusBadge = `<span class="badge-failed">${item.status || 'Failed'}</span>`;
+                    if (item.status === 'Passed') {
+                        statusBadge = `<span class="badge-success">Passed</span>`;
+                    } else if (item.status === 'Aborted') {
+                        statusBadge = `<span class="badge-aborted">Aborted</span>`;
+                    }
 
                     const formattedTime = formatHistoryTimestamp(item.timestamp || item.id.substring(0, 15));
                     const durationLabel = formatDuration(item.durationMs);
@@ -2406,6 +2445,18 @@
 
             const run = historyCached.find(r => r.id === reportId);
 
+            // Update column headers with selected run context
+            const runNum = run && run.runNumber ? '#' + run.runNumber : '';
+            const runLabel = runNum ? ` - Run ${runNum}` : '';
+            const testsHeader = document.getElementById('historyTestsHeader');
+            if (testsHeader) {
+                testsHeader.textContent = `Test Cases${runLabel}`;
+            }
+            const detailsHeader = document.getElementById('historyDetailsHeader');
+            if (detailsHeader) {
+                detailsHeader.textContent = 'Test Case Details';
+            }
+
             // Transition to State 2: runs (fixed) | tests (flex-grow)
             applyHistoryState(2);
 
@@ -2423,8 +2474,18 @@
                 testsList.innerHTML = `<div style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 24px;">No tests available.</div>`;
             } else {
                 testsList.innerHTML = run.tests.map(t => {
-                    const tSuccess = t.status === 'Passed';
-                    const dotClass = tSuccess ? 'passed' : 'failed';
+                    let cardBadgeClass = 'badge-failed';
+                    let cardBadgeText = 'Failed';
+                    let dotClass = 'failed';
+                    if (t.status === 'Passed') {
+                        cardBadgeClass = 'badge-success';
+                        cardBadgeText = 'Passed';
+                        dotClass = 'passed';
+                    } else if (t.status === 'Aborted') {
+                        cardBadgeClass = 'badge-aborted';
+                        cardBadgeText = 'Aborted';
+                        dotClass = 'aborted';
+                    }
 
                     // Browser icon: BrowserDefault / Default → Chrome; unknown → generic globe
                     let browserIcon = 'fa-solid fa-globe';
@@ -2503,7 +2564,7 @@
 
                     return `<div class="test-card" data-test-name="${t.name}" onclick="loadInteractiveTest('${reportId}', '${t.file}', '${t.name}', this)">
                         <div class="test-card-title-row">
-                            <span class="${tSuccess ? 'badge-success' : 'badge-failed'}">${tSuccess ? 'Passed' : 'Failed'}</span>
+                            <span class="${cardBadgeClass}">${cardBadgeText}</span>
                             <span class="test-card-label">${label}${datasetPart}</span>
                         </div>
                         <div class="test-card-meta">
@@ -2537,6 +2598,15 @@
             }
             if (rowElement) {
                 rowElement.classList.add('selected');
+            }
+
+            // Update column header with selected run context
+            const run = historyCached.find(r => r.id === reportId);
+            const runNum = run && run.runNumber ? '#' + run.runNumber : '';
+            const runLabel = runNum ? ` - Run ${runNum}` : '';
+            const detailsHeader = document.getElementById('historyDetailsHeader');
+            if (detailsHeader) {
+                detailsHeader.textContent = `Test Case Details${runLabel}`;
             }
 
             document.getElementById('historyPlaceholder').style.display = 'none';
@@ -2582,8 +2652,18 @@
             strip.style.display = 'flex';
 
             bubblesContainer.innerHTML = matchingRuns.map(({ run, test }) => {
-                const isPassed = test.status === 'Passed';
-                const statusClass = isPassed ? 'passed' : 'failed';
+                let statusClass = 'failed';
+                let bubbleBadgeClass = 'badge-failed';
+                let bubbleBadgeLabel = 'Failed';
+                if (test.status === 'Passed') {
+                    statusClass = 'passed';
+                    bubbleBadgeClass = 'badge-success';
+                    bubbleBadgeLabel = 'Passed';
+                } else if (test.status === 'Aborted') {
+                    statusClass = 'aborted';
+                    bubbleBadgeClass = 'badge-aborted';
+                    bubbleBadgeLabel = 'Aborted';
+                }
                 const runNum = run.runNumber ? '#' + run.runNumber : '';
                 const dur = test.durationMs ? (test.durationMs / 1000).toFixed(1) + 's' : '';
                 const isActive = run.id === activeRunId;
@@ -2592,10 +2672,6 @@
                 const logBtnHtml = (test.hasLog === 'true' || test.hasLog === true)
                     ? `<button class="mini-log-btn" onclick="event.stopPropagation(); openTestLog('${run.id}', '${testName}')" title="View test log"><i class="fa-solid fa-file-lines"></i></button>`
                     : '';
-
-                // Badge style: Passed (green) or Failed (red), matching run-row badge styling
-                const bubbleBadgeClass = isPassed ? 'badge-success' : 'badge-failed';
-                const bubbleBadgeLabel = isPassed ? 'Passed' : 'Failed';
 
                 return `<span class="mini-run-bubble ${statusClass}${selectedClass}"
                             onclick="loadInteractiveTest('${run.id}', '${test.file}', '${testName}', null)"

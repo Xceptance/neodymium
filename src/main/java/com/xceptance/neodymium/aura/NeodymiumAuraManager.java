@@ -927,8 +927,8 @@ public final class NeodymiumAuraManager {
                                             // Only accept terminal values — the JSON always contains
                                             // "running" while executing, which we must not use as
                                             // the final outcome. Fall through to the step-checker below.
-                                            if ("Passed".equals(rawStatus) || "Failed".equals(rawStatus)) {
-                                                testStatus = rawStatus;
+                                            if ("Passed".equals(rawStatus) || "Failed".equals(rawStatus) || "aborted".equalsIgnoreCase(rawStatus)) {
+                                                testStatus = "aborted".equalsIgnoreCase(rawStatus) ? "Aborted" : rawStatus;
                                             } else {
                                                 // Non-terminal status: derive from step results
                                                 boolean hasFailedStep = false;
