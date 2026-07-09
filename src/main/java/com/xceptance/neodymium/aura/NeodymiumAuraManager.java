@@ -339,6 +339,15 @@ public final class NeodymiumAuraManager {
                     handleStatusStream(exchange);
                 } else if ("/api/allure/history".equals(path) && "GET".equalsIgnoreCase(method)) {
                     handleAllureHistory(exchange);
+                } else if (path.startsWith("/dashboard-") && (path.endsWith(".css") || path.endsWith(".js"))) {
+                    final InputStream is = NeodymiumAuraManager.class.getClassLoader()
+                            .getResourceAsStream("com/xceptance/neodymium/aura" + path);
+                    if (is == null) {
+                        sendError(exchange, 404, "Not found");
+                        return;
+                    }
+                    String contentType = path.endsWith(".css") ? "text/css" : "application/javascript";
+                    sendResponse(exchange, 200, contentType, is.readAllBytes());
                 } else if ("/interactive_console.html".equals(path) && "GET".equalsIgnoreCase(method)) {
                     final InputStream is = NeodymiumAuraManager.class.getClassLoader()
                             .getResourceAsStream("com/xceptance/neodymium/ai/console/interactive_console.html");

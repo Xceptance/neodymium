@@ -839,19 +839,41 @@ public class AiAgent
                 try
                 {
                     final String stateJson = consoleEngine.getCurrentStateJson();
-                    String testName = "test-" + System.currentTimeMillis();
-                    try {
-                        String name = Neodymium.getTestName();
-                        if (name != null && !name.trim().isEmpty()) {
-                            testName = name;
+                    String testId = null;
+                    if (Neodymium.getData() != null) {
+                        testId = Neodymium.getData().get("testId");
+                        if (testId == null || testId.trim().isEmpty()) {
+                            testId = Neodymium.getData().get("TEST_ID");
                         }
-                    } catch (Exception ignore) {}
-                    testName = testName.replaceAll("[^a-zA-Z0-9_-]", "");
-                    if (testName.length() > 100) {
-                        testName = testName.substring(0, 100);
                     }
+
+                    String testNamePart = "";
+                    if (testId != null && !testId.trim().isEmpty()) {
+                        testNamePart = testId.trim();
+                    } else {
+                        String yamlName = "test";
+                        String sourceFile = Neodymium.getTestdataSourceFile();
+                        if (sourceFile != null && !sourceFile.trim().isEmpty()) {
+                            yamlName = new java.io.File(sourceFile).getName();
+                        }
+                        
+                        String datasetNum = "1";
+                        if (Neodymium.getData() != null) {
+                            String idxStr = Neodymium.getData().get("neodymium.testdata.index");
+                            if (idxStr != null) {
+                                try {
+                                    datasetNum = String.valueOf(Integer.parseInt(idxStr) + 1);
+                                } catch (Exception ignore) {}
+                            }
+                        }
+                        testNamePart = yamlName + "-" + datasetNum;
+                    }
+
+                    // Append timestamp and sanitize for safe filenames
+                    testNamePart = (testNamePart + "-" + System.currentTimeMillis()).replaceAll("[^a-zA-Z0-9_-]", "");
+
                     String allureDir = System.getProperty("allure.results.directory", "target/allure-results");
-                    final java.io.File out = new java.io.File(allureDir, "console-execution-" + testName + ".json");
+                    final java.io.File out = new java.io.File(allureDir, "console-execution-" + testNamePart + ".json");
                     if (!out.getParentFile().exists()) 
                     { 
                         out.getParentFile().mkdirs(); 
@@ -2034,7 +2056,23 @@ public class AiAgent
         state.addProperty("runId", this.currentRunId);
         state.addProperty("pauseId", this.currentPauseId);
         state.addProperty("testName", Neodymium.getTestName());
-        state.addProperty("testId", Neodymium.getData() != null ? Neodymium.getData().get("testId") : null);
+        
+        String testId = null;
+        if (Neodymium.getData() != null) {
+            testId = Neodymium.getData().get("testId");
+            if (testId == null || testId.trim().isEmpty()) {
+                testId = Neodymium.getData().get("TEST_ID");
+            }
+            if (testId == null || testId.trim().isEmpty()) {
+                String idxStr = Neodymium.getData().get("neodymium.testdata.index");
+                if (idxStr != null) {
+                    try {
+                        testId = "Dataset " + (Integer.parseInt(idxStr) + 1);
+                    } catch (Exception ignore) {}
+                }
+            }
+        }
+        state.addProperty("testId", testId);
         state.addProperty("browser", Neodymium.getBrowserProfileName());
         state.addProperty("hudPromptChanged", this.hudPromptChanged);
 

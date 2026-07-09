@@ -467,7 +467,7 @@ function applyState(state) {
     }
     const topTestDataBody = document.getElementById('topTestDataBody');
     if (topTestDataBody && state.dataBindings) {
-        const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps'];
+        const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps', 'neodymium.testdata.index'];
         const keys = Object.keys(state.dataBindings).filter(k => !excludedKeys.includes(k));
         if (keys.length > 0) {
             topTestDataBody.innerHTML = keys.map(k => `
@@ -760,7 +760,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
 }
 
 function generateEditableBindingsTable(bindings, textareaIdOrClass) {
-    const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps'];
+    const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps','neodymium.testdata.index'];
     const keys = Object.keys(bindings || {}).filter(k => !excludedKeys.includes(k));
     if (keys.length === 0) {
         return '<div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 8px;">No variables available.</div>';
@@ -799,7 +799,7 @@ function updateDataBinding(key, val) {
         // Also update top test data body if visible
         const topTestDataBody = document.getElementById('topTestDataBody');
         if (topTestDataBody) {
-            const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps'];
+            const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps', 'neodymium.testdata.index'];
             const keys = Object.keys(currentState.dataBindings).filter(k => !excludedKeys.includes(k));
             topTestDataBody.innerHTML = keys.map(k => `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
@@ -1650,7 +1650,7 @@ function setConnectionState(state) {
     if (dot) {
         dot.className = '';
         dot.classList.add(state);
-        dot.title = { connected: 'Connected', paused: 'Waiting for input', error: 'Disconnected' }[state] || state;
+        dot.title = { connected: 'Loading', paused: 'Waiting for input', error: 'Disconnected' }[state] || state;
     }
 
     if (state === 'error' && currentState === null) {

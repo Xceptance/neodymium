@@ -2420,7 +2420,7 @@
                                     <button class="run-action-btn" ${allureDisabled} ${allureTitle} ${allureAction}>
                                         <i class="fa-solid fa-chart-bar"></i> Allure Report
                                     </button>
-                                    ${item.runConfig && !isRunning ? `<button class="run-action-btn" onclick="event.stopPropagation(); rerunFullRun(${JSON.stringify(JSON.stringify(item.runConfig))})" title="Re-run this entire suite with the same configuration"><i class="fa-solid fa-rotate-right"></i> Rerun</button>` : ''}
+                                    ${item.runConfig && !isRunning ? `<button class="run-action-btn" onclick="event.stopPropagation(); rerunFullRun('${JSON.stringify(item.runConfig).replace(/"/g, '&quot;')}')" title="Re-run this entire suite with the same configuration"><i class="fa-solid fa-rotate-right"></i> Rerun</button>` : ''}
                                 </div>
                                 <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
                                     <button class="run-action-btn danger" style="font-size: 10px; padding: 2px 6px; opacity: 0.65;" onclick="event.stopPropagation(); deleteReport('${item.id}')" title="Delete this run">
@@ -2557,8 +2557,8 @@
                                 video: rc.video,
                                 keepOpen: rc.keepOpen
                             };
-                            const payloadStr = JSON.stringify(JSON.stringify(singlePayload));
-                            rerunBtn = `<button class="run-action-btn" style="font-size:10px; padding:2px 7px;" onclick="event.stopPropagation(); rerunSingleTest(${payloadStr})" title="Re-run this test case with the same configuration"><i class="fa-solid fa-rotate-right"></i> Rerun</button>`;
+                            const payloadStr = JSON.stringify(singlePayload).replace(/"/g, '&quot;');
+                            rerunBtn = `<button class="run-action-btn" style="font-size:10px; padding:2px 7px;" onclick="event.stopPropagation(); rerunSingleTest('${payloadStr}')" title="Re-run this test case with the same configuration"><i class="fa-solid fa-rotate-right"></i> Rerun</button>`;
                         }
                     }
 
@@ -3383,12 +3383,17 @@
 
                 // Strip long leading paths — show only the last path segment for readability
                 const label = t.file ? t.file.replace(/\\/g, '/').split('/').pop() : t.file;
+                
+                let datasetPart = '';
+                if (t.id) {
+                    const isNumeric = /^\d+$/.test(String(t.id).trim());
+                    datasetPart = isNumeric ? ` · Dataset ${t.id}` : ` · ${t.id}`;
+                }
 
                 return `<div class="test-card" style="cursor: ${cursor}; ${cardStyle}" ${onclick}>
                     <div class="test-card-title-row" style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="test-card-label" style="word-break: break-all; flex: 1;" title="${t.file}">${label}</span>
+                        <span class="test-card-label" style="word-break: break-all; flex: 1;" title="${t.file}">${label}${datasetPart}</span>
                         <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                            ${t.id ? `<span class="tag tag-blue">${t.id}</span>` : ''}
                             ${iconHtml}
                         </div>
                     </div>
