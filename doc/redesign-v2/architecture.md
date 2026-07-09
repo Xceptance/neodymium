@@ -13,7 +13,7 @@ graph TD
     classDef interface fill:#f9f,stroke:#333,stroke-width:2px;
     classDef concrete fill:#bbf,stroke:#333,stroke-width:1px;
 
-    User[Developer Test Case] -->|AiSession.browser| Session[AiSession]
+    User[Developer Test Case] -->|AiSession.selenide| Session[AiSession]
     
     subgraph Core Engine
         Session --> Runner[StateMachineRunner]
@@ -30,13 +30,13 @@ graph TD
     subgraph LLM Provider
         Session --> Llm[LlmProvider]:::interface
         Llm --> Gemini[GeminiLlmProvider]:::concrete
-        Llm --> Ollama[OllamaLlmProvider]:::concrete
+        Llm --> Mistral[MistralLlmProvider]:::concrete
     end
 
     subgraph Resource Persistence
-        Session --> Storage[PlaybookStorage]:::interface
-        Storage --> Disk[LocalFilePlaybookStorage]:::concrete
-        Storage --> Memory[MemoryPlaybookStorage]:::concrete
+        Session --> Storage[PlaybookResourceManager]:::interface
+        Storage --> Disk[LocalFileResourceManager]:::concrete
+        Storage --> Memory[InMemoryResourceManager]:::concrete
     end
 
     subgraph Event Listeners
@@ -76,53 +76,163 @@ public interface TargetExecutor
     void execute(Action action) throws Exception;
 
     /**
-     * Returns the description/prompt instructions of all actions supported 
-     * by this executor, used to build the LLM system prompt dynamically.
+     * Returns the structured definitions of all actions supported 
+     * by this executor, allowing the prompt builder to format them dynamically.
      */
-    List<String> getSupportedActionInstructions();
+    List<ActionDefinition> getSupportedActions();
 
-    /**
-     * Restores SUT state back to a known stable checkpoint (used during self-healing).
-     */
-    void restoreState();
 }
 ```
 
-The returned **`SutState`** represents the SUT state in a generic format:
+### Structured Action Representation
+Instead of returning raw prompt instruction strings, the executor returns structured **`ActionDefinition`** objects. This allows the prompt builder to format the action guidelines dynamically based on model preferences (e.g. JSON schema structure vs. natural language list):
+
 ```java
-public record SutState(
-    String textContent,                 // Page DOM, JSON body, or CLI buffer
-    List<SutAttachment> attachments,    // Screenshots or log files
-    String visualHash                   // Perceptual dHash of the state
+public record ActionDefinition(
+    String name,
+    String description,
+    List<ParameterDefinition> parameters,
+    String defaultPromptInstruction
+) {}
+
+public record ParameterDefinition(
+    String name,
+    String type,
+    String description,
+    boolean required
 ) {}
 ```
-This enables the exact same execution runner to drive a Web Browser, a REST API, a database, or a terminal session, simply by changing the active executor.
+
+#### Concrete Action Invocation Model
+To maintain 100% backward-compatibility with the 22 existing browser action plugins (like `ClickAction` and `TypeAction`), the **`Action`** class remains a concrete, serializable data class. To support REST APIs, CLI, or database domains, it includes a generic parameters map:
+
+```java
+public class Action
+{
+    private String type;                     // e.g., "CLICK", "NAVIGATE", "SEND_REQUEST"
+    private String target;                   // SUT target (e.g. selector "#btn" or URL path "/api/login")
+    private List<String> value;              // Interaction value list (e.g. ["admin"], ["POST"])
+    private String description;              // Human-readable action description
+    private String reasoning;                // LLM reasoning details
+    
+    // Extensibility map to attach domain-specific typed parameters
+    private transient Map<String, Object> parameters = new HashMap<>();
+
+    public Action() {}
+
+    public Action(String type, String target, String description)
+    {
+        this.type = type;
+        this.target = target;
+        this.description = description;
+    }
+
+    // Standard getters & setters...
+    public String getType() { return type; }
+    public String getTarget() { return target; }
+    public String getValue() { return value != null && !value.isEmpty() ? value.get(0) : null; }
+    
+    public Map<String, Object> getParameters() { return parameters; }
+}
+```
+
+* **Control Flow Decoupling**: Legacy action plugins that handled structural control flow (like `IncludeAction`, `BranchAction`, or `SplitAction`) are gradually retired or refactored. Their logical flow control (e.g. dynamic step splicing, conditional branching) is intercepted and managed directly by the core State Machine Pipeline, keeping action execution clean and side-effect free.
+
+---
+
+The returned **`SutState`** represents the SUT state in an extensible format:
+
+```java
+public interface SutState
+{
+    /**
+     * The primary text content representing the state (DOM, JSON body, CLI printout).
+     * Used by the prompt builder to feed state context to the LLM.
+     */
+    String getTextContent();
+
+    /**
+     * Optional visual or binary attachments (like screenshots, API response traces).
+     */
+    List<SutAttachment> getAttachments();
+
+    /**
+     * Perceptual visual hash (dHash) or content hash used to detect state divergence.
+     */
+    String getContentHash();
+}
+```
+
+### Domain-Specific SUT State Implementations
+Concrete executors extend the base `SutState` to capture and expose domain-specific properties:
+
+1. **`BrowserSutState`** (Web Browsers):
+   * `getTextContent()`: Returns the page DOM HTML.
+   * `getContentHash()`: Returns the perceptual screenshot dHash.
+   * `getAttachments()`: Returns the screenshot image attachment.
+   * **Extended Properties**: `getUrl()`, `getBrowserConsoleLogs()`, `getActiveElement()`.
+2. **`RestSutState`** (REST APIs):
+   * `getTextContent()`: Returns the formatted API response body.
+   * `getContentHash()`: Returns the SHA-256 hash of response headers + body.
+   * **Extended Properties**: `getStatusCode()` (e.g. 200, 404), `getHeaders()` (response headers map), `getDurationMs()`.
+
+This enables the exact same execution runner to drive a Web Browser, a REST API, a database, or a terminal session, simply by changing the active executor, while giving custom action plugins or assertions full access to rich, domain-specific state data.
+
 
 ---
 
 ### B. Action Plugins Scoped to the Executor
-Action plugins are registered inside the concrete `TargetExecutor` implementing class. They are typed to the specific bridge resources that the executor manages.
+Action plugins are registered inside the concrete `TargetExecutor` implementing class. They are typed to the specific SUT resources (like drivers or HTTP clients) and states that the executor manages.
 
-For example, a browser-focused action plugin:
+#### 1. Browser Action Plugin Example
+Browser actions receive the active `SelenideDriver` resource and operate on a `BrowserSutState`:
+
 ```java
 public interface BrowserActionPlugin
 {
     String getActionName();
     String getPromptInstructions();
-    void execute(Action action, SelenideDriver driver) throws Exception;
+    void execute(Action action, SelenideDriver driver, BrowserSutState state) throws Exception;
 }
 ```
+
+#### 2. REST API Action Plugin Example
+REST action plugins operate on raw HTTP request builders/clients and inspect the typed `RestSutState`:
+
+```java
+public interface RestActionPlugin
+{
+    String getActionName();
+    String getPromptInstructions();
+    void execute(Action action, HttpClient client, RestSutState state) throws Exception;
+}
+```
+
+* **Type-Safe Downcasting**: Since these action plugins are registered directly inside the corresponding domain executor package (e.g. `com.xceptance.neodymium.ai.rest.action`), they can safely downcast the generic `SutState` to the type-specific implementation (`RestSutState` or `BrowserSutState`) to assert status codes, inspect headers, or query session logs.
+* **Separation of Concerns**: This keeps the core state machine runner completely domain-blind, while allowing the individual actions to utilize 100% of the SUT's specialized state properties.
 
 The **`SelenideTargetExecutor`** implements `TargetExecutor` by:
 1. Instantiating the Selenide WebDriver instance.
 2. Initializing and registering the browser actions (`ClickAction`, `TypeAction`, etc.).
-3. Implementing `execute(Action action)` by routing to the appropriate registered `BrowserActionPlugin`.
-4. Implementing `getSupportedActionInstructions()` by pulling instructions directly from the registered plugins.
-5. Implementing `restoreState()` by using browser-specific recovery steps (like navigating to the last stable URL checkpoint).
+3. Implementing `execute(Action action)` by routing to the appropriate registered `BrowserActionPlugin`, passing it the active driver and the downcast `BrowserSutState`.
+4. Implementing `getSupportedActions()` by compiling the list of structured `ActionDefinition` objects from the registered action plugins.
 
 ---
 
-### C. Event-Driven Lifecycle: `ExecutionEventBus`
+### C. Failure Handling & Step Recovery
+When a step execution or validation fails, the runner does not terminate the browser session or replay from the start. Instead, it handles the failure directly in the active session context using the following escalation flow:
+
+1. **Active Healing & Escalation**:
+   * The runner enters a localized healing phase (e.g., retrying the action with alternate locators, waiting for dynamic elements, or upgrading the context detail level).
+   * It attempts to resolve the failure using self-healing rules until the retry budget/escalation limits are exhausted.
+2. **Interactive Break (Debug Mode)**:
+   * If self-healing cannot resolve the issue and the session is in interactive debug mode (HUD active), the runner breaks execution, reports the failure details to the HUD, and pauses to wait for user intervention (e.g. manually editing the step or updating the SUT state and resuming).
+3. **Conclusive Failure**:
+   * If in non-interactive/CI mode, or if all healing options are exhausted and no debugger/HUD is present, the execution halts and fails for good.
+
+---
+
+### D. Event-Driven Lifecycle: `ExecutionEventBus`
 The `StateMachineRunner` transitions through step resolution and execution, publishing simple domain events. It is entirely free of logging, reporting, HUD, or serialization concerns.
 
 #### Core Events:
@@ -133,7 +243,7 @@ The `StateMachineRunner` transitions through step resolution and execution, publ
 * **`SessionFinishedEvent`**: Dispatched when the test session completes.
 
 #### Listeners:
-* **`PlaybookRecorder`**: Listens to step and action events to build the recording and saves it via `PlaybookStorage` upon session success.
+* **`PlaybookRecorder`**: Listens to step and action events to build the recording and saves it via `PlaybookResourceManager` upon session success.
 * **`HudListener`**: Renders the glassmorphic interactive HUD on the browser, handles breakpoints, and pauses the runner on execution errors to await manual overrides.
 * **`AllureReporter` / `AuraServerReporter`**: Collect step details and screenshots to output test reports.
 
@@ -197,7 +307,7 @@ public interface PlaybookResourceManager
      * against a parent playbook's identifier.
      * 
      * @param parentIdentifier the identifier of the parent playbook
-     * @param relativePath the relative target (e.g., "includes/login.md")
+     * @param relativePath the relative target (e.g., "includes/login.yaml")
      * @return the resolved absolute or fully qualified identifier
      */
     String resolveInclude(String parentIdentifier, String relativePath);
@@ -223,8 +333,8 @@ graph TD
 ```
 
 1. **Playbook Parser / Loader**:
-   * When loading a playbook (e.g. `Playbook.from("src/test/resources/my-playbook.md", resourceManager)`), the parser reads the source stream.
-   * When it encounters an include directive (e.g. `include: common/login.md`), the parser calls `resourceManager.resolveInclude("src/test/resources/my-playbook.md", "common/login.md")` to compute the path to the included file, and recursively reads its stream.
+   * When loading a playbook (e.g. `Playbook.from("src/test/resources/my-playbook.yaml", resourceManager)`), the parser reads the source stream.
+   * When it encounters an include directive (e.g. `include: common/login.yaml`), the parser calls `resourceManager.resolveInclude("src/test/resources/my-playbook.yaml", "common/login.yaml")` to compute the path to the included file, and recursively reads its stream.
 2. **`PlaybookRecorder` (Event Listener)**:
    * When execution completes, the recorder listener captures the returned `PlaybookRecording` and serializes it to JSON.
    * It writes the output by calling `resourceManager.write("src/test/resources/my-playbook-recording.json", json)`.
@@ -234,14 +344,14 @@ graph TD
 #### Common Implementations:
 * **`LocalFileResourceManager`**: Resolves includes and reads/writes using local file system absolute/relative path strings (default for local test cases).
 * **`ClasspathResourceManager`**: Resolves relative classpath paths and reads resources using Java's ClassLoader stream API (read-only).
-* **`InMemoryResourceManager`**: Resolves paths in a simple map structure (ideal for unit testing).
+* **`InMemoryResourceManager`**: Holds playbooks and recordings in memory without writing them to disk (enabling a playbook recording generated in one run to be passed directly to the next replay session without any disk I/O).
 
 ---
 
 ## 5. Thread Isolation and Concurrency
 
 * All static `ThreadLocal` variables (previously used for the active agent and run results) are removed.
-* The `AiSession` acts as the single owner of the execution context, holding the `TargetExecutor`, `PlaybookStorage`, `ExecutionEventBus`, and statistics.
+* The `AiSession` acts as the single owner of the execution context, holding the `TargetExecutor`, `PlaybookResourceManager`, `ExecutionEventBus`, and statistics.
 * This permits running multiple AI test sessions concurrently in parallel JVM threads (essential for multi-browser testing or high-throughput CI runs).
 
 ---
@@ -300,7 +410,8 @@ When the session is initialized in **Debug Mode**, the `StateMachineRunner` chec
 1. Before starting a step, the runner checks if a breakpoint is matched or if `pause()` was called.
 2. If paused, it posts a `DebuggerPauseEvent` via the `ExecutionEventBus` containing a hint to the HUD to read the current execution state.
 3. The runner blocks using a lock/condition until the debugger receives `resume()`, `stepOver()`, or `rewindTo()` from the client.
-4. If a step is edited or added by the user during the pause, the debugger updates the active `Playbook` on the fly, updates the execution cursor, and instructs the runner to transition back to step resolution.
+4. **Tree-Based Stack Rewinding**: If `rewindTo(stepIndex)` is called, the debugger clears any dynamic children (sub-steps generated via splits or includes) from root step `stepIndex` onwards, resets the runner execution stack with the remaining root steps starting at `stepIndex`, and resets their statuses.
+5. If a step is edited or added by the user during the pause, the debugger updates the active `Playbook` on the fly, updates the execution stack, and instructs the runner to transition back to step resolution.
 
 ---
 
@@ -323,6 +434,13 @@ classDiagram
         +mock(ExecutionMode mode) AiSession$
         +execute(Playbook playbook) PlaybookRecording
         +getDebugger() SessionDebugger
+        +getResourceManager() PlaybookResourceManager
+        +getLlmRegistry() LlmRegistry
+        +getActionRegistry() ActionRegistry
+        +getJavaMethodRegistry() JavaMethodRegistry
+        +getTemplateLoader() TemplateLoader
+        +getEventBus() ExecutionEventBus
+        +getSessionData() SessionData
     }
     class SelenideBrowserSession {
         ~SelenideBrowserSession(ExecutionMode mode)
@@ -356,8 +474,8 @@ public void testPurchaseFlow()
     // 1. Initialize session in REPLAY_AND_FIX mode
     final AiSession session = AiSession.selenide(ExecutionMode.REPLAY_AND_FIX);
 
-    // 2. Load the playbook (resolves guest-purchase.md and its recording)
-    final Playbook playbook = Playbook.from("guest-purchase.md");
+    // 2. Load the playbook (resolves guest-purchase.yaml and its recording)
+    final Playbook playbook = Playbook.from("guest-purchase.yaml");
 
     // 3. Execute and receive the updated recording
     final PlaybookRecording updatedRecording = session.execute(playbook);
@@ -615,10 +733,34 @@ graph LR
     end
 ```
 
-### A. Abstract Playbook Parsing
-A `Playbook` does not have to be a file on disk. We separate the location (`PlaybookSource`) from the format parser (`PlaybookParser`):
+### A. Abstract Playbook Parsing & Recursive Step Structure
+A `Playbook` is a tree of step instructions. Rather than a flat list, steps are modeled using a recursive **Composite Pattern** to correctly represent dynamic includes, splits, and nested splits (splits of splits).
 
 ```java
+public class PlaybookStep
+{
+    private String instruction;
+    private final List<PlaybookStep> subSteps = new ArrayList<>();
+    private final List<Action> actions = new ArrayList<>(); // Concrete executed actions (leaves only)
+    private boolean failed;
+    private String failureReason;
+
+    public PlaybookStep(final String instruction)
+    {
+        this.instruction = instruction;
+    }
+
+    public String getInstruction() { return instruction; }
+    public void setInstruction(final String instruction) { this.instruction = instruction; }
+
+    public List<PlaybookStep> getSubSteps() { return subSteps; }
+    public List<Action> getActions() { return actions; }
+
+    public boolean isComposite() { return !subSteps.isEmpty(); }
+    public boolean isFailed() { return failed; }
+    public void setFailed(final boolean failed) { this.failed = failed; }
+}
+
 public interface PlaybookSource
 {
     InputStream openStream() throws IOException;
@@ -654,28 +796,39 @@ Execution variables are not static. During a run:
 
 ---
 
-### C. Dynamic Playbook Includes (Macro Expansion)
-In addition to pre-execution compile-time includes, a running session may encounter a **dynamic include instruction** during execution (e.g. an instruction to execute a reusable sub-playbook module like `"include: login-flow.md"` on the fly, or an LLM-generated macro action).
+### C. Dynamic Playbook Includes & Splicing
+To correctly represent dynamic step splits, inclusions, and splits of splits recursively, the playbook execution sequence is modeled as a **hierarchical tree of steps**. A `PlaybookStep` can host a child list of nested `subSteps` (Composite Pattern).
 
-To handle this dynamically without introducing storage path dependencies to the engine:
-1. The session asks its configured **`PlaybookResourceManager`** to resolve the relative include path against the current parent playbook ID.
-2. It opens the resolved stream and invokes the `PlaybookParser` on the fly to get the sub-steps.
-3. The session runner **splices these steps directly into the execution cursor** (pushing the new steps onto the active execution stack), ensuring they are evaluated in the correct sequence.
+When a running session encounters a dynamic include instruction (e.g. `"include: login-flow.yaml"`) or a split instruction (e.g. a `SPLIT` action returned by the LLM containing remaining instruction text):
+
+1. **Step Splicing via Children**:
+   * The parsed sub-steps or splits are added directly into the **`subSteps`** collection of the currently executing step.
+   * This naturally represents splits of splits recursively as branches of a tree (e.g. `Step 2` -> `Sub-step 2.2` -> `Sub-sub-step 2.2.1`).
+2. **Active Runner Stack**:
+   * The runner maintains an active execution stack (`Deque<PlaybookStep>`) holding the active leaf node being executed.
+   * When a parent step has children, the runner pushes its children onto the execution stack. This prevents index shifting in the root playbook list, keeping step cursor navigation clean and robust.
 
 ```java
 public void executeDynamicInclude(final String relativePath, final ExecutionContext context) throws Exception
 {
-    // 1. Resolve relative path against parent ID
-    final String resolvedId = context.getResourceManager()
+    // 1. Fetch the currently executing active step from context
+    final PlaybookStep currentStep = context.getActiveStep();
+
+    // 2. Resolve relative path against parent ID
+    final String resolvedId = context.getSession().getResourceManager()
         .resolveInclude(context.getCurrentPlaybookId(), relativePath);
 
-    // 2. Read and parse sub-steps dynamically
-    try (final InputStream stream = context.getResourceManager().read(resolvedId))
+    // 3. Read and parse sub-steps dynamically
+    try (final InputStream stream = context.getSession().getResourceManager().read(resolvedId))
     {
-        final List<PlaybookStep> subSteps = context.getParser().parse(stream);
+        final PlaybookSource source = new StreamPlaybookSource(resolvedId, stream);
+        final List<PlaybookStep> subSteps = context.getSession().getPlaybookParser().parse(source);
 
-        // 3. Splice steps at the current runner cursor
-        context.getStepStack().spliceAtCursor(subSteps);
+        // 4. Add parsed steps as children of the current step
+        currentStep.getSubSteps().addAll(subSteps);
+
+        // 5. Push the sub-steps onto the execution runner stack to run next
+        context.pushSteps(subSteps);
     }
 }
 ```
@@ -696,10 +849,10 @@ graph TD
         ContextSanitizer -->|Output Safe Prompts| LLM[LLM Provider API]
     end
 
-    subgraph 2. Post-Execution Cleanup
-        RecordedActions[Raw Executed Actions] -->|Parametrize & Clean| RecordingSanitizer[RecordingSanitizer]
-        SessionData -->|Identifies Variable References| RecordingSanitizer
-        RecordingSanitizer -->|Serialize Safe Output| PlaybookStorage[PlaybookStorage Disk]
+    subgraph 2. On-the-Fly Sanitization
+        RawAction[Executed Action] -->|Sanitize & Parametrize| ActionSanitizer[ActionSanitizer]
+        SessionData -->|Identifies Variable References| ActionSanitizer
+        ActionSanitizer -->|Write Sanitized Action| PlaybookRecording[PlaybookRecording Memory]
     end
 ```
 
@@ -717,29 +870,29 @@ public interface ContextSanitizer
 }
 ```
 
-* **Secret Masking**: Any value in `SessionData` flagged as sensitive or mapped under keys like `password`, `apiKey`, or `token` is scanned for and replaced in the HTML/prompt with anonymous tokens like `[SENSITIVE_DATA_1]`.
-* **Reverse Mapping**: The `SanitizedPayload` holds a temporary map linking `[SENSITIVE_DATA_1]` back to its variable reference. If the LLM generates a response action containing `[SENSITIVE_DATA_1]`, the session maps it back to the real reference (`${userPassword}`) before execution.
+* **Secret Masking**: Any value in `SessionData` flagged as sensitive or mapped under keys like `password`, `apiKey`, or `token` is scanned for and replaced in the HTML/prompt. Replacing is done using either a format-preserving mock pattern (matching the length and structure of the original data) or a user-supplied stand-in value, preventing the LLM from seeing the actual secret while maintaining semantic validity.
+* **Reverse Mapping**: The `SanitizedPayload` holds a temporary map linking the masked value or stand-in back to its variable reference. If the LLM generates a response action containing the stand-in value, the session maps it back to the real variable reference (e.g. `${userPassword}`) before execution.
 
 ---
 
-### B. Post-Execution Recording Sanitization (`RecordingSanitizer`)
-When execution completes, the raw actions performed contain real values (like typed text or generated order numbers). Before the `PlaybookRecorder` saves the `PlaybookRecording` via `PlaybookStorage`, it routes the recording through a **`RecordingSanitizer`**:
+### B. On-the-Fly Recording Sanitization & Parameterization
+To ensure credentials and transient data are correctly identified, sanitization and parameterization happen **on the fly as actions are executed and recorded**, rather than in a post-execution pass. The `PlaybookRecorder` intercepts executed actions and sanitizes them before adding them to the `PlaybookRecording` memory object:
 
 ```java
-public interface RecordingSanitizer
+public interface ActionSanitizer
 {
     /**
-     * Cleans up the recording, replacing hardcoded credentials and dynamic run garbage 
-     * with clean variable references or wildcard patterns.
+     * Sanitizes an executed action on the fly, replacing hardcoded credentials 
+     * and dynamic run values with variable references or wildcards.
      */
-    void sanitizeRecording(PlaybookRecording recording, SessionData data);
+    Action sanitize(Action rawAction, SessionData data);
 }
 ```
 
 * **Action Value Parameterization**:
-  If a test typed `admin_pass_9921` into a password field, the sanitizer matches `admin_pass_9921` against the active `SessionData`. Finding that it belongs to variable `userPassword`, it rewrites the recorded step to save `value = "${userPassword}"` on disk instead of the raw credential.
+  If the runner executes an action that types `admin_pass_9921` into a password field, the sanitizer immediately matches it against the active `SessionData` references. Knowing it corresponds to the variable `userPassword`, it rewrites the action's value to `${userPassword}` before it is written to the recording.
 * **Transient Data Exclusion**:
-  Dynamic runtime tokens (like CSRF tokens or ephemeral session cookies) are auto-detected by registered patterns and stripped or replaced with wildcards, ensuring the recording remains clean and stable across subsequent runs.
+  Dynamic runtime values (like CSRF tokens or ephemeral session identifiers) are intercepted using registered patterns and replaced with wildcards on the fly, preventing dynamic run garbage from entering the stored recording.
 
 ---
 
@@ -832,7 +985,7 @@ public static PipelineStep createLiveExecutionPipeline()
                 ctx -> ctx.getRetryBudget().hasBudget(),
                 new SequenceStep(
                     new EscalateContextStep(), // Context level upgrade
-                    new RestoreSutStep(),      // Recover stable checkpoint
+                    new PrepareRetryStep(),    // In-page state reset (clear input, close overlays)
                     new CallLlmStep(),
                     new ExecuteActionsStep(),
                     new VerifyOutcomeStep()
@@ -880,11 +1033,71 @@ To pass data between pipeline steps (e.g. sharing captured DOM state or generate
 ```java
 public final class ExecutionContext
 {
+    private final AiSession session;
+    private final List<PlaybookStep> rootSteps;
+    private final String currentPlaybookId;
+    private final Deque<PlaybookStep> runnerStack = new ArrayDeque<>();
+    private PlaybookStep activeStep;
+
     // Transient data map acting as a scratchpad for the current step execution
     private final Map<String, Object> transientData = new ConcurrentHashMap<>();
-    
-    // Scoped variable mappings
-    private final SessionData sessionData;
+
+    public ExecutionContext(final AiSession session, final List<PlaybookStep> rootSteps, final String currentPlaybookId)
+    {
+        this.session = session;
+        this.rootSteps = Collections.unmodifiableList(new ArrayList<>(rootSteps));
+        this.currentPlaybookId = currentPlaybookId;
+        
+        // Initialize stack with root steps in order
+        for (int i = rootSteps.size() - 1; i >= 0; i--)
+        {
+            this.runnerStack.push(rootSteps.get(i));
+        }
+    }
+
+    public AiSession getSession()
+    {
+        return this.session;
+    }
+
+    public List<PlaybookStep> getRootSteps()
+    {
+        return this.rootSteps;
+    }
+
+    public Deque<PlaybookStep> getRunnerStack()
+    {
+        return this.runnerStack;
+    }
+
+    public PlaybookStep getActiveStep()
+    {
+        return this.activeStep;
+    }
+
+    public void setActiveStep(final PlaybookStep activeStep)
+    {
+        this.activeStep = activeStep;
+    }
+
+    public void pushSteps(final List<PlaybookStep> steps)
+    {
+        // Push sub-steps to the head of the LIFO execution stack in correct order
+        for (int i = steps.size() - 1; i >= 0; i--)
+        {
+            this.runnerStack.push(steps.get(i));
+        }
+    }
+
+    public String getCurrentPlaybookId()
+    {
+        return this.currentPlaybookId;
+    }
+
+    public SessionData getSessionData()
+    {
+        return this.session.getSessionData();
+    }
 
     public void putTransient(final String key, final Object value)
     {
@@ -990,8 +1203,7 @@ graph TD
     
     subgraph LLM Providers
         Provider --> Gemini[GeminiLlmProvider]:::concrete
-        Provider --> OpenAI[OpenAiLlmProvider]:::concrete
-        Provider --> Ollama[OllamaLlmProvider]:::concrete
+        Provider --> Mistral[MistralLlmProvider]:::concrete
         Provider --> MockLlm[MockLlmProvider]:::concrete
     end
 
@@ -1174,9 +1386,72 @@ When `AiPrompt.parseResponse(rawText)` is invoked, it routes the raw model outpu
 1. **Raw String Stage**: Fixes raw response text (e.g. stripping markdown code ticks ` ```json ... ``` `, repairing unescaped newlines).
 2. **JSON Element Stage**: Modifies the parsed `JsonElement` tree representation (e.g., adding missing array nodes or patching bad keys) prior to Gson/Jackson deserialization.
 3. **Model Object Stage**: Validates and overrides fields on the compiled Java object `T` (e.g. normalizing browser target selectors) before returning it to the caller.
+---
+
+## 14. Session Verification & Auditing Layer
+
+To verify if the AI agent executed the correct actions and successfully fulfilled the test's high-level intent, the framework supports registering pluggable **Session Audit Hooks**. These run at the **conclusion of the entire execution session** (right before `AiSession.execute` returns the final recording) to validate the gathered data and execution consistency.
+
+```mermaid
+graph TD
+    End[Session Run Conclusion] -->|Trigger Audit| Hooks[Session Audit Chain]
+    
+    subgraph Audit Hooks
+        Hooks --> A1[LlmExecutionAuditor]
+        Hooks --> A2[DataConsistencyAuditor]
+        Hooks --> A3[AuraVisualAuditor]
+    end
+
+    A1 -->|Output Audit Report| Result[AuditResult passed=true/false]
+```
+
+### A. The `SessionAuditHook` Interface
+Auditors evaluate the initial playbook instructions, the compiled execution trace (recording), and the final variable state:
+
+```java
+public interface SessionAuditHook
+{
+    /**
+     * Audits the completed session.
+     * 
+     * @param playbook the initial instruction playbook
+     * @param recording the final execution trace (actions, states, screenshots)
+     * @param data the final session data variables
+     * @return the result indicating if the run successfully fulfilled its goals
+     */
+    AuditResult audit(Playbook playbook, PlaybookRecording recording, SessionData data);
+}
+
+public record AuditResult(
+    boolean passed,
+    String summary,
+    Map<String, Object> details // Diagnostic metrics, LLM reasoning explanations, etc.
+) {}
+```
 
 ---
 
+### B. Execution Lifecycle Integration
+* The hooks are registered on the `AiSession` (e.g. `session.registerAuditHook(new LlmExecutionAuditor())`).
+* When the runner finishes the entire playbook, the session executes the registered audit hooks sequentially.
+* The audit results are attached directly to the final `PlaybookRecording` metadata and reported in the test logs.
+* *Note: This auditing layer is designed for high extensibility, but remains **low priority** for the initial MVP implementation.*
+
 ---
 
+### C. Standard Audit Use Cases
 
+#### 1. LLM Execution Auditor (`LlmExecutionAuditor`)
+* **Goal**: Double-checks if the AI did the right thing based on the initial instructions.
+* **Mechanism**: Sends the full `Playbook` steps, the sequence of executed concrete actions, and the final SUT state (DOM & screenshot) to a secondary LLM.
+* **Analysis**: Asks the model: *"Analyze the initial goal and the executed action trace. Did the agent execute the right steps, or did it hallucinate/skip instructions? Explain any deviations."*
+
+#### 2. Data Consistency Auditor (`DataConsistencyAuditor`)
+* **Goal**: Validates the consistency of dynamic variable values extracted during execution.
+* **Checks**: Verifies that extracted values (like order numbers, checkouts, or user IDs) match expected format structures (e.g. regexes) and contain no raw credentials or system error tags.
+
+#### 3. Visual Integrity Auditor (`AuraVisualAuditor`)
+* **Goal**: Audits the entire run's visual timeline.
+* **Checks**: Automatically reviews the full screenshot sequence for visual abnormalities, layout regressions, or overlapping elements that occurred during the test run.
+
+---
