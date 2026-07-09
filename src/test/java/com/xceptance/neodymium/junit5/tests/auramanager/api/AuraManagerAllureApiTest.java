@@ -3,6 +3,7 @@ package com.xceptance.neodymium.junit5.tests.auramanager.api;
 import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
+import com.xceptance.neodymium.util.Neodymium;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -80,7 +81,7 @@ public final class AuraManagerAllureApiTest
     @Test
     public void testServeReportFileAndSecurity() throws IOException, InterruptedException
     {
-        final File historyDir = new File("allure-reports-history").getAbsoluteFile();
+        final File historyDir = com.xceptance.neodymium.aura.NeodymiumAuraManager.getReportHistoryDir();
         if (!historyDir.exists())
         {
             historyDir.mkdirs();
@@ -93,14 +94,16 @@ public final class AuraManagerAllureApiTest
             reportDir.mkdirs();
         }
 
-        final File dummyFile = new File(reportDir, "index.html").getAbsoluteFile();
+        final File allureDir = new File(reportDir, "allure-report");
+        allureDir.mkdirs();
+        final File dummyFile = new File(allureDir, "index.html").getAbsoluteFile();
         Files.writeString(dummyFile.toPath(), "<html>dummy report</html>", StandardCharsets.UTF_8);
 
         try
         {
             // 1. Valid request
             HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://127.0.0.1:" + port + "/api/allure/report/" + reportId + "/index.html"))
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/allure/report/" + reportId + "/allure-report/index.html"))
                 .GET()
                 .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -120,6 +123,10 @@ public final class AuraManagerAllureApiTest
             if (dummyFile.exists())
             {
                 dummyFile.delete();
+            }
+            if (allureDir.exists())
+            {
+                allureDir.delete();
             }
             if (reportDir.exists())
             {
@@ -142,7 +149,7 @@ public final class AuraManagerAllureApiTest
     @Test
     public void testDeleteReportAndSecurity() throws IOException, InterruptedException
     {
-        final File historyDir = new File("allure-reports-history").getAbsoluteFile();
+        final File historyDir = com.xceptance.neodymium.aura.NeodymiumAuraManager.getReportHistoryDir();
         if (!historyDir.exists())
         {
             historyDir.mkdirs();
@@ -194,5 +201,32 @@ public final class AuraManagerAllureApiTest
 
         final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         Assertions.assertEquals(404, response.statusCode());
+    }
+
+    @Test
+    public void testReportHistoryDirResolution()
+    {
+        // 1. Verify default relative path configuration
+        final File defaultDir = NeodymiumAuraManager.getReportHistoryDir();
+        Assertions.assertNotNull(defaultDir);
+        Assertions.assertTrue(defaultDir.isAbsolute());
+        Assertions.assertEquals("report-history", defaultDir.getName());
+
+        // 2. Verify custom absolute path configuration override (via system property)
+        final String tempAbsoluteDir = System.getProperty("java.io.tmpdir") + File.separator + "absolute-report-history-test";
+        System.setProperty("neodymium.aura.reportHistoryDir", tempAbsoluteDir);
+        // Refresh configuration context
+        Neodymium.clearThreadContext();
+
+        try
+        {
+            final File resolvedAbsoluteDir = NeodymiumAuraManager.getReportHistoryDir();
+            Assertions.assertEquals(new File(tempAbsoluteDir).getAbsoluteFile(), resolvedAbsoluteDir);
+        }
+        finally
+        {
+            System.clearProperty("neodymium.aura.reportHistoryDir");
+            Neodymium.clearThreadContext();
+        }
     }
 }

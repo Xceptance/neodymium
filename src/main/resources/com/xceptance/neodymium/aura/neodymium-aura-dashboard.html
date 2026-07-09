@@ -2392,7 +2392,7 @@
                         : (!hasReport ? 'title="Allure report not available"' : '');
                     const allureDisabled = (!hasReport || !allureEnabled) ? 'disabled' : '';
                     const allureAction = hasReport
-                        ? `onclick="event.stopPropagation(); window.open('/api/allure/report/${item.id}/index.html', '_blank')"`
+                        ? `onclick="event.stopPropagation(); window.open('/api/allure/report/${item.id}/allure-report/index.html', '_blank')"`
                         : '';
 
                     const allureNote = (!allureEnabled)
@@ -3275,7 +3275,7 @@
 
         function openReportView(reportId) {
             reportDisplayName.innerText = reportId;
-            reportIframe.src = `/api/allure/report/${reportId}/index.html`;
+            reportIframe.src = `/api/allure/report/${reportId}/allure-report/index.html`;
 
             document.body.classList.add('report-active');
             showView('reportView');

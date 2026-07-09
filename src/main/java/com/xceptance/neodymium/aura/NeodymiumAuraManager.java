@@ -487,7 +487,7 @@ public final class NeodymiumAuraManager {
 
             File targetFile = null;
             if (runId != null && !runId.isEmpty()) {
-                final File historyDir = new File("allure-reports-history", runId).getCanonicalFile();
+                final File historyDir = new File(getReportHistoryDir(), runId).getCanonicalFile();
                 targetFile = new File(historyDir, "screenshots/" + file).getCanonicalFile();
                 if (!targetFile.getPath().startsWith(historyDir.getPath())) {
                     sendError(exchange, 403, "Access denied");
@@ -814,7 +814,7 @@ public final class NeodymiumAuraManager {
         }
 
         private void handleAllureHistory(final HttpExchange exchange) throws IOException {
-            final File historyDir = new File("allure-reports-history").getAbsoluteFile();
+            final File historyDir = getReportHistoryDir();
             final List<Map<String, Object>> historyList = new ArrayList<>();
 
             if (historyDir.exists() && historyDir.isDirectory()) {
@@ -893,7 +893,7 @@ public final class NeodymiumAuraManager {
                             }
                         }
 
-                        final File indexHtml = new File(dir, "index.html");
+                        final File indexHtml = new File(new File(dir, "allure-report"), "index.html");
                         final boolean hasReport = indexHtml.exists() && indexHtml.isFile();
 
                         final List<Map<String, String>> tests = new ArrayList<>();
@@ -1048,7 +1048,7 @@ public final class NeodymiumAuraManager {
         private void handleServeReportFile(final HttpExchange exchange, final String path) throws IOException {
             final String prefix = "/api/allure/report/";
             final String subPath = path.substring(prefix.length());
-            final File historyDir = new File("allure-reports-history").getCanonicalFile();
+            final File historyDir = getReportHistoryDir();
             final File file = new File(historyDir, subPath).getCanonicalFile();
 
             if (!file.getPath().startsWith(historyDir.getPath())) {
@@ -1095,7 +1095,7 @@ public final class NeodymiumAuraManager {
 
             LOGGER.info("[Aura Server] POST /api/allure/delete - Request received for ID: {}", req.id);
 
-            final File historyDir = new File("allure-reports-history").getCanonicalFile();
+            final File historyDir = getReportHistoryDir();
             final File reportDir = new File(historyDir, req.id).getCanonicalFile();
 
             if (!reportDir.getPath().startsWith(historyDir.getPath())) {
@@ -1598,10 +1598,10 @@ public final class NeodymiumAuraManager {
         }
         final String joined = String.join("_", names);
         final String folderName = timestamp + "_" + (joined.isEmpty() ? "run" : joined);
-        final File destDir = new File("allure-reports-history", folderName).getAbsoluteFile();
+        final File destDir = new File(getReportHistoryDir(), folderName).getAbsoluteFile();
 
         try {
-            copyDirectory(srcDir, destDir);
+            copyDirectory(srcDir, new File(destDir, "allure-report"));
 
             // Write metadata.json with full run details including timing, run options, and the
             // original run configuration needed to replay the run (Rerun button).
@@ -1769,6 +1769,24 @@ public final class NeodymiumAuraManager {
             }
         }
         file.delete();
+    }
+
+    public static File getReportHistoryDir() {
+        final String path = Neodymium.configuration().reportHistoryDir();
+        final File file = new File(path);
+        if (file.isAbsolute()) {
+            try {
+                return file.getCanonicalFile();
+            } catch (final IOException e) {
+                return file.getAbsoluteFile();
+            }
+        } else {
+            try {
+                return new File(System.getProperty("user.dir"), path).getCanonicalFile();
+            } catch (final IOException e) {
+                return new File(System.getProperty("user.dir"), path).getAbsoluteFile();
+            }
+        }
     }
 
     public static String stripAnsi(final String line) {
