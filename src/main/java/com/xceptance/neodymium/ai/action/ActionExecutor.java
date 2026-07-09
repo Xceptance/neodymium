@@ -29,31 +29,25 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.jspecify.annotations.Nullable;
 import org.openqa.selenium.By;
-import org.openqa.selenium.NoSuchWindowException;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codeborne.selenide.CheckResult;
-import com.codeborne.selenide.Condition;
-import com.codeborne.selenide.Configuration;
-import com.codeborne.selenide.Driver;
-import com.codeborne.selenide.ElementsCollection;
-import com.codeborne.selenide.Selectors;
-import com.codeborne.selenide.Selenide;
-import com.codeborne.selenide.SelenideElement;
-import com.codeborne.selenide.WebDriverRunner;
-import com.codeborne.selenide.WebElementCondition;
+import com.xceptance.neodymium.util.layer.FoundElement;
 
 import io.qameta.allure.Step;
 
 /**
- * Translates {@link Action} objects into Selenium WebDriver calls. Uses smart
- * element resolution that tries multiple
- * strategies.
+ * Translates {@link Action} objects into browser interactions via the
+ * backend-agnostic {@link com.xceptance.neodymium.util.InteractionLayer}.
+ * Uses smart element resolution that tries multiple strategies in order of
+ * preference.
+ * <p>
+ * This class contains <strong>no direct Selenide or WebDriver imports</strong>.
+ * All browser interactions are delegated through {@code Neodymium.interaction()}
+ * and the {@link FoundElement} abstraction, making it compatible with both
+ * the Selenide and Playwright backends.
+ * </p>
  *
  * @author AI-generated: Gemini 2.5 Flash
  * @author Xceptance GmbH 2026
@@ -64,55 +58,9 @@ public class ActionExecutor {
 
     private final Duration getElementTimeout()
     {
-        return Duration.ofMillis(Configuration.timeout);
+        return Duration.ofMillis(Neodymium.interaction().getTimeout());
     }
 
-    private static final String SHADOW_DOM_FINDER_PREFIX = "var allRoots = [document];\n" +
-            "function findShadowRoots(root) {\n" +
-            "  var els = root.querySelectorAll('*');\n" +
-            "  for (var i = 0; i < els.length; i++) {\n" +
-            "    if (els[i].shadowRoot) {\n" +
-            "      allRoots.push(els[i].shadowRoot);\n" +
-            "      findShadowRoots(els[i].shadowRoot);\n" +
-            "    }\n" +
-            "  }\n" +
-            "}\n" +
-            "findShadowRoots(document);\n";
-
-    private static final String SHADOW_DOM_CSS_SELECTOR_ALL = SHADOW_DOM_FINDER_PREFIX +
-            "var results = [];\n" +
-            "for (var i = 0; i < allRoots.length; i++) {\n" +
-            "  try {\n" +
-            "    var els = allRoots[i].querySelectorAll(arguments[0]);\n" +
-            "    for (var j = 0; j < els.length; j++) { results.push(els[j]); }\n" +
-            "  } catch(e) {}\n" +
-            "}\n" +
-            "return results;";
-
-    private static final String SHADOW_DOM_TEXT_SELECTOR_ALL = SHADOW_DOM_FINDER_PREFIX +
-            "var targetText = arguments[0].toLowerCase().trim();\n" +
-            "var exactMatches = [];\n" +
-            "var partialMatches = [];\n" +
-            "for (var i = 0; i < allRoots.length; i++) {\n" +
-            "  var els = allRoots[i].querySelectorAll('*');\n" +
-            "  for (var j = 0; j < els.length; j++) {\n" +
-            "    var el = els[j];\n" +
-            "    if (el.closest && el.closest('#neo-ai-hud')) continue;\n" +
-            "    var text = el.children.length === 0 && el.textContent ? el.textContent.toLowerCase().trim() : '';\n" +
-            "    var val = el.value ? el.value.toLowerCase().trim() : '';\n" +
-            "    var aria = el.getAttribute('aria-label') ? el.getAttribute('aria-label').toLowerCase().trim() : '';\n" +
-            "    if (text === targetText || val === targetText || aria === targetText) {\n" +
-            "      exactMatches.push(el);\n" +
-            "    } else if (text.includes(targetText) || val.includes(targetText) || aria.includes(targetText)) {\n" +
-            "      var score = text.length || val.length || aria.length;\n" +
-            "      partialMatches.push({el: el, score: score});\n" +
-            "    }\n" +
-            "  }\n" +
-            "}\n" +
-            "if (exactMatches.length > 0) return exactMatches;\n" +
-            "partialMatches.sort(function(a, b) { return a.score - b.score; });\n" +
-            "var results = []; for(var k=0; k<partialMatches.length; k++) results.push(partialMatches[k].el);\n" +
-            "return results;";
 
     /**
      * The instance of the currently running Test Class
@@ -277,7 +225,7 @@ public class ActionExecutor {
 
         preCheckAction(action);
 
-        AiActionPlugin plugin = ActionRegistry.getPlugin(action.getType());
+        final AiActionPlugin plugin = ActionRegistry.getPlugin(action.getType());
 
         try
         {
@@ -299,7 +247,8 @@ public class ActionExecutor {
         {
             try
             {
-                WebDriverRunner.getWebDriver().switchTo().defaultContent();
+                // Always reset frame context via the backend-agnostic facade.
+                Neodymium.interaction().switchToDefaultContent();
             }
             catch (final Exception ignored)
             {
@@ -325,35 +274,51 @@ public class ActionExecutor {
             execute(action);
 
             // Small pause between actions for page stability
-            Selenide.sleep(300);
+            Neodymium.interaction().sleep(300);
         }
     }
 
     // --- Element resolution ---
 
     /**
-     * Finds an element using multiple strategies in order of preference: 0.
-     * data-neo-ref 1. CSS
-     * selector 2. XPath 3. Link text / partial link text 4. Text content via XPath
+     * Finds an element using multiple strategies in order of preference:
+     * 0. Neodymium data-neo-ref ID
+     * 1. CSS selector
+     * 2. XPath
+     * 3. Link text / partial link text
+     * 4. Text content via XPath
+     *
+     * @param action the action whose target and element details are used
+     * @return the first matched {@link FoundElement}
      */
-    public SelenideElement findElement(final Action action)
+    public FoundElement findElement(final Action action)
     {
         try
         {
-            return findElements(action).first().should(Condition.exist, getElementTimeout());
+            final List<FoundElement> elements = findElements(action);
+            if (!elements.isEmpty())
+            {
+                return elements.get(0);
+            }
+            throw new ActionExecutionException(
+                    String.format("Could not find element for target '%s' or text '%s'",
+                            action.getTarget(), action.getElementDetails()));
         }
         catch (final ActionExecutionException e)
         {
-            // Rethrow using singular error message to maintain backward compatibility
-            throw new ActionExecutionException(String.format("Could not find element for target '%s' or text '%s'", action.getTarget(),
-                    action.getElementDetails()));
+            throw new ActionExecutionException(
+                    String.format("Could not find element for target '%s' or text '%s'",
+                            action.getTarget(), action.getElementDetails()));
         }
     }
 
     /**
      * Finds all elements using the same strategies as findElement, polling until the timeout is reached.
+     *
+     * @param action the action whose target and element details are used
+     * @return list of matched elements (non-empty)
      */
-    public ElementsCollection findElements(final Action action)
+    public List<FoundElement> findElements(final Action action)
     {
         final long start = System.currentTimeMillis();
         final long timeoutMs = getElementTimeout().toMillis();
@@ -364,7 +329,7 @@ public class ActionExecutor {
             try
             {
                 final boolean isLastAttempt = (System.currentTimeMillis() - start + 100) >= timeoutMs;
-                final ElementsCollection elements = findElementsInternal(action, isLastAttempt);
+                final List<FoundElement> elements = findElementsInternal(action, isLastAttempt);
                 if (!elements.isEmpty())
                 {
                     return elements;
@@ -380,7 +345,7 @@ public class ActionExecutor {
                 break;
             }
 
-            Selenide.sleep(100);
+            Neodymium.interaction().sleep(100);
         }
 
         if (lastException != null)
@@ -393,7 +358,18 @@ public class ActionExecutor {
                         action.getElementDetails()));
     }
 
-    private ElementsCollection findElementsInternal(final Action action, final boolean logErrors)
+    /**
+     * Internal element lookup using multiple fallback strategies.
+     * Strategies that rely on JavaScript returning DOM element handles (Strategy 0 shadow fallback,
+     * 1.5, 0.2, 5) have been removed because Playwright cannot serialize DOM elements from JS.
+     * Strategies 1 (CSS), 2 (XPath), 3 (link text), and 4 (text XPath) work via the
+     * {@link com.xceptance.neodymium.util.InteractionLayer} and are backend-agnostic.
+     *
+     * @param action      the action whose target and element details are used
+     * @param logErrors   whether to emit debug log messages for each failed strategy
+     * @return a non-empty list of matched elements, or throws {@link ActionExecutionException}
+     */
+    private List<FoundElement> findElementsInternal(final Action action, final boolean logErrors)
     {
         switchFrameContext(action.getFrameId());
         final String target = cleanTarget(action.getTarget());
@@ -403,126 +379,32 @@ public class ActionExecutor {
         {
             try
             {
-                final ElementsCollection elements = Selenide.$$(By.cssSelector("[data-neo-ref='" + target + "']"));
+                final List<FoundElement> elements = Neodymium.interaction()
+                        .findAllElements(By.cssSelector("[data-neo-ref='" + target + "']"));
                 if (!elements.isEmpty())
                 {
                     logDebug(logErrors, "   🔍 Resolved using Strategy 0: Neodymium Automation ID [{}]", target);
                     return elements;
                 }
-                else
-                {
-                    // Fallback to Shadow DOM deep selector via Javascript
-                    final List<WebElement> shadowWebEls = Selenide.executeJavaScript(SHADOW_DOM_CSS_SELECTOR_ALL,
-                            "[data-neo-ref='" + target + "']");
-                    if (shadowWebEls != null && !shadowWebEls.isEmpty())
-                    {
-                        logDebug(logErrors, "   🔍 Resolved using Strategy 0 (Shadow DOM JS): Neodymium Automation ID [{}]", target);
-                        return Selenide.$$(shadowWebEls);
-                    }
-                    logDebug(logErrors, "   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neo-ref='{}']]", target);
-                }
+                logDebug(logErrors, "   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neo-ref='{}']]", target);
             }
             catch (final Exception e)
             {
-                logDebug(logErrors, "   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neo-ref='{}']] with error: {}", target, e.getMessage());
-            }
-        }
-
-        // Strategy 0.2: Match by computed parentText
-        if (target.contains("parentText="))
-        {
-            final Matcher m = Pattern.compile("parentText=['\"]?(.*?)['\"]?\\]?$")
-                    .matcher(target);
-            if (m.find())
-            {
-                final String expectedParentText = m.group(1);
-                try
-                {
-                    final String parentTextFinderJs = 
-                        "var expectedParentText = arguments[0];\n" +
-                        "var candidates = document.querySelectorAll('button, a, input, select, textarea, [role=\"button\"]');\n" +
-                        "var results = [];\n" +
-                        "for (var i = 0; i < candidates.length; i++) {\n" +
-                        "    var el = candidates[i];\n" +
-                        "    var parentText = '';\n" +
-                        "    var lbl = (el.innerText || el.value || el.placeholder || '').trim();\n" +
-                        "    var p = el.parentElement;\n" +
-                        "    var depth = 0;\n" +
-                        "    while (p && p !== document.body && depth < 3) {\n" +
-                        "        var pTag = p.tagName.toLowerCase();\n" +
-                        "        var role = p.getAttribute('role') || '';\n" +
-                        "        var cls = (typeof p.className === 'string' ? p.className : '').toLowerCase();\n" +
-                        "        var id = (p.id || '').toLowerCase();\n" +
-                        "        if (pTag === 'header' || pTag === 'footer' || pTag === 'nav' || pTag === 'aside') break;\n" +
-                        "        if (role === 'banner' || role === 'navigation' || role === 'contentinfo' || role === 'complementary') break;\n" +
-                        "        if (cls.includes('navbar') || cls.includes('header') || cls.includes('footer') ||\n" +
-                        "            id.includes('navbar') || id.includes('header') || id.includes('footer')) break;\n" +
-                        "        var pText = (p.innerText || '').trim();\n" +
-                        "        if (pText.length > lbl.length && pText.length < 300) {\n" +
-                        "            parentText = pText;\n" +
-                        "            break;\n" +
-                        "        }\n" +
-                        "        if (pText.length >= 300) break;\n" +
-                        "        p = p.parentElement;\n" +
-                        "        depth++;\n" +
-                        "    }\n" +
-                        "    if (parentText) {\n" +
-                        "        var formatted = parentText.replace(/\\s*\\n\\s*/g, ' | ');\n" +
-                        "        if (formatted.length > 200) { formatted = formatted.substring(0, 200) + '…'; }\n" +
-                        "        if (formatted === expectedParentText) {\n" +
-                        "            results.push(el);\n" +
-                        "        }\n" +
-                        "    }\n" +
-                        "}\n" +
-                        "return results;";
-                    
-                    final List<WebElement> matchingEls = Selenide.executeJavaScript(parentTextFinderJs, expectedParentText);
-                    if (matchingEls != null && !matchingEls.isEmpty())
-                    {
-                        logDebug(logErrors, "   🔍 Resolved using Strategy 0.2: Computed parentText [{}]", expectedParentText);
-                        return Selenide.$$(matchingEls);
-                    }
-                    logDebug(logErrors, "   ❌ Strategy 0.2 failed: Computed parentText [{}]", expectedParentText);
-                }
-                catch (final Exception e)
-                {
-                    logDebug(logErrors, "   ❌ Strategy 0.2 failed: Computed parentText [{}] with error: {}", expectedParentText, e.getMessage());
-                }
-            }
-        }
-
-        // Strategy 0.5: Try explicit Shadow DOM selector
-        if (target.contains("::shadow"))
-        {
-            try
-            {
-                final ElementsCollection elements = Selenide.$$(resolveLocator(target));
-                if (!elements.isEmpty())
-                {
-                    logDebug(logErrors, "   🔍 Resolved using Strategy 0.5: Shadow DOM selector [{}]", target);
-                    return elements;
-                }
-                else
-                {
-                    logDebug(logErrors, "   ❌ Strategy 0.5 failed: Shadow DOM selector [{}]", target);
-                }
-            }
-            catch (final Exception e)
-            {
-                logDebug(logErrors, "   ❌ Strategy 0.5 failed: Shadow DOM selector [{}] with error: {}", target, e.getMessage());
+                logDebug(logErrors, "   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neo-ref='{}']] with error: {}",
+                        target, e.getMessage());
             }
         }
 
         if (target.equals("document.title") || target.equals("pageTitle"))
         {
             logDebug(logErrors, "   🔍 Resolved using Title Strategy [{}]", target);
-            return Selenide.$$("head > title");
+            return Neodymium.interaction().findAllElements(By.cssSelector("head > title"));
         }
 
         // Strategy 1: Try as CSS selector
         try
         {
-            final ElementsCollection elements = Selenide.$$(By.cssSelector(target));
+            final List<FoundElement> elements = Neodymium.interaction().findAllElements(By.cssSelector(target));
             if (!elements.isEmpty())
             {
                 logDebug(logErrors, "   🔍 Resolved using Strategy 1: CSS selector [{}]", target);
@@ -538,28 +420,6 @@ public class ActionExecutor {
             logDebug(logErrors, "   ❌ Strategy 1 failed: CSS selector [{}] with error: {}", target, e.getMessage());
         }
 
-        // Strategy 1.5: Try deep Shadow DOM CSS selector via Javascript
-        if (!target.startsWith("/") && !target.startsWith("("))
-        {
-            try
-            {
-                final List<WebElement> shadowWebEls = Selenide.executeJavaScript(SHADOW_DOM_CSS_SELECTOR_ALL, target);
-                if (shadowWebEls != null && !shadowWebEls.isEmpty())
-                {
-                    logDebug(logErrors, "   🔍 Resolved using Strategy 1.5: Deep Shadow DOM CSS selector [{}]", target);
-                    return Selenide.$$(shadowWebEls);
-                }
-                else
-                {
-                    logDebug(logErrors, "   ❌ Strategy 1.5 failed: Deep Shadow DOM selector [{}]", target);
-                }
-            }
-            catch (final Exception e)
-            {
-                logDebug(logErrors, "   ❌ Strategy 1.5 failed: Deep Shadow DOM selector [{}] with error: {}", target, e.getMessage());
-            }
-        }
-
         // Strategy 2: Try as XPath
         if (target.startsWith("/") || target.startsWith("("))
         {
@@ -567,7 +427,7 @@ public class ActionExecutor {
             {
                 try
                 {
-                    final ElementsCollection elements = Selenide.$$x(target);
+                    final List<FoundElement> elements = Neodymium.interaction().findAllElements(By.xpath(target));
                     if (!elements.isEmpty())
                     {
                         logDebug(logErrors, "   🔍 Resolved using Strategy 2: XPath [{}]", target);
@@ -592,7 +452,7 @@ public class ActionExecutor {
         // Strategy 3: Try as link text
         try
         {
-            ElementsCollection elements = Selenide.$$(By.linkText(target));
+            List<FoundElement> elements = Neodymium.interaction().findAllElements(By.linkText(target));
             if (!elements.isEmpty())
             {
                 logDebug(logErrors, "   🔍 Resolved using Strategy 3: Link text [{}]", target);
@@ -603,10 +463,11 @@ public class ActionExecutor {
             final String extractedTargetName = cleanElementText(target);
             if (extractedTargetName != null && !extractedTargetName.equals(target))
             {
-                elements = Selenide.$$(By.linkText(extractedTargetName));
+                elements = Neodymium.interaction().findAllElements(By.linkText(extractedTargetName));
                 if (!elements.isEmpty())
                 {
-                    logDebug(logErrors, "   🔍 Resolved using Strategy 3 (extracted target name): Link text [{}]", extractedTargetName);
+                    logDebug(logErrors, "   🔍 Resolved using Strategy 3 (extracted target name): Link text [{}]",
+                            extractedTargetName);
                     return elements;
                 }
                 logDebug(logErrors, "   ❌ Strategy 3 failed (extracted target name): Link text [{}]", extractedTargetName);
@@ -615,7 +476,7 @@ public class ActionExecutor {
             final String elementText = action.getElementDetails();
             if (elementText != null && !elementText.isBlank() && !elementText.equals(target))
             {
-                elements = Selenide.$$(By.linkText(elementText));
+                elements = Neodymium.interaction().findAllElements(By.linkText(elementText));
                 if (!elements.isEmpty())
                 {
                     logDebug(logErrors, "   🔍 Resolved using Strategy 3: Link text [{}]", elementText);
@@ -636,7 +497,7 @@ public class ActionExecutor {
             String xpath = String.format(
                     "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
                     targetXpath, targetXpath, targetXpath);
-            ElementsCollection elements = Selenide.$$x(xpath);
+            List<FoundElement> elements = Neodymium.interaction().findAllElements(By.xpath(xpath));
             if (!elements.isEmpty())
             {
                 logDebug(logErrors, "   🔍 Resolved using Strategy 4: Text content XPath [{}]", xpath);
@@ -651,7 +512,7 @@ public class ActionExecutor {
                 xpath = String.format(
                         "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
                         extractedXpath, extractedXpath, extractedXpath);
-                elements = Selenide.$$x(xpath);
+                elements = Neodymium.interaction().findAllElements(By.xpath(xpath));
                 if (!elements.isEmpty())
                 {
                     logDebug(logErrors, "   🔍 Resolved using Strategy 4 (extracted target name): Text content XPath [{}]", xpath);
@@ -667,7 +528,7 @@ public class ActionExecutor {
                 xpath = String.format(
                         "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
                         elementTextXpath, elementTextXpath, elementTextXpath);
-                elements = Selenide.$$x(xpath);
+                elements = Neodymium.interaction().findAllElements(By.xpath(xpath));
                 if (!elements.isEmpty())
                 {
                     logDebug(logErrors, "   🔍 Resolved using Strategy 4: Text content XPath [{}]", xpath);
@@ -681,93 +542,70 @@ public class ActionExecutor {
             logDebug(logErrors, "   ❌ Strategy 4 failed: Text content search with error: {}", e.getMessage());
         }
 
-        // Strategy 5: Try deep Shadow DOM text search via Javascript (covers what XPath can't)
-        try
-        {
-            List<WebElement> shadowWebEls = Selenide.executeJavaScript(SHADOW_DOM_TEXT_SELECTOR_ALL, target);
-            if (shadowWebEls != null && !shadowWebEls.isEmpty())
-            {
-                logDebug(logErrors, "   🔍 Resolved using Strategy 5: Deep Shadow DOM text search [{}]", target);
-                return Selenide.$$(shadowWebEls);
-            }
-            logDebug(logErrors, "   ❌ Strategy 5 failed: Deep Shadow DOM text search [{}]", target);
-
-            final String extractedTargetName = cleanElementText(target);
-            if (extractedTargetName != null && !extractedTargetName.equals(target))
-            {
-                shadowWebEls = Selenide.executeJavaScript(SHADOW_DOM_TEXT_SELECTOR_ALL, extractedTargetName);
-                if (shadowWebEls != null && !shadowWebEls.isEmpty())
-                {
-                    logDebug(logErrors, "   🔍 Resolved using Strategy 5 (extracted target name): Deep Shadow DOM text search [{}]", extractedTargetName);
-                    return Selenide.$$(shadowWebEls);
-                }
-                logDebug(logErrors, "   ❌ Strategy 5 failed (extracted target name): Deep Shadow DOM text search [{}]", extractedTargetName);
-            }
-
-            final String elementText = cleanElementText(action.getElementDetails());
-            if (elementText != null && !elementText.isBlank() && !elementText.equals(target))
-            {
-                shadowWebEls = Selenide.executeJavaScript(SHADOW_DOM_TEXT_SELECTOR_ALL, elementText);
-                if (shadowWebEls != null && !shadowWebEls.isEmpty())
-                {
-                    logDebug(logErrors, "   🔍 Resolved using Strategy 5: Deep Shadow DOM text search [{}]", elementText);
-                    return Selenide.$$(shadowWebEls);
-                }
-                logDebug(logErrors, "   ❌ Strategy 5 failed: Deep Shadow DOM text search [{}]", elementText);
-            }
-        }
-        catch (final Exception e)
-        {
-            logDebug(logErrors, "   ❌ Strategy 5 failed: Deep Shadow DOM text search with error: {}", e.getMessage());
-        }
-
         throw new ActionExecutionException(
                 String.format("Could not find any elements for target '%s' or text '%s'", action.getTarget(),
                         action.getElementDetails()));
     }
-
-    public By resolveLocator(final String target) {
-        if (target.startsWith("/") || target.startsWith("(")) {
+    /**
+     * Resolves a locator string to a Selenium {@link By} instance.
+     * Handles XPath expressions (starting with {@code /} or {@code (}), and falls back
+     * to CSS selector for all other strings.
+     *
+     * @param target the target selector string
+     * @return the resolved {@link By} locator
+     */
+    public By resolveLocator(final String target)
+    {
+        if (target.startsWith("/") || target.startsWith("("))
+        {
             return By.xpath(target);
-        }
-        if (target.contains("::shadow")) {
-            String[] parts = target.split("::shadow");
-            String shadowTarget = parts[parts.length - 1].trim();
-            String[] shadowHosts = new String[parts.length - 1];
-            for (int i = 0; i < parts.length - 1; i++) {
-                shadowHosts[i] = parts[i].trim();
-            }
-            return Selectors.shadowCss(shadowTarget, shadowHosts);
         }
         return By.cssSelector(target);
     }
 
-    private boolean isValidXPath(String target) {
+    private boolean isValidXPath(final String target)
+    {
         if (target == null || target.isBlank())
+        {
             return false;
-        try {
-            return Selenide.executeJavaScript(
+        }
+        try
+        {
+            return Neodymium.interaction().executeJavaScript(
                     "try { document.createExpression(arguments[0], null); return true; } catch(e) { return false; }",
                     target);
-        } catch (Exception e) {
+        }
+        catch (final Exception e)
+        {
             return false;
         }
     }
 
-    private String escapeXpath(String value) {
-        if (!value.contains("'")) {
+    private String escapeXpath(final String value)
+    {
+        if (!value.contains("'"))
+        {
             return "'" + value + "'";
-        } else if (!value.contains("\"")) {
+        }
+        else if (!value.contains("\""))
+        {
             return "\"" + value + "\"";
-        } else {
+        }
+        else
+        {
             return "concat('" + value.replace("'", "', \"'\", '") + "')";
         }
     }
 
-    public void scrollIntoView(final SelenideElement element) {
-        Selenide.executeJavaScript(
-                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element);
-        Selenide.sleep(200);
+    /**
+     * Scrolls the given element into the visible viewport using a smooth animation.
+     *
+     * @param element the {@link FoundElement} to scroll into view
+     */
+    public void scrollIntoView(final FoundElement element)
+    {
+        element.scrollIntoView();
+        Neodymium.interaction().sleep(200);
     }
 
     /**
@@ -775,22 +613,34 @@ public class ActionExecutor {
      * is attempted. Use this for safely
      * replaying instructions from a Playbook.
      */
+    /**
+     * Pre-checks if the action target exists and is visible before any interaction
+     * is attempted. Use this for safely replaying instructions from a Playbook.
+     *
+     * @param action the action to pre-check
+     */
     @Step("Pre-checking action: {action.type}")
-    public void preCheckAction(Action action) {
-        AiActionPlugin plugin = ActionRegistry.getPlugin(action.getType());
-        if (plugin != null) {
+    public void preCheckAction(final Action action)
+    {
+        final AiActionPlugin plugin = ActionRegistry.getPlugin(action.getType());
+        if (plugin != null)
+        {
             plugin.preCheck(action, this);
         }
     }
 
     /**
-     * Extracts useful DOM attributes from a SelenideElement to be used as context.
-     * This helps the LLM self-heal
-     * Playbooks by knowing what the element used to look like.
+     * Extracts useful DOM attributes from a {@link FoundElement} to be used as action context.
+     * This helps the LLM self-heal Playbooks by knowing what the element used to look like.
+     *
+     * @param element the element to inspect
+     * @return a map of attribute names to values (nulls and blanks filtered out)
      */
-    public Map<String, String> extractElementContext(SelenideElement element) {
-        try {
-            Map<String, String> context = new HashMap<>();
+    public Map<String, String> extractElementContext(final FoundElement element)
+    {
+        try
+        {
+            final Map<String, String> context = new HashMap<>();
             context.put("tagName", element.getTagName());
             context.put("text", element.getText());
             context.put("id", element.getAttribute("id"));
@@ -800,11 +650,13 @@ public class ActionExecutor {
             context.put("type", element.getAttribute("type"));
             context.put("placeholder", element.getAttribute("placeholder"));
 
-            // Filter out nulls
+            // Filter out nulls and blank values
             context.entrySet().removeIf(entry -> entry.getValue() == null || entry.getValue().isBlank());
 
             return context;
-        } catch (Exception e) {
+        }
+        catch (final Exception e)
+        {
             LOG.warn("Failed to extract element context: {}", e.getMessage());
             return new HashMap<>();
         }
@@ -813,72 +665,16 @@ public class ActionExecutor {
     /**
      * Exception thrown when an action execution fails.
      */
-    public static class ActionExecutionException extends RuntimeException {
-        public ActionExecutionException(final String message) {
+    public static class ActionExecutionException extends RuntimeException
+    {
+        public ActionExecutionException(final String message)
+        {
             super(message);
         }
 
-        public ActionExecutionException(final String message, final Throwable cause) {
+        public ActionExecutionException(final String message, final Throwable cause)
+        {
             super(message, cause);
-        }
-    }
-
-    public static class DataAttributeMatches extends WebElementCondition {
-
-        private final Pattern namePattern;
-
-        private final Pattern valuePattern;
-
-        public DataAttributeMatches(String nameRegex, String valueRegex) {
-            super("dataAttributeMatches");
-            this.namePattern = Pattern.compile(nameRegex);
-            this.valuePattern = Pattern.compile(valueRegex);
-        }
-
-        @Override
-        public CheckResult check(Driver driver, WebElement element) {
-            Map<String, String> attributes = driver.executeJavaScript(
-                    "var items = {}; " +
-                            "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
-                            "  items[attrs[i].name] = attrs[i].value; " +
-                            "} "
-                            + "return items;",
-                    element);
-            boolean found = false;
-
-            for (var entry : attributes.entrySet()) {
-                String name = entry.getKey();
-
-                if (!namePattern.matcher(name).matches())
-                    continue;
-
-                String value = entry.getValue();
-
-                if (value != null && valuePattern.matcher(value).matches()) {
-                    found = true;
-                }
-            }
-
-            return new CheckResult(found, attributes);
-        }
-    }
-
-    public static class PartialTextContent extends WebElementCondition {
-
-        private final String value;
-
-        public PartialTextContent(String value) {
-            super("PartialTextContent");
-            this.value = value;
-        }
-
-        @Override
-        public CheckResult check(Driver driver, WebElement element) {
-            @Nullable
-            String attribute = element.getAttribute("textContent");
-            boolean found = attribute.contains(value);
-
-            return new CheckResult(found, attribute);
         }
     }
 
@@ -924,11 +720,10 @@ public class ActionExecutor {
         {
             framePath = "main";
         }
-        
-        final WebDriver driver = WebDriverRunner.getWebDriver();
+
         try
         {
-            final Set<String> activeHandles = driver.getWindowHandles();
+            final Set<String> activeHandles = Neodymium.interaction().getWindowHandles();
             if (windowHandle.startsWith("win_"))
             {
                 final int index = Integer.parseInt(windowHandle.substring(4));
@@ -955,9 +750,9 @@ public class ActionExecutor {
                 }
                 windowHandle = windowHandleMapping.get(windowHandle);
             }
-            driver.switchTo().window(windowHandle);
-            driver.switchTo().defaultContent();
-            
+            Neodymium.interaction().switchToWindow(windowHandle);
+            Neodymium.interaction().switchToDefaultContent();
+
             if (!"main".equals(framePath))
             {
                 if (framePath.matches("^[0-9]+(\\.[0-9]+)*$"))
@@ -967,8 +762,7 @@ public class ActionExecutor {
                     {
                         if (!indexStr.equals("main") && !indexStr.isBlank())
                         {
-                            final int index = Integer.parseInt(indexStr);
-                            driver.switchTo().frame(index);
+                            Neodymium.interaction().switchToFrame(Integer.parseInt(indexStr));
                         }
                     }
                 }
@@ -979,8 +773,8 @@ public class ActionExecutor {
                     {
                         if (!selector.equals("main") && !selector.isBlank())
                         {
-                            final WebElement iframeElement = driver.findElement(By.cssSelector(selector));
-                            driver.switchTo().frame(iframeElement);
+                            // Switch to frame by CSS selector using the backend-agnostic facade.
+                            Neodymium.interaction().switchToFrame(selector);
                         }
                     }
                 }
@@ -993,12 +787,12 @@ public class ActionExecutor {
                 logDebug("   ⚠️ Target window was closed, falling back to first available window: {}", e.getMessage());
                 try
                 {
-                    final Set<String> activeHandlesFallback = driver.getWindowHandles();
+                    final Set<String> activeHandlesFallback = Neodymium.interaction().getWindowHandles();
                     if (!activeHandlesFallback.isEmpty())
                     {
                         final String fallbackHandle = activeHandlesFallback.iterator().next();
-                        driver.switchTo().window(fallbackHandle);
-                        driver.switchTo().defaultContent();
+                        Neodymium.interaction().switchToWindow(fallbackHandle);
+                        Neodymium.interaction().switchToDefaultContent();
                         windowHandleMapping.put(rawWindowHandle, fallbackHandle);
                     }
                 }
@@ -1016,15 +810,13 @@ public class ActionExecutor {
 
     private boolean isNoSuchWindowException(final Exception e)
     {
-        if (e instanceof NoSuchWindowException)
-        {
-            return true;
-        }
+        // Check by message since WebDriver types are not imported here.
         final String msg = e.getMessage();
         if (msg != null)
         {
             final String lower = msg.toLowerCase();
-            return lower.contains("no such window") || lower.contains("window already closed") || lower.contains("target window already closed");
+            return lower.contains("no such window") || lower.contains("window already closed")
+                    || lower.contains("target window already closed");
         }
         return false;
     }

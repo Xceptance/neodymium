@@ -2253,6 +2253,8 @@ public class AiAgent {
 
                 final String systemPrompt = AiAgentPrompts.getSystemPrompt(contextLevel);
 
+
+
                 LOG.debug("   💬 Sending prompt to LLM... [context: {}]", contextLevel);
                 llmClient.getAiStats().recordContextLevel(contextLevel);
                 final String llmResponse;

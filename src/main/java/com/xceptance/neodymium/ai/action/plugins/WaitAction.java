@@ -24,11 +24,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.codeborne.selenide.Condition;
-import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * AI action plugin for handling WAIT/sleep instructions.
@@ -157,9 +156,9 @@ public class WaitAction implements AiActionPlugin
             }
             
             LOG.debug("Waiting up to {} ms for element: {}", timeoutMs, target);
-            
-            // Wait until the element is visible in the page DOM
-            executor.findElement(action).shouldBe(Condition.visible, Duration.ofMillis(timeoutMs));
+
+            // Wait until the element is visible in the page DOM via the backend-agnostic FoundElement API.
+            executor.findElement(action).waitUntilVisible(Duration.ofMillis(timeoutMs));
         }
         else
         {
@@ -180,9 +179,9 @@ public class WaitAction implements AiActionPlugin
             }
             
             LOG.debug("Sleeping for {} ms", ms);
-            
-            // Sleep the browser driver execution thread
-            Selenide.sleep(ms);
+
+            // Sleep the thread via the interaction layer (keeps Selenide out of this plugin)
+            Neodymium.interaction().sleep(ms);
         }
     }
 }

@@ -54,14 +54,13 @@ public class DebugUtilsTest {
             System.out.println("JS window.NEODYMIUM.isVisible: " + Selenide.executeJavaScript("return window.NEODYMIUM ? window.NEODYMIUM.isVisible(arguments[0]) : 'undefined';", el));
         }
         System.out.println("=== DIAGNOSTIC END ===");
-        DebugUtils.highlightElements(list, Neodymium.getDriver());
+        DebugUtils.highlightElementsAsync(".site-title", LocatorType.CSS);
         $(".neodymium-highlight-box").shouldBe(visible);
 
         DebugUtils.resetAllHighlight();
         $(".neodymium-highlight-box").shouldNot(exist);
 
-        final List<WebElement> list2 = Neodymium.getDriver().findElements(By.cssSelector(".site-title"));
-        DebugUtils.highlightElements(list2, Neodymium.getDriver());
+        DebugUtils.highlightElementsAsync(".site-title", LocatorType.CSS);
         $$(".neodymium-highlight-box").shouldHave(sizeGreaterThan(0));
 
         DebugUtils.resetAllHighlight();
@@ -79,8 +78,7 @@ public class DebugUtilsTest {
         DebugUtils.injectJavaScript();
         assertJsSuccessfullyInjected();
 
-        final List<WebElement> list = Neodymium.getDriver().findElements(By.cssSelector(".site-title"));
-        DebugUtils.highlightElements(list, Neodymium.getDriver());
+        DebugUtils.highlightElementsAsync(".site-title", LocatorType.CSS);
         $(".neodymium-highlight-box").shouldBe(visible);
 
         DebugUtils.resetAllHighlight();
@@ -151,13 +149,8 @@ public class DebugUtilsTest {
         body.click();
         assertJsSuccessfullyInjected();
 
-        final List<WebElement> list = $("body").findElements(By.cssSelector("select"));
-
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "false");
-        DebugUtils.highlightElements(list, Neodymium.getDriver());
-        $(".neodymium-highlight-box").shouldBe(visible);
-
-        DebugUtils.resetAllHighlight();
+        DebugUtils.highlightAllElements("select", LocatorType.CSS);
         $(".neodymium-highlight-box").shouldNot(exist);
     }
 
@@ -173,8 +166,7 @@ public class DebugUtilsTest {
         DebugUtils.injectJavaScript();
         assertJsSuccessfullyInjected();
 
-        final List<WebElement> list = Neodymium.getDriver().findElements(By.cssSelector(".site-title"));
-        DebugUtils.highlightAllElements(list, Neodymium.getDriver());
+        DebugUtils.highlightAllElements(".site-title", LocatorType.CSS);
         $(".neodymium-highlight-box").shouldNot(exist);
     }
 

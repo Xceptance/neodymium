@@ -113,7 +113,7 @@ public class FilmTestExecution
         RecordingConfigurations config = getContext((isGif ? GifRecordingConfigurations.class
             : VideoRecordingConfigurations.class));
 
-        if (!config.enableFilming() && !Neodymium.hasDriver())
+        if (!config.enableFilming() || !Neodymium.hasActiveBrowser() || Neodymium.getDriver() == null)
         {
             return null;
         }

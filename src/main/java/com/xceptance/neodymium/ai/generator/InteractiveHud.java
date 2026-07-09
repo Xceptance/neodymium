@@ -38,7 +38,7 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
-import com.codeborne.selenide.Selenide;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
@@ -201,7 +201,7 @@ public final class InteractiveHud
         this.lastIsReplay = isReplay;
         try
         {
-            final String readyState = Selenide.executeJavaScript("return document.readyState;");
+            final String readyState = Neodymium.interaction().executeJavaScript("return document.readyState;");
             if (!"complete".equals(readyState) && !"interactive".equals(readyState))
             {
                 return;
@@ -235,7 +235,7 @@ public final class InteractiveHud
 
         try
         {
-            Selenide.executeJavaScript(HUD_JS, HUD_HTML, planned, performed, autoSkip,
+            Neodymium.interaction().executeJavaScript(HUD_JS, HUD_HTML, planned, performed, autoSkip,
                     hudPromptChanged, isFinished, this.canEdit, currentUnresolvedStep, this.dataBindings, configMap, reasoning, isReplay, this.lastFullPromptOpen, this.lastBreakpointsStr, this.lastHelpShown, readSettings(), this.lastStateSignature,
                     beforeSteps, stepsSteps, afterSteps, this.currentBlock, currentBlockIndex);
         }
@@ -299,14 +299,14 @@ public final class InteractiveHud
         ensureHudInSync();
         try
         {
-            final String readyState = Selenide.executeJavaScript("return document.readyState;");
+            final String readyState = Neodymium.interaction().executeJavaScript("return document.readyState;");
 
             if (!"complete".equals(readyState) && !"interactive".equals(readyState))
             {
                 return null;
             }
 
-            final Boolean hudExists = Selenide.executeJavaScript("return document.getElementById('neo-ai-hud') !== null;");
+            final Boolean hudExists = Neodymium.interaction().executeJavaScript("return document.getElementById('neo-ai-hud') !== null;");
 
             if (Boolean.FALSE.equals(hudExists) && this.lastPlanned != null)
             {
@@ -317,31 +317,31 @@ public final class InteractiveHud
             else if (Boolean.TRUE.equals(hudExists))
             {
                 // If it exists, sync HUD interaction variables back into the local state
-                final Object skipStatus = Selenide.executeJavaScript("return window.neoHudAutoSkip;");
+                final Object skipStatus = Neodymium.interaction().executeJavaScript("return window.neoHudAutoSkip;");
                 if (skipStatus != null)
                 {
                     this.lastAutoSkip = (Boolean) skipStatus;
                 }
-                final Object promptOpen = Selenide.executeJavaScript("return window.neoFullPromptOpen;");
+                final Object promptOpen = Neodymium.interaction().executeJavaScript("return window.neoFullPromptOpen;");
                 if (promptOpen != null)
                 {
                     this.lastFullPromptOpen = (Boolean) promptOpen;
                 }
                 
-                final Object bps = Selenide.executeJavaScript("return window.neoBreakpoints ? JSON.stringify(window.neoBreakpoints) : null;");
+                final Object bps = Neodymium.interaction().executeJavaScript("return window.neoBreakpoints ? JSON.stringify(window.neoBreakpoints) : null;");
                 if (bps != null)
                 {
                     this.lastBreakpointsStr = (String) bps;
                 }
                 
-                final Object helpShown = Selenide.executeJavaScript("return window.neoHelpShown;");
+                final Object helpShown = Neodymium.interaction().executeJavaScript("return window.neoHelpShown;");
                 if (helpShown != null)
                 {
                     this.lastHelpShown = (Boolean) helpShown;
                 }
             }
 
-            final Object status = Selenide.executeJavaScript("var val = window.neoHudAction; window.neoHudAction = null; return val;");
+            final Object status = Neodymium.interaction().executeJavaScript("var val = window.neoHudAction; window.neoHudAction = null; return val;");
             if (status != null)
             {
                 return String.valueOf(status);
@@ -364,7 +364,7 @@ public final class InteractiveHud
         ensureHudInSync();
         try
         {
-            final Object status = Selenide.executeJavaScript("return window.neoHudAutoSkip;");
+            final Object status = Neodymium.interaction().executeJavaScript("return window.neoHudAutoSkip;");
             if (status == null)
             {
                 return null;
@@ -389,8 +389,8 @@ public final class InteractiveHud
             boolean windowClosed = false;
             try
             {
-                final String currentHandle = Selenide.webdriver().driver().getWebDriver().getWindowHandle();
-                final Set<String> handles = Selenide.webdriver().driver().getWebDriver().getWindowHandles();
+                final String currentHandle = Neodymium.interaction().getDriver().getWindowHandle();
+                final Set<String> handles = Neodymium.interaction().getDriver().getWindowHandles();
                 windowClosed = !handles.contains(currentHandle);
             }
             catch (final Exception e)
@@ -400,14 +400,14 @@ public final class InteractiveHud
 
             if (windowClosed)
             {
-                final Set<String> handles = Selenide.webdriver().driver().getWebDriver().getWindowHandles();
+                final Set<String> handles = Neodymium.interaction().getDriver().getWindowHandles();
                 if (!handles.isEmpty())
                 {
-                    Selenide.switchTo().window(handles.iterator().next());
+                    Neodymium.interaction().switchToWindow(handles.iterator().next());
                 }
             }
 
-            final String currentSig = Selenide.executeJavaScript(
+            final String currentSig = Neodymium.interaction().executeJavaScript(
                 "var el = document.getElementById('neodymium-ai-hud-container'); " +
                 "return el ? el.getAttribute('data-hud-state-sig') : null;"
             );
@@ -456,7 +456,7 @@ public final class InteractiveHud
     {
         try
         {
-            Selenide.executeJavaScript("window.neoHudAction = null;");
+            Neodymium.interaction().executeJavaScript("window.neoHudAction = null;");
         }
         catch (final Exception e)
         {

@@ -124,6 +124,24 @@ public class BrowserRunner
         wDSCont = null;
         this.browserMethodData = browserTag;
         BrowserConfiguration browserConfiguration = multibrowserConfiguration.getBrowserProfiles().get(browserTag.getBrowserTag());
+
+        final boolean isPlaywright = "playwright".equalsIgnoreCase(Neodymium.configuration().driverBackend());
+        if (isPlaywright)
+        {
+            Neodymium.setBrowserProfileName(browserConfiguration.getConfigTag());
+            Neodymium.setBrowserName(browserConfiguration.getCapabilities().getBrowserName());
+            initSelenideConfiguration();
+            if (browserConfiguration.isHeadless())
+            {
+                System.setProperty("playwright.headless", "true");
+            }
+            else
+            {
+                System.setProperty("playwright.headless", "false");
+            }
+            return;
+        }
+
         try
         {
             // try to find appropriate web driver in cache before create a new instance
@@ -179,6 +197,34 @@ public class BrowserRunner
 
     public void teardown(boolean testFailed, boolean preventReuse, BrowserMethodData browserMethodData, WebDriverStateContainer webDriverStateContainer)
     {
+        final boolean isPlaywright = "playwright".equalsIgnoreCase(Neodymium.configuration().driverBackend());
+        if (isPlaywright)
+        {
+            takeScreenshotAtTestEnd();
+            BrowserConfiguration browserConfiguration = multibrowserConfiguration.getBrowserProfiles().get(Neodymium.getBrowserProfileName());
+            if (browserConfiguration != null && !browserConfiguration.isHeadless())
+            {
+                if (keepOpen(testFailed, browserMethodData, browserConfiguration))
+                {
+                    LOGGER.debug("Keep Playwright browser open");
+                }
+                else
+                {
+                    LOGGER.debug("Teardown Playwright browser");
+                    Neodymium.interaction().close();
+                }
+            }
+            else
+            {
+                LOGGER.debug("Teardown Playwright browser");
+                Neodymium.interaction().close();
+            }
+            Neodymium.setWebDriverStateContainer(null);
+            Neodymium.setBrowserProfileName(null);
+            Neodymium.setBrowserName(null);
+            return;
+        }
+
         takeScreenshotAtTestEnd();
 
         BrowserConfiguration browserConfiguration = multibrowserConfiguration.getBrowserProfiles().get(Neodymium.getBrowserProfileName());

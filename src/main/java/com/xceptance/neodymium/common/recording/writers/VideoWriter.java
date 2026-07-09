@@ -18,7 +18,6 @@ import org.apache.commons.lang3.math.Fraction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
 import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
 import com.xceptance.neodymium.util.AllureAddons;
@@ -144,7 +143,7 @@ public class VideoWriter implements Writer
                 LOGGER.error("something went wrong with video processing");
                 break;
             }
-            Selenide.sleep(200);
+            try { Thread.sleep(200); } catch (final InterruptedException ie) { Thread.currentThread().interrupt(); }
         }
         File tempFile = new File(recordingConfigurations.tempFolderToStoreRecording() + "/" + "temp" + UUID.randomUUID() + ".mp4");
         new File(videoFileName).renameTo(tempFile);
@@ -168,7 +167,7 @@ public class VideoWriter implements Writer
                 LOGGER.error("something went wrong with adjusting frame rate");
                 break;
             }
-            Selenide.sleep(200);
+            try { Thread.sleep(200); } catch (final InterruptedException ie) { Thread.currentThread().interrupt(); }
         }
         tempFile.delete();
         if (recordingConfigurations.logInformationAboutRecording())

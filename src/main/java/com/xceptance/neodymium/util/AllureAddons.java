@@ -1,6 +1,6 @@
 package com.xceptance.neodymium.util;
 
-import com.codeborne.selenide.Selenide;
+
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -386,7 +386,7 @@ public class AllureAddons
         {
             if (retries > 0)
             {
-                Selenide.sleep(100);
+                Neodymium.interaction().sleep(100);
             }
             try
             {

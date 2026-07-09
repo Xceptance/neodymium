@@ -1,8 +1,8 @@
 package com.xceptance.neodymium;
 
 import com.xceptance.neodymium.util.DebugUtils;
+import com.xceptance.neodymium.util.LocatorType;
 import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.SelenideAddons;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -45,6 +45,60 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         return true;
     }
 
+    private void highlight(final By by)
+    {
+        if (by == null)
+        {
+            return;
+        }
+        final String str = by.toString();
+        String locator = str;
+        LocatorType type = LocatorType.CSS;
+
+        if (str.startsWith("By.xpath: "))
+        {
+            locator = str.substring(10);
+            type = LocatorType.XPATH;
+        }
+        else if (str.startsWith("By.cssSelector: "))
+        {
+            locator = str.substring(16);
+            type = LocatorType.CSS;
+        }
+        else if (str.startsWith("By.id: "))
+        {
+            locator = str.substring(7);
+            type = LocatorType.ID;
+        }
+        else if (str.startsWith("By.className: "))
+        {
+            locator = str.substring(14);
+            type = LocatorType.CLASS_NAME;
+        }
+        else if (str.startsWith("By.tagName: "))
+        {
+            locator = str.substring(12);
+            type = LocatorType.TAG_NAME;
+        }
+        else if (str.startsWith("By.name: "))
+        {
+            locator = str.substring(9);
+            type = LocatorType.NAME;
+        }
+        else if (str.startsWith("By.linkText: "))
+        {
+            locator = ".//a[text()='" + str.substring(13).replace("'", "\\'") + "']";
+            type = LocatorType.XPATH;
+        }
+        else if (str.startsWith("By.partialLinkText: "))
+        {
+            locator = ".//a[contains(text(),'" + str.substring(20).replace("'", "\\'") + "')]";
+            type = LocatorType.XPATH;
+        }
+
+        DebugUtils.highlightAllElements(locator, type);
+    }
+
     @Override
     public void beforeFindElement(final WebDriver driver, final By by)
     {
@@ -54,7 +108,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
             if (Neodymium.configuration().debuggingHighlightSelectedElements() && !isHighlightOrOutlineSelector(by) && shouldTriggerHighlight(by))
             {
                 DebugUtils.injectHighlightingJs();
-                DebugUtils.highlightAllElements(by, driver);
+                highlight(by);
             }
         }
         catch (final Throwable e)
@@ -72,7 +126,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
             if (Neodymium.configuration().debuggingHighlightSelectedElements() && !isHighlightOrOutlineSelector(by) && shouldTriggerHighlight(by))
             {
                 DebugUtils.injectHighlightingJs();
-                DebugUtils.highlightAllElements(by, driver);
+                highlight(by);
             }
         }
         catch (final Throwable e)
@@ -87,10 +141,10 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         Neodymium.setLastUsedLocator(element, locator);
         try
         {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasDriver() && !isHighlightOrOutlineSelector(locator) && shouldTriggerHighlight(locator))
+            if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasActiveBrowser() && !isHighlightOrOutlineSelector(locator) && shouldTriggerHighlight(locator))
             {
                 DebugUtils.injectHighlightingJs();
-                SelenideAddons.$safe(() -> DebugUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));
+                highlight(locator);
             }
         }
         catch (final Throwable e)
@@ -105,10 +159,10 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         Neodymium.setLastUsedLocator(element, locator);
         try
         {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasDriver() && !isHighlightOrOutlineSelector(locator) && shouldTriggerHighlight(locator))
+            if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasActiveBrowser() && !isHighlightOrOutlineSelector(locator) && shouldTriggerHighlight(locator))
             {
                 DebugUtils.injectHighlightingJs();
-                SelenideAddons.$safe(() -> DebugUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));
+                highlight(locator);
             }
         }
         catch (final Throwable e)

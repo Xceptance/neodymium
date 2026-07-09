@@ -52,7 +52,6 @@ import com.browserup.bup.mitm.RootCertificateGenerator;
 import com.browserup.bup.mitm.manager.ImpersonatingMitmManager;
 import com.browserup.bup.proxy.auth.AuthType;
 import com.codeborne.selenide.SelenideConfig;
-import com.codeborne.selenide.WebDriverRunner;
 import com.codeborne.selenide.impl.Plugins;
 import com.codeborne.selenide.proxy.SelenideProxyServer;
 import com.codeborne.selenide.proxy.SelenideProxyServerFactory;
@@ -453,7 +452,7 @@ public final class BrowserRunnerHelper
         }
         final WebDriver decoratedDriver = new EventFiringDecorator<WebDriver>(new NeodymiumWebDriverListener()).decorate(wDSC.getWebDriver());
         wDSC.setDecoratedWebDriver(decoratedDriver);
-        WebDriverRunner.setWebDriver(decoratedDriver, selenideProxyServer);
+        Neodymium.interaction().setWebDriver(decoratedDriver, selenideProxyServer);
         return wDSC;
     }
 

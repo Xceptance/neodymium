@@ -9,37 +9,30 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 
 import javax.imageio.ImageIO;
 
 import org.openqa.selenium.Dimension;
-import org.openqa.selenium.JavascriptExecutor;
-import org.openqa.selenium.NoSuchElementException;
-import org.openqa.selenium.OutputType;
 import org.openqa.selenium.Point;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.chromium.HasCdp;
-import org.openqa.selenium.devtools.DevTools;
-import org.openqa.selenium.devtools.HasDevTools;
-import org.openqa.selenium.devtools.v147.page.Page;
-import org.openqa.selenium.devtools.v147.page.model.Viewport;
-import org.openqa.selenium.firefox.HasFullPageScreenshot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.assertthat.selenium_shutterbug.core.Capture;
-import com.assertthat.selenium_shutterbug.core.PageSnapshot;
-import com.assertthat.selenium_shutterbug.core.Shutterbug;
 import com.assertthat.selenium_shutterbug.utils.image.ImageProcessor;
 import com.assertthat.selenium_shutterbug.utils.web.Coordinates;
-import com.google.common.collect.ImmutableMap;
+import com.xceptance.neodymium.util.LocatorType;
 import com.xceptance.neodymium.util.Neodymium;
 
 import io.qameta.allure.Allure;
 
+/**
+ * Utility for capturing and writing screenshots, with optional element highlighting.
+ *
+ * @author AI-generated: Antigravity
+ * @author Xceptance GmbH 2026
+ */
 public class ScreenshotWriter {
     private static final Logger log = LoggerFactory.getLogger(ScreenshotWriter.class);
 
@@ -99,55 +92,37 @@ public class ScreenshotWriter {
         return base64Image;
     }
 
-    private static String takeScreenshot(String filename, String pathname, Capture captureMode, boolean attach)
+    private static String takeScreenshot(final String filename, final String pathname, final Capture captureMode, final boolean attach)
             throws IOException {
         // If no driver is available, we cannot take a screenshot
-        if (!Neodymium.hasDriver()) {
+        if (!Neodymium.hasActiveBrowser()) {
             return null;
         }
 
-        WebDriver driver = Neodymium.getDriver();
         Optional<BufferedImage> imageOptional = Optional.empty();
 
-        // Try advanced capturing methods if mode is FULL
         if (Capture.FULL.equals(captureMode)) {
-            Optional<File> imageFile = Optional.empty();
-            if (driver instanceof HasFullPageScreenshot firefoxDriver) {
-                imageFile = Optional.of(firefoxDriver.getFullPageScreenshotAs(OutputType.FILE));
-            } else if (driver instanceof HasCdp) {
-                imageFile = takeScreenshotWithCDP((WebDriver & HasCdp & JavascriptExecutor) driver, OutputType.FILE);
-            } else if (driver instanceof HasDevTools) {
-                imageFile = takeScreenshot((WebDriver & HasDevTools & JavascriptExecutor) driver, OutputType.FILE);
-            }
-
-            if (imageFile.isPresent()) {
-                imageOptional = Optional.of(ImageIO.read(imageFile.get()));
-            }
-        }
-
-        // Fallback or Viewport: Use Shutterbug (From HEAD branch logic / Develop
-        // fallback)
-        if (imageOptional.isEmpty()) {
-            PageSnapshot snapshot = Shutterbug.shootPage(driver, captureMode);
-            imageOptional = Optional.of(snapshot.getImage());
+            imageOptional = Neodymium.interaction().takeFullPageScreenshot();
+        } else {
+            imageOptional = Neodymium.interaction().takeViewportScreenshot();
         }
 
         if (imageOptional.isPresent()) {
             BufferedImage image = imageOptional.get();
             Files.createDirectories(Paths.get(pathname));
-            String imagePath = pathname + File.separator + filename + ".png";
-            File outputfile = new File(imagePath);
+            final String imagePath = pathname + File.separator + filename + ".png";
+            final File outputfile = new File(imagePath);
 
             // Logic for highlighting/blurring
             if (Capture.FULL.equals(captureMode) && (highlightViewPort() || blurFullPageScreenshot())) {
-                double devicePixelRatio = Double.parseDouble(
-                        ((JavascriptExecutor) driver).executeScript("return window.devicePixelRatio") + "");
-                int offsetY = (int) (Double.parseDouble(((JavascriptExecutor) driver)
-                        .executeScript(
+                final double devicePixelRatio = Double.parseDouble(
+                        Neodymium.interaction().executeJavaScript("return window.devicePixelRatio") + "");
+                final int offsetY = (int) (Double.parseDouble(Neodymium.interaction()
+                        .executeJavaScript(
                                 "return Math.round(Math.max(document.documentElement.scrollTop, document.body.scrollTop))")
                         .toString()));
-                int offsetX = (int) (Double.parseDouble(((JavascriptExecutor) driver)
-                        .executeScript(
+                final int offsetX = (int) (Double.parseDouble(Neodymium.interaction()
+                        .executeJavaScript(
                                 "return Math.round(Math.max(document.documentElement.scrollLeft, document.body.scrollLeft))")
                         .toString()));
 
@@ -156,8 +131,8 @@ public class ScreenshotWriter {
                 size = new Dimension(Math.min(size.width - (int) (15 * devicePixelRatio),
                         image.getWidth()), Math.min(size.height - (int) (15 * devicePixelRatio), image.getHeight()));
 
-                Point currentLocation = new Point(offsetX, offsetY);
-                Coordinates coords = new Coordinates(currentLocation, currentLocation, size, new Dimension(0, 0),
+                final Point currentLocation = new Point(offsetX, offsetY);
+                final Coordinates coords = new Coordinates(currentLocation, currentLocation, size, new Dimension(0, 0),
                         devicePixelRatio);
 
                 if (highlightViewPort()) {
@@ -169,28 +144,80 @@ public class ScreenshotWriter {
                 }
             }
 
-            if (Neodymium.configuration().enableHighlightLastElement() && Neodymium.hasLastUsedElement()) {
-                WebElement lastUsedElement = Neodymium.getLastUsedElement();
-                if (lastUsedElement != null) {
-                    try {
-                        double devicePixelRatio = Double.parseDouble(
-                                "" + ((JavascriptExecutor) driver).executeScript("return window.devicePixelRatio"));
-                        image = highlightScreenShot(image, new Coordinates(lastUsedElement, devicePixelRatio),
-                                Color.decode(Neodymium.configuration().screenshotElementHighlightColor()));
-                    } catch (NoSuchElementException e) {
-                        // If the test is breaking because we can't find an element, we also can't
-                        // highlight this
-                        // element...
-                        // so a NoSuchElementException is expected and can be ignored.
+            if (Neodymium.configuration().enableHighlightLastElement() && Neodymium.hasLastUsedLocator()) {
+                final String locator = Neodymium.getLastUsedLocatorString();
+                final LocatorType type = Neodymium.getLastUsedLocatorType();
+                String selector = locator;
+                boolean isXpath = false;
+
+                if (type != null) {
+                    switch (type) {
+                        case XPATH:
+                            isXpath = true;
+                            break;
+                        case CSS:
+                            selector = locator;
+                            break;
+                        case ID:
+                            selector = "#" + locator;
+                            break;
+                        case CLASS_NAME:
+                            selector = "." + locator;
+                            break;
+                        case TAG_NAME:
+                            selector = locator;
+                            break;
+                        case NAME:
+                            selector = "[name=\"" + locator + "\"]";
+                            break;
                     }
+                }
+
+                final String jsQuery;
+                if (isXpath) {
+                    jsQuery = "var el = document.evaluate(arguments[0], document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;\n" +
+                              "if (el) {\n" +
+                              "  var r = el.getBoundingClientRect();\n" +
+                              "  return [r.left + window.scrollX, r.top + window.scrollY, r.width, r.height];\n" +
+                              "}\n" +
+                              "return null;";
+                } else {
+                    jsQuery = "var el = document.querySelector(arguments[0]);\n" +
+                              "if (el) {\n" +
+                              "  var r = el.getBoundingClientRect();\n" +
+                              "  return [r.left + window.scrollX, r.top + window.scrollY, r.width, r.height];\n" +
+                              "}\n" +
+                              "return null;";
+                }
+
+                try {
+                    final Object rectObj = Neodymium.interaction().executeJavaScript(jsQuery, selector);
+                    if (rectObj instanceof List<?> list && list.size() == 4) {
+                        final double x = Double.parseDouble(list.get(0).toString());
+                        final double y = Double.parseDouble(list.get(1).toString());
+                        final double w = Double.parseDouble(list.get(2).toString());
+                        final double h = Double.parseDouble(list.get(3).toString());
+
+                        final double devicePixelRatio = Double.parseDouble(
+                                "" + Neodymium.interaction().executeJavaScript("return window.devicePixelRatio"));
+
+                        final Point elementLocation = new Point((int) x, (int) y);
+                        final Dimension elementSize = new Dimension((int) w, (int) h);
+                        final Coordinates coords = new Coordinates(elementLocation, elementLocation, elementSize, new Dimension(0, 0), devicePixelRatio);
+
+                        image = highlightScreenShot(image, coords,
+                                Color.decode(Neodymium.configuration().screenshotElementHighlightColor()));
+                    }
+                } catch (final Throwable e) {
+                    // ignore if element cannot be found or JS fails
                 }
             }
             log.debug("captured Screenshot to: " + imagePath);
 
-            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-            boolean result = ImageIO.write(image, "png", baos);
+            final java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            final boolean result = ImageIO.write(image, "png", baos);
             if (result) {
-                byte[] imageBytes = baos.toByteArray();
+                final byte[] imageBytes = baos.toByteArray();
                 java.nio.file.Files.write(outputfile.toPath(), imageBytes);
 
                 // The idea is to put the screenshot to the best place in the report,
@@ -220,67 +247,12 @@ public class ScreenshotWriter {
         return null;
     }
 
-    public static <WD extends WebDriver & HasDevTools & JavascriptExecutor, ResultType> Optional<ResultType> takeScreenshot(
-            WD devtoolsDriver,
-            OutputType<ResultType> outputType) {
-        DevTools devTools = devtoolsDriver.getDevTools();
-        devTools.createSessionIfThereIsNotOne(devtoolsDriver.getWindowHandle());
+    public static BufferedImage highlightScreenShot(final BufferedImage sourceImage, final Coordinates coords, final Color color) {
+        final int lineWith = Neodymium.configuration().screenshotHighlightLineThickness();
+        final Graphics2D g = sourceImage.createGraphics();
 
-        long fullWidth = (long) devtoolsDriver.executeScript(
-                "return Math.max(document.body.scrollWidth, document.documentElement.scrollWidth, document.body.offsetWidth, document.documentElement.offsetWidth, document.body.clientWidth, document.documentElement.clientWidth)");
-        long fullHeight = (long) devtoolsDriver.executeScript(
-                "return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, document.body.offsetHeight, document.documentElement.offsetHeight, document.body.clientHeight, document.documentElement.clientHeight)");
-
-        long viewWidth = (long) devtoolsDriver.executeScript("return window.innerWidth");
-        long viewHeight = (long) devtoolsDriver.executeScript("return window.innerHeight");
-        boolean exceedViewport = fullWidth > viewWidth || fullHeight > viewHeight;
-        Viewport viewport = new Viewport(0, 0, fullWidth, fullHeight, 1);
-
-        String base64 = devTools.send(Page.captureScreenshot(
-                Optional.empty(),
-                Optional.empty(),
-                Optional.of(viewport),
-                Optional.empty(),
-                Optional.of(exceedViewport),
-                Optional.of(true)));
-
-        ResultType screenshot = outputType.convertFromBase64Png(base64);
-        return Optional.of(screenshot);
-    }
-
-    public static <WD extends WebDriver & HasCdp & JavascriptExecutor, ResultType> Optional<ResultType> takeScreenshotWithCDP(
-            WD cdpDriver,
-            OutputType<ResultType> outputType) {
-        long fullWidth = (long) cdpDriver.executeScript(
-                "return Math.max(document.body.scrollWidth, document.documentElement.scrollWidth, document.body.offsetWidth, document.documentElement.offsetWidth, document.body.clientWidth, document.documentElement.clientWidth)");
-        long fullHeight = (long) cdpDriver.executeScript(
-                "return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, document.body.offsetHeight, document.documentElement.offsetHeight, document.body.clientHeight, document.documentElement.clientHeight)");
-
-        long viewWidth = (long) cdpDriver.executeScript("return window.innerWidth");
-        long viewHeight = (long) cdpDriver.executeScript("return window.innerHeight");
-        boolean exceedViewport = fullWidth > viewWidth || fullHeight > viewHeight;
-        Map<String, Object> captureScreenshotOptions = ImmutableMap.of(
-                "clip", ImmutableMap.of(
-                        "x", 0,
-                        "y", 0,
-                        "width", fullWidth,
-                        "height", fullHeight,
-                        "scale", 1),
-                "captureBeyondViewport", exceedViewport);
-
-        Map<String, Object> result = cdpDriver.executeCdpCommand("Page.captureScreenshot", captureScreenshotOptions);
-
-        String base64 = (String) result.get("data");
-        ResultType screenshot = outputType.convertFromBase64Png(base64);
-        return Optional.of(screenshot);
-    }
-
-    public static BufferedImage highlightScreenShot(BufferedImage sourceImage, Coordinates coords, Color color) {
-        int lineWith = Neodymium.configuration().screenshotHighlightLineThickness();
-        Graphics2D g = sourceImage.createGraphics();
-
-        int maxHeigt = sourceImage.getHeight();
-        int maxWidth = sourceImage.getWidth();
+        final int maxHeigt = sourceImage.getHeight();
+        final int maxWidth = sourceImage.getWidth();
 
         g.setPaint(color);
         g.setStroke(new BasicStroke(lineWith));
@@ -294,3 +266,4 @@ public class ScreenshotWriter {
         return sourceImage;
     }
 }
+

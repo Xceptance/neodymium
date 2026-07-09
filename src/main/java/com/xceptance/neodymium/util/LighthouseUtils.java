@@ -14,8 +14,6 @@ import java.util.List;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Assert;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WindowType;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -43,8 +41,8 @@ public class LighthouseUtils
      */
     public static void createLightHouseReport(String reportName) throws Exception 
     {
-        assertTrue(Neodymium.hasDriver(),
-                   "Lighthouse report can only be created if a driver is present in Neodymium, please ensure that a driver is set before calling this method. Maybe the @Browser annotation is missing or @SuppressBrowser is used?");
+        assertTrue(Neodymium.hasActiveBrowser(),
+                   "Lighthouse report can only be created if a browser is present in Neodymium, please ensure that a browser is set before calling this method. Maybe the @Browser annotation is missing or @SuppressBrowser is used?");
 
         // validate that lighthouse is installed
         String readerOutput = "";
@@ -88,18 +86,15 @@ public class LighthouseUtils
         }
         
         // validate chrome browser (lighthouse only works for chrome)
-        SelenideAddons.wrapAssertionError(() -> {
+        Neodymium.interaction().wrapAssertionError(() -> {
             Assert.assertTrue("the current browser is " + Neodymium.getBrowserName() + ", but lighthouse only works in combination with chrome", Neodymium.getBrowserName().contains("chrome"));
         });
-        
-        // get the current webdriver
-        WebDriver driver = Neodymium.getDriver();
-        
+
         // get the current URL
-        String URL = driver.getCurrentUrl();
-        
+        final String URL = Neodymium.interaction().getCurrentUrl();
+
         // close window to avoid conflict with lighthouse
-        String newWindow = windowOperations(driver);
+        final String newWindow = windowOperations();
 
         // start lighthouse report
         lighthouseAudit(URL, reportName);
@@ -121,7 +116,7 @@ public class LighthouseUtils
         double seoScore = categories.getAsJsonObject("seo").get("score").getAsDouble();
         
         // validate if values in report json are greater than defined threshold in config
-        SelenideAddons.wrapAssertionError(() -> {
+        Neodymium.interaction().wrapAssertionError(() -> {
             Assert.assertTrue("The Lighthouse performance score " + performanceScore + " doesn't exceed nor match the required threshold of " + Neodymium.configuration().lighthouseAssertPerformance() + ", please improve the score to match expectations and look into the corresponding Lighthouse report named \"" + reportName + "\"", Neodymium.configuration().lighthouseAssertPerformance() <= performanceScore);
             Assert.assertTrue("The Lighthouse accessibility score " + accessibilityScore + " doesn't exceed nor match the required threshold of " + Neodymium.configuration().lighthouseAssertAccessibility() + ", please improve the score to match expectations and look into the corresponding Lighthouse report named \"" + reportName + "\"", Neodymium.configuration().lighthouseAssertAccessibility() <= accessibilityScore);
             Assert.assertTrue("The Lighthouse best practices score " + bestPracticesScore + " doesn't exceed nor match the required threshold of " + Neodymium.configuration().lighthouseAssertBestPractices() + ", please improve the score to match expectations and look into the corresponding Lighthouse report named \"" + reportName + "\"", Neodymium.configuration().lighthouseAssertBestPractices() <= bestPracticesScore);
@@ -133,8 +128,8 @@ public class LighthouseUtils
         
         
         // switch back to saved URL
-        driver.switchTo().window(newWindow);
-        driver.get(URL);
+        Neodymium.interaction().switchToWindow(newWindow);
+        Neodymium.interaction().open(URL);
     }
     
     /**
@@ -143,18 +138,16 @@ public class LighthouseUtils
      * If the first tab with the test automation is not closed, the Lighthouse report will not have proper values,
      * because it will interfere with the Lighthouse report generation.
      * </p>
-     * 
-     * @param driver
-     *            The current webdriver
+     *
      * @return A new empty tab with a window handle
      */
-    private static String windowOperations(WebDriver driver)
+    private static String windowOperations()
     {
-        String originalWindow = driver.getWindowHandle();
-        driver.switchTo().newWindow(WindowType.TAB);
-        String newWindow = driver.getWindowHandle();
-        driver.switchTo().window(originalWindow);
-        driver.close();
+        final String originalWindow = Neodymium.interaction().getWindowHandle();
+        Neodymium.interaction().openNewTab();
+        final String newWindow = Neodymium.interaction().getWindowHandle();
+        Neodymium.interaction().switchToWindow(originalWindow);
+        Neodymium.interaction().closeCurrentWindow();
         return newWindow;
     }
 
@@ -269,7 +262,7 @@ public class LighthouseUtils
                 
             }
             
-            SelenideAddons.wrapAssertionError(() -> {
+            Neodymium.interaction().wrapAssertionError(() -> {
                 Assert.assertTrue("the following Lighthouse audits " + errorAudits
                                    + " contain errors that need to be fixed, please look into the Lighthouse report named \"" + reportName
                                   + "\" for further information. ", errorAudits.size() == 0);

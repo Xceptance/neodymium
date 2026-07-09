@@ -19,7 +19,7 @@
 package com.xceptance.neodymium.ai.action.plugins;
 
 import java.util.List;
-import com.codeborne.selenide.SelenideElement;
+import com.xceptance.neodymium.util.layer.FoundElement;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
@@ -61,7 +61,7 @@ public class CheckAction implements AiActionPlugin
     {
         if (action.getTarget() != null && !action.getTarget().isBlank())
         {
-            final SelenideElement element = executor.findElement(action);
+            final FoundElement element = executor.findElement(action);
             if (!element.isSelected())
             {
                 element.click();

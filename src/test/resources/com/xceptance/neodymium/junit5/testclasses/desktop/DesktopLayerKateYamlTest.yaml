@@ -1,0 +1,11 @@
+#TODO add properties override to yaml?
+_properties:
+  neodymium.driver.backend: desktop
+
+_steps:
+  - Open "kate /tmp/neo-desktop-yaml-test.txt"
+  - If a session-restore dialog appears, close it by pressing Escape
+  - Click in the center of the editor area
+  - Type the text: "Hello World"
+  - Save the file using Ctrl+S
+  - Close Kate using Ctrl+Q

@@ -4,7 +4,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.function.Supplier;
 
-import com.codeborne.selenide.WebDriverRunner;
+
 import com.xceptance.neodymium.common.Data;
 import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
 import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
@@ -46,7 +46,7 @@ public class BrowserBeforeRunner
         if (!startNewBrowserForSetUp && (Neodymium.getDriver() == null || !Neodymium.getDriver().equals(oldWDsCont.getWebDriver()))
             && oldWDsCont != null)
         {
-            WebDriverRunner.setWebDriver(oldWDsCont.getWebDriver());
+            Neodymium.interaction().setWebDriver(oldWDsCont.getWebDriver());
             Neodymium.setWebDriverStateContainer(oldWDsCont);
             Neodymium.setBrowserProfileName(oldBrowserConfiguration.getConfigTag());
             Neodymium.setBrowserName(oldBrowserConfiguration.getCapabilities().getBrowserName());
@@ -89,7 +89,7 @@ public class BrowserBeforeRunner
             // Neodymium.setWebDriverStateContainer(oldWDsCont);
             if (oldWDsCont != null)
             {
-                WebDriverRunner.setWebDriver(oldWDsCont.getWebDriver());
+                Neodymium.interaction().setWebDriver(oldWDsCont.getWebDriver());
                 Neodymium.setWebDriverStateContainer(oldWDsCont);
             }
             if (oldBrowserConfiguration != null)

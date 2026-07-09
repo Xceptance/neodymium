@@ -20,15 +20,11 @@ package com.xceptance.neodymium.ai.action.plugins;
 
 import java.util.List;
 
-import org.openqa.selenium.ElementNotInteractableException;
-import org.openqa.selenium.Keys;
-import org.openqa.selenium.StaleElementReferenceException;
-
-import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Action plugin responsible for simulating a keyboard key press.
@@ -127,95 +123,42 @@ public class KeyPressAction implements AiActionPlugin
             throw new ActionExecutor.ActionExecutionException("KEY_PRESS action requires a 'value' (key name)");
         }
 
-        final CharSequence seleniumKey = mapKey(key);
+        // Resolve the key name to a driver sequence via the interaction layer (keeps Keys import out of this plugin)
+        final CharSequence mappedKey = Neodymium.interaction().mapKeyName(key);
         try
         {
             if (action.getTarget() != null && !action.getTarget().isBlank())
             {
-                // Send key to specified target element
-                executor.findElement(action).sendKeys(seleniumKey);
+                // Send key to the specified target element
+                executor.findElement(action).sendKeys(mappedKey);
             }
             else
             {
-                // Fallback: Send key directly to the currently focused/active page element
-                WebDriverRunner.getWebDriver().switchTo().activeElement().sendKeys(seleniumKey);
+                // Fallback: send key to the currently focused/active page element
+                Neodymium.interaction().sendKeysToActiveElement(mappedKey);
             }
-        }
-        catch (final ElementNotInteractableException e)
-        {
-            throw new ActionExecutor.ActionExecutionException(String.format("Target element not interactable for target '%s'", action.getTarget()), e);
-        }
-        catch (final StaleElementReferenceException e)
-        {
-            throw new ActionExecutor.ActionExecutionException(String.format("Element became stale for target '%s'", action.getTarget()), e);
         }
         catch (final Throwable t)
         {
+            if (t instanceof ActionExecutor.ActionExecutionException)
+            {
+                throw t;
+            }
             throw new ActionExecutor.ActionExecutionException(String.format("Failed to execute key press for target '%s'", action.getTarget()), t);
         }
     }
 
+    /**
+     * Maps a key name string to the driver key sequence.
+     * Delegates to {@link com.xceptance.neodymium.util.InteractionLayer#mapKeyName(String)}.
+     *
+     * @param keyName the key name to map
+     * @return the driver-specific key sequence
+     * @deprecated Use {@link com.xceptance.neodymium.util.Neodymium#interaction()}.mapKeyName() directly.
+     */
+    @Deprecated
     public static CharSequence mapKey(final String keyName)
     {
-        if (keyName == null || keyName.isBlank())
-        {
-            throw new ActionExecutionException("Key name cannot be null or empty");
-        }
-        final String trimmed = keyName.trim();
-        if (trimmed.contains("+"))
-        {
-            final String[] parts = trimmed.split("\\+");
-            final CharSequence[] chords = new CharSequence[parts.length];
-            for (int i = 0; i < parts.length; i++)
-            {
-                final String part = parts[i].trim();
-                if (part.equalsIgnoreCase("Ctrl") || part.equalsIgnoreCase("Control"))
-                {
-                    chords[i] = Keys.CONTROL;
-                }
-                else if (part.equalsIgnoreCase("Shift"))
-                {
-                    chords[i] = Keys.SHIFT;
-                }
-                else if (part.equalsIgnoreCase("Alt"))
-                {
-                    chords[i] = Keys.ALT;
-                }
-                else if (part.equalsIgnoreCase("Meta") || part.equalsIgnoreCase("Cmd") || part.equalsIgnoreCase("Command"))
-                {
-                    chords[i] = Keys.META;
-                }
-                else
-                {
-                    chords[i] = mapKeySingle(part);
-                }
-            }
-            return Keys.chord(chords);
-        }
-        return mapKeySingle(trimmed);
-    }
-
-    private static CharSequence mapKeySingle(final String keyName)
-    {
-        if (keyName != null && keyName.length() == 1)
-        {
-            return keyName;
-        }
-
-        return switch (keyName.toUpperCase())
-        {
-            case "ENTER", "RETURN" -> Keys.ENTER;
-            case "TAB" -> Keys.TAB;
-            case "SHIFT_TAB", "SHIFTTAB", "SHIFT+TAB", "SHIFT-TAB", "REVERSE_TAB" -> Keys.chord(Keys.SHIFT, Keys.TAB);
-            case "ESCAPE", "ESC" -> Keys.ESCAPE;
-            case "BACKSPACE" -> Keys.BACK_SPACE;
-            case "DELETE" -> Keys.DELETE;
-            case "SPACE" -> Keys.SPACE;
-            case "ARROW_UP", "ARROWUP", "UP" -> Keys.ARROW_UP;
-            case "ARROW_DOWN", "ARROWDOWN", "DOWN" -> Keys.ARROW_DOWN;
-            case "ARROW_LEFT", "ARROWLEFT", "LEFT" -> Keys.ARROW_LEFT;
-            case "ARROW_RIGHT", "ARROWRIGHT", "RIGHT" -> Keys.ARROW_RIGHT;
-            default -> throw new ActionExecutionException("Unknown key: " + keyName);
-        };
+        return Neodymium.interaction().mapKeyName(keyName);
     }
 }

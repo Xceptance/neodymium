@@ -102,7 +102,7 @@ public class AiPromptGenerator {
     }
 
     protected void openBrowser(String url) {
-        com.codeborne.selenide.Selenide.open(url);
+        Neodymium.interaction().open(url);
     }
 
     protected String captureDom(PageAnalyzer pageAnalyzer) {

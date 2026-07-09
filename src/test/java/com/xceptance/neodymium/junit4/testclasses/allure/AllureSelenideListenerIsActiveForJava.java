@@ -15,7 +15,7 @@ public class AllureSelenideListenerIsActiveForJava
     @Test
     public void testWaitingAnimationSelectorUnconfiguredJUnit4()
     {
-        Assert.assertTrue(" AllureSelenide listener is not attached", SelenideLogger.hasListener(NeodymiumRunner.LISTENER_NAME));
+        Assert.assertTrue(" AllureSelenide listener is not attached", SelenideLogger.hasListener("allure-selenide-java"));
     }
 
 }

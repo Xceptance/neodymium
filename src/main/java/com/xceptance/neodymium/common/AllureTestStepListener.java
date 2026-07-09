@@ -1,6 +1,5 @@
 package com.xceptance.neodymium.common;
 
-import com.codeborne.selenide.Configuration;
 import com.xceptance.neodymium.util.Neodymium;
 import io.qameta.allure.listener.StepLifecycleListener;
 import io.qameta.allure.model.StepResult;
@@ -10,7 +9,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Random;
 
-import static com.xceptance.neodymium.common.TestStepListener.URL_CHANGED_STEP_MESSAGE;
+import static com.xceptance.neodymium.common.BrowserNavigationHook.URL_CHANGED_STEP_MESSAGE;
 import static com.xceptance.neodymium.util.AllureAddons.currentStepHasChildren;
 import static io.qameta.allure.model.Status.PASSED;
 
@@ -82,7 +81,7 @@ public class AllureTestStepListener implements StepLifecycleListener
         try
         {
             ScreenshotWriter.doScreenshot("beforeStepStop_screenshot_" + System.currentTimeMillis() + "_" + new Random().nextLong(),
-                                          (result.getStatus() != PASSED) && Configuration.config().screenshots());
+                                          (result.getStatus() != PASSED) && Neodymium.interaction().isSelenideScreenshotsEnabled());
         }
         catch (IOException e)
         {

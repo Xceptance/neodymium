@@ -9,24 +9,15 @@ import org.junit.runner.notification.RunListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codeborne.selenide.logevents.SelenideLogger;
 import com.xceptance.neodymium.util.Neodymium;
 
 import io.qameta.allure.Attachment;
-import io.qameta.allure.selenide.AllureSelenide;
 
 public class NeodymiumCucumberRunListener extends RunListener
 {
-    public static final String LISTENER_NAME = "allure-selenide-cucumber";
-
     private static final Logger LOGGER = LoggerFactory.getLogger(NeodymiumCucumberRunListener.class);
 
     private List<Failure> failures = new LinkedList<>();
-
-    public NeodymiumCucumberRunListener()
-    {
-        SelenideLogger.addListener(LISTENER_NAME, new AllureSelenide());
-    }
 
     @Override
     public void testStarted(Description description) throws Exception

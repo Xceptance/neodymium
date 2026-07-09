@@ -459,4 +459,8 @@ public interface NeodymiumConfiguration extends Mutable, Accessible
     @Key("neodymium.seleniumLogLevel")
     @DefaultValue("SEVERE")
     public String seleniumLogLevel();
+
+    @Key("neodymium.driver.backend")
+    @DefaultValue("selenium")
+    public String driverBackend();
 }

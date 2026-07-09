@@ -1,15 +1,12 @@
 package com.xceptance.neodymium.util;
 
-import static com.codeborne.selenide.Selenide.$;
+
 
 import java.util.LinkedList;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.function.BooleanSupplier;
 
-import org.openqa.selenium.StaleElementReferenceException;
 
-import com.codeborne.selenide.Selenide;
 
 /**
  * Source: http://www.swtestacademy.com/selenium-wait-javascript-angular-ajax/ With a lot of modifications
@@ -27,20 +24,20 @@ public class JavaScriptUtils
         if (Neodymium.configuration().javascriptLoadingJQueryIsRequired())
         {
             conditionsToWaitFor.add(() -> {
-                return Selenide.executeJavaScript("return !!window.jQuery && window.jQuery.active == 0");
+                return Neodymium.interaction().executeJavaScript("return !!window.jQuery && window.jQuery.active == 0");
             });
         }
 
         // dom ready
         conditionsToWaitFor.add(() -> {
-            return Selenide.executeJavaScript("return document.readyState == 'complete'");
+            return Neodymium.interaction().executeJavaScript("return document.readyState == 'complete'");
         });
 
         if (Neodymium.configuration().javascriptLoadingAnimationSelector() != null)
         {
             // no loading animation
             conditionsToWaitFor.add(() -> {
-                return !$(Neodymium.configuration().javascriptLoadingAnimationSelector()).exists();
+                return !Neodymium.interaction().find(Neodymium.configuration().javascriptLoadingAnimationSelector()).exists();
             });
         }
 
@@ -74,9 +71,9 @@ public class JavaScriptUtils
                         continue;
                     }
                 }
-                catch (final StaleElementReferenceException | NoSuchElementException e)
+                catch (final RuntimeException e)
                 {
-                    // we might have to limit the exception range
+                    // Suppress transient exceptions (e.g. stale element, no such element) during polling
                 }
 
                 sleep(Neodymium.configuration().javaScriptPollingInterval());
@@ -163,6 +160,6 @@ public class JavaScriptUtils
                               + "}"
                               + ")();";
 
-        Selenide.executeJavaScript(popupBlocker, "");
+        Neodymium.interaction().executeJavaScript(popupBlocker, "");
     }
 }

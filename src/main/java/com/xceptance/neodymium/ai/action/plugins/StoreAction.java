@@ -23,7 +23,6 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codeborne.selenide.SelenideElement;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
@@ -92,7 +91,7 @@ public final class StoreAction implements AiActionPlugin
         }
         else
         {
-            final SelenideElement element = executor.findElement(action);
+            final var element = executor.findElement(action);
             final String text = element.getText();
             
             if (text != null)

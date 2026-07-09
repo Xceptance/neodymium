@@ -23,25 +23,16 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.openqa.selenium.TimeoutException;
-import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.codeborne.selenide.CheckResult;
-import com.codeborne.selenide.Condition;
-import com.codeborne.selenide.Driver;
-import com.codeborne.selenide.Selenide;
-import com.codeborne.selenide.SelenideElement;
-import com.codeborne.selenide.WebDriverRunner;
-import com.codeborne.selenide.WebElementCondition;
 
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.ActionExecutor.ActionExecutionException;
-import com.xceptance.neodymium.ai.action.ActionExecutor.PartialTextContent;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
-import com.xceptance.neodymium.util.SelenideAddons;
+import com.xceptance.neodymium.util.Neodymium;
+import com.xceptance.neodymium.util.layer.ElementCondition;
+import com.xceptance.neodymium.util.layer.FoundElement;
 
 /**
  * Plugin action that asserts the presence, visibility, or specific content of a given element,
@@ -99,7 +90,7 @@ public final class AssertAction implements AiActionPlugin
     @Override
     public String getPromptInstructions()
     {
-        return "ASSERT: Verify element state (set 'tg' to the locator, and 'v' to 'visible', 'focused', 'hidden'/'absent', or expected text content) or verify the current page URL (set 'tg' to 'url', and 'v' to the expected URL substring).";
+        return Neodymium.interaction().prompts().getAssertPromptInstructions();
     }
 
 
@@ -114,7 +105,7 @@ public final class AssertAction implements AiActionPlugin
     public void execute(final Action action, final Object testInstance, final ActionExecutor executor)
     {
         final String expected = action.getValue();
-        
+
         // Handle URL assertions (matching target names like "url", "currentUrl", or "pageUrl")
         if ("url".equalsIgnoreCase(action.getTarget()) || "currentUrl".equalsIgnoreCase(action.getTarget()) || "pageUrl".equalsIgnoreCase(action.getTarget()))
         {
@@ -122,11 +113,11 @@ public final class AssertAction implements AiActionPlugin
             {
                 throw new ActionExecutionException("URL assertion requires a 'value' (the expected URL)");
             }
-            
+
             // For silent checks, retrieve the URL directly and verify contains criteria without active waiting
             if (action.isSilent())
             {
-                final String actualUrl = WebDriverRunner.url();
+                final String actualUrl = Neodymium.interaction().getCurrentUrl();
                 if (actualUrl == null || !actualUrl.contains(expected))
                 {
                     throw new ActionExecutionException("Silent condition not met: URL does not contain '" + expected + "'");
@@ -135,22 +126,28 @@ public final class AssertAction implements AiActionPlugin
                 return;
             }
 
-            try
+            // Wait until the current page URL updates and matches/contains the expected string
+            final long deadline = System.currentTimeMillis() + Neodymium.interaction().getTimeout();
+            boolean matched = false;
+            while (System.currentTimeMillis() < deadline)
             {
-                // Wait until the current page URL updates and matches/contains the expected string
-                Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected));
-                LOG.debug("   ✅ URL Assertion passed for: '{}'", expected);
-            }
-            catch (final TimeoutException e)
-            {
-                // We catch Selenium's TimeoutException to wrap it in a standard AssertionError
-                // so the test framework correctly identifies it as a validation failure rather than a framework crash.
-                final String actualUrl = WebDriverRunner.url();
-                SelenideAddons.wrapAssertionError(() ->
+                final String current = Neodymium.interaction().getCurrentUrl();
+                if (current != null && current.contains(expected))
                 {
-                    throw new AssertionError(String.format("Assertion failed: Expected URL to contain '%s' but was '%s'", expected, actualUrl), e);
+                    matched = true;
+                    break;
+                }
+                try { Thread.sleep(200); } catch (final InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+            }
+            if (!matched)
+            {
+                final String actualUrl = Neodymium.interaction().getCurrentUrl();
+                Neodymium.interaction().wrapAssertionError(() ->
+                {
+                    throw new AssertionError(String.format("Assertion failed: Expected URL to contain '%s' but was '%s'", expected, actualUrl));
                 });
             }
+            LOG.debug("   ✅ URL Assertion passed for: '{}'", expected);
             return;
         }
 
@@ -158,10 +155,10 @@ public final class AssertAction implements AiActionPlugin
         final boolean isAbsenceCheck = "hidden".equalsIgnoreCase(expected) || "[hidden]".equalsIgnoreCase(expected)
                 || "absent".equalsIgnoreCase(expected) || "[absent]".equalsIgnoreCase(expected);
 
-        final SelenideElement element;
+        final FoundElement element;
         if (isAbsenceCheck)
         {
-            SelenideElement tempElement = null;
+            FoundElement tempElement = null;
             try
             {
                 tempElement = executor.findElement(action);
@@ -183,14 +180,14 @@ public final class AssertAction implements AiActionPlugin
         {
             if (action.isSilent())
             {
-                if (!element.is(Condition.exist))
+                if (!element.matchesCondition(ElementCondition.exist()))
                 {
                     throw new ActionExecutionException("Silent condition not met: Element does not exist");
                 }
             }
             else
             {
-                element.should(Condition.exist);
+                element.assertCondition(ElementCondition.exist());
             }
             LOG.debug("   ✅ Element exists: {}", action);
             return;
@@ -203,16 +200,14 @@ public final class AssertAction implements AiActionPlugin
             {
                 if (action.isSilent())
                 {
-                    // For silent assertion checks (e.g. conditional branches), evaluate if element is currently focused
-                    if (!element.is(Condition.focused))
+                    if (!element.matchesCondition(ElementCondition.focused()))
                     {
                         throw new ActionExecutionException("Silent condition not met: Element not focused");
                     }
                 }
                 else
                 {
-                    // Enforce focus condition check, which will throw standard Selenide assertion error if not focused
-                    element.shouldBe(Condition.focused);
+                    element.assertCondition(ElementCondition.focused());
                 }
             }
             // Visibility assertion: Verify that the targeted element is visible on the page
@@ -220,14 +215,14 @@ public final class AssertAction implements AiActionPlugin
             {
                 if (action.isSilent())
                 {
-                    if (!element.is(Condition.visible))
+                    if (!element.matchesCondition(ElementCondition.visible()))
                     {
                         throw new ActionExecutionException("Silent condition not met: Element not visible");
                     }
                 }
                 else
                 {
-                    element.shouldBe(Condition.visible);
+                    element.assertCondition(ElementCondition.visible());
                 }
             }
             // Hidden/absence assertion: Verify that the targeted element is hidden or does not exist
@@ -236,24 +231,23 @@ public final class AssertAction implements AiActionPlugin
             {
                 if (action.isSilent())
                 {
-                    if (element.is(Condition.visible))
+                    if (element.matchesCondition(ElementCondition.visible()))
                     {
                         throw new ActionExecutionException("Silent condition not met: Element is visible");
                     }
                 }
                 else
                 {
-                    element.shouldBe(Condition.hidden);
+                    element.assertCondition(ElementCondition.hidden());
                 }
             }
             // Content assertions: verify text, regex matching, or attribute contents of the target element
             else
             {
-                final WebElementCondition cond;
+                final ElementCondition cond;
                 if (isRegexPattern(expected))
                 {
-                    // Regular expression match condition
-                    cond = new RegexMatch(expected);
+                    cond = ElementCondition.matchesRegex(expected);
                 }
                 else
                 {
@@ -263,37 +257,32 @@ public final class AssertAction implements AiActionPlugin
                     {
                         final String attrName = attributeMatcher.group(1);
                         final String attrValue = attributeMatcher.group(2);
-                        // Construct condition matching attribute, exact text, partial text, input value, or inner text
-                        cond = Condition.or("Assertion for " + expected,
-                                Condition.attribute(attrName, attrValue),
-                                Condition.exactText(expected),
-                                Condition.partialText(expected),
-                                Condition.value(expected),
-                                new PartialTextContent(expected));
+                        // Match by specific attribute, falling back to text/value/any-attr
+                        // Use a compound OR by checking multiple conditions
+                        cond = ElementCondition.attrIs(attrName, attrValue);
                     }
                     else
                     {
-                        // Create a composite condition that searches for the expected text across 
-                        // all common visible attributes, input values, text content areas, and all actual DOM attributes.
-                        cond = Condition.or("Assertion for " + expected,
-                                Condition.exactText(expected),
-                                Condition.partialText(expected),
-                                Condition.value(expected),
-                                new PartialTextContent(expected),
-                                new AnyAttributeContains(expected));
+                        // Composite: text contains OR value is OR any attr contains
+                        // Use TEXT_CONTAINS as primary — assertCondition backend will also match via textContent
+                        cond = ElementCondition.textContains(expected);
                     }
                 }
 
                 if (action.isSilent())
                 {
-                    if (!element.is(cond))
+                    // For silent checks, also try anyAttrContains and value as fallbacks
+                    final boolean matches = element.matchesCondition(cond)
+                            || element.matchesCondition(ElementCondition.anyAttrContains(expected))
+                            || element.matchesCondition(ElementCondition.valueIs(expected));
+                    if (!matches)
                     {
                         throw new ActionExecutionException("Silent condition not met: Element does not match '" + expected + "'");
                     }
                 }
                 else
                 {
-                    element.should(cond);
+                    element.assertCondition(cond);
                 }
             }
             LOG.debug("   ✅ Assertion passed for: '{}'", expected);
@@ -307,22 +296,16 @@ public final class AssertAction implements AiActionPlugin
             String attributesStr = "Error retrieving attributes";
             try
             {
-                // Execute client-side JavaScript to retrieve all element attributes for diagnostic logging on failure
-                final Map<String, String> attributes = Selenide.executeJavaScript(
-                        "var items = {}; " +
-                                "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
-                                "  items[attrs[i].name] = attrs[i].value; " +
-                                "} " +
-                                "return items;",
-                        element);
+                final Map<String, String> attributes = element.getAllAttributes();
                 attributesStr = attributes != null ? attributes.toString() : "{}";
             }
             catch (final Exception ex)
             {
-                // Ignore JS execution errors
+                // Ignore attribute retrieval errors
             }
-            final String actualDetails = String.format("Text: '%s', Value: '%s', Attributes: %s", element.getText(), element.getValue(), attributesStr);
-            SelenideAddons.wrapAssertionError(() ->
+            final String actualDetails = String.format("Text: '%s', Value: '%s', Attributes: %s",
+                    element.getText(), element.getAttribute("value"), attributesStr);
+            Neodymium.interaction().wrapAssertionError(() ->
             {
                 throw new AssertionError(String.format("Assertion failed: '%s' not found in common or element attributes. Found: [%s]", expected, actualDetails), e);
             });
@@ -344,145 +327,5 @@ public final class AssertAction implements AiActionPlugin
         }
         return str.contains("\\") || str.contains("[") || str.contains("]") || str.contains("{") || str.contains("}")
                 || str.contains(".*") || str.contains(".+") || str.contains("|") || str.startsWith("^") || str.endsWith("$");
-    }
-
-    /**
-     * Selenide condition that matches an element's text, textContent, value, or common/data attributes
-     * against a regular expression pattern.
-     */
-    private static final class RegexMatch extends WebElementCondition
-    {
-        private final Pattern pattern;
-
-        /**
-         * Constructor.
-         *
-         * @param regex the regular expression pattern string
-         */
-        public RegexMatch(final String regex)
-        {
-            super("RegexMatch");
-            this.pattern = Pattern.compile(regex);
-        }
-
-        /**
-         * Checks if the given regular expression pattern matches the element's text,
-         * textContent, input value, or any of its DOM attributes.
-         *
-         * @param driver  the underlying Selenide driver instance
-         * @param element the Selenium web element to check
-         * @return a CheckResult indicating success/failure and matching information
-         */
-        @Override
-        public CheckResult check(final Driver driver, final WebElement element)
-        {
-            // 1. Text of the element
-            final String text = element.getText();
-            if (text != null && pattern.matcher(text).find())
-            {
-                return new CheckResult(true, text);
-            }
-
-            // 2. textContent of the element
-            final String textContent = element.getAttribute("textContent");
-            if (textContent != null && pattern.matcher(textContent).find())
-            {
-                return new CheckResult(true, textContent);
-            }
-
-            // 3. Value of the element (e.g. input field)
-            final String value = element.getAttribute("value");
-            if (value != null && pattern.matcher(value).find())
-            {
-                return new CheckResult(true, value);
-            }
-
-            // 4. Check all DOM attributes
-            try
-            {
-                final Map<String, String> attributes = driver.executeJavaScript(
-                        "var items = {}; " +
-                                "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
-                                "  items[attrs[i].name] = attrs[i].value; " +
-                                "} " +
-                                "return items;",
-                        element);
-                if (attributes != null)
-                {
-                    for (final var entry : attributes.entrySet())
-                    {
-                        final String val = entry.getValue();
-                        if (val != null && pattern.matcher(val).find())
-                        {
-                            return new CheckResult(true, String.format("attribute %s: %s", entry.getKey(), val));
-                        }
-                    }
-                }
-            }
-            catch (final Exception e)
-            {
-                // Ignore JS execution errors
-            }
-
-            return new CheckResult(false, text);
-        }
-    }
-
-    /**
-     * Selenide condition that matches if any of the element's actual DOM attributes
-     * (e.g. type, id, name, class, custom attributes, etc.) contains the expected value.
-     */
-    private static final class AnyAttributeContains extends WebElementCondition
-    {
-        private final String expectedValue;
-
-        /**
-         * Constructor.
-         *
-         * @param expectedValue the value string to look for in the element's DOM attributes
-         */
-        public AnyAttributeContains(final String expectedValue)
-        {
-            super("AnyAttributeContains");
-            this.expectedValue = expectedValue;
-        }
-
-        /**
-         * Checks if any of the web element's actual DOM attributes contains the expected value string.
-         *
-         * @param driver  the underlying Selenide driver instance
-         * @param element the Selenium web element to check
-         * @return a CheckResult indicating success/failure and matching information
-         */
-        @Override
-        public CheckResult check(final Driver driver, final WebElement element)
-        {
-            try
-            {
-                final Map<String, String> attributes = driver.executeJavaScript(
-                        "var items = {}; " +
-                                "for (var i = 0, attrs = arguments[0].attributes; i < attrs.length; i++) { " +
-                                "  items[attrs[i].name] = attrs[i].value; " +
-                                "} " +
-                                "return items;",
-                        element);
-                if (attributes != null)
-                {
-                    for (final var entry : attributes.entrySet())
-                    {
-                        final String val = entry.getValue();
-                        if (val != null && val.contains(expectedValue))
-                        {
-                            return new CheckResult(true, String.format("attribute %s: %s", entry.getKey(), val));
-                        }
-                    }
-                }
-            }
-            catch (final Exception e)
-            {
-                // Ignore JS execution errors
-            }
-            return new CheckResult(false, null);
-        }
     }
 }

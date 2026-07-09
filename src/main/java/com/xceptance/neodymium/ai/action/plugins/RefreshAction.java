@@ -21,10 +21,10 @@ package com.xceptance.neodymium.ai.action.plugins;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
+import com.xceptance.neodymium.util.Neodymium;
 
 public class RefreshAction implements AiActionPlugin {
     private static final Logger LOG = LoggerFactory.getLogger(RefreshAction.class);
@@ -52,6 +52,6 @@ public class RefreshAction implements AiActionPlugin {
     @Override
     public void execute(Action action, Object testInstance, ActionExecutor executor) {
         LOG.debug("Refreshing page");
-        Selenide.refresh();
+        Neodymium.interaction().refresh();
     }
 }

@@ -19,14 +19,13 @@
 package com.xceptance.neodymium.ai.action.plugins;
 
 import java.util.List;
-import org.openqa.selenium.ElementNotInteractableException;
-import org.openqa.selenium.StaleElementReferenceException;
-import com.codeborne.selenide.SelenideElement;
+import com.xceptance.neodymium.util.layer.ElementCondition;
+import com.xceptance.neodymium.util.layer.FoundElement;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
-
 import com.xceptance.neodymium.ai.action.SelectorParser;
+import com.xceptance.neodymium.util.Neodymium;
 
 public class TypeAction implements AiActionPlugin {
     @Override
@@ -53,10 +52,10 @@ public class TypeAction implements AiActionPlugin {
     }
 
     @Override
-    public void preCheck(Action action, ActionExecutor executor) {
+    public void preCheck(final Action action, final ActionExecutor executor) {
         try {
-            executor.findElement(action).shouldBe(com.codeborne.selenide.Condition.visible);
-        } catch (Throwable t) {
+            executor.findElement(action).assertCondition(ElementCondition.visible());
+        } catch (final Throwable t) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element not found or not visible for target '%s'", action.getTarget()), t);
         }
     }
@@ -65,22 +64,23 @@ public class TypeAction implements AiActionPlugin {
     public boolean requiresLlm(Action action) { return false; }
 
     @Override
-    public String getPromptInstructions() { return "TYPE: Type text into a target input field (requires 'tg' and 'v'). Automatically clears the field first."; }
+    public String getPromptInstructions()
+    {
+        return Neodymium.interaction().prompts().getTypePromptInstructions();
+    }
 
     @Override
-    public void execute(Action action, Object testInstance, ActionExecutor executor) {
+    public void execute(final Action action, final Object testInstance, final ActionExecutor executor) {
         try {
-            final SelenideElement element = executor.findElement(action);
+            final FoundElement element = executor.findElement(action);
             action.setElementContext(executor.extractElementContext(element));
             executor.scrollIntoView(element);
             element.clear();
             element.sendKeys(action.getValue());
-        } catch (final org.openqa.selenium.ElementNotInteractableException e) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Element not interactable for target '%s'", action.getTarget()), e);
-        } catch (final org.openqa.selenium.StaleElementReferenceException e) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Element became stale for target '%s'", action.getTarget()), e);
-        } catch (Throwable t) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Failed to execute action '%s'", action.getTarget()), t);
+        } catch (final ActionExecutor.ActionExecutionException e) {
+            throw e;
+        } catch (final Throwable t) {
+            throw new ActionExecutor.ActionExecutionException(String.format("Failed to type into target '%s'", action.getTarget()), t);
         }
     }
 }

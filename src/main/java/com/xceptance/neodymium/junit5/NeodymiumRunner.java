@@ -1,12 +1,9 @@
 package com.xceptance.neodymium.junit5;
 
-import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
-import io.qameta.allure.selenide.AllureSelenide;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
@@ -21,22 +18,12 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NeodymiumRunner.class);
 
-    public static final String LISTENER_NAME = "allure-selenide-java";
-
     private static boolean neoVersionLogged = false;
 
     private NeodymiumData neoData;
 
     public NeodymiumRunner()
     {
-        AllureSelenide allureSelenide = new AllureSelenide();
-
-        // if advanced screenshots are enabled, Selenide screenshots should be disabled
-        allureSelenide.screenshots(!Neodymium.configuration().enableAdvancedScreenShots());
-
-        SelenideLogger.addListener(LISTENER_NAME, allureSelenide);
-        SelenideLogger.addListener(TestStepListener.LISTENER_NAME, new TestStepListener());
-
         if (!neoVersionLogged && Neodymium.configuration().logNeoVersion())
         {
             if (!AllureAddons.envFileExists())

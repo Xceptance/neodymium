@@ -27,14 +27,10 @@ import java.util.Map;
 import java.util.Set;
 
 import org.openqa.selenium.NoSuchWindowException;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.chromium.HasCdp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codeborne.selenide.Selenide;
-import com.codeborne.selenide.WebDriverRunner;
+import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.common.ScreenshotWriter;
 
 /**
@@ -537,16 +533,7 @@ public class PageAnalyzer {
     }
 
     private boolean hasActiveWebDriver() {
-        if (!WebDriverRunner.hasWebDriverStarted()) {
-            return false;
-        }
-        try {
-            WebDriverRunner.getWebDriver();
-            return true;
-        } catch (final Exception e) {
-            LOG.debug("Active WebDriver check failed: {}", e.getMessage());
-            return false;
-        }
+        return Neodymium.interaction().hasActiveSession();
     }
 
     /**
@@ -562,7 +549,6 @@ public class PageAnalyzer {
             return null;
         }
         LOG.debug("   📸 Capturing screenshot for: {}", title);
-        final WebDriver driver = WebDriverRunner.getWebDriver();
         try
         {
             return captureScreenshotInternal(title);
@@ -574,12 +560,12 @@ public class PageAnalyzer {
                 LOG.warn("   ⚠️ Target window was closed during screenshot capture, switching to first available window");
                 try
                 {
-                    final Set<String> activeHandles = driver.getWindowHandles();
+                    final Set<String> activeHandles = Neodymium.interaction().getWindowHandles();
                     if (!activeHandles.isEmpty())
                     {
                         final String fallback = activeHandles.iterator().next();
-                        driver.switchTo().window(fallback);
-                        driver.switchTo().defaultContent();
+                        Neodymium.interaction().switchToWindow(fallback);
+                        Neodymium.interaction().switchToDefaultContent();
                         return captureScreenshotInternal(title);
                     }
                 }
@@ -650,7 +636,7 @@ public class PageAnalyzer {
                     "        callback(hasHud);\n" +
                     "    }, 180);\n" +
                     "}, 420);";
-            final Object hudExists = Selenide.executeAsyncJavaScript(script);
+            final Object hudExists = Neodymium.interaction().executeAsyncJavaScript(script);
             hidden = Boolean.TRUE.equals(hudExists);
         }
         catch (final Exception e)
@@ -658,7 +644,7 @@ public class PageAnalyzer {
             // Animation failed or timed out — fall back to simply hiding the HUD synchronously
             try
             {
-                final Object hudExists = Selenide.executeJavaScript(
+                final Object hudExists = Neodymium.interaction().executeJavaScript(
                         "var hud = document.getElementById('neodymium-ai-hud-container'); " +
                         "if (hud && hud.style.display !== 'none') { hud.style.display = 'none'; return true; } " +
                         "return false;");
@@ -682,7 +668,7 @@ public class PageAnalyzer {
             {
                 try
                 {
-                    Selenide.executeJavaScript(
+                    Neodymium.interaction().executeJavaScript(
                             "var hud = document.getElementById('neodymium-ai-hud-container'); " +
                                     "if (hud) { hud.style.display = ''; }");
                 }
@@ -743,15 +729,23 @@ public class PageAnalyzer {
      * @return simplified DOM as a structured text
      */
     @SuppressWarnings("unchecked")
-    public String captureSimplifiedDom(final ContextLevel level) {
-        if (!hasActiveWebDriver()) {
+    public String captureSimplifiedDom(final ContextLevel level)
+    {
+        if (!hasActiveWebDriver())
+        {
             return "Page URL: <empty page>\nPage Title: \n\n";
+        }
+
+        final String customRepresentation = Neodymium.interaction().prompts().getPageSourceRepresentation(level);
+        if (customRepresentation != null)
+        {
+            return customRepresentation;
         }
         final String url;
         final String title;
         try {
-            url = WebDriverRunner.url();
-            title = Selenide.title();
+            url = Neodymium.interaction().getCurrentUrl();
+            title = Neodymium.interaction().title();
         } catch (final Exception e) {
             return "Page URL: <empty page>\nPage Title: \n\n";
         }
@@ -763,7 +757,7 @@ public class PageAnalyzer {
 
         final StringBuilder dom = new StringBuilder();
         dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
-        dom.append("Page Title: ").append(Selenide.title()).append("\n\n");
+        dom.append("Page Title: ").append(Neodymium.interaction().title()).append("\n\n");
 
         if (isEmptyPage) {
             return dom.toString();
@@ -785,13 +779,13 @@ public class PageAnalyzer {
             }
         }
 
-        final org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
-        final String currentWindow = driver.getWindowHandle();
+        final String currentWindow = Neodymium.interaction().getWindowHandle();
 
         boolean showFrameId = true;
         try {
-            final java.util.Set<String> windowHandles = driver.getWindowHandles();
-            if (windowHandles.size() == 1 && com.codeborne.selenide.Selenide.$$("iframe, frame").isEmpty()) {
+            final java.util.Set<String> windowHandles = Neodymium.interaction().getWindowHandles();
+            final int frameCount = ((Number) Neodymium.interaction().executeJavaScript("return document.querySelectorAll('iframe, frame').length;")).intValue();
+            if (windowHandles.size() == 1 && frameCount == 0) {
                 showFrameId = false;
             }
         } catch (final Exception e) {
@@ -799,12 +793,12 @@ public class PageAnalyzer {
         }
 
         try {
-            final Set<String> windowHandles = driver.getWindowHandles();
+            final Set<String> windowHandles = Neodymium.interaction().getWindowHandles();
             final List<String> windowList = new ArrayList<>(windowHandles);
             for (int i = 0; i < windowList.size(); i++) {
                 final String windowHandle = windowList.get(i);
                 final String logicalWindowName = "win_" + i;
-                driver.switchTo().window(windowHandle);
+                Neodymium.interaction().switchToWindow(windowHandle);
 
                 // Omit window context header and URL/Title info if there is only a single
                 // window
@@ -812,8 +806,8 @@ public class PageAnalyzer {
                 // URL and Title.
                 if (showFrameId || windowList.size() > 1) {
                     dom.append("=== Window: ").append(logicalWindowName).append(" ===\n");
-                    dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
-                    dom.append("Title: ").append(driver.getTitle()).append("\n\n");
+                    dom.append("URL: ").append(Neodymium.interaction().getCurrentUrl()).append("\n");
+                    dom.append("Title: ").append(Neodymium.interaction().title()).append("\n\n");
                 }
                 captureFrameTree(dom, level, logicalWindowName, "main", showFrameId);
             }
@@ -821,8 +815,8 @@ public class PageAnalyzer {
             LOG.warn("Error capturing full frame tree: {}", e.getMessage());
         } finally {
             try {
-                driver.switchTo().window(currentWindow);
-                driver.switchTo().defaultContent();
+                Neodymium.interaction().switchToWindow(currentWindow);
+                Neodymium.interaction().switchToDefaultContent();
             } catch (final Exception e) {
             }
         }
@@ -839,7 +833,7 @@ public class PageAnalyzer {
             final String framePath, final boolean showFrameId) {
         final String frameId = windowHandle + ":" + framePath;
         try {
-            final Map<String, Object> data = (Map<String, Object>) com.codeborne.selenide.Selenide
+            final Map<String, Object> data = (Map<String, Object>) Neodymium.interaction()
                     .executeJavaScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent());
             // Render element sections
             final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");
@@ -903,13 +897,12 @@ public class PageAnalyzer {
             }
 
             // Now recursively process iframes in this frame
-            final com.codeborne.selenide.ElementsCollection frames = com.codeborne.selenide.Selenide
-                    .$$("iframe, frame");
-            for (int i = 0; i < frames.size(); i++) {
+            final int frameCount = ((Number) Neodymium.interaction().executeJavaScript("return document.querySelectorAll('iframe, frame').length;")).intValue();
+            for (int i = 0; i < frameCount; i++) {
                 try {
                     // Generate a stable selector for this frame in the parent context
-                    final String selector = com.codeborne.selenide.Selenide.executeJavaScript(
-                            "var el = arguments[0];" +
+                    final String selector = (String) Neodymium.interaction().executeJavaScript(
+                            "var el = document.querySelectorAll('iframe, frame')[arguments[0]];" +
                             "if (el.id) { return '#' + CSS.escape(el.id); }" +
                             "if (el.name) { return el.tagName.toLowerCase() + '[name=\\'' + el.name + '\\']'; }" +
                             "var path = [];" +
@@ -930,30 +923,12 @@ public class PageAnalyzer {
                             "  el = el.parentNode;" +
                             "}" +
                             "return path.join(' > ');",
-                            frames.get(i));
-                    com.codeborne.selenide.Selenide.switchTo().frame(frames.get(i));
+                            i);
+                    Neodymium.interaction().switchToFrame(i);
                     captureFrameTree(dom, level, windowHandle, framePath + " >>> " + selector, showFrameId);
-                    com.codeborne.selenide.Selenide.switchTo().parentFrame();
+                    Neodymium.interaction().switchToParentFrame();
                 } catch (final Exception e) {
-                    LOG.debug("Could not switch to frame: {}", e.getMessage());
-                    com.codeborne.selenide.Selenide.switchTo().defaultContent();
-                    // Recover path
-                    if (!"main".equals(framePath)) {
-                        if (framePath.contains(" >>> ")) {
-                            final String[] selectors = framePath.split(" >>> ");
-                            for (final String sel : selectors) {
-                                if (!sel.equals("main") && !sel.isBlank()) {
-                                    final WebElement iframeElement = com.codeborne.selenide.Selenide.$(sel);
-                                    com.codeborne.selenide.Selenide.switchTo().frame(iframeElement);
-                                }
-                            }
-                        } else {
-                            final String[] indices = framePath.substring(5).split("\\."); // remove "main."
-                            for (final String indexStr : indices) {
-                                com.codeborne.selenide.Selenide.switchTo().frame(Integer.parseInt(indexStr));
-                            }
-                        }
-                    }
+                    // If we can't switch to a frame, just skip it
                 }
             }
         } catch (final Exception e) {
@@ -1104,13 +1079,7 @@ public class PageAnalyzer {
 
     @SuppressWarnings("unchecked")
     private String captureAXTreeDOM() {
-        final WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
-        if (!(driver instanceof final HasCdp cdpDriver)) {
-            LOG.debug("Driver does not support CDP, AXTree is unavailable. Falling back to LEAN.");
-            return null;
-        }
-
-        final Map<String, Object> axTree = cdpDriver.executeCdpCommand("Accessibility.getFullAXTree", Map.of());
+        final Map<String, Object> axTree = Neodymium.interaction().getAXTree();
         if (axTree == null || !axTree.containsKey("nodes")) {
             return null;
         }
@@ -1167,7 +1136,7 @@ public class PageAnalyzer {
 
         final Set<String> visitedNodeIds = new HashSet<>();
         for (final Map<String, Object> rootNode : rootNodes) {
-            serializeAXNode(rootNode, nodesById, visitedNodeIds, dom, 0, interactiveRoles, landmarkRoles, cdpDriver);
+            serializeAXNode(rootNode, nodesById, visitedNodeIds, dom, 0, interactiveRoles, landmarkRoles);
         }
 
         return dom.toString();
@@ -1180,8 +1149,7 @@ public class PageAnalyzer {
             final StringBuilder dom,
             final int depth,
             final Set<String> interactiveRoles,
-            final Set<String> landmarkRoles,
-            final HasCdp cdpDriver) {
+            final Set<String> landmarkRoles) {
         final Object nodeIdObj = node.get("nodeId");
         final String nodeId = nodeIdObj != null ? String.valueOf(nodeIdObj) : null;
         final Object backendIdObj = node.get("backendDOMNodeId");
@@ -1212,7 +1180,7 @@ public class PageAnalyzer {
                     final Map<String, Object> childNode = nodesById.get(String.valueOf(childIdObj));
                     if (childNode != null) {
                         if (serializeAXNode(childNode, nodesById, visitedNodeIds, dom, depth, interactiveRoles,
-                                landmarkRoles, cdpDriver)) {
+                                landmarkRoles)) {
                             anyChildSerialized = true;
                         }
                     }
@@ -1287,7 +1255,7 @@ public class PageAnalyzer {
 
         try {
             final Map<String, Object> resolveParams = Map.of("backendNodeId", backendDOMNodeId);
-            final Map<String, Object> resolvedNode = cdpDriver.executeCdpCommand("DOM.resolveNode", resolveParams);
+            final Map<String, Object> resolvedNode = Neodymium.interaction().executeCdpCommand("DOM.resolveNode", resolveParams);
             if (resolvedNode != null && resolvedNode.containsKey("object")) {
                 final Map<String, Object> objectInfo = (Map<String, Object>) resolvedNode.get("object");
                 final String objectId = (String) objectInfo.get("objectId");
@@ -1373,7 +1341,7 @@ public class PageAnalyzer {
                             "functionDeclaration", functionDeclaration,
                             "returnByValue", true);
 
-                    final Map<String, Object> callResult = cdpDriver.executeCdpCommand("Runtime.callFunctionOn",
+                    final Map<String, Object> callResult = Neodymium.interaction().executeCdpCommand("Runtime.callFunctionOn",
                             callParams);
                     if (callResult != null && callResult.containsKey("result")) {
                         final Map<String, Object> resultVal = (Map<String, Object>) callResult.get("result");
@@ -1470,7 +1438,7 @@ public class PageAnalyzer {
                 final Map<String, Object> childNode = nodesById.get(String.valueOf(childIdObj));
                 if (childNode != null) {
                     if (serializeAXNode(childNode, nodesById, visitedNodeIds, childrenContent, depth + 1,
-                            interactiveRoles, landmarkRoles, cdpDriver)) {
+                            interactiveRoles, landmarkRoles)) {
                         hasSerializedChildren = true;
                     }
                 }

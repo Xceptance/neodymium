@@ -5,9 +5,7 @@ import com.codeborne.selenide.CheckResult;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.ElementsCollection;
-import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
-import com.codeborne.selenide.WebDriverRunner;
 import com.codeborne.selenide.WebElementCondition;
 import com.codeborne.selenide.ex.UIAssertionError;
 import com.codeborne.selenide.impl.Html;
@@ -30,9 +28,7 @@ import java.util.stream.Collectors;
 
 
 import static com.codeborne.selenide.Condition.not;
-import static com.codeborne.selenide.Selenide.$$;
-import static com.codeborne.selenide.Selenide.open;
-import static com.codeborne.selenide.Selenide.sleep;
+
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -67,7 +63,7 @@ public class SelenideAddons {
         return new Supplier<SelenideElement>() {
             @Override
             public SelenideElement get() {
-                return $$(parentSelector).asDynamicIterable().stream().filter(e -> {
+                return Neodymium.interaction().findAll(parentSelector).asDynamicIterable().stream().filter(e -> {
                     return e.$(subElementSelector).exists();
                 }).findFirst().get();
             };
@@ -98,10 +94,10 @@ public class SelenideAddons {
         return new Supplier<ElementsCollection>() {
             @Override
             public ElementsCollection get() {
-                List<SelenideElement> list = $$(parentSelector).asDynamicIterable().stream().filter(e -> {
+                List<SelenideElement> list = Neodymium.interaction().findAll(parentSelector).asDynamicIterable().stream().filter(e -> {
                     return e.$(subElementSelector).exists();
                 }).collect(Collectors.toList());
-                return new ElementsCollection(new WebElementsCollectionWrapper(WebDriverRunner.driver(), list));
+                return new ElementsCollection(new WebElementsCollectionWrapper(Neodymium.interaction().driver(), list));
             };
         };
     }
@@ -130,10 +126,10 @@ public class SelenideAddons {
         return new Supplier<ElementsCollection>() {
             @Override
             public ElementsCollection get() {
-                List<SelenideElement> list = $$(parentSelector).asDynamicIterable().stream().filter(e -> {
+                List<SelenideElement> list = Neodymium.interaction().findAll(parentSelector).asDynamicIterable().stream().filter(e -> {
                     return !e.$(subElementSelector).exists();
                 }).collect(Collectors.toList());
-                return new ElementsCollection(new WebElementsCollectionWrapper(WebDriverRunner.driver(), list));
+                return new ElementsCollection(new WebElementsCollectionWrapper(Neodymium.interaction().driver(), list));
             };
         };
     }
@@ -189,7 +185,7 @@ public class SelenideAddons {
                         throw t;
                     } else {
                         AllureAddons.addToReport(SERE + " catched times: \"" + retryCounter + "\".", retryCounter);
-                        Selenide.sleep(Neodymium.configuration().staleElementRetryTimeout());
+                        Neodymium.interaction().sleep(Neodymium.configuration().staleElementRetryTimeout());
                     }
                 } else {
                     // not the kind of error we are looking for
@@ -384,30 +380,44 @@ public class SelenideAddons {
      * @param runnable
      *                 The lambda containing an assertion
      */
-    public static void wrapAssertionError(final Runnable runnable) {
-        try {
+    public static void wrapAssertionError(final Runnable runnable)
+    {
+        try
+        {
             runnable.run();
-        } catch (AssertionError e) {
-            Driver driver = WebDriverRunner.driver();
+        }
+        catch (final AssertionError e)
+        {
+            final Driver driver = Neodymium.interaction().driver();
             String message = "No error message provided by the Assertion.";
-            if (StringUtils.isNotBlank(e.getMessage())) {
+            final AssertionError errorToProcess;
+            if (StringUtils.isNotBlank(e.getMessage()))
+            {
                 message = e.getMessage();
-            } else {
-                AssertionError wrapper = new AssertionError(message, e.getCause());
-                wrapper.setStackTrace(e.getStackTrace());
-                e = wrapper;
+                errorToProcess = e;
             }
-            if (!driver.config().assertionMode().equals(AssertionMode.SOFT)) {
-                AssertionError e1 = e;
+            else
+            {
+                final AssertionError wrapper = new AssertionError(message, e.getCause());
+                wrapper.setStackTrace(e.getStackTrace());
+                errorToProcess = wrapper;
+            }
+            if (!driver.config().assertionMode().equals(AssertionMode.SOFT))
+            {
                 SelenideLogger.commitStep(SelenideLogger.step("Assertion error", () -> {
-                    if (WebDriverRunner.hasWebDriverStarted() && driver.getSessionId() != null) {
-                        throw UIAssertionError.wrap(driver, e1, 0);
-                    } else {
-                        throw e1;
+                    if (driver.getSessionId() != null)
+                    {
+                        throw UIAssertionError.wrap(driver, errorToProcess, 0);
                     }
-                }), e);
-            } else {
-                SelenideLogger.commitStep(SelenideLogger.beginStep("Assertion error", message), e);
+                    else
+                    {
+                        throw errorToProcess;
+                    }
+                }), errorToProcess);
+            }
+            else
+            {
+                SelenideLogger.commitStep(SelenideLogger.beginStep("Assertion error", message), errorToProcess);
             }
         }
     }
@@ -425,8 +435,8 @@ public class SelenideAddons {
      *                           The offset for the vertical movement
      */
     public static void dragAndDrop(SelenideElement elementToMove, int horizontalMovement, int verticalMovement) {
-        assertTrue(Neodymium.hasDriver(),
-                "Neodymium has no driver, so we can not perform a drag and drop operation. Please check your setup and add the @Browser annotation to your test.");
+        assertTrue(Neodymium.hasActiveBrowser(),
+                "Neodymium has no active browser, so we can not perform a drag and drop operation. Please check your setup and add the @Browser annotation to your test.");
 
         try {
             // perform drag and drop via the standard Selenium way
@@ -436,7 +446,7 @@ public class SelenideAddons {
         } catch (MoveTargetOutOfBoundsException targetOutOfBound) {
             String message = "Performing drag and drop with an element moved the element out of the viewport. Try to scroll the element completely into the view port or to decrease the absolute values of your movements.";
             SelenideLogger.commitStep(SelenideLogger.beginStep("slider", message), targetOutOfBound);
-            throw UIAssertionError.wrap(WebDriverRunner.driver(), new AssertionError(message, targetOutOfBound), 0);
+            throw UIAssertionError.wrap(Neodymium.interaction().driver(), new AssertionError(message, targetOutOfBound), 0);
         }
     }
 
@@ -477,7 +487,7 @@ public class SelenideAddons {
                 });
             }
             dragAndDrop(elementToMove, horizontalMovement, verticalMovement);
-            sleep(pauseBetweenMovements);
+            Neodymium.interaction().sleep(pauseBetweenMovements);
             counter++;
         }
     }
@@ -491,7 +501,7 @@ public class SelenideAddons {
      */
     public static void openHtmlContentWithCurrentWebDriver(String htmlContent) {
         String encodedStuff = Base64.getEncoder().encodeToString(htmlContent.getBytes());
-        open("data:text/html;charset=utf-8;base64," + encodedStuff);
+        Neodymium.interaction().open("data:text/html;charset=utf-8;base64," + encodedStuff);
     }
 
     /**
@@ -583,7 +593,7 @@ public class SelenideAddons {
                 result = true;
                 break;
             }
-            Selenide.sleep(pollingInterval);
+            Neodymium.interaction().sleep(pollingInterval);
         }
         return result;
     }

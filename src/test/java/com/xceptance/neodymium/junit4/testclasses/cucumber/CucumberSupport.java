@@ -7,7 +7,6 @@ import org.junit.Assert;
 
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
-import com.xceptance.neodymium.junit4.NeodymiumCucumberRunListener;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.WebDriverUtils;
 
@@ -53,6 +52,6 @@ public class CucumberSupport
     @Then("^validate the AllureSelenide listener is active$")
     public void validateAllureSelenideListenerIsActive()
     {
-        Assert.assertTrue(" AllureSelenide listener is not attached", SelenideLogger.hasListener(NeodymiumCucumberRunListener.LISTENER_NAME));
+        Assert.assertTrue(" AllureSelenide listener is not attached", SelenideLogger.hasListener("allure-selenide-java"));
     }
 }

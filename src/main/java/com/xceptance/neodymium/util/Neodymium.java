@@ -19,7 +19,6 @@ import org.openqa.selenium.remote.RemoteWebDriver;
 import com.browserup.bup.BrowserUpProxy;
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
-import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
@@ -74,6 +73,10 @@ public class Neodymium
 
     private WebElement lastUsedElement;
 
+    private String lastLocatorString;
+
+    private LocatorType lastLocatorType;
+
     // our global configuration
     private NeodymiumConfiguration configuration;
 
@@ -86,6 +89,8 @@ public class Neodymium
     // our data for anywhere access
     private final TestData data = new TestData();
 
+    private InteractionLayer interactionLayer;
+
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "neodymium.temporaryConfigFile";
 
     /**
@@ -93,6 +98,8 @@ public class Neodymium
      */
     private Neodymium()
     {
+        CONTEXTS.put(Thread.currentThread(), this);
+
         // the property needs to be a valid URI in order to satisfy the Owner framework
         if (null == ConfigFactory.getProperty(TEMPORARY_CONFIG_FILE_PROPERTY_NAME))
         {
@@ -101,6 +108,7 @@ public class Neodymium
         configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
         aiConfiguration = ConfigFactory.create(AiConfiguration.class, System.getProperties(), System.getenv());
         localization = NeodymiumLocalization.build(configuration.localizationFile());
+        interactionLayer = new InteractionLayer(configuration.driverBackend());
     }
 
     private static List<String> generateBrowserFilter()
@@ -130,9 +138,12 @@ public class Neodymium
      */
     static Neodymium getContext()
     {
-        return CONTEXTS.computeIfAbsent(Thread.currentThread(), key -> {
-            return new Neodymium();
-        });
+        Neodymium context = CONTEXTS.get(Thread.currentThread());
+        if (context == null)
+        {
+            context = new Neodymium();
+        }
+        return context;
     }
 
     /**
@@ -143,6 +154,28 @@ public class Neodymium
     {
         CONTEXTS.remove(Thread.currentThread());
         TestStepListener.clearLastUrl();
+    }
+
+    /**
+     * Get the interaction layer instance for the current Thread.
+     * 
+     * @return interactionLayer
+     */
+    public static InteractionLayer interaction()
+    {
+        return getContext().interactionLayer;
+    }
+
+    /**
+     * Recreates the interaction layer dynamically with the specified driver backend.
+     * This is useful when switching backends mid-test or ensuring the correct layer
+     * is loaded for a specific backend.
+     *
+     * @param backend the name of the backend (e.g., "selenium", "desktop", "playwright")
+     */
+    public static void recreateInteractionLayer(final String backend)
+    {
+        getContext().interactionLayer = new InteractionLayer(backend);
     }
 
     /**
@@ -301,19 +334,30 @@ public class Neodymium
      */
     public static WebDriver getDriver()
     {
+        return interaction().getDriver();
+    }
+
+    /**
+     * Check if a browser session is currently active (either Selenium or Playwright).
+     *
+     * @return true if a browser is active, false otherwise
+     */
+    public static boolean hasActiveBrowser()
+    {
         final WebDriverStateContainer wDSC = getContext().webDriverStateContainer;
-        return wDSC == null ? null : wDSC.getWebDriver();
+        return (wDSC != null && wDSC.getWebDriver() != null) || interaction().hasActiveSession();
     }
 
     /**
      * Check if a WebDriver is currently set in the context.
      *
      * @return true if a WebDriver is set, false otherwise
+     * @deprecated Use {@link #hasActiveBrowser()} instead.
      */
+    @Deprecated
     public static boolean hasDriver()
     {
-        final WebDriverStateContainer wDSC = getContext().webDriverStateContainer;
-        return wDSC != null && wDSC.getWebDriver() != null;
+        return hasActiveBrowser();
     }
 
     /**
@@ -546,8 +590,8 @@ public class Neodymium
      */
     public static Dimension getViewportSize()
     {
-        Long width = Selenide.executeJavaScript("return window.innerWidth");
-        Long height = Selenide.executeJavaScript("return window.innerHeight");
+        final Long width = interaction().executeJavaScript("return window.innerWidth");
+        final Long height = interaction().executeJavaScript("return window.innerHeight");
 
         return new Dimension(width.intValue(), height.intValue());
     }
@@ -559,8 +603,8 @@ public class Neodymium
      */
     public static Dimension getPageSize()
     {
-        Long width = Selenide.executeJavaScript("return document.documentElement.clientWidth");
-        Long height = Selenide.executeJavaScript("return document.documentElement.clientHeight");
+        final Long width = interaction().executeJavaScript("return document.documentElement.clientWidth");
+        final Long height = interaction().executeJavaScript("return document.documentElement.clientHeight");
 
         return new Dimension(width.intValue(), height.intValue());
     }
@@ -800,16 +844,67 @@ public class Neodymium
         return buildVersion == null ? "?.?.?" : buildVersion;
     }
 
+    private static void updateLastLocator(final By by)
+    {
+        if (by == null)
+        {
+            getContext().lastLocatorString = null;
+            getContext().lastLocatorType = null;
+            return;
+        }
+
+        final String str = by.toString();
+        String locator = str;
+        LocatorType type = LocatorType.CSS;
+
+        if (str.startsWith("By.xpath: "))
+        {
+            locator = str.substring(10);
+            type = LocatorType.XPATH;
+        }
+        else if (str.startsWith("By.cssSelector: "))
+        {
+            locator = str.substring(16);
+            type = LocatorType.CSS;
+        }
+        else if (str.startsWith("By.id: "))
+        {
+            locator = str.substring(7);
+            type = LocatorType.ID;
+        }
+        else if (str.startsWith("By.className: "))
+        {
+            locator = str.substring(14);
+            type = LocatorType.CLASS_NAME;
+        }
+        else if (str.startsWith("By.tagName: "))
+        {
+            locator = str.substring(12);
+            type = LocatorType.TAG_NAME;
+        }
+        else if (str.startsWith("By.name: "))
+        {
+            locator = str.substring(9);
+            type = LocatorType.NAME;
+        }
+
+        getContext().lastLocatorString = locator;
+        getContext().lastLocatorType = type;
+    }
+
     /**
      * Saves the last used locator
      * 
      * @param by
      *            CSS Selector
+     * @deprecated Use {@link #setLastUsedLocator(String, LocatorType)} instead.
      */
-    public static void setLastUsedLocator(By by)
+    @Deprecated
+    public static void setLastUsedLocator(final By by)
     {
         getContext().lastLocator = by;
         getContext().lastUsedElement = null;
+        updateLastLocator(by);
     }
 
     /**
@@ -819,18 +914,69 @@ public class Neodymium
      *            Webelement
      * @param by
      *            CSS Selector
+     * @deprecated Use {@link #setLastUsedLocator(String, LocatorType)} instead.
      */
-    public static void setLastUsedLocator(WebElement element, By by)
+    @Deprecated
+    public static void setLastUsedLocator(final WebElement element, final By by)
     {
         getContext().lastLocator = by;
         getContext().lastUsedElement = element;
+        updateLastLocator(by);
+    }
+
+    /**
+     * Saves the last used locator string and type.
+     * 
+     * @param locator
+     *            the locator string
+     * @param type
+     *            the locator type
+     */
+    public static void setLastUsedLocator(final String locator, final LocatorType type)
+    {
+        getContext().lastLocatorString = locator;
+        getContext().lastLocatorType = type;
+        getContext().lastLocator = null;
+        getContext().lastUsedElement = null;
+    }
+
+    /**
+     * Gets the last used locator string.
+     * 
+     * @return the last used locator string or null
+     */
+    public static String getLastUsedLocatorString()
+    {
+        return getContext().lastLocatorString;
+    }
+
+    /**
+     * Gets the last used locator type.
+     * 
+     * @return the last used locator type or null
+     */
+    public static LocatorType getLastUsedLocatorType()
+    {
+        return getContext().lastLocatorType;
+    }
+
+    /**
+     * Checks if the test already looked up any locator.
+     * 
+     * @return true if there is a last used locator string
+     */
+    public static boolean hasLastUsedLocator()
+    {
+        return getContext().lastLocatorString != null;
     }
 
     /**
      * Returns the last used Element
      * 
      * @return last used Element or null if nothing was set
+     * @deprecated Use {@link #getLastUsedLocatorString()} and {@link #getLastUsedLocatorType()} instead.
      */
+    @Deprecated
     public static WebElement getLastUsedElement()
     {
         try
@@ -848,7 +994,7 @@ public class Neodymium
                 return null;
             }
         }
-        catch (Throwable t)
+        catch (final Throwable t)
         {
             // if this breaks something upfront was already broken so we want the original error instead of this one
             // covring up
@@ -858,7 +1004,9 @@ public class Neodymium
 
     /**
      * Checks if the test already looked up any element. return whether there is a last element stored
+     * @deprecated Use {@link #hasLastUsedLocator()} instead.
      */
+    @Deprecated
     public static boolean hasLastUsedElement()
     {
         if (getContext().lastUsedElement != null && getContext().lastLocator != null)
@@ -874,6 +1022,7 @@ public class Neodymium
             return false;
         }
     }
+
 
     public static void initializePlaybook()
     {

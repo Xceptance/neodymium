@@ -19,14 +19,11 @@
 package com.xceptance.neodymium.ai.action.plugins;
 
 import java.util.List;
-import org.openqa.selenium.ElementNotInteractableException;
-import org.openqa.selenium.StaleElementReferenceException;
-import com.codeborne.selenide.SelenideElement;
-import com.codeborne.selenide.ex.ElementNotFound;
+import com.xceptance.neodymium.util.layer.ElementCondition;
+import com.xceptance.neodymium.util.layer.FoundElement;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
-
 import com.xceptance.neodymium.ai.action.SelectorParser;
 
 public class SelectAction implements AiActionPlugin {
@@ -54,17 +51,16 @@ public class SelectAction implements AiActionPlugin {
     }
 
     @Override
-    public void preCheck(Action action, ActionExecutor executor) {
+    public void preCheck(final Action action, final ActionExecutor executor) {
         try {
-            SelenideElement element = executor.findElement(action);
+            final FoundElement element = executor.findElement(action);
             // Modern web frameworks tend to hide the actual select field and show a custom box.
-
-            if ("select".equalsIgnoreCase(element.getTagName()) && element.isDisplayed() == false) {
-                element.should(com.codeborne.selenide.Condition.exist);
+            if ("select".equalsIgnoreCase(element.getTagName()) && !element.isDisplayed()) {
+                element.assertCondition(ElementCondition.exist());
             } else {
-                element.shouldBe(com.codeborne.selenide.Condition.visible);
+                element.assertCondition(ElementCondition.visible());
             }
-        } catch (Throwable t) {
+        } catch (final Throwable t) {
             throw new ActionExecutor.ActionExecutionException(String.format("Element not found or not visible for target '%s'", action.getTarget()), t);
         }
     }
@@ -76,20 +72,14 @@ public class SelectAction implements AiActionPlugin {
     public String getPromptInstructions() { return "SELECT: Select an option from a target dropdown element (requires 'tg' and 'v')."; }
 
     @Override
-    public void execute(Action action, Object testInstance, ActionExecutor executor) {
+    public void execute(final Action action, final Object testInstance, final ActionExecutor executor) {
         try {
-            final SelenideElement element = executor.findElement(action);
+            final FoundElement element = executor.findElement(action);
             action.setElementContext(executor.extractElementContext(element));
             executor.scrollIntoView(element);
             element.selectOption(action.getValue());
-        } catch (final org.openqa.selenium.ElementNotInteractableException e) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Element not interactable for target '%s'", action.getTarget()), e);
-        } catch (final com.codeborne.selenide.ex.ElementNotFound e) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Element not found for target '%s'", action.getTarget()), e);
-        } catch (final org.openqa.selenium.StaleElementReferenceException e) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Element became stale for target '%s'", action.getTarget()), e);
-        } catch (Throwable t) {
-            throw new ActionExecutor.ActionExecutionException(String.format("Failed to execute action '%s'", action.getTarget()), t);
+        } catch (final Throwable t) {
+            throw new ActionExecutor.ActionExecutionException(String.format("Failed to select option for target '%s'", action.getTarget()), t);
         }
     }
 }

@@ -19,12 +19,10 @@
 package com.xceptance.neodymium.ai.action.plugins;
 
 import java.util.List;
-import com.codeborne.selenide.Selenide;
-import com.codeborne.selenide.SelenideElement;
+import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.ai.action.Action;
 import com.xceptance.neodymium.ai.action.ActionExecutor;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
-
 import com.xceptance.neodymium.ai.action.SelectorParser;
 
 public class ScrollAction implements AiActionPlugin {
@@ -63,16 +61,15 @@ public class ScrollAction implements AiActionPlugin {
         if (action != null && action.getTarget() != null && !action.getTarget().isBlank()) {
             final String target = action.getTarget().trim();
             if (target.equalsIgnoreCase("down")) {
-                Selenide.executeJavaScript("window.scrollBy(0, window.innerHeight)");
+                Neodymium.interaction().executeJavaScript("window.scrollBy(0, window.innerHeight)");
             } else if (target.equalsIgnoreCase("up")) {
-                Selenide.executeJavaScript("window.scrollBy(0, -window.innerHeight)");
+                Neodymium.interaction().executeJavaScript("window.scrollBy(0, -window.innerHeight)");
             } else {
-                final SelenideElement element = executor.findElement(action);
-                executor.scrollIntoView(element);
+                executor.scrollIntoView(executor.findElement(action));
             }
         } else {
             // Scroll down by viewport height
-            Selenide.executeJavaScript("window.scrollBy(0, window.innerHeight)");
+            Neodymium.interaction().executeJavaScript("window.scrollBy(0, window.innerHeight)");
         }
     }
 }

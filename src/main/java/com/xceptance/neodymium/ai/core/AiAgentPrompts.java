@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.xceptance.neodymium.ai.action.ActionRegistry;
 import com.xceptance.neodymium.ai.action.AiActionPlugin;
 import com.xceptance.neodymium.ai.action.plugins.JavaMethodAction;
+import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookStep;
 
@@ -245,7 +246,7 @@ public final class AiAgentPrompts
      */
     public static String getSystemPromptBase()
     {
-        final String snippetRole = getPrompt("snippet-role.md");
+        final String snippetRole = Neodymium.interaction().prompts().getAiRolePrompt();
         final String snippetCapabilities = getPrompt("snippet-capabilities.md");
         final String snippetResponseFormat = getPrompt("snippet-response-format.md");
         final String systemPromptRules = getPrompt("system-prompt-rules.md");
@@ -265,7 +266,7 @@ public final class AiAgentPrompts
      */
     public static String getSystemHealingPrompt()
     {
-        final String snippetRole = getPrompt("snippet-role.md");
+        final String snippetRole = Neodymium.interaction().prompts().getAiRolePrompt();
         final String snippetCapabilities = getPrompt("snippet-capabilities.md");
         final String snippetResponseFormat = getPrompt("snippet-response-format.md");
         final String systemPromptRules = getPrompt("system-prompt-rules.md");
@@ -385,7 +386,7 @@ public final class AiAgentPrompts
      */
     public static String getSystemPrompt(final ContextLevel level)
     {
-        final String snippetRole = getPrompt("snippet-role.md");
+        final String snippetRole = Neodymium.interaction().prompts().getAiRolePrompt();
         final StringBuilder sb = new StringBuilder();
         sb.append(snippetRole).append("\n\n");
 
@@ -445,6 +446,12 @@ public final class AiAgentPrompts
 
             final String systemPromptRules = getPrompt("system-prompt-rules.md");
             sb.append(systemPromptRules).append("\n\n");
+            
+            final String targetingRules = Neodymium.interaction().prompts().getAiTargetingRules();
+            if (targetingRules != null && !targetingRules.isEmpty())
+            {
+                sb.append(targetingRules);
+            }
         }
 
         switch (level)

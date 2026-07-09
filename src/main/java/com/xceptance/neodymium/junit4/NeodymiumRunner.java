@@ -27,10 +27,8 @@ import org.junit.runners.model.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.ai.core.AiBrowser;
-import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.BrowserData;
 import com.xceptance.neodymium.common.retry.RetryMethodData;
@@ -41,8 +39,6 @@ import com.xceptance.neodymium.util.AllureAddons;
 import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import com.xceptance.neodymium.util.Neodymium;
 import com.xceptance.neodymium.util.NeodymiumRandom;
-
-import io.qameta.allure.selenide.AllureSelenide;
 
 /**
  * This class executes {@link JUnit4} test classes (aka JUnit Runner) and adds several features to test execution e.g. multi {@link Browser browser} and <a
@@ -84,21 +80,11 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(NeodymiumRunner.class);
 
-    public static final String LISTENER_NAME = "allure-selenide-java";
-
     private static boolean neoVersionLogged = false;
 
     public NeodymiumRunner(Class<?> clazz) throws InitializationError
     {
         super(clazz);
-
-        AllureSelenide allureSelenide = new AllureSelenide();
-
-        // if advanced screenshots are enabled, Selenide screenshots should be disabled
-        allureSelenide.screenshots(!Neodymium.configuration().enableAdvancedScreenShots());
-
-        SelenideLogger.addListener(LISTENER_NAME, allureSelenide);
-        SelenideLogger.addListener(TestStepListener.LISTENER_NAME, new TestStepListener());
 
         if (!neoVersionLogged && Neodymium.configuration().logNeoVersion())
         {
