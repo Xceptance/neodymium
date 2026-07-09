@@ -192,12 +192,14 @@ public class PageAnalyzer {
                     );
                 }
 
-                // Helper to extract the input value, explicitly including text entry fields to provide full LLM context, but obscuring passwords
+                // Helper to extract the input value, filtering out user-editable fields to protect privacy and token counts
                 function getElementValue(el, label) {
                     var tag = el.tagName ? el.tagName.toLowerCase() : '';
                     var type = (el.getAttribute('type') || 'text').toLowerCase();
-                    if (tag === 'input' && type === 'password') {
-                        return '***';
+                    var isTextEntry = tag === 'input' && 
+                        ['text', 'password', 'email', 'tel', 'url', 'search', 'number', 'date', 'datetime-local', 'month', 'time', 'week'].indexOf(type) !== -1;
+                    if (isTextEntry || tag === 'textarea') {
+                        return null;
                     }
                     return truncate(el.value || el.getAttribute('value'), MAX_VALUE);
                 }
