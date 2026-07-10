@@ -955,6 +955,45 @@ public class HealingRequiredException extends PipelineException
 }
 
 /**
+ * Thrown when execution fails and requires context detail escalation.
+ */
+public abstract class EscalationException extends PipelineException
+{
+    protected EscalationException(String message, Throwable cause) { super(message, cause); }
+}
+
+/**
+ * Requests escalation to the SEMANTIC (AXTree) context detail level.
+ */
+public class ToSemanticEscalationException extends EscalationException
+{
+    public ToSemanticEscalationException(String message, Throwable cause) { super(message, cause); }
+}
+
+/**
+ * Requests escalation to the FULL (DOM + Screenshots) context detail level.
+ */
+public class ToVisualEscalationException extends EscalationException
+{
+    public ToVisualEscalationException(String message, Throwable cause) { super(message, cause); }
+}
+
+/**
+ * Thrown when a compound step is dynamically split into sub-steps.
+ * Aborts current step execution and triggers stack splicing.
+ */
+public class StepSplitException extends PipelineException
+{
+    private final List<PlaybookStep> subSteps;
+    public StepSplitException(String message, List<PlaybookStep> subSteps)
+    {
+        super(message);
+        this.subSteps = subSteps;
+    }
+    public List<PlaybookStep> getSubSteps() { return subSteps; }
+}
+
+/**
  * Thrown during replay when the SUT state does not match the baseline recording.
  * Triggers the fallback to Live LLM mode.
  */
@@ -985,7 +1024,7 @@ We define reusable structural composite steps in code to manage flow control:
 4. **`LoopStep`**: Repeats a subpipeline under specific retry budget ceilings.
 
 #### Stack Mutation for Step Splitting
-Because the `ExecutionContext` exposes the active execution stack, steps (like `PesapStep` or dynamic includes) can directly mutate the runner queue using `context.pushSteps(list)`. When the step completes normally, the runner loop naturally pops and executes the newly inserted sub-steps on subsequent iterations. This eliminates the need for any custom `REPEAT_STEP` loop directives.
+To cleanly split a compound instruction without executing actions on the parent step, a step (such as `PesapStep` or `CallLlmStep` returning a split action) throws a `StepSplitException` containing the sub-steps. The pipeline catches this exception, marks the current parent step status as `SPLITTED` (leaving a clear execution trail), and pushes the sub-steps onto the stack using `context.pushSteps(subSteps)`. This aborts the current execution path immediately and restarts the runner on the first sub-step.
 
 ---
 
@@ -999,36 +1038,45 @@ Used when generating or healing actions.
 ```java
 public static PipelineStep createLiveExecutionPipeline()
 {
-    return new SequenceStep(
-        new LintStep(),                   // Local semantic linter
-        new CaptureStateStep(),           // Computes DOM and screenshot dHash
-        new TryCatchStep(
-            // Try Block: Resolve actions and run
-            new SequenceStep(
-                new CallLlmStep(),        // Calls registered LLM provider
-                new ExecuteActionsStep(), // Executes actions on TargetExecutor
-                new VerifyOutcomeStep()   // Verifies post-assertions
-            ),
-            // Catch Block Map: Map specific exceptions to healing/recovery steps
-            Map.of(
-                HealingRequiredException.class, new LoopStep(
-                    ctx -> ctx.getRetryBudget().hasBudget(),
-                    new SequenceStep(
-                        new EscalateContextStep(), // Context level upgrade, clears cached state
-                        new PrepareRetryStep(),    // In-page state reset (clear input, close overlays)
-                        new CaptureStateStep(),    // Capture SUT state at new ContextLevel
-                        new CallLlmStep(),
-                        new ExecuteActionsStep(),
-                        new VerifyOutcomeStep()
-                    )
+    return new TryCatchStep(
+        new SequenceStep(
+            new LintStep(),                   // Local semantic linter
+            new CaptureStateStep(),           // Computes DOM and screenshot dHash
+            new TryCatchStep(
+                // Try Block: Resolve actions and run
+                new SequenceStep(
+                    new CallLlmStep(),        // Calls registered LLM provider
+                    new ExecuteActionsStep(), // Executes actions on TargetExecutor
+                    new VerifyOutcomeStep()   // Verifies post-assertions
                 ),
-                ConclusiveFailureException.class, new SequenceStep(
-                    new ReportFailureStep(),
-                    new FailSessionStep()
+                // Catch Block Map: Map specific exceptions to healing/recovery steps
+                Map.of(
+                    HealingRequiredException.class, new LoopStep(
+                        ctx -> ctx.getRetryBudget().hasBudget(),
+                        new SequenceStep(
+                            new EscalateContextStep(), // Context level upgrade, clears cached state
+                            new PrepareRetryStep(),    // In-page state reset (clear input, close overlays)
+                            new CaptureStateStep(),    // Capture SUT state at new ContextLevel
+                            new CallLlmStep(),
+                            new ExecuteActionsStep(),
+                            new VerifyOutcomeStep()
+                        )
+                    ),
+                    ConclusiveFailureException.class, new SequenceStep(
+                        new ReportFailureStep(),
+                        new FailSessionStep()
+                    )
                 )
-            )
+            ),
+            new PublishEventsStep()           // Clean event teardown
         ),
-        new PublishEventsStep()           // Clean event teardown
+        // Outer Catch: Handle step splitting
+        Map.of(
+            StepSplitException.class, new SequenceStep(
+                new MarkStepSplittedStep(),   // Marks current parent step status as SPLITTED
+                new PushSubStepsStep()        // Pushes split sub-steps onto runner stack
+            )
+        )
     );
 }
 ```
