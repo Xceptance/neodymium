@@ -956,26 +956,29 @@ public class HealingRequiredException extends PipelineException
 
 /**
  * Thrown when execution fails and requires context detail escalation.
+ * By default, this signals escalation to the next logical context level
+ * in the sequence (e.g. LEAN -> SEMANTIC -> FULL).
  */
-public abstract class EscalationException extends PipelineException
+public class EscalationException extends PipelineException
 {
-    protected EscalationException(String message, Throwable cause) { super(message, cause); }
+    public EscalationException(String message, Throwable cause) { super(message, cause); }
 }
 
 /**
- * Requests escalation to the SEMANTIC (AXTree) context detail level.
+ * Thrown to explicitly jump directly to a specific target ContextLevel,
+ * bypassing the sequential relative escalation order.
  */
-public class ToSemanticEscalationException extends EscalationException
+public class ToLevelEscalationException extends EscalationException
 {
-    public ToSemanticEscalationException(String message, Throwable cause) { super(message, cause); }
-}
+    private final ContextLevel targetLevel;
 
-/**
- * Requests escalation to the FULL (DOM + Screenshots) context detail level.
- */
-public class ToVisualEscalationException extends EscalationException
-{
-    public ToVisualEscalationException(String message, Throwable cause) { super(message, cause); }
+    public ToLevelEscalationException(String message, ContextLevel targetLevel, Throwable cause)
+    {
+        super(message, cause);
+        this.targetLevel = targetLevel;
+    }
+
+    public ContextLevel getTargetLevel() { return targetLevel; }
 }
 
 /**
