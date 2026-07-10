@@ -1587,21 +1587,19 @@ function setButtonsEnabled(enabled) {
         }
     });
 
-    const btnRerun = document.getElementById('btnRerun');
+
     if (!enabled && currentState && currentState.status !== 'running') {
         if (runBtn) runBtn.style.display = 'none';
         if (skipBtn) skipBtn.style.display = 'none';
         if (backBtn) backBtn.style.display = 'none';
         if (autoBtn) autoBtn.style.display = 'none';
         if (btnCancel) btnCancel.style.display = 'none';
-        if (btnRerun) btnRerun.style.display = 'inline-flex';
     } else {
         if (runBtn) runBtn.style.display = '';
         if (skipBtn) skipBtn.style.display = '';
         if (backBtn) backBtn.style.display = '';
         if (autoBtn) autoBtn.style.display = '';
         if (btnCancel) btnCancel.style.display = '';
-        if (btnRerun) btnRerun.style.display = 'none';
 
         if (isAutoMode) {
             if (runBtn) runBtn.disabled = true;
@@ -1621,11 +1619,6 @@ function setButtonsEnabled(enabled) {
     }
 }
 
-function triggerRerun() {
-    if (window.parent && window.parent !== window && currentState && currentState.testId) {
-        window.parent.postMessage({ action: 'rerunTest', testId: currentState.testId }, '*');
-    }
-}
 
 function syncAutoButton() {
     const btn = document.getElementById('btnAuto');
