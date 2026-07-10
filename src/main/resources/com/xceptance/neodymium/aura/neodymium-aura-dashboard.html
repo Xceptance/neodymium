@@ -2621,8 +2621,8 @@
             const dataUrl = '/api/allure/report/' + reportId + '/' + testFile;
             iframe.src = '/interactive_console.html?dataUrl=' + encodeURIComponent(dataUrl);
 
-            // Transition to State 3: three-column layout with details visible
-            applyHistoryState(3);
+            // Transition to State 4: mini-runs bar, tests list, and wide details
+            applyHistoryState(4);
 
             // Populate the mini history strip with bubbles for this test across all runs
             renderMiniHistoryStrip(testName, reportId);
@@ -3309,7 +3309,7 @@
             // is actually rendered. Without this the live console loads into a
             // display:none column and the HUD is never shown to the user.
             requestAnimationFrame(() => {
-                applyHistoryState(3);
+                applyHistoryState(4);
                 // Populate the tests column immediately — previously it was left empty
                 // until the next poll cycle detected an activeFile change.
                 renderLiveTestList();
