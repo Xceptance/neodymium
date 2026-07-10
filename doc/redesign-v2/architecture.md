@@ -1100,7 +1100,7 @@ We define reusable structural composite steps in code to manage flow control:
 4. **`LoopStep`**: Repeats a subpipeline under specific retry budget ceilings.
 
 #### Stack Mutation for Step Splitting
-To cleanly split a compound instruction without executing actions on the parent step, a step (such as `PesapStep` or `CallLlmStep` returning a split action) throws a `StepSplitException` containing the sub-steps. The pipeline catches this exception, marks the current parent step status as `SPLITTED` (leaving a clear execution trail), and pushes the sub-steps onto the stack using `context.pushSteps(subSteps)`. This aborts the current execution path immediately and restarts the runner on the first sub-step.
+To cleanly split a compound instruction without executing actions on the parent step, a step (such as `PesapStep` or `CallLlmStep` returning a split action) throws a `StepSplitException` containing the sub-steps. The pipeline catches this exception, marks the current parent step status as `SPLITTED` (leaving a clear execution trail), nests the generated sub-steps within the parent step as children (`subSteps`), and pushes the sub-steps onto the stack using `context.pushSteps(subSteps)`. This aborts the current execution path immediately and restarts the runner on the first sub-step.
 
 ---
 

@@ -31,3 +31,10 @@ The `ExecutionEventBus` MUST prevent re-entrant loops by skipping dispatching to
 #### Scenario: Listener fires recursive event
 - **WHEN** a registered listener is executing `onEvent` and publishes a new event to the bus
 - **THEN** the event bus dispatches the new event to all other registered listeners, but bypasses the active listener to prevent infinite recursion.
+
+### Requirement: Step Splitting Tree Structure
+When a compound step is split (throwing a `StepSplitException`), the runner MUST nest the generated sub-steps within the parent step as children (`subSteps`) and set the parent step status to `SPLITTED`. The runner SHALL then push the sub-steps onto the execution stack.
+
+#### Scenario: Splicing nested sub-steps
+- **WHEN** a step execution throws `StepSplitException` with sub-steps
+- **THEN** the runner assigns the sub-steps as children of the parent step, sets parent status to `SPLITTED`, and executes the first child sub-step next.
