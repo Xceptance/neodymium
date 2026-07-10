@@ -55,8 +55,10 @@
 - [ ] 5.8 Implement concrete runner steps: `LintStep` (pre-checks) and `CaptureStateStep` (context-level state capture).
 - [ ] 5.9 Implement concrete runner steps: `CallLlmStep` (compiles and sends LLM query) and `ExecuteActionsStep` (executes actions on executor).
 - [ ] 5.10 Implement concrete runner steps: `VerifyOutcomeStep` (post-step assertions) and `PrepareRetryStep` (clears input/closes alerts).
-- [ ] 5.11 Implement `StateMachineRunner` that wires the static live and replay pipelines.
-- [ ] 5.12 Write TDD integration tests executing mock playbooks browserless. Verify successful step execution, self-healing escalation loops, compound step splits, and replay-to-live divergence fallbacks.
+- [ ] 5.11 Define the abstract `AiSession` class holding the execution context, LLM capability registry, event bus, and session data.
+- [ ] 5.12 Implement concrete package-private session classes (`MockBrowserSession`, `MockRestSession`) and static factory methods on `AiSession` (e.g. `AiSession.mock()`) for testing.
+- [ ] 5.13 Implement `StateMachineRunner` that wires the static live and replay pipelines and executes inside the active session.
+- [ ] 5.14 Write TDD integration tests executing mock playbooks browserless. Verify successful step execution, self-healing escalation loops, compound step splits, and replay-to-live divergence fallbacks.
 
 ## 6. Concrete Domain Implementation (Selenide)
 
