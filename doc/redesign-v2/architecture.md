@@ -1140,6 +1140,128 @@ This ensures data passing is completely independent of the execution loop flow c
 
 ---
 
+### E. Execution Scenarios & Pipeline Flow Diagrams
+To illustrate how these comopsable steps execute in practice, the diagrams below show the flow of state transitions under different SUT execution scenarios.
+
+#### 1. Normal Execution Flow
+When the initial context information sent to the LLM is correct, execution flows sequentially through PESAP, State Capture, LLM query, and Action execution.
+
+```mermaid
+sequenceDiagram
+    participant Runner
+    participant Context as ExecutionContext
+    participant PESAP as PesapStep
+    participant Capture as CaptureStateStep
+    participant LLM as CallLlmStep
+    participant Exec as ExecuteActionsStep
+    
+    Runner->>Context: Reset transient data
+    Runner->>PESAP: execute(context)
+    Note over PESAP: Classifies starting ContextLevel (e.g., AXTREE)
+    PESAP-->>Context: Set context level = AXTREE
+    
+    Runner->>Capture: execute(context)
+    Note over Capture: Captures DOM at AXTREE detail
+    Capture-->>Context: Save BrowserSutState
+    
+    Runner->>LLM: execute(context)
+    Note over LLM: Prompt compiled with AXTREE DOM
+    LLM-->>Context: Save Actions list
+    
+    Runner->>Exec: execute(context)
+    Note over Exec: Runs Selenide Action
+    Exec-->>Runner: StepResult (CONTINUE)
+```
+
+#### 2. Escalation Flow (DOM Details Missing / LLM Cannot Resolve)
+If the LLM cannot resolve target elements due to lean state information, the runner escalates the context detail level, recaptures SUT state, and retries the LLM call.
+
+```mermaid
+sequenceDiagram
+    participant Runner
+    participant Context as ExecutionContext
+    participant LLM as CallLlmStep
+    participant Escalate as EscalateContextStep
+    participant Capture as CaptureStateStep
+    
+    Note over Runner,LLM: 1. Try at AXTREE
+    Runner->>LLM: execute(context)
+    Note over LLM: LLM replies: "Element not found in accessibility tree"
+    LLM-->>Runner: StepResult (ESCALATE)
+    
+    Note over Runner,Capture: 2. Escalate to LEAN DOM
+    Runner->>Escalate: execute(context)
+    Note over Escalate: Upgrades level to LEAN DOM, clears cached state
+    Runner->>Capture: execute(context)
+    Note over Capture: Captures LEAN DOM (full tags & attributes)
+    
+    Runner->>LLM: execute(context)
+    Note over LLM: LLM replies: "Element found, but overlay blocks it"
+    LLM-->>Runner: StepResult (ESCALATE)
+    
+    Note over Runner,Capture: 3. Escalate to FULL DOM + Screenshot
+    Runner->>Escalate: execute(context)
+    Note over Escalate: Upgrades level to FULL, clears cached state
+    Runner->>Capture: execute(context)
+    Note over Capture: Captures FULL DOM + Screenshot
+    
+    Runner->>LLM: execute(context)
+    LLM-->>Context: Save Actions list (Click selector)
+    Note over Runner: Execute Actions & Verify
+```
+
+#### 3. Action Failure Flow (Execution / Validation Fails)
+If the LLM generates an action but its execution on the SUT fails (or a validation fails), the pipeline catches the failure, escalates the context level, and prompts the LLM again with the failure trace.
+
+```mermaid
+sequenceDiagram
+    participant Runner
+    participant Exec as ExecuteActionsStep
+    participant Escalate as EscalateContextStep
+    participant Capture as CaptureStateStep
+    participant LLM as CallLlmStep
+    
+    Note over Runner,Exec: 1. Execute action (fails)
+    Runner->>Exec: execute(context)
+    Note over Exec: Click #btn (blocks / throws WebDriverException)
+    Exec-->>Runner: StepResult (ESCALATE)
+    
+    Note over Runner,Capture: 2. Escalate Context & Recapture
+    Runner->>Escalate: execute(context)
+    Note over Escalate: Context level = LEAN
+    Runner->>Capture: execute(context)
+    
+    Runner->>LLM: execute(context)
+    Note over LLM: LLM analyzes LEAN DOM with error context
+    LLM-->>Context: Save corrected Action (Scroll into view first)
+    
+    Runner->>Exec: execute(context)
+    Note over Exec: Action executed successfully
+    Exec-->>Runner: StepResult (CONTINUE)
+```
+
+#### 4. Upfront Step Splitting (Compound Steps)
+When static analysis (PESAP) detects a compound step instruction, it dynamically parses it into sub-steps, pushes them onto the execution stack, and repeats execution on the first sub-step.
+
+```mermaid
+sequenceDiagram
+    participant Runner
+    participant Context as ExecutionContext
+    participant PESAP as PesapStep
+    
+    Runner->>Context: Fetch active Step ("Click shop and select shoes")
+    Runner->>PESAP: execute(context)
+    Note over PESAP: Detects compound step
+    Note over PESAP: Parses into Step A ("Click shop") & Step B ("Select shoes")
+    PESAP->>Context: Push Step A & Step B onto runner stack (LIFO)
+    PESAP-->>Runner: StepResult (REPEAT_STEP)
+    
+    Note over Runner: Runner restarts loop on next stack frame (Step A)
+    Runner->>Context: Pop active Step ("Click shop")
+```
+
+---
+
 ## 12. Concurrency Boundaries & Atomicity
 
 To ensure SUT stability and prevent race conditions with external controllers (like the HUD or Aura Server dashboard), the framework establishes clear rules around execution threading, step boundaries, and data synchronization.
