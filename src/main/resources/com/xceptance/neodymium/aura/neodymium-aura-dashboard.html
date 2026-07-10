@@ -2548,9 +2548,16 @@
                             matchedDataset = rc.datasets[0];
                         }
                         if (matchedDataset) {
+                            let finalId = matchedDataset.id || null;
+                            if (!finalId && t.testId) {
+                                finalId = t.testId;
+                                if (finalId.startsWith('Dataset ')) {
+                                    finalId = finalId.substring(8);
+                                }
+                            }
                             // Build single-dataset payload: same flags but only this one dataset + testId
                             const singlePayload = {
-                                datasets: [{ file: matchedDataset.file, id: t.testId || matchedDataset.id || null }],
+                                datasets: [{ file: matchedDataset.file, id: finalId }],
                                 headless: rc.headless,
                                 interactive: rc.interactive,
                                 allure: rc.allure,
