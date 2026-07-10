@@ -13,3 +13,10 @@ Pipeline control flow and execution routing MUST be managed by throwing typed su
 #### Scenario: Catch block routing
 - **WHEN** a composite pipeline step encounters an execution error and throws a `HealingRequiredException`
 - **THEN** the outer `TryCatchStep` intercepts the exception and executes the registered catch subpipeline matching the exception type.
+
+### Requirement: Pre-Execution Setup Hooks
+Before executing any playbook steps or initiating SUT state captures, the execution session MUST run all registered `SessionSetupHook` implementations sequentially. If any hook throws an exception, the session SHALL terminate immediately and propagate the exception.
+
+#### Scenario: Setup hook fails and aborts run
+- **WHEN** a registered setup hook throws an exception at start
+- **THEN** the session does not capture SUT state or run the pipeline, aborts immediately, and propagates the exception to the caller.

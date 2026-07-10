@@ -1043,7 +1043,6 @@ public static PipelineStep createLiveExecutionPipeline()
 {
     return new TryCatchStep(
         new SequenceStep(
-            new LintStep(),                   // Local semantic linter
             new CaptureStateStep(),           // Computes DOM and screenshot dHash
             new TryCatchStep(
                 // Try Block: Resolve actions and run
@@ -1580,11 +1579,27 @@ public interface AiPrompt<T>
 
 ---
 
-### B. Session-Scoped `LlmRegistry`
+### B. Session-Scoped `LlmRegistry` & Multi-Key Role Mapping
 Every `AiSession` contains its own isolated `LlmRegistry` instance. 
 
-* The registry selects the active provider dynamically based on the required capability (e.g., routing visual linter checks to a `VISION` provider, while running local mock assertions on a `TEXT_ONLY` provider).
-* If no specialized provider is registered for a capability, the registry falls back to a designated **default provider**. If no default is set, it throws an `IllegalStateException`.
+To optimize execution costs, response speeds, and token consumption, different roles in the framework (e.g. static linter checking, UI action generation, screenshot vision auditing, and session verification) can target different models and use separate API keys or endpoints.
+
+#### 1. Configuration Property Hierarchy
+The session reads configuration properties hierarchically (JVM arguments > `ai.properties` > `neodymium.properties` > defaults). Properties are divided into **Global Defaults** and **Role-Specific overrides**:
+
+* **Global Defaults**:
+  * `neodymium.ai.model`: The default model name (e.g. `gemini-2.5-flash`).
+  * `neodymium.ai.apiKey`: The default API key (masked at runtime).
+* **Role-Specific Overrides** (Roles: `pesap`, `execution`, `vision`, `audit`):
+  * `neodymium.ai.pesap.model` / `neodymium.ai.pesap.apiKey`: Used by the instruction semantic classifier and step splitter.
+  * `neodymium.ai.execution.model` / `neodymium.ai.execution.apiKey`: Used by the runner to call the LLM for action generation.
+  * `neodymium.ai.vision.model` / `neodymium.ai.vision.apiKey`: Used for multimodal image and screenshot analysis.
+  * `neodymium.ai.audit.model` / `neodymium.ai.audit.apiKey`: Used by post-run verification auditors.
+
+#### 2. Provider Instantiation & Registry Registration
+During session initialization, the `AiSession` parses these overrides. For each role, if an override `model` or `apiKey` is provided, it instantiates a separate `LlmProvider` configured with those specific parameters. If no role-specific overrides exist, it falls back to the global defaults.
+
+The registry selects the active provider dynamically based on the required capability (e.g. routing visual checks to the provider registered for `LlmCapability.VISION`, and syntax parsing to `LlmCapability.STEP_SPLITTING`). If no specialized provider is registered for a capability, the registry falls back to the designated default provider. If no default is set, it throws an `IllegalStateException`.
 
 ---
 
@@ -1606,25 +1621,51 @@ When `AiPrompt.parseResponse(rawText)` is invoked, it routes the raw model outpu
 3. **Model Object Stage**: Validates and overrides fields on the compiled Java object `T` (e.g. normalizing browser target selectors) before returning it to the caller.
 ---
 
-## 14. Session Verification & Auditing Layer
+## 14. Session Setup & Auditing Layers (Pre/Post Hooks)
 
-To verify if the AI agent executed the correct actions and successfully fulfilled the test's high-level intent, the framework supports registering pluggable **Session Audit Hooks**. These run at the **conclusion of the entire execution session** (right before `AiSession.execute` returns the final recording) to validate the gathered data and execution consistency.
+To ensure the test environment is correctly prepared before execution starts, and dynamically validated after execution completes, the framework introduces pluggable **Pre-Execution Setup Hooks** and **Post-Execution Audit Hooks**. These hooks are registered on the `AiSession` and execute at the boundaries of the execution cycle.
 
 ```mermaid
 graph TD
-    End[Session Run Conclusion] -->|Trigger Audit| Hooks[Session Audit Chain]
-    
-    subgraph Audit Hooks
-        Hooks --> A1[LlmExecutionAuditor]
-        Hooks --> A2[DataConsistencyAuditor]
-        Hooks --> A3[AuraVisualAuditor]
+    Start[AiSession.execute] -->|1. Run Setup Hooks| PreHooks[Session Setup Chain]
+    PreHooks -->|2. Execute Pipeline| Runner[StateMachineRunner]
+    Runner -->|3. Run Audit Hooks| PostHooks[Session Audit Chain]
+    PostHooks --> End[Return Recording]
+
+    subgraph Pre-Hooks
+        PreHooks --> S1[EnvironmentPreparer]
+        PreHooks --> S2[StateInitializer]
     end
 
-    A1 -->|Output Audit Report| Result[AuditResult passed=true/false]
+    subgraph Post-Hooks
+        PostHooks --> A1[LlmExecutionAuditor]
+        PostHooks --> A2[DataConsistencyAuditor]
+    end
 ```
 
-### A. The `SessionAuditHook` Interface
-Auditors evaluate the initial playbook instructions, the compiled execution trace (recording), and the final variable state:
+---
+
+### A. The Setup and Auditing Interfaces
+
+#### 1. Pre-Execution Setup Hook (`SessionSetupHook`)
+Setup hooks execute sequentially *prior* to SUT state capture or pipeline execution. If any setup hook throws an exception, the session terminates immediately and propagates the error, preventing unnecessary SUT/LLM interaction costs:
+
+```java
+public interface SessionSetupHook
+{
+    /**
+     * Executes custom setup logic before executing any playbook steps.
+     * 
+     * @param playbook the initial instruction playbook
+     * @param data the session data variables
+     * @throws Exception if setup fails, aborting execution
+     */
+    void setup(Playbook playbook, SessionData data) throws Exception;
+}
+```
+
+#### 2. Post-Execution Audit Hook (`SessionAuditHook`)
+Audit hooks execute sequentially at the conclusion of the execution session (right before the session returns the final recording) to validate data consistency, layout regression, or AI reasoning correctness:
 
 ```java
 public interface SessionAuditHook
@@ -1639,6 +1680,7 @@ public interface SessionAuditHook
      */
     AuditResult audit(Playbook playbook, PlaybookRecording recording, SessionData data);
 }
+```
 
 public record AuditResult(
     boolean passed,
@@ -1808,7 +1850,7 @@ graph TD
 * **Target Components**:
   * `PipelineStep`, `StepResult`, `FlowControl` (CONTINUE, ABORT, REPEAT_STEP, ESCALATE).
   * Composite steps: `SequenceStep`, `ConditionalBranchStep`, `TryCatchStep`, `LoopStep`.
-  * Concrete steps: `LintStep`, `CaptureStateStep`, `CallLlmStep`, `ExecuteActionsStep`, `VerifyOutcomeStep`, `PrepareRetryStep`.
+  * Concrete steps: `CaptureStateStep`, `CallLlmStep`, `ExecuteActionsStep`, `VerifyOutcomeStep`, `PrepareRetryStep`.
   * `ExecutionContext` (Transient data map, stack runner).
   * `StateMachineRunner` (Compiles pipeline structure and runs state loop).
 * **Testing Strategy**: Run end-to-end simulated test scenarios in JUnit using `MockTargetExecutor` and `MockLlmProvider`. Assert pipeline success, failure, self-healing loop execution, and breakpoint pauses.

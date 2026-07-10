@@ -19,10 +19,12 @@
 - [ ] 2.2 Create request/response record structures `LlmRequest` (system prompt, user query, attachments, schema) and `LlmResponse` (text content, token usage, model name).
 - [ ] 2.3 Define `LlmProvider` interface with `LlmResponse chat(LlmRequest)` and `Set<LlmCapability> getCapabilities()`.
 - [ ] 2.4 Implement `MockLlmProvider` holding a thread-safe queue of canned responses to bypass LLM API calls in tests.
-- [ ] 2.5 Implement `LlmRegistry` resolving providers dynamically based on required capability tokens.
-- [ ] 2.6 Define `AiPrompt<T>` interface specifying the generic prompts compilation and multi-stage response parsing/repairing.
-- [ ] 2.7 Write TDD tests asserting that prompts format system/user messages correctly and repair malformed model JSON responses.
-- [ ] 2.8 Implement a concrete prompt class (e.g. `ActionsPrompt` or `StringPrompt`) and verify its output parsing.
+- [ ] 2.5 Implement `LlmRegistry` supporting dynamic capability resolution and fallback to a default provider.
+- [ ] 2.6 Implement hierarchical configuration properties loading (`AiConfiguration`) resolving global defaults and role-specific (`pesap`, `execution`, `vision`, `audit`) overrides.
+- [ ] 2.7 Implement provider bootstrapping that instantiates and registers separate role-specific `LlmProvider`s based on configuration overrides.
+- [ ] 2.8 Define `AiPrompt<T>` interface specifying the generic prompts compilation and multi-stage response parsing/repairing.
+- [ ] 2.9 Write TDD tests asserting that prompts format system/user messages correctly and repair malformed model JSON responses.
+- [ ] 2.10 Implement a concrete prompt class (e.g. `ActionsPrompt` or `StringPrompt`) and verify its output parsing.
 
 ## 3. Session Data & Sanitization
 
@@ -52,13 +54,14 @@
 - [ ] 5.5 Implement `ExecutionContext` carrying the LIFO stack runner queue, session context, and transient data map.
 - [ ] 5.6 Implement structural pipeline steps: `SequenceStep`, `ConditionalBranchStep`, and `LoopStep`.
 - [ ] 5.7 Implement `TryCatchStep` holding a map of caught exception classes to subpipeline handlers.
-- [ ] 5.8 Implement concrete runner steps: `LintStep` (pre-checks) and `CaptureStateStep` (context-level state capture).
+- [ ] 5.8 Implement concrete runner step `CaptureStateStep` (context-level state capture).
 - [ ] 5.9 Implement concrete runner steps: `CallLlmStep` (compiles and sends LLM query) and `ExecuteActionsStep` (executes actions on executor).
 - [ ] 5.10 Implement concrete runner steps: `VerifyOutcomeStep` (post-step assertions) and `PrepareRetryStep` (clears input/closes alerts).
-- [ ] 5.11 Define the abstract `AiSession` class holding the execution context, LLM capability registry, event bus, and session data.
-- [ ] 5.12 Implement concrete package-private session classes (`MockBrowserSession`, `MockRestSession`) and static factory methods on `AiSession` (e.g. `AiSession.mock()`) for testing.
-- [ ] 5.13 Implement `StateMachineRunner` that wires the static live and replay pipelines and executes inside the active session.
-- [ ] 5.14 Write TDD integration tests executing mock playbooks browserless. Verify successful step execution, self-healing escalation loops, compound step splits, and replay-to-live divergence fallbacks.
+- [ ] 5.11 Define the abstract `AiSession` class holding the execution context, LLM capability registry, event bus, and session data, implementing `AutoCloseable`.
+- [ ] 5.12 Define the `SessionSetupHook` interface and support registering and executing setup hooks sequentially before the state machine runner executes.
+- [ ] 5.13 Implement concrete package-private session classes (`MockBrowserSession`, `MockRestSession`) and static factory methods on `AiSession` (e.g. `AiSession.mock()`) for testing.
+- [ ] 5.14 Implement `StateMachineRunner` that wires the static live and replay pipelines and executes inside the active session.
+- [ ] 5.15 Write TDD integration tests executing mock playbooks browserless. Verify successful step execution, setup/audit hook lifecycles, self-healing escalation loops, compound step splits, and replay-to-live divergence fallbacks.
 
 ## 6. Concrete Domain Implementation (Selenide)
 
