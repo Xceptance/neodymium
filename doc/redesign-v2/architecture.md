@@ -1674,7 +1674,83 @@ public record AuditResult(
 
 ---
 
-## 15. Implementation Roadmap & TDD Plan
+## 15. Session-Level Authentication Setup & Interception
+
+To interact with authenticated websites (e.g. Basic Auth) or secure REST APIs without exposing credentials in prompt contexts or requiring the LLM to execute UI login actions, the framework supports native **Session-Level Authentication Configuration**.
+
+### A. Playbook Authentication Schema
+Playbooks can declare protocol-level authentication requirements directly in their YAML metadata. This keeps the execution steps clean of credential management:
+
+```yaml
+name: "Secure Shopping Flow"
+auth:
+  type: "BASIC"                             # Options: BASIC, BEARER, CUSTOM_HEADER
+  targetDomain: "https://secure-store.com"
+  username: "${storeUser}"                  # Resolved dynamically from SessionData
+  password: "${storePassword}"              # Resolved dynamically from SessionData
+```
+
+Or for APIs requiring token authorization:
+```yaml
+auth:
+  type: "BEARER"
+  token: "${apiToken}"
+```
+
+---
+
+### B. Driver & Client Interception
+
+When the `AiSession` starts, it parses the `auth` block, resolves dynamic credentials from `SessionData`, and delegates authentication setup to the active `TargetExecutor` *before* any SUT state capture or execution begins:
+
+#### 1. Browser Authentication (`SelenideTargetExecutor`)
+Because OS-native Basic Auth dialogs block DOM rendering and cannot be selected or clicked by the LLM, the `SelenideTargetExecutor` intercepts them at the driver level using Selenium 4's native **`HasAuthentication`** interface:
+
+```java
+public void configureAuth(AuthenticationConfig auth)
+{
+    if ("BASIC".equalsIgnoreCase(auth.type()))
+    {
+        final WebDriver driver = getSelenideDriver().getWebDriver();
+        if (driver instanceof HasAuthentication authDriver)
+        {
+            // Selenium 4 automatically registers credentials and intercepts the OS dialog
+            authDriver.register(
+                UriTemplate.of(auth.targetDomain()),
+                UsernameAndPassword.of(auth.username(), auth.password())
+            );
+        }
+    }
+}
+```
+
+#### 2. API Authentication (`RestTargetExecutor`)
+For REST APIs, the `RestTargetExecutor` registers request interceptors directly on the underlying HTTP Client to automatically inject the required headers for every outgoing request:
+
+```java
+public void configureAuth(AuthenticationConfig auth)
+{
+    if ("BEARER".equalsIgnoreCase(auth.type()))
+    {
+        // Registers a global request interceptor that adds the header automatically
+        this.httpClient.registerInterceptor(request -> {
+            request.setHeader("Authorization", "Bearer " + auth.token());
+        });
+    }
+    else if ("BASIC".equalsIgnoreCase(auth.type()))
+    {
+        this.httpClient.registerInterceptor(request -> {
+            String credentials = auth.username() + ":" + auth.password();
+            String base64 = Base64.getEncoder().encodeToString(credentials.getBytes());
+            request.setHeader("Authorization", "Basic " + base64);
+        });
+    }
+}
+```
+
+---
+
+## 16. Implementation Roadmap & TDD Plan
 
 This section provides the step-by-step implementation order of the Neo Aura AI v2 decoupled architecture, prioritizing bottom-level leaf components first. Each phase requires accompanying test suites and mock providers to verify logic in a browserless environment.
 
