@@ -1672,7 +1672,7 @@ function setConnectionState(state) {
         if (overlay) {
             const h2 = overlay.querySelector('h2');
             const p = overlay.querySelector('p');
-            if (h2) h2.textContent = 'Connected';
+            if (h2) h2.textContent = 'Loading';
             if (p) p.textContent = 'Waiting for test data...';
             const icon = overlay.querySelector('i');
             if (icon) {
