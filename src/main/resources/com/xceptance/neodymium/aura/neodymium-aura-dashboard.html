@@ -1383,6 +1383,7 @@
                             <div>Total Run: <span id="statsTotalExecution" style="color:var(--accent);">0</span></div>
                             <div>Passed: <span id="statsPassed" style="color:var(--success);">0</span></div>
                             <div>Failed: <span id="statsFailed" style="color:var(--danger);">0</span></div>
+                            <div>Skipped: <span id="statsSkipped" style="color:var(--text-muted);">0</span></div>
                         </div>
                     </div>
                     <!-- Terminal Panel -->
@@ -2012,7 +2013,7 @@
         }
 
         let historyCached = [];
-        let activeRunStats = { total: 0, passed: 0, failed: 0, running: false, startTime: null, activeTestId: null };
+        let activeRunStats = { total: 0, passed: 0, failed: 0, skipped: 0, running: false, startTime: null, activeTestId: null };
         /**
          * Tracks which test files have already completed in the current live run.
          * Keyed by the full file path string. Updated whenever the backend's
@@ -2402,6 +2403,7 @@
                     // Passed/failed counts as clear text
                     const passedCount = parseInt(item.passed) || 0;
                     const failedCount = parseInt(item.failed) || 0;
+                    const skippedCount = parseInt(item.skipped) || 0;
 
                     return `
                         <tr class="history-row" style="cursor: pointer; ${selectedStyle}" onclick="selectHistoryRun('${item.id}', ${hasReport})">
@@ -2415,6 +2417,7 @@
                                 <div class="run-stats-row">
                                     <span class="run-stat-passed"><i class="fa-solid fa-check" aria-hidden="true"></i> ${passedCount} passed</span>
                                     <span class="run-stat-failed"><i class="fa-solid fa-xmark" aria-hidden="true"></i> ${failedCount} failed</span>
+                                    ${skippedCount > 0 ? `<span class="run-stat-skipped" style="color:var(--text-muted); font-weight:600;"><i class="fa-solid fa-forward-step" aria-hidden="true"></i> ${skippedCount} skipped</span>` : ''}
                                 </div>
                                 <div class="run-actions-row">
                                     <button class="run-action-btn" ${allureDisabled} ${allureTitle} ${allureAction}>
@@ -3451,6 +3454,7 @@
             activeRunStats.total = 0;
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
+            activeRunStats.skipped = 0;
             activeRunStats.activeFile = null;
             activeRunStats.activeTestId = null;
             activeRunStats.tests = fileDatasets;
@@ -3514,6 +3518,7 @@
             activeRunStats.total = 0;
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
+            activeRunStats.skipped = 0;
             activeRunStats.activeFile = null;
             activeRunStats.activeTestId = null;
             activeRunStats.tests = fileDatasets;
@@ -3573,6 +3578,7 @@
             activeRunStats.total = 0;
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
+            activeRunStats.skipped = 0;
             activeRunStats.activeFile = null;
             activeRunStats.activeTestId = null;
             activeRunStats.tests = selectedDatasets.map(d => ({ file: d.file, id: d.id }));
@@ -3640,6 +3646,7 @@
             activeRunStats.total = 0;
             activeRunStats.passed = 0;
             activeRunStats.failed = 0;
+            activeRunStats.skipped = 0;
             activeRunStats.activeFile = null;
             activeRunStats.activeTestId = null;
             activeRunStats.tests = (payload.datasets || []).map(d => ({ file: d.file, id: d.id }));
@@ -3890,15 +3897,17 @@
                         document.getElementById('statsTotalExecution').innerText = `${statusData.total} Test${statusData.total === 1 ? '' : 's'}`;
                         document.getElementById('statsPassed').innerText = statusData.passed;
                         document.getElementById('statsFailed').innerText = statusData.failed;
+                        document.getElementById('statsSkipped').innerText = statusData.skipped || 0;
 
                         activeRunStats.running = statusData.running;
                         activeRunStats.total = statusData.total;
                         activeRunStats.passed = statusData.passed;
                         activeRunStats.failed = statusData.failed;
+                        activeRunStats.skipped = statusData.skipped || 0;
                         if (statusData.running && !activeRunStats.startTime) {
                             activeRunStats.startTime = new Date();
                         }
-                        const currentStatsStr = `${activeRunStats.running}:${activeRunStats.total}:${activeRunStats.passed}:${activeRunStats.failed}:${historyCached.length}`;
+                        const currentStatsStr = `${activeRunStats.running}:${activeRunStats.total}:${activeRunStats.passed}:${activeRunStats.failed}:${activeRunStats.skipped}:${historyCached.length}`;
                         if (window._lastStatsStr !== currentStatsStr) {
                             renderHistoryTable();
                             window._lastStatsStr = currentStatsStr;
@@ -3929,7 +3938,7 @@
                                 const sidebarBadge = document.getElementById('sidebarRunBadge');
                                 if (sidebarBadge) {
                                     sidebarBadge.style.display = 'flex';
-                                    sidebarBadge.innerHTML = `<i class="fa-solid fa-circle-notch spinner"></i> ${statusData.passed + statusData.failed + 1}/${statusData.total}`;
+                                    sidebarBadge.innerHTML = `<i class="fa-solid fa-circle-notch spinner"></i> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${statusData.total}`;
                                 }
                                 updateRunButtons();
                             } else {

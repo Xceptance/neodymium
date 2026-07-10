@@ -91,7 +91,7 @@ import dev.langchain4j.data.message.UserMessage;
 public final class NeodymiumAuraManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(NeodymiumAuraManager.class);
     private static final Pattern STATS_PATTERN = Pattern
-            .compile("Tests run:\\s*(\\d+),\\s*Failures:\\s*(\\d+),\\s*Errors:\\s*(\\d+)");
+            .compile("Tests run:\\s*(\\d+),\\s*Failures:\\s*(\\d+),\\s*Errors:\\s*(\\d+)(?:,\\s*Skipped:\\s*(\\d+))?");
     private static final Gson gson = new Gson();
     
     private static final String serverSessionId = UUID.randomUUID().toString();
@@ -105,6 +105,7 @@ public final class NeodymiumAuraManager {
     private static final AtomicInteger globalTestsRun = new AtomicInteger(0);
     private static final AtomicInteger globalPassed = new AtomicInteger(0);
     private static final AtomicInteger globalFailed = new AtomicInteger(0);
+    private static final AtomicInteger globalSkipped = new AtomicInteger(0);
     private static final AtomicBoolean runningQueue = new AtomicBoolean(false);
     private static final AtomicBoolean manuallyStopped = new AtomicBoolean(false);
     private static final AtomicReference<String> activeFile = new AtomicReference<>("");
@@ -750,6 +751,7 @@ public final class NeodymiumAuraManager {
             status.put("total", globalTestsRun.get());
             status.put("passed", globalPassed.get());
             status.put("failed", globalFailed.get());
+            status.put("skipped", globalSkipped.get());
             status.put("running", runningQueue.get());
             status.put("activeFile", activeFile.get());
 
@@ -1290,6 +1292,7 @@ public final class NeodymiumAuraManager {
                 globalTestsRun.set(0);
                 globalPassed.set(0);
                 globalFailed.set(0);
+                globalSkipped.set(0);
                 manuallyStopped.set(false);
                 currentRunLogs.clear();
                 currentRunEvents.clear();
@@ -1427,6 +1430,7 @@ public final class NeodymiumAuraManager {
                     final AtomicInteger fileTestsRun = new AtomicInteger(0);
                     final AtomicInteger fileFailures = new AtomicInteger(0);
                     final AtomicInteger fileErrors = new AtomicInteger(0);
+                    final AtomicInteger fileSkipped = new AtomicInteger(0);
 
                     try (final BufferedReader reader = new BufferedReader(
                             new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
@@ -1449,6 +1453,9 @@ public final class NeodymiumAuraManager {
                                 fileTestsRun.set(Integer.parseInt(m.group(1)));
                                 fileFailures.set(Integer.parseInt(m.group(2)));
                                 fileErrors.set(Integer.parseInt(m.group(3)));
+                                if (m.group(4) != null) {
+                                    fileSkipped.set(Integer.parseInt(m.group(4)));
+                                }
                             }
                         }
                     } catch (final IOException e) {
@@ -1476,8 +1483,10 @@ public final class NeodymiumAuraManager {
                     if (fileTestsRun.get() > 0) {
                         globalTestsRun.addAndGet(fileTestsRun.get());
                         final int failures = fileFailures.get() + fileErrors.get();
+                        final int skipped = fileSkipped.get();
                         globalFailed.addAndGet(failures);
-                        globalPassed.addAndGet(fileTestsRun.get() - failures);
+                        globalSkipped.addAndGet(skipped);
+                        globalPassed.addAndGet(fileTestsRun.get() - failures - skipped);
                     } else {
                         globalTestsRun.incrementAndGet();
                         if (exitCode != 0) {
@@ -1615,7 +1624,7 @@ public final class NeodymiumAuraManager {
             // Write metadata.json with full run details including timing, run options, and the
             // original run configuration needed to replay the run (Rerun button).
             final File metadataFile = new File(destDir, "metadata.json");
-            final String status = manuallyStopped.get() ? "Aborted" : (globalFailed.get() == 0 ? "Passed" : "Failed");
+            final String status = manuallyStopped.get() ? "Aborted" : (globalFailed.get() == 0 && globalPassed.get() == 0 && globalSkipped.get() > 0 ? "Aborted" : (globalFailed.get() == 0 ? "Passed" : "Failed"));
             final long durationMs = System.currentTimeMillis() - runStartTimeMs.get();
             final boolean headless = req != null && req.headless;
             final boolean allureEnabled = req != null && req.allure;
@@ -1626,8 +1635,8 @@ public final class NeodymiumAuraManager {
             final String runConfigJson = gson.toJson(req);
 
             final String metadataContent = String.format(
-                    "{%n  \"status\": \"%s\",%n  \"timestamp\": \"%s\",%n  \"total\": %d,%n  \"passed\": %d,%n  \"failed\": %d,%n  \"durationMs\": %d,%n  \"headless\": %b,%n  \"allureEnabled\": %b,%n  \"videoEnabled\": %b,%n  \"runConfig\": %s%n}",
-                    status, timestamp, globalTestsRun.get(), globalPassed.get(), globalFailed.get(),
+                    "{%n  \"status\": \"%s\",%n  \"timestamp\": \"%s\",%n  \"total\": %d,%n  \"passed\": %d,%n  \"failed\": %d,%n  \"skipped\": %d,%n  \"durationMs\": %d,%n  \"headless\": %b,%n  \"allureEnabled\": %b,%n  \"videoEnabled\": %b,%n  \"runConfig\": %s%n}",
+                    status, timestamp, globalTestsRun.get(), globalPassed.get(), globalFailed.get(), globalSkipped.get(),
                     durationMs, headless, allureEnabled, videoEnabled, runConfigJson);
             Files.writeString(metadataFile.toPath(), metadataContent, StandardCharsets.UTF_8);
 
