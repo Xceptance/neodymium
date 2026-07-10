@@ -1455,3 +1455,79 @@ public record AuditResult(
 * **Checks**: Automatically reviews the full screenshot sequence for visual abnormalities, layout regressions, or overlapping elements that occurred during the test run.
 
 ---
+
+## 15. Implementation Roadmap & TDD Plan
+
+This section provides the step-by-step implementation order of the Neo Aura AI v2 decoupled architecture, prioritizing bottom-level leaf components first. Each phase requires accompanying test suites and mock providers to verify logic in a browserless environment.
+
+### A. TDD & Mocking Strategy
+* **Mocks First**: We create mock implementations for the SUT (`MockTargetExecutor`), the LLM (`MockLlmProvider`), and the resource manager (`InMemoryResourceManager`).
+* **Isolated Verification**: This allows us to unit test YAML parsing, variable sanitization, event dispatching, and pipeline loops in local JUnit 5 tests without browser dependencies or active API keys.
+
+---
+
+### B. Phased Rollout Plan
+
+```mermaid
+graph TD
+    P1[Phase 1: Parsers, Models & Resources] --> P2[Phase 2: Pluggable LLM & Prompts]
+    P2 --> P3[Phase 3: Session Data & Sanitizers]
+    P3 --> P4[Phase 4: Target Abstraction & Event Bus]
+    P4 --> P5[Phase 5: Composable Pipeline & Runner]
+    P5 --> P6[Phase 6: Selenide Implementation]
+    P6 --> P7[Phase 7: Debugger & HUD Integration]
+```
+
+#### Phase 1: Parsers, Models & Resources
+* **Target Components**: 
+  * `PlaybookStep` (Composite pattern tree for steps, nested steps, actions).
+  * `Playbook` (Main container holding steps).
+  * `PlaybookResourceManager` interface.
+  * `InMemoryResourceManager` (Holds playbooks/recordings in memory for direct next replay).
+  * `LocalFileResourceManager` (Local NIO file manager).
+  * `PlaybookParser` / `YamlPlaybookParser`.
+* **Testing Strategy**: Unit test playbook parsing from files, classpath resources, and raw strings. Verify include path resolution under both in-memory and local disk file managers.
+
+#### Phase 2: Pluggable LLM Provider & Registry
+* **Target Components**:
+  * `LlmCapability` enum, `LlmRequest`, `LlmResponse`, `LlmProvider` interface.
+  * `MockLlmProvider` (Accepts queued canned responses).
+  * `LlmRegistry` (Capability-based routing registry).
+  * `AiPrompt<T>` (compilation, response parsing & repair interface).
+* **Testing Strategy**: Mock LLM calls using `MockLlmProvider`. Assert correct prompt generation, prompt schema settings, model capabilities routing, and multi-stage response repairing/deserialization.
+
+#### Phase 3: Session Data & Sanitization
+* **Target Components**:
+  * `SessionData` (Dual static/dynamic variables map, snapshots, and rollback logic).
+  * `ContextSanitizer` (Pre-LLM masking using format-preserving mock patterns or user stand-ins).
+  * `ActionSanitizer` (On-the-fly action parameterization from raw values to variable references).
+* **Testing Strategy**: Test sensitive key scanning and value replacement. Verify reverse-mapping of stand-ins and assert that recorded action values are correctly parameterised on the fly during simulated mock executions.
+
+#### Phase 4: Target Abstraction & Event Bus
+* **Target Components**:
+  * `TargetExecutor` interface, `SutState`, `ActionDefinition`.
+  * `MockTargetExecutor` / `MockSutState` (Mock browser/API states).
+  * `ExecutionEventBus` (Publish/subscribe bus for lifecycle events).
+* **Testing Strategy**: Verify event dispatching and handler listener registration. Verify that state capturing and action execution routing trigger the correct listeners in isolation.
+
+#### Phase 5: Composable Pipeline & State Machine Runner
+* **Target Components**:
+  * `PipelineStep`, `StepResult`, `FlowControl` (CONTINUE, ABORT, REPEAT_STEP, ESCALATE).
+  * Composite steps: `SequenceStep`, `ConditionalBranchStep`, `TryCatchStep`, `LoopStep`.
+  * Concrete steps: `LintStep`, `CaptureStateStep`, `CallLlmStep`, `ExecuteActionsStep`, `VerifyOutcomeStep`, `PrepareRetryStep`.
+  * `ExecutionContext` (Transient data map, stack runner).
+  * `StateMachineRunner` (Compiles pipeline structure and runs state loop).
+* **Testing Strategy**: Run end-to-end simulated test scenarios in JUnit using `MockTargetExecutor` and `MockLlmProvider`. Assert pipeline success, failure, self-healing loop execution, and breakpoint pauses.
+
+#### Phase 6: Concrete Domain Implementation (Selenide)
+* **Target Components**:
+  * `SelenideTargetExecutor`, `BrowserSutState`, `SelenideBrowserSession`.
+  * Browser action plugins (`ClickAction`, `TypeAction`, etc.).
+  * `PlaybookRecorder` (Event listener compiling the output recording).
+* **Testing Strategy**: Run browser verification tests in `Aura Glance Sandbox` (`AuraGlanceTest.java`) with real/mock LLM endpoints.
+
+#### Phase 7: Debugger & HUD Integration
+* **Target Components**:
+  * `SessionDebugger` interface.
+  * Integration with HUD client websockets, execution stack rewinding, and dynamic playbook/data updates.
+* **Testing Strategy**: Verify HUD interactive break pausing, resume, step-over, and variables updates using debugger test cases.
