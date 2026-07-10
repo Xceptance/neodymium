@@ -41,7 +41,7 @@
 - [ ] 4.1 Define abstract `TargetExecutor` interface with `captureState`, `execute`, and `getSupportedActions` methods.
 - [ ] 4.2 Define `SutState` interface (DOM source, attachments, content hash) and `ActionDefinition` records.
 - [ ] 4.3 Implement `MockTargetExecutor` and `MockSutState` returning canned HTML strings and screenshot hashes in tests.
-- [ ] 4.4 Define pipeline events (`StepStartedEvent`, `StateCapturedEvent`, `ActionExecutedEvent`, `StepFinishedEvent`, `SessionFinishedEvent`).
+- [ ] 4.4 Define pipeline and diagnostic events (`StepStartedEvent`, `StateCapturedEvent`, `ActionExecutedEvent`, `StepFinishedEvent`, `SessionFinishedEvent`, `DiagnosticInfoEvent`, `DiagnosticWarningEvent`, `DiagnosticErrorEvent`).
 - [ ] 4.5 Implement `ExecutionEventBus` allowing listeners to register and receive lifecycle events synchronously.
 - [ ] 4.6 Write TDD tests checking that event bus dispatches events to multiple listeners in the correct order.
 
@@ -58,10 +58,10 @@
 - [ ] 5.9 Implement concrete runner steps: `CallLlmStep` (compiles and sends LLM query) and `ExecuteActionsStep` (executes actions on executor).
 - [ ] 5.10 Implement concrete runner steps: `VerifyOutcomeStep` (post-step assertions) and `PrepareRetryStep` (clears input/closes alerts).
 - [ ] 5.11 Define the abstract `AiSession` class holding the execution context, LLM capability registry, event bus, and session data, implementing `AutoCloseable`.
-- [ ] 5.12 Define the `SessionSetupHook` interface and support registering and executing setup hooks sequentially before the state machine runner executes.
+- [ ] 5.12 Define the `PreExecutionHook` and `PostExecutionHook` interfaces and support registering and executing them sequentially at session boundaries.
 - [ ] 5.13 Implement concrete package-private session classes (`MockBrowserSession`, `MockRestSession`) and static factory methods on `AiSession` (e.g. `AiSession.mock()`) for testing.
 - [ ] 5.14 Implement `StateMachineRunner` that wires the static live and replay pipelines and executes inside the active session.
-- [ ] 5.15 Write TDD integration tests executing mock playbooks browserless. Verify successful step execution, setup/audit hook lifecycles, self-healing escalation loops, compound step splits, and replay-to-live divergence fallbacks.
+- [ ] 5.15 Write TDD integration tests executing mock playbooks browserless. Verify successful step execution, pre/post execution hook lifecycles, event-driven warning diagnostics collection, self-healing loops, splits, and divergence.
 
 ## 6. Concrete Domain Implementation (Selenide)
 

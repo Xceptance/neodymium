@@ -14,9 +14,13 @@ Pipeline control flow and execution routing MUST be managed by throwing typed su
 - **WHEN** a composite pipeline step encounters an execution error and throws a `HealingRequiredException`
 - **THEN** the outer `TryCatchStep` intercepts the exception and executes the registered catch subpipeline matching the exception type.
 
-### Requirement: Pre-Execution Setup Hooks
-Before executing any playbook steps or initiating SUT state captures, the execution session MUST run all registered `SessionSetupHook` implementations sequentially. If any hook throws an exception, the session SHALL terminate immediately and propagate the exception.
+### Requirement: Pre/Post-Execution Lifecycle Hooks
+The execution session MUST run all registered `PreExecutionHook` implementations sequentially before starting step executions, and run all registered `PostExecutionHook` implementations sequentially after step executions complete. If any hook throws an exception, the session SHALL immediately terminate and propagate the exception. Hooks MUST support publishing non-blocking warnings or diagnostic info by sending events to the `ExecutionEventBus`.
 
 #### Scenario: Setup hook fails and aborts run
-- **WHEN** a registered setup hook throws an exception at start
+- **WHEN** a registered `PreExecutionHook` throws an exception at start
 - **THEN** the session does not capture SUT state or run the pipeline, aborts immediately, and propagates the exception to the caller.
+
+#### Scenario: Post-execution hook publishes diagnostic warning
+- **WHEN** a registered `PostExecutionHook` publishes a `DiagnosticWarningEvent` to the event bus
+- **THEN** the session runner captures the warning and attaches it to the final `PlaybookRecording` metadata without aborting or failing the run.

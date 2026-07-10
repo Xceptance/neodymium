@@ -713,6 +713,29 @@ public record SessionTelemetry(
 ```
 This telemetry is dumped as an audit JSON at the end of the session, allowing teams to track token budgets and AI execution efficiency directly inside CI/CD pipelines.
 
+### D. Custom Diagnostic & Hook Events
+
+To support soft reporting, warning logs, and custom setup/validation feedback, any execution step, pre-execution hook, or post-execution hook can publish custom diagnostic events to the `ExecutionEventBus` at any time.
+
+#### 1. Standard Diagnostic Events
+* **`DiagnosticInfoEvent`**: Carries informational logs (e.g. *"Setup hook populated test user credentials"*).
+* **`DiagnosticWarningEvent`**: Carries warning logs (e.g. *"Slow page load time detected during setup"*).
+* **`DiagnosticErrorEvent`**: Carries non-blocking, soft errors (e.g. *"Potential visual overlap detected on the checkout button"*).
+
+```java
+public record DiagnosticWarningEvent(
+    String message,
+    String sourceComponent,
+    Instant timestamp
+) implements ExecutionEvent {}
+```
+
+#### 2. Event Dispatching & Handling
+Subscribers listen to these events and process them in a decoupled manner:
+* **`Slf4jConsoleLogger`**: Subscribes to `DiagnosticWarningEvent` to log colorized warnings to the terminal, and `DiagnosticErrorEvent` to log soft errors.
+* **`PlaybookRecorder`**: Subscribes to all diagnostic events and attaches them directly to the `PlaybookRecording` metadata.
+* **Allure & HTML Reporters**: Subscribes to gather warnings and errors, formatting them as non-blocking annotations or warnings inside the test execution reports.
+
 ---
 
 ## 9. Playbook Parsing & Data Mutability
@@ -1621,15 +1644,15 @@ When `AiPrompt.parseResponse(rawText)` is invoked, it routes the raw model outpu
 3. **Model Object Stage**: Validates and overrides fields on the compiled Java object `T` (e.g. normalizing browser target selectors) before returning it to the caller.
 ---
 
-## 14. Session Setup & Auditing Layers (Pre/Post Hooks)
+## 14. Pre/Post-Execution Lifecycle Hooks
 
-To ensure the test environment is correctly prepared before execution starts, and dynamically validated after execution completes, the framework introduces pluggable **Pre-Execution Setup Hooks** and **Post-Execution Audit Hooks**. These hooks are registered on the `AiSession` and execute at the boundaries of the execution cycle.
+To ensure the test environment is correctly prepared before execution starts, and dynamically validated after execution completes, the framework introduces pluggable **Pre-Execution Hooks** and **Post-Execution Hooks**. These hooks are registered on the `AiSession` and execute at the boundaries of the execution cycle.
 
 ```mermaid
 graph TD
-    Start[AiSession.execute] -->|1. Run Setup Hooks| PreHooks[Session Setup Chain]
+    Start[AiSession.execute] -->|1. Run Pre-Execution Hooks| PreHooks[Pre-Execution Chain]
     PreHooks -->|2. Execute Pipeline| Runner[StateMachineRunner]
-    Runner -->|3. Run Audit Hooks| PostHooks[Session Audit Chain]
+    Runner -->|3. Run Post-Execution Hooks| PostHooks[Post-Execution Chain]
     PostHooks --> End[Return Recording]
 
     subgraph Pre-Hooks
@@ -1645,57 +1668,53 @@ graph TD
 
 ---
 
-### A. The Setup and Auditing Interfaces
+### A. The Hook Interfaces & Event-Driven Diagnostics
 
-#### 1. Pre-Execution Setup Hook (`SessionSetupHook`)
-Setup hooks execute sequentially *prior* to SUT state capture or pipeline execution. If any setup hook throws an exception, the session terminates immediately and propagates the error, preventing unnecessary SUT/LLM interaction costs:
+Both pre- and post-execution hooks receive the active `AiSession` instance, giving them direct access to `session.getEventBus()`, `session.getSessionData()`, and configuration settings.
+
+* **Hard Failures**: A hook throws an exception (e.g. `VerificationException`) to immediately fail the session execution.
+* **Soft Warnings & Soft Errors**: Instead of throwing, a hook publishes standard diagnostic events (e.g. `DiagnosticWarningEvent` or `DiagnosticErrorEvent`) to the event bus. Decoupled listeners collect these warnings and attach them to the final `PlaybookRecording` metadata or Allure reports.
+
+#### 1. Pre-Execution Hook (`PreExecutionHook`)
+Executes sequentially *prior* to SUT state capture or pipeline execution. If any setup hook throws an exception, the session terminates immediately and propagates the error, preventing unnecessary SUT/LLM interaction costs:
 
 ```java
-public interface SessionSetupHook
+public interface PreExecutionHook
 {
     /**
-     * Executes custom setup logic before executing any playbook steps.
+     * Executes custom preparation or validation logic before executing steps.
      * 
-     * @param playbook the initial instruction playbook
-     * @param data the session data variables
-     * @throws Exception if setup fails, aborting execution
+     * @param session the active execution session context
+     * @throws Exception if validation or setup fails, triggering a hard failure
      */
-    void setup(Playbook playbook, SessionData data) throws Exception;
+    void before(AiSession session) throws Exception;
 }
 ```
 
-#### 2. Post-Execution Audit Hook (`SessionAuditHook`)
-Audit hooks execute sequentially at the conclusion of the execution session (right before the session returns the final recording) to validate data consistency, layout regression, or AI reasoning correctness:
+#### 2. Post-Execution Hook (`PostExecutionHook`)
+Executes sequentially at the conclusion of the execution session (right before the session returns the final recording) to validate data consistency, layout regression, or AI reasoning correctness:
 
 ```java
-public interface SessionAuditHook
+public interface PostExecutionHook
 {
     /**
-     * Audits the completed session.
+     * Executes custom audits or verifications on the finished run.
      * 
-     * @param playbook the initial instruction playbook
-     * @param recording the final execution trace (actions, states, screenshots)
-     * @param data the final session data variables
-     * @return the result indicating if the run successfully fulfilled its goals
+     * @param session the active execution session context
+     * @param recording the completed execution recording
+     * @throws Exception if auditing detects a critical failure, failing the test run
      */
-    AuditResult audit(Playbook playbook, PlaybookRecording recording, SessionData data);
+    void after(AiSession session, PlaybookRecording recording) throws Exception;
 }
-```
-
-public record AuditResult(
-    boolean passed,
-    String summary,
-    Map<String, Object> details // Diagnostic metrics, LLM reasoning explanations, etc.
-) {}
 ```
 
 ---
 
 ### B. Execution Lifecycle Integration
-* The hooks are registered on the `AiSession` (e.g. `session.registerAuditHook(new LlmExecutionAuditor())`).
-* When the runner finishes the entire playbook, the session executes the registered audit hooks sequentially.
-* The audit results are attached directly to the final `PlaybookRecording` metadata and reported in the test logs.
-* *Note: This auditing layer is designed for high extensibility, but remains **low priority** for the initial MVP implementation.*
+* The hooks are registered on the `AiSession` (e.g. `session.registerPostExecutionHook(new LlmExecutionAuditor())`).
+* When the runner finishes the entire playbook, the session executes the registered post-execution hooks sequentially.
+* Any warnings published by hooks to the event bus during the `before()` or `after()` phases are captured by the `PlaybookRecorder` listener and saved under the final `PlaybookRecording` metadata log.
+* *Note: This hook layer is designed for high extensibility, but remains **low priority** for the initial MVP implementation.*
 
 ---
 
