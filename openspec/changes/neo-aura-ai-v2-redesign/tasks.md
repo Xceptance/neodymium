@@ -42,8 +42,8 @@
 - [ ] 4.2 Define `SutState` interface (DOM source, attachments, content hash) and `ActionDefinition` records.
 - [ ] 4.3 Implement `MockTargetExecutor` and `MockSutState` returning canned HTML strings and screenshot hashes in tests.
 - [ ] 4.4 Define pipeline and diagnostic events (`StepStartedEvent`, `StateCapturedEvent`, `ActionExecutedEvent`, `StepFinishedEvent`, `SessionFinishedEvent`, `DiagnosticInfoEvent`, `DiagnosticWarningEvent`, `DiagnosticErrorEvent`).
-- [ ] 4.5 Implement `ExecutionEventBus` allowing listeners to register and receive lifecycle events synchronously.
-- [ ] 4.6 Write TDD tests checking that event bus dispatches events to multiple listeners in the correct order.
+- [ ] 4.5 Implement `ExecutionEventBus` allowing listeners to register, receive events, and including an active listeners tracking set to prevent re-entrant recursion.
+- [ ] 4.6 Write TDD tests checking that event bus dispatches events in the correct order, and blocks re-entrant listener loop recursion.
 
 ## 5. Composable Pipeline & State Machine Runner
 
@@ -51,7 +51,7 @@
 - [ ] 5.2 Implement subclass exceptions: `HealingRequiredException`, `DivergenceException`, and `ConclusiveFailureException`.
 - [ ] 5.3 Implement `EscalationException` and subclass `ToLevelEscalationException` to support relative and target level context jumps.
 - [ ] 5.4 Implement `StepSplitException` carrying parsed child sub-steps.
-- [ ] 5.5 Implement `ExecutionContext` carrying the LIFO stack runner queue, session context, and transient data map.
+- [ ] 5.5 Implement `ExecutionContext` carrying the LIFO stack runner queue, session context, transient data map, and a mutable recording metadata map.
 - [ ] 5.6 Implement structural pipeline steps: `SequenceStep`, `ConditionalBranchStep`, and `LoopStep`.
 - [ ] 5.7 Implement `TryCatchStep` holding a map of caught exception classes to subpipeline handlers.
 - [ ] 5.8 Implement concrete runner step `CaptureStateStep` (context-level state capture).

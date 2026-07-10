@@ -24,3 +24,10 @@ The execution session MUST run all registered `PreExecutionHook` implementations
 #### Scenario: Post-execution hook publishes diagnostic warning
 - **WHEN** a registered `PostExecutionHook` publishes a `DiagnosticWarningEvent` to the event bus
 - **THEN** the session runner captures the warning and attaches it to the final `PlaybookRecording` metadata without aborting or failing the run.
+
+### Requirement: Event Bus Loop Protection
+The `ExecutionEventBus` MUST prevent re-entrant loops by skipping dispatching to any event listener that is already active on the execution call stack.
+
+#### Scenario: Listener fires recursive event
+- **WHEN** a registered listener is executing `onEvent` and publishes a new event to the bus
+- **THEN** the event bus dispatches the new event to all other registered listeners, but bypasses the active listener to prevent infinite recursion.

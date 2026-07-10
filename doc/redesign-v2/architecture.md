@@ -235,14 +235,64 @@ When a step execution or validation fails, the runner does not terminate the bro
 ### D. Event-Driven Lifecycle: `ExecutionEventBus`
 The `StateMachineRunner` transitions through step resolution and execution, publishing simple domain events. It is entirely free of logging, reporting, HUD, or serialization concerns.
 
-#### Core Events:
+#### 1. The `ExecutionEvent` and `ExecutionEventBus` Contracts
+Every event implements `ExecutionEvent` and carries a reference to the active `ExecutionContext` to let subscribers easily query session data, variables, playbooks, and states:
+
+```java
+public interface ExecutionEvent
+{
+    /**
+     * @return the execution context of the active session.
+     */
+    ExecutionContext getContext();
+}
+
+public interface ExecutionEventListener
+{
+    void onEvent(ExecutionEvent event);
+}
+```
+
+#### 2. Re-entrancy Loop Protection
+Since the session runs entirely on a single thread, the `ExecutionEventBus` implements a simple instance-level guard set to track currently executing listeners and prevent infinite loops or stack overflows from recursive event publishing:
+
+```java
+public final class ExecutionEventBus
+{
+    private final List<ExecutionEventListener> listeners = new CopyOnWriteArrayList<>();
+    private final Set<ExecutionEventListener> activeListeners = new HashSet<>();
+
+    public void publish(final ExecutionEvent event)
+    {
+        for (final ExecutionEventListener listener : this.listeners)
+        {
+            // Guard: Prevent re-entrant loops by skipping listeners currently on the call stack
+            if (!this.activeListeners.contains(listener))
+            {
+                this.activeListeners.add(listener);
+                try
+                {
+                    listener.onEvent(event);
+                }
+                finally
+                {
+                    this.activeListeners.remove(listener);
+                }
+            }
+        }
+    }
+}
+```
+
+#### 3. Core Events:
 * **`StepStartedEvent`**: Dispatched when a new instruction starts.
 * **`StateCapturedEvent`**: Contains the `SutState` (DOM and screenshot) prior to action execution.
 * **`ActionExecutedEvent`**: Dispatched when a single action finishes.
 * **`StepFinishedEvent`**: Contains the outcome, reasoning, and healed context level.
 * **`SessionFinishedEvent`**: Dispatched when the test session completes.
+* **`DiagnosticInfoEvent` / `DiagnosticWarningEvent` / `DiagnosticErrorEvent`**: Dispatched by hooks or runner steps to log soft diagnostics.
 
-#### Listeners:
+#### 4. Listeners:
 * **`PlaybookRecorder`**: Listens to step and action events to build the recording and saves it via `PlaybookResourceManager` upon session success.
 * **`HudListener`**: Renders the glassmorphic interactive HUD on the browser, handles breakpoints, and pauses the runner on execution errors to await manual overrides.
 * **`AllureReporter` / `AuraServerReporter`**: Collect step details and screenshots to output test reports.
