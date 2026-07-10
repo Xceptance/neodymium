@@ -917,8 +917,8 @@ graph TD
     end
 ```
 
-### A. The Core Contract: `PipelineStep` & `StepResult`
-Every phase in the execution chain implements a functional interface:
+### A. The Core Contract: `PipelineStep` & Exception-Based Flow Control
+Every phase in the execution chain implements a simple functional interface. Instead of returning custom flow control enums, steps execute normally (implying standard continuation) or throw typed exceptions that extend `PipelineException` to trigger custom flow routing:
 
 ```java
 @FunctionalInterface
@@ -927,23 +927,49 @@ public interface PipelineStep
     /**
      * Executes this phase.
      * 
-     * @param context the thread-isolated execution context of the session
-     * @return the result instructing the pipeline runner how to proceed
+     * @param context the thread-isolated execution context
+     * @throws PipelineException if a flow redirection or execution error occurs
      */
-    StepResult execute(ExecutionContext context) throws Exception;
+    void execute(ExecutionContext context) throws PipelineException;
 }
 
-public record StepResult(
-    FlowControl control,       // CONTINUE, ABORT, REPEAT_STEP, ESCALATE
-    String message
-) {}
-
-public enum FlowControl
+public abstract class PipelineException extends Exception
 {
-    CONTINUE,                  // Proceed to the next step in the sequence
-    ABORT,                     // Halts execution immediately (error/assertion failure)
-    REPEAT_STEP,               // Instructs the parent loop to retry the current step
-    ESCALATE                   // Signals context level escalation
+    protected PipelineException(String message) { super(message); }
+    protected PipelineException(String message, Throwable cause) { super(message, cause); }
+}
+
+/**
+ * Thrown when SUT execution fails (e.g. element not found or validation fails).
+ * Triggers the context escalation and healing pipeline.
+ */
+public class HealingRequiredException extends PipelineException
+{
+    private final Action failedAction;
+    public HealingRequiredException(String message, Action failedAction, Throwable cause)
+    {
+        super(message, cause);
+        this.failedAction = failedAction;
+    }
+    public Action getFailedAction() { return failedAction; }
+}
+
+/**
+ * Thrown during replay when the SUT state does not match the baseline recording.
+ * Triggers the fallback to Live LLM mode.
+ */
+public class DivergenceException extends PipelineException
+{
+    public DivergenceException(String message) { super(message); }
+}
+
+/**
+ * Thrown when execution fails conclusively (e.g. retry budget exhausted).
+ * Halts pipeline execution and fails the test.
+ */
+public class ConclusiveFailureException extends PipelineException
+{
+    public ConclusiveFailureException(String message, Throwable cause) { super(message, cause); }
 }
 ```
 
@@ -953,10 +979,13 @@ public enum FlowControl
 
 We define reusable structural composite steps in code to manage flow control:
 
-1. **`SequenceStep`**: Runs a list of steps sequentially. Halts if a step returns `ABORT`.
+1. **`SequenceStep`**: Runs a list of steps sequentially. Halts and propagates if any step throws a `PipelineException`.
 2. **`ConditionalBranchStep`**: Evaluates a predicate against the context to route execution into either a `then` or `else` subpipeline.
-3. **`TryCatchStep`**: Wraps a pipeline. If an action or assertion fails, it executes a fallback subpipeline (e.g. self-healing or HUD debugger prompt).
+3. **`TryCatchStep`**: Wraps a `tryStep` and maps exceptions to specific catch subpipelines (analogous to a Java `try-catch` block). If an exception occurs, the catch map is scanned for the nearest matching class handler to execute.
 4. **`LoopStep`**: Repeats a subpipeline under specific retry budget ceilings.
+
+#### Stack Mutation for Step Splitting
+Because the `ExecutionContext` exposes the active execution stack, steps (like `PesapStep` or dynamic includes) can directly mutate the runner queue using `context.pushSteps(list)`. When the step completes normally, the runner loop naturally pops and executes the newly inserted sub-steps on subsequent iterations. This eliminates the need for any custom `REPEAT_STEP` loop directives.
 
 ---
 
@@ -980,15 +1009,22 @@ public static PipelineStep createLiveExecutionPipeline()
                 new ExecuteActionsStep(), // Executes actions on TargetExecutor
                 new VerifyOutcomeStep()   // Verifies post-assertions
             ),
-            // Catch Block: Trigger healing escalation loop
-            new LoopStep(
-                ctx -> ctx.getRetryBudget().hasBudget(),
-                new SequenceStep(
-                    new EscalateContextStep(), // Context level upgrade
-                    new PrepareRetryStep(),    // In-page state reset (clear input, close overlays)
-                    new CallLlmStep(),
-                    new ExecuteActionsStep(),
-                    new VerifyOutcomeStep()
+            // Catch Block Map: Map specific exceptions to healing/recovery steps
+            Map.of(
+                HealingRequiredException.class, new LoopStep(
+                    ctx -> ctx.getRetryBudget().hasBudget(),
+                    new SequenceStep(
+                        new EscalateContextStep(), // Context level upgrade, clears cached state
+                        new PrepareRetryStep(),    // In-page state reset (clear input, close overlays)
+                        new CaptureStateStep(),    // Capture SUT state at new ContextLevel
+                        new CallLlmStep(),
+                        new ExecuteActionsStep(),
+                        new VerifyOutcomeStep()
+                    )
+                ),
+                ConclusiveFailureException.class, new SequenceStep(
+                    new ReportFailureStep(),
+                    new FailSessionStep()
                 )
             )
         ),
@@ -1009,15 +1045,24 @@ public static PipelineStep createReplayPipeline()
             // Condition: Does the current page dHash match the baseline recording preStateHash?
             ctx -> ctx.isReplayStateConsistent(),
             
-            // Then: Safe Replay
-            new SequenceStep(
-                new ReplayActionsStep(),
-                new VerifyOutcomeStep()
+            // Then: Try Safe Replay
+            new TryCatchStep(
+                new SequenceStep(
+                    new ReplayActionsStep(),
+                    new VerifyOutcomeStep()
+                ),
+                // Catch any replay failure: Mark diverged and fallback to live LLM healing
+                Map.of(
+                    PipelineException.class, new SequenceStep(
+                        new MarkDivergedStep(),   // Truncates future recording steps
+                        createLiveExecutionPipeline()
+                    )
+                )
             ),
             
             // Else: Divergence! Switch to Live Healing
             new SequenceStep(
-                new MarkDivergedStep(),   // Truncates future recording steps
+                new MarkDivergedStep(),
                 createLiveExecutionPipeline()
             )
         )
