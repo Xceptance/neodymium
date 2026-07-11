@@ -560,8 +560,7 @@ public void testInMemoryReplay()
 ---
 
 ### A. Layered Data Holder: `SessionData`
-To support dynamic runtime variables (like extracted order numbers or HUD edits) while preserving original inputs, the session maintains two distinct data layers:
-1. **Static Data Layer (Immutable)**: Contains the initial dataset parameters, system properties, and configurations injected at startup.
+1. **Static Data Layer (Immutable)**: Contains the initial dataset parameters, system properties, and configurations injected at startup. To prevent runtime mutations (such as variable extractions or HUD updates) from modifying the original playbook's parsed datasets, the `SessionData` constructor defensively copies the input static map and wraps it in an unmodifiable map.
 2. **Dynamic Data Layer (Mutable)**: Contains variables mutated, added, or extracted during the run.
 
 ```mermaid

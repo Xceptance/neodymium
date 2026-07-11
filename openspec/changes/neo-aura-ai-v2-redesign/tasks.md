@@ -32,7 +32,7 @@
 
 - [ ] 3.1 Create `SessionData` class supporting static (immutable) variables and dynamic (mutable concurrent) variables.
 - [ ] 3.2 Implement snapshot history mapping in `SessionData` to capture dynamic variable states.
-- [ ] 3.3 Write TDD tests verifying variable values lookup precedence (Dynamic > Static) and state rollback.
+- [ ] 3.3 Write TDD tests verifying variable values lookup precedence (Dynamic > Static), state rollback, and immutability of the static dataset (defensive copying).
 - [ ] 3.4 Implement `ContextSanitizer` scanning payloads for credentials, replacing them with format-preserving mock patterns or user stand-in values.
 - [ ] 3.5 Implement `ActionSanitizer` performing on-the-fly variable parameterization of executed actions (raw input replaced with variable references).
 - [ ] 3.6 Write TDD tests verifying pre-LLM secret masking and reverse-mapping of stand-ins.

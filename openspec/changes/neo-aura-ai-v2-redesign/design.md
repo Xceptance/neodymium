@@ -60,6 +60,11 @@ Neo Aura AI v1 is a coupled, browser-bound AI execution engine. The redesigned v
 * **Rationale**: This allows post-run validation of logical correctness, variable structures, and visual regressions without cluttering the main state machine runner.
 * **Alternatives Considered**: Verification inside the main runner steps. Rejected to maintain strict single-responsibility separation.
 
+### 8. Immutable Playbook & Defensive SessionData Copying
+* **Decision**: The parsed `Playbook` and its associated dataset parameter lists are strictly immutable. When the session initializes, it copies the active dataset map defensively to construct the thread-isolated `SessionData` instance.
+* **Rationale**: This prevents dynamic runtime variable modifications (e.g. dynamic value extractions or HUD edits) from mutating the original static dataset, keeping it clean and consistent for subsequent replays or parallel execution threads.
+* **Alternatives Considered**: Direct mapping of the parsed dataset map. Rejected due to the high risk of cross-thread contamination during parallel runs.
+
 ---
 
 ## Risks / Trade-offs
