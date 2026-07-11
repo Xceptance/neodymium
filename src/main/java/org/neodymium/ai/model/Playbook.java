@@ -33,7 +33,14 @@ import java.util.Map;
  */
 public final class Playbook
 {
+    /**
+     * The unmodifiable sequential list of primary playbook steps.
+     */
     private final List<PlaybookStep> steps;
+
+    /**
+     * The unmodifiable list of dataset maps containing test parameters.
+     */
     private final List<Map<String, SessionData.DataEntry>> dataSets;
 
     /**

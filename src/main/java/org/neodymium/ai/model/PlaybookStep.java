@@ -31,11 +31,34 @@ import org.neodymium.ai.action.Action;
  */
 public final class PlaybookStep
 {
+    /**
+     * The natural language instruction describing what needs to be executed in this step.
+     */
     private String instruction;
+
+    /**
+     * Nested child steps in the composite hierarchy if this step was split or structured.
+     */
     private final List<PlaybookStep> subSteps = new ArrayList<>();
+
+    /**
+     * The concrete executed actions list associated with this step.
+     */
     private final List<Action> actions = new ArrayList<>();
+
+    /**
+     * The current execution state of this step.
+     */
     private PlaybookStepStatus status = PlaybookStepStatus.PENDING;
+
+    /**
+     * Flag indicating whether the step execution failed.
+     */
     private boolean failed;
+
+    /**
+     * The error trace or failure message describing the cause of execution failure.
+     */
     private String failureReason;
 
     /**

@@ -12,7 +12,7 @@
 - **Headers:** Add GNU AGPLv3 license header to all AI-related source files, but MIT license header for the rest.
 - **Attribution:** Do not use inline comments like `// AI-generated: <Model>`. Use `@author` tags on class/interface Javadoc level instead (e.g., `@author AI-generated: <Model Name>`), and always add a second author tag for `Xceptance GmbH 2026`.
 - **Strict Java:** Aggressive `final` modifiers (variables, args, methods, fields). NO inline FQCNs; use explicit top imports. Unused imports and variables are strictly prohibited.
-- **Documentation:** Write proper method comments, inline comments, and class comments where needed. Make it as useful for a human as possible. Also keep in mind, that this is also documentation for AI to reconstruct decisions.
+- **Documentation:** Write proper method comments, inline comments, class comments, and clearly document what fields are for. Make it as useful for a human as possible. Also keep in mind, that this is also documentation for AI to reconstruct decisions.
 - **Imports:** Always import fully qualified. Use static imports such as `Assertions.assertEquals`, only when it increases readability and the import is used multiple times. Remove unused imports.
 
 ## Dependencies & Git

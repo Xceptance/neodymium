@@ -40,10 +40,19 @@ public final class SessionData
      */
     public static record DataEntry(Object value, boolean sensitive) {}
 
+    /**
+     * The immutable static dataset injected at session startup (defensively copied).
+     */
     private final Map<String, DataEntry> staticData;
+
+    /**
+     * The mutable dynamic data layer for storing extracted variables and runtime parameters.
+     */
     private final Map<String, DataEntry> dynamicData = new ConcurrentHashMap<>();
     
-    // Keyed by step index, stores a snapshot of dynamicData at the start of that step
+    /**
+     * History mapping step index to a snapshot copy of the dynamic data at the start of that step.
+     */
     private final Map<Integer, Map<String, DataEntry>> dynamicHistory = new ConcurrentHashMap<>();
 
     /**
