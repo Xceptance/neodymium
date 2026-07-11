@@ -38,7 +38,7 @@ The current Neo Aura AI orchestration engine is tightly coupled to Selenide brow
 
 ## Impact
 
-* **Affected Packages**: Refactors and extends `com.xceptance.neodymium.ai.*`.
+* **New Parallel Package**: Implements the v2 redesign as a parallel implementation under the package `org.neodymium.ai.*`, removing the company prefix `com.xceptance` to make it open-source ready.
 * **APIs**: Introduces clean static factories on abstract `AiSession` (e.g., `AiSession.selenide()`, `AiSession.rest()`), package-private concrete sessions, and JUnit annotations (`@NeodymiumAiTest`, `@AiPlaybook`, etc.).
 * **Dependencies**: Extends Selenium 4 API usage (for CDP `HasAuthentication` interception).
 * **Testing**: Replaces mock browser frameworks with local `MockLlmProvider` and `MockTargetExecutor` unit test fixtures.

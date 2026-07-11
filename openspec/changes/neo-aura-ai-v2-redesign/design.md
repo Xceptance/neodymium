@@ -65,6 +65,11 @@ Neo Aura AI v1 is a coupled, browser-bound AI execution engine. The redesigned v
 * **Rationale**: This prevents dynamic runtime variable modifications (e.g. dynamic value extractions or HUD edits) from mutating the original static dataset, keeping it clean and consistent for subsequent replays or parallel execution threads.
 * **Alternatives Considered**: Direct mapping of the parsed dataset map. Rejected due to the high risk of cross-thread contamination during parallel runs.
 
+### 9. Parallel Implementation in `org.neodymium.ai`
+* **Decision**: All redesigned v2 engine classes and interfaces will be implemented from scratch under a new parallel package structure `org.neodymium.ai.*` (removing the legacy `com.xceptance` prefix).
+* **Rationale**: This decouples v2 implementation from legacy v1 classes (`com.xceptance.neodymium.ai.*`), enabling side-by-side verification and testing without breaking existing classic AI test suites. Furthermore, removing the company prefix makes the library open-source ready.
+* **Alternatives Considered**: Modifying existing v1 classes in-place. Rejected because it would instantly break the existing 22 action plugins and standard test configurations during the transition.
+
 ---
 
 ## Risks / Trade-offs

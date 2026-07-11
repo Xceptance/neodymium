@@ -208,7 +208,7 @@ public interface RestActionPlugin
 }
 ```
 
-* **Type-Safe Downcasting**: Since these action plugins are registered directly inside the corresponding domain executor package (e.g. `com.xceptance.neodymium.ai.rest.action`), they can safely downcast the generic `SutState` to the type-specific implementation (`RestSutState` or `BrowserSutState`) to assert status codes, inspect headers, or query session logs.
+* **Type-Safe Downcasting**: Since these action plugins are registered directly inside the corresponding domain executor package (e.g. `org.neodymium.ai.rest.action`), they can safely downcast the generic `SutState` to the type-specific implementation (`RestSutState` or `BrowserSutState`) to assert status codes, inspect headers, or query session logs.
 * **Separation of Concerns**: This keeps the core state machine runner completely domain-blind, while allowing the individual actions to utilize 100% of the SUT's specialized state properties.
 
 The **`SelenideTargetExecutor`** implements `TargetExecutor` by:
@@ -705,7 +705,7 @@ The `Slf4jConsoleLogger` subscribes to the event bus to produce clean, user-frie
 ```java
 public final class Slf4jConsoleLogger implements ExecutionEventListener
 {
-    private static final Logger LOG = LoggerFactory.getLogger("com.xceptance.neodymium.ai.console");
+    private static final Logger LOG = LoggerFactory.getLogger("org.neodymium.ai.console");
 
     @Override
     public void onEvent(final ExecutionEvent event)
