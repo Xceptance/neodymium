@@ -12,6 +12,7 @@
 - [ ] 1.10 Implement `YamlPlaybookParser` parsing playbooks recursively using snakeyaml, including a cycle-detection check (tracking the include resolution path) to prevent infinite loops.
 - [ ] 1.11 Implement `InlinePlaybookParser` parsing raw multi-line strings into playbook steps.
 - [ ] 1.12 Create JUnit 5 verification suite for full playbook parsing and resource resolution.
+- [ ] 1.13 Copy and rewrite core utility helper classes (e.g., config loaders, tag extractors, and element selectors) from legacy packages into `org.neodymium.ai` to ensure completely independent, side-by-side evolution.
 
 ## 2. LLM Client Interface, Registry & Prompts
 
