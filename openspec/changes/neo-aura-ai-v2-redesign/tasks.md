@@ -9,7 +9,7 @@
 - [ ] 1.7 Implement `InMemoryResourceManager` utilizing thread-safe string maps to store playbook recordings without disk writes.
 - [ ] 1.8 Define `PlaybookParser` interface signature.
 - [ ] 1.9 Write TDD tests parsing simple YAML files and nested includes using a mock parser.
-- [ ] 1.10 Implement `YamlPlaybookParser` parsing playbooks recursively using snakeyaml.
+- [ ] 1.10 Implement `YamlPlaybookParser` parsing playbooks recursively using snakeyaml, including a cycle-detection check (tracking the include resolution path) to prevent infinite loops.
 - [ ] 1.11 Implement `InlinePlaybookParser` parsing raw multi-line strings into playbook steps.
 - [ ] 1.12 Create JUnit 5 verification suite for full playbook parsing and resource resolution.
 
