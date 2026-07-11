@@ -13,10 +13,13 @@ Neo Aura AI v1 is a coupled, browser-bound AI execution engine. The redesigned v
 * Support format-preserving secret masking and on-the-fly action parameterization during runtime recording.
 * Implement protocol-level driver interception for Basic Auth (Selenium 4 `HasAuthentication`) and REST Bearer token injection.
 * Support offline browserless test execution using `MockLlmProvider` and `MockTargetExecutor` fixtures.
+* Implement a custom JUnit 5 runner extension and suite of annotations (`@NeodymiumAiTest`, `@AiPlaybook`, `@AiMode`, `@AiDataSet`, etc.) supporting convention-based playbook resolution, parameterization, and lifecycle sharing.
+* Implement dynamic, model-family-optimized prompt compilation via `PromptBuilderService` and output repairing via a Multi-Stage Response Repairer.
+* Implement pluggable lifecycle hooks (`PreExecutionHook`, `PostExecutionHook`) and standard audit implementations (`LlmExecutionAuditor`, `DataConsistencyAuditor`, `AuraVisualAuditor`).
+* Implement a Visual Root Cause Analysis (RCA) diagnostic loop and a Two-Stage Semantic Healing comparison pattern (Semantic Divergence Analysis).
 
 **Non-Goals:**
 * Implementing concrete executors for non-browser/non-REST interfaces (such as Database or CLI) in this phase.
-* Implementing complex post-execution session auditing hooks (deferred to a future MVP phase).
 
 ---
 
@@ -28,7 +31,7 @@ Neo Aura AI v1 is a coupled, browser-bound AI execution engine. The redesigned v
 * **Alternatives Considered**: Enum-based state mapping inside the runner loop. Rejected due to the risk of creating a complex procedural loop inside the main runner class.
 
 ### 2. On-the-Fly Sanitization & Parameterization
-* **Decision**: Masking of secrets in prompts and DOM structures (using format-preserving mock patterns or stand-ins) occurs immediately before sending data to the LLM. Parameterization of recorded actions (converting raw typed strings to variables like `${userPassword}`) occurs on-the-fly as the actions are executed.
+* **Decision**: Masking of secrets in prompts and DOM structures (using format-preserving mock patterns or user stand-ins) occurs immediately before sending data to the LLM. Parameterization of recorded actions (converting raw typed strings to variables like `${userPassword}`) occurs on-the-fly as the actions are executed.
 * **Rationale**: Identifying which raw strings in a finished `PlaybookRecording` correspond to variables is extremely difficult after the run is complete. Doing this on the fly when the execution context has full variable mapping preserves correctness.
 * **Alternatives Considered**: Post-execution sanitization pass. Rejected due to the high risk of false positives/negatives in matching credentials after execution data is serialized.
 
@@ -36,6 +39,26 @@ Neo Aura AI v1 is a coupled, browser-bound AI execution engine. The redesigned v
 * **Decision**: Native website Basic Auth is intercepted at the driver layer using Selenium 4's `HasAuthentication` CDP registration. API authorization (e.g. Bearer tokens) is injected directly using HTTP Client request interceptors.
 * **Rationale**: Basic auth challenges are OS-level dialogs that do not exist in the DOM, making them completely invisible to the LLM. Intercepting them at the protocol level ensures the LLM only interacts with the fully rendered, authenticated web application.
 * **Alternatives Considered**: Simulated UI interaction steps. Rejected because browser-native authentication prompts are not interactable via DOM-based click/type selectors.
+
+### 4. JUnit 5 Extension & Annotation Mapping
+* **Decision**: We build a custom JUnit 5 extension (`NeodymiumAiRunner`) implementing `TestTemplateInvocationContextProvider`. `@NeodymiumAiTest` marks the class, resolving playbooks by package package/convention, and `@AiPlaybook` marks test methods. `@AiDataSet` filters data sets, and `@AiMode` configures sequential/single execution modes.
+* **Rationale**: `@Test` is always required to maintain IDE integration, while the custom template provider handles spawning parameterized invocations for multiple data sets dynamically.
+* **Alternatives Considered**: A custom JUnit runner class extending old JUnit 4 runner concepts. Rejected in favor of modern JUnit 5 extension APIs.
+
+### 5. Two-Stage Semantic Healing & Visual RCA
+* **Decision**: When divergence or failure occurs, the runner performs a Semantic Divergence Analysis comparison of the baseline state and current state before action generation, storing a Semantic Diff Summary in the context. Upon conclusive failure, a Vision-based LLM query captures a Visual RCA diagnostic.
+* **Rationale**: Decoupling the diagnostic task (finding what changed) from generation improves LLM success rates and reduces trial-and-error, while Visual RCA yields plain-English failure descriptions in test reports.
+* **Alternatives Considered**: Direct live generation of corrective actions without pre-comparison. Rejected because it frequently results in incorrect LLM assumptions and wasted tokens.
+
+### 6. Model-Tailored Prompt Compilation & Repairing
+* **Decision**: We introduce a `PromptBuilderService` accessed by `LlmProvider` to format prompt messages based on target model family syntax (e.g. Gemini headers vs Mistral messages). Raw responses pass through a Multi-Stage Response Repairer (Raw string stage, JSON Element stage, Java Object stage).
+* **Rationale**: LLM models react very differently to system message placement. Repairing JSON at multiple stages prevents minor model formatting errors from throwing parsing exceptions.
+* **Alternatives Considered**: Static prompt string interpolation in pipeline steps. Rejected due to model syntax divergence.
+
+### 7. Post-Execution Audit Verification
+* **Decision**: Pluggable post-run audit hooks (`LlmExecutionAuditor`, `DataConsistencyAuditor`, `AuraVisualAuditor`) are executed sequentially at session completion, publishing diagnostic events or throwing exceptions to fail the run.
+* **Rationale**: This allows post-run validation of logical correctness, variable structures, and visual regressions without cluttering the main state machine runner.
+* **Alternatives Considered**: Verification inside the main runner steps. Rejected to maintain strict single-responsibility separation.
 
 ---
 

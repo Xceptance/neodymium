@@ -25,6 +25,8 @@
 - [ ] 2.8 Define `AiPrompt<T>` interface specifying the generic prompts compilation and multi-stage response parsing/repairing.
 - [ ] 2.9 Write TDD tests asserting that prompts format system/user messages correctly and repair malformed model JSON responses.
 - [ ] 2.10 Implement a concrete prompt class (e.g. `ActionsPrompt` or `StringPrompt`) and verify its output parsing.
+- [ ] 2.11 Define and implement `PromptBuilderService` supporting model-specific formatting overlays (e.g. Gemini vs Mistral).
+- [ ] 2.12 Implement Multi-Stage Response Repairer processing raw strings, JSON Element trees, and deserialized model objects.
 
 ## 3. Session Data & Sanitization
 
@@ -61,7 +63,10 @@
 - [ ] 5.12 Define the `PreExecutionHook` and `PostExecutionHook` interfaces and support registering and executing them sequentially at session boundaries.
 - [ ] 5.13 Implement concrete package-private session classes (`MockBrowserSession`, `MockRestSession`) and static factory methods on `AiSession` (e.g. `AiSession.mock()`) for testing.
 - [ ] 5.14 Implement `StateMachineRunner` that wires the static live and replay pipelines and executes inside the active session.
-- [ ] 5.15 Write TDD integration tests executing mock playbooks browserless. Verify successful step execution, pre/post execution hook lifecycles, event-driven warning diagnostics collection, self-healing loops, splits, and divergence.
+- [ ] 5.15 Implement Visual Root Cause Analysis (RCA) step triggered on conclusive failures or debugger breakpoints.
+- [ ] 5.16 Implement Two-Stage Semantic Healing comparison flow (Semantic Divergence Analysis) before generating corrective actions.
+- [ ] 5.17 Implement concrete PostExecutionHook classes: `LlmExecutionAuditor`, `DataConsistencyAuditor`, and `AuraVisualAuditor`.
+- [ ] 5.18 Write TDD integration tests executing mock playbooks browserless. Verify successful step execution, pre/post execution hook lifecycles (including auditor runs), event-driven warning diagnostics collection, self-healing loops, splits, divergence, and visual RCA.
 
 ## 6. Concrete Domain Implementation (Selenide)
 
@@ -78,3 +83,12 @@
 - [ ] 7.2 Implement breakpoint checks and thread locks inside `StateMachineRunner` before step transitions.
 - [ ] 7.3 Implement stack rewinding (`rewindTo`) in `SessionDebugger` that clears sub-steps and resets execution stack cursors.
 - [ ] 7.4 Create unit tests verifying debugger halts, step-overs, stack rewinding, and dynamic playbook updates during execution breaks.
+
+## 8. JUnit 5/6 Annotation-Driven Integration
+
+- [ ] 8.1 Define annotations: `@NeodymiumAiTest` (class-level runner mapping), `@AiPlaybook` (method-level file override).
+- [ ] 8.2 Define configuration annotations: `@AiMode` (execution mode override array), `@AiDataSet` (dataset inclusion/exclusion filter with regex support).
+- [ ] 8.3 Implement `NeodymiumAiRunner` extending JUnit 5's `TestTemplateInvocationContextProvider` to parse playbooks and resolve parameter dimensions.
+- [ ] 8.4 Support sharing active `AiSession` and SUT browser state across `@BeforeEach`, `@Test`, and `@AfterEach` lifecycle boundaries for a single invocation.
+- [ ] 8.5 Write JUnit 5 annotation-driven integration tests executing playbooks by convention, specific file overrides, and multi-dataset filters.
+
