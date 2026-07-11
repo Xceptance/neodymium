@@ -1030,7 +1030,7 @@ public class HealingRequiredException extends PipelineException
 /**
  * Thrown when execution fails and requires context detail escalation.
  * By default, this signals escalation to the next logical context level
- * in the sequence (e.g. LEAN -> SEMANTIC -> FULL).
+ * in the sequence (e.g. AXTREE -> LEAN -> STANDARD -> VISUAL).
  */
 public class EscalationException extends PipelineException
 {
@@ -1936,3 +1936,366 @@ graph TD
   * `SessionDebugger` interface.
   * Integration with HUD client websockets, execution stack rewinding, and dynamic playbook/data updates.
 * **Testing Strategy**: Verify HUD interactive break pausing, resume, step-over, and variables updates using debugger test cases.
+
+---
+
+## 17. Questions & Answers
+
+This section captures design questions, clarifications, and decisions made during the architecture review process.
+
+### Q1: What is the starting point from the user's point of view?
+
+**Answer**: The developer entry point is a two-step process using `AiSession` and `Playbook`:
+
+1. **Create an `AiSession`** via a static factory method on the abstract class, selecting the domain (browser, REST, mock) and the `ExecutionMode`:
+   ```java
+   final AiSession session = AiSession.selenide(ExecutionMode.REPLAY_AND_FIX);
+   ```
+   Concrete session classes (`SelenideBrowserSession`, `RestApiSession`) are package-private — users never instantiate them directly.
+
+2. **Load a `Playbook`** from a YAML file or build one inline:
+   ```java
+   final Playbook playbook = Playbook.from("guest-purchase.yaml");
+   // or
+   final Playbook playbook = Playbook.builder()
+       .step("Navigate to homepage")
+       .step("Click login button")
+       .build();
+   ```
+
+3. **Execute** and receive the `PlaybookRecording`:
+   ```java
+   final PlaybookRecording recording = session.execute(playbook);
+   ```
+
+The `ExecutionMode` controls behavior:
+- **`LLM_ONLY`**: Live LLM execution, no recordings consumed or produced.
+- **`RECORD`**: Live LLM execution, compiles a new `PlaybookRecording`.
+- **`REPLAY_ONLY`**: Strict cached replay; halts on divergence.
+- **`REPLAY_AND_FIX`**: Replays cached recording; falls back to LLM self-healing on divergence.
+
+Between session creation and `execute()`, the session serves as the central configuration surface for registering hooks, custom LLM providers, and resource managers (e.g. `session.registerPostExecutionHook(...)`, `session.getLlmRegistry()`).
+
+*(Reference: Section 7, lines 468–557)*
+
+### Q2: The YAML files define multiple data sets that automatically duplicate the test and run it in several dimensions — is that in the YAML reader?
+
+**Initial analysis**: In v1, the `data:` block is handled by a separate JUnit runner layer (`TestdataStatement` / `NeodymiumData`), not the AI playbook parser. The `YamlPlaybookParser` only sees the `steps:` block.
+
+**Decision**: The parser resolves **everything**. The `YamlPlaybookParser` reads both `steps:` and `data:` blocks, producing a self-contained `Playbook` object that carries its own data sets. This establishes **one unified concept** instead of splitting responsibilities across two separate layers.
+
+**Key design points**:
+
+1. **Unified Parsing**: The `Playbook` object carries both the parsed `PlaybookStep` tree and a `List<Map<String, DataEntry>>` of data sets. One parse call, one result object, consumers pull what they need.
+
+2. **JUnit 5/6 Integration via New Annotations**: New annotations (e.g. `@AiPlaybook("file.yaml")`) drive the full test lifecycle transparently:
+   - The JUnit extension reads the `Playbook`, iterates over its data sets, and creates N parameterized test invocations.
+   - Each invocation seeds `SessionData` with the active data set, creates an `AiSession`, executes the playbook, and returns.
+   - **No explicit `AiSession` calls required** for the standard case.
+
+3. **No Backward Compatibility Constraint**: The AI playbook system is its own self-contained concept. It does **not** need to integrate with or depend on the existing Neodymium `TestdataStatement` / `NeodymiumData` data iteration machinery. This frees the design from legacy constraints.
+
+4. **Explicit API Remains Available**: For advanced use cases (custom session configuration, programmatic playbook construction, in-memory replay), the explicit `AiSession.selenide(mode).execute(playbook)` API remains fully available.
+
+**Example YAML** (`GuestCheckoutTest.yaml`):
+```yaml
+steps: |
+  Open ${verla.url}/verla-${quality}/index.html
+  Click 'Add to Cart'
+  ...
+
+data:
+  - testId: "perfect"
+    quality: "perfect"
+  - testId: "normal"
+    quality: "normal"
+  - testId: "bad"
+    quality: "bad"
+```
+
+**Example JUnit 5 usage** (annotation-driven, no explicit `AiSession`):
+```java
+@AiPlaybook("GuestCheckoutTest.yaml")
+class GuestCheckoutTest
+{
+    // The JUnit extension handles everything:
+    // 1. Parses the YAML (steps + data)
+    // 2. Creates 3 parameterized test invocations (perfect, normal, bad)
+    // 3. For each: seeds SessionData, creates AiSession, executes playbook
+}
+```
+
+*(Reference: Section 9, lines 791–910; Decision made during Q&A review)*
+
+### Q3: What annotations are needed for classes and methods in the JUnit 5/6 integration?
+
+**Decision**: A complete annotation model has been designed for AI playbook test integration. The full design is documented in [annotations.md](annotations.md).
+
+**Key decisions**:
+
+1. **`@Test` is always required** — `@AiPlaybook` complements `@Test`, never replaces it. A bare `@Test` inside a `@NeodymiumAiTest` class runs the class-level playbook with global defaults.
+
+2. **Five annotations** cover the full surface:
+   - `@NeodymiumAiTest` (class) — marks the AI test class, resolves playbook by convention, explicit file, directory, or regex pattern
+   - `@AiPlaybook` (method) — overrides the class-level playbook file
+   - `@AiMode` (class/method) — overrides execution mode (`LLM_ONLY`, `RECORD`, `REPLAY_ONLY`, `REPLAY_AND_FIX`); supports multi-mode sequential execution
+   - `@AiDataSet` (class/method) — include/exclude data sets by `testId` with regex support; method overrides class (not additive)
+   - `@AiSelenide` / `@AiRest` / ... (future) — domain selection, defaults to Selenide
+
+3. **Mandatory `testId`** — 2+ data sets require explicit `testId` (parser validates); single data set defaults to `"default"`. No index-based selection.
+
+4. **`@BeforeEach` / `@AfterEach` support `@AiPlaybook`** — AI-driven setup/teardown (e.g., login/logout playbooks) sharing the same session and SUT state as the test method.
+
+5. **AI hooks are property-driven**, not annotation-registered. Built-in hooks are toggled via `neodymium.properties`.
+
+*(Full specification: [annotations.md](annotations.md))*
+
+### Q4: How do we do logging so that all intel ends up in a file — including prompts, DOM trees, and more?
+
+**Answer**: The v2 architecture already covers this in Section 8 (Unified Event-Driven Logging & Metrics). The core principle is: **the engine never writes files — it only fires events. Specialized event listeners handle all file output.**
+
+Three listeners serve different audiences:
+
+| Listener | Captures | Output Target |
+|---|---|---|
+| `Slf4jConsoleLogger` | Step progress, actions, success/failure (human-readable) | JVM terminal via SLF4J/Logback |
+| `TraceDiagnosticLogger` | **Everything**: prompts, DOM trees, screenshots, LLM JSON responses, self-healing traces, diagnostic events | Target directory (JSON + PNG) or Aura Server (WebSocket) |
+| `MetricsCollector` | Token usage, costs, timing, self-healing rates | Audit JSON at session end |
+
+**The `TraceDiagnosticLogger`** is the comprehensive "all intel in a file" listener. It subscribes to:
+- `StateCapturedEvent` → raw HTML DOM string + screenshot PNG
+- `LlmRequestSentEvent` → complete prompt (system + user, including injected DOM context)
+- `LlmResponseReceivedEvent` → exact JSON returned by the model
+- `StepFinishedEvent` → outcome, reasoning, healed context level
+- `DiagnosticWarningEvent` / `DiagnosticErrorEvent` → soft diagnostics from hooks
+
+**v1 comparison**: In v1, this was split between `AiDiscussionLogger` (HTML attachment for Allure) and `dumpDiagnosticLog()` (text `.log` files). v2 unifies both into the single `TraceDiagnosticLogger` event listener.
+
+**No new design decision needed** — the existing architecture handles this. The event-driven model ensures that adding new logging targets (e.g., a database, a cloud trace service) is simply a matter of registering another listener.
+
+*(Reference: Section 8, lines 677–789)*
+
+### Q5: How do we compose the prompts? How do we ensure that we are not hardcoding them and make sure they fit the current executor model, the mode, and the current path such as healing?
+
+**Answer**: Prompt composition is a dynamic, multi-layered process decoupled from the execution engine. It uses externalized templates, the active `ExecutionContext`, and a provider-specific `PromptBuilderService` to assemble the payload on-the-fly.
+
+Here is how each dynamic dimension is resolved:
+
+#### 1. Preventing Hardcoding: External Templates & Loader
+- **Externalized Assets**: Prompt templates are stored in classpath resource folders (e.g., `ai-prompts/system-prompt-actions.txt`) or a workspace override folder (e.g., `config/ai-prompts/`).
+- **`TemplateLoader`**: Injected into the session to load these files dynamically at runtime, allowing updates without modifying code.
+- **Dynamic Variable Injections**: The step text variables (like `${userEmail}`) are resolved against `SessionData` before compilation.
+
+#### 2. Adapting to the Executor Model (Selenide vs. REST vs. Mock)
+- **Registry Snippets**: The system prompt is dynamically assembled using snippets from registries:
+  - `context.getActionRegistry().compileActionPrompts()` formats and lists instructions only for actions supported by the current SUT (e.g., `CLICK`/`TYPE` for SelenideBrowser; `GET`/`POST` for RestApi).
+  - `context.getJavaMethodRegistry().compileMethodPrompts()` provides definitions and descriptions of registered `@AiMethod` helper methods.
+- The compiled instructions automatically match the active executor's capabilities.
+
+#### 3. Adapting to the Execution Mode & Current Path (Healing)
+- **Typed Prompt Implementations**: Different logical prompt structures are represented by concrete implementations of `AiPrompt<T>` (e.g., `ActionsPrompt` vs. `HealActionPrompt`):
+  - **`ActionsPrompt`** (used in `RECORD`/`LLM_ONLY`): Requests actions from a clean step description.
+  - **`HealActionPrompt`** (used in `REPLAY_AND_FIX`): Executed when replay diverges. It receives the original instruction, the recorded action that failed, and the failure trace/exception, instructing the LLM to output a corrective repair action.
+- **Execution Path History**: The user message includes a history of failed execution attempts in the current step execution loop (e.g., *"Action X failed with exception Y. Please provide a different action"*).
+
+#### 4. Adapting to the Context Level (Sequential and Target Jumps)
+- **Dynamic SUT State Compilation**: During prompt compilation, `SutState` is formatted based on the active `ContextLevel` in the `ExecutionContext`:
+  - `LEAN`: Renders a minimal representation (e.g., clean Accessibility Tree / AXTree).
+  - `SEMANTIC`: Renders semantic HTML elements containing only interactive nodes, ARIA attributes, and form fields.
+  - `FULL`: Renders the full DOM tree and attaches screenshot PNGs (routed through `LlmCapability.VISION`).
+- As the runner escalates context levels upon failure, the prompt automatically receives richer state context.
+
+#### 5. Bidirectional Optimization for Model Families
+- **`PromptBuilderService`**: After the logical prompt is compiled, the `LlmProvider` routes it through a `PromptBuilderService` to format the message structures specifically for the targeted LLM (e.g., system instructions in a separate header field for Gemini vs. folded user/assistant messages for Mistral).
+
+*(Reference: Section 13.A/C, lines 1599–1654, 1679–1688)*
+
+### Q6: Do we have a plan for how the normal escalation pipeline and our healing look like?
+
+**Answer**: Yes, we have a concrete composite pipeline design. However, the static pipeline configurations in Section 11.C adapt dynamically depending on the active `ExecutionMode`.
+
+Specifically, the fallback and healing behaviors branch as follows:
+
+1. **`LLM_ONLY` / `RECORD`**:
+   - Executes the **Live Execution Pipeline** directly.
+   - Self-healing retries with sequential context escalation (`AXTREE` ➔ `LEAN` ➔ `STANDARD` ➔ `VISUAL`) are managed via `LoopStep` and `EscalateContextStep`.
+
+2. **`REPLAY_AND_FIX`**:
+   - Executes the **Playbook Replay Pipeline**.
+   - If divergence occurs (state hash mismatch) or action execution fails, it catches the exception, marks the session as diverged (truncating subsequent recording actions), and routes execution to the **Live Execution Pipeline** to self-heal the remaining steps.
+
+3. **`REPLAY_ONLY`**:
+   - Executes the **Playbook Replay Pipeline** but **without LLM fallback**.
+   - If a state divergence occurs, or a recorded action fails, it throws a `ConclusiveFailureException` immediately, halting execution and failing the test without calling the LLM or performing context escalation.
+
+To implement this cleanly, the pipeline construction can use conditional checks on `ExecutionMode` or map exceptions differently inside `TryCatchStep`/`ConditionalBranchStep`.
+
+#### Escalation & Healing Path Details:
+- **Relative Escalation**: Handled inside `LoopStep` via `EscalateContextStep`. It increments the context level enum (`AXTREE` ➔ `LEAN` ➔ `STANDARD` ➔ `VISUAL`) and clears the cached SUT state.
+- **Absolute Target Jumps**: If a step or validation fails with a diagnosed issue (e.g., a visual layout shift), it throws a `ToLevelEscalationException(ContextLevel.VISUAL)`. `TryCatchStep` or `LoopStep` catches this and sets the active context level directly to `VISUAL` for the next retry, skipping intermediate levels.
+- **In-Page Recovery (`PrepareRetryStep`)**: Before calling the LLM again, this step performs lightweight recovery actions to reset the SUT state (e.g. closing open overlay modals, clearing partially typed input fields) to ensure a clean state for the retried LLM call.
+
+*(Reference: Section 11, lines 972–1195; specs/adaptive-context-escalation/spec.md)*
+
+### Q7: How does our healing mode approach look like and when is it triggered?
+
+**Answer**: Self-healing operates differently depending on the execution phase: **Replay Mode** (cached execution) vs. **Live Mode** (interaction with the LLM).
+
+#### 1. Replay Mode Divergence (Switching to LLM Healing)
+In `REPLAY_AND_FIX` mode, before replaying a cached action, the runner checks for SUT state consistency. A **Divergence Point** is triggered when:
+- **Playbook edits**: The user modified or inserted a step in the playbook YAML since the recording was generated.
+- **State hash mismatch**: The perceptual visual hash (`dHash`) or content hash of the current page doesn't match the `preStateHash` in the recording baseline.
+- **Action execution failure**: The cached action (e.g. `CLICK #btn`) fails to execute or locate the element at runtime (e.g. due to class/id selector updates).
+
+**Action taken**:
+1. The replay pipeline catches the failure exception.
+2. It executes `MarkDivergedStep` which truncates all subsequent cached recording steps.
+3. It switches **permanently** to the **Live Execution Pipeline** (LLM healing) for the remainder of the session.
+
+#### 2. Live Healing Mode (LLM Self-Healing Pipeline)
+Once in the Live Execution Pipeline (or when running in `RECORD` / `LLM_ONLY` modes), healing is triggered whenever a step execution or validation fails.
+
+**The Live Healing Loop**:
+1. **Initial failure**: An action execution (`ExecuteActionsStep`) or post-execution validation (`VerifyOutcomeStep`) throws a failure.
+2. **Catch & Loop**: A `TryCatchStep` catches the execution error/assertion failure and delegates to a `LoopStep` mapping `HealingRequiredException`.
+3. **Escalate SUT detail level**: The pipeline runs `EscalateContextStep` to upgrade the detail level of SUT context sent to the LLM (sequential sequence: `AXTREE` ➔ `LEAN` ➔ `STANDARD` ➔ `VISUAL`), clearing the cached state.
+4. **In-Page recovery**: Runs `PrepareRetryStep` which performs SUT-specific cleanups (e.g., closing unpredicted popups/overlays, clearing partially typed inputs).
+5. **Re-capture & prompt**: Captures SUT state at the escalated level (`CaptureStateStep`), compiles a healing prompt (`HealActionPrompt` user query containing the failed action description, the failure trace/exception, and the new DOM context), and queries the LLM again.
+6. **Apply & Verify**: Executes the newly generated LLM actions and verifies them. This loop repeats until the step succeeds or the retry budget/context escalation limit is exhausted (which then escalates to a hard `ConclusiveFailureException`).
+
+#### 3. Recording Update
+- If healing succeeds, the corrected actions, updated pre/post state hashes, and new screenshots are merged into the updated `PlaybookRecording` object returned by the session.
+- The `PlaybookRecorder` listener serializes the updated recording back to disk via the `PlaybookResourceManager`.
+
+*(Reference: Section 3, lines 326–333; Section 11.C, lines 1111–1195)*
+
+### Q8: How do we determine the starting ContextLevel for a step, and how do we prevent wasting LLM calls at insufficient levels?
+
+**Decision**: To optimize execution time and token consumption, the runner dynamically resolves the starting `ContextLevel` for each step by combining semantic prediction (PESAP) with historical execution data (from the playbook/recording):
+
+1. **Resolution Rule**:
+   $$\text{Start Level} = \max(\text{PESAP Predicted Level}, \text{Previously Learned Healed Level})$$
+   - **PESAP Classifier**: Analyzes the step text to predict the initial required level (e.g., tags visual step ➔ `VISUAL`, standard click step ➔ `LEAN` or `AXTREE`).
+   - **Playbook / Recording Cache**: Reads the `healedContextLevel` stored in the recording for this step from a previous successful run (e.g. if this step previously failed at `LEAN` but was healed and succeeded at `STANDARD`, the cache stores `STANDARD`).
+
+2. **Benefits**:
+   - The runner starts execution at the highest predicted or historically proven level.
+   - It avoids wasting time and tokens on lower-level calls that are historically known to be insufficient for that specific step.
+
+3. **Fallback Route**:
+   - If execution fails or the SUT states do not match at this resolved starting level, the runner falls back to the standard sequential escalation route (e.g. upgrading to the next higher level in the hierarchy up to `VISUAL`).
+
+*(Reference: Section 11.C, lines 1111–1195; PlaybookStep.java)*
+
+### Q9: Should we run an "identification/analysis round" with the LLM (using full DOM + screenshot) to diagnose why a step failed? Is it a waste of tokens?
+
+**Decision**: Yes, we will implement a **Visual Root Cause Analysis (RCA) Diagnostic** phase. Rather than being a waste of tokens, this provides immense value by replacing cryptic framework exceptions (e.g. `ElementNotFoundException`) with plain-English, actionable explanations in test reports.
+
+To prevent token waste, we establish strict rules on when this diagnostic round is triggered:
+
+1. **Trigger Boundaries**:
+   - **Never run on intermediate retries**: The runner does *not* invoke diagnostic analysis during standard relative context escalation.
+   - **Conclusive Failure Boundary**: Triggered exactly *once* when the retry budget is exhausted and the engine is about to throw a `ConclusiveFailureException` (test failure).
+   - **Interactive Break Boundary**: Triggered when execution pauses at a breakpoint or throws an error in the glassmorphic HUD, giving the developer instant, localized feedback.
+
+2. **Context Payload**:
+   - Compiles the maximum available context level (`VISUAL` = full HTML DOM + screenshot PNG + the full step execution attempt history).
+   - Prompts the LLM (routed to `LlmCapability.VISION`) specifically to perform an audit: *"Analyze this SUT state and execution history. Explain why action X failed to execute."*
+
+3. **Output & Integration**:
+   - The LLM's explanation is wrapped in a structured `DiagnosticErrorEvent` published to the event bus.
+   - **Allure & HTML Reports**: The analysis is formatted and attached directly to the failed step block (e.g., *"RCA: The 'Add to Cart' button could not be clicked because a cookie consent modal covered 40% of the screen"*).
+   - **HUD**: Displayed in real-time on the debugger interface, proposing suggested resolutions to the developer.
+
+**Verdict**: The token cost of a single multimodal query at the end of a failed test is negligible compared to the developer time saved diagnosing CI/CD regression failures.
+
+*(Reference: Section 8.D, lines 766–788)*
+
+### Q10: How can we support the self-healing process by analyzing what has changed between the recording and the current page (questioning first) instead of blind trial-and-error?
+
+**Decision**: We will implement a **Two-Stage Semantic Healing** pattern. When a divergence is first detected, rather than immediately asking the LLM to generate actions blindly, the runner executes a diagnostic comparison round first to identify the changes:
+
+#### Stage 1: Semantic Divergence Analysis
+- **Trigger**: Fired once when a step first diverges from the recording during replay.
+- **Context**: The runner compiles the recorded `preState` (DOM / visual hashes of the baseline recording), the current `SUT state` at the active context level, and the original step instruction.
+- **Query**: It asks the LLM (optimized for comparison): *"Compare these two page states. Locate the target elements for the step 'X' and identify what has changed (e.g., selector updates, text changes, structural shifts, or new blocking elements)."*
+- **Output**: The model returns a concise **Semantic Diff Summary** (e.g. *"The 'Checkout' button's ID was updated from `#btn-checkout` to `#btn-pay-now`, and it is now wrapped in a container `.actions-row`"*).
+- **Storage**: This summary is written to the `ExecutionContext` for the duration of the step's execution loop.
+
+#### Stage 2: Targeted Action Generation (Healing)
+- **Input**: The standard action generation prompt (`HealActionPrompt`) is enriched with the **Semantic Diff Summary** as an explicit instruction block.
+- **Action**: Armed with the exact knowledge of what changed, the LLM generates the corrected actions.
+
+#### Why this is superior:
+1. **Decouples cognitive tasks**: Separates the diagnostic comparison task (finding the diff) from the generation task (writing the action), which dramatically improves LLM success rates.
+2. **Reduces trial-and-error**: Instead of guessing and failing sequentially through multiple context levels, the model gets the fix correct on the first healing attempt, saving overall execution time and aggregate tokens.
+
+*(Reference: Section 3, lines 326–333; Section 11.C, lines 1159–1195)*
+
+### Q11: What is a recording's `preState` and what does it contain?
+
+**Answer**: In the v2 architecture, the **`preState`** is a structured snapshot of the SUT (System Under Test) captured **immediately before** an action is executed during a recording session. To optimize size and execution stability, it focuses on **targeted element-level metadata** rather than full page states.
+
+#### What it contains:
+1. **Global Page State**:
+   - **`preStateHash` (Global Hash)**: Perceptual visual hash (`dHash`) of the entire page screenshot (solely used for quick, high-level divergence detection).
+   - **`SutAttachment` (Reporting Only)**: PNG screenshot file reference (kept solely for reporting, never loaded during execution).
+
+2. **Local Element Context (The interacted element's immediate region)**:
+   - **`elementContextDOM`**: The minified HTML subtree surrounding the target element we interacted with (e.g., the parent form or card container, plus the element itself).
+   - **`elementDomHash`**: SHA-256 hash of this local HTML subtree text.
+   - **`elementVisualHash`**: Perceptual visual hash (`dHash`) of the cropped screenshot area containing the target element (the element's bounding box plus a small padding).
+
+#### Why this approach is critical:
+- **Resilience to Global Shifts**: If the header, footer, or sidebar of a page changes, a global hash checks will fail. However, by comparing the **`elementDomHash`** and **`elementVisualHash`** locally, the runner can verify if the target element itself is still identical, avoiding false-positive divergences.
+- **Precise Divergence Analysis**: During Stage 1 healing, the runner passes the recorded `elementContextDOM` and the current SUT state's matched element context to the LLM. The model gets a highly localized diff showing exactly what changed on the target element (e.g., button ID changed, input placeholder updated).
+
+*(Reference: Section 1.A, lines 150–178; Section 3, lines 304–333)*
+
+### Q12: How much data will the `preState` be, and how do we prevent the `PlaybookRecording` JSON from bloating?
+
+**Decision**: By shifting from full-page DOM/visual references to **local element-level context subtrees and crops**, the `PlaybookRecording` JSON data size remains extremely small:
+
+#### 1. Data Size Breakdown (per step):
+- **Global & Local Hashes**: `preStateHash`, `elementDomHash`, `elementVisualHash` ➔ **~200 bytes** (negligible).
+- **`elementContextDOM`**: The minified HTML subtree of the interacted element ➔ **~0.5KB - 1.5KB** (typically only 5-15 lines of pruned HTML representing the target element and its immediate parent container).
+- **`SutAttachment`**: Screenshot file reference ➔ **~100 bytes** (the image is stored externally in `.attachments/` and kept only for HTML reporting, never loaded during execution).
+
+#### 2. Local Subtree Extraction & Pruning Rules:
+To extract the `elementContextDOM`, the recorder applies these extraction rules:
+- **Find Bounding Container**: Starting at the target element, traverse up the DOM tree until reaching the nearest functional parent container (e.g. `<form>`, `<div class="product-card">`, or `<li>` list item). If no container is found, default to 3 parent levels up.
+- **Extract Subtree**: Extract only this subtree.
+- **Prune Heavily**: Strip all scripts, styles, class names (keeping only `id`, `name`, `type`, `value`, `placeholder`, `aria-*`, and `data-neo-ref`), and remove any child elements that are not the target element or its direct siblings.
+- **Visual Crop**: The browser driver captures the bounding box coordinates of the target element, crops the screenshot, and computes the `elementVisualHash` (dHash) on this small cropped image before discarding it.
+
+#### 3. Expected File Footprint (for a typical 10-step test):
+- **`PlaybookRecording` JSON**: **~10KB - 20KB** (ultra-optimized, pure text).
+- **Attachments directory**: **~1MB** (full-page screenshots kept solely for HTML reporting).
+The JSON footprint is negligible, making it extremely fast to read/write, parse, and commit to version control.
+
+*(Reference: Section 3.B, lines 388–393; Section 8.B, lines 739–748)*
+
+### Q13: Global screenshots are volatile (videos, dynamic banners, rotating carousels). How do we prevent these from causing misleading divergence alerts?
+
+**Answer**: Global page visual hashes (`preStateHash`) are useful baseline helpers but prone to high volatility. To prevent dynamic content from causing false-positive divergence alerts, we implement a **Hierarchy of Consistency Checks** that prioritizes local element state consistency:
+
+```
+Capture current page state
+  │
+  ├─► Check 1: Does current global page dHash match preStateHash?
+  │     ├─► YES: State is consistent. Replay action.
+  │     └─► NO (Diverged globally): Proceed to Check 2.
+  │
+  └─► Check 2: Locate target element and check local hashes (elementDomHash & elementVisualHash)
+        ├─► YES: Target element is identical. Replay action (Global divergence ignored).
+        └─► NO: Target element changed/missing. Trigger actual Divergence & Healing.
+```
+
+#### The Rules:
+1. **Global Hash Check (Fast Path)**: The runner compares the current page screenshot's `dHash` against `preStateHash`. If they match, the page is 100% identical and execution continues immediately.
+2. **Local Element Fallback (Resilience Path)**: If the global hash mismatch occurs (e.g. a video player loaded a different thumbnail or a dynamic ad changed), the runner does **not** fail or drop to LLM healing. Instead, it locates the target element on the current page and verifies:
+   - Does the element's current local DOM subtree match `elementDomHash`?
+   - Does the element's current local visual crop dHash match `elementVisualHash`?
+3. **Outcome**: If the local checks pass, the page changes are classified as irrelevant noise. The runner executes the replayed action safely. Only if both the global page check and the local element checks fail is a real **Divergence** triggered.
+
+*(Reference: Section 3.A, lines 326–333; Q11 & Q12)*
