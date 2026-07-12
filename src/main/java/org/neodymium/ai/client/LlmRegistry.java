@@ -149,14 +149,53 @@ public final class LlmRegistry
             final LlmProvider defaultProvider = LlmProviderFactory.createProvider("global", config);
             registry.setDefaultProvider(defaultProvider);
 
-            // 2. Resolve and register role-specific providers: "pesap", "execution", "vision", "audit"
+            // 2. Resolve and register capability-specific providers dynamically
+            for (final LlmCapability capability : LlmCapability.values())
+            {
+                String roleKey = capability.name().toLowerCase();
+
+                // Allow "visual" as an alias for "vision"
+                if (capability == LlmCapability.VISION)
+                {
+                    final boolean hasVisualConfig = config.getProperty("neodymium.ai.visual.provider", null) != null
+                        || config.getProperty("neodymium.ai.visual.model", null) != null
+                        || config.getProperty("neodymium.ai.visual.apiKey", null) != null;
+                    if (hasVisualConfig)
+                    {
+                        roleKey = "visual";
+                    }
+                }
+
+                final boolean hasOverride = config.getProperty("neodymium.ai." + roleKey + ".provider", null) != null
+                    || config.getProperty("neodymium.ai." + roleKey + ".model", null) != null
+                    || config.getProperty("neodymium.ai." + roleKey + ".apiKey", null) != null;
+
+                if (hasOverride)
+                {
+                    final LlmProvider capabilityProvider = LlmProviderFactory.createProvider(roleKey, config);
+                    registry.registerProvider(capability, capabilityProvider);
+                }
+            }
+
+            // 3. Resolve and register legacy role-specific providers: "pesap", "execution", "vision", "audit"
             final String[] roles = {"pesap", "execution", "vision", "audit"};
             for (final String role : roles)
             {
-                final LlmProvider roleProvider = LlmProviderFactory.createProvider(role, config);
-                for (final LlmCapability capability : roleProvider.getCapabilities())
+                final boolean hasOverride = config.getProperty("neodymium.ai." + role + ".provider", null) != null
+                    || config.getProperty("neodymium.ai." + role + ".model", null) != null
+                    || config.getProperty("neodymium.ai." + role + ".apiKey", null) != null;
+
+                if (hasOverride)
                 {
-                    registry.registerProvider(capability, roleProvider);
+                    final LlmProvider roleProvider = LlmProviderFactory.createProvider(role, config);
+                    for (final LlmCapability capability : roleProvider.getCapabilities())
+                    {
+                        // Fall back to legacy role only if not explicitly overridden by a capability-specific config
+                        if (registry.getProvider(capability) == defaultProvider)
+                        {
+                            registry.registerProvider(capability, roleProvider);
+                        }
+                    }
                 }
             }
         }

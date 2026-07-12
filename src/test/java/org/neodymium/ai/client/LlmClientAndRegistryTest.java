@@ -187,4 +187,49 @@ public final class LlmClientAndRegistryTest
         System.clearProperty("neodymium.ai.provider");
         System.clearProperty("neodymium.ai.vision.provider");
     }
+
+    /**
+     * Verifies that bootstrapping correctly instantiates capability-specific overrides.
+     */
+    @Test
+    public void testCapabilitySpecificBootstrapOverrides()
+    {
+        System.setProperty("neodymium.ai.provider", "mock");
+        System.setProperty("neodymium.ai.verification.provider", "mock");
+        System.setProperty("neodymium.ai.verification.model", "gemini-2.5-pro");
+
+        final AiConfiguration config = new AiConfiguration();
+        final LlmRegistry registry = new LlmRegistry();
+
+        LlmRegistry.bootstrap(registry, config);
+
+        assertNotNull(registry.getDefaultProvider());
+        assertNotNull(registry.getProvider(LlmCapability.VERIFICATION));
+        assertTrue(registry.getRegisteredCapabilities().contains(LlmCapability.VERIFICATION));
+
+        System.clearProperty("neodymium.ai.provider");
+        System.clearProperty("neodymium.ai.verification.provider");
+        System.clearProperty("neodymium.ai.verification.model");
+    }
+
+    /**
+     * Verifies that visual alias correctly resolves and registers overrides for the VISION capability.
+     */
+    @Test
+    public void testVisualAliasBootstrapOverrides()
+    {
+        System.setProperty("neodymium.ai.provider", "mock");
+        System.setProperty("neodymium.ai.visual.provider", "mock");
+
+        final AiConfiguration config = new AiConfiguration();
+        final LlmRegistry registry = new LlmRegistry();
+
+        LlmRegistry.bootstrap(registry, config);
+
+        assertNotNull(registry.getProvider(LlmCapability.VISION));
+        assertTrue(registry.getRegisteredCapabilities().contains(LlmCapability.VISION));
+
+        System.clearProperty("neodymium.ai.provider");
+        System.clearProperty("neodymium.ai.visual.provider");
+    }
 }
