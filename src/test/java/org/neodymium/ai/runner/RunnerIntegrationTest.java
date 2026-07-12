@@ -137,6 +137,22 @@ public final class RunnerIntegrationTest
             {
                 throw new IllegalArgumentException("Malformed response syntax");
             }
+            final String instruction = (String) context.getTransientData().get("currentInstruction");
+            if (instruction != null)
+            {
+                if (instruction.contains("login.steps"))
+                {
+                    return List.of(new Action("INCLUDE", "fragments/login.steps", ""));
+                }
+                if (instruction.contains("login button"))
+                {
+                    return List.of(new Action("CLICK", "#login", ""));
+                }
+                if (instruction.contains("username"))
+                {
+                    return List.of(new Action("TYPE", "#user", "admin"));
+                }
+            }
             return List.of(new Action("CLICK", "button#submit", "Click Submit"));
         }
     }
@@ -345,5 +361,68 @@ public final class RunnerIntegrationTest
         assertEquals(2, receivedEvents.size());
         assertTrue(receivedEvents.get(0) instanceof StateCapturedEvent);
         assertTrue(receivedEvents.get(1) instanceof ActionExecutedEvent);
+    }
+
+    /**
+     * Verifies that the ExecuteActionsStep handles dynamic run-time INCLUDE actions
+     * by parsing the included steps and pushing them onto the stack dynamically.
+     */
+    @Test
+    public void testDynamicIncludeExpansion() throws PipelineException, IOException
+    {
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final TestLlmProvider provider = new TestLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(provider);
+        registry.registerProvider(provider);
+
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        // 1. Prepare in-memory resource manager with include files
+        final org.neodymium.ai.resources.InMemoryResourceManager resourceManager = new org.neodymium.ai.resources.InMemoryResourceManager();
+        resourceManager.write("fragments/login.steps", "steps:\n  - Click login button\n  - Type username\n");
+
+        context.getTransientData().put("resourceManager", resourceManager);
+        context.getTransientData().put("playbookParser", new org.neodymium.ai.playbook.YamlPlaybookParser());
+        context.getTransientData().put("activePrompt", new MockActionsPrompt());
+        context.getTransientData().put("currentInstruction", "fragments/login.steps");
+
+        // 2. Set LLM to return an INCLUDE action
+        provider.setResponseContent("[{\"type\": \"INCLUDE\", \"target\": \"fragments/login.steps\"}]");
+
+        // Set SUT states for 3 steps (1 root + 2 sub-steps)
+        executor.enqueueState(new MockSutState("<html>root</html>", "root-hash"));
+        executor.enqueueState(new MockSutState("<html>step1</html>", "step1-hash"));
+        executor.enqueueState(new MockSutState("<html>step2</html>", "step2-hash"));
+
+        // 3. Assemble and push root step sequence
+        final CaptureStateStep captureStep = new CaptureStateStep();
+        final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(new MockActionsPrompt(), LlmCapability.TEXT_ONLY);
+        final ExecuteActionsStep executeStep = new ExecuteActionsStep();
+
+        final SequenceStep rootSeq = new SequenceStep(List.of(captureStep, llmStep, executeStep));
+        context.pushStep(rootSeq);
+
+        // 4. Run StateMachineRunner
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        runner.run();
+
+        // 5. Verify SUT executor executed only SUT-impacting actions (CLICK and TYPE)
+        final List<Action> executed = executor.getExecutedActions();
+        assertEquals(2, executed.size());
+        assertEquals("CLICK", executed.get(0).getType());
+        assertEquals("TYPE", executed.get(1).getType());
+
+        // 6. Verify recorded action history contains the INCLUDE as well as CLICK and TYPE
+        @SuppressWarnings("unchecked")
+        final List<Action> recorded = (List<Action>) context.getTransientData().get("recording");
+        assertNotNull(recorded);
+        assertEquals(3, recorded.size());
+        assertEquals("INCLUDE", recorded.get(0).getType());
+        assertEquals("CLICK", recorded.get(1).getType());
+        assertEquals("TYPE", recorded.get(2).getType());
     }
 }
