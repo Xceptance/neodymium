@@ -1,9 +1,3 @@
-before:
-  - java startManager()
-
-after:
-  - java stopManager()
-
 steps: |
   Open ${auraManagerUrl} in the browser
   Verify the page title is "Neodymium Aura Manager"
