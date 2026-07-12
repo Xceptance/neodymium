@@ -18,21 +18,171 @@
  */
 package org.neodymium.ai.pipeline;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.pipeline.structural.EndTryStep;
 
 /**
- * Interface representing the pipeline execution context. Tracks the active session
- * data, variable stack layers, and runner queue during a test run.
+ * Thread-isolated execution context tracking the LIFO step execution queue,
+ * session context, transient runtime variables, and active recording metadata.
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-public interface ExecutionContext
+public final class ExecutionContext
 {
     /**
-     * Retrieves the session data containing static and dynamic variables.
-     *
-     * @return the active session data
+     * The LIFO execution stack containing steps yet to be processed.
      */
-    SessionData getSessionData();
+    private final Deque<PipelineStep> runStack = new ArrayDeque<>();
+
+    /**
+     * The active session data container.
+     */
+    private final SessionData sessionData;
+
+    /**
+     * The try-catch blocks hierarchy stack.
+     */
+    private final Deque<PipelineStep> tryCatchStack = new ArrayDeque<>();
+
+    /**
+     * Thread-safe map for transient runtime state/variables.
+     */
+    private final Map<String, Object> transientData = new ConcurrentHashMap<>();
+
+    /**
+     * Thread-safe map containing recording/auditing metadata.
+     */
+    private final Map<String, Object> recordingMetadata = new ConcurrentHashMap<>();
+
+    /**
+     * Constructs an ExecutionContext with the specified session variables.
+     *
+     * @param sessionData the active session data
+     */
+    public ExecutionContext(final SessionData sessionData)
+    {
+        this.sessionData = sessionData;
+    }
+
+    /**
+     * Pushes a step onto the LIFO execution stack.
+     *
+     * @param step the step to push
+     */
+    public void pushStep(final PipelineStep step)
+    {
+        if (step != null)
+        {
+            this.runStack.push(step);
+        }
+    }
+
+    /**
+     * Pops the top step from the execution stack.
+     *
+     * @return the popped step, or null if the stack is empty
+     */
+    public PipelineStep popStep()
+    {
+        return this.runStack.isEmpty() ? null : this.runStack.pop();
+    }
+
+    /**
+     * Checks if the execution stack contains any remaining steps.
+     *
+     * @return true if steps exist, false otherwise
+     */
+    public boolean hasSteps()
+    {
+        return !this.runStack.isEmpty();
+    }
+
+    /**
+     * Retrieves the session data container.
+     *
+     * @return the session data
+     */
+    public SessionData getSessionData()
+    {
+        return this.sessionData;
+    }
+
+    /**
+     * Retrieves the thread-safe transient data map.
+     *
+     * @return the transient data map
+     */
+    public Map<String, Object> getTransientData()
+    {
+        return this.transientData;
+    }
+
+    /**
+     * Retrieves the thread-safe recording metadata map.
+     *
+     * @return the recording metadata map
+     */
+    public Map<String, Object> getRecordingMetadata()
+    {
+        return this.recordingMetadata;
+    }
+
+    /**
+     * Pushes a try-catch step onto the active try-catch hierarchy stack.
+     *
+     * @param tryCatch the try-catch step
+     */
+    public void pushTryCatch(final PipelineStep tryCatch)
+    {
+        if (tryCatch != null)
+        {
+            this.tryCatchStack.push(tryCatch);
+        }
+    }
+
+    /**
+     * Pops the top try-catch step from the active hierarchy stack.
+     *
+     * @return the popped try-catch step, or null if empty
+     */
+    public PipelineStep popTryCatch()
+    {
+        return this.tryCatchStack.isEmpty() ? null : this.tryCatchStack.pop();
+    }
+
+    /**
+     * Peeks at the active try-catch step at the top of the hierarchy stack.
+     *
+     * @return the active try-catch step, or null if none
+     */
+    public PipelineStep peekTryCatch()
+    {
+        return this.tryCatchStack.isEmpty() ? null : this.tryCatchStack.peek();
+    }
+
+    /**
+     * Discards all pending steps on the execution stack up to and including the
+     * boundary marker matching the specified try-catch block.
+     *
+     * @param tryCatch the try-catch block to discard steps for
+     */
+    public void discardStepsUpToTryCatch(final PipelineStep tryCatch)
+    {
+        while (!this.runStack.isEmpty())
+        {
+            final PipelineStep popped = this.runStack.pop();
+            if (popped instanceof EndTryStep endTry)
+            {
+                if (endTry.getTryCatchStep() == tryCatch)
+                {
+                    break;
+                }
+            }
+        }
+    }
 }
