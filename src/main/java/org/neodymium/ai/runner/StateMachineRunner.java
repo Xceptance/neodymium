@@ -58,8 +58,8 @@ public final class StateMachineRunner
     {
         this.session.runPreHooks();
         final ExecutionContext context = this.session.getExecutionContext();
-        context.getTransientData().put("session", this.session);
-        context.getTransientData().put("targetExecutor", this.session.getTargetExecutor());
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, this.session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, this.session.getTargetExecutor());
         boolean success = false;
 
         try

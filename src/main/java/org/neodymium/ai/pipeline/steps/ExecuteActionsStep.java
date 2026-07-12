@@ -74,9 +74,9 @@ public final class ExecuteActionsStep implements PipelineStep
     public void execute(final ExecutionContext context) throws PipelineException
     {
         // Retrieve the active session from context transient storage
-        final AiSession session = (AiSession) context.getTransientData().get("session");
+        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
         // Retrieve SUT target executor driving browser/REST operations
-        final TargetExecutor executor = (TargetExecutor) context.getTransientData().get("targetExecutor");
+        final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
 
         if (session == null)
         {
@@ -89,7 +89,7 @@ public final class ExecuteActionsStep implements PipelineStep
 
         // Retrieve the list of actions returned by the prior CallLlmStep execution
         @SuppressWarnings("unchecked")
-        final List<Action> actions = (List<Action>) context.getTransientData().get("lastLlmResult");
+        final List<Action> actions = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_LAST_LLM_RESULT);
         if (actions == null)
         {
             return;
@@ -98,7 +98,7 @@ public final class ExecuteActionsStep implements PipelineStep
         // Initialize or fetch the concurrent recording collection tracking all executed playbooks actions
         @SuppressWarnings("unchecked")
         final List<Action> recordedActions = (List<Action>) context.getTransientData()
-            .computeIfAbsent("recording", k -> new CopyOnWriteArrayList<>());
+            .computeIfAbsent(ExecutionContext.KEY_RECORDING, k -> new CopyOnWriteArrayList<>());
 
         // Execute each parsed action sequentially
         for (final Action action : actions)
@@ -167,14 +167,14 @@ public final class ExecuteActionsStep implements PipelineStep
         }
 
         // Retrieve registered PlaybookResourceManager from the context state
-        final PlaybookResourceManager manager = (PlaybookResourceManager) context.getTransientData().get("resourceManager");
+        final PlaybookResourceManager manager = (PlaybookResourceManager) context.getTransientData().get(ExecutionContext.KEY_RESOURCE_MANAGER);
         if (manager == null)
         {
             throw new ConclusiveFailureException("No PlaybookResourceManager registered in ExecutionContext transient data");
         }
 
         // Retrieve or instantiate the default YamlPlaybookParser
-        PlaybookParser parser = (PlaybookParser) context.getTransientData().get("playbookParser");
+        PlaybookParser parser = (PlaybookParser) context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK_PARSER);
         if (parser == null)
         {
             parser = new YamlPlaybookParser();
@@ -183,7 +183,7 @@ public final class ExecuteActionsStep implements PipelineStep
         // Fetch thread-safe stack listing active includes to detect cycle inclusions
         @SuppressWarnings("unchecked")
         final List<String> runtimeStack = (List<String>) context.getTransientData()
-            .computeIfAbsent("runtimeIncludeStack", k -> new ArrayList<>());
+            .computeIfAbsent(ExecutionContext.KEY_RUNTIME_INCLUDE_STACK, k -> new ArrayList<>());
 
         if (runtimeStack.contains(path))
         {
@@ -191,7 +191,7 @@ public final class ExecuteActionsStep implements PipelineStep
         }
 
         // Resolve absolute or relative path context based on active parent directory
-        final String currentParent = (String) context.getTransientData().getOrDefault("currentPlaybookIdentifier", "");
+        final String currentParent = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_PLAYBOOK_IDENTIFIER, "");
         final String resolvedIdentifier = manager.resolveInclude(currentParent, path);
 
         // Add to callstack before parsing to cover circular validations
@@ -248,12 +248,12 @@ public final class ExecuteActionsStep implements PipelineStep
 
         // For leaf steps, return a pipeline step wrapper setting the active instruction and pushing execution loop
         return contextState -> {
-            contextState.getTransientData().put("currentPlaybookStep", step);
-            contextState.getTransientData().put("currentInstruction", step.getInstruction());
+            contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+            contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, step.getInstruction());
 
             @SuppressWarnings("unchecked")
             final AiPrompt<List<Action>> activePrompt = (AiPrompt<List<Action>>) contextState.getTransientData()
-                .get("activePrompt");
+                .get(ExecutionContext.KEY_ACTIVE_PROMPT);
 
             if (activePrompt == null)
             {

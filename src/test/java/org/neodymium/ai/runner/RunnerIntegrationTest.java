@@ -137,7 +137,7 @@ public final class RunnerIntegrationTest
             {
                 throw new IllegalArgumentException("Malformed response syntax");
             }
-            final String instruction = (String) context.getTransientData().get("currentInstruction");
+            final String instruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
             if (instruction != null)
             {
                 if (instruction.contains("login.steps"))
@@ -343,7 +343,7 @@ public final class RunnerIntegrationTest
         runner.run();
 
         // 4. Verify SUT state was captured and stored
-        final SutState captured = (SutState) context.getTransientData().get("lastState");
+        final SutState captured = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
         assertNotNull(captured);
         assertEquals("test-dom-hash", captured.getContentHash());
 
@@ -352,7 +352,7 @@ public final class RunnerIntegrationTest
         assertEquals("CLICK", executor.getExecutedActions().get(0).getType());
 
         @SuppressWarnings("unchecked")
-        final List<Action> recorded = (List<Action>) context.getTransientData().get("recording");
+        final List<Action> recorded = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_RECORDING);
         assertNotNull(recorded);
         assertEquals(1, recorded.size());
         assertEquals("CLICK", recorded.get(0).getType());
@@ -385,10 +385,10 @@ public final class RunnerIntegrationTest
         final org.neodymium.ai.resources.InMemoryResourceManager resourceManager = new org.neodymium.ai.resources.InMemoryResourceManager();
         resourceManager.write("fragments/login.steps", "steps:\n  - Click login button\n  - Type username\n");
 
-        context.getTransientData().put("resourceManager", resourceManager);
-        context.getTransientData().put("playbookParser", new org.neodymium.ai.playbook.YamlPlaybookParser());
-        context.getTransientData().put("activePrompt", new MockActionsPrompt());
-        context.getTransientData().put("currentInstruction", "fragments/login.steps");
+        context.getTransientData().put(ExecutionContext.KEY_RESOURCE_MANAGER, resourceManager);
+        context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_PARSER, new org.neodymium.ai.playbook.YamlPlaybookParser());
+        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new MockActionsPrompt());
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "fragments/login.steps");
 
         // 2. Set LLM to return an INCLUDE action
         provider.setResponseContent("[{\"type\": \"INCLUDE\", \"target\": \"fragments/login.steps\"}]");
@@ -418,7 +418,7 @@ public final class RunnerIntegrationTest
 
         // 6. Verify recorded action history contains the INCLUDE as well as CLICK and TYPE
         @SuppressWarnings("unchecked")
-        final List<Action> recorded = (List<Action>) context.getTransientData().get("recording");
+        final List<Action> recorded = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_RECORDING);
         assertNotNull(recorded);
         assertEquals(3, recorded.size());
         assertEquals("INCLUDE", recorded.get(0).getType());

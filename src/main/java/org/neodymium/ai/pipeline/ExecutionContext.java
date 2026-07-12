@@ -35,6 +35,22 @@ import org.neodymium.ai.pipeline.structural.EndTryStep;
 public final class ExecutionContext
 {
     /**
+     * Context transient data map keys.
+     */
+    public static final String KEY_SESSION = "session";
+    public static final String KEY_TARGET_EXECUTOR = "targetExecutor";
+    public static final String KEY_LAST_LLM_RESULT = "lastLlmResult";
+    public static final String KEY_LAST_STATE = "lastState";
+    public static final String KEY_RECORDING = "recording";
+    public static final String KEY_RESOURCE_MANAGER = "resourceManager";
+    public static final String KEY_PLAYBOOK_PARSER = "playbookParser";
+    public static final String KEY_RUNTIME_INCLUDE_STACK = "runtimeIncludeStack";
+    public static final String KEY_CURRENT_PLAYBOOK_IDENTIFIER = "currentPlaybookIdentifier";
+    public static final String KEY_CURRENT_PLAYBOOK_STEP = "currentPlaybookStep";
+    public static final String KEY_CURRENT_INSTRUCTION = "currentInstruction";
+    public static final String KEY_ACTIVE_PROMPT = "activePrompt";
+
+    /**
      * The LIFO execution stack containing steps yet to be processed.
      */
     private final Deque<PipelineStep> runStack = new ArrayDeque<>();

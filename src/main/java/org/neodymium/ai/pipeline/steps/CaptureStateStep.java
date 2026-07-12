@@ -54,15 +54,15 @@ public final class CaptureStateStep implements PipelineStep
     @Override
     public void execute(final ExecutionContext context) throws PipelineException
     {
-        final AiSession session = (AiSession) context.getTransientData().get("session");
-        final TargetExecutor executor = (TargetExecutor) context.getTransientData().get("targetExecutor");
+        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+        final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
 
         if (session != null && executor != null)
         {
             try
             {
                 final SutState state = executor.captureState();
-                context.getTransientData().put("lastState", state);
+                context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
                 session.getEventBus().dispatch(new StateCapturedEvent(state));
             }
             catch (final IOException e)

@@ -77,7 +77,7 @@ public final class CallLlmStep<T> implements PipelineStep
     @Override
     public void execute(final ExecutionContext context) throws PipelineException
     {
-        final AiSession session = (AiSession) context.getTransientData().get("session");
+        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
         if (session == null)
         {
             return;
@@ -87,7 +87,7 @@ public final class CallLlmStep<T> implements PipelineStep
         final String user = this.prompt.compileUserMessage(context);
 
         List<SutAttachment> attachments = Collections.emptyList();
-        final SutState lastState = (SutState) context.getTransientData().get("lastState");
+        final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
         if (lastState != null && lastState.getAttachments() != null)
         {
             attachments = lastState.getAttachments();
@@ -116,7 +116,7 @@ public final class CallLlmStep<T> implements PipelineStep
         try
         {
             final T parsedResult = this.prompt.parseResponse(response.content(), context);
-            context.getTransientData().put("lastLlmResult", parsedResult);
+            context.getTransientData().put(ExecutionContext.KEY_LAST_LLM_RESULT, parsedResult);
         }
         catch (final Exception e)
         {
