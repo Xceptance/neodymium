@@ -87,9 +87,10 @@ public final class ExecuteActionsStep implements PipelineStep
             throw new ConclusiveFailureException("No active TargetExecutor registered in ExecutionContext transient data");
         }
 
-        // Retrieve the result returned by the prior CallLlmStep execution
-        final Object result = context.getTransientData().get("lastLlmResult");
-        if (result == null)
+        // Retrieve the list of actions returned by the prior CallLlmStep execution
+        @SuppressWarnings("unchecked")
+        final List<Action> actions = (List<Action>) context.getTransientData().get("lastLlmResult");
+        if (actions == null)
         {
             return;
         }
@@ -99,20 +100,13 @@ public final class ExecuteActionsStep implements PipelineStep
         final List<Action> recordedActions = (List<Action>) context.getTransientData()
             .computeIfAbsent("recording", k -> new CopyOnWriteArrayList<>());
 
-        // Process single actions or lists of actions dynamically returned by model response
-        if (result instanceof List<?> list)
+        // Execute each parsed action sequentially
+        for (final Action action : actions)
         {
-            for (final Object obj : list)
+            if (action != null)
             {
-                if (obj instanceof Action action)
-                {
-                    executeSingleAction(action, executor, recordedActions, session, context);
-                }
+                executeSingleAction(action, executor, recordedActions, session, context);
             }
-        }
-        else if (result instanceof Action action)
-        {
-            executeSingleAction(action, executor, recordedActions, session, context);
         }
     }
 
