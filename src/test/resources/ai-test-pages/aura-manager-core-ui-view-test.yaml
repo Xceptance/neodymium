@@ -1,0 +1,9 @@
+steps: |
+  Open ${auraManagerUrl} in the browser
+  Click on the "History & Reports" navigation item
+  Verify the History view is displayed
+  Click on the "Workspace" navigation item
+  Verify the Workspace view is displayed
+
+data:
+  - testId: "View_Switching"

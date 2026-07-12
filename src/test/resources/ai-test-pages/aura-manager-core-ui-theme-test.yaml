@@ -1,0 +1,10 @@
+steps: |
+  Open ${auraManagerUrl} in the browser
+  Verify the page title is "Neodymium Aura Manager"
+  Click the Dark Mode button
+  Verify the root element has the "force-dark" class
+  Click the Light Mode button
+  Verify the root element has the "force-light" class
+
+data:
+  - testId: "Theme_Toggling"
