@@ -41,7 +41,7 @@ public interface AiConfiguration extends Mutable
     public String aiApiKey();
 
     @Key("neodymium.ai.model")
-    @DefaultValue("gemini-2.5-flash")
+    @DefaultValue("gemini-3.5-flash")
     public String aiModel();
 
     @Key("neodymium.ai.timeoutSeconds")

@@ -99,7 +99,7 @@ public final class PromptAndRepairTest
         final String rawPrompt = "Write a test script";
 
         // 1. Gemini / Default (No wrapper tags)
-        assertEquals(rawPrompt, PromptBuilderService.format("gemini-2.5-flash", rawPrompt, false));
+        assertEquals(rawPrompt, PromptBuilderService.format("gemini-3.5-flash", rawPrompt, false));
         assertEquals(rawPrompt, PromptBuilderService.format("openai-gpt4", rawPrompt, true));
 
         // 2. Mistral wrapping

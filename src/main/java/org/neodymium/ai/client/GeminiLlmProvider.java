@@ -73,7 +73,7 @@ public final class GeminiLlmProvider implements LlmProvider
 
         final ChatModel model = GoogleAiGeminiChatModel.builder()
             .apiKey(this.apiKey)
-            .modelName(this.modelName != null ? this.modelName : "gemini-2.5-flash")
+            .modelName(this.modelName != null ? this.modelName : "gemini-3.5-flash")
             .temperature(request.temperature())
             .build();
 
