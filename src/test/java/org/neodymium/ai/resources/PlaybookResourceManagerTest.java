@@ -24,16 +24,22 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests for the {@link PlaybookResourceManager} path resolution behaviors.
+ * Validates the core interface contract and logic using an anonymous mock resolver.
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
 public final class PlaybookResourceManagerTest
 {
+    /**
+     * Verifies relative include path resolution against a parent identifier path.
+     * Uses a mock implementation of PlaybookResourceManager that resolves relative paths
+     * and double-dot parent directory shifts.
+     */
     @Test
     public void testMockPathResolution()
     {
-        // Simple mock path resolution check using an anonymous implementation
+        // Anonymous mock implementation to test basic interface signature and path resolution rules
         final PlaybookResourceManager manager = new PlaybookResourceManager()
         {
             @Override
@@ -63,7 +69,7 @@ public final class PlaybookResourceManagerTest
                 
                 final String parentDir = parentIdentifier.substring(0, lastSlash);
                 
-                // Extremely simple relative path resolution logic for mock testing
+                // Relative path resolution logic for testing parent directory shifts ("../")
                 if (relativePath.startsWith("../"))
                 {
                     final int secondLastSlash = parentDir.lastIndexOf('/');
@@ -78,9 +84,11 @@ public final class PlaybookResourceManagerTest
             }
         };
 
+        // Assert simple nested relative folder resolution
         assertEquals("src/test/resources/common/login.yaml", 
             manager.resolveInclude("src/test/resources/my-playbook.yaml", "common/login.yaml"));
 
+        // Assert double-dot folder resolution back to parent dir
         assertEquals("playbooks/login.yaml", 
             manager.resolveInclude("playbooks/checkout/checkout.yaml", "../login.yaml"));
     }

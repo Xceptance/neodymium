@@ -19,8 +19,6 @@
 package org.neodymium.ai.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
@@ -32,12 +30,16 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests for the {@link Playbook} class.
+ * Validates root model initialization, steps registration, and deep unmodifiable immutability guarantees.
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
 public final class PlaybookTest
 {
+    /**
+     * Verifies that the Playbook successfully initializes with provided steps and datasets.
+     */
     @Test
     public void testInitialization()
     {
@@ -51,12 +53,19 @@ public final class PlaybookTest
 
         final Playbook playbook = new Playbook(steps, datasets);
 
+        // Verify that steps list is correctly populated
         assertEquals(1, playbook.getSteps().size());
         assertEquals("Step 1", playbook.getSteps().get(0).getInstruction());
+
+        // Verify that dataset maps are correctly populated
         assertEquals(1, playbook.getDataSets().size());
         assertEquals("user1", playbook.getDataSets().get(0).get("username").value());
     }
 
+    /**
+     * Verifies the strict immutability behavior of the Playbook wrapper class.
+     * Accessing steps, datasets lists, or nested maps should throw UnsupportedOperationException if mutated.
+     */
     @Test
     public void testImmutability()
     {
@@ -70,17 +79,17 @@ public final class PlaybookTest
 
         final Playbook playbook = new Playbook(steps, datasets);
 
-        // Verify that steps list is unmodifiable
+        // Verify that steps list cannot be modified after construction
         assertThrows(UnsupportedOperationException.class, () -> {
             playbook.getSteps().add(new PlaybookStep("Step 2"));
         });
 
-        // Verify that datasets list is unmodifiable
+        // Verify that the datasets wrapper list itself cannot be modified
         assertThrows(UnsupportedOperationException.class, () -> {
             playbook.getDataSets().add(new HashMap<>());
         });
 
-        // Verify that dataset maps are unmodifiable
+        // Verify that individual inner dataset parameter maps cannot be modified
         assertThrows(UnsupportedOperationException.class, () -> {
             playbook.getDataSets().get(0).put("password", new SessionData.DataEntry("pass", true));
         });
