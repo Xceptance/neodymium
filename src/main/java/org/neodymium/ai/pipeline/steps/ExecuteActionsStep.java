@@ -78,9 +78,13 @@ public final class ExecuteActionsStep implements PipelineStep
         // Retrieve SUT target executor driving browser/REST operations
         final TargetExecutor executor = (TargetExecutor) context.getTransientData().get("targetExecutor");
 
-        if (session == null || executor == null)
+        if (session == null)
         {
-            return;
+            throw new ConclusiveFailureException("No active AiSession registered in ExecutionContext transient data");
+        }
+        if (executor == null)
+        {
+            throw new ConclusiveFailureException("No active TargetExecutor registered in ExecutionContext transient data");
         }
 
         // Retrieve the result returned by the prior CallLlmStep execution
