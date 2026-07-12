@@ -62,27 +62,9 @@ public class AuraE2ELiveIntegrationTest extends BaseAiTest
 {
     private String url;
 
-    private String getApiKey()
-    {
-        String key = System.getenv("GEMINI_API_KEY");
-        if (key == null || key.isBlank())
-        {
-            key = System.getProperty("neodymium.ai.apiKey");
-        }
-        return key;
-    }
-
     @BeforeEach
     public void setupTestEnvironment()
     {
-        final String key = getApiKey();
-        if (key == null || key.isBlank())
-        {
-            throw new IllegalStateException("GEMINI_API_KEY environment variable or neodymium.ai.apiKey property is missing. This test requires a valid API key to run. No silent fallbacks allowed.");
-        }
-
-        System.setProperty("neodymium.ai.apiKey", key);
-        
         // Target the floating-labels.html sandbox page served by EmbeddedHtmlServer
         this.url = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/floating-labels.html", server.getPort());
         
