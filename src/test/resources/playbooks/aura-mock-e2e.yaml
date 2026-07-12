@@ -1,0 +1,2 @@
+steps:
+  - action: "Type 'testuser' into the username field"
