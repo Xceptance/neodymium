@@ -18,10 +18,20 @@
  */
 package org.neodymium.ai.runner;
 
+import java.util.Collections;
+import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.client.LlmProvider;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.ResponseSchema;
+import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
+import org.neodymium.ai.prompt.VisualRcaPrompt;
 import org.neodymium.ai.session.AiSession;
 
 /**
@@ -84,6 +94,8 @@ public final class StateMachineRunner
                             context.popTryCatch();
                             // Discard try block pending steps up to boundary marker
                             context.discardStepsUpToTryCatch(tryCatch);
+                            // Store the error message in the context for the handler (e.g. LLM Escalation prompt)
+                            context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, e.getMessage());
                             // Schedule exception handler step
                             context.pushStep(handler);
                             continue;
@@ -95,9 +107,62 @@ public final class StateMachineRunner
             }
             success = true;
         }
+        catch (final PipelineException e)
+        {
+            runVisualRca(context, e);
+            throw e;
+        }
         finally
         {
             this.session.runPostHooks(success);
+        }
+    }
+
+    /**
+     * Captures SUT state and schedules Vision-based LLM query to analyze and document visual root causes.
+     */
+    private void runVisualRca(final ExecutionContext context, final Throwable exception)
+    {
+        try
+        {
+            final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+            if (executor == null)
+            {
+                return;
+            }
+
+            final SutState state = executor.captureState();
+            if (state == null)
+            {
+                return;
+            }
+
+            final String failedInstruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+            final String errorMessage = exception != null ? exception.getMessage() : "Unknown execution error";
+
+            final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(failedInstruction, errorMessage);
+            final String system = rcaPrompt.compileSystemMessage(context);
+            final String user = rcaPrompt.compileUserMessage(context);
+
+            final LlmRequest request = new LlmRequest(
+                system,
+                user,
+                state.getAttachments() != null ? state.getAttachments() : Collections.emptyList(),
+                ResponseSchema.TEXT,
+                0.0,
+                60
+            );
+
+            final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.VISION);
+            final LlmResponse response = provider.chat(request);
+            final String rcaExplanation = rcaPrompt.parseResponse(response.content(), context);
+
+            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_EXPLANATION, rcaExplanation);
+            this.session.getEventBus().dispatch(new DiagnosticErrorEvent("Visual RCA analysis: " + rcaExplanation, exception));
+        }
+        catch (final Exception e)
+        {
+            this.session.getEventBus().dispatch(new DiagnosticErrorEvent("Failed to execute Visual RCA: " + e.getMessage(), e));
         }
     }
 }

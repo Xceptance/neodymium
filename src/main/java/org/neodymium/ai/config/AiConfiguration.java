@@ -285,4 +285,23 @@ public final class AiConfiguration
     {
         return getBoolean("neodymium.ai.semanticVerification.enabled", true);
     }
+
+    /**
+     * Gets the active execution mode for the AI pipeline.
+     * Defaults to REPLAY_WITH_HEALING.
+     *
+     * @return the execution mode enum
+     */
+    public ExecutionMode getExecutionMode()
+    {
+        final String modeStr = getProperty("neodymium.ai.executionMode", "REPLAY_WITH_HEALING");
+        try
+        {
+            return ExecutionMode.valueOf(modeStr.trim().toUpperCase());
+        }
+        catch (final IllegalArgumentException e)
+        {
+            return ExecutionMode.REPLAY_WITH_HEALING;
+        }
+    }
 }

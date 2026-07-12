@@ -20,7 +20,9 @@ package org.neodymium.ai.pipeline.steps;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmCapability;
@@ -34,6 +36,7 @@ import org.neodymium.ai.pipeline.HealingRequiredException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.structural.SequenceStep;
+import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.PlaybookParser;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.prompt.ActionSanitizer;
@@ -273,17 +276,71 @@ public final class ExecuteActionsStep implements PipelineStep
                 throw new ConclusiveFailureException("No active prompt template registered in ExecutionContext transient data");
             }
 
-            // Standard step loop sequence: CaptureStateStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
+            final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) contextState.getTransientData()
+                .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> new org.neodymium.ai.config.AiConfiguration().getExecutionMode());
+
+            // Assemble try block sequence: CaptureStateStep -> [CallLlmStep | Replay Actions] -> ExecuteActionsStep -> VerifyOutcomeStep
             final CaptureStateStep captureStep = new CaptureStateStep();
-            final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, LlmCapability.TEXT_ONLY);
             final ExecuteActionsStep executeStep = new ExecuteActionsStep();
             final VerifyOutcomeStep verifyStep = new VerifyOutcomeStep();
 
-            // Push to context stack in reverse order (LIFO)
-            contextState.pushStep(verifyStep);
-            contextState.pushStep(executeStep);
-            contextState.pushStep(llmStep);
-            contextState.pushStep(captureStep);
+            final List<PipelineStep> standardFlow = new ArrayList<>();
+            standardFlow.add(captureStep);
+
+            final boolean isReplay = step.getActions() != null && !step.getActions().isEmpty();
+
+            if (isReplay)
+            {
+                // Replay mode: Put recorded actions directly into KEY_LAST_LLM_RESULT without querying LLM
+                standardFlow.add(c -> c.getTransientData().put(ExecutionContext.KEY_LAST_LLM_RESULT, step.getActions()));
+            }
+            else
+            {
+                // Live mode: Query LLM for actions
+                final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, LlmCapability.TEXT_ONLY);
+                standardFlow.add(llmStep);
+            }
+
+            standardFlow.add(executeStep);
+            standardFlow.add(verifyStep);
+
+            final SequenceStep tryBlock = new SequenceStep(standardFlow);
+
+            // Register exception handlers based on execution mode
+            final Map<Class<? extends PipelineException>, PipelineStep> handlers = new HashMap<>();
+
+            if (mode == org.neodymium.ai.config.ExecutionMode.LIVE || (!isReplay && mode == org.neodymium.ai.config.ExecutionMode.REPLAY_WITH_HEALING))
+            {
+                // Live Escalation: PrepareRetryStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
+                handlers.put(HealingRequiredException.class, c -> {
+                    final PrepareRetryStep prepareStep = new PrepareRetryStep();
+                    final CallLlmStep<List<Action>> escalationLlmStep = new CallLlmStep<>(activePrompt, LlmCapability.TEXT_ONLY);
+                    
+                    c.pushStep(verifyStep);
+                    c.pushStep(executeStep);
+                    c.pushStep(escalationLlmStep);
+                    c.pushStep(prepareStep);
+                });
+            }
+            else if (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_WITH_HEALING && isReplay)
+            {
+                // Replay Healing: PrepareRetryStep -> SemanticDivergenceAnalysisStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
+                handlers.put(HealingRequiredException.class, c -> {
+                    final PrepareRetryStep prepareStep = new PrepareRetryStep();
+                    final SemanticDivergenceAnalysisStep diffStep = new SemanticDivergenceAnalysisStep();
+                    final CallLlmStep<List<Action>> healLlmStep = new CallLlmStep<>(activePrompt, LlmCapability.TEXT_ONLY);
+                    
+                    c.pushStep(verifyStep);
+                    c.pushStep(executeStep);
+                    c.pushStep(healLlmStep);
+                    c.pushStep(diffStep);
+                    c.pushStep(prepareStep);
+                });
+            }
+            // If REPLAY_STRICT, no HealingRequiredException handler is registered; exception escapes to trigger Visual RCA
+
+            final TryCatchStep tryCatch = new TryCatchStep(tryBlock, handlers);
+            contextState.pushStep(tryCatch);
         };
     }
 }

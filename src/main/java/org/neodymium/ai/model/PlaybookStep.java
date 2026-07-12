@@ -62,6 +62,11 @@ public final class PlaybookStep
     private String failureReason;
 
     /**
+     * The baseline state text content (e.g. HTML/DOM) recorded for this step.
+     */
+    private String baselineState;
+
+    /**
      * Constructs a PlaybookStep with a natural language instruction.
      *
      * @param instruction the natural language instruction prompt
@@ -179,5 +184,25 @@ public final class PlaybookStep
     public void setFailureReason(final String failureReason)
     {
         this.failureReason = failureReason;
+    }
+
+    /**
+     * Returns the baseline state text content recorded for this step.
+     *
+     * @return the baseline state string or null
+     */
+    public String getBaselineState()
+    {
+        return this.baselineState;
+    }
+
+    /**
+     * Sets the baseline state text content recorded for this step.
+     *
+     * @param baselineState the baseline state string to set
+     */
+    public void setBaselineState(final String baselineState)
+    {
+        this.baselineState = baselineState;
     }
 }

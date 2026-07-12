@@ -553,4 +553,125 @@ public final class RunnerIntegrationTest
         final PrepareRetryStep step = new PrepareRetryStep();
         step.execute(context);
     }
+
+    /**
+     * Verifies that SemanticDivergenceAnalysisStep computes a diff summary when baseline and
+     * current states differ, and stores the result in the execution context.
+     */
+    @Test
+    public void testTwoStageSemanticHealingDiffSummary() throws Exception
+    {
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final TestLlmProvider provider = new TestLlmProvider();
+        provider.setResponseContent("The login button ID changed from 'login' to 'signin'.");
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(provider);
+        registry.registerProvider(provider);
+
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+
+        // Populate baseline state on the playbook step
+        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep("Click the login button");
+        step.setBaselineState("<button id='login'>Login</button>");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+
+        // Populate a different current SUT state
+        executor.enqueueState(new org.neodymium.ai.executor.MockSutState(
+            "<button id='signin'>Sign In</button>", Collections.emptyList(), "hash-current"
+        ));
+        final org.neodymium.ai.executor.SutState currentState = executor.captureState();
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
+
+        final org.neodymium.ai.pipeline.steps.SemanticDivergenceAnalysisStep diffStep =
+            new org.neodymium.ai.pipeline.steps.SemanticDivergenceAnalysisStep();
+        diffStep.execute(context);
+
+        final String diffSummary = (String) context.getTransientData().get(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY);
+        assertNotNull(diffSummary, "Diff summary should be stored in context");
+        assertFalse(diffSummary.isBlank(), "Diff summary should not be blank");
+    }
+
+    /**
+     * Verifies that SemanticDivergenceAnalysisStep stores a placeholder message when states match.
+     */
+    @Test
+    public void testTwoStageSemanticHealingMatchingStates() throws Exception
+    {
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final LlmRegistry registry = new LlmRegistry();
+
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+
+        // Baseline and current state are identical
+        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep("Click the submit button");
+        step.setBaselineState("<button id='submit'>Submit</button>");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+
+        executor.enqueueState(new org.neodymium.ai.executor.MockSutState(
+            "<button id='submit'>Submit</button>", Collections.emptyList(), "hash-same"
+        ));
+        final org.neodymium.ai.executor.SutState currentState = executor.captureState();
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
+
+        final org.neodymium.ai.pipeline.steps.SemanticDivergenceAnalysisStep diffStep =
+            new org.neodymium.ai.pipeline.steps.SemanticDivergenceAnalysisStep();
+        diffStep.execute(context);
+
+        final String diffSummary = (String) context.getTransientData().get(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY);
+        assertNotNull(diffSummary, "Placeholder diff summary should be stored");
+        assertTrue(diffSummary.contains("No layout changes"), "Should indicate no divergence detected");
+    }
+
+    /**
+     * Verifies that a conclusive pipeline failure triggers a Visual RCA query and
+     * publishes a DiagnosticErrorEvent to the event bus.
+     */
+    @Test
+    public void testVisualRcaOnConclusiveFailure()
+    {
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final TestLlmProvider provider = new TestLlmProvider();
+        provider.setResponseContent("A cookie consent popup is blocking the page content.");
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(provider);
+        registry.registerProvider(provider);
+
+        // Enqueue SUT state with a screenshot attachment to be captured on failure
+        executor.enqueueState(new org.neodymium.ai.executor.MockSutState(
+            "<div>Page with blocking overlay</div>",
+            java.util.List.of(new SutAttachment("image/png", "screenshot.png", "iVBORw0KGgo=")),
+            "hash-rca"
+        ));
+
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        // Collect DiagnosticErrorEvents dispatched during execution
+        final List<org.neodymium.ai.event.ExecutionEvent> events = new ArrayList<>();
+        eventBus.registerListener(e -> events.add(e));
+
+        // Inject a step that throws a conclusive failure
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click the checkout button");
+        context.pushStep(c -> { throw new ConclusiveFailureException("Selector not found: #checkout"); });
+
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        assertThrows(ConclusiveFailureException.class, runner::run);
+
+        // Verify that a DiagnosticErrorEvent was dispatched
+        final boolean hasRcaEvent = events.stream()
+            .anyMatch(e -> e instanceof org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent);
+        assertTrue(hasRcaEvent, "A DiagnosticErrorEvent with Visual RCA should have been dispatched");
+    }
 }

@@ -51,6 +51,10 @@ public final class ExecutionContext
     public static final String KEY_ACTIVE_PROMPT = "activePrompt";
     public static final String KEY_CURRENT_STEP_ACTIONS = "currentStepActions";
     public static final String KEY_VERIFICATION_TOKEN_USAGE = "verificationTokenUsage";
+    public static final String KEY_SEMANTIC_DIFF_SUMMARY = "semanticDiffSummary";
+    public static final String KEY_VISUAL_RCA_EXPLANATION = "visualRcaExplanation";
+    public static final String KEY_EXECUTION_MODE = "executionMode";
+    public static final String KEY_LAST_EXECUTION_ERROR = "lastExecutionError";
 
     /**
      * The LIFO execution stack containing steps yet to be processed.
