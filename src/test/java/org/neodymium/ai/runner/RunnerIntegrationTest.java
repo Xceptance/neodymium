@@ -40,6 +40,7 @@ import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.ResponseSchema;
+import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.ExecutionListener;
@@ -57,6 +58,8 @@ import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.steps.CallLlmStep;
 import org.neodymium.ai.pipeline.steps.CaptureStateStep;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
+import org.neodymium.ai.pipeline.steps.PrepareRetryStep;
+import org.neodymium.ai.pipeline.steps.VerifyOutcomeStep;
 import org.neodymium.ai.pipeline.structural.ConditionalBranchStep;
 import org.neodymium.ai.pipeline.structural.LoopStep;
 import org.neodymium.ai.pipeline.structural.SequenceStep;
@@ -93,13 +96,21 @@ public final class RunnerIntegrationTest
         @Override
         public LlmResponse chat(final LlmRequest request)
         {
+            if (request.responseSchema() == ResponseSchema.ASSERTION)
+            {
+                if (this.responseContent != null && this.responseContent.contains("\"passed\""))
+                {
+                    return new LlmResponse(this.responseContent, new TokenUsage(10, 10, 20), "test-model");
+                }
+                return new LlmResponse("{\"passed\": true, \"reasoning\": \"Mock assertion passed\"}", new TokenUsage(10, 10, 20), "test-model");
+            }
             return new LlmResponse(this.responseContent, new TokenUsage(10, 10, 20), "test-model");
         }
 
         @Override
         public Set<LlmCapability> getCapabilities()
         {
-            return Set.of(LlmCapability.TEXT_ONLY, LlmCapability.VISION);
+            return Set.of(LlmCapability.TEXT_ONLY, LlmCapability.VISION, LlmCapability.VERIFICATION);
         }
     }
 
@@ -424,5 +435,122 @@ public final class RunnerIntegrationTest
         assertEquals("INCLUDE", recorded.get(0).getType());
         assertEquals("CLICK", recorded.get(1).getType());
         assertEquals("TYPE", recorded.get(2).getType());
+    }
+
+    /**
+     * Verifies that VerifyOutcomeStep succeeds when the LLM returns a passed JSON validation response.
+     */
+    @Test
+    public void testVerifyOutcomeStepSuccess() throws Exception
+    {
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final TestLlmProvider provider = new TestLlmProvider();
+        provider.setResponseContent("{\"passed\": true, \"reasoning\": \"Looks great\"}");
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(provider);
+        registry.registerProvider(provider);
+
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click login");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, new SutState()
+        {
+            @Override
+            public String getTextContent()
+            {
+                return "<html>Initial</html>";
+            }
+
+            @Override
+            public List<SutAttachment> getAttachments()
+            {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public String getContentHash()
+            {
+                return "hash1";
+            }
+        });
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        step.execute(context);
+
+        final TokenUsage usage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
+        assertNotNull(usage);
+        assertEquals(10, usage.inputTokenCount());
+        assertEquals(10, usage.outputTokenCount());
+    }
+
+    /**
+     * Verifies that VerifyOutcomeStep throws HealingRequiredException when the LLM returns a failed JSON response.
+     */
+    @Test
+    public void testVerifyOutcomeStepFailure() throws Exception
+    {
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final TestLlmProvider provider = new TestLlmProvider();
+        provider.setResponseContent("{\"passed\": false, \"reasoning\": \"State did not change\"}");
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(provider);
+        registry.registerProvider(provider);
+
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click login");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, new SutState()
+        {
+            @Override
+            public String getTextContent()
+            {
+                return "<html>Initial</html>";
+            }
+
+            @Override
+            public List<SutAttachment> getAttachments()
+            {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public String getContentHash()
+            {
+                return "hash1";
+            }
+        });
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        assertThrows(HealingRequiredException.class, () -> step.execute(context));
+    }
+
+    /**
+     * Verifies that PrepareRetryStep runs without issues in a browserless/non-webdriver test context.
+     */
+    @Test
+    public void testPrepareRetryStep() throws Exception
+    {
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final MockTargetExecutor executor = new MockTargetExecutor();
+
+        final LlmRegistry registry = new LlmRegistry();
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        final PrepareRetryStep step = new PrepareRetryStep();
+        step.execute(context);
     }
 }

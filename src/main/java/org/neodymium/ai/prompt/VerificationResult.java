@@ -16,29 +16,28 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.neodymium.ai.client;
+package org.neodymium.ai.prompt;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.gson.annotations.SerializedName;
 
 /**
- * Enum representing the specialized features/capabilities that an LLM provider
- * is qualified to perform. Used for dynamic routing of AI operations.
+ * Record representing the outcome of semantic validation checks.
+ *
+ * @param passed true if the verification criteria were met successfully, false otherwise
+ * @param reasoning the detailed reasoning justifying the validation outcome
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-public enum LlmCapability
+public record VerificationResult(
+    @JsonProperty("passed")
+    @SerializedName("passed")
+    boolean passed,
+
+    @JsonProperty("reasoning")
+    @SerializedName("reasoning")
+    String reasoning
+)
 {
-    /** Basic textual generation and reasoning tasks. */
-    TEXT_ONLY,
-
-    /** Multimodal image and screenshot analysis. */
-    VISION,
-
-    /** Structured tool calling or schema-enforced JSON outputs. */
-    STRUCTURED_JSON,
-
-    /** Complex compound instruction splitting and preprocessing. */
-    STEP_SPLITTING,
-
-    /** Specialized validation of step execution outcomes and assertions. */
-    VERIFICATION
 }

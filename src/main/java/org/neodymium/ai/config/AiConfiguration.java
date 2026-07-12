@@ -275,4 +275,14 @@ public final class AiConfiguration
         }
         return getProperty("neodymium.ai.provider", "gemini");
     }
+
+    /**
+     * Checks if semantic verification is enabled for pipeline steps outcome validation.
+     *
+     * @return true if semantic verification is enabled, false otherwise
+     */
+    public boolean isSemanticVerificationEnabled()
+    {
+        return getBoolean("neodymium.ai.semanticVerification.enabled", true);
+    }
 }

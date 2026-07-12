@@ -49,6 +49,8 @@ public final class ExecutionContext
     public static final String KEY_CURRENT_PLAYBOOK_STEP = "currentPlaybookStep";
     public static final String KEY_CURRENT_INSTRUCTION = "currentInstruction";
     public static final String KEY_ACTIVE_PROMPT = "activePrompt";
+    public static final String KEY_CURRENT_STEP_ACTIONS = "currentStepActions";
+    public static final String KEY_VERIFICATION_TOKEN_USAGE = "verificationTokenUsage";
 
     /**
      * The LIFO execution stack containing steps yet to be processed.

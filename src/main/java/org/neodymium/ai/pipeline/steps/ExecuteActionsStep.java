@@ -138,6 +138,12 @@ public final class ExecuteActionsStep implements PipelineStep
             
             // Log to local recording and dispatch verification updates to active event listeners
             recordedActions.add(sanitized);
+            @SuppressWarnings("unchecked")
+            final List<Action> stepActions = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
+            if (stepActions != null)
+            {
+                stepActions.add(sanitized);
+            }
             session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
         }
         catch (final IOException e)
@@ -213,6 +219,12 @@ public final class ExecuteActionsStep implements PipelineStep
             // Parameterize and log the INCLUDE step record in history
             final Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());
             recordedActions.add(sanitized);
+            @SuppressWarnings("unchecked")
+            final List<Action> stepActions = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
+            if (stepActions != null)
+            {
+                stepActions.add(sanitized);
+            }
             session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
         }
         catch (final IOException e)
@@ -250,6 +262,7 @@ public final class ExecuteActionsStep implements PipelineStep
         return contextState -> {
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, step.getInstruction());
+            contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_STEP_ACTIONS, new CopyOnWriteArrayList<Action>());
 
             @SuppressWarnings("unchecked")
             final AiPrompt<List<Action>> activePrompt = (AiPrompt<List<Action>>) contextState.getTransientData()
@@ -260,12 +273,14 @@ public final class ExecuteActionsStep implements PipelineStep
                 throw new ConclusiveFailureException("No active prompt template registered in ExecutionContext transient data");
             }
 
-            // Standard step loop sequence: CaptureStateStep -> CallLlmStep -> ExecuteActionsStep
+            // Standard step loop sequence: CaptureStateStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
             final CaptureStateStep captureStep = new CaptureStateStep();
             final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, LlmCapability.TEXT_ONLY);
             final ExecuteActionsStep executeStep = new ExecuteActionsStep();
+            final VerifyOutcomeStep verifyStep = new VerifyOutcomeStep();
 
             // Push to context stack in reverse order (LIFO)
+            contextState.pushStep(verifyStep);
             contextState.pushStep(executeStep);
             contextState.pushStep(llmStep);
             contextState.pushStep(captureStep);
