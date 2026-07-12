@@ -33,12 +33,21 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.executor.ActionDefinition;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.executor.selenide.plugins.BackAction;
 import org.neodymium.ai.executor.selenide.plugins.BrowserActionPlugin;
 import org.neodymium.ai.executor.selenide.plugins.ClearAction;
+import org.neodymium.ai.executor.selenide.plugins.ClearCookiesAction;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.executor.selenide.plugins.ForwardAction;
 import org.neodymium.ai.executor.selenide.plugins.HoverAction;
+import org.neodymium.ai.executor.selenide.plugins.KeyPressAction;
 import org.neodymium.ai.executor.selenide.plugins.NavigateAction;
+import org.neodymium.ai.executor.selenide.plugins.RefreshAction;
+import org.neodymium.ai.executor.selenide.plugins.ScrollAction;
+import org.neodymium.ai.executor.selenide.plugins.SelectAction;
+import org.neodymium.ai.executor.selenide.plugins.SwitchWindowAction;
 import org.neodymium.ai.executor.selenide.plugins.TypeAction;
+import org.neodymium.ai.executor.selenide.plugins.WaitAction;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import org.openqa.selenium.HasAuthentication;
@@ -69,6 +78,15 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("TYPE", new TypeAction());
         this.plugins.put("CLEAR", new ClearAction());
         this.plugins.put("HOVER", new HoverAction());
+        this.plugins.put("BACK", new BackAction());
+        this.plugins.put("FORWARD", new ForwardAction());
+        this.plugins.put("REFRESH", new RefreshAction());
+        this.plugins.put("CLEAR_COOKIES", new ClearCookiesAction());
+        this.plugins.put("SCROLL", new ScrollAction());
+        this.plugins.put("SELECT", new SelectAction());
+        this.plugins.put("WAIT", new WaitAction());
+        this.plugins.put("KEY_PRESS", new KeyPressAction());
+        this.plugins.put("SWITCH_WINDOW", new SwitchWindowAction());
     }
 
     /**
@@ -163,7 +181,16 @@ public final class SelenideTargetExecutor implements TargetExecutor
             new ActionDefinition("CLICK", "Click element matching selector", Collections.emptyMap()),
             new ActionDefinition("TYPE", "Type text into element matching selector", Collections.emptyMap()),
             new ActionDefinition("CLEAR", "Clear text from element matching selector", Collections.emptyMap()),
-            new ActionDefinition("HOVER", "Hover mouse over element matching selector", Collections.emptyMap())
+            new ActionDefinition("HOVER", "Hover mouse over element matching selector", Collections.emptyMap()),
+            new ActionDefinition("BACK", "Navigate back in history", Collections.emptyMap()),
+            new ActionDefinition("FORWARD", "Navigate forward in history", Collections.emptyMap()),
+            new ActionDefinition("REFRESH", "Refresh page", Collections.emptyMap()),
+            new ActionDefinition("CLEAR_COOKIES", "Clear all browser cookies", Collections.emptyMap()),
+            new ActionDefinition("SCROLL", "Scroll element or page", Collections.emptyMap()),
+            new ActionDefinition("SELECT", "Select option in dropdown", Collections.emptyMap()),
+            new ActionDefinition("WAIT", "Wait for element state or pause", Collections.emptyMap()),
+            new ActionDefinition("KEY_PRESS", "Send key press events", Collections.emptyMap()),
+            new ActionDefinition("SWITCH_WINDOW", "Switch WebDriver focus to another window or tab", Collections.emptyMap())
         );
     }
 

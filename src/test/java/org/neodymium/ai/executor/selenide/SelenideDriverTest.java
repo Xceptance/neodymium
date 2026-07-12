@@ -21,6 +21,7 @@ package org.neodymium.ai.executor.selenide;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
@@ -95,6 +96,29 @@ public final class SelenideDriverTest
 
         // Supported actions check
         assertFalse(executor.getSupportedActions().isEmpty());
+    }
+
+    /**
+     * Verifies registration and mapping of newly introduced browser action plugins.
+     */
+    @Test
+    public void testNewBrowserPluginsRegistration()
+    {
+        final SelenideTargetExecutor executor = new SelenideTargetExecutor();
+        final List<String> expectedTypes = List.of(
+            "NAVIGATE", "CLICK", "TYPE", "CLEAR", "HOVER",
+            "BACK", "FORWARD", "REFRESH", "CLEAR_COOKIES",
+            "SCROLL", "SELECT", "WAIT", "KEY_PRESS", "SWITCH_WINDOW"
+        );
+
+        final java.util.Set<String> supportedTypes = executor.getSupportedActions().stream()
+            .map(org.neodymium.ai.executor.ActionDefinition::type)
+            .collect(Collectors.toSet());
+
+        for (final String type : expectedTypes)
+        {
+            assertTrue(supportedTypes.contains(type), "Missing expected action type registration: " + type);
+        }
     }
 
     /**
