@@ -73,7 +73,9 @@ public final class ExecuteActionsStep implements PipelineStep
     @Override
     public void execute(final ExecutionContext context) throws PipelineException
     {
+        // Retrieve the active session from context transient storage
         final AiSession session = (AiSession) context.getTransientData().get("session");
+        // Retrieve SUT target executor driving browser/REST operations
         final TargetExecutor executor = (TargetExecutor) context.getTransientData().get("targetExecutor");
 
         if (session == null || executor == null)
@@ -81,16 +83,19 @@ public final class ExecuteActionsStep implements PipelineStep
             return;
         }
 
+        // Retrieve the result returned by the prior CallLlmStep execution
         final Object result = context.getTransientData().get("lastLlmResult");
         if (result == null)
         {
             return;
         }
 
+        // Initialize or fetch the concurrent recording collection tracking all executed playbooks actions
         @SuppressWarnings("unchecked")
         final List<Action> recordedActions = (List<Action>) context.getTransientData()
             .computeIfAbsent("recording", k -> new CopyOnWriteArrayList<>());
 
+        // Process single actions or lists of actions dynamically returned by model response
         if (result instanceof List<?> list)
         {
             for (final Object obj : list)
@@ -118,6 +123,7 @@ public final class ExecuteActionsStep implements PipelineStep
         final ExecutionContext context
     ) throws PipelineException
     {
+        // Intercept INCLUDE control actions to perform dynamic runtime inclusion expansion
         if (action.getType().equalsIgnoreCase("INCLUDE"))
         {
             executeIncludeAction(action, session, context, recordedActions);
@@ -126,13 +132,19 @@ public final class ExecuteActionsStep implements PipelineStep
 
         try
         {
+            // Execute SUT action via targeted SUT driver
             executor.execute(action);
+            
+            // Mask any raw sensitive inputs dynamically matching SessionData variable keys
             final Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());
+            
+            // Log to local recording and dispatch verification updates to active event listeners
             recordedActions.add(sanitized);
             session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
         }
         catch (final IOException e)
         {
+            // Dispatch failed event status and throw HealingRequiredException to initiate recovery
             session.getEventBus().dispatch(new ActionExecutedEvent(action, false));
             throw new HealingRequiredException("Action execution failed against SUT: " + action.getDescription(), e);
         }
@@ -148,6 +160,7 @@ public final class ExecuteActionsStep implements PipelineStep
         final List<Action> recordedActions
     ) throws PipelineException
     {
+        // Extract include path target from SUT action definition
         final String pathTemp = action.getTarget();
         final String path = (pathTemp == null || pathTemp.trim().isEmpty()) ? action.getValue() : pathTemp;
         if (path == null || path.trim().isEmpty())
@@ -155,18 +168,21 @@ public final class ExecuteActionsStep implements PipelineStep
             throw new ConclusiveFailureException("INCLUDE action target path is null or empty");
         }
 
-        PlaybookResourceManager manager = (PlaybookResourceManager) context.getTransientData().get("resourceManager");
+        // Retrieve registered PlaybookResourceManager from the context state
+        final PlaybookResourceManager manager = (PlaybookResourceManager) context.getTransientData().get("resourceManager");
         if (manager == null)
         {
             throw new ConclusiveFailureException("No PlaybookResourceManager registered in ExecutionContext transient data");
         }
 
+        // Retrieve or instantiate the default YamlPlaybookParser
         PlaybookParser parser = (PlaybookParser) context.getTransientData().get("playbookParser");
         if (parser == null)
         {
             parser = new YamlPlaybookParser();
         }
 
+        // Fetch thread-safe stack listing active includes to detect cycle inclusions
         @SuppressWarnings("unchecked")
         final List<String> runtimeStack = (List<String>) context.getTransientData()
             .computeIfAbsent("runtimeIncludeStack", k -> new ArrayList<>());
@@ -176,22 +192,27 @@ public final class ExecuteActionsStep implements PipelineStep
             throw new ConclusiveFailureException("Circular dynamic inclusion detected: " + String.join(" -> ", runtimeStack) + " -> " + path);
         }
 
+        // Resolve absolute or relative path context based on active parent directory
         final String currentParent = (String) context.getTransientData().getOrDefault("currentPlaybookIdentifier", "");
         final String resolvedIdentifier = manager.resolveInclude(currentParent, path);
 
+        // Add to callstack before parsing to cover circular validations
         runtimeStack.add(path);
         try
         {
+            // Parse included YAML playbook target
             final Playbook playbook = parser.parse(resolvedIdentifier, manager);
             final List<PlaybookStep> playbookSteps = playbook.getSteps();
 
-            // Push steps in reverse order onto the LIFO stack to execute them in forward order
+            // Push included sub-steps onto LIFO stack in reverse order to ensure sequential execution
             for (int i = playbookSteps.size() - 1; i >= 0; i--)
             {
                 final PlaybookStep step = playbookSteps.get(i);
                 final PipelineStep stepPipeline = mapPlaybookStepToPipelineStep(step, session, context);
                 context.pushStep(stepPipeline);
             }
+            
+            // Parameterize and log the INCLUDE step record in history
             final Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());
             recordedActions.add(sanitized);
             session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
@@ -202,6 +223,7 @@ public final class ExecuteActionsStep implements PipelineStep
         }
         finally
         {
+            // Clean stack isolation frame
             runtimeStack.remove(runtimeStack.size() - 1);
         }
     }
@@ -215,6 +237,7 @@ public final class ExecuteActionsStep implements PipelineStep
         final ExecutionContext context
     )
     {
+        // For composite steps, map and execute all children sequentially using SequenceStep
         if (step.isComposite())
         {
             final List<PipelineStep> subPipelineSteps = new ArrayList<>();
@@ -225,6 +248,7 @@ public final class ExecuteActionsStep implements PipelineStep
             return new SequenceStep(subPipelineSteps);
         }
 
+        // For leaf steps, return a pipeline step wrapper setting the active instruction and pushing execution loop
         return contextState -> {
             contextState.getTransientData().put("currentPlaybookStep", step);
             contextState.getTransientData().put("currentInstruction", step.getInstruction());
@@ -238,10 +262,12 @@ public final class ExecuteActionsStep implements PipelineStep
                 throw new ConclusiveFailureException("No active prompt template registered in ExecutionContext transient data");
             }
 
+            // Standard step loop sequence: CaptureStateStep -> CallLlmStep -> ExecuteActionsStep
             final CaptureStateStep captureStep = new CaptureStateStep();
             final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, LlmCapability.TEXT_ONLY);
             final ExecuteActionsStep executeStep = new ExecuteActionsStep();
 
+            // Push to context stack in reverse order (LIFO)
             contextState.pushStep(executeStep);
             contextState.pushStep(llmStep);
             contextState.pushStep(captureStep);
