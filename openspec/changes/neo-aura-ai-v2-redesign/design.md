@@ -70,6 +70,11 @@ Neo Aura AI v1 is a coupled, browser-bound AI execution engine. The redesigned v
 * **Rationale**: This decouples v2 implementation from legacy v1 classes (`com.xceptance.neodymium.ai.*`), enabling side-by-side verification and testing without breaking existing classic AI test suites. Furthermore, removing the company prefix makes the library open-source ready.
 * **Alternatives Considered**: Modifying existing v1 classes in-place or importing legacy utilities directly. Rejected because it would instantly break the existing 22 action plugins and couple the new package to legacy company-namespaced classes.
 
+### 10. Action-Driven Inclusions (Dynamic Include Resolution)
+* **Decision**: Playbook inclusions can be resolved statically during parsing (via `- include:` YAML directives) or dynamically at runtime as a result of executing an action of type `INCLUDE`. When executing an `INCLUDE` action, the runner resolves the relative target path against the current playbook identifier via the active `PlaybookResourceManager`, parses it using the `PlaybookParser`, and pushes the resolved steps onto the active execution stack context.
+* **Rationale**: This allows the generative model (LLM) or a domain action plugin to trigger modular playbook inclusion on-the-fly depending on SUT runtime state (e.g. dynamically including a two-factor auth setup flow only if the SUT presents a verification screen), preserving full compatibility with legacy `IncludeAction` behavior while conforming to the decoupled v2 architecture.
+* **Alternatives Considered**: Resolving all inclusions statically at load-time. Rejected because it is impossible to predict runtime-triggered inclusions, which must adapt dynamically to live browser states.
+
 ---
 
 ## Risks / Trade-offs

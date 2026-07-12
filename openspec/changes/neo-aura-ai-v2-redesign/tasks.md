@@ -68,6 +68,7 @@
 - [ ] 5.16 Implement Two-Stage Semantic Healing comparison flow (Semantic Divergence Analysis) before generating corrective actions.
 - [ ] 5.17 Implement concrete PostExecutionHook classes: `LlmExecutionAuditor`, `DataConsistencyAuditor`, and `AuraVisualAuditor`.
 - [ ] 5.18 Write TDD integration tests executing mock playbooks browserless. Verify successful step execution, pre/post execution hook lifecycles (including auditor runs), event-driven warning diagnostics collection, self-healing loops, splits, divergence, and visual RCA.
+- [ ] 5.19 Implement and test dynamic run-time `INCLUDE` action step expansion using the parser and resource manager.
 
 ## 6. Concrete Domain Implementation (Selenide)
 
