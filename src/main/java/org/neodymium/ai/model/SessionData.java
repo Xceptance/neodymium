@@ -165,4 +165,33 @@ public final class SessionData
         }
         return merged;
     }
+
+    /**
+     * Retrieves a map containing all raw sensitive variables and their actual secret values.
+     * Used strictly by sanitizers to identify and mask secrets in outbound payloads.
+     *
+     * @return the map of raw secret values mapped to their variable keys
+     */
+    public Map<String, String> getRawSensitiveData()
+    {
+        final Map<String, String> sensitiveMap = new HashMap<>();
+        
+        for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
+        {
+            if (entry.getValue().sensitive() && entry.getValue().value() != null)
+            {
+                sensitiveMap.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+            }
+        }
+        
+        for (final Map.Entry<String, DataEntry> entry : this.dynamicData.entrySet())
+        {
+            if (entry.getValue().sensitive() && entry.getValue().value() != null)
+            {
+                sensitiveMap.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+            }
+        }
+        
+        return sensitiveMap;
+    }
 }
