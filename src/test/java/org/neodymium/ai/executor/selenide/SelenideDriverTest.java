@@ -144,7 +144,9 @@ public final class SelenideDriverTest
     {
         final InMemoryResourceManager resourceManager = new InMemoryResourceManager();
         final List<org.neodymium.ai.model.PlaybookStep> steps = new java.util.ArrayList<>();
-        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep("Click Submit button", 1, "test.yaml");
+        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep("Click Submit button");
+        step.setLineNumber(1);
+        step.setSourceFile("test.yaml");
         final Action action = new Action("CLICK", "button#submit", "Click Submit button");
         step.getActions().add(action);
         steps.add(step);
