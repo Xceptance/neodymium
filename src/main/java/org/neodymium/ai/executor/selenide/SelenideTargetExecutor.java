@@ -235,12 +235,12 @@ public final class SelenideTargetExecutor implements TargetExecutor
         {
             plugin.execute(action);
 
-            if (beforeUrl != null && WebDriverRunner.hasWebDriverStarted())
+            if (WebDriverRunner.hasWebDriverStarted())
             {
                 final String afterUrl = WebDriverRunner.getWebDriver().getCurrentUrl();
-                if (!beforeUrl.equals(afterUrl))
+                if (beforeUrl == null || !beforeUrl.equals(afterUrl))
                 {
-                    // URL changed, wait for document ready and a stabilization delay
+                    // URL changed or browser just started, wait for document ready and a stabilization delay
                     Selenide.Wait().until(d -> Selenide.executeJavaScript("return document.readyState").equals("complete"));
                     try
                     {
