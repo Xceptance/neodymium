@@ -49,14 +49,28 @@ public final class SelenideElementFinder
             throw new IllegalArgumentException("Target cannot be empty");
         }
 
-        final String clean = target.trim();
+        String clean = target.trim();
+        boolean forceXpath = false;
+        boolean forceCss = false;
+
+        if (clean.toLowerCase().startsWith("xpath="))
+        {
+            clean = clean.substring(6).trim();
+            forceXpath = true;
+        }
+        else if (clean.toLowerCase().startsWith("css="))
+        {
+            clean = clean.substring(4).trim();
+            forceCss = true;
+        }
+
         final long start = System.currentTimeMillis();
         final long timeoutMs = com.codeborne.selenide.Configuration.timeout;
 
         while (true)
         {
             // 1. Neodymium Automation ID (xc_...)
-            if (clean.contains("data-neo-ref") || clean.contains("xc_"))
+            if (!forceXpath && (clean.contains("data-neo-ref") || clean.contains("xc_")))
             {
                 ElementsCollection els = clean.matches("^xc_.*")
                     ? Selenide.$$(By.cssSelector("[data-neo-ref='" + clean + "']"))
@@ -85,25 +99,11 @@ public final class SelenideElementFinder
             }
 
             // 2. Try as CSS Selector
-            try
-            {
-                final ElementsCollection els = Selenide.$$(By.cssSelector(clean));
-                if (!els.isEmpty())
-                {
-                    return els.first();
-                }
-            }
-            catch (final Exception e)
-            {
-                // Ignored
-            }
-
-            // 3. Try as XPath
-            if (clean.startsWith("/") || clean.startsWith("(") || clean.startsWith(".") || clean.startsWith("*") || clean.contains("["))
+            if (!forceXpath)
             {
                 try
                 {
-                    final ElementsCollection els = Selenide.$$x(clean);
+                    final ElementsCollection els = Selenide.$$(By.cssSelector(clean));
                     if (!els.isEmpty())
                     {
                         return els.first();
@@ -115,37 +115,63 @@ public final class SelenideElementFinder
                 }
             }
 
-            // 4. Try as Link Text
-            try
+            // 3. Try as XPath
+            if (!forceCss)
             {
-                final ElementsCollection els = Selenide.$$(By.linkText(clean));
-                if (!els.isEmpty())
+                if (forceXpath || clean.startsWith("/") || clean.startsWith("(") || clean.startsWith(".") || clean.startsWith("*") || clean.contains("["))
                 {
-                    return els.first();
+                    try
+                    {
+                        final ElementsCollection els = Selenide.$$x(clean);
+                        if (!els.isEmpty())
+                        {
+                            return els.first();
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        // Ignored
+                    }
                 }
             }
-            catch (final Exception e)
+
+            // 4. Try as Link Text
+            if (!forceCss && !forceXpath)
             {
-                // Ignored
+                try
+                {
+                    final ElementsCollection els = Selenide.$$(By.linkText(clean));
+                    if (!els.isEmpty())
+                    {
+                        return els.first();
+                    }
+                }
+                catch (final Exception e)
+                {
+                    // Ignored
+                }
             }
 
             // 5. Try finding by text content via XPath
-            try
+            if (!forceCss && !forceXpath)
             {
-                final String escaped = escapeXpath(clean);
-                final String xpath = String.format(
-                    "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
-                    escaped, escaped, escaped
-                );
-                final ElementsCollection els = Selenide.$$x(xpath);
-                if (!els.isEmpty())
+                try
                 {
-                    return els.first();
+                    final String escaped = escapeXpath(clean);
+                    final String xpath = String.format(
+                        "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
+                        escaped, escaped, escaped
+                    );
+                    final ElementsCollection els = Selenide.$$x(xpath);
+                    if (!els.isEmpty())
+                    {
+                        return els.first();
+                    }
                 }
-            }
-            catch (final Exception e)
-            {
-                // Ignored
+                catch (final Exception e)
+                {
+                    // Ignored
+                }
             }
 
             if (System.currentTimeMillis() - start >= timeoutMs)
@@ -165,6 +191,10 @@ public final class SelenideElementFinder
         }
 
         // Fallback: Default Selenide behavior
+        if (forceXpath)
+        {
+            return Selenide.$x(clean);
+        }
         return Selenide.$(clean);
     }
 
