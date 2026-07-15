@@ -101,7 +101,12 @@ public final class MistralLlmProvider implements LlmProvider
             TokenUsage mappedUsage = null;
             if (usage != null)
             {
-                mappedUsage = new TokenUsage(usage.inputTokenCount(), usage.outputTokenCount(), usage.totalTokenCount());
+                mappedUsage = new TokenUsage(
+                    usage.inputTokenCount(),
+                    usage.outputTokenCount(),
+                    usage.totalTokenCount(),
+                    extractCachedTokens(usage)
+                );
             }
 
             return new LlmResponse(response.aiMessage().text(), mappedUsage, this.modelName);
@@ -110,6 +115,33 @@ public final class MistralLlmProvider implements LlmProvider
         {
             throw new IOException("Failed to execute Mistral chat request: " + e.getMessage(), e);
         }
+    }
+
+    private int extractCachedTokens(final dev.langchain4j.model.output.TokenUsage usage)
+    {
+        if (usage == null)
+        {
+            return 0;
+        }
+        try
+        {
+            final java.lang.reflect.Method detailsMethod = usage.getClass().getMethod("promptTokensDetails");
+            final Object details = detailsMethod.invoke(usage);
+            if (details != null)
+            {
+                final java.lang.reflect.Method cachedMethod = details.getClass().getMethod("cachedTokens");
+                final Object cached = cachedMethod.invoke(details);
+                if (cached instanceof Integer)
+                {
+                    return (Integer) cached;
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            // Silent catch
+        }
+        return 0;
     }
 
     @Override

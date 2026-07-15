@@ -806,7 +806,7 @@ public class PageAnalyzer {
         final boolean isEmptyPage = "data:,".equals(url) || "about:blank".equals(url);
 
         if (!isEmptyPage) {
-            LOG.debug("🔴 Capturing simplified DOM for: {} (level: {})", url, level);
+            LOG.debug("🔴 [DOM Capture: {}] URL: {}", level, url);
         }
 
         final StringBuilder dom = new StringBuilder();

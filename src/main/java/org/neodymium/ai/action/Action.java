@@ -56,6 +56,11 @@ public class Action
      */
     private final String reasoning;
 
+    private String stepInstruction = "";
+    private int stepLine = -1;
+    private String stepFile = "";
+    private String stepScreenshotHash = "";
+
     /**
      * Dynamic parameter binding bindings for extensible runtime properties.
      */
@@ -175,5 +180,45 @@ public class Action
     public final Map<String, Object> getParameters()
     {
         return this.parameters;
+    }
+
+    public final String getStepInstruction()
+    {
+        return this.stepInstruction;
+    }
+
+    public final void setStepInstruction(final String stepInstruction)
+    {
+        this.stepInstruction = stepInstruction;
+    }
+
+    public final int getStepLine()
+    {
+        return this.stepLine;
+    }
+
+    public final void setStepLine(final int stepLine)
+    {
+        this.stepLine = stepLine;
+    }
+
+    public final String getStepFile()
+    {
+        return this.stepFile;
+    }
+
+    public final void setStepFile(final String stepFile)
+    {
+        this.stepFile = stepFile;
+    }
+
+    public final String getStepScreenshotHash()
+    {
+        return this.stepScreenshotHash;
+    }
+
+    public final void setStepScreenshotHash(final String stepScreenshotHash)
+    {
+        this.stepScreenshotHash = stepScreenshotHash;
     }
 }

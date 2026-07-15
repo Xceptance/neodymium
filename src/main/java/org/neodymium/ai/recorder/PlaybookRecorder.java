@@ -118,8 +118,41 @@ public final class PlaybookRecorder implements ExecutionListener
             json.append("  {\n");
             json.append("    \"type\": \"").append(escape(action.getType())).append("\",\n");
             json.append("    \"target\": \"").append(escape(action.getTarget())).append("\",\n");
-            json.append("    \"description\": \"").append(escape(action.getDescription())).append("\"\n");
-            json.append("  }");
+            json.append("    \"description\": \"").append(escape(action.getDescription())).append("\"");
+
+            if (action.getStepInstruction() != null && !action.getStepInstruction().isEmpty())
+            {
+                json.append(",\n    \"stepInstruction\": \"").append(escape(action.getStepInstruction())).append("\"");
+            }
+            if (action.getStepLine() != -1)
+            {
+                json.append(",\n    \"stepLine\": ").append(action.getStepLine());
+            }
+            if (action.getStepFile() != null && !action.getStepFile().isEmpty())
+            {
+                json.append(",\n    \"stepFile\": \"").append(escape(action.getStepFile())).append("\"");
+            }
+            if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
+            {
+                json.append(",\n    \"stepScreenshotHash\": \"").append(escape(action.getStepScreenshotHash())).append("\"");
+            }
+
+            final List<String> vals = action.getValues();
+            if (vals != null && !vals.isEmpty())
+            {
+                json.append(",\n    \"value\": [");
+                for (int j = 0; j < vals.size(); j++)
+                {
+                    json.append("\"").append(escape(vals.get(j))).append("\"");
+                    if (j < vals.size() - 1)
+                    {
+                        json.append(", ");
+                    }
+                }
+                json.append("]");
+            }
+
+            json.append("\n  }");
             if (i < this.recordedActions.size() - 1)
             {
                 json.append(",\n");

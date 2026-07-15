@@ -56,9 +56,9 @@ public final class PlaybookParserTest
         final PlaybookResourceManager manager = new InMemoryResourceManager();
         
         final String yaml = """
-            steps:
-              - Click login button
-              - Type username
+            steps: |
+              Click login button
+              Type username
             data:
               - username: testuser
                 password: secretpassword
@@ -99,20 +99,20 @@ public final class PlaybookParserTest
         final PlaybookResourceManager manager = new InMemoryResourceManager();
 
         final String mainYaml = """
-            steps:
-              - include: common/setup.yaml
-              - Click continue
+            steps: |
+              include: common/setup.yaml
+              Click continue
             """;
 
         final String setupYaml = """
-            steps:
-              - Open homepage
-              - include: login.yaml
+            steps: |
+              Open homepage
+              include: login.yaml
             """;
 
         final String loginYaml = """
-            steps:
-              - Enter credentials
+            steps: |
+              Enter credentials
             """;
 
         manager.write("main.yaml", mainYaml);
@@ -158,13 +158,13 @@ public final class PlaybookParserTest
         final PlaybookResourceManager manager = new InMemoryResourceManager();
 
         final String aYaml = """
-            steps:
-              - include: b.yaml
+            steps: |
+              include: b.yaml
             """;
 
         final String bYaml = """
-            steps:
-              - include: a.yaml
+            steps: |
+              include: a.yaml
             """;
 
         manager.write("a.yaml", aYaml);

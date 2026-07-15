@@ -1453,7 +1453,10 @@ public final class EmbeddedHtmlServer
 
                     // Display confirmation fragment
                     final String successHtml = "<div style=\"text-align:center; padding: 40px 20px;\">" +
-                                               "  <div style=\"font-size: 64px; color: var(--color-success); margin-bottom: 20px;\">✓</div>" +
+                                               "  <svg class=\"success-icon\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" style=\"margin: 0 auto 20px auto; display: block;\">" +
+                                               "    <circle cx=\"32\" cy=\"32\" r=\"30\" fill=\"#5F8766\" />" +
+                                               "    <path d=\"M20 32L28 40L44 24\" stroke=\"white\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-linejoin=\"round\" />" +
+                                               "  </svg>" +
                                                "  <h2 style=\"font-family: var(--font-family-serif); font-size: 28px; margin-bottom: 12px;\">Thank you for your purchase!</h2>" +
                                                "  <p style=\"color: var(--color-text-secondary); margin-bottom: 24px;\">Your order has been placed successfully.</p>" +
                                                "  <div style=\"background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); padding: 24px; border-radius: var(--border-radius); text-align: left; max-width: 480px; margin: 0 auto 30px auto;\">" +

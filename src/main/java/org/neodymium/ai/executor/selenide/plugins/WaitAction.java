@@ -20,6 +20,7 @@ package org.neodymium.ai.executor.selenide.plugins;
 
 import java.time.Duration;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebElementCondition;
@@ -100,7 +101,7 @@ public final class WaitAction implements BrowserActionPlugin
                     condition = Condition.hidden;
                 }
             }
-            Selenide.$(target).shouldBe(condition, Duration.ofSeconds(10));
+            SelenideElementFinder.findElement(target).shouldBe(condition, Duration.ofSeconds(10));
         }
     }
 }

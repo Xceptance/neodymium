@@ -37,6 +37,8 @@ import org.neodymium.ai.session.AiSession;
  */
 public final class CaptureStateStep implements PipelineStep
 {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(CaptureStateStep.class);
+
     /**
      * Constructs a CaptureStateStep.
      */
@@ -61,7 +63,9 @@ public final class CaptureStateStep implements PipelineStep
         {
             try
             {
-                final SutState state = executor.captureState();
+                final org.neodymium.ai.executor.selenide.ContextLevel level = (org.neodymium.ai.executor.selenide.ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+                LOGGER.debug("📸 [Capture] Capturing SUT state (level: {}) BEFORE executing actions", level);
+                final SutState state = executor.captureState(level);
                 context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
                 session.getEventBus().dispatch(new StateCapturedEvent(state));
             }

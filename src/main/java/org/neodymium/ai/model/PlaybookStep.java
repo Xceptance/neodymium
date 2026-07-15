@@ -67,6 +67,61 @@ public final class PlaybookStep
     private String baselineState;
 
     /**
+     * The perceptual screenshot hash (dHash) of the page visual state.
+     */
+    private String screenshotHash;
+
+    /**
+     * The line number in the source file where this step is defined.
+     */
+    private int lineNumber = -1;
+
+    /**
+     * The source file identifier where this step is defined.
+     */
+    private String sourceFile;
+
+    /**
+     * Returns the line number in the source file.
+     *
+     * @return the line number, or -1 if unknown
+     */
+    public int getLineNumber()
+    {
+        return this.lineNumber;
+    }
+
+    /**
+     * Sets the line number in the source file.
+     *
+     * @param lineNumber the line number to set
+     */
+    public void setLineNumber(final int lineNumber)
+    {
+        this.lineNumber = lineNumber;
+    }
+
+    /**
+     * Returns the source file identifier.
+     *
+     * @return the source file name/path, or null if unknown
+     */
+    public String getSourceFile()
+    {
+        return this.sourceFile;
+    }
+
+    /**
+     * Sets the source file identifier.
+     *
+     * @param sourceFile the source file to set
+     */
+    public void setSourceFile(final String sourceFile)
+    {
+        this.sourceFile = sourceFile;
+    }
+
+    /**
      * Constructs a PlaybookStep with a natural language instruction.
      *
      * @param instruction the natural language instruction prompt
@@ -204,5 +259,25 @@ public final class PlaybookStep
     public void setBaselineState(final String baselineState)
     {
         this.baselineState = baselineState;
+    }
+
+    /**
+     * Returns the screenshot hash (dHash) recorded for this step.
+     *
+     * @return the screenshot hash hex string or null
+     */
+    public String getScreenshotHash()
+    {
+        return this.screenshotHash;
+    }
+
+    /**
+     * Sets the screenshot hash (dHash) recorded for this step.
+     *
+     * @param screenshotHash the screenshot hash hex string to set
+     */
+    public void setScreenshotHash(final String screenshotHash)
+    {
+        this.screenshotHash = screenshotHash;
     }
 }

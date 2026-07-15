@@ -19,6 +19,7 @@
 package org.neodymium.ai.runner;
 
 import java.util.Collections;
+import java.util.List;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
@@ -31,8 +32,11 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
 import org.neodymium.ai.session.AiSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * State machine loop that pops and executes scheduled steps from the LIFO stack
@@ -43,6 +47,7 @@ import org.neodymium.ai.session.AiSession;
  */
 public final class StateMachineRunner
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(StateMachineRunner.class);
     /**
      * The active playbook execution session.
      */
@@ -66,11 +71,24 @@ public final class StateMachineRunner
      */
     public void run() throws PipelineException
     {
+        final long startTime = System.currentTimeMillis();
         this.session.runPreHooks();
         final ExecutionContext context = this.session.getExecutionContext();
         context.getTransientData().put(ExecutionContext.KEY_SESSION, this.session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, this.session.getTargetExecutor());
+
+        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+        final String datasetLabel = (String) context.getTransientData().get(ExecutionContext.KEY_ACTIVE_DATASET_LABEL);
+        final String testName = com.xceptance.neodymium.util.Neodymium.getTestName();
+
+        LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
+        LOGGER.debug("║ 🚀 STARTING TEST CASE: {}", testName != null ? testName : "Unknown Test");
+        LOGGER.debug("║ 📂 Active Dataset:    {}", datasetLabel != null ? datasetLabel : "default");
+        LOGGER.debug("║ ⚙️  Execution Mode:    {}", mode != null ? mode : "LLM_ONLY");
+        LOGGER.debug("╚════════════════════════════════════════════════════════════════════════════════════");
+
         boolean success = false;
+        Throwable failureCause = null;
 
         try
         {
@@ -94,8 +112,8 @@ public final class StateMachineRunner
                             context.popTryCatch();
                             // Discard try block pending steps up to boundary marker
                             context.discardStepsUpToTryCatch(tryCatch);
-                            // Store the error message in the context for the handler (e.g. LLM Escalation prompt)
-                            context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, e.getMessage());
+                            // Store the exception in the context for the handler (e.g. LLM Escalation prompt)
+                            context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, e);
                             // Schedule exception handler step
                             context.pushStep(handler);
                             continue;
@@ -109,12 +127,155 @@ public final class StateMachineRunner
         }
         catch (final PipelineException e)
         {
+            failureCause = e;
             runVisualRca(context, e);
             throw e;
         }
+        catch (final Throwable t)
+        {
+            failureCause = t;
+            throw t;
+        }
         finally
         {
+            final long durationMs = System.currentTimeMillis() - startTime;
+            this.session.getEventBus().dispatch(new SessionFinishedEvent(durationMs, success));
+            logFinalStatsSummary(context, durationMs, success, failureCause);
             this.session.runPostHooks(success);
+        }
+    }
+
+    /**
+     * Logs both the cumulative AI execution statistics and the step-by-step trace statistics.
+     */
+    private void logFinalStatsSummary(final ExecutionContext context, final long durationMs, final boolean success, final Throwable failureCause)
+    {
+        @SuppressWarnings("unchecked")
+        final List<org.neodymium.ai.pipeline.StepStats> stepStatsList = 
+            (List<org.neodymium.ai.pipeline.StepStats>) context.getTransientData().get("execution.stepStatsList");
+        
+        if (stepStatsList != null && !stepStatsList.isEmpty())
+        {
+            if (!success && failureCause != null)
+            {
+                final org.neodymium.ai.pipeline.StepStats lastStats = stepStatsList.get(stepStatsList.size() - 1);
+                if (lastStats.getDurationMs() == 0)
+                {
+                    lastStats.setDurationMs(System.currentTimeMillis() - lastStats.getStartTime());
+                    Throwable root = failureCause;
+                    while (root.getCause() != null && root != root.getCause())
+                    {
+                        root = root.getCause();
+                    }
+                    lastStats.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
+                    
+                    @SuppressWarnings("unchecked")
+                    final List<org.neodymium.ai.action.Action> stepActions = 
+                        (List<org.neodymium.ai.action.Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
+                    if (stepActions != null)
+                    {
+                        lastStats.getActions().addAll(stepActions);
+                    }
+                }
+            }
+
+            LOGGER.debug("======== 📊 AI Step Execution Statistics ========");
+            for (int i = 0; i < stepStatsList.size(); i++)
+            {
+                final org.neodymium.ai.pipeline.StepStats stats = stepStatsList.get(i);
+                LOGGER.debug("  Step {}: {}", i + 1, stats.getInstruction());
+                LOGGER.debug("    Mode:           {}", stats.isReplayed() ? "REPLAY" : "LLM");
+                LOGGER.debug("    Duration:       {} ms", stats.getDurationMs());
+                LOGGER.debug("    Escalations:    {}", Math.max(0, stats.getContextLevels().size() - 1));
+                if (!stats.getContextLevels().isEmpty())
+                {
+                    LOGGER.debug("    Context Levels: {}", String.join(" -> ", stats.getContextLevels()));
+                }
+                
+                final List<org.neodymium.ai.action.Action> actions = stats.getActions();
+                if (actions != null && !actions.isEmpty())
+                {
+                    final String actionTypes = actions.stream()
+                        .map(act -> act.getType())
+                        .collect(java.util.stream.Collectors.joining(", "));
+                    LOGGER.debug("    Actions:        {} ({})", actions.size(), actionTypes);
+                }
+                else
+                {
+                    LOGGER.debug("    Actions:        0");
+                }
+
+                if (stats.getStandardCalls() > 0)
+                {
+                    LOGGER.debug("    Standard Calls: {} (Tokens: {} in ({} cached) → {} out)",
+                        stats.getStandardCalls(),
+                        stats.getStandardInputTokens(),
+                        stats.getStandardCachedTokens(),
+                        stats.getStandardOutputTokens());
+                }
+                if (stats.getVerificationCalls() > 0)
+                {
+                    LOGGER.debug("    Verification Calls: {} (Tokens: {} in ({} cached) → {} out)",
+                        stats.getVerificationCalls(),
+                        stats.getVerificationInputTokens(),
+                        stats.getVerificationCachedTokens(),
+                        stats.getVerificationOutputTokens());
+                }
+                if (stats.getFailureReason() != null)
+                {
+                    LOGGER.debug("    Failure:        {}", stats.getFailureReason());
+                }
+            }
+            LOGGER.debug("=================================================");
+        }
+
+        final Integer llmCalls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
+        final Integer replays = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
+        
+        final org.neodymium.ai.client.TokenUsage standardUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
+        final org.neodymium.ai.client.TokenUsage verificationUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
+
+        final long standardIn = standardUsage != null ? standardUsage.inputTokenCount() : 0;
+        final long standardOut = standardUsage != null ? standardUsage.outputTokenCount() : 0;
+        final long standardCached = standardUsage != null ? standardUsage.cachedTokenCount() : 0;
+        final long verificationIn = verificationUsage != null ? verificationUsage.inputTokenCount() : 0;
+        final long verificationOut = verificationUsage != null ? verificationUsage.outputTokenCount() : 0;
+        final long verificationCached = verificationUsage != null ? verificationUsage.cachedTokenCount() : 0;
+        
+        final long totalIn = standardIn + verificationIn;
+        final long totalOut = standardOut + verificationOut;
+        final long totalCached = standardCached + verificationCached;
+        final long totalTokens = totalIn + totalOut;
+
+        LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
+        LOGGER.debug("║ 🏁 TEST CASE COMPLETED: {}", success ? "SUCCESS" : "FAILED");
+        if (!success && failureCause != null)
+        {
+            Throwable root = failureCause;
+            while (root.getCause() != null && root != root.getCause())
+            {
+                root = root.getCause();
+            }
+            LOGGER.debug("║ ❌ Failure Reason:      {}", root.getMessage() != null ? root.getMessage() : root.toString());
+        }
+        LOGGER.debug("║ ⏱️ Duration:            {} ms", String.format("%,d", durationMs));
+        LOGGER.debug("║ 🤖 LLM Calls:           {} (Standard: {}, Verification: {})", llmCalls + (verificationUsage != null ? 1 : 0), llmCalls, verificationUsage != null ? 1 : 0);
+        LOGGER.debug("║ 🎟️ Replays:             {}", replays);
+        LOGGER.debug("║ 🪙 Tokens:              {} (Input: {}, Cached: {}, Output: {})",
+            String.format("%,d", totalTokens),
+            String.format("%,d", totalIn),
+            String.format("%,d", totalCached),
+            String.format("%,d", totalOut));
+        LOGGER.debug("╚════════════════════════════════════════════════════════════════════════════════════");
+        @SuppressWarnings("unchecked")
+        final List<String> warnings = (List<String>) context.getTransientData().get("verificationWarnings");
+        if (warnings != null && !warnings.isEmpty())
+        {
+            LOGGER.warn("⚠️ Semantic Verification Warnings/Failures:");
+            for (final String warn : warnings)
+            {
+                LOGGER.warn("  - {}", warn);
+            }
         }
     }
 

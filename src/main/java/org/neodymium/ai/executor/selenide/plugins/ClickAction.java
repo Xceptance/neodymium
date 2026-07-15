@@ -21,6 +21,8 @@ package org.neodymium.ai.executor.selenide.plugins;
 import org.neodymium.ai.action.Action;
 import com.codeborne.selenide.Selenide;
 
+import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+
 /**
  * Concrete action plugin executing CLICK browser commands.
  *
@@ -47,7 +49,15 @@ public final class ClickAction implements BrowserActionPlugin
     {
         if (action != null && action.getTarget() != null)
         {
-            Selenide.$(action.getTarget()).click();
+            final com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(action.getTarget());
+            try
+            {
+                element.click();
+            }
+            catch (final Exception | AssertionError e)
+            {
+                Selenide.executeJavaScript("arguments[0].click();", element);
+            }
         }
     }
 }

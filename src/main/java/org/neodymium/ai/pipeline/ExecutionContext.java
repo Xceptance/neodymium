@@ -51,10 +51,15 @@ public final class ExecutionContext
     public static final String KEY_ACTIVE_PROMPT = "activePrompt";
     public static final String KEY_CURRENT_STEP_ACTIONS = "currentStepActions";
     public static final String KEY_VERIFICATION_TOKEN_USAGE = "verificationTokenUsage";
+    public static final String KEY_STANDARD_TOKEN_USAGE = "standardTokenUsage";
+    public static final String KEY_TOTAL_LLM_CALLS = "totalLlmCalls";
+    public static final String KEY_TOTAL_REPLAYS = "totalReplays";
+    public static final String KEY_CURRENT_CONTEXT_LEVEL = "currentContextLevel";
     public static final String KEY_SEMANTIC_DIFF_SUMMARY = "semanticDiffSummary";
     public static final String KEY_VISUAL_RCA_EXPLANATION = "visualRcaExplanation";
     public static final String KEY_EXECUTION_MODE = "executionMode";
     public static final String KEY_LAST_EXECUTION_ERROR = "lastExecutionError";
+    public static final String KEY_ACTIVE_DATASET_LABEL = "activeDatasetLabel";
 
     /**
      * The LIFO execution stack containing steps yet to be processed.

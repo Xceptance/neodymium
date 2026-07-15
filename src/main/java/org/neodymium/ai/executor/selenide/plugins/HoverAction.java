@@ -21,6 +21,8 @@ package org.neodymium.ai.executor.selenide.plugins;
 import org.neodymium.ai.action.Action;
 import com.codeborne.selenide.Selenide;
 
+import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+
 /**
  * Concrete action plugin executing HOVER browser commands.
  *
@@ -47,7 +49,7 @@ public final class HoverAction implements BrowserActionPlugin
     {
         if (action != null && action.getTarget() != null)
         {
-            Selenide.$(action.getTarget()).hover();
+            SelenideElementFinder.findElement(action.getTarget()).hover();
         }
     }
 }

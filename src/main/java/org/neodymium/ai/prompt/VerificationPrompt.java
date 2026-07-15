@@ -52,19 +52,19 @@ public final class VerificationPrompt implements AiPrompt<VerificationResult>
     {
         return """
             You are a strict, objective SUT Execution and Action Validator.
-            Your task is to determine if the SUT page successfully transitioned to the correct state to satisfy the natural language instruction, given the initial page state, the actions decided by the agent, and the final resulting page state.
+            Your task is to determine if the SUT page successfully transitioned to the correct state to satisfy the natural language instruction.
+            You are provided with:
+            1. The natural language instruction.
+            2. The executed actions.
+            3. Two screenshots: The page state BEFORE the actions ("Initial State Screenshot"), and the page state AFTER the actions ("Final State Screenshot").
 
-            Evaluate two criteria:
-            1. Action Logic: Did the executed actions make logical sense to achieve the instruction in the initial state? (i.e. did the AI try the right thing?)
-            2. State Transition: Does the final resulting page state represent a successful outcome of the instruction? (i.e. did we get the right results, or did the SUT fail?)
+            Compare the two screenshots and the executed actions to verify if the instruction was successfully completed.
 
             You must output a JSON object adhering to this schema:
             {
               "passed": boolean,
-              "reasoning": "A concise explanation covering the action logic correctness and state transition correctness"
+              "reasoning": "A concise explanation covering the visual verification result"
             }
-
-            CRITICAL: Return only the JSON object. Do not include markdown code block wrappers (like ```json) or any extra conversational text.
             """;
     }
 
@@ -73,8 +73,6 @@ public final class VerificationPrompt implements AiPrompt<VerificationResult>
     public String compileUserMessage(final ExecutionContext context)
     {
         final String instruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
-        final SutState initialState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
-        final SutState finalState = (SutState) context.getTransientData().get("finalState");
         final List<Action> actions = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
 
         final StringBuilder actionsStr = new StringBuilder();
@@ -90,32 +88,17 @@ public final class VerificationPrompt implements AiPrompt<VerificationResult>
             actionsStr.append("(No actions executed)");
         }
 
-        final String initMarkup = initialState != null ? initialState.getTextContent() : "(No initial state)";
-        final String finalMarkup = finalState != null ? finalState.getTextContent() : "(No final state)";
-
         return String.format("""
             Instruction:
             \"\"\"
             %s
             \"\"\"
 
-            Initial SUT Page State (Before Actions):
-            \"\"\"
-            %s
-            \"\"\"
-
             Executed Actions:
             %s
-
-            Final SUT Page State (After Actions):
-            \"\"\"
-            %s
-            \"\"\"
             """,
             instruction != null ? instruction : "",
-            initMarkup,
-            actionsStr.toString(),
-            finalMarkup
+            actionsStr.toString()
         );
     }
 

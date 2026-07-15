@@ -111,7 +111,7 @@ public final class RestTargetExecutor implements TargetExecutor
      * @throws IOException if state capture fails
      */
     @Override
-    public SutState captureState() throws IOException
+    public SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level) throws IOException
     {
         return new MockSutState(this.lastResponseBody, String.valueOf(this.lastResponseStatus));
     }

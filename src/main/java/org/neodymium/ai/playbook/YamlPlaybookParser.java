@@ -30,6 +30,8 @@ import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.resources.PlaybookResourceManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -41,6 +43,8 @@ import org.yaml.snakeyaml.Yaml;
  */
 public final class YamlPlaybookParser implements PlaybookParser
 {
+    private static final Logger LOG = LoggerFactory.getLogger(YamlPlaybookParser.class);
+
     /**
      * Constructs a default YamlPlaybookParser.
      */
@@ -63,6 +67,103 @@ public final class YamlPlaybookParser implements PlaybookParser
         final LinkedHashSet<String> activeStack = new LinkedHashSet<>();
         final List<PlaybookStep> steps = new ArrayList<>();
         final List<Map<String, SessionData.DataEntry>> dataSets = new ArrayList<>();
+
+        if (identifier.endsWith(".json"))
+        {
+            // Try to find the companion YAML file
+            String yamlPath = identifier.substring(0, identifier.length() - 5) + ".yaml";
+            boolean yamlExists = false;
+            try (final InputStream in = manager.read(yamlPath))
+            {
+                if (in != null)
+                {
+                    yamlExists = true;
+                }
+            }
+            catch (final Exception e)
+            {
+                // ignore
+            }
+
+            if (!yamlExists)
+            {
+                yamlPath = identifier.substring(0, identifier.length() - 5) + ".yml";
+                try (final InputStream in = manager.read(yamlPath))
+                {
+                    if (in != null)
+                    {
+                        yamlExists = true;
+                    }
+                }
+                catch (final Exception e)
+                {
+                    // ignore
+                }
+            }
+
+            if (yamlExists)
+            {
+                return parseAndMerge(identifier, yamlPath, manager);
+            }
+        }
+
+        // Check if it is a JSON recording
+        try (final InputStream in = manager.read(identifier))
+        {
+            if (in == null)
+            {
+                throw new IOException("Failed to load playbook: resource stream is null for " + identifier);
+            }
+            final byte[] bytes = in.readAllBytes();
+            final String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8).trim();
+            if (content.startsWith("["))
+            {
+                final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                final List<org.neodymium.ai.action.Action> actions = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<org.neodymium.ai.action.Action>>(){});
+                final String fileName = new java.io.File(identifier).getName();
+                PlaybookStep currentStep = null;
+                for (final org.neodymium.ai.action.Action action : actions)
+                {
+                    final String stepDesc = (action.getStepInstruction() != null && !action.getStepInstruction().trim().isEmpty())
+                        ? action.getStepInstruction()
+                        : action.getDescription();
+
+                    final String stepFile = (action.getStepFile() != null && !action.getStepFile().trim().isEmpty())
+                        ? action.getStepFile()
+                        : fileName;
+
+                    final int stepLine = action.getStepLine();
+
+                    if (currentStep != null 
+                        && java.util.Objects.equals(currentStep.getInstruction(), stepDesc)
+                        && java.util.Objects.equals(currentStep.getSourceFile(), stepFile)
+                        && currentStep.getLineNumber() == stepLine)
+                    {
+                        currentStep.getActions().add(action);
+                        if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
+                        {
+                            currentStep.setScreenshotHash(action.getStepScreenshotHash());
+                        }
+                    }
+                    else
+                    {
+                        currentStep = new PlaybookStep(stepDesc);
+                        currentStep.getActions().add(action);
+                        currentStep.setSourceFile(stepFile);
+                        if (stepLine != -1)
+                        {
+                            currentStep.setLineNumber(stepLine);
+                        }
+                        if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
+                        {
+                            currentStep.setScreenshotHash(action.getStepScreenshotHash());
+                        }
+                        steps.add(currentStep);
+                    }
+                }
+                return new Playbook(steps, dataSets);
+            }
+        }
 
         parseRecursive(identifier, manager, activeStack, steps, dataSets);
 
@@ -102,8 +203,12 @@ public final class YamlPlaybookParser implements PlaybookParser
                 throw new IOException("Failed to load playbook: resource stream is null for " + identifier);
             }
 
+            final byte[] bytes = in.readAllBytes();
+            final String fileContent = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+            final String fileName = new java.io.File(identifier).getName();
+
             final Yaml yaml = new Yaml();
-            final Map<String, Object> loadedMap = yaml.load(in);
+            final Map<String, Object> loadedMap = yaml.load(fileContent);
 
             if (loadedMap == null)
             {
@@ -139,7 +244,9 @@ public final class YamlPlaybookParser implements PlaybookParser
                 {
                     if (stepItem instanceof String)
                     {
-                        outSteps.add(new PlaybookStep((String) stepItem));
+                        final PlaybookStep step = new PlaybookStep((String) stepItem);
+                        initStepLocation(step, fileName, fileContent, (String) stepItem);
+                        outSteps.add(step);
                     }
                     else if (stepItem instanceof Map)
                     {
@@ -151,6 +258,7 @@ public final class YamlPlaybookParser implements PlaybookParser
 
                             // Construct the composite parent inclusion step
                             final PlaybookStep includeStep = new PlaybookStep("include: " + includeRelativePath);
+                            initStepLocation(includeStep, fileName, fileContent, "include: " + includeRelativePath);
                             
                             // Recursively parse the included file, writing output sub-steps into this composite parent
                             parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
@@ -160,11 +268,64 @@ public final class YamlPlaybookParser implements PlaybookParser
                     }
                 }
             }
+            else if (rawSteps instanceof String)
+            {
+                final String[] lines = ((String) rawSteps).split("\\r?\\n");
+                for (final String line : lines)
+                {
+                    final String trimmed = line.trim();
+                    if (trimmed.isEmpty() || trimmed.startsWith("#"))
+                    {
+                        continue;
+                    }
+                    if (trimmed.startsWith("include:") || trimmed.startsWith("_include:"))
+                    {
+                        final int colonIdx = trimmed.indexOf(':');
+                        final String includeRelativePath = trimmed.substring(colonIdx + 1).trim();
+                        final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
+                        
+                        final PlaybookStep includeStep = new PlaybookStep("include: " + includeRelativePath);
+                        initStepLocation(includeStep, fileName, fileContent, line);
+                        parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
+                        outSteps.add(includeStep);
+                    }
+                    else
+                    {
+                        final PlaybookStep step = new PlaybookStep(trimmed);
+                        initStepLocation(step, fileName, fileContent, line);
+                        outSteps.add(step);
+                    }
+                }
+            }
         }
         finally
         {
             // Pop the identifier off the stack once its children are fully parsed
             activeStack.remove(identifier);
+        }
+    }
+
+    /**
+     * Helper to initialize the step's source file and approximate line number.
+     */
+    private void initStepLocation(final PlaybookStep step, final String fileName, final String fileContent, final String searchStr)
+    {
+        step.setSourceFile(fileName);
+        if (fileContent != null && searchStr != null && !searchStr.isEmpty())
+        {
+            final int idx = fileContent.indexOf(searchStr);
+            if (idx != -1)
+            {
+                int lineCount = 1;
+                for (int i = 0; i < idx; i++)
+                {
+                    if (fileContent.charAt(i) == '\n')
+                    {
+                        lineCount++;
+                    }
+                }
+                step.setLineNumber(lineCount);
+            }
         }
     }
 
@@ -186,5 +347,85 @@ public final class YamlPlaybookParser implements PlaybookParser
             || lower.contains("secret") 
             || lower.contains("private") 
             || lower.contains("sensitive");
+    }
+
+    private Playbook parseAndMerge(
+        final String jsonIdentifier,
+        final String yamlIdentifier,
+        final PlaybookResourceManager manager) throws IOException
+    {
+        // 1. Parse the YAML playbook
+        final Playbook yamlPlaybook = parse(yamlIdentifier, manager);
+        final List<PlaybookStep> yamlSteps = yamlPlaybook.getSteps();
+
+        // 2. Parse the JSON actions
+        final List<org.neodymium.ai.action.Action> actions;
+        try (final InputStream in = manager.read(jsonIdentifier))
+        {
+            if (in == null)
+            {
+                return yamlPlaybook;
+            }
+            final byte[] bytes = in.readAllBytes();
+            final String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8).trim();
+            final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            actions = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<org.neodymium.ai.action.Action>>(){});
+        }
+
+        // 3. Merge actions into YAML steps sequentially
+        int yamlIndex = 0;
+        for (final org.neodymium.ai.action.Action action : actions)
+        {
+            final String stepDesc = (action.getStepInstruction() != null && !action.getStepInstruction().trim().isEmpty())
+                ? action.getStepInstruction()
+                : action.getDescription();
+
+            // Find the matching YAML step sequentially starting from the current index
+            int foundIndex = -1;
+            for (int i = yamlIndex; i < yamlSteps.size(); i++)
+            {
+                final PlaybookStep yamlStep = yamlSteps.get(i);
+                if (yamlStep.getInstruction().trim().equalsIgnoreCase(stepDesc.trim()))
+                {
+                    foundIndex = i;
+                    break;
+                }
+            }
+
+            // If not found from current pointer, scan from the beginning as fallback
+            if (foundIndex == -1)
+            {
+                for (int i = 0; i < yamlSteps.size(); i++)
+                {
+                    final PlaybookStep yamlStep = yamlSteps.get(i);
+                    if (yamlStep.getInstruction().trim().equalsIgnoreCase(stepDesc.trim()))
+                    {
+                        foundIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (foundIndex != -1)
+            {
+                final PlaybookStep yamlStep = yamlSteps.get(foundIndex);
+                if (!"NONE".equalsIgnoreCase(action.getType()))
+                {
+                    yamlStep.getActions().add(action);
+                }
+                if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
+                {
+                    yamlStep.setScreenshotHash(action.getStepScreenshotHash());
+                }
+                // Advance the pointer to the next step
+                yamlIndex = foundIndex;
+            }
+            else
+            {
+                LOG.warn("No matching step found in YAML for JSON action instruction: {}", stepDesc);
+            }
+        }
+
+        return yamlPlaybook;
     }
 }

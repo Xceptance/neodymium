@@ -75,6 +75,7 @@ public final class GeminiLlmProvider implements LlmProvider
             .apiKey(this.apiKey)
             .modelName(this.modelName != null ? this.modelName : "gemini-3.5-flash")
             .temperature(request.temperature())
+            .timeout(java.time.Duration.ofSeconds(request.timeoutSeconds() > 0 ? request.timeoutSeconds() : 180))
             .build();
 
         final List<ChatMessage> messages = new ArrayList<>();
@@ -126,7 +127,12 @@ public final class GeminiLlmProvider implements LlmProvider
             TokenUsage mappedUsage = null;
             if (usage != null)
             {
-                mappedUsage = new TokenUsage(usage.inputTokenCount(), usage.outputTokenCount(), usage.totalTokenCount());
+                mappedUsage = new TokenUsage(
+                    usage.inputTokenCount(),
+                    usage.outputTokenCount(),
+                    usage.totalTokenCount(),
+                    extractCachedTokens(usage)
+                );
             }
 
             return new LlmResponse(response.aiMessage().text(), mappedUsage, this.modelName);
@@ -135,6 +141,31 @@ public final class GeminiLlmProvider implements LlmProvider
         {
             throw new IOException("Failed to execute Gemini chat request: " + e.getMessage(), e);
         }
+    }
+
+    private int extractCachedTokens(final dev.langchain4j.model.output.TokenUsage usage)
+    {
+        if (usage == null)
+        {
+            return 0;
+        }
+        try
+        {
+            if (usage.getClass().getSimpleName().equals("GoogleAiGeminiTokenUsage"))
+            {
+                final java.lang.reflect.Method method = usage.getClass().getMethod("cachedContentTokenCount");
+                final Object result = method.invoke(usage);
+                if (result instanceof Integer)
+                {
+                    return (Integer) result;
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            // Silent catch
+        }
+        return 0;
     }
 
     @Override

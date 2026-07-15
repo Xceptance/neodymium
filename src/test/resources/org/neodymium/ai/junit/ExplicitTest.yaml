@@ -1,0 +1,8 @@
+data:
+  - testId: explicit1
+    param: foo
+  - testId: explicit2
+    param: bar
+steps: |
+  Step A
+  Step B

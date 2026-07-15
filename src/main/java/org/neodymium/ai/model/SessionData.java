@@ -93,7 +93,46 @@ public final class SessionData
             return this.dynamicData.get(key);
         }
         // 2. Fallback to static data
-        return this.staticData.get(key);
+        if (this.staticData.containsKey(key))
+        {
+            return this.staticData.get(key);
+        }
+        // 3. Fallback to System properties
+        final String sysProp = System.getProperty(key);
+        if (sysProp != null)
+        {
+            return new DataEntry(sysProp, false);
+        }
+        // 4. Fallback to Neodymium test data properties
+        try
+        {
+            if (com.xceptance.neodymium.util.Neodymium.getData().exists(key))
+            {
+                final String neoProp = com.xceptance.neodymium.util.Neodymium.getData().asString(key);
+                if (neoProp != null)
+                {
+                    return new DataEntry(neoProp, false);
+                }
+            }
+        }
+        catch (final Throwable t)
+        {
+            // ignore on configuration lookup failure
+        }
+        // 5. Fallback to Neodymium configuration properties
+        try
+        {
+            final String configProp = com.xceptance.neodymium.util.Neodymium.configuration().getProperty(key);
+            if (configProp != null)
+            {
+                return new DataEntry(configProp, false);
+            }
+        }
+        catch (final Throwable t)
+        {
+            // ignore
+        }
+        return null;
     }
 
     /**
@@ -193,5 +232,57 @@ public final class SessionData
         }
         
         return sensitiveMap;
+    }
+
+    private static final java.util.regex.Pattern VARIABLE_PATTERN = java.util.regex.Pattern.compile("\\$\\{([^}]+)\\}");
+
+    /**
+     * Resolves variable placeholders in the format "${variableName}" in a template string
+     * using the values stored in this SessionData container. Supports nested resolution.
+     *
+     * @param template the template string containing placeholders
+     * @return the resolved string with placeholders replaced by actual values
+     */
+    public String resolveVariables(final String template)
+    {
+        return resolveVariables(template, 0);
+    }
+
+    private String resolveVariables(final String template, final int depth)
+    {
+        if (depth > 10 || template == null || template.isEmpty())
+        {
+            return template;
+        }
+
+        final java.util.regex.Matcher matcher = VARIABLE_PATTERN.matcher(template);
+        final StringBuilder sb = new StringBuilder();
+        int lastEnd = 0;
+        boolean replaced = false;
+
+        while (matcher.find())
+        {
+            sb.append(template, lastEnd, matcher.start());
+            final String placeholderKey = matcher.group(1);
+            final Object value = this.get(placeholderKey);
+            if (value == null)
+            {
+                sb.append(matcher.group(0));
+            }
+            else
+            {
+                sb.append(value);
+                replaced = true;
+            }
+            lastEnd = matcher.end();
+        }
+        sb.append(template.substring(lastEnd));
+
+        final String result = sb.toString();
+        if (replaced && result.contains("${"))
+        {
+            return resolveVariables(result, depth + 1);
+        }
+        return result;
     }
 }

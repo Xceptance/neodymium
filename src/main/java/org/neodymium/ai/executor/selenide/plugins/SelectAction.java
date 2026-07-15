@@ -21,6 +21,8 @@ package org.neodymium.ai.executor.selenide.plugins;
 import org.neodymium.ai.action.Action;
 import com.codeborne.selenide.Selenide;
 
+import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+
 /**
  * Concrete action plugin executing SELECT dropdown option commands.
  * Supports selection by visible option text or numerical index.
@@ -50,14 +52,22 @@ public final class SelectAction implements BrowserActionPlugin
         {
             final String target = action.getTarget();
             final String value = action.getValue();
+            final com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(target);
             try
             {
                 final int index = Integer.parseInt(value);
-                Selenide.$(target).selectOption(index);
+                element.selectOption(index);
             }
             catch (final NumberFormatException e)
             {
-                Selenide.$(target).selectOption(value);
+                try
+                {
+                    element.selectOption(value);
+                }
+                catch (final Exception | AssertionError ex)
+                {
+                    element.selectOptionByValue(value);
+                }
             }
         }
     }

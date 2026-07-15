@@ -103,7 +103,7 @@ public final class MockTargetExecutor implements TargetExecutor
      * @throws IOException if state capture fails
      */
     @Override
-    public SutState captureState() throws IOException
+    public SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level) throws IOException
     {
         final SutState next = this.stateQueue.poll();
         if (next != null)

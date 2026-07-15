@@ -19,6 +19,15 @@
 package org.neodymium.ai.executor.selenide;
 
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriter;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.stream.ImageOutputStream;
+import java.util.Iterator;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -34,7 +43,9 @@ import org.neodymium.ai.executor.ActionDefinition;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.plugins.BackAction;
+import org.neodymium.ai.executor.selenide.plugins.AssertAction;
 import org.neodymium.ai.executor.selenide.plugins.BrowserActionPlugin;
+import org.neodymium.ai.executor.selenide.plugins.JavaMethodAction;
 import org.neodymium.ai.executor.selenide.plugins.ClearAction;
 import org.neodymium.ai.executor.selenide.plugins.ClearCookiesAction;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
@@ -87,6 +98,21 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("WAIT", new WaitAction());
         this.plugins.put("KEY_PRESS", new KeyPressAction());
         this.plugins.put("SWITCH_WINDOW", new SwitchWindowAction());
+        this.plugins.put("ASSERT", new AssertAction());
+        this.plugins.put("NONE", action -> {});
+    }
+
+    private org.neodymium.ai.pipeline.ExecutionContext context;
+
+    /**
+     * Sets the execution context and registers context-dependent action plugins.
+     *
+     * @param context the execution context
+     */
+    public void setExecutionContext(final org.neodymium.ai.pipeline.ExecutionContext context)
+    {
+        this.context = context;
+        this.plugins.put("JAVA_METHOD", new JavaMethodAction(context));
     }
 
     /**
@@ -97,21 +123,77 @@ public final class SelenideTargetExecutor implements TargetExecutor
      * @throws IOException if state capture fails
      */
     @Override
-    public SutState captureState() throws IOException
+    public SutState captureState(final ContextLevel level) throws IOException
     {
         if (!WebDriverRunner.hasWebDriverStarted())
         {
-            return new BrowserSutState("<html><body>Not Started</body></html>", Collections.emptyList(), "not-started");
+            org.slf4j.LoggerFactory.getLogger(SelenideTargetExecutor.class).warn("⚠️ Browser/WebDriver has not started yet. No active page loaded.");
+            return new BrowserSutState("⚠️ Browser/WebDriver is not started yet. No active DOM available.", Collections.emptyList(), "not-started");
         }
 
-        final String html = WebDriverRunner.getWebDriver().getPageSource();
+        final ContextLevel activeLevel = level != null ? level : ContextLevel.STANDARD;
+        final String html = new PageAnalyzer().captureSimplifiedDom(activeLevel);
         final String hash = calculateHtmlHash(html);
 
         final List<SutAttachment> attachments = new ArrayList<>();
-        final String screenshotFile = Selenide.screenshot("capture_" + System.currentTimeMillis());
-        if (screenshotFile != null)
+        if (activeLevel.includesScreenshot())
         {
-            attachments.add(new SutAttachment("image/png", screenshotFile, null));
+            final String screenshotFile = Selenide.screenshot("capture_" + System.currentTimeMillis());
+            if (screenshotFile != null)
+            {
+                String base64Data = null;
+                String mediaType = "image/png";
+                try
+                {
+                    final java.nio.file.Path path;
+                    if (screenshotFile.startsWith("file:"))
+                    {
+                        path = java.nio.file.Path.of(new java.net.URI(screenshotFile));
+                    }
+                    else
+                    {
+                        path = java.nio.file.Path.of(screenshotFile);
+                    }
+                    final byte[] bytes = java.nio.file.Files.readAllBytes(path);
+                    
+                    byte[] compressedBytes = bytes;
+                    try
+                    {
+                        final BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
+                        if (img != null)
+                        {
+                            final ByteArrayOutputStream os = new ByteArrayOutputStream();
+                            final Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
+                            if (writers.hasNext())
+                            {
+                                final ImageWriter writer = writers.next();
+                                final ImageWriteParam param = writer.getDefaultWriteParam();
+                                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                                param.setCompressionQuality(0.6f);
+                                try (final ImageOutputStream ios = ImageIO.createImageOutputStream(os))
+                                {
+                                    writer.setOutput(ios);
+                                    writer.write(null, new IIOImage(img, null, null), param);
+                                }
+                                writer.dispose();
+                                compressedBytes = os.toByteArray();
+                                mediaType = "image/jpeg";
+                            }
+                        }
+                    }
+                    catch (final Exception compressEx)
+                    {
+                        // ignore and fallback to uncompressed png
+                    }
+                    
+                    base64Data = java.util.Base64.getEncoder().encodeToString(compressedBytes);
+                }
+                catch (final Exception e)
+                {
+                    org.slf4j.LoggerFactory.getLogger(SelenideTargetExecutor.class).error("Failed to read screenshot file: " + screenshotFile, e);
+                }
+                attachments.add(new SutAttachment(mediaType, screenshotFile, base64Data));
+            }
         }
 
         return new BrowserSutState(html, attachments, hash);

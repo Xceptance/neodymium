@@ -35,7 +35,7 @@ public final class ResponseRepairService
     /**
      * Shared Gson instance for deserialization.
      */
-    private static final Gson GSON = new GsonBuilder().create();
+    private static final Gson GSON = new GsonBuilder().setLenient().create();
 
     private ResponseRepairService()
     {

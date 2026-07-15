@@ -21,6 +21,8 @@ package org.neodymium.ai.executor.selenide.plugins;
 import org.neodymium.ai.action.Action;
 import com.codeborne.selenide.Selenide;
 
+import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+
 /**
  * Concrete action plugin executing SCROLL browser commands.
  * Supports scrolling target elements into view or scrolling the window context.
@@ -52,9 +54,9 @@ public final class ScrollAction implements BrowserActionPlugin
         }
 
         final String target = action.getTarget();
-        if (target == null || target.trim().isEmpty())
+        final String value = action.getValue() != null ? action.getValue().toLowerCase().trim() : "";
+        if (target == null || target.trim().isEmpty() || "body".equalsIgnoreCase(target.trim()) || "html".equalsIgnoreCase(target.trim()) || "top".equals(value) || "bottom".equals(value))
         {
-            final String value = action.getValue() != null ? action.getValue().toLowerCase().trim() : "";
             if ("bottom".equals(value))
             {
                 Selenide.executeJavaScript("window.scrollTo(0, document.body.scrollHeight)");
@@ -70,7 +72,7 @@ public final class ScrollAction implements BrowserActionPlugin
         }
         else
         {
-            Selenide.$(target).scrollIntoView(true);
+            SelenideElementFinder.findElement(target).scrollIntoView(true);
         }
     }
 }

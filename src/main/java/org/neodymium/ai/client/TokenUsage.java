@@ -32,7 +32,19 @@ package org.neodymium.ai.client;
 public record TokenUsage(
     int inputTokenCount,
     int outputTokenCount,
-    int totalTokenCount
+    int totalTokenCount,
+    int cachedTokenCount
 )
 {
+    /**
+     * Backward-compatible constructor defaulting cachedTokenCount to 0.
+     *
+     * @param inputTokenCount the input token count
+     * @param outputTokenCount the output token count
+     * @param totalTokenCount the total token count
+     */
+    public TokenUsage(final int inputTokenCount, final int outputTokenCount, final int totalTokenCount)
+    {
+        this(inputTokenCount, outputTokenCount, totalTokenCount, 0);
+    }
 }

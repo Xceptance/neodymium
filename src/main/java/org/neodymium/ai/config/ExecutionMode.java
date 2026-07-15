@@ -30,9 +30,21 @@ public enum ExecutionMode
 {
     /**
      * Live execution using the LLM to determine actions.
-     * Failures trigger an escalation path (re-querying the LLM) without baseline diffing.
+     * Does not record the executed steps to a json playbook file.
      */
-    LIVE,
+    LLM_ONLY,
+
+    /**
+     * Live execution using the LLM to determine actions,
+     * and automatically records the executed steps to a json playbook file.
+     */
+    LLM_RECORDING,
+
+    /**
+     * Enforces live execution using the LLM to determine actions and records them,
+     * completely ignoring any pre-existing playbook recordings on disk.
+     */
+    FORCE_RECORDING,
 
     /**
      * Replays pre-recorded actions.
@@ -45,5 +57,37 @@ public enum ExecutionMode
      * Replays pre-recorded actions strictly.
      * Failures are conclusive and terminate execution immediately (no LLM fallback).
      */
-    REPLAY_STRICT
+    REPLAY_STRICT;
+
+    /**
+     * Returns true if this mode performs live LLM action generation.
+     */
+    public boolean isLive()
+    {
+        return this == LLM_ONLY || this == LLM_RECORDING || this == FORCE_RECORDING;
+    }
+
+    /**
+     * Returns true if this mode automatically records executed actions.
+     */
+    public boolean isRecording()
+    {
+        return this == LLM_RECORDING || this == FORCE_RECORDING;
+    }
+
+    /**
+     * Returns true if this mode supports replaying recorded actions.
+     */
+    public boolean isReplay()
+    {
+        return this == LLM_RECORDING || this == REPLAY_WITH_HEALING || this == REPLAY_STRICT;
+    }
+
+    /**
+     * Returns true if this mode supports healing replay failures via LLM.
+     */
+    public boolean supportsHealing()
+    {
+        return this == REPLAY_WITH_HEALING;
+    }
 }

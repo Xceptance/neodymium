@@ -34,10 +34,22 @@ public interface TargetExecutor
     /**
      * Captures the current state of the SUT.
      *
+     * @param level the active context level to capture
      * @return the captured SUT state
      * @throws IOException if state capture fails
      */
-    SutState captureState() throws IOException;
+    SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level) throws IOException;
+
+    /**
+     * Captures the current state of the SUT using the default LEAN context level.
+     *
+     * @return the captured SUT state
+     * @throws IOException if state capture fails
+     */
+    default SutState captureState() throws IOException
+    {
+        return captureState(org.neodymium.ai.executor.selenide.ContextLevel.LEAN);
+    }
 
     /**
      * Executes a specific action against the SUT.
