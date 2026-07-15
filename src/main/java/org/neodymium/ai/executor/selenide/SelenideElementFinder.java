@@ -67,7 +67,7 @@ public final class SelenideElementFinder
                 // If not found, dynamically stamp data-neo-ref attributes into the DOM (crucial for offline replays)
                 try
                 {
-                    new PageAnalyzer().captureSimplifiedDom(ContextLevel.AXTREE);
+                    new PageAnalyzer().captureSimplifiedDom(ContextLevel.LEAN);
                 }
                 catch (final Exception ignored)
                 {
