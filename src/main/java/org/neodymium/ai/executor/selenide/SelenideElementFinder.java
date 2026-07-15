@@ -56,9 +56,11 @@ public final class SelenideElementFinder
         while (true)
         {
             // 1. Neodymium Automation ID (xc_...)
-            if (clean.matches("^xc_.*"))
+            if (clean.contains("data-neo-ref") || clean.contains("xc_"))
             {
-                final ElementsCollection els = Selenide.$$(By.cssSelector("[data-neo-ref='" + clean + "']"));
+                ElementsCollection els = clean.matches("^xc_.*")
+                    ? Selenide.$$(By.cssSelector("[data-neo-ref='" + clean + "']"))
+                    : Selenide.$$(By.cssSelector(clean));
                 if (!els.isEmpty())
                 {
                     return els.first();
@@ -73,7 +75,9 @@ public final class SelenideElementFinder
                 {
                 }
 
-                final ElementsCollection retryEls = Selenide.$$(By.cssSelector("[data-neo-ref='" + clean + "']"));
+                final ElementsCollection retryEls = clean.matches("^xc_.*")
+                    ? Selenide.$$(By.cssSelector("[data-neo-ref='" + clean + "']"))
+                    : Selenide.$$(By.cssSelector(clean));
                 if (!retryEls.isEmpty())
                 {
                     return retryEls.first();
