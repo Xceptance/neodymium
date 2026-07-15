@@ -404,7 +404,9 @@ public final class ExecuteActionsStep implements PipelineStep
                         timeoutSeconds
                     );
 
+                    LOGGER.debug("================================================================================");
                     LOGGER.debug("💬 [Pre-Step PESAP] Running analysis for: \"{}\"", resolvedInstruction);
+                    LOGGER.debug("================================================================================");
                     if (LOGGER.isTraceEnabled())
                     {
                         LOGGER.trace("System Prompt:\n{}", request.systemMessage());

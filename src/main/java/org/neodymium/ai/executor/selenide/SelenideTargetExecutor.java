@@ -229,9 +229,28 @@ public final class SelenideTargetExecutor implements TargetExecutor
             throw new IOException("Unsupported browser action type: " + type);
         }
 
+        final String beforeUrl = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver().getCurrentUrl() : null;
+
         try
         {
             plugin.execute(action);
+
+            if (beforeUrl != null && WebDriverRunner.hasWebDriverStarted())
+            {
+                final String afterUrl = WebDriverRunner.getWebDriver().getCurrentUrl();
+                if (!beforeUrl.equals(afterUrl))
+                {
+                    // URL changed, wait for document ready and a stabilization delay
+                    Selenide.Wait().until(d -> Selenide.executeJavaScript("return document.readyState").equals("complete"));
+                    try
+                    {
+                        Thread.sleep(500);
+                    }
+                    catch (final InterruptedException ignored)
+                    {
+                    }
+                }
+            }
         }
         catch (final Exception e)
         {
