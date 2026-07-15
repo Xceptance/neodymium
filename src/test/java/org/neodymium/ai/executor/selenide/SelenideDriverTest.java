@@ -89,7 +89,7 @@ public final class SelenideDriverTest
         final BrowserSutState state = (BrowserSutState) executor.captureState();
         assertNotNull(state);
         assertEquals("not-started", state.getContentHash());
-        assertTrue(state.getTextContent().contains("Not Started"));
+        assertTrue(state.getTextContent().toLowerCase().contains("not started"));
 
         // Register basic auth should execute safely without active driver
         executor.registerBasicAuth("user", "pass");
@@ -108,7 +108,8 @@ public final class SelenideDriverTest
         final List<String> expectedTypes = List.of(
             "NAVIGATE", "CLICK", "TYPE", "CLEAR", "HOVER",
             "BACK", "FORWARD", "REFRESH", "CLEAR_COOKIES",
-            "SCROLL", "SELECT", "WAIT", "KEY_PRESS", "SWITCH_WINDOW"
+            "SCROLL", "SELECT", "WAIT", "KEY_PRESS", "SWITCH_WINDOW",
+            "ASSERT", "CHECK", "STORE", "BRANCH", "INCLUDE", "SPLIT", "JAVA_METHOD"
         );
 
         final java.util.Set<String> supportedTypes = executor.getSupportedActions().stream()

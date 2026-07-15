@@ -102,7 +102,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
-    @AiPlaybook("playbooks/integration/guest-checkout-verla.json")
+    @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
     public void testCheckoutReplay()
     {
         // Assert order success screen checkmark is displayed

@@ -40,6 +40,8 @@ public final class StepStats
 
     private final List<Action> actions = new ArrayList<>();
 
+    private final List<StepStats> subStats = new ArrayList<>();
+
     private int standardCalls;
 
     private long standardInputTokens;
@@ -55,6 +57,14 @@ public final class StepStats
     private long verificationOutputTokens;
 
     private long verificationCachedTokens;
+
+    private int pesapCalls;
+
+    private long pesapInputTokens;
+
+    private long pesapOutputTokens;
+
+    private long pesapCachedTokens;
 
     private String failureReason;
 
@@ -280,5 +290,70 @@ public final class StepStats
     public void setReplayed(final boolean replayed)
     {
         this.replayed = replayed;
+    }
+
+    /**
+     * Adds PESAP LLM call tokens to the aggregates.
+     *
+     * @param input the input tokens
+     * @param output the output tokens
+     * @param cached the cached tokens
+     */
+    public void addPesapCall(final int input, final int output, final int cached)
+    {
+        this.pesapCalls++;
+        this.pesapInputTokens += input;
+        this.pesapOutputTokens += output;
+        this.pesapCachedTokens += cached;
+    }
+
+    /**
+     * Gets the number of PESAP LLM calls.
+     *
+     * @return the count
+     */
+    public int getPesapCalls()
+    {
+        return this.pesapCalls;
+    }
+
+    /**
+     * Gets the PESAP input tokens count.
+     *
+     * @return the count
+     */
+    public long getPesapInputTokens()
+    {
+        return this.pesapInputTokens;
+    }
+
+    /**
+     * Gets the PESAP output tokens count.
+     *
+     * @return the count
+     */
+    public long getPesapOutputTokens()
+    {
+        return this.pesapOutputTokens;
+    }
+
+    /**
+     * Gets the PESAP cached tokens count.
+     *
+     * @return the count
+     */
+    public long getPesapCachedTokens()
+    {
+        return this.pesapCachedTokens;
+    }
+
+    /**
+     * Gets the nested sub-step statistics.
+     *
+     * @return the sub-steps statistics list
+     */
+    public List<StepStats> getSubStats()
+    {
+        return this.subStats;
     }
 }

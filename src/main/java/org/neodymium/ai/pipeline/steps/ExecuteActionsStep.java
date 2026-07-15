@@ -20,12 +20,18 @@ package org.neodymium.ai.pipeline.steps;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.client.LlmProvider;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
@@ -45,6 +51,7 @@ import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.prompt.ActionSanitizer;
 import org.neodymium.ai.prompt.AiPrompt;
 import org.neodymium.ai.prompt.DefaultActionSanitizer;
+import org.neodymium.ai.prompt.PesapPrompt;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.session.AiSession;
 
@@ -129,10 +136,10 @@ public final class ExecuteActionsStep implements PipelineStep
         final ExecutionContext context
     ) throws PipelineException
     {
-        if (action == null)
-        {
-            return;
-        }
+         if (action == null)
+         {
+             return;
+         }
 
         // Intercept control / assertion actions that require no SUT execution
         if ("NONE".equalsIgnoreCase(action.getType()) || "VERIFY".equalsIgnoreCase(action.getType()))
@@ -169,13 +176,18 @@ public final class ExecuteActionsStep implements PipelineStep
             
             // Mask any raw sensitive inputs dynamically matching SessionData variable keys
             final Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());
-            final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-            if (step != null)
-            {
-                sanitized.setStepInstruction(step.getInstruction());
-                sanitized.setStepLine(step.getLineNumber());
-                sanitized.setStepFile(step.getSourceFile());
-            }
+             final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+             if (step != null)
+             {
+                 sanitized.setStepInstruction(step.getInstruction());
+                 sanitized.setStepLine(step.getLineNumber());
+                 sanitized.setStepFile(step.getSourceFile());
+                 final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+                 if (mode != null && !mode.isReplay())
+                 {
+                     step.getActions().add(sanitized);
+                 }
+             }
             
             // Log to local recording and dispatch verification updates to active event listeners
             recordedActions.add(sanitized);
@@ -249,10 +261,15 @@ public final class ExecuteActionsStep implements PipelineStep
             final Playbook playbook = parser.parse(resolvedIdentifier, manager);
             final List<PlaybookStep> playbookSteps = playbook.getSteps();
 
+            final PlaybookStep includeStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
             // Push included sub-steps onto LIFO stack in reverse order to ensure sequential execution
             for (int i = playbookSteps.size() - 1; i >= 0; i--)
             {
                 final PlaybookStep step = playbookSteps.get(i);
+                if (includeStep != null)
+                {
+                    step.setParent(includeStep);
+                }
                 final PipelineStep stepPipeline = mapPlaybookStepToPipelineStep(step, session, context);
                 context.pushStep(stepPipeline);
             }
@@ -307,11 +324,6 @@ public final class ExecuteActionsStep implements PipelineStep
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, resolvedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_STEP_ACTIONS, new CopyOnWriteArrayList<Action>());
 
-            final org.neodymium.ai.pipeline.StepStats stats = new org.neodymium.ai.pipeline.StepStats(resolvedInstruction, System.currentTimeMillis());
-            final org.neodymium.ai.config.ExecutionMode executionMode = (org.neodymium.ai.config.ExecutionMode) contextState.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
-            stats.setReplayed(executionMode != null && executionMode.isReplay());
-            contextState.getTransientData().put("KEY_CURRENT_STEP_STATS", stats);
-
             @SuppressWarnings("unchecked")
             List<org.neodymium.ai.pipeline.StepStats> allStats = (List<org.neodymium.ai.pipeline.StepStats>) contextState.getTransientData().get("execution.stepStatsList");
             if (allStats == null)
@@ -319,7 +331,21 @@ public final class ExecuteActionsStep implements PipelineStep
                 allStats = new java.util.ArrayList<>();
                 contextState.getTransientData().put("execution.stepStatsList", allStats);
             }
-            allStats.add(stats);
+
+            @SuppressWarnings("unchecked")
+            final Map<PlaybookStep, org.neodymium.ai.pipeline.StepStats> stepStatsMap =
+                (Map<PlaybookStep, org.neodymium.ai.pipeline.StepStats>) contextState.getTransientData()
+                    .computeIfAbsent("execution.stepStatsMap", k -> new java.util.HashMap<>());
+
+            final org.neodymium.ai.config.ExecutionMode executionMode = (org.neodymium.ai.config.ExecutionMode) contextState.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+            final boolean isReplayStats = executionMode != null && executionMode.isReplay();
+
+            final org.neodymium.ai.pipeline.StepStats stats = getOrCreateStatsForStep(step, System.currentTimeMillis(), isReplayStats, stepStatsMap, allStats);
+            contextState.getTransientData().put("KEY_CURRENT_STEP_STATS", stats);
+
+            @SuppressWarnings("unchecked")
+            final Set<PlaybookStep> alreadySplitSteps = (Set<PlaybookStep>) contextState.getTransientData()
+                .computeIfAbsent("pesap.alreadySplitSteps", k -> new HashSet<>());
 
             org.neodymium.ai.executor.selenide.ContextLevel initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
             final String lower = resolvedInstruction.toLowerCase();
@@ -335,11 +361,134 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.HINT;
             }
-            contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, initialLevel);
-            stats.getContextLevels().add(initialLevel.name());
 
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.flatSteps");
+
+            final boolean isReplayMode = executionMode != null && executionMode.isReplay();
+            final org.neodymium.ai.config.AiConfiguration config = new org.neodymium.ai.config.AiConfiguration();
+            if (!isReplayMode && config.getBoolean("neodymium.ai.pesap.enabled", true) && !alreadySplitSteps.contains(step))
+            {
+                alreadySplitSteps.add(step);
+                try
+                {
+                    String previousInstruction = null;
+                    final List<String> nextInstructions = new ArrayList<>();
+                    if (flatSteps != null)
+                    {
+                        final int idx = flatSteps.indexOf(step);
+                        if (idx != -1)
+                        {
+                            if (idx > 0)
+                            {
+                                previousInstruction = contextState.getSessionData().resolveVariables(flatSteps.get(idx - 1).getInstruction());
+                            }
+                            for (int i = idx + 1; i < flatSteps.size() && nextInstructions.size() < 2; i++)
+                            {
+                                nextInstructions.add(contextState.getSessionData().resolveVariables(flatSteps.get(i).getInstruction()));
+                            }
+                        }
+                    }
+
+                    final PesapPrompt pesapPrompt = new PesapPrompt(resolvedInstruction, previousInstruction, nextInstructions);
+                    final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.STEP_SPLITTING);
+                    final double temp = config.getTemperature("action");
+                    final int timeoutSeconds = config.getTimeoutSeconds("action");
+
+                    final LlmRequest request = new LlmRequest(
+                        pesapPrompt.compileSystemMessage(contextState),
+                        pesapPrompt.compileUserMessage(contextState),
+                        Collections.emptyList(),
+                        pesapPrompt.getResponseSchema(),
+                        temp,
+                        timeoutSeconds
+                    );
+
+                    LOGGER.debug("💬 [Pre-Step PESAP] Running analysis for: \"{}\"", resolvedInstruction);
+                    if (LOGGER.isTraceEnabled())
+                    {
+                        LOGGER.trace("System Prompt:\n{}", request.systemMessage());
+                        LOGGER.trace("User Prompt:\n{}", request.userMessage());
+                    }
+
+                    final LlmResponse response = provider.chat(request);
+
+                    LOGGER.debug("LLM response received. Length: {} chars", response.content() != null ? response.content().length() : 0);
+                    if (LOGGER.isTraceEnabled())
+                    {
+                        LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
+                    }
+
+                    final org.neodymium.ai.client.TokenUsage newUsage = response.tokenUsage();
+                    if (newUsage != null)
+                    {
+                        stats.addPesapCall(newUsage.inputTokenCount(), newUsage.outputTokenCount(), newUsage.cachedTokenCount());
+
+                        LOGGER.debug("   📊 [Pre-Step PESAP] Tokens: {} in ({} cached) → {} out (total: {})",
+                            newUsage.inputTokenCount(), newUsage.cachedTokenCount(), newUsage.outputTokenCount(), newUsage.totalTokenCount());
+
+                        final org.neodymium.ai.client.TokenUsage existing = (org.neodymium.ai.client.TokenUsage) contextState.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
+                        if (existing == null)
+                        {
+                            contextState.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, newUsage);
+                        }
+                        else
+                        {
+                            contextState.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, new org.neodymium.ai.client.TokenUsage(
+                                existing.inputTokenCount() + newUsage.inputTokenCount(),
+                                existing.outputTokenCount() + newUsage.outputTokenCount(),
+                                existing.totalTokenCount() + newUsage.totalTokenCount(),
+                                existing.cachedTokenCount() + newUsage.cachedTokenCount()
+                            ));
+                        }
+                    }
+
+                    final PesapPrompt.PesapResult pesapResult = pesapPrompt.parseResponse(response.content(), contextState);
+
+                    if (pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
+                    {
+                        LOGGER.info("✂️ Upfront JIT step split detected: \"{}\" split into {}", resolvedInstruction, pesapResult.splitSteps());
+                        for (final String part : pesapResult.splitSteps())
+                        {
+                            final PlaybookStep subStep = new PlaybookStep(part);
+                            subStep.setSourceFile(step.getSourceFile());
+                            subStep.setLineNumber(step.getLineNumber());
+                            subStep.setParent(step);
+                            step.getSubSteps().add(subStep);
+                        }
+
+                        final List<PipelineStep> subPipelineSteps = new ArrayList<>();
+                        for (final PlaybookStep subStep : step.getSubSteps())
+                        {
+                            subPipelineSteps.add(mapPlaybookStepToPipelineStep(subStep, session, context));
+                        }
+                        for (int i = subPipelineSteps.size() - 1; i >= 0; i--)
+                        {
+                            contextState.pushStep(subPipelineSteps.get(i));
+                        }
+                        return;
+                    }
+
+                    if (pesapResult.contextLevel() != null)
+                    {
+                        try
+                        {
+                            initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.valueOf(pesapResult.contextLevel().toUpperCase().trim());
+                        }
+                        catch (final Exception e)
+                        {
+                            // Keep default
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("⚠️ Pre-Step PESAP failed for step '{}' — falling back to defaults: {}", resolvedInstruction, e.getMessage());
+                }
+            }
+
+            contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, initialLevel);
+            stats.getContextLevels().add(initialLevel.name());
             String stepIndicator = "";
             if (flatSteps != null)
             {
@@ -384,7 +533,7 @@ public final class ExecuteActionsStep implements PipelineStep
                 .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> new org.neodymium.ai.config.AiConfiguration().getExecutionMode());
 
             // Check if we are in replay mode and have a recorded dHash for this step
-            if (mode.isReplay() && step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
+            if (mode.isReplay() && step.isVisualStep() && step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
             {
                 final TargetExecutor executor = (TargetExecutor) contextState.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                 if (executor != null)
@@ -603,4 +752,32 @@ public final class ExecuteActionsStep implements PipelineStep
         };
     }
 
+    private static org.neodymium.ai.pipeline.StepStats getOrCreateStatsForStep(
+        final PlaybookStep step,
+        final long startTime,
+        final boolean replayed,
+        final Map<PlaybookStep, org.neodymium.ai.pipeline.StepStats> stepStatsMap,
+        final List<org.neodymium.ai.pipeline.StepStats> allStats
+    )
+    {
+        org.neodymium.ai.pipeline.StepStats stats = stepStatsMap.get(step);
+        if (stats == null)
+        {
+            stats = new org.neodymium.ai.pipeline.StepStats(step.getInstruction(), startTime);
+            stats.setReplayed(replayed);
+            stepStatsMap.put(step, stats);
+
+            final PlaybookStep parentStep = step.getParent();
+            if (parentStep != null)
+            {
+                final org.neodymium.ai.pipeline.StepStats parentStats = getOrCreateStatsForStep(parentStep, startTime, replayed, stepStatsMap, allStats);
+                parentStats.getSubStats().add(stats);
+            }
+            else
+            {
+                allStats.add(stats);
+            }
+        }
+        return stats;
+    }
 }

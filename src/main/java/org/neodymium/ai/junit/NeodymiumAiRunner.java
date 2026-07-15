@@ -106,10 +106,29 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
         }
 
-        // Default to classname convention if no explicit playbook path is configured
+        // Default to class/method/dataset convention if no explicit playbook path is configured
         if (playbookPaths.isEmpty())
         {
-            final String defaultPlaybookName = testClass.getSimpleName() + ".yaml";
+            final String dsLabel;
+            final AiDataSet methodDS = method.getAnnotation(AiDataSet.class);
+            if (methodDS != null && methodDS.value().length > 0)
+            {
+                dsLabel = "_" + methodDS.value()[0];
+            }
+            else
+            {
+                final AiDataSet classDS = testClass.getAnnotation(AiDataSet.class);
+                if (classDS != null && classDS.value().length > 0)
+                {
+                    dsLabel = "_" + classDS.value()[0];
+                }
+                else
+                {
+                    dsLabel = "";
+                }
+            }
+
+            final String defaultPlaybookName = testClass.getSimpleName() + "_" + method.getName() + dsLabel + ".yaml";
             final String resourcePath = testClass.getPackageName().replace('.', '/') + "/" + defaultPlaybookName;
             playbookPaths.add(resourcePath);
         }
@@ -470,7 +489,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     recordingPath = recordingPath.substring(0, recordingPath.length() - 4) + ".json";
                 }
-                final org.neodymium.ai.recorder.PlaybookRecorder recorder = new org.neodymium.ai.recorder.PlaybookRecorder(manager, recordingPath);
+                final org.neodymium.ai.recorder.PlaybookRecorder recorder = new org.neodymium.ai.recorder.PlaybookRecorder(manager, recordingPath, playbookSteps);
                 eventBus.registerListener(recorder);
             }
 

@@ -209,8 +209,8 @@ public final class VerifyOutcomeStep implements PipelineStep
             // 5. Update lastState to the verified finalState
             context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, finalState);
 
-            // Compute and store dHash if a screenshot exists in the final state
-            if (finalState != null && finalState.getAttachments() != null && step != null)
+            // Compute and store dHash if a screenshot exists in the final state and the step is a visual step
+            if (finalState != null && finalState.getAttachments() != null && step != null && step.isVisualStep())
             {
                 String dHash = null;
                 for (final SutAttachment attachment : finalState.getAttachments())

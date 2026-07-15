@@ -59,6 +59,10 @@ import org.neodymium.ai.executor.selenide.plugins.SelectAction;
 import org.neodymium.ai.executor.selenide.plugins.SwitchWindowAction;
 import org.neodymium.ai.executor.selenide.plugins.TypeAction;
 import org.neodymium.ai.executor.selenide.plugins.WaitAction;
+import org.neodymium.ai.executor.selenide.plugins.CheckAction;
+import org.neodymium.ai.executor.selenide.plugins.StoreAction;
+import org.neodymium.ai.executor.selenide.plugins.BranchAction;
+import org.neodymium.ai.executor.selenide.plugins.IncludeAction;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import org.openqa.selenium.HasAuthentication;
@@ -99,6 +103,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("KEY_PRESS", new KeyPressAction());
         this.plugins.put("SWITCH_WINDOW", new SwitchWindowAction());
         this.plugins.put("ASSERT", new AssertAction());
+        this.plugins.put("CHECK", new CheckAction());
         this.plugins.put("NONE", action -> {});
     }
 
@@ -113,6 +118,9 @@ public final class SelenideTargetExecutor implements TargetExecutor
     {
         this.context = context;
         this.plugins.put("JAVA_METHOD", new JavaMethodAction(context));
+        this.plugins.put("STORE", new StoreAction(context));
+        this.plugins.put("BRANCH", new BranchAction(context));
+        this.plugins.put("INCLUDE", new IncludeAction(context));
     }
 
     /**
@@ -272,7 +280,13 @@ public final class SelenideTargetExecutor implements TargetExecutor
             new ActionDefinition("SELECT", "Select option in dropdown", Collections.emptyMap()),
             new ActionDefinition("WAIT", "Wait for element state or pause", Collections.emptyMap()),
             new ActionDefinition("KEY_PRESS", "Send key press events", Collections.emptyMap()),
-            new ActionDefinition("SWITCH_WINDOW", "Switch WebDriver focus to another window or tab", Collections.emptyMap())
+            new ActionDefinition("SWITCH_WINDOW", "Switch WebDriver focus to another window or tab", Collections.emptyMap()),
+            new ActionDefinition("ASSERT", "Assert state or value", Collections.emptyMap()),
+            new ActionDefinition("CHECK", "Check or select elements", Collections.emptyMap()),
+            new ActionDefinition("STORE", "Store variable values", Collections.emptyMap()),
+            new ActionDefinition("BRANCH", "Conditional branch logic", Collections.emptyMap()),
+            new ActionDefinition("INCLUDE", "Include external playbook", Collections.emptyMap()),
+            new ActionDefinition("JAVA_METHOD", "Invoke Java reflection method", Collections.emptyMap())
         );
     }
 

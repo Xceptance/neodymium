@@ -47,46 +47,43 @@ public final class PlaybookRecorder implements ExecutionListener
     private final String recordingPath;
 
     /**
-     * The thread-safe list of sanitized actions captured during execution.
+     * The list of playbook steps to record and serialize.
      */
-    private final List<Action> recordedActions = new CopyOnWriteArrayList<>();
+    private final List<org.neodymium.ai.model.PlaybookStep> playbookSteps;
 
     /**
      * Constructs a PlaybookRecorder.
      *
      * @param resourceManager the resource manager
      * @param recordingPath the target path for the recording file
+     * @param playbookSteps the steps list to record and serialize
      */
     public PlaybookRecorder(
         final PlaybookResourceManager resourceManager,
-        final String recordingPath
+        final String recordingPath,
+        final List<org.neodymium.ai.model.PlaybookStep> playbookSteps
     )
     {
         this.resourceManager = resourceManager;
         this.recordingPath = recordingPath;
+        this.playbookSteps = playbookSteps;
     }
 
     /**
-     * Consumes action execution and session finished events. Compiles the captured actions
-     * into JSON format on session completion and writes them to the resource path.
+     * Consumes session finished events to serialize and write the steps to resource path.
      *
      * @param event the dispatched execution event
      */
     @Override
     public void onEvent(final ExecutionEvent event)
     {
-        if (event instanceof ActionExecutedEvent actionEvent)
+        if (event instanceof SessionFinishedEvent)
         {
-            if (actionEvent.isSuccess())
-            {
-                this.recordedActions.add(actionEvent.getAction());
-            }
-        }
-        else if (event instanceof SessionFinishedEvent)
-        {
-            final String json = serializeActionsToJson();
             try
             {
+                final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                mapper.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+                final String json = mapper.writeValueAsString(this.playbookSteps);
                 this.resourceManager.write(this.recordingPath, json);
             }
             catch (final Exception e)
@@ -94,83 +91,5 @@ public final class PlaybookRecorder implements ExecutionListener
                 // Silent catch or logger details printout
             }
         }
-    }
-
-    /**
-     * Retrieves the unmodifiable list of captured recorded actions.
-     *
-     * @return the list of recorded actions
-     */
-    public List<Action> getRecordedActions()
-    {
-        return List.copyOf(this.recordedActions);
-    }
-
-    /**
-     * Formats recorded actions into a standard JSON array string without external dependencies.
-     */
-    private String serializeActionsToJson()
-    {
-        final StringBuilder json = new StringBuilder("[\n");
-        for (int i = 0; i < this.recordedActions.size(); i++)
-        {
-            final Action action = this.recordedActions.get(i);
-            json.append("  {\n");
-            json.append("    \"type\": \"").append(escape(action.getType())).append("\",\n");
-            json.append("    \"target\": \"").append(escape(action.getTarget())).append("\",\n");
-            json.append("    \"description\": \"").append(escape(action.getDescription())).append("\"");
-
-            if (action.getStepInstruction() != null && !action.getStepInstruction().isEmpty())
-            {
-                json.append(",\n    \"stepInstruction\": \"").append(escape(action.getStepInstruction())).append("\"");
-            }
-            if (action.getStepLine() != -1)
-            {
-                json.append(",\n    \"stepLine\": ").append(action.getStepLine());
-            }
-            if (action.getStepFile() != null && !action.getStepFile().isEmpty())
-            {
-                json.append(",\n    \"stepFile\": \"").append(escape(action.getStepFile())).append("\"");
-            }
-            if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
-            {
-                json.append(",\n    \"stepScreenshotHash\": \"").append(escape(action.getStepScreenshotHash())).append("\"");
-            }
-
-            final List<String> vals = action.getValues();
-            if (vals != null && !vals.isEmpty())
-            {
-                json.append(",\n    \"value\": [");
-                for (int j = 0; j < vals.size(); j++)
-                {
-                    json.append("\"").append(escape(vals.get(j))).append("\"");
-                    if (j < vals.size() - 1)
-                    {
-                        json.append(", ");
-                    }
-                }
-                json.append("]");
-            }
-
-            json.append("\n  }");
-            if (i < this.recordedActions.size() - 1)
-            {
-                json.append(",\n");
-            }
-        }
-        json.append("\n]");
-        return json.toString();
-    }
-
-    /**
-     * Escapes double quotes and backslashes for JSON encoding compatibility.
-     */
-    private String escape(final String raw)
-    {
-        if (raw == null)
-        {
-            return "";
-        }
-        return raw.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

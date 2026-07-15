@@ -180,51 +180,13 @@ public final class StateMachineRunner
             }
 
             LOGGER.debug("======== 📊 AI Step Execution Statistics ========");
+            for (final org.neodymium.ai.pipeline.StepStats stats : stepStatsList)
+            {
+                calculateDuration(stats);
+            }
             for (int i = 0; i < stepStatsList.size(); i++)
             {
-                final org.neodymium.ai.pipeline.StepStats stats = stepStatsList.get(i);
-                LOGGER.debug("  Step {}: {}", i + 1, stats.getInstruction());
-                LOGGER.debug("    Mode:           {}", stats.isReplayed() ? "REPLAY" : "LLM");
-                LOGGER.debug("    Duration:       {} ms", stats.getDurationMs());
-                LOGGER.debug("    Escalations:    {}", Math.max(0, stats.getContextLevels().size() - 1));
-                if (!stats.getContextLevels().isEmpty())
-                {
-                    LOGGER.debug("    Context Levels: {}", String.join(" -> ", stats.getContextLevels()));
-                }
-                
-                final List<org.neodymium.ai.action.Action> actions = stats.getActions();
-                if (actions != null && !actions.isEmpty())
-                {
-                    final String actionTypes = actions.stream()
-                        .map(act -> act.getType())
-                        .collect(java.util.stream.Collectors.joining(", "));
-                    LOGGER.debug("    Actions:        {} ({})", actions.size(), actionTypes);
-                }
-                else
-                {
-                    LOGGER.debug("    Actions:        0");
-                }
-
-                if (stats.getStandardCalls() > 0)
-                {
-                    LOGGER.debug("    Standard Calls: {} (Tokens: {} in ({} cached) → {} out)",
-                        stats.getStandardCalls(),
-                        stats.getStandardInputTokens(),
-                        stats.getStandardCachedTokens(),
-                        stats.getStandardOutputTokens());
-                }
-                if (stats.getVerificationCalls() > 0)
-                {
-                    LOGGER.debug("    Verification Calls: {} (Tokens: {} in ({} cached) → {} out)",
-                        stats.getVerificationCalls(),
-                        stats.getVerificationInputTokens(),
-                        stats.getVerificationCachedTokens(),
-                        stats.getVerificationOutputTokens());
-                }
-                if (stats.getFailureReason() != null)
-                {
-                    LOGGER.debug("    Failure:        {}", stats.getFailureReason());
-                }
+                logStats(stepStatsList.get(i), "  ", String.valueOf(i + 1));
             }
             LOGGER.debug("=================================================");
         }
@@ -324,6 +286,82 @@ public final class StateMachineRunner
         catch (final Exception e)
         {
             this.session.getEventBus().dispatch(new DiagnosticErrorEvent("Failed to execute Visual RCA: " + e.getMessage(), e));
+        }
+    }
+
+    private long calculateDuration(final org.neodymium.ai.pipeline.StepStats stats)
+    {
+        if (stats.getDurationMs() > 0)
+        {
+            return stats.getDurationMs();
+        }
+        if (stats.getSubStats() != null && !stats.getSubStats().isEmpty())
+        {
+            long sum = 0;
+            for (final org.neodymium.ai.pipeline.StepStats child : stats.getSubStats())
+            {
+                sum += calculateDuration(child);
+            }
+            stats.setDurationMs(sum);
+            return sum;
+        }
+        return 0;
+    }
+
+    private void logStats(final org.neodymium.ai.pipeline.StepStats stats, final String prefix, final String stepNum)
+    {
+        LOGGER.debug("{}Step {}: {}", prefix, stepNum, stats.getInstruction());
+        final String indent = prefix + "    ";
+        LOGGER.debug("{}Mode:           {}", indent, stats.isReplayed() ? "REPLAY" : "LLM");
+        LOGGER.debug("{}Duration:       {} ms", indent, stats.getDurationMs());
+        LOGGER.debug("{}Escalations:    {}", indent, Math.max(0, stats.getContextLevels().size() - 1));
+        if (!stats.getContextLevels().isEmpty())
+        {
+            LOGGER.debug("{}Context Levels: {}", indent, String.join(" -> ", stats.getContextLevels()));
+        }
+        
+        final List<org.neodymium.ai.action.Action> actions = stats.getActions();
+        if (actions != null && !actions.isEmpty())
+        {
+            final String actionTypes = actions.stream()
+                .map(act -> act.getType())
+                .collect(java.util.stream.Collectors.joining(", "));
+            LOGGER.debug("{}Actions:        {} ({})", indent, actions.size(), actionTypes);
+        }
+        else
+        {
+            LOGGER.debug("{}Actions:        0", indent);
+        }
+
+        if (stats.getStandardCalls() > 0)
+        {
+            LOGGER.debug("{}Standard Calls: {} (Tokens: {} in ({} cached) → {} out)",
+                indent,
+                stats.getStandardCalls(),
+                stats.getStandardInputTokens(),
+                stats.getStandardCachedTokens(),
+                stats.getStandardOutputTokens());
+        }
+        if (stats.getVerificationCalls() > 0)
+        {
+            LOGGER.debug("{}Verification Calls: {} (Tokens: {} in ({} cached) → {} out)",
+                indent,
+                stats.getVerificationCalls(),
+                stats.getVerificationInputTokens(),
+                stats.getVerificationCachedTokens(),
+                stats.getVerificationOutputTokens());
+        }
+        if (stats.getFailureReason() != null)
+        {
+            LOGGER.debug("{}Failure:        {}", indent, stats.getFailureReason());
+        }
+
+        if (stats.getSubStats() != null && !stats.getSubStats().isEmpty())
+        {
+            for (int j = 0; j < stats.getSubStats().size(); j++)
+            {
+                logStats(stats.getSubStats().get(j), prefix + "  ", stepNum + "." + (j + 1));
+            }
         }
     }
 }

@@ -20,6 +20,7 @@ package org.neodymium.ai.model;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.neodymium.ai.action.Action;
 
 /**
@@ -29,6 +30,7 @@ import org.neodymium.ai.action.Action;
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public final class PlaybookStep
 {
     /**
@@ -40,6 +42,12 @@ public final class PlaybookStep
      * Nested child steps in the composite hierarchy if this step was split or structured.
      */
     private final List<PlaybookStep> subSteps = new ArrayList<>();
+
+    /**
+     * The parent playbook step in the composite hierarchy, if any.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private transient PlaybookStep parent;
 
     /**
      * The concrete executed actions list associated with this step.
@@ -122,6 +130,13 @@ public final class PlaybookStep
     }
 
     /**
+     * Constructs an empty PlaybookStep for serialization.
+     */
+    public PlaybookStep()
+    {
+    }
+
+    /**
      * Constructs a PlaybookStep with a natural language instruction.
      *
      * @param instruction the natural language instruction prompt
@@ -162,6 +177,20 @@ public final class PlaybookStep
     }
 
     /**
+     * Sets the nested sub-steps collection of this step.
+     *
+     * @param subSteps the sub-steps to set
+     */
+    public void setSubSteps(final List<PlaybookStep> subSteps)
+    {
+        this.subSteps.clear();
+        if (subSteps != null)
+        {
+            this.subSteps.addAll(subSteps);
+        }
+    }
+
+    /**
      * Returns the concrete executed actions list of this step (leaves only).
      *
      * @return the actions list
@@ -169,6 +198,58 @@ public final class PlaybookStep
     public List<Action> getActions()
     {
         return this.actions;
+    }
+
+    /**
+     * Sets the concrete executed actions list of this step.
+     *
+     * @param actions the actions list to set
+     */
+    public void setActions(final List<Action> actions)
+    {
+        this.actions.clear();
+        if (actions != null)
+        {
+            this.actions.addAll(actions);
+        }
+    }
+
+    /**
+     * Returns the parent playbook step, if any.
+     *
+     * @return the parent playbook step
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public PlaybookStep getParent()
+    {
+        return this.parent;
+    }
+
+    /**
+     * Sets the parent playbook step.
+     *
+     * @param parent the parent step to set
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void setParent(final PlaybookStep parent)
+    {
+        this.parent = parent;
+    }
+
+    /**
+     * Checks if this step is a visual-only or layout verification step.
+     *
+     * @return true if the instruction indicates a visual verification, false otherwise
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isVisualStep()
+    {
+        if (this.instruction == null)
+        {
+            return false;
+        }
+        final String lower = this.instruction.toLowerCase();
+        return lower.contains("(visual)") || lower.contains("(layout)");
     }
 
     /**

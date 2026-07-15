@@ -56,12 +56,14 @@ public class StoreDemoMockIntegrationTest extends BaseAiTest
     public static void configureMockLlm()
     {
         System.setProperty("neodymium.ai.global.provider", "mock");
+        System.setProperty("neodymium.ai.pesap.enabled", "false");
     }
 
     @AfterAll
     public static void clearMockLlm()
     {
         System.clearProperty("neodymium.ai.global.provider");
+        System.clearProperty("neodymium.ai.pesap.enabled");
     }
 
     @BeforeEach

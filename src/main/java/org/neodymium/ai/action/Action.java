@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Represents a single executable action parsed from LLM response or recording.
@@ -29,8 +31,14 @@ import java.util.Map;
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Action
 {
+    private List<Action> condition;
+    private List<Action> then;
+    @JsonProperty("else")
+    private List<Action> elseActions;
+    private boolean adjust = false;
     /**
      * The domain action type (e.g. "CLICK", "TYPE", "NAVIGATE").
      */
@@ -44,6 +52,7 @@ public class Action
     /**
      * Optional input parameter value list associated with this action.
      */
+    @JsonProperty("values")
     private final List<String> value;
 
     /**
@@ -137,6 +146,7 @@ public class Action
      *
      * @return the first value in the values list, or null
      */
+    @JsonProperty(value = "value", access = JsonProperty.Access.READ_ONLY)
     public final String getValue()
     {
         return (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : null;
@@ -150,6 +160,21 @@ public class Action
     public final List<String> getValues()
     {
         return this.value != null ? new ArrayList<>(this.value) : new ArrayList<>();
+    }
+
+    /**
+     * Sets the values list of this action (for Jackson deserialization).
+     *
+     * @param valueList the values list to set
+     */
+    @JsonProperty("values")
+    public final void setValues(final List<String> valueList)
+    {
+        this.value.clear();
+        if (valueList != null)
+        {
+            this.value.addAll(valueList);
+        }
     }
 
     /**
@@ -220,5 +245,45 @@ public class Action
     public final void setStepScreenshotHash(final String stepScreenshotHash)
     {
         this.stepScreenshotHash = stepScreenshotHash;
+    }
+
+    public final List<Action> getCondition()
+    {
+        return this.condition;
+    }
+
+    public final void setCondition(final List<Action> condition)
+    {
+        this.condition = condition;
+    }
+
+    public final List<Action> getThen()
+    {
+        return this.then;
+    }
+
+    public final void setThen(final List<Action> then)
+    {
+        this.then = then;
+    }
+
+    public final List<Action> getElseActions()
+    {
+        return this.elseActions;
+    }
+
+    public final void setElseActions(final List<Action> elseActions)
+    {
+        this.elseActions = elseActions;
+    }
+
+    public final boolean getAdjust()
+    {
+        return this.adjust;
+    }
+
+    public final void setAdjust(final boolean adjust)
+    {
+        this.adjust = adjust;
     }
 }

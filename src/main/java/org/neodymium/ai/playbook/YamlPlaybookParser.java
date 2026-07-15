@@ -64,6 +64,28 @@ public final class YamlPlaybookParser implements PlaybookParser
     @Override
     public Playbook parse(final String identifier, final PlaybookResourceManager manager) throws IOException
     {
+        final Playbook playbook = parseInternal(identifier, manager);
+        if (playbook != null)
+        {
+            setParentReferences(playbook.getSteps(), null);
+        }
+        return playbook;
+    }
+
+    private void setParentReferences(final List<PlaybookStep> steps, final PlaybookStep parent)
+    {
+        if (steps != null)
+        {
+            for (final PlaybookStep step : steps)
+            {
+                step.setParent(parent);
+                setParentReferences(step.getSubSteps(), step);
+            }
+        }
+    }
+
+    private Playbook parseInternal(final String identifier, final PlaybookResourceManager manager) throws IOException
+    {
         final LinkedHashSet<String> activeStack = new LinkedHashSet<>();
         final List<PlaybookStep> steps = new ArrayList<>();
         final List<Map<String, SessionData.DataEntry>> dataSets = new ArrayList<>();
@@ -119,6 +141,19 @@ public final class YamlPlaybookParser implements PlaybookParser
             if (content.startsWith("["))
             {
                 final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                try
+                {
+                    final List<PlaybookStep> parsedSteps = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<PlaybookStep>>(){});
+                    if (parsedSteps != null && !parsedSteps.isEmpty() && parsedSteps.get(0).getInstruction() != null)
+                    {
+                        return new Playbook(parsedSteps, dataSets);
+                    }
+                }
+                catch (final Exception e)
+                {
+                    // Fall back to legacy Action list parsing
+                }
+
                 final List<org.neodymium.ai.action.Action> actions = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<org.neodymium.ai.action.Action>>(){});
                 final String fileName = new java.io.File(identifier).getName();
                 PlaybookStep currentStep = null;
@@ -369,6 +404,22 @@ public final class YamlPlaybookParser implements PlaybookParser
             final byte[] bytes = in.readAllBytes();
             final String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8).trim();
             final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            if (content.startsWith("["))
+            {
+                try
+                {
+                    final List<PlaybookStep> jsonSteps = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<PlaybookStep>>(){});
+                    if (jsonSteps != null && !jsonSteps.isEmpty() && jsonSteps.get(0).getInstruction() != null)
+                    {
+                        return new Playbook(jsonSteps, yamlPlaybook.getDataSets());
+                    }
+                }
+                catch (final Exception e)
+                {
+                    e.printStackTrace();
+                    // Fall back to legacy merge logic
+                }
+            }
             actions = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<org.neodymium.ai.action.Action>>(){});
         }
 
