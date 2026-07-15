@@ -63,6 +63,21 @@ public final class SelenideElementFinder
                 {
                     return els.first();
                 }
+
+                // If not found, dynamically stamp data-neo-ref attributes into the DOM (crucial for offline replays)
+                try
+                {
+                    new PageAnalyzer().captureSimplifiedDom(ContextLevel.AXTREE);
+                }
+                catch (final Exception ignored)
+                {
+                }
+
+                final ElementsCollection retryEls = Selenide.$$(By.cssSelector("[data-neo-ref='" + clean + "']"));
+                if (!retryEls.isEmpty())
+                {
+                    return retryEls.first();
+                }
             }
 
             // 2. Try as CSS Selector
