@@ -143,15 +143,15 @@ public final class SelenideDriverTest
     public void testPlaybookRecorderOutput()
     {
         final InMemoryResourceManager resourceManager = new InMemoryResourceManager();
-        final PlaybookRecorder recorder = new PlaybookRecorder(resourceManager, "recordings/playbook.json");
-
+        final List<org.neodymium.ai.model.PlaybookStep> steps = new java.util.ArrayList<>();
+        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep("Click Submit button", 1, "test.yaml");
         final Action action = new Action("CLICK", "button#submit", "Click Submit button");
-        recorder.onEvent(new ActionExecutedEvent(action, true));
-        recorder.onEvent(new SessionFinishedEvent(100L, true));
+        step.getActions().add(action);
+        steps.add(step);
 
-        // Check if actions list was recorded
-        assertEquals(1, recorder.getRecordedActions().size());
-        assertEquals("CLICK", recorder.getRecordedActions().get(0).getType());
+        final PlaybookRecorder recorder = new PlaybookRecorder(resourceManager, "recordings/playbook.json", steps);
+
+        recorder.onEvent(new SessionFinishedEvent(100L, true));
 
         // Check if the file was written to memory
         String fileContent = null;
@@ -162,10 +162,11 @@ public final class SelenideDriverTest
         }
         catch (final IOException e)
         {
-            // Fail test if read fails
+            org.junit.jupiter.api.Assertions.fail("Read failed: " + e.getMessage());
         }
+
         assertNotNull(fileContent);
-        assertTrue(fileContent.contains("\"type\": \"CLICK\""));
-        assertTrue(fileContent.contains("\"target\": \"button#submit\""));
+        assertTrue(fileContent.contains("Click Submit button"));
+        assertTrue(fileContent.contains("button#submit"));
     }
 }
