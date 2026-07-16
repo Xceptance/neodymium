@@ -151,14 +151,11 @@ public final class GeminiLlmProvider implements LlmProvider
         }
         try
         {
-            if (usage.getClass().getSimpleName().equals("GoogleAiGeminiTokenUsage"))
+            final java.lang.reflect.Method method = usage.getClass().getMethod("cachedContentTokenCount");
+            final Object result = method.invoke(usage);
+            if (result instanceof Number)
             {
-                final java.lang.reflect.Method method = usage.getClass().getMethod("cachedContentTokenCount");
-                final Object result = method.invoke(usage);
-                if (result instanceof Integer)
-                {
-                    return (Integer) result;
-                }
+                return ((Number) result).intValue();
             }
         }
         catch (final Exception e)
