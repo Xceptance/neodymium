@@ -404,14 +404,42 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (this.mode.isReplay())
             {
                 // Replay modes: automatically prefer companion JSON file if present
-                String companionJsonPath = playbookPath;
-                if (companionJsonPath.endsWith(".yaml"))
+                String companionJsonPath = null;
+                if (this.datasetId != null && !this.datasetId.isEmpty())
                 {
-                    companionJsonPath = companionJsonPath.substring(0, companionJsonPath.length() - 5) + ".json";
+                    String suffixed = playbookPath;
+                    if (suffixed.endsWith(".yaml"))
+                    {
+                        suffixed = suffixed.substring(0, suffixed.length() - 5) + "_" + this.datasetId + ".json";
+                    }
+                    else if (suffixed.endsWith(".yml"))
+                    {
+                        suffixed = suffixed.substring(0, suffixed.length() - 4) + "_" + this.datasetId + ".json";
+                    }
+                    try (final java.io.InputStream in = manager.read(suffixed))
+                    {
+                        if (in != null)
+                        {
+                            companionJsonPath = suffixed;
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
                 }
-                else if (companionJsonPath.endsWith(".yml"))
+
+                if (companionJsonPath == null)
                 {
-                    companionJsonPath = companionJsonPath.substring(0, companionJsonPath.length() - 4) + ".json";
+                    String standard = playbookPath;
+                    if (standard.endsWith(".yaml"))
+                    {
+                        standard = standard.substring(0, standard.length() - 5) + ".json";
+                    }
+                    else if (standard.endsWith(".yml"))
+                    {
+                        standard = standard.substring(0, standard.length() - 4) + ".json";
+                    }
+                    companionJsonPath = standard;
                 }
 
                 try (final java.io.InputStream in = manager.read(companionJsonPath))
@@ -481,13 +509,27 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (this.mode.isRecording())
             {
                 String recordingPath = playbookPath;
-                if (recordingPath.endsWith(".yaml"))
+                if (this.datasetId != null && !this.datasetId.isEmpty())
                 {
-                    recordingPath = recordingPath.substring(0, recordingPath.length() - 5) + ".json";
+                    if (recordingPath.endsWith(".yaml"))
+                    {
+                        recordingPath = recordingPath.substring(0, recordingPath.length() - 5) + "_" + this.datasetId + ".json";
+                    }
+                    else if (recordingPath.endsWith(".yml"))
+                    {
+                        recordingPath = recordingPath.substring(0, recordingPath.length() - 4) + "_" + this.datasetId + ".json";
+                    }
                 }
-                else if (recordingPath.endsWith(".yml"))
+                else
                 {
-                    recordingPath = recordingPath.substring(0, recordingPath.length() - 4) + ".json";
+                    if (recordingPath.endsWith(".yaml"))
+                    {
+                        recordingPath = recordingPath.substring(0, recordingPath.length() - 5) + ".json";
+                    }
+                    else if (recordingPath.endsWith(".yml"))
+                    {
+                        recordingPath = recordingPath.substring(0, recordingPath.length() - 4) + ".json";
+                    }
                 }
                 final org.neodymium.ai.recorder.PlaybookRecorder recorder = new org.neodymium.ai.recorder.PlaybookRecorder(manager, recordingPath, playbookSteps);
                 eventBus.registerListener(recorder);
