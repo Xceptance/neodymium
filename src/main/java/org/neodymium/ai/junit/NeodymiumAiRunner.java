@@ -54,6 +54,11 @@ import org.neodymium.ai.playbook.PlaybookParser;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
+import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.Browsers;
+import com.xceptance.neodymium.common.browser.BrowserMethodData;
+import com.xceptance.neodymium.common.browser.BrowserRunner;
+import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * JUnit 5 {@link TestTemplateInvocationContextProvider} implementation for Neodymium AI tests.
@@ -358,19 +363,56 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             // Set test name dynamically in the Neodymium context
             if (context.getRequiredTestMethod() != null && context.getRequiredTestClass() != null)
             {
-                com.xceptance.neodymium.util.Neodymium.setTestName(
+                Neodymium.setTestName(
                     context.getRequiredTestClass().getSimpleName() + "." + context.getRequiredTestMethod().getName()
                 );
             }
 
+            // Resolve browser profile name from annotations if not already set
+            if (Neodymium.getBrowserProfileName() == null)
+            {
+                final String annotBrowser;
+                final Method method = context.getRequiredTestMethod();
+                if (method.isAnnotationPresent(Browser.class))
+                {
+                    annotBrowser = method.getAnnotation(Browser.class).value();
+                }
+                else if (method.isAnnotationPresent(Browsers.class))
+                {
+                    final Browser[] bs = method.getAnnotation(Browsers.class).value();
+                    annotBrowser = bs.length > 0 ? bs[0].value() : null;
+                }
+                else
+                {
+                    final Class<?> testClass = context.getRequiredTestClass();
+                    if (testClass.isAnnotationPresent(Browser.class))
+                    {
+                        annotBrowser = testClass.getAnnotation(Browser.class).value();
+                    }
+                    else if (testClass.isAnnotationPresent(Browsers.class))
+                    {
+                        final Browser[] bs = testClass.getAnnotation(Browsers.class).value();
+                        annotBrowser = bs.length > 0 ? bs[0].value() : null;
+                    }
+                    else
+                    {
+                        annotBrowser = null;
+                    }
+                }
+                if (annotBrowser != null)
+                {
+                    Neodymium.setBrowserProfileName(annotBrowser);
+                }
+            }
+
             // Automatically reset/clean the browser state at the start of a new AI session
-            final String profileName = com.xceptance.neodymium.util.Neodymium.getBrowserProfileName();
+            final String profileName = Neodymium.getBrowserProfileName();
             if (profileName != null)
             {
-                final com.xceptance.neodymium.common.browser.BrowserRunner runner = new com.xceptance.neodymium.common.browser.BrowserRunner();
+                final BrowserRunner runner = new BrowserRunner();
                 runner.teardown(false, true,
-                    new com.xceptance.neodymium.common.browser.BrowserMethodData(profileName, false, false, true, true, java.util.Collections.emptyList()),
-                    com.xceptance.neodymium.util.Neodymium.getWebDriverStateContainer());
+                    new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
+                    Neodymium.getWebDriverStateContainer());
                 try
                 {
                     Thread.sleep(500);
@@ -380,8 +422,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     Thread.currentThread().interrupt();
                 }
                 runner.setUpTest(
-                    new com.xceptance.neodymium.common.browser.BrowserMethodData(profileName, false, false, true, true, java.util.Collections.emptyList()),
-                    com.xceptance.neodymium.util.Neodymium.getTestName());
+                    new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
+                    Neodymium.getTestName());
             }
 
             final SessionData sessionData = new SessionData(new HashMap<>(dataset));

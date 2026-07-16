@@ -25,6 +25,7 @@ import com.xceptance.neodymium.ai.BaseAiTest;
 import com.xceptance.neodymium.common.browser.Browser;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.MethodOrderer;
@@ -35,15 +36,6 @@ import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
-import org.neodymium.ai.pipeline.ExecutionContext;
-import org.neodymium.ai.resources.ClasspathResourceManager;
-import org.neodymium.ai.resources.PlaybookResourceManager;
-import org.neodymium.ai.session.AiSession;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 /**
  * Guest Checkout Integration Test for Verla storefront.
@@ -52,7 +44,7 @@ import java.nio.file.Path;
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-@Browser("Chrome_headless")
+@Browser("Chrome_1500x1000")
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
@@ -90,7 +82,6 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
     @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
-    @TestTemplate
     public void testCheckoutLive()
     {
         // Assert order success screen checkmark is displayed
@@ -105,7 +96,6 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
     @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
-    @TestTemplate
     public void testCheckoutReplay()
     {
         // Assert order success screen checkmark is displayed
@@ -119,7 +109,6 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(3)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
-    @TestTemplate
     public void testCheckoutLiveAllDataSets()
     {
         // Assert order success screen checkmark is displayed
@@ -133,7 +122,6 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(4)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
-    @TestTemplate
     public void testCheckoutReplayAllDataSets()
     {
         // Assert order success screen checkmark is displayed

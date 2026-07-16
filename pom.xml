@@ -84,6 +84,7 @@
 					<includes>
 						<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
 						<include>com/xceptance/neodymium/common/**/*Test.java</include>
+						<include>org/neodymium/**/*Test.java</include>
 					</includes>
 				</configuration>
 			</plugin>
@@ -262,6 +263,7 @@
 								<include>
 									com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
 							  <include> com/xceptance/neodymium/util/**/*JUnit5Test.java </include>
+								<include>org/neodymium/**/*Test.java</include>
 							</includes>
 						</configuration>
 					</plugin>

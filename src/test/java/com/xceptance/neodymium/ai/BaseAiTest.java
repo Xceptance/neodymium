@@ -24,6 +24,8 @@ import java.util.Collections;
 import java.util.List;
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
 import com.xceptance.neodymium.common.browser.BrowserRunner;
+import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
+import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -73,7 +75,7 @@ public abstract class BaseAiTest extends BaseLlmTest
     @BeforeAll
     public static void startServer() throws IOException
     {
-        Configuration.headless = true;
+        Configuration.headless = Boolean.parseBoolean(System.getProperty("selenide.headless", "true"));
         server = new EmbeddedHtmlServer();
         server.start();
     }
@@ -104,6 +106,18 @@ public abstract class BaseAiTest extends BaseLlmTest
         
         currentTestUrl = String.format("http://localhost:%d/%s/%s.html", server.getPort(), className, methodName);
         Neodymium.setAiPlaybook(null);
+
+        // Apply headless configuration from the active browser profile if configured
+        final String profileName = Neodymium.getBrowserProfileName();
+        if (profileName != null)
+        {
+            final BrowserConfiguration config = MultibrowserConfiguration.getInstance()
+                .getBrowserProfiles().get(profileName);
+            if (config != null)
+            {
+                Configuration.headless = config.isHeadless();
+            }
+        }
     }
 
     /**
