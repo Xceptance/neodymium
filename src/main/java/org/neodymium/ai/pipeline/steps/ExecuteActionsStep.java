@@ -175,7 +175,15 @@ public final class ExecuteActionsStep implements PipelineStep
                 }
 
                 // Execute SUT action via targeted SUT driver
-                executor.execute(action);
+                try
+                {
+                    context.getTransientData().put("currentAction", action);
+                    executor.execute(action);
+                }
+                finally
+                {
+                    context.getTransientData().remove("currentAction");
+                }
                 
                 // Mask any raw sensitive inputs dynamically matching SessionData variable keys
                 final Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());

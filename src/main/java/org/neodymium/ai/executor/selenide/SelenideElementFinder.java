@@ -101,27 +101,50 @@ public final class SelenideElementFinder
                 final org.neodymium.ai.pipeline.ExecutionContext context = org.neodymium.ai.pipeline.ExecutionContext.getActiveContext();
                 if (context != null)
                 {
-                    final org.neodymium.ai.model.PlaybookStep step = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(org.neodymium.ai.pipeline.ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-                    if (step != null)
+                    final org.neodymium.ai.action.Action currentAction = (org.neodymium.ai.action.Action) context.getTransientData().get("currentAction");
+                    if (currentAction != null && "ASSERT".equalsIgnoreCase(currentAction.getType()) && currentAction.getValue() != null)
                     {
-                        for (final org.neodymium.ai.action.Action action : step.getActions())
+                        final String expectedVal = currentAction.getValue();
+                        final ElementsCollection allElements = Selenide.$$("*");
+                        for (final com.codeborne.selenide.SelenideElement el : allElements)
                         {
-                            if ("ASSERT".equalsIgnoreCase(action.getType()) && action.getValue() != null)
+                            try
                             {
-                                final String expectedVal = action.getValue();
-                                final ElementsCollection allElements = Selenide.$$("*");
-                                for (final com.codeborne.selenide.SelenideElement el : allElements)
+                                final String text = el.text().trim();
+                                if (text.equals(expectedVal) || text.contains(expectedVal) || text.matches(expectedVal))
                                 {
-                                    try
+                                    return el;
+                                }
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+                    }
+                    else
+                    {
+                        final org.neodymium.ai.model.PlaybookStep step = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(org.neodymium.ai.pipeline.ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                        if (step != null)
+                        {
+                            for (final org.neodymium.ai.action.Action action : step.getActions())
+                            {
+                                if ("ASSERT".equalsIgnoreCase(action.getType()) && action.getValue() != null)
+                                {
+                                    final String expectedVal = action.getValue();
+                                    final ElementsCollection allElements = Selenide.$$("*");
+                                    for (final com.codeborne.selenide.SelenideElement el : allElements)
                                     {
-                                        final String text = el.text().trim();
-                                        if (text.equals(expectedVal) || text.contains(expectedVal) || text.matches(expectedVal))
+                                        try
                                         {
-                                            return el;
+                                            final String text = el.text().trim();
+                                            if (text.equals(expectedVal) || text.contains(expectedVal) || text.matches(expectedVal))
+                                            {
+                                                return el;
+                                            }
                                         }
-                                    }
-                                    catch (final Exception ignored)
-                                    {
+                                        catch (final Exception ignored)
+                                        {
+                                        }
                                     }
                                 }
                             }
