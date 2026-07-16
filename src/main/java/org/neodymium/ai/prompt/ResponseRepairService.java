@@ -54,28 +54,78 @@ public final class ResponseRepairService
             return "";
         }
 
-        // 1. Strip markdown json code fences (e.g. ```json ... ``` or ``` ... ```)
         String content = rawContent.trim();
-        if (content.startsWith("```"))
+
+        // 1. Locate markdown JSON code fences (e.g. ```json ... ```)
+        final int jsonFenceStart = content.indexOf("```json");
+        if (jsonFenceStart != -1)
         {
-            final int firstNewLine = content.indexOf('\n');
-            if (firstNewLine != -1)
+            final int fenceEnd = content.indexOf("```", jsonFenceStart + 7);
+            if (fenceEnd != -1)
             {
-                content = content.substring(firstNewLine + 1);
+                content = content.substring(jsonFenceStart + 7, fenceEnd).trim();
             }
             else
             {
-                content = content.substring(3);
+                content = content.substring(jsonFenceStart + 7).trim();
             }
-
-            if (content.endsWith("```"))
+        }
+        else
+        {
+            final int generalFenceStart = content.indexOf("```");
+            if (generalFenceStart != -1)
             {
-                content = content.substring(0, content.length() - 3);
+                final int fenceEnd = content.indexOf("```", generalFenceStart + 3);
+                if (fenceEnd != -1)
+                {
+                    content = content.substring(generalFenceStart + 3, fenceEnd).trim();
+                }
+                else
+                {
+                    content = content.substring(generalFenceStart + 3).trim();
+                }
             }
-            content = content.trim();
         }
 
-        // 2. Balance missing JSON closing braces (curly braces)
+        // 2. If it does not start with '{', extract the JSON object using brace matching
+        if (!content.startsWith("{"))
+        {
+            final int firstBrace = content.indexOf('{');
+            if (firstBrace != -1)
+            {
+                int openCount = 0;
+                int matchingEnd = -1;
+                for (int i = firstBrace; i < content.length(); i++)
+                {
+                    final char c = content.charAt(i);
+                    if (c == '{')
+                    {
+                        openCount++;
+                    }
+                    else if (c == '}')
+                    {
+                        openCount--;
+                        if (openCount == 0)
+                        {
+                            matchingEnd = i;
+                            break;
+                        }
+                    }
+                }
+                if (matchingEnd != -1)
+                {
+                    content = content.substring(firstBrace, matchingEnd + 1);
+                }
+                else
+                {
+                    content = content.substring(firstBrace);
+                }
+            }
+        }
+
+        content = content.trim();
+
+        // 3. Balance missing JSON closing braces (curly braces)
         int openCurlyBraces = 0;
         int closeCurlyBraces = 0;
         for (int i = 0; i < content.length(); i++)
