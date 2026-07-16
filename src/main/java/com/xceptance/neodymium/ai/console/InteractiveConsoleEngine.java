@@ -88,6 +88,7 @@ import java.net.URLEncoder;
  * hint the browser UI can render as a warning.
  * </p>
  * * @author AI-generated: Claude Sonnet 4.5
+ * @author AI-generated: Antigravity
  * 
  * @author Xceptance GmbH 2026
  */
@@ -202,8 +203,10 @@ public final class InteractiveConsoleEngine {
         
         this.currentStateJson = minified;
         
-        if ("true".equals(System.getProperty("neodymium.managerActive"))) {
-            try {
+        if ("true".equals(System.getProperty("neodymium.managerActive")))
+        {
+            try
+            {
                 final String managerUrl = System.getProperty("neodymium.managerUrl");
                 final HttpClient client = HttpClient.newHttpClient();
                 final HttpRequest request = HttpRequest.newBuilder()
@@ -211,8 +214,19 @@ public final class InteractiveConsoleEngine {
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(minified, StandardCharsets.UTF_8))
                     .build();
-                client.send(request, HttpResponse.BodyHandlers.discarding());
-            } catch (Exception e) {
+                final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 200)
+                {
+                    final JsonObject respJson = JsonParser.parseString(response.body()).getAsJsonObject();
+                    if (respJson.has("status") && "stopped".equals(respJson.get("status").getAsString()))
+                    {
+                        LOG.warn("[InteractiveConsole] Aura Manager requested stop. Exiting JVM...");
+                        System.exit(0);
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
                 LOG.error("Failed to proxy state to Aura Manager", e);
             }
             return;
@@ -350,6 +364,23 @@ public final class InteractiveConsoleEngine {
     public JsonObject waitForAction() throws InterruptedException
     {
         return waitForAction(null, DEFAULT_TIMEOUT_MS);
+    }
+
+    /**
+     * Forcefully deposits an abort action and wakes up any waiting threads.
+     *
+     * @author AI-generated: Antigravity
+     * @author Xceptance GmbH 2026
+     */
+    public void abort()
+    {
+        final JsonObject abortAction = new JsonObject();
+        abortAction.addProperty("action", "ABORT");
+        this.pendingAction.set(abortAction);
+        synchronized (this.lock)
+        {
+            this.lock.notifyAll();
+        }
     }
 
     // -------------------------------------------------------------------------

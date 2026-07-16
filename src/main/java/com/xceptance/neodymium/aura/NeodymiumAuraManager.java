@@ -86,6 +86,8 @@ import dev.langchain4j.data.message.UserMessage;
  * create, edit, queue, run, and view reports of Neodymium YAML test data files.
  * 
  * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Antigravity
+ * 
  * @author Xceptance GmbH 2026
  */
 public final class NeodymiumAuraManager {
@@ -114,6 +116,7 @@ public final class NeodymiumAuraManager {
     /** The RunRequest that initiated the most recent queue execution, used for archiving metadata. */
     private static final AtomicReference<RunRequest> lastRunRequest = new AtomicReference<>(null);
     private static final AtomicReference<InteractiveConsoleEngine> currentConsoleEngine = new AtomicReference<>(null);
+    private static final AtomicReference<String> lastProcessedRunId = new AtomicReference<>(null);
 
     private static final ScheduledExecutorService shutdownScheduler = Executors
             .newSingleThreadScheduledExecutor(runnable -> {
@@ -412,13 +415,22 @@ public final class NeodymiumAuraManager {
                     try {
                         final com.google.gson.JsonObject json = gson.fromJson(body, com.google.gson.JsonObject.class);
                         if (json != null && json.has("runId")) {
-                            engine.setRunId(json.get("runId").getAsString());
+                            final String incomingRunId = json.get("runId").getAsString();
+                            final String lastId = lastProcessedRunId.getAndSet(incomingRunId);
+                            if (incomingRunId != null && !incomingRunId.equals(lastId)) {
+                                LOGGER.info("[Aura Server] New runId detected: {}. Resetting manuallyStopped flag.", incomingRunId);
+                                manuallyStopped.set(false);
+                            }
+                            engine.setRunId(incomingRunId);
                         }
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         // ignore parsing error
                     }
                     engine.pushState(body);
-                    sendResponse(exchange, 200, "application/json", "{\"status\":\"ok\"}".getBytes());
+                    final String responseJson = manuallyStopped.get()
+                            ? "{\"status\":\"stopped\"}"
+                            : "{\"status\":\"ok\"}";
+                    sendResponse(exchange, 200, "application/json", responseJson.getBytes());
                 } else if ("/api/console/internal/broadcast".equals(path) && "POST".equalsIgnoreCase(method)) {
                     InteractiveConsoleEngine engine = currentConsoleEngine.get();
                     if (engine == null) {
@@ -431,6 +443,12 @@ public final class NeodymiumAuraManager {
                     engine.broadcastSseEvent(json.get("event").getAsString(), json.get("payload").getAsString());
                     sendResponse(exchange, 200, "application/json", "{\"status\":\"ok\"}".getBytes());
                 } else if ("/api/console/internal/waitForAction".equals(path) && "GET".equalsIgnoreCase(method)) {
+                    if (manuallyStopped.get()) {
+                        final com.google.gson.JsonObject abortAction = new com.google.gson.JsonObject();
+                        abortAction.addProperty("action", "ABORT");
+                        sendResponse(exchange, 200, "application/json", abortAction.toString().getBytes());
+                        return;
+                    }
                     InteractiveConsoleEngine engine = currentConsoleEngine.get();
                     if (engine == null) {
                         engine = new InteractiveConsoleEngine("initializing");
@@ -1128,6 +1146,10 @@ public final class NeodymiumAuraManager {
         private void handleStopProcess(final HttpExchange exchange) throws IOException {
             LOGGER.info("[Aura Server] User requested to stop active execution subprocess");
             manuallyStopped.set(true);
+            final InteractiveConsoleEngine engine = currentConsoleEngine.get();
+            if (engine != null) {
+                engine.abort();
+            }
             final Process p = activeProcess.get();
             if (p != null && p.isAlive()) {
                 p.destroy();

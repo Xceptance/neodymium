@@ -2178,6 +2178,7 @@ body.mode-results .step-rewind-btn         { display: none !important; }
 body.mode-results .btn-mobile-qr          { display: none !important; }
 body.mode-results .step-status-icon.pending-step          { display: none !important; }
 
+
 /* ═══════════════════════════════════════════════════════════════════════════
    MODE: EMBEDDED (running inside the Aura dashboard iframe)
    Applied via <body class="mode-embedded"> when window.parent !== window.

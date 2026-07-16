@@ -1623,6 +1623,12 @@ function setButtonsEnabled(enabled) {
         }
     });
 
+    // Control visibility of Add Step buttons
+    const addStepBtns = document.querySelectorAll('.add-step-card-btn');
+    addStepBtns.forEach(btn => {
+        btn.style.display = enabled ? '' : 'none';
+    });
+
 
     if (!enabled && currentState && currentState.status !== 'running') {
         if (runBtn) runBtn.style.display = 'none';
@@ -2345,7 +2351,10 @@ document.addEventListener('keydown', function (e) {
         if (backBtn && !backBtn.disabled) backBtn.click();
     } else if (e.altKey && key === 'n') {
         e.preventDefault();
-        openAddStepOverlay();
+        const runBtn = document.getElementById('btnRun');
+        if (runBtn && !runBtn.disabled) {
+            openAddStepOverlay();
+        }
     } else if (e.altKey && key === 'e') {
         e.preventDefault();
         const activeCard = document.querySelector('.step-card.active');

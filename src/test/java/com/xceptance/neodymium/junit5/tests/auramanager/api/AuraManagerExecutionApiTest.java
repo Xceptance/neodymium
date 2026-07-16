@@ -22,6 +22,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests execution endpoints (run queue, stop, SSE status, disconnect, concurrent operations).
+ * 
+ * @author AI-generated: Antigravity
+ * @author Xceptance GmbH 2026
  */
 public final class AuraManagerExecutionApiTest
 {
@@ -42,17 +45,18 @@ public final class AuraManagerExecutionApiTest
         server = NeodymiumAuraManager.startServer(18104, true);
         port = server.getAddress().getPort();
         client = HttpClient.newHttpClient();
-        resetRunningQueue();
+        resetManagerFields();
     }
 
     @AfterEach
     public void tearDown()
     {
         NeodymiumAuraManager.stopServer(server);
-        resetRunningQueue();
+        resetManagerFields();
     }
 
-    private void resetRunningQueue()
+    @SuppressWarnings("unchecked")
+    private void resetManagerFields()
     {
         try
         {
@@ -60,6 +64,21 @@ public final class AuraManagerExecutionApiTest
             field.setAccessible(true);
             final AtomicBoolean runningQueue = (AtomicBoolean) field.get(null);
             runningQueue.set(false);
+
+            final Field stopField = NeodymiumAuraManager.class.getDeclaredField("manuallyStopped");
+            stopField.setAccessible(true);
+            final AtomicBoolean manuallyStopped = (AtomicBoolean) stopField.get(null);
+            manuallyStopped.set(false);
+
+            final Field runIdField = NeodymiumAuraManager.class.getDeclaredField("lastProcessedRunId");
+            runIdField.setAccessible(true);
+            final java.util.concurrent.atomic.AtomicReference<String> lastProcessedRunId = (java.util.concurrent.atomic.AtomicReference<String>) runIdField.get(null);
+            lastProcessedRunId.set(null);
+
+            final Field engineField = NeodymiumAuraManager.class.getDeclaredField("currentConsoleEngine");
+            engineField.setAccessible(true);
+            final java.util.concurrent.atomic.AtomicReference<com.xceptance.neodymium.ai.console.InteractiveConsoleEngine> currentConsoleEngine = (java.util.concurrent.atomic.AtomicReference<com.xceptance.neodymium.ai.console.InteractiveConsoleEngine>) engineField.get(null);
+            currentConsoleEngine.set(null);
         }
         catch (final Exception e)
         {
@@ -190,5 +209,63 @@ public final class AuraManagerExecutionApiTest
         Assertions.assertEquals(true, result.get("success"));
 
         Thread.sleep(500);
+    }
+
+    @Test
+    public void testInteractiveStopFlow() throws Exception
+    {
+        // 1. Initial pushState for run-1 should return status:ok
+        final String requestBody1 = gson.toJson(Map.of("runId", "run-1", "step", "starting"));
+        final HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/console/internal/pushState"))
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody1))
+            .header("Content-Type", "application/json")
+            .build();
+        final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, response.statusCode());
+        final Map<?, ?> result = gson.fromJson(response.body(), Map.class);
+        Assertions.assertEquals("ok", result.get("status"));
+
+        // 2. Trigger stop via POST /api/stop
+        final HttpRequest stopRequest = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/stop"))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+        final HttpResponse<String> stopResponse = client.send(stopRequest, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, stopResponse.statusCode());
+
+        // 3. Subsequent pushState for run-1 should return status:stopped
+        final String requestBody2 = gson.toJson(Map.of("runId", "run-1", "step", "middle"));
+        final HttpRequest request2 = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/console/internal/pushState"))
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody2))
+            .header("Content-Type", "application/json")
+            .build();
+        final HttpResponse<String> response2 = client.send(request2, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, response2.statusCode());
+        final Map<?, ?> result2 = gson.fromJson(response2.body(), Map.class);
+        Assertions.assertEquals("stopped", result2.get("status"));
+
+        // 4. GET waitForAction should immediately return ABORT
+        final HttpRequest waitRequest = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/console/internal/waitForAction"))
+            .GET()
+            .build();
+        final HttpResponse<String> waitResponse = client.send(waitRequest, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, waitResponse.statusCode());
+        final Map<?, ?> waitResult = gson.fromJson(waitResponse.body(), Map.class);
+        Assertions.assertEquals("ABORT", waitResult.get("action"));
+
+        // 5. If we start a NEW run (run-2), pushState should detect the runId change, reset stopped flag and return status:ok
+        final String requestBody3 = gson.toJson(Map.of("runId", "run-2", "step", "starting"));
+        final HttpRequest request3 = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/console/internal/pushState"))
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody3))
+            .header("Content-Type", "application/json")
+            .build();
+        final HttpResponse<String> response3 = client.send(request3, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, response3.statusCode());
+        final Map<?, ?> result3 = gson.fromJson(response3.body(), Map.class);
+        Assertions.assertEquals("ok", result3.get("status"));
     }
 }

@@ -1628,12 +1628,19 @@
             showView('reportViewContainer');
         }
 
-        function openInteractiveConsoleViewLive(url) {
+        function openInteractiveConsoleViewLive(url, skipTestListRender = false) {
             document.getElementById('historyPlaceholder').style.display = 'none';
             // Hide mini-history strip since no specific test is selected in live view
             const miniStrip = document.getElementById('miniHistoryStrip');
             if (miniStrip) miniStrip.style.display = 'none';
-            document.getElementById('historyConsoleIframe').src = url;
+
+            // Append dynamic cache-buster query parameter to force iframe reload/reconnect
+            let targetUrl = url;
+            if (url.includes('interactive_console.html') && !url.includes('dataUrl=')) {
+                const buster = activeRunStats.activeTestId || activeRunStats.activeFile || Date.now();
+                targetUrl = url + (url.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(buster);
+            }
+            document.getElementById('historyConsoleIframe').src = targetUrl;
             currentReportId = null;
             // Mark that we are now watching a live run — the poll not-running branch
             // uses this flag to decide whether to redirect the user away afterwards.
@@ -1647,7 +1654,9 @@
                 applyHistoryState(4);
                 // Populate the tests column immediately — previously it was left empty
                 // until the next poll cycle detected an activeFile change.
-                renderLiveTestList();
+                if (!skipTestListRender) {
+                    renderLiveTestList();
+                }
             });
         }
 
@@ -1732,7 +1741,8 @@
                     datasetPart = isNumeric ? ` · Dataset ${t.id}` : ` · ${t.id}`;
                 }
 
-                return `<div class="test-card" style="cursor: ${cursor}; ${cardStyle}" ${onclick}>
+                const cardClass = isCurrent ? 'test-card active' : 'test-card';
+                return `<div class="${cardClass}" style="cursor: ${cursor}; ${cardStyle}" ${onclick}>
                     <div class="test-card-title-row" style="display: flex; justify-content: space-between; align-items: center;">
                         <span class="test-card-label" style="word-break: break-all; flex: 1;" title="${t.file}">${label}${datasetPart}</span>
                         <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
@@ -1741,6 +1751,14 @@
                     </div>
                 </div>`;
             }).join('');
+
+            // Scroll the active test card into view smoothly
+            requestAnimationFrame(() => {
+                const activeCard = testsList.querySelector('.test-card.active');
+                if (activeCard) {
+                    activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            });
         }
 
         function openCurrentRunView() {
@@ -2263,6 +2281,7 @@
                                     // user is already watching the live view.
                                     if (document.getElementById('colTests').style.display === 'flex' && currentReportId === null) {
                                         renderLiveTestList();
+                                        openInteractiveConsoleViewLive('/interactive_console.html', true);
                                     }
                                 }
 
