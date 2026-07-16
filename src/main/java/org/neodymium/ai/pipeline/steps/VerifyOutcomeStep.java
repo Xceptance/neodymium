@@ -148,7 +148,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             );
 
             final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.VERIFICATION);
-            LOGGER.debug("Calling LLM provider via capability: VERIFICATION");
+            LOGGER.debug("Calling LLM provider '{}' via capability: VERIFICATION", provider.getClass().getSimpleName());
             final long startTime = System.currentTimeMillis();
             final LlmResponse response = provider.chat(request);
             final long durationMs = System.currentTimeMillis() - startTime;

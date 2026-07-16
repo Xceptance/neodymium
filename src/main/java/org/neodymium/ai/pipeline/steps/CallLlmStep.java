@@ -127,7 +127,7 @@ public final class CallLlmStep<T> implements PipelineStep
         );
 
         final LlmProvider provider = session.getLlmRegistry().getProvider(this.capability);
-        LOGGER.debug("Calling LLM provider via capability: {}", this.capability);
+        LOGGER.debug("Calling LLM provider '{}' via capability: {}", provider.getClass().getSimpleName(), this.capability);
         final long startTime = System.currentTimeMillis();
         final LlmResponse response;
         try

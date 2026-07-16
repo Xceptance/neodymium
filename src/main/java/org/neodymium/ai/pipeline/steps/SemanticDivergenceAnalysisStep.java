@@ -96,7 +96,7 @@ public final class SemanticDivergenceAnalysisStep implements PipelineStep
             try
             {
                 final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
-                LOGGER.debug("Calling LLM provider via capability: TEXT_ONLY");
+                LOGGER.debug("Calling LLM provider '{}' via capability: TEXT_ONLY", provider.getClass().getSimpleName());
                 final long startTime = System.currentTimeMillis();
                 final LlmResponse response = provider.chat(request);
                 final long durationMs = System.currentTimeMillis() - startTime;

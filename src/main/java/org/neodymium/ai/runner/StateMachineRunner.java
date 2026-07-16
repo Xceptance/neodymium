@@ -276,8 +276,8 @@ public final class StateMachineRunner
                 60
             );
 
-            LOGGER.debug("Calling LLM provider via capability: VISION (Visual RCA)");
             final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.VISION);
+            LOGGER.debug("Calling LLM provider '{}' via capability: VISION (Visual RCA)", provider.getClass().getSimpleName());
             final long startTime = System.currentTimeMillis();
             final LlmResponse response = provider.chat(request);
             final long durationMs = System.currentTimeMillis() - startTime;

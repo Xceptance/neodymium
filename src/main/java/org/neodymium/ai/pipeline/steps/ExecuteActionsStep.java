@@ -413,7 +413,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     );
 
                     LOGGER.debug("================================================================================");
-                    LOGGER.debug("💬 [Pre-Step PESAP] Running analysis for: \"{}\"", resolvedInstruction);
+                    LOGGER.debug("💬 [Pre-Step PESAP] Running analysis for: \"{}\" using provider '{}'", resolvedInstruction, provider.getClass().getSimpleName());
                     LOGGER.debug("================================================================================");
                     if (LOGGER.isTraceEnabled())
                     {
