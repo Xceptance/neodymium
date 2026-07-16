@@ -106,7 +106,9 @@ public final class VertexAiLlamaProvider implements LlmProvider
         final List<ChatMessage> messages = new ArrayList<>();
         if (request.systemMessage() != null && !request.systemMessage().isBlank())
         {
-            messages.add(SystemMessage.from(request.systemMessage()));
+            final String llamaSystemMessage = request.systemMessage() + "\n\n" +
+                "CRITICAL: You MUST output ONLY the raw JSON block. Do NOT include any conversational preamble, introduction, explanation, markdown fences, or postfix text. Your output must start with '{' and end with '}'.";
+            messages.add(SystemMessage.from(llamaSystemMessage));
         }
 
         final List<Content> contents = new ArrayList<>();
