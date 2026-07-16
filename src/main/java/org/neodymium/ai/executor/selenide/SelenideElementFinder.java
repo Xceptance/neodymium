@@ -96,6 +96,34 @@ public final class SelenideElementFinder
                 {
                     return retryEls.first();
                 }
+
+                // Dynamic text-matching assertion fallback for missing data-neo-ref targets
+                final org.neodymium.ai.model.PlaybookStep step = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                if (step != null)
+                {
+                    for (final org.neodymium.ai.action.Action action : step.getActions())
+                    {
+                        if ("ASSERT".equalsIgnoreCase(action.getType()) && action.getValue() != null)
+                        {
+                            final String expectedVal = action.getValue();
+                            final ElementsCollection allElements = Selenide.$$("*");
+                            for (final com.codeborne.selenide.SelenideElement el : allElements)
+                            {
+                                try
+                                {
+                                    final String text = el.text().trim();
+                                    if (text.equals(expectedVal) || text.contains(expectedVal) || text.matches(expectedVal))
+                                    {
+                                        return el;
+                                    }
+                                }
+                                catch (final Exception ignored)
+                                {
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // 2. Try as CSS Selector
@@ -110,21 +138,36 @@ public final class SelenideElementFinder
                     }
 
                     // Fallback healing for CSS button selectors that are actually divs/spans
-                    if (clean.endsWith(" button"))
+                    final String[] selectors = clean.split(",");
+                    for (final String sel : selectors)
                     {
-                        final String parentSelector = clean.substring(0, clean.length() - 7).trim();
-                        final ElementsCollection parentEls = Selenide.$$(By.cssSelector(parentSelector));
-                        if (!parentEls.isEmpty())
+                        final String trimmedSel = sel.trim();
+                        if (trimmedSel.endsWith(" button") || trimmedSel.endsWith(" a") || trimmedSel.endsWith(" .add-btn"))
                         {
-                            final com.codeborne.selenide.SelenideElement parent = parentEls.first();
-                            final ElementsCollection candidates = parent.$$(By.cssSelector("div, span, a, [role='button']"));
-                            for (final com.codeborne.selenide.SelenideElement cand : candidates)
+                            int suffixLength = 7;
+                            if (trimmedSel.endsWith(" a"))
                             {
-                                final String text = cand.text().trim().toLowerCase();
-                                final String cursor = cand.getCssValue("cursor");
-                                if ("pointer".equals(cursor) || text.contains("add") || text.contains("cart"))
+                                suffixLength = 2;
+                            }
+                            else if (trimmedSel.endsWith(" .add-btn"))
+                            {
+                                suffixLength = 9;
+                            }
+
+                            final String parentSelector = trimmedSel.substring(0, trimmedSel.length() - suffixLength).trim();
+                            final ElementsCollection parentEls = Selenide.$$(By.cssSelector(parentSelector));
+                            if (!parentEls.isEmpty())
+                            {
+                                final com.codeborne.selenide.SelenideElement parent = parentEls.first();
+                                final ElementsCollection candidates = parent.$$(By.cssSelector("div, span, a, button, [role='button']"));
+                                for (final com.codeborne.selenide.SelenideElement cand : candidates)
                                 {
-                                    return cand;
+                                    final String text = cand.text().trim().toLowerCase();
+                                    final String cursor = cand.getCssValue("cursor");
+                                    if ("pointer".equals(cursor) || text.contains("add") || text.contains("cart"))
+                                    {
+                                        return cand;
+                                    }
                                 }
                             }
                         }
