@@ -22,6 +22,7 @@ import com.google.gson.TypeAdapter;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,13 +60,6 @@ public class ValueListTypeAdapter extends TypeAdapter<List<String>>
         out.endArray();
     }
 
-    /**
-     * Reads a JSON token and deserializes it into a list of strings, supporting both array and single string forms.
-     *
-     * @param in the JSON reader
-     * @return a list containing the deserialized string values, or null
-     * @throws IOException if a reading error occurs
-     */
     @Override
     public List<String> read(final JsonReader in) throws IOException
     {
@@ -81,14 +75,25 @@ public class ValueListTypeAdapter extends TypeAdapter<List<String>>
             in.beginArray();
             while (in.hasNext())
             {
-                list.add(in.nextString());
+                list.add(readAsRawString(in));
             }
             in.endArray();
         }
         else
         {
-            list.add(in.nextString());
+            list.add(readAsRawString(in));
         }
         return list;
+    }
+
+    private String readAsRawString(final JsonReader in) throws IOException
+    {
+        final JsonToken token = in.peek();
+        if (token == JsonToken.STRING || token == JsonToken.NUMBER || token == JsonToken.BOOLEAN)
+        {
+            return in.nextString();
+        }
+        // It's an object or array, read it as JsonElement and convert to string
+        return JsonParser.parseReader(in).toString();
     }
 }

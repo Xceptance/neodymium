@@ -32,6 +32,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
+import org.openqa.selenium.InvalidSelectorException;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -520,5 +522,112 @@ public class ActionExecutorTest
         Assertions.assertEquals(2, tracker.switchedWindows.size());
         Assertions.assertEquals("closed_win", tracker.switchedWindows.get(0));
         Assertions.assertEquals("real_win_0", tracker.switchedWindows.get(1));
+    }
+
+    /**
+     * Verifies that if Strategy 1 (CSS selector) fails with an invalid selector exception,
+     * the executor falls back to Strategy 2 (XPath) for relaxed XPath patterns (e.g. starting with * or .).
+     */
+    @Test
+    public void testFindElementsRelaxedXPathFallback() throws Exception
+    {
+        final ActionExecutor executor = new ActionExecutor(this);
+
+        final Class<?>[] webElementInterfaces = new Class<?>[] { WebElement.class };
+        final WebElement mockWebElement = (WebElement) Proxy.newProxyInstance(
+            WebElement.class.getClassLoader(),
+            webElementInterfaces,
+            (final Object proxy, final Method method, final Object[] args) -> {
+                if ("getTagName".equals(method.getName()))
+                {
+                    return "div";
+                }
+                return null;
+            }
+        );
+
+        final List<By> requestedLocators = new ArrayList<>();
+
+        final Class<?>[] locatorInterfaces = new Class<?>[] { WebDriver.TargetLocator.class };
+        final WebDriver.TargetLocator mockLocator = (WebDriver.TargetLocator) Proxy.newProxyInstance(
+            WebDriver.TargetLocator.class.getClassLoader(),
+            locatorInterfaces,
+            (final Object proxy, final Method method, final Object[] args) -> null
+        );
+
+        final Class<?>[] driverInterfaces = new Class<?>[] { WebDriver.class, JavascriptExecutor.class };
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            WebDriver.class.getClassLoader(),
+            driverInterfaces,
+            (final Object proxy, final Method method, final Object[] args) -> {
+                final String methodName = method.getName();
+                if ("getWindowHandles".equals(methodName))
+                {
+                    final Set<String> handles = new java.util.HashSet<>();
+                    handles.add("win_0");
+                    return handles;
+                }
+                else if ("getWindowHandle".equals(methodName))
+                {
+                    return "win_0";
+                }
+                else if ("switchTo".equals(methodName))
+                {
+                    return mockLocator;
+                }
+                else if ("findElements".equals(methodName))
+                {
+                    final By by = (By) args[0];
+                    requestedLocators.add(by);
+                    if (by instanceof By.ByCssSelector)
+                    {
+                        throw new InvalidSelectorException("invalid selector");
+                    }
+                    else if (by instanceof By.ByXPath)
+                    {
+                        return List.of(mockWebElement);
+                    }
+                }
+                else if ("executeScript".equals(methodName) || "executeAsyncScript".equals(methodName))
+                {
+                    // Mock JavaScript isValidXPath call
+                    final String script = (String) args[0];
+                    if (script.contains("document.createExpression"))
+                    {
+                        return true;
+                    }
+                    return null;
+                }
+                return null;
+            }
+        );
+
+        final WebDriver originalDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        try
+        {
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final Action action = new Action("CLICK", "*[@id='submit']", "Click submit button");
+            final com.codeborne.selenide.ElementsCollection result = executor.findElements(action);
+
+            Assertions.assertNotNull(result);
+            Assertions.assertFalse(result.isEmpty());
+            Assertions.assertEquals(4, requestedLocators.size());
+            Assertions.assertTrue(requestedLocators.get(0) instanceof By.ByCssSelector);
+            Assertions.assertTrue(requestedLocators.get(1) instanceof By.ByXPath);
+            Assertions.assertTrue(requestedLocators.get(2) instanceof By.ByXPath);
+            Assertions.assertTrue(requestedLocators.get(3) instanceof By.ByXPath);
+        }
+        finally
+        {
+            if (originalDriver != null)
+            {
+                WebDriverRunner.setWebDriver(originalDriver);
+            }
+            else
+            {
+                WebDriverRunner.closeWebDriver();
+            }
+        }
     }
 }

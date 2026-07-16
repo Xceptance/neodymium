@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Standard Checkable Inputs Test</title>
+</head>
+<body>
+    <form>
+        <!-- Text entry input (value should not be exposed) -->
+        <input type="text" id="username" name="username" value="mySecretUsername" />
+
+        <!-- Password input (value should not be exposed) -->
+        <input type="password" id="password" name="password" value="mySuperSecretPassword" />
+
+        <!-- Textarea (value should not be exposed) -->
+        <textarea id="comments" name="comments">Some multiline comment</textarea>
+        <!-- Checkboxes -->
+        <input type="checkbox" id="subscribe" name="subscribe" value="newsletter" checked />
+        <input type="checkbox" id="terms" name="terms" value="agreed" />
+
+        <!-- Radio buttons -->
+        <input type="radio" id="gender-male" name="gender" value="M" checked />
+        <input type="radio" id="gender-female" name="gender" value="F" />
+
+        <!-- Button with value -->
+        <input type="submit" id="submit-btn" name="submit-btn" value="Submit Form" />
+    </form>
+</body>
+</html>

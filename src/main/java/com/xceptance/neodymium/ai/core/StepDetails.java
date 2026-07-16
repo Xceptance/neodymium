@@ -47,6 +47,7 @@ public final class StepDetails
     private boolean replayed;
     private boolean directParse;
     private boolean pesapCalled;
+    private boolean executed;
 
     public StepDetails(final String rawInstruction)
     {
@@ -248,5 +249,25 @@ public final class StepDetails
     public final void setOriginalUnsplitInstruction(final String originalUnsplitInstruction)
     {
         this.originalUnsplitInstruction = originalUnsplitInstruction;
+    }
+
+    /**
+     * Checks if this step was executed.
+     *
+     * @return true if executed, false otherwise
+     */
+    public final boolean isExecuted()
+    {
+        return this.executed;
+    }
+
+    /**
+     * Sets whether this step was executed.
+     *
+     * @param executed the execution status
+     */
+    public final void setExecuted(final boolean executed)
+    {
+        this.executed = executed;
     }
 }

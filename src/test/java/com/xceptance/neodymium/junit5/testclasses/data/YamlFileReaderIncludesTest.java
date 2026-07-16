@@ -24,8 +24,8 @@ package com.xceptance.neodymium.junit5.testclasses.data;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,10 +39,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
-import com.xceptance.neodymium.common.testdata.util.MalformedPlaybookException;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.xceptance.neodymium.common.testdata.util.MalformedPlaybookException;
+import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
 import com.xceptance.neodymium.util.Neodymium;
 
 public final class YamlFileReaderIncludesTest
@@ -477,6 +477,67 @@ public final class YamlFileReaderIncludesTest
     }
 
     @Test
+    @DisplayName("Verify that inline AI includes resolve correctly even if a test data file exists")
+    public final void testInlineIncludeWithTestDataFile() throws IOException
+    {
+        // Setup: A "test data file" exists (simulate it via neodymium.sourceFile)
+        File testDataFile = new File(this.tempDir, "testdata/YamlFileReaderIncludesTest.yaml");
+        testDataFile.getParentFile().mkdirs();
+        Files.writeString(testDataFile.toPath(), "steps:\n  - Do nothing", StandardCharsets.UTF_8);
+
+        // This simulates the test having a data file
+        Neodymium.getData().put("neodymium.sourceFile", testDataFile.getAbsolutePath());
+
+        // The inline string has an include path relative to project root
+        File inlineIncludeFile = new File(this.tempDir, "src/test/java/utils/login.steps");
+        inlineIncludeFile.getParentFile().mkdirs();
+        Files.writeString(inlineIncludeFile.toPath(), "- Click inline login", StandardCharsets.UTF_8);
+
+        File tempInline = new File("temp-inline-login.steps");
+        Files.writeString(tempInline.toPath(), "- Click inline login", StandardCharsets.UTF_8);
+
+        try {
+            // When ai.execute runs, it passes the relative path
+            final List<YamlFileReader.Step> steps = YamlFileReader.loadInclude("temp-inline-login.steps");
+            assertEquals(1, steps.size());
+            assertEquals("Click inline login", steps.get(0).text);
+        } finally {
+            tempInline.delete();
+        }
+    }
+
+    @Test
+    @DisplayName("Verify that inline AI includes resolve correctly with a source root path")
+    public final void testInlineIncludeWithSourceRootPath() throws IOException
+    {
+        // Setup a test data file
+        File testDataFile = new File(this.tempDir, "testdata/Aura.yaml");
+        testDataFile.getParentFile().mkdirs();
+        Files.writeString(testDataFile.toPath(), "steps:\n  - Do nothing", StandardCharsets.UTF_8);
+
+        Neodymium.getData().put("neodymium.sourceFile", testDataFile.getAbsolutePath());
+
+        // Setup an included file within a simulated source root
+        File sourceRoot = new File("src/test/resources");
+        sourceRoot.mkdirs();
+        File sourceIncludeFile = new File(sourceRoot, "temp-source-root-login.steps");
+        sourceIncludeFile.getParentFile().mkdirs();
+        Files.writeString(sourceIncludeFile.toPath(), "- Click source root login", StandardCharsets.UTF_8);
+
+        try
+        {
+            // Passing the path relative to the source root
+            final List<YamlFileReader.Step> steps = YamlFileReader.loadInclude("temp-source-root-login.steps");
+            assertEquals(1, steps.size());
+            assertEquals("Click source root login", steps.get(0).text);
+        }
+        finally
+        {
+            sourceIncludeFile.delete();
+        }
+    }
+
+    @Test
     @DisplayName("Verify circular inclusion detection works with differing relative paths pointing to the same file")
     public final void testCircularInclusionDifferentRelativePaths() throws IOException
     {
@@ -501,4 +562,3 @@ public final class YamlFileReaderIncludesTest
         assertEquals("Circular inclusion detected: A.yaml -> B.steps -> C.steps -> B.steps", ex.getMessage());
     }
 }
-

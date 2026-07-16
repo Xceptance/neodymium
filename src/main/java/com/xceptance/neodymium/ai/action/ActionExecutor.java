@@ -561,7 +561,7 @@ public class ActionExecutor {
         }
 
         // Strategy 2: Try as XPath
-        if (target.startsWith("/") || target.startsWith("("))
+        if (target.startsWith("/") || target.startsWith("(") || target.startsWith(".") || target.startsWith("*") || target.contains("[") || target.contains("::") || isValidXPath(target))
         {
             if (isValidXPath(target))
             {
