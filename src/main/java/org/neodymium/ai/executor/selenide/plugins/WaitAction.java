@@ -23,6 +23,7 @@ import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.WebElementCondition;
 
 /**
@@ -90,7 +91,7 @@ public final class WaitAction implements BrowserActionPlugin
         {
             if ("text".equalsIgnoreCase(target) && value != null && !value.isBlank())
             {
-                SelenideElementFinder.findElement(value).shouldBe(Condition.visible, Duration.ofSeconds(10));
+                Selenide.$(Selectors.withText(value)).shouldBe(Condition.visible, Duration.ofSeconds(10));
             }
             else
             {
