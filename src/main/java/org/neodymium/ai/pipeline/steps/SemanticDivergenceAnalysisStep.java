@@ -32,6 +32,8 @@ import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.prompt.SemanticDivergencePrompt;
 import org.neodymium.ai.session.AiSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Pipeline step executing the first stage of self-healing: Semantic Divergence Diffing.
@@ -43,6 +45,7 @@ import org.neodymium.ai.session.AiSession;
  */
 public final class SemanticDivergenceAnalysisStep implements PipelineStep
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SemanticDivergenceAnalysisStep.class);
     /**
      * Constructs a SemanticDivergenceAnalysisStep.
      */
@@ -93,7 +96,11 @@ public final class SemanticDivergenceAnalysisStep implements PipelineStep
             try
             {
                 final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+                LOGGER.debug("Calling LLM provider via capability: TEXT_ONLY");
+                final long startTime = System.currentTimeMillis();
                 final LlmResponse response = provider.chat(request);
+                final long durationMs = System.currentTimeMillis() - startTime;
+                LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
                 final String diffSummary = diffPrompt.parseResponse(response.content(), context);
                 context.getTransientData().put(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY, diffSummary);
             }

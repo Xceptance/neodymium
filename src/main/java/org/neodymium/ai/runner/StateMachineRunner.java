@@ -276,8 +276,12 @@ public final class StateMachineRunner
                 60
             );
 
+            LOGGER.debug("Calling LLM provider via capability: VISION (Visual RCA)");
             final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.VISION);
+            final long startTime = System.currentTimeMillis();
             final LlmResponse response = provider.chat(request);
+            final long durationMs = System.currentTimeMillis() - startTime;
+            LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
             final String rcaExplanation = rcaPrompt.parseResponse(response.content(), context);
 
             context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_EXPLANATION, rcaExplanation);

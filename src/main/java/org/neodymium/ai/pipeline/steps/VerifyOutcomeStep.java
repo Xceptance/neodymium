@@ -149,8 +149,10 @@ public final class VerifyOutcomeStep implements PipelineStep
 
             final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.VERIFICATION);
             LOGGER.debug("Calling LLM provider via capability: VERIFICATION");
+            final long startTime = System.currentTimeMillis();
             final LlmResponse response = provider.chat(request);
-            LOGGER.debug("LLM response received. Length: {} chars", response.content() != null ? response.content().length() : 0);
+            final long durationMs = System.currentTimeMillis() - startTime;
+            LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
             if (LOGGER.isTraceEnabled())
             {
                 LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));

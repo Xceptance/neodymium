@@ -421,9 +421,11 @@ public final class ExecuteActionsStep implements PipelineStep
                         LOGGER.trace("User Prompt:\n{}", request.userMessage());
                     }
 
+                    final long startTime = System.currentTimeMillis();
                     final LlmResponse response = provider.chat(request);
+                    final long durationMs = System.currentTimeMillis() - startTime;
 
-                    LOGGER.debug("LLM response received. Length: {} chars", response.content() != null ? response.content().length() : 0);
+                    LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
                     if (LOGGER.isTraceEnabled())
                     {
                         LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));

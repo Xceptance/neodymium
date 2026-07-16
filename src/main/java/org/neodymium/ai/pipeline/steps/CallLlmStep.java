@@ -128,11 +128,13 @@ public final class CallLlmStep<T> implements PipelineStep
 
         final LlmProvider provider = session.getLlmRegistry().getProvider(this.capability);
         LOGGER.debug("Calling LLM provider via capability: {}", this.capability);
+        final long startTime = System.currentTimeMillis();
         final LlmResponse response;
         try
         {
             response = provider.chat(request);
-            LOGGER.debug("LLM response received. Length: {} chars", response.content() != null ? response.content().length() : 0);
+            final long durationMs = System.currentTimeMillis() - startTime;
+            LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
             if (LOGGER.isTraceEnabled())
             {
                 LOGGER.trace("Raw response content:\n{}", formatJsonForLogging(response.content()));
