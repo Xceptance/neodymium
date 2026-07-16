@@ -54,6 +54,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
     private final String apiKey;
     private final String modelName;
     private final String baseUrl;
+    private ChatModel model;
 
     /**
      * Constructs a VertexAiLlamaProvider and dynamically resolves its configuration.
@@ -85,21 +86,29 @@ public final class VertexAiLlamaProvider implements LlmProvider
         }
     }
 
+    private ChatModel getModel() throws IOException
+    {
+        if (this.model == null)
+        {
+            if (this.apiKey == null || this.apiKey.isBlank())
+            {
+                throw new IOException("Vertex API key is missing. Please configure neodymium.ai.vertex.apiKey or set VERTEX_API_KEY.");
+            }
+            this.model = OpenAiChatModel.builder()
+                .baseUrl(this.baseUrl)
+                .apiKey(this.apiKey)
+                .modelName(this.modelName)
+                .temperature(0.0)
+                .timeout(java.time.Duration.ofSeconds(180))
+                .build();
+        }
+        return this.model;
+    }
+
     @Override
     public LlmResponse chat(final LlmRequest request) throws IOException
     {
-        if (this.apiKey == null || this.apiKey.isBlank())
-        {
-            throw new IOException("Vertex API key is missing. Please configure neodymium.ai.vertex.apiKey or set VERTEX_API_KEY.");
-        }
-
-        final ChatModel model = OpenAiChatModel.builder()
-            .baseUrl(this.baseUrl)
-            .apiKey(this.apiKey)
-            .modelName(this.modelName)
-            .temperature(request.temperature())
-            .timeout(java.time.Duration.ofSeconds(request.timeoutSeconds() > 0 ? request.timeoutSeconds() : 180))
-            .build();
+        final ChatModel activeModel = getModel();
 
         final List<ChatMessage> messages = new ArrayList<>();
         if (request.systemMessage() != null && !request.systemMessage().isBlank())
@@ -144,7 +153,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
 
         try
         {
-            final ChatResponse response = model.chat(messages);
+            final ChatResponse response = activeModel.chat(messages);
             final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
 
             TokenUsage mappedUsage = null;
