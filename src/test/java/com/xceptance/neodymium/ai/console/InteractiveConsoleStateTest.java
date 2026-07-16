@@ -101,6 +101,7 @@ public final class InteractiveConsoleStateTest extends BaseConsoleTest
             final SelenideElement step0 = $(".step-card[data-step-idx='0']");
             step0.should(Condition.exist);
             step0.shouldHave(Condition.cssClass("active"));
+            step0.shouldHave(Condition.cssClass("selected-details"));
 
             // Verify Back button is disabled on step index 0
             final SelenideElement btnBack = $("#btnBack");

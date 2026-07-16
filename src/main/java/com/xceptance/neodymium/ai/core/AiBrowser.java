@@ -272,6 +272,11 @@ public class AiBrowser implements AutoCloseable {
             String key = Neodymium.getData().exists("raw_steps") ? "raw_steps" : "steps";
             runResult.setStepsResult(new AiExecutionResult(Neodymium.getData(), this, Neodymium.getData().asString(key)));
         }
+        if (Neodymium.getData().exists("after"))
+        {
+            String key = Neodymium.getData().exists("raw_after") ? "raw_after" : "after";
+            runResult.addAfterResult(new AiExecutionResult(Neodymium.getData(), this, Neodymium.getData().asString(key)));
+        }
 
         try {
             if (Neodymium.getData().exists("before")) {
@@ -295,6 +300,22 @@ public class AiBrowser implements AutoCloseable {
                 String key = Neodymium.getData().exists("raw_steps") ? "raw_steps" : "steps";
                 agent.execute(Neodymium.getData().asString(key), res);
                 if (agent.isHudSaveExit()) return runResult;
+            }
+            if (Neodymium.getData().exists("after"))
+            {
+                agent.setCurrentBlock("after");
+                if (!Neodymium.getData().exists("after"))
+                {
+                    agent.setFinalBlock(true);
+                }
+                final List<AiExecutionResult> resultList = runResult.getAfterResults();
+                for (AiExecutionResult res : resultList)
+                {
+                    String key = Neodymium.getData().exists("raw_after") ? "raw_after" : "after";
+                    agent.execute(Neodymium.getData().asString(key), res);
+                    if (agent.isHudSaveExit())
+                        return runResult;
+                }
             }
         } catch (final Throwable t)
         {

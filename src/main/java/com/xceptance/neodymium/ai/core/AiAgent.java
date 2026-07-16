@@ -100,6 +100,8 @@ public class AiAgent
 
     private String currentPauseId;
 
+    private final long executionTimestamp = System.currentTimeMillis();
+
     private final java.util.Map<String, java.util.List<String>> blockInstructions = new java.util.LinkedHashMap<>();
     private final java.util.Set<String> modifiedBlocks = new java.util.HashSet<>();
     private boolean finalBlock = false;
@@ -890,8 +892,8 @@ public class AiAgent
                         testNamePart = yamlName + "-" + datasetNum;
                     }
 
-                    // Append timestamp and sanitize for safe filenames
-                    testNamePart = (testNamePart + "-" + System.currentTimeMillis()).replaceAll("[^a-zA-Z0-9_-]", "");
+                    // Append testcase execution timestamp and sanitize for safe filenames
+                    testNamePart = (testNamePart + "-" + executionTimestamp).replaceAll("[^a-zA-Z0-9_-]", "");
 
                     String allureDir = System.getProperty("allure.results.directory", "target/allure-results");
                     final java.io.File out = new java.io.File(allureDir, "console-execution-" + testNamePart + ".json");

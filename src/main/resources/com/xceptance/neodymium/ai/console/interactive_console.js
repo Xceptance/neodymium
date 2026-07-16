@@ -534,8 +534,8 @@ function applyState(state) {
 
     // Auto-advance: always track the currently relevant step.
     // Priority: running/failed step first, then next pending after the last passed one.
-    if (state && mainSteps.length > 0) {
-        const steps = mainSteps;
+    if (state && allSteps.length > 0) {
+        const steps = allSteps;
         const activeStep = steps.find(s => s.status === 'running' || s.status === 'failed');
         if (activeStep) {
             // A step is currently executing or errored – select it unconditionally
