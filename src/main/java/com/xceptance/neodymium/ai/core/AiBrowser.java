@@ -210,15 +210,6 @@ public class AiBrowser implements AutoCloseable {
      * @return the execution result details
      */
     public final AiExecutionResult execute(final String naturalLanguageInstructions) {
-        if (config.aiInteractive()) {
-            try {
-                com.xceptance.neodymium.ai.generator.InteractiveHud hud = Neodymium.getOrCreateInteractiveHud();
-                if (Neodymium.getData() != null) {
-                    hud.setDataBindings(new java.util.HashMap<>(Neodymium.getData()));
-                }
-            } catch (Exception e) {
-            }
-        }
 
         final AiExecutionResult result = new AiExecutionResult(Neodymium.getData(), this);
         this.lastExecutionResult = result;
@@ -232,12 +223,8 @@ public class AiBrowser implements AutoCloseable {
             agent.execute(naturalLanguageInstructions, result);
         } catch (final Throwable t) {
             throw t;
-        } finally {
-            if (config.aiInteractive() && Neodymium.getInteractiveHud() != null) {
-                Neodymium.getInteractiveHud().incrementBlockStepOffset(result.getSteps().size());
-            }
-        }
-
+        } 
+        
         return result;
     }
 
@@ -275,32 +262,70 @@ public class AiBrowser implements AutoCloseable {
         this.lastTestRunResult = runResult;
         Throwable testError = null;
 
+        // Pre-initialize results with instructions so they are visible as pending in the console
+        if (Neodymium.getData().exists("before")) {
+            String key = Neodymium.getData().exists("raw_before") ? "raw_before" : "before";
+            runResult.setBeforeResult(new AiExecutionResult(Neodymium.getData(), this, Neodymium.getData().asString(key)));
+        }
+        if (Neodymium.getData().exists("steps")) {
+            String key = Neodymium.getData().exists("raw_steps") ? "raw_steps" : "steps";
+            runResult.setStepsResult(new AiExecutionResult(Neodymium.getData(), this, Neodymium.getData().asString(key)));
+        }
+        if (Neodymium.getData().exists("after"))
+        {
+            String key = Neodymium.getData().exists("raw_after") ? "raw_after" : "after";
+            runResult.addAfterResult(new AiExecutionResult(Neodymium.getData(), this, Neodymium.getData().asString(key)));
+        }
+
         try {
             if (Neodymium.getData().exists("before")) {
-                if (config.aiInteractive())
-                {
-                    Neodymium.getOrCreateInteractiveHud().setCurrentBlock("before");
+                agent.setCurrentBlock("before");
+                if (!Neodymium.getData().exists("steps") && !Neodymium.getData().exists("after")) {
+                    agent.setFinalBlock(true);
                 }
-                runResult.setBeforeResult(executeAndGetResult(Neodymium.getData().asString("before")));
+                // We use the already created result if it exists
+                final AiExecutionResult res = runResult.getBeforeResult();
+                String key = Neodymium.getData().exists("raw_before") ? "raw_before" : "before";
+                agent.execute(Neodymium.getData().asString(key), res);
+                if (agent.isHudSaveExit()) return runResult;
             }
 
-            if (config.aiInteractive())
-            {
-                Neodymium.getOrCreateInteractiveHud().setCurrentBlock("steps");
+            if (Neodymium.getData().exists("steps")) {
+                agent.setCurrentBlock("steps");
+                if (!Neodymium.getData().exists("after")) {
+                    agent.setFinalBlock(true);
+                }
+                final AiExecutionResult res = runResult.getStepsResult();
+                String key = Neodymium.getData().exists("raw_steps") ? "raw_steps" : "steps";
+                agent.execute(Neodymium.getData().asString(key), res);
+                if (agent.isHudSaveExit()) return runResult;
             }
-            runResult.setStepsResult(executeAndGetResult(Neodymium.getData().asString("steps")));
+            if (Neodymium.getData().exists("after"))
+            {
+                agent.setCurrentBlock("after");
+                if (!Neodymium.getData().exists("after"))
+                {
+                    agent.setFinalBlock(true);
+                }
+                final List<AiExecutionResult> resultList = runResult.getAfterResults();
+                for (AiExecutionResult res : resultList)
+                {
+                    String key = Neodymium.getData().exists("raw_after") ? "raw_after" : "after";
+                    agent.execute(Neodymium.getData().asString(key), res);
+                    if (agent.isHudSaveExit())
+                        return runResult;
+                }
+            }
 
         } catch (final Throwable t)
         {
             testError = t;
             throw t;
         } finally {
-            if (Neodymium.getData().exists("after")) {
+            if (Neodymium.getData().exists("after") && !agent.isHudSaveExit()) {
                 try {
-                    if (config.aiInteractive())
-                    {
-                        Neodymium.getOrCreateInteractiveHud().setCurrentBlock("after");
-                    }
+                    agent.setCurrentBlock("after");
+                    agent.setFinalBlock(true);
                     executeListAfterMode(Neodymium.getData().asString("after"), runResult);
                 } catch (Throwable afterError) {
                     if (testError != null) {
@@ -351,6 +376,7 @@ public class AiBrowser implements AutoCloseable {
             for (final String item : list) {
                 try {
                     runResult.addAfterResult(execute(item));
+                    if (agent.isHudSaveExit()) return;
                 } catch (Throwable t) {
                     if (accumulatedError == null) {
                         accumulatedError = t;

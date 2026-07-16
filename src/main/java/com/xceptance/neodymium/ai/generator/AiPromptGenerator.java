@@ -546,18 +546,6 @@ public class AiPromptGenerator {
         boolean isInteractive = Neodymium.aiConfiguration().aiInteractive();
         boolean autoSkip = false;
         for (int i = 0; i < maxSteps && !entireGoalAchieved; i++) {
-            if (isInteractive) {
-                Boolean currentAutoSkipStatus = com.xceptance.neodymium.util.Neodymium.getOrCreateInteractiveHud()
-                        .checkAutoSkipStatus();
-                if (currentAutoSkipStatus != null) {
-                    autoSkip = currentAutoSkipStatus;
-                }
-                List<String> performedStrs = new java.util.ArrayList<>();
-                for (Action a : actionsForLogging)
-                    performedStrs.add(a.getDescription());
-                Neodymium.getOrCreateInteractiveHud().injectOrUpdateHud(null, performedStrs, autoSkip, false, false,
-                        "");
-            }
             executionLog.startStep(i + 1, maxSteps, "Exploration Step");
             executionLog.startAttempt("Exploration Attempt");
             LOG.info("\n\uD83D\uDC63 --- EXPLORATION STEP {} \u2192 Analyzing DOM and asking AI... ---", i + 1);
@@ -862,27 +850,22 @@ public class AiPromptGenerator {
                         }
 
                         logProposedAction(nextAction, knownBindings);
-                        if (shouldExecute && nextAction.getDataBindings() != null)
+                        if (nextAction.getDataBindings() != null)
                             knownBindings.putAll(nextAction.getDataBindings());
 
                         try {
-                            if (shouldExecute) {
-                                executeAction(actionExecutor, nextAction);
-                                com.xceptance.neodymium.ai.playbook.PlaybookStep pbStep = new com.xceptance.neodymium.ai.playbook.PlaybookStep();
-                                pbStep.setPromptLine(nextAction.getDescription());
-                                pbStep.setReasoning(reasoning);
-                                pbStep.setActions(java.util.Collections.singletonList(nextAction));
-                                playbook.addStep(pbStep);
-                                actionsForLogging.add(nextAction);
-                                executionLog.logActions(java.util.Collections.singletonList(nextAction));
+                            executeAction(actionExecutor, nextAction);
+                            com.xceptance.neodymium.ai.playbook.PlaybookStep pbStep = new com.xceptance.neodymium.ai.playbook.PlaybookStep();
+                            pbStep.setPromptLine(nextAction.getDescription());
+                            pbStep.setReasoning(reasoning);
+                            pbStep.setActions(java.util.Collections.singletonList(nextAction));
+                            playbook.addStep(pbStep);
+                            actionsForLogging.add(nextAction);
+                            executionLog.logActions(java.util.Collections.singletonList(nextAction));
 
-                                statusMessage = nextAction.getDescription() + " (Target: " + nextAction.getTarget()
-                                        + ")";
-                                failedAttempts = 0;
-                            } else {
-                                statusMessage = "Skipped by user: " + nextAction.getDescription();
-                                failedAttempts = 0;
-                            }
+                            statusMessage = nextAction.getDescription() + " (Target: " + nextAction.getTarget()
+                                    + ")";
+                            failedAttempts = 0;
                         } catch (Throwable e) {
                             LOG.warn("Action failed: {}", e.getMessage(), e);
                             statusMessage = nextAction.getDescription() + " -> FAILED: " + e.getMessage();

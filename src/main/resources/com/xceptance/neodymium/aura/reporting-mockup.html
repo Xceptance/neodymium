@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Enterprise Reporting Dashboard</title>
+    <style>
+        :root {
+            --bg-base: #0f172a;
+            --bg-panel: #1e293b;
+            --bg-panel-hover: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --pass: #10b981;
+            --fail: #ef4444;
+            --flaky: #f59e0b;
+            --border: #334155;
+            --font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font-family); background-color: var(--bg-base); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+
+        /* Sidebar */
+        aside { width: 250px; background-color: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 1.5rem; }
+        .logo { font-size: 1.5rem; font-weight: 700; margin-bottom: 2.5rem; display: flex; align-items: center; gap: 0.75rem; }
+        .logo span { background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        nav { display: flex; flex-direction: column; gap: 0.5rem; }
+        nav a { color: var(--text-muted); text-decoration: none; padding: 0.75rem 1rem; border-radius: 0.5rem; transition: all 0.2s; font-weight: 500; display: flex; align-items: center; gap: 0.75rem; }
+        nav a:hover { background-color: var(--bg-panel-hover); color: var(--text-main); }
+        nav a.active { background-color: rgba(59, 130, 246, 0.1); color: var(--accent); border-left: 3px solid var(--accent); }
+
+        main { flex: 1; padding: 2rem 3rem; overflow-y: auto; display: flex; flex-direction: column; gap: 2rem; }
+
+        /* Suite / Context Selector */
+        .suite-context { display: flex; flex-direction: column; gap: 1rem; }
+        .suite-context h1 { font-size: 1.875rem; font-weight: 600; }
+        .suite-tabs { display: flex; gap: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+        .suite-tab { padding: 0.75rem 1.5rem; color: var(--text-muted); cursor: pointer; border-radius: 0.5rem 0.5rem 0 0; transition: all 0.2s; font-weight: 500; border-bottom: 2px solid transparent; }
+        .suite-tab:hover { color: var(--text-main); background: rgba(255,255,255,0.02); }
+        .suite-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: linear-gradient(to top, rgba(59,130,246,0.1), transparent); }
+
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 380px; gap: 2rem; align-items: start; }
+
+        /* Feature Matrix Container */
+        .matrix-container { background-color: var(--bg-panel); border-radius: 1rem; border: 1px solid var(--border); padding: 1.5rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); overflow-x: auto; }
+        .matrix-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .matrix-header h2 { font-size: 1.25rem; font-weight: 600; }
+        .matrix-desc { font-size: 0.875rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem 0.5rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        th { color: var(--text-muted); font-weight: 500; font-size: 0.875rem; position: sticky; top: 0; background-color: var(--bg-panel); z-index: 5; }
+
+        th.run-col { width: 36px; padding: 0.75rem 0.25rem; text-align: center; cursor: pointer; transition: color 0.2s; }
+        th.run-col:hover, th.run-col.active { color: var(--accent); background: rgba(59, 130, 246, 0.1); border-radius: 4px 4px 0 0; }
+        .run-id { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 0.75rem; letter-spacing: 1px; white-space: nowrap; padding: 4px 0;}
+
+        /* Feature Rows (Aggregated) */
+        .feature-name { font-weight: 500; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+        .feature-name svg { width: 14px; height: 14px; color: var(--text-muted); }
+        .feature-meta { font-size: 0.75rem; color: var(--text-muted); }
+        
+        .agg-block { width: 100%; height: 26px; border-radius: 4px; margin: 0 auto; cursor: pointer; transition: transform 0.2s; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; position: relative; }
+        .agg-block:hover { transform: scale(1.15); z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        
+        .agg-pass { background-color: rgba(16, 185, 129, 0.15); border: 1px solid var(--pass); color: var(--pass); }
+        .agg-fail { background-color: rgba(239, 68, 68, 0.15); border: 1px solid var(--fail); color: #fca5a5; }
+        .agg-warn { background-color: rgba(245, 158, 11, 0.15); border: 1px solid var(--flaky); color: #fcd34d; }
+        
+        .tooltip { visibility: hidden; background-color: #0b0f19; color: #fff; text-align: left; border-radius: 6px; padding: 0.75rem; position: absolute; z-index: 20; bottom: 130%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.2s; font-size: 0.75rem; width: max-content; pointer-events: none; box-shadow: 0 4px 15px rgba(0,0,0,0.6); border: 1px solid #334155;}
+        .agg-block:hover .tooltip { visibility: visible; opacity: 1; }
+        .tooltip-title { font-weight: bold; margin-bottom: 6px; color: var(--accent); border-bottom: 1px solid #334155; padding-bottom: 4px;}
+        .tooltip-row { display: flex; justify-content: space-between; gap: 1.5rem; margin-bottom: 3px;}
+        .tooltip-desc { margin-top: 6px; color: #94a3b8; font-style: italic; border-top: 1px solid #334155; padding-top: 4px;}
+
+        /* Run Sidebar (The Deep Dive) */
+        .run-sidebar { background: linear-gradient(145deg, var(--bg-panel), #161e2e); border: 1px solid var(--border); border-radius: 1rem; padding: 1.5rem; position: sticky; top: 2rem; display: flex; flex-direction: column; gap: 1.5rem;}
+        
+        .sidebar-header { border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
+        .sidebar-title { font-size: 1.25rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;}
+        .status-badge { font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 1rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; }
+        .badge-fail { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid var(--fail); }
+        .sidebar-meta { font-size: 0.875rem; color: var(--text-muted); }
+
+        .run-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .mini-stat { background: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 0.5rem; }
+        .mini-stat-label { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+        .mini-stat-val { font-size: 1.25rem; font-weight: 700; }
+
+        .failures-section h3 { font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 1rem; }
+        .failure-card { background: rgba(239,68,68,0.05); border-left: 3px solid var(--fail); padding: 0.75rem; border-radius: 0 0.5rem 0.5rem 0; margin-bottom: 0.75rem; cursor: pointer; transition: all 0.2s; border-top: 1px solid transparent; border-right: 1px solid transparent; border-bottom: 1px solid transparent; }
+        .failure-card:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.2); border-left-color: var(--fail); }
+        .fail-name { font-size: 0.875rem; font-weight: 500; color: var(--text-main); margin-bottom: 0.25rem; }
+        .fail-error { font-size: 0.75rem; color: #fca5a5; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.5rem;}
+        
+        .action-btn { width: 100%; background: rgba(59,130,246,0.1); color: var(--accent); border: 1px solid var(--accent); padding: 0.5rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;}
+        .action-btn:hover { background: var(--accent); color: white; }
+
+    </style>
+</head>
+<body>
+    <aside>
+        <div class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="url(#gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <defs>
+                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#60a5fa" />
+                        <stop offset="100%" stop-color="#a78bfa" />
+                    </linearGradient>
+                </defs>
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+            <span>Aura Reports</span>
+        </div>
+        <nav>
+            <a href="#" class="active"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Suites & Features</a>
+            <a href="#"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Run Explorer</a>
+        </nav>
+    </aside>
+
+    <main>
+        <div class="suite-context">
+            <h1>Enterprise Test Intelligence</h1>
+            <div class="suite-tabs">
+                <div class="suite-tab active">US Nightly (Full Suite)</div>
+                <div class="suite-tab">EU Smoke Tests</div>
+                <div class="suite-tab">PR Checks (Checkout)</div>
+                <div class="suite-tab">B2B Core Features</div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="matrix-container">
+                <div class="matrix-header">
+                    <div>
+                        <h2>Feature Health Matrix</h2>
+                        <div class="matrix-desc">Aggregated test results grouped by feature/tag for the US Nightly suite.</div>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 250px;">Feature Group</th>
+                            <th class="run-col"><div class="run-id">#1044</div></th>
+                            <th class="run-col"><div class="run-id">#1045</div></th>
+                            <th class="run-col"><div class="run-id">#1046</div></th>
+                            <th class="run-col"><div class="run-id">#1047</div></th>
+                            <th class="run-col"><div class="run-id">#1048</div></th>
+                            <th class="run-col active"><div class="run-id">#1049</div></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <div class="feature-name">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    Authentication
+                                </div>
+                                <div class="feature-meta">45 tests • @auth</div>
+                            </td>
+                            <td><div class="agg-block agg-pass">45<div class="tooltip"><div class="tooltip-title">Auth in #1044</div><div class="tooltip-row"><span>Passed:</span><span style="color:var(--pass)">45</span></div><div class="tooltip-row"><span>Failed:</span><span style="color:var(--fail)">0</span></div></div></div></td>
+                            <td><div class="agg-block agg-pass">45<div class="tooltip"><div class="tooltip-title">Auth in #1045</div><div class="tooltip-row"><span>Passed:</span><span style="color:var(--pass)">45</span></div></div></div></td>
+                            <td><div class="agg-block agg-pass">45</div></td>
+                            <td><div class="agg-block agg-warn">44<div class="tooltip"><div class="tooltip-title">Auth in #1047</div><div class="tooltip-row"><span>Passed:</span><span style="color:var(--pass)">44</span></div><div class="tooltip-row"><span>Flaky:</span><span style="color:var(--flaky)">1</span></div><div class="tooltip-desc">Click to see flaky test</div></div></div></td>
+                            <td><div class="agg-block agg-pass">45</div></td>
+                            <td><div class="agg-block agg-pass">45</div></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div class="feature-name">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    Checkout Flow
+                                </div>
+                                <div class="feature-meta">120 tests • @checkout</div>
+                            </td>
+                            <td><div class="agg-block agg-pass">120</div></td>
+                            <td><div class="agg-block agg-pass">120</div></td>
+                            <td><div class="agg-block agg-pass">120</div></td>
+                            <td><div class="agg-block agg-pass">120</div></td>
+                            <td><div class="agg-block agg-pass">120</div></td>
+                            <td><div class="agg-block agg-fail">118<div class="tooltip"><div class="tooltip-title">Checkout in #1049</div><div class="tooltip-row"><span>Passed:</span><span style="color:var(--pass)">118</span></div><div class="tooltip-row"><span>Failed:</span><span style="color:var(--fail)">2</span></div><div class="tooltip-desc">Click to drill down into failures</div></div></div></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div class="feature-name">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    Catalog & Search
+                                </div>
+                                <div class="feature-meta">350 tests • @catalog</div>
+                            </td>
+                            <td><div class="agg-block agg-pass">350</div></td>
+                            <td><div class="agg-block agg-pass">350</div></td>
+                            <td><div class="agg-block agg-fail">312<div class="tooltip"><div class="tooltip-title">Catalog in #1046</div><div class="tooltip-row"><span>Failed:</span><span style="color:var(--fail)">38</span></div><div class="tooltip-desc">Massive failure event</div></div></div></td>
+                            <td><div class="agg-block agg-pass">350</div></td>
+                            <td><div class="agg-block agg-pass">350</div></td>
+                            <td><div class="agg-block agg-pass">350</div></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div class="feature-name">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    User Profile (B2B)
+                                </div>
+                                <div class="feature-meta">85 tests • @b2b-profile</div>
+                            </td>
+                            <td><div class="agg-block agg-pass">85</div></td>
+                            <td><div class="agg-block agg-pass">85</div></td>
+                            <td><div class="agg-block agg-pass">85</div></td>
+                            <td><div class="agg-block agg-pass">85</div></td>
+                            <td><div class="agg-block agg-pass">85</div></td>
+                            <td><div class="agg-block agg-pass">85</div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Contextual Sidebar showing details for the selected Run -->
+            <div class="run-sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-title">
+                        US Nightly #1049
+                        <span class="status-badge badge-fail">Failed</span>
+                    </div>
+                    <div class="sidebar-meta">Executed today at 04:00 AM • Branch: main</div>
+                </div>
+
+                <div class="run-stats-grid">
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Pass Rate</div>
+                        <div class="mini-stat-val" style="color: var(--fail)">99.6%</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Duration</div>
+                        <div class="mini-stat-val">42m 15s</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Total Tests</div>
+                        <div class="mini-stat-val">600</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Failures</div>
+                        <div class="mini-stat-val" style="color: var(--fail)">2</div>
+                    </div>
+                </div>
+
+                <div class="failures-section">
+                    <h3>2 Failing Tests</h3>
+                    
+                    <div class="failure-card">
+                        <div class="fail-name">Credit Card Validation - Amex</div>
+                        <div class="fail-error">AssertionError: Element [data-test="cvv"] not visible</div>
+                        <div class="fail-meta" style="font-size: 0.7rem; color: var(--text-muted);">Feature: Checkout Flow</div>
+                        <button class="action-btn" style="margin-top: 0.75rem;" onclick="alert('Launching Interactive Console for Amex test...')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                            Debug in Interactive Console
+                        </button>
+                    </div>
+
+                    <div class="failure-card">
+                        <div class="fail-name">Credit Card Validation - Visa</div>
+                        <div class="fail-error">TimeoutException: Network request to /api/payment timed out</div>
+                        <div class="fail-meta" style="font-size: 0.7rem; color: var(--text-muted);">Feature: Checkout Flow</div>
+                        <button class="action-btn" style="margin-top: 0.75rem;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                            Debug in Interactive Console
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

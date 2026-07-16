@@ -33,6 +33,7 @@ public class TestdataRunner
                 Neodymium.setTestdataSourceFile(sourceFile);
             }
             Neodymium.getData().putAll(dataSet);
+            Neodymium.getData().put("neodymium.testdata.index", String.valueOf(testData.getIndex()));
             Neodymium.getData().remove("neodymium.sourceFile");
             initializeDataObjects(testClassInstance);
         }

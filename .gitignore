@@ -51,7 +51,7 @@ neodymium.code-workspace
 tmp/
 
 # Neodymium Aura Reports History
-/allure-reports-history/
+/report-history/
 
 # Antigravity CLI
 .antigravitycli/

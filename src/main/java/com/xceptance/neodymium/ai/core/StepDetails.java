@@ -48,6 +48,14 @@ public final class StepDetails
     private boolean directParse;
     private boolean pesapCalled;
     private boolean executed;
+    private boolean skipped;
+
+    private String source;
+    private int includeLevel;
+    private String includeFile;
+    private List<String> includeChain;
+    private long thinkingTimeMs;
+    private String screenshot;
 
     public StepDetails(final String rawInstruction)
     {
@@ -215,6 +223,8 @@ public final class StepDetails
         this.pesapRequiresJavaMethods = pesapRequiresJavaMethods;
     }
 
+    private String reasoning;
+
     /**
      * Extracts and returns the reasoning from the first LLM call of this step, if present.
      *
@@ -224,9 +234,19 @@ public final class StepDetails
     {
         if (this.llmCalls.isEmpty())
         {
-            return "";
+            return this.reasoning != null ? this.reasoning : "";
         }
         return this.llmCalls.get(0).getReasoning();
+    }
+
+    /**
+     * Sets an explicit reasoning for this step (e.g. when replaying from a playbook).
+     *
+     * @param reasoning the reasoning string
+     */
+    public final void setReasoning(final String reasoning)
+    {
+        this.reasoning = reasoning;
     }
 
     private String originalUnsplitInstruction;
@@ -269,5 +289,75 @@ public final class StepDetails
     public final void setExecuted(final boolean executed)
     {
         this.executed = executed;
+    }
+
+    public final boolean isSkipped()
+    {
+        return this.skipped;
+    }
+
+    public final void setSkipped(final boolean skipped)
+    {
+        this.skipped = skipped;
+    }
+
+    public final String getSource()
+    {
+        return this.source;
+    }
+
+    public final void setSource(final String source)
+    {
+        this.source = source;
+    }
+
+    public final int getIncludeLevel()
+    {
+        return this.includeLevel;
+    }
+
+    public final void setIncludeLevel(final int includeLevel)
+    {
+        this.includeLevel = includeLevel;
+    }
+
+    public final String getIncludeFile()
+    {
+        return this.includeFile;
+    }
+
+    public final void setIncludeFile(final String includeFile)
+    {
+        this.includeFile = includeFile;
+    }
+
+    public final List<String> getIncludeChain()
+    {
+        return this.includeChain;
+    }
+
+    public final void setIncludeChain(final List<String> includeChain)
+    {
+        this.includeChain = includeChain;
+    }
+
+    public final long getThinkingTimeMs()
+    {
+        return this.thinkingTimeMs;
+    }
+
+    public final void setThinkingTimeMs(final long thinkingTimeMs)
+    {
+        this.thinkingTimeMs = thinkingTimeMs;
+    }
+
+    public final String getScreenshot()
+    {
+        return this.screenshot;
+    }
+
+    public final void setScreenshot(final String screenshot)
+    {
+        this.screenshot = screenshot;
     }
 }

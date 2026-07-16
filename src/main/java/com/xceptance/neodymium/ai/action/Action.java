@@ -47,6 +47,8 @@ public class Action
     private String reasoning;
 
     private java.util.Map<String, String> elementContext;
+    
+    private long durationMs;
 
     private String screenshotPath;
 
@@ -250,7 +252,7 @@ public class Action
         this.frameId = frameId;
     }
     
-    public boolean getAdjust()
+    public boolean isAdjust()
     {
         return adjust;
     }
@@ -258,6 +260,16 @@ public class Action
     public void setAdjust(final boolean adjust)
     {
         this.adjust = adjust;
+    }
+
+    public long getDurationMs()
+    {
+        return durationMs;
+    }
+
+    public void setDurationMs(final long durationMs)
+    {
+        this.durationMs = durationMs;
     }
 
 }

@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neodymium Interactive Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="stylesheet" href="/interactive_console.css">
+
+</head>
+
+<body>
+
+    <!-- Initial Loading Overlay -->
+    <div id="initialLoadingOverlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(11, 12, 16, 0.45); backdrop-filter: blur(8px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.3s, visibility 0.3s;">
+        <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 3rem; color: var(--accent-primary); margin-bottom: 1rem;"></i>
+        <h2 style="font-size: 1.25rem; font-weight: 500; color: var(--text-main); font-family: var(--font-main);">Loading</h2>
+        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem; font-family: var(--font-main);">Waiting for data</p>
+    </div>
+
+    <!-- Stale tab warning -->
+    <div id="staleBanner">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span id="staleBannerMsg">This tab is connected to an old test run.</span>
+        <button class="btn btn-primary" onclick="refreshToCurrentRun()"
+            style="padding: 5px 12px; font-size: 12px;">Refresh to current run</button>
+    </div>
+    <!-- Mobile: progress label + bar shown below header -->
+    <div id="progressLabelMobile"></div>
+    <div id="progressBarMobile">
+        <div id="progressBarMobileFill" style="width:0%"></div>
+    </div>
+
+    <header>
+        <div class="header-meta">
+            <div id="connectionDot" title="Connecting..."></div>
+            <span class="header-browser-icon" id="browserIcon" title="Browser"><i
+                    class="fa-brands fa-chrome"></i></span>
+            <!-- Test name/ID is now a button that toggles the details panel -->
+            <button class="header-meta-btn" id="btnToggleDetails" onclick="toggleTopDetails()"
+                title="Test Details (Alt+D)" aria-label="Toggle Test Metadata Details" type="button">
+                <h1 id="testNameDisplay">—</h1>
+                <span class="hdr-id big-screen-only" id="testIdDisplay"></span>
+                <span class="hdr-details-hint"><i class="fa-solid fa-chevron-down" id="detailsChevron"></i>
+                    <span class="big-screen-only">details</span></span>
+            </button>
+        </div>
+        <!-- Step progress pill (desktop) -->
+        <div class="progress-pill" id="progressPill" style="display:none;" title="Test execution progress">
+            <span id="progressLabel">Step 0 / 0</span>
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div>
+            </div>
+        </div>
+        <div class="header-controls">
+            <div class="help-hover-container">
+                <button class="btn btn-icon" id="btnHelp" onclick="toggleHelpOverlay()" title="Help (Alt+I)"
+                    aria-label="Keyboard Shortcuts and Help"><i class="fa-solid fa-circle-question"></i></button>
+                <div id="helpOverlay">
+                    <div class="modal-header">
+                        <h3>Keyboard Shortcuts & Info</h3>
+                        <button class="close-btn" onclick="closeOverlay('helpOverlay')"
+                            aria-label="Close Help">&times;</button>
+                    </div>
+                    <div style="margin: 12px 0; text-align: left; font-size: 13.5px; line-height: 1.5;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr
+                                    style="border-bottom:1px solid var(--border-color); text-align:left; color:var(--text-secondary);">
+                                    <th style="padding: 6px 8px;">Shortcut</th>
+                                    <th style="padding: 6px 8px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + R / Ctrl + Enter
+                                    </td>
+                                    <td style="padding:6px 8px;">Run active step</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + K</td>
+                                    <td style="padding:6px 8px;">Skip active step</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + S</td>
+                                    <td style="padding:6px 8px;">Toggle Auto-run</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + E</td>
+                                    <td style="padding:6px 8px;">Edit step</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + N</td>
+                                    <td style="padding:6px 8px;">Add step</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + Z / Alt + Y</td>
+                                    <td style="padding:6px 8px;">Rewind execution</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + D</td>
+                                    <td style="padding:6px 8px;">Toggle test details</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + O</td>
+                                    <td style="padding:6px 8px;">Open Settings</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + I</td>
+                                    <td style="padding:6px 8px;">Toggle this panel</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p style="margin-top: 12px; font-size:12px; font-style: italic; color:var(--text-secondary);">
+                            Hover over steps to reveal drag handles, edit, and rewind buttons.</p>
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-mobile-qr" onclick="openMobileQr()" title="Open on mobile"
+                aria-label="Show QR code to open on mobile device"><i class="fa-solid fa-mobile-screen-button"
+                    aria-hidden="true"></i></button>
+            <button class="btn" id="btnSettings" onclick="openOverlay('settingsOverlay')" title="Settings (Alt+G)"
+                aria-label="Open Settings (Alt+G)"><i class="fa-solid fa-gear" aria-hidden="true"></i></button>
+            <button class="btn" onclick="toggleTheme()" title="Toggle Theme" aria-label="Toggle Light/Dark Theme"><i
+                    class="fa-solid fa-circle-half-stroke"></i></button>
+        </div>
+    </header>
+    <div id="topDetailsPanel" class="hidden-details"
+        style="padding:16px; background:var(--bg-surface); border-bottom:1px solid var(--border-color); width:100%;">
+        <div style="max-width: 1400px; margin: 0 auto; display: flex; gap: 24px; flex-wrap: wrap;">
+            <!-- Column 1: Tags + Source file -->
+            <div style="flex: 1; min-width: 160px;">
+                <div
+                    style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text-secondary); margin-bottom:6px;">
+                    Test Info</div>
+                <div id="topJunitTags" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;"></div>
+                <div id="topTestSource"
+                    style="font-size:11px; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all; display:none; padding:6px 8px; background:rgba(0,0,0,0.15); border:1px solid var(--border-color); border-radius:5px; line-height:1.5;">
+                </div>
+            </div>
+            <!-- Column 2: Initial Dataset Parameters -->
+            <div style="flex: 2; min-width: 220px;">
+                <div
+                    style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text-secondary); margin-bottom:6px;">
+                    Initial Dataset Parameters</div>
+                <div style="overflow-x: auto; max-height: 180px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead style="position:sticky; top:0; background:var(--bg-surface);">
+                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
+                                <th
+                                    style="padding: 5px 8px; color: var(--text-secondary); font-weight: 600; width: 40%;">
+                                    Parameter</th>
+                                <th style="padding: 5px 8px; color: var(--text-secondary); font-weight: 600;">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topTestDataBody">
+                            <tr>
+                                <td colspan="2" style="padding: 10px; text-align: center; color: var(--text-muted);">No
+                                    initial test data.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- Column 3: Live Variables — only shown when state.storedVariables has entries -->
+            <div id="topLiveVarsCol" style="flex: 2; min-width: 220px; display:none;">
+                <div
+                    style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text-secondary); margin-bottom:6px;">
+                    Stored Variables</div>
+                <div style="overflow-x: auto; max-height: 180px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead style="position:sticky; top:0; background:var(--bg-surface);">
+                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
+                                <th
+                                    style="padding: 5px 8px; color: var(--text-secondary); font-weight: 600; width: 40%;">
+                                    Variable</th>
+                                <th style="padding: 5px 8px; color: var(--text-secondary); font-weight: 600;">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topLiveVarsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="workspace" role="main">
+        <div class="column" style="display:flex; flex-direction:column; justify-content:space-between; height:100%;"
+            role="region" aria-label="Steps Timeline">
+            <div class="scrollable-content" id="timelineList" style="flex-grow:1;"
+                ondragover="handleContainerDragOver(event)">
+
+                <div class="block-group" id="beforeGroup" style="display:none;" role="group"
+                    aria-label="Before Execution Steps">
+                    <div class="block-header">Before Execution</div>
+                    <div id="beforeSteps"></div>
+                    <button class="add-step-card-btn" onclick="openAddStepOverlay('before')" title="Add Step (Alt+N)"
+                        aria-label="Add step to before block" style="margin-top: 4px; margin-bottom: 12px;"><i
+                            class="fa-solid fa-plus"></i> Add Step</button>
+                </div>
+
+                <div class="block-group" id="stepsGroup" style="display:none;" role="group"
+                    aria-label="Core Test Steps">
+                    <div class="block-header">Core Test Steps</div>
+                    <div id="stepsSteps"></div>
+                    <button class="add-step-card-btn" onclick="openAddStepOverlay('steps')" title="Add Step (Alt+N)"
+                        aria-label="Add step to steps block" style="margin-top: 4px; margin-bottom: 12px;"><i
+                            class="fa-solid fa-plus"></i> Add Step</button>
+                </div>
+
+                <div class="block-group" id="afterGroup" style="display:none;" role="group"
+                    aria-label="After Execution Steps">
+                    <div class="block-header">After Execution</div>
+                    <div id="afterSteps"></div>
+                    <button class="add-step-card-btn" onclick="openAddStepOverlay('after')" title="Add Step (Alt+N)"
+                        aria-label="Add step to after block" style="margin-top: 4px; margin-bottom: 12px;"><i
+                            class="fa-solid fa-plus"></i> Add Step</button>
+                </div>
+            </div>
+
+            <!-- Bottom Action Area inside Left Column -->
+            <div class="bottom-area" role="region" aria-label="Execution Controls">
+
+                <div class="toolbar-footer">
+                    <div class="btn-group">
+                        <button class="btn" id="btnBack" onclick="sendAction('REWIND')"
+                            title="Step Back (Alt+Z / Alt+Y)" aria-label="Rewind step back (Alt+Z or Alt+Y)" disabled><i
+                                class="fa-solid fa-backward-step" aria-hidden="true"></i> <span>Back</span></button>
+                        <button class="btn btn-success" id="btnRun" onclick="sendAction('RUN')"
+                            title="Run Step (Alt+R / Ctrl+Enter)" aria-label="Run step (Alt+R or Ctrl+Enter)"
+                            disabled><i class="fa-solid fa-play" aria-hidden="true"></i> <span>Run</span></button>
+                        <button class="btn" id="btnSkip" onclick="sendAction('SKIP')" title="Skip Step (Alt+K)"
+                            aria-label="Skip step (Alt+K)" disabled><i class="fa-solid fa-forward-step"
+                                aria-hidden="true"></i> <span>Skip</span></button>
+                        <button class="btn" id="btnAuto" onclick="toggleAuto()" title="Auto-run (Alt+S)"
+                            aria-label="Toggle Auto-run (Alt+S)" disabled><i class="fa-solid fa-forward-fast"
+                                aria-hidden="true"></i> <span>Auto</span></button>
+                    </div>
+
+                    <div class="btn-group">
+                        <div class="cancel-warning" id="cancelWarning" role="alert" aria-live="assertive">
+                            Are you sure?
+                            <button class="btn" style="padding: 4px 8px; font-size: 11px;"
+                                onclick="triggerStop()" aria-label="Confirm stop and exit">Yes, Stop</button>
+                            <button class="btn" style="padding: 4px 8px; font-size: 11px;" onclick="hideCancelWarning()"
+                                aria-label="Cancel stopping">No</button>
+                        </div>
+                        <button class="btn btn-danger" id="btnCancel" onclick="showCancelWarning()"
+                            title="Cancel test run (Escape)" aria-label="Cancel test run (Escape)"><i
+                                class="fa-solid fa-stop" aria-hidden="true"></i> <span>Cancel
+                                Test</span></button>
+
+                        <!-- Kebab menu: debug actions hidden beside the Cancel button -->
+                        <div class="kebab-menu-wrapper" id="kebabMenuWrapper">
+                            <button class="btn kebab-toggle" id="btnKebab"
+                                onclick="toggleKebabMenu(event)"
+                                title="More debug options"
+                                aria-label="More debug options"
+                                aria-haspopup="true"
+                                aria-expanded="false"
+                                disabled>
+                                <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
+                            </button>
+                            <div class="kebab-dropdown" id="kebabDropdown" role="menu">
+                                <button class="kebab-item" id="btnDump"
+                                    onclick="triggerDump()"
+                                    title="Capture AI context, DOM, and step history to target/ai-console-dump/"
+                                    aria-label="Create Data Dump"
+                                    role="menuitem">
+                                    <i class="fa-solid fa-bug" aria-hidden="true"></i>
+                                    Create Data Dump
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="column" role="region" aria-label="Step Details">
+            <div class="panel-header">
+                <h2>Step Details</h2>
+            </div>
+            <div class="scrollable-content">
+                <!-- Step Details Card -->
+                <div id="bigScreenStepDetails"
+                    style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                    <h3
+                        style="font-size: 13px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-circle-info" style="color:var(--accent-primary)"></i> Step Execution
+                        Details
+                    </h3>
+                    <div id="bigScreenDetailsContent">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Overlays -->
+    <!-- Mobile QR Overlay -->
+    <div id="mobileQrOverlay" class="modal-overlay" onclick="closeOverlay('mobileQrOverlay')" role="dialog"
+        aria-labelledby="mobileQrTitle" aria-modal="true">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width:340px;text-align:center;">
+            <div class="modal-header">
+                <h3 id="mobileQrTitle"><i class="fa-solid fa-mobile-screen-button"
+                        style="color:var(--accent-primary);"></i> Open on Mobile</h3>
+                <button class="close-btn" onclick="closeOverlay('mobileQrOverlay')" aria-label="Close">&times;</button>
+            </div>
+            <p style="font-size:13px;color:var(--text-secondary);margin:12px 0 4px;">Scan with your phone to open this
+                test in the interactive console.</p>
+            <canvas id="mobileQrCanvas" width="220" height="220"></canvas>
+            <div id="mobileQrUrl"></div>
+        </div>
+    </div>
+    <div id="settingsOverlay" class="modal-overlay" onclick="closeOverlay('settingsOverlay')" role="dialog"
+        aria-labelledby="settingsTitle" aria-modal="true">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="settingsTitle">HUD Settings</h3>
+                <button class="close-btn" onclick="closeOverlay('settingsOverlay')"
+                    aria-label="Close Settings">&times;</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:16px; margin: 16px 0; text-align: left;">
+                <div>
+                    <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px;">Theme
+                        Preference</label>
+                    <select id="themeSelect"
+                        style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:var(--text-main); padding:8px; border-radius:6px;">
+                        <option value="dark">Dark Theme</option>
+                        <option value="light">Light Theme</option>
+                        <option value="system">System Theme</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px;">Zoom Level
+                        (%)</label>
+                    <input type="number" id="zoomInput" value="100" min="50" max="200" step="5"
+                        style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:var(--text-main); padding:8px; border-radius:6px; font-family:var(--font-mono);" />
+                </div>
+            </div>
+            <div class="inline-edit-actions">
+                <button class="btn" onclick="closeOverlay('settingsOverlay')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="helpOverlay" class="modal-overlay" onclick="closeOverlay('helpOverlay')">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>Keyboard Shortcuts & Info</h3>
+                <button class="close-btn" onclick="closeOverlay('helpOverlay')">&times;</button>
+            </div>
+            <div style="margin: 16px 0; text-align: left; font-size: 13.5px; line-height: 1.5;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr
+                            style="border-bottom:1px solid var(--border-color); text-align:left; color:var(--text-secondary);">
+                            <th style="padding: 6px 8px;">Shortcut</th>
+                            <th style="padding: 6px 8px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + R / Ctrl + Enter</td>
+                            <td style="padding:6px 8px;">Run active step</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + K</td>
+                            <td style="padding:6px 8px;">Skip active step</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + S</td>
+                            <td style="padding:6px 8px;">Toggle Auto-run</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + E</td>
+                            <td style="padding:6px 8px;">Edit step</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + N</td>
+                            <td style="padding:6px 8px;">Add step</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + Z / Alt + Y</td>
+                            <td style="padding:6px 8px;">Rewind execution</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + O</td>
+                            <td style="padding:6px 8px;">Open Settings</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:6px 8px; font-family:var(--font-mono);">Alt + I</td>
+                            <td style="padding:6px 8px;">Open Keyboard Shortcuts Info</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <button class="btn btn-primary" onclick="closeOverlay('helpOverlay')">Close</button>
+        </div>
+    </div>
+
+    <div id="domOverlay" class="modal-overlay" onclick="closeOverlay('domOverlay')">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>Simplified DOM Content</h3>
+                <button class="close-btn" onclick="closeOverlay('domOverlay')">&times;</button>
+            </div>
+            <pre id="domPre"
+                style="background: rgba(0,0,0,0.3); padding:12px; border-radius:6px; overflow:auto; max-height: 400px; font-family:var(--font-mono); font-size:12px; text-align:left; white-space: pre-wrap; word-break: break-all;"></pre>
+        </div>
+    </div>
+
+    <div id="screenshotOverlay" class="modal-overlay" onclick="closeOverlay('screenshotOverlay')">
+        <div class="modal-content" onclick="event.stopPropagation()"
+            style="max-width: 90%; width: 90%; height: 90%; display: flex; flex-direction: column;">
+            <div class="modal-header" style="flex-shrink: 0;">
+                <h3>Screenshot</h3>
+                <div style="display: flex; gap: 8px; align-items: center; margin-right: 16px;">
+                    <button class="btn btn-icon" onclick="zoomScreenshot(1.2)" title="Zoom In"><i
+                            class="fa-solid fa-magnifying-glass-plus"></i></button>
+                    <button class="btn btn-icon" onclick="zoomScreenshot(0.8)" title="Zoom Out"><i
+                            class="fa-solid fa-magnifying-glass-minus"></i></button>
+                    <button class="btn" onclick="resetScreenshotZoom()"
+                        style="font-size: 11px; padding: 4px 8px;">Reset</button>
+                </div>
+                <button class="close-btn" onclick="closeOverlay('screenshotOverlay')">&times;</button>
+            </div>
+            <div id="screenshotViewport"
+                style="flex-grow: 1; overflow: hidden; position: relative; background: rgba(0,0,0,0.4); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: grab;">
+                <img id="screenshotImg" src=""
+                    style="max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center center; transition: transform 0.1s ease-out; user-select: none; pointer-events: none;" />
+            </div>
+        </div>
+    </div>
+
+
+
+    <script src="/interactive_console.js"></script>
+
+    <div id="ariaLiveRegion" class="visually-hidden" aria-live="assertive"></div>
+
+    <!-- Final Save Overlay -->
+    <div id="finalSaveOverlay" class="final-save-overlay" role="dialog" aria-modal="true" aria-labelledby="finalSaveTitle">
+        <div class="final-save-box">
+            <h2 id="finalSaveTitle"><i class="fa-solid fa-circle-check"></i> Test Finished</h2>
+            <p id="finalSaveText">You have made changes to the test steps during execution. Would you like to save these changes?</p>
+            <div id="saveScopeContainer" style="display: none; margin: 15px 0 25px 0; text-align: left;">
+                <label for="saveScopeSelect" style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: bold; color: #ccc;">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Destination
+                </label>
+                <select id="saveScopeSelect" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #444; background-color: #222; color: #fff; font-size: 14px; outline: none; cursor: pointer;">
+                    <option value="global">Global (full test / root level)</option>
+                    <option value="local">Local (only this dataset)</option>
+                </select>
+            </div>
+            <div class="final-save-buttons" id="finalSaveButtons">
+                <button class="btn btn-primary" onclick="sendAction('SAVE_EXIT', { saveScope: document.getElementById('saveScopeSelect')?.value || 'local' })">Save Changes</button>
+                <button class="btn btn-danger" onclick="sendAction('DISCARD')">Discard</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Dump Ready Popup ───────────────────────────────────────────────
+         Shown via SSE dumpReady event from performDebugDump() in AiAgent.
+         Provides exact absolute file paths and sizes for both dump files.
+    ───────────────────────────────────────────────────────────────────── -->
+    <div id="dumpReadyOverlay" class="dump-ready-overlay" role="dialog" aria-modal="true" aria-labelledby="dumpReadyTitle">
+        <div class="dump-ready-box">
+            <div class="dump-ready-header">
+                <i class="fa-solid fa-bug dump-ready-icon" aria-hidden="true"></i>
+                <h2 id="dumpReadyTitle">Data Dump Created</h2>
+            </div>
+            <p class="dump-ready-subtitle">The following files were written to disk:</p>
+            <div class="dump-ready-files" id="dumpReadyFiles">
+                <!-- populated by JS -->
+            </div>
+            <div class="dump-ready-footer">
+                <button class="btn btn-primary" onclick="closeDumpPopup()" autofocus>
+                    <i class="fa-solid fa-check" aria-hidden="true"></i> Got it
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

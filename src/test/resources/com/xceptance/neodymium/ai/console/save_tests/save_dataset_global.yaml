@@ -1,0 +1,9 @@
+before: |
+  Before step 1
+steps: |
+  Step 1 "${var}" (optional)
+after: |
+  After step 1
+data:
+  - var: v1
+  - var: v2

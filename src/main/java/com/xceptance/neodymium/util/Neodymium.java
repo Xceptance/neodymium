@@ -1,5 +1,6 @@
 package com.xceptance.neodymium.util;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -10,6 +11,7 @@ import java.util.WeakHashMap;
 
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.lang3.StringUtils;
+import org.jspecify.annotations.NonNull;
 import org.openqa.selenium.By;
 import org.openqa.selenium.Dimension;
 import org.openqa.selenium.WebDriver;
@@ -24,7 +26,6 @@ import com.xceptance.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.ai.core.AiExecutionResult;
 import com.xceptance.neodymium.ai.core.AiTestRunResult;
-import com.xceptance.neodymium.ai.generator.InteractiveHud;
 import com.xceptance.neodymium.ai.playbook.Playbook;
 import com.xceptance.neodymium.ai.playbook.PlaybookManager;
 import com.xceptance.neodymium.common.TestStepListener;
@@ -50,8 +51,6 @@ public class Neodymium
     // keep our active AI Playbook instance
     private Playbook activeAiPlaybook;
 
-    // keep our interactive HUD instance
-    private InteractiveHud interactiveHud;
 
     // keep our current browser profile name
     private String browserProfileName;
@@ -87,6 +86,10 @@ public class Neodymium
     private final TestData data = new TestData();
 
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "neodymium.temporaryConfigFile";
+
+    private Class<?> testClass;
+
+    private Method requiredTestMethod;
 
     /**
      * Constructor
@@ -437,39 +440,6 @@ public class Neodymium
         getContext().activeAiPlaybook = playbook;
     }
 
-    /**
-     * Get the current InteractiveHud instance
-     * 
-     * @return interactiveHud
-     */
-    public static InteractiveHud getInteractiveHud()
-    {
-        return getContext().interactiveHud;
-    }
-
-    /**
-     * Get or create the InteractiveHud instance
-     * 
-     * @return interactiveHud
-     */
-    public static InteractiveHud getOrCreateInteractiveHud()
-    {
-        if (getContext().interactiveHud == null) {
-            getContext().interactiveHud = new InteractiveHud();
-        }
-        return getContext().interactiveHud;
-    }
-
-    /**
-     * Set the current InteractiveHud instance
-     * 
-     * @param interactiveHud
-     *            the InteractiveHud to set
-     */
-    public static void setInteractiveHud(InteractiveHud interactiveHud)
-    {
-        getContext().interactiveHud = interactiveHud;
-    }
 
     /**
      * Name of the current browser
@@ -993,6 +963,21 @@ public class Neodymium
     public static void reloadConfiguration()
     {
         getContext().configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
+    }
+
+    public static void setTestClass(@NonNull Class<?> testClass)
+    {
+        getContext().testClass = testClass;
+    }
+
+    public static void setTestMethod(@NonNull Method requiredTestMethod)
+    {
+        getContext().requiredTestMethod = requiredTestMethod;
+    }
+
+    public static Class<?> getTestClass()
+    {
+        return getContext().testClass;
     }
 
 }
