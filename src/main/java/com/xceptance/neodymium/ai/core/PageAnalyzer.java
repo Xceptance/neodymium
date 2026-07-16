@@ -343,8 +343,10 @@ public class PageAnalyzer {
                             var options = null;
                             // Format select dropdown options neatly
                             if (el.tagName.toLowerCase() === 'select') {
-                                options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
-                                if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
+                                var opts = Array.from(el.options).map(o => o.text).filter(t => t.trim().length > 0);
+                                var slicedOpts = opts.slice(0, 50);
+                                if (opts.length > 50) slicedOpts.push('... (total ' + opts.length + ')');
+                                options = JSON.stringify(slicedOpts);
                             }
 
                             results.push({
@@ -400,8 +402,10 @@ public class PageAnalyzer {
                             var text = (el.innerText || '').trim().replace(/\\s*\\n\\s*/g, ' ');
                             var options = null;
                             if (el.tagName && el.tagName.toLowerCase() === 'select') {
-                                options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
-                                if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
+                                var opts = Array.from(el.options).map(o => o.text).filter(t => t.trim().length > 0);
+                                var slicedOpts = opts.slice(0, 50);
+                                if (opts.length > 50) slicedOpts.push('... (total ' + opts.length + ')');
+                                options = JSON.stringify(slicedOpts);
                             }
 
                             results.push({
@@ -462,8 +466,10 @@ public class PageAnalyzer {
                                     automationId: autoId
                                 };
                                 if (inp.tagName && inp.tagName.toLowerCase() === 'select') {
-                                    field.options = Array.from(inp.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
-                                    if (inp.options.length > 50) field.options += '... (total ' + inp.options.length + ')';
+                                    var opts = Array.from(inp.options).map(o => o.text).filter(t => t.trim().length > 0);
+                                    var slicedOpts = opts.slice(0, 50);
+                                    if (opts.length > 50) slicedOpts.push('... (total ' + opts.length + ')');
+                                    field.options = JSON.stringify(slicedOpts);
                                 }
                                 fields.push(field);
                             }
@@ -942,7 +948,8 @@ public class PageAnalyzer {
                                         field.get("automationId")));
                             }
                             if (field.containsKey("options")) {
-                                dom.append(String.format(" options='[%s]'", field.get("options")));
+                                String escapedOpts = field.get("options").toString().replace("&", "&amp;").replace("'", "&apos;").replace("<", "&lt;").replace(">", "&gt;");
+                                dom.append(String.format(" options='%s'", escapedOpts));
                             }
                             dom.append("\n");
                         }
@@ -1087,7 +1094,10 @@ public class PageAnalyzer {
         appendAttribute(dom, "disabled", el.get("disabled"));
         appendAttribute(dom, "multiple", el.get("multiple"));
         appendAttribute(dom, "value", el.get("value"));
-        appendAttribute(dom, "options", el.get("options"));
+        if (el.containsKey("options") && el.get("options") != null && !el.get("options").toString().isEmpty()) {
+            String escapedOpts = el.get("options").toString().replace("&", "&amp;").replace("'", "&apos;").replace("<", "&lt;").replace(">", "&gt;");
+            dom.append(" options='").append(escapedOpts).append("'");
+        }
 
         appendAttribute(dom, "data-neo-ref", el.get("automationId"));
 
