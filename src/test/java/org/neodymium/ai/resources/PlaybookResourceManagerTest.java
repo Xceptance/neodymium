@@ -54,6 +54,11 @@ public final class PlaybookResourceManagerTest
             }
 
             @Override
+            public void delete(final String identifier)
+            {
+            }
+
+            @Override
             public String resolveInclude(final String parentIdentifier, final String relativePath)
             {
                 if (parentIdentifier == null || relativePath == null)
