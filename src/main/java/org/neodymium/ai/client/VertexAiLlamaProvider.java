@@ -113,7 +113,9 @@ public final class VertexAiLlamaProvider implements LlmProvider
                 "2. Always prefer targeting elements directly by their ID (e.g., '#zip-code-value') or unique standard attributes/classes if available.\n" +
                 "3. Avoid using fragile relative paths or sibling combinators (like '+' or '~') that depend on exact nesting, as they frequently fail due to minor HTML structural changes.\n" +
                 "CRITICAL REGEX RULE:\n" +
-                "4. When the instruction asks to verify a pattern (e.g., \"in the form 'V-[0-9]+-US'\"), you MUST use the exact regular expression pattern as the assertion value (e.g., 'V-[0-9]+-US'), NOT the specific literal value currently shown in the DOM (e.g., do NOT use 'V-12345-US').";
+                "4. When the instruction asks to verify a pattern (e.g., \"in the form 'V-[0-9]+-US'\"), you MUST use the exact regular expression pattern as the assertion value (e.g., 'V-[0-9]+-US'), NOT the specific literal value currently shown in the DOM (e.g., do NOT use 'V-12345-US').\n" +
+                "CRITICAL ACTIONS LIMIT:\n" +
+                "5. You MUST ONLY generate actions that are directly requested by the instruction. Do NOT generate extra, unsolicited assertions or actions for other elements on the page (for example, if the instruction asks to verify the total, do NOT add extra assertions for the order number or zip code).";
             messages.add(SystemMessage.from(llamaSystemMessage));
         }
 
