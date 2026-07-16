@@ -108,6 +108,27 @@ public final class SelenideElementFinder
                     {
                         return els.first();
                     }
+
+                    // Fallback healing for CSS button selectors that are actually divs/spans
+                    if (clean.endsWith(" button"))
+                    {
+                        final String parentSelector = clean.substring(0, clean.length() - 7).trim();
+                        final ElementsCollection parentEls = Selenide.$$(By.cssSelector(parentSelector));
+                        if (!parentEls.isEmpty())
+                        {
+                            final com.codeborne.selenide.SelenideElement parent = parentEls.first();
+                            final ElementsCollection candidates = parent.$$(By.cssSelector("div, span, a, [role='button']"));
+                            for (final com.codeborne.selenide.SelenideElement cand : candidates)
+                            {
+                                final String text = cand.text().trim().toLowerCase();
+                                final String cursor = cand.cssValue("cursor");
+                                if ("pointer".equals(cursor) || text.contains("add") || text.contains("cart"))
+                                {
+                                    return cand;
+                                }
+                            }
+                        }
+                    }
                 }
                 catch (final Exception e)
                 {
