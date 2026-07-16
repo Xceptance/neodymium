@@ -2152,7 +2152,7 @@ public final class EmbeddedHtmlServer
                    "  <div style=\"padding-top:10px;\">" +
                    "    <div class=\"product-title-bad\" style=\"font-weight:bold;\">" + localeName + "</div>" +
                    "    <div class=\"product-price-bad\">" + priceHtml + "</div>" +
-                   "    <div style=\"background:#C87A53;color:white;text-align:center;padding:8px;margin-top:8px;cursor:pointer;\" " +
+                   "    <div class=\"add-btn product-quick-add\" style=\"background:#C87A53;color:white;text-align:center;padding:8px;margin-top:8px;cursor:pointer;\" " +
                    "         hx-post=\"api/cart/add?productId=" + p.id + "\" hx-target=\"#cart-btn-wrapper\" hx-swap=\"outerHTML\">Add</div>" +
                    "  </div>" +
                    "</div>";
