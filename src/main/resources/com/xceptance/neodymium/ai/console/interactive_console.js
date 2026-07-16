@@ -43,14 +43,32 @@ function connectSSE() {
                 const finalSaveButtons = document.getElementById('finalSaveButtons');
                 if (finalSaveOverlay) {
                     const editsMade = currentState && currentState.hudPromptChanged === true;
+                    const saveScopeContainer = document.getElementById('saveScopeContainer');
+                    if (saveScopeContainer) {
+                        saveScopeContainer.style.display = editsMade ? 'block' : 'none';
+                        const saveScopeSelect = document.getElementById('saveScopeSelect');
+                        if (saveScopeSelect && currentState && currentState.yamlScope) {
+                            saveScopeSelect.value = currentState.yamlScope;
+                        }
+                    }
                     if (finalSaveText) {
-                        finalSaveText.textContent = editsMade 
-                            ? "You have made changes to the test steps during execution. Would you like to save these changes?"
-                            : "Test execution finished successfully!";
+                        if (editsMade) {
+                            let files = [];
+                            if (currentState.yamlSource) {
+                                files.push(currentState.yamlSource);
+                            }
+                            if (currentState.playbookFile) {
+                                files.push(currentState.playbookFile);
+                            }
+                            let filesHtml = files.length > 0 ? "<div style='margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;'><ul style='margin: 0; padding-left: 20px; text-align: left;'>" + files.map(f => "<li style='word-break: break-all;'><code>" + f + "</code></li>").join("") + "</ul></div>" : "";
+                            finalSaveText.innerHTML = "You have made changes to the test steps during execution. The following files will be updated:" + filesHtml + "Would you like to save these changes?";
+                        } else {
+                            finalSaveText.innerHTML = "Test execution finished successfully!";
+                        }
                     }
                     if (finalSaveButtons) {
                         finalSaveButtons.innerHTML = editsMade
-                            ? `<button class="btn btn-primary" onclick="sendAction('SAVE_EXIT')">Save Changes</button>
+                            ? `<button class="btn btn-primary" onclick="sendAction('SAVE_EXIT', { saveScope: document.getElementById('saveScopeSelect')?.value || 'local' })">Save Changes</button>
                                <button class="btn btn-danger" onclick="sendAction('DISCARD')">Discard</button>`
                             : `<button class="btn btn-primary" onclick="sendAction('DISCARD')">Close Console</button>`;
                     }
@@ -248,6 +266,14 @@ window.addEventListener('DOMContentLoaded', () => {
 // -------------------------------------------------------------------------
 // State application / Dynamic rendering
 // -------------------------------------------------------------------------
+
+window.testErrors = [];
+const oldError = console.error;
+console.error = function(...args) {
+    window.testErrors.push(args.join(' '));
+    oldError.apply(console, args);
+};
+
 const activeBreakpoints = new Set();
 
 function applyState(state) {
@@ -287,6 +313,7 @@ function applyState(state) {
     // to silently drop the next Run/Skip click.
     if ('pauseId' in state) {
         currentPauseId = state.pauseId;
+        window.currentPauseId = currentPauseId; // Expose to Selenium
     }
 
     // On a new test run, clear the selected step to fall back to default behavior
@@ -310,6 +337,7 @@ function applyState(state) {
     }
 
     currentState = state;
+    window.currentState = currentState; // Expose to Selenium
     currentRunId = state.runId;
 
     // Header info
@@ -1063,7 +1091,7 @@ function renderStepCard(step) {
                             <textarea class="inline-edit-textarea" aria-label="Edit step instruction text">${isEditing && window.currentEditText != null ? escHtml(window.currentEditText) : escHtml(step.rawInstruction || step.instruction)}</textarea>
                             <div class="inline-edit-actions">
                                 <button class="btn" style="padding: 4px 10px; font-size: 11px;" onclick="cancelEdit(this)" aria-label="Cancel editing step">Cancel</button>
-                                <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" onclick="saveEdit(this)" aria-label="Save step instruction">Save</button>
+                                <button class="btn btn-primary step-save-btn" style="padding: 4px 10px; font-size: 11px;" onclick="saveEdit(this)" aria-label="Save step instruction">Save</button>
                             </div>
                         </div>
                         <div class="inline-edit-bindings" style="${isEditing ? 'display:flex; flex-direction:column; gap:6px; margin:8px 0;' : 'display:none;'}">${generateEditableBindingsTable(currentState?.dataBindings, '.inline-edit-textarea')}</div>
@@ -1128,6 +1156,7 @@ function sendAction(action, extra) {
         setButtonsEnabled(true);
     });
     currentPauseId = null;
+    window.currentPauseId = null;
     // Keep currentState in sync so local re-renders see no active pause token.
     if (currentState) {
         currentState.pauseId = null;
@@ -1509,6 +1538,7 @@ function cancelEdit(btnElement) {
 }
 
 function saveEdit(btnElement) {
+    console.error('saveEdit called');
     const card = btnElement.closest('.step-card');
     const textarea = card.querySelector('.inline-edit-textarea');
     const newVal = textarea.value.trim();
@@ -1539,9 +1569,14 @@ function saveEdit(btnElement) {
         } else {
             cancelEdit(btnElement);
         }
+        card.classList.remove('editing');
     } else {
-        if (oldVal !== newVal && currentPauseId) {
-            sendAction('EDIT', { index: idx, instruction: newVal });
+        console.error('Found step in state blocks:', blockName, idx, 'oldVal:', oldVal, 'newVal:', newVal, 'currentPauseId:', currentPauseId);
+        // We always want to send an EDIT action if the user clicks Save, even if the text didn't change, 
+        // because the user might have changed dataBindings.
+        if (currentPauseId) {
+            console.error('Sending EDIT action');
+            sendAction('EDIT', { index: idx, instruction: newVal, bindings: currentState?.dataBindings });
         }
         card.classList.remove('editing');
         setButtonsEnabled(true);
@@ -1701,6 +1736,10 @@ document.getElementById('btnCancel').style.display = 'inline-flex';
 function hideCancelWarning() {
     document.getElementById('cancelWarning').style.display = 'none';
     document.getElementById('btnCancel').style.display = 'inline-flex';
+}
+
+function triggerSaveExit() {
+    sendAction('SAVE_EXIT', { bindings: currentState?.dataBindings });
 }
 
 function triggerStop() {

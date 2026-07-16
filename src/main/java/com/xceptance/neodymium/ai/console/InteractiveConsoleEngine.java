@@ -236,6 +236,20 @@ public final class InteractiveConsoleEngine {
      *       broadcasts it to all SSE clients so they can include it in their
      *       subsequent POST requests.</li>
      * </ol>
+     /**
+     * Pre-registers a pause token to avoid race conditions where the UI acts 
+     * on the state SSE event before waitForAction is fully invoked.
+     * @param pauseId the expected pause token
+     */
+    public void registerPauseId(final String pauseId)
+    {
+        this.currentPauseId.set(pauseId);
+        this.pendingAction.set(null);
+    }
+
+    /**
+     * Blocks the current thread until an action is received from the UI.
+     * Sends a Server-Sent Event (SSE) indicating the runner is paused.
      *
      * @param timeoutMs maximum time to wait in milliseconds; use
      *                  {@link #DEFAULT_TIMEOUT_MS} for the default 1-hour timeout
@@ -286,10 +300,14 @@ public final class InteractiveConsoleEngine {
             }
         }
 
-        // Generate a fresh pause token and clear any stale pending action.
+        // Generate a fresh pause token and clear any stale pending action,
+        // UNLESS the pauseId was already pre-registered.
         final String pauseId = (customPauseId != null && !customPauseId.isEmpty()) ? customPauseId : UUID.randomUUID().toString();
-        this.currentPauseId.set(pauseId);
-        this.pendingAction.set(null);
+        if (!pauseId.equals(this.currentPauseId.get()))
+        {
+            this.currentPauseId.set(pauseId);
+            this.pendingAction.set(null);
+        }
 
         // Broadcast the updated state including the new pauseId so all tabs know they can act.
         broadcastSseEvent("pause", buildPausePayload(pauseId));
@@ -596,11 +614,13 @@ public final class InteractiveConsoleEngine {
             if (activePauseId == null || !activePauseId.equals(incomingPauseId)) {
                 // The pause token was already consumed or the runner is not paused — idempotent
                 // OK.
+                System.out.println("[ACTION HANDLER] Action rejected. activePauseId=" + activePauseId + ", incomingPauseId=" + incomingPauseId);
                 sendJson(exchange, 200, "{\"status\":\"already-handled\"}");
                 return;
             }
 
             // Deposit the action and wake up the waiting test-runner thread.
+            System.out.println("[ACTION HANDLER] Action accepted! pauseId=" + incomingPauseId + ", req=" + req);
             pendingAction.set(req);
             synchronized (lock) {
                 lock.notifyAll();

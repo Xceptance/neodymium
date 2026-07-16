@@ -1,4 +1,0 @@
-variables:
-  myVar: "https://www.wikipedia.org"
-steps: |
-  Open ${myVar}

@@ -1,4 +1,4 @@
-package com.xceptance.neodymium.aura;
+package com.xceptance.neodymium.aura.manager;
 
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
@@ -7,12 +7,12 @@ import java.io.File;
 import java.nio.file.Files;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.sun.net.httpserver.HttpServer;
+import com.xceptance.neodymium.aura.NeodymiumAuraManager;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 

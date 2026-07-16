@@ -454,8 +454,17 @@
         <div class="final-save-box">
             <h2 id="finalSaveTitle"><i class="fa-solid fa-circle-check"></i> Test Finished</h2>
             <p id="finalSaveText">You have made changes to the test steps during execution. Would you like to save these changes?</p>
+            <div id="saveScopeContainer" style="display: none; margin: 15px 0 25px 0; text-align: left;">
+                <label for="saveScopeSelect" style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: bold; color: #ccc;">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Destination
+                </label>
+                <select id="saveScopeSelect" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #444; background-color: #222; color: #fff; font-size: 14px; outline: none; cursor: pointer;">
+                    <option value="global">Global (full test / root level)</option>
+                    <option value="local">Local (only this dataset)</option>
+                </select>
+            </div>
             <div class="final-save-buttons" id="finalSaveButtons">
-                <button class="btn btn-primary" onclick="sendAction('SAVE_EXIT')">Save Changes</button>
+                <button class="btn btn-primary" onclick="sendAction('SAVE_EXIT', { saveScope: document.getElementById('saveScopeSelect')?.value || 'local' })">Save Changes</button>
                 <button class="btn btn-danger" onclick="sendAction('DISCARD')">Discard</button>
             </div>
         </div>

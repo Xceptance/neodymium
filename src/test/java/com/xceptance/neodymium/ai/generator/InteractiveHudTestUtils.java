@@ -108,6 +108,43 @@ public final class InteractiveHudTestUtils
     }
 
     /**
+     * Executes the given task in a background thread while copying and maintaining the main thread's
+     * Neodymium thread-local context, but without sharing or proxying the WebDriver session,
+     * allowing the background thread to run its own separate browser.
+     *
+     * @param task the background task to run
+     * @param onErrorCallback the callback to execute when the background thread encounters a throwable
+     * @return the started background thread
+     */
+    public static Thread runInteractiveInBgSeparateBrowser(final Runnable task, final Function<Throwable, Void> onErrorCallback)
+    {
+        final Object mainContext;
+        try
+        {
+            mainContext = getNeodymiumContext();
+        }
+        catch (final Exception e)
+        {
+            throw new RuntimeException(e);
+        }
+
+        final Thread bgThread = new Thread(() ->
+        {
+            try
+            {
+                setNeodymiumContext(mainContext);
+                task.run();
+            }
+            catch (final Throwable e)
+            {
+                onErrorCallback.apply(e);
+            }
+        });
+        bgThread.start();
+        return bgThread;
+    }
+
+    /**
      * Creates a thread-safe synchronized dynamic proxy for the given WebDriver instance.
      * Every method call on the proxy is serialized on the raw driver instance to prevent
      * concurrent ChromeDriver session corruption.
@@ -213,6 +250,7 @@ public final class InteractiveHudTestUtils
         final Field agentField = AiBrowser.class.getDeclaredField("agent");
         agentField.setAccessible(true);
         agentField.set(browser, customAgent);
+
         return browser;
     }
 }

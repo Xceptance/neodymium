@@ -48,6 +48,7 @@ public final class StepDetails
     private boolean directParse;
     private boolean pesapCalled;
     private boolean executed;
+    private boolean skipped;
 
     private String source;
     private int includeLevel;
@@ -288,6 +289,16 @@ public final class StepDetails
     public final void setExecuted(final boolean executed)
     {
         this.executed = executed;
+    }
+
+    public final boolean isSkipped()
+    {
+        return this.skipped;
+    }
+
+    public final void setSkipped(final boolean skipped)
+    {
+        this.skipped = skipped;
     }
 
     public final String getSource()

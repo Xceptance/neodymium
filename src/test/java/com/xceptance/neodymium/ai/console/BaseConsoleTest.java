@@ -49,9 +49,6 @@ public abstract class BaseConsoleTest
         // Bind mock properties
         System.setProperty("neodymium.ai.interactive", "true");
         System.setProperty("neodymium.ai.interactive.allowHeadlessHUD", "true");
-        // Speed up simulation AI-thinking delay (200 ms) so auto-run steps complete
-        // well within the Selenide assertion timeout in CI/headless environments.
-        System.setProperty("neodymium.ai.console.simulation.thinkMs", "200");
 
         // Initialize engine and server on a random free port
         this.engine = new InteractiveConsoleEngine("test-run-id");
@@ -86,7 +83,6 @@ public abstract class BaseConsoleTest
 
         System.clearProperty("neodymium.ai.interactive");
         System.clearProperty("neodymium.ai.interactive.allowHeadlessHUD");
-        System.clearProperty("neodymium.ai.console.simulation.thinkMs");
         Neodymium.clearThreadContext();
     }
 

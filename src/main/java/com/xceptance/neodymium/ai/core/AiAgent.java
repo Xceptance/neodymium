@@ -100,6 +100,18 @@ public class AiAgent
 
     private String currentPauseId;
 
+    private final java.util.Map<String, java.util.List<String>> blockInstructions = new java.util.LinkedHashMap<>();
+    private final java.util.Set<String> modifiedBlocks = new java.util.HashSet<>();
+    private boolean finalBlock = false;
+
+    public void setFinalBlock(boolean finalBlock) {
+        this.finalBlock = finalBlock;
+    }
+
+    public boolean isHudSaveExit() {
+        return this.hudSaveExit;
+    }
+
     private static final ThreadLocal<AiAgent> activeAgent = new ThreadLocal<>();
 
     private static final ThreadLocal<AiExecutionResult> activeResult = new ThreadLocal<>();
@@ -155,6 +167,8 @@ public class AiAgent
     private String currentBlock = "steps";
 
     private Map<String, String> originalDataBindings;
+
+    private final Map<String, String> modifiedDataBindings = new java.util.HashMap<>();
 
     public void setCurrentBlock(final String currentBlock)
     {
@@ -267,7 +281,7 @@ public class AiAgent
     {
         activeAgent.set(this);
         activeResult.set(result);
-        if (Neodymium.getData() != null)
+        if (Neodymium.getData() != null && this.originalDataBindings == null)
         {
             this.originalDataBindings = new HashMap<>(Neodymium.getData());
         }
@@ -298,7 +312,10 @@ public class AiAgent
             LOG.debug("SUT Context:\n{}", sutContext);
         }
 
-        this.hudPromptChanged = false;
+        if (!this.hudPromptChanged)
+        {
+            this.hudPromptChanged = false;
+        }
         this.hudSaveExit = false;
 
         this.currentRunId = "true".equals(System.getProperty("neodymium.managerActive")) 
@@ -737,6 +754,9 @@ public class AiAgent
                 }
             }
 
+            if (this.currentBlock != null) {
+                this.blockInstructions.put(this.currentBlock, new java.util.ArrayList<>(performedInstructions));
+            }
             LOG.debug("───────────────────────────────────────────────────────────");
             if (abortedDueToExpectedFailure)
             {
@@ -780,7 +800,7 @@ public class AiAgent
                 {
                     // Already saved in processHudActionException during execution loop
                 }
-                else if (Neodymium.aiConfiguration().aiInteractive() && !hudAborted)
+                else if (Neodymium.aiConfiguration().aiInteractive() && !hudAborted && this.finalBlock)
                 {
                     LOG.info("Waiting for final user action to save or discard in Interactive Console...");
                     try
@@ -797,7 +817,8 @@ public class AiAgent
                         
                         if ("SAVE_EXIT".equals(actionType))
                         {
-                            saveYamlAndExit(result.getSteps().size(), performedInstructions);
+                            final String saveScope = actionObj.has("saveScope") ? actionObj.get("saveScope").getAsString() : null;
+                            saveYamlAndExit(result.getSteps().size(), performedInstructions, saveScope);
                         }
                         else
                         {
@@ -1904,11 +1925,29 @@ public class AiAgent
             else if (typeEnum == HudActionType.SAVE_EXIT)
             {
                 this.hudSaveExit = true;
-                throw new HudActionException(HudActionType.SAVE_EXIT, null, 0);
+                final String saveScope = actionObj.has("saveScope") ? actionObj.get("saveScope").getAsString() : null;
+                throw new HudActionException(HudActionType.SAVE_EXIT, null, 0, 0, saveScope, null);
             }
             else if (typeEnum == HudActionType.ABORT)
             {
                 throw new HudActionException(HudActionType.ABORT, null, 0);
+            }
+            else if (typeEnum == HudActionType.HUD_PROMPT_CHANGED)
+            {
+                final Map<String, String> bindingsMap = new HashMap<>();
+                if (actionObj.has("state"))
+                {
+                    final JsonObject stateObj = actionObj.getAsJsonObject("state");
+                    if (stateObj.has("dataBindings"))
+                    {
+                        final JsonObject bObj = stateObj.getAsJsonObject("dataBindings");
+                        for (final String key : bObj.keySet())
+                        {
+                            bindingsMap.put(key, bObj.get(key).getAsString());
+                        }
+                    }
+                }
+                throw new HudActionException(HudActionType.HUD_PROMPT_CHANGED, null, 0, bindingsMap);
             }
             else if (typeEnum == HudActionType.SETTINGS)
             {
@@ -2075,6 +2114,7 @@ public class AiAgent
         state.addProperty("testId", testId);
         state.addProperty("browser", Neodymium.getBrowserProfileName());
         state.addProperty("hudPromptChanged", this.hudPromptChanged);
+        state.addProperty("yamlScope", detectYamlScope());
 
         Class<?> testClass = Neodymium.getTestClass();
         // Data and Files
@@ -2221,6 +2261,46 @@ public class AiAgent
         this.consoleEngine.pushState(new Gson().toJson(state));
     }
 
+    private String detectYamlScope()
+    {
+        final String sourceFile = Neodymium.getTestdataSourceFile();
+        if (sourceFile == null)
+        {
+            return "local";
+        }
+
+        java.io.File file = new java.io.File(sourceFile);
+        if (!file.exists() && !sourceFile.startsWith("src/test/resources/"))
+        {
+            file = new java.io.File("src/test/resources/" + (sourceFile.startsWith("/") ? sourceFile.substring(1) : sourceFile));
+        }
+        if (!file.exists())
+        {
+            return "local";
+        }
+
+        try (final java.io.InputStream is = new java.io.FileInputStream(file))
+        {
+            final org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml();
+            final Object loaded = yaml.load(is);
+            if (loaded instanceof Map)
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> map = (Map<String, Object>) loaded;
+                if (map.containsKey("before") || map.containsKey("steps") || map.containsKey("after")
+                    || map.containsKey("_beforeEach") || map.containsKey("_steps") || map.containsKey("_afterEach"))
+                {
+                    return "global";
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            // Ignore, default to local
+        }
+        return "local";
+    }
+
     private final Map<String, String> screenshotUrlCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     private String getScreenshotUrl(final String base64)
@@ -2288,6 +2368,10 @@ public class AiAgent
                     status = "failed";
                 }
                 stepObj.addProperty("errorMessage", step.getFailureReason());
+            }
+            else if (step.isSkipped())
+            {
+                status = "skipped";
             }
             else if (blockName.equals(this.currentBlock))
             {
@@ -3526,7 +3610,7 @@ public class AiAgent
         }
     }
 
-    boolean saveYamlAndExit(final int currentIndex, final List<String> performedInstructions)
+    boolean saveYamlAndExit(final int currentIndex, final List<String> performedInstructions, final String saveScope)
     {
         LOG.info("User requested Save & Exit. Halting execution and generating yaml.");
         final Playbook playbook = Neodymium.getAiPlaybook();
@@ -3571,7 +3655,11 @@ public class AiAgent
                 }
             }
 
-            final String newSteps = String.join("\n", performedInstructions) + "\n";
+            // Put current block to instructions if not there (just to be safe)
+            if (this.currentBlock != null) {
+                this.blockInstructions.put(this.currentBlock, new java.util.ArrayList<>(performedInstructions));
+            }
+
             Map<String, Object> targetDataset = null;
 
             if (data instanceof Map)
@@ -3595,6 +3683,7 @@ public class AiAgent
                 final Map<String, Object> root = new LinkedHashMap<>();
                 root.put("data", data);
                 data = root;
+                targetDataset = root;
             }
             else
             {
@@ -3603,31 +3692,69 @@ public class AiAgent
                 targetDataset = root;
             }
 
+            final String resolvedScope = saveScope != null ? saveScope : detectYamlScope();
+            final boolean saveGlobally = "global".equalsIgnoreCase(resolvedScope) || targetDataset == null;
+
             // Write modified steps to the target dataset or root map depending on block type
-            if (targetDataset != null)
-            {
-                final String targetKey = getTargetBlockKey(targetDataset, this.currentBlock);
-                targetDataset.put(targetKey, newSteps);
-            }
-            else if (data instanceof Map)
-            {
-                @SuppressWarnings("unchecked")
-                final Map<String, Object> root = (Map<String, Object>) data;
-                final String targetKey = getTargetBlockKey(root, this.currentBlock);
-                root.put(targetKey, newSteps);
+            for (java.util.Map.Entry<String, java.util.List<String>> entry : this.blockInstructions.entrySet()) {
+                String block = entry.getKey();
+                if (!this.modifiedBlocks.contains(block)) {
+                    continue; // Skip blocks that were not modified
+                }
+                String newSteps = String.join("\n", entry.getValue()) + "\n";
+                if (saveGlobally)
+                {
+                    if (data instanceof Map)
+                    {
+                        @SuppressWarnings("unchecked")
+                        final Map<String, Object> root = (Map<String, Object>) data;
+                        final String targetKey = getTargetBlockKey(root, block);
+                        root.put(targetKey, newSteps);
+                    }
+                }
+                else
+                {
+                    if (targetDataset != null)
+                    {
+                        final String targetKey = getTargetBlockKey(targetDataset, block);
+                        targetDataset.put(targetKey, newSteps);
+                        if (data instanceof Map)
+                        {
+                            @SuppressWarnings("unchecked")
+                            final Map<String, Object> root = (Map<String, Object>) data;
+                            final String rootKey = getTargetBlockKey(root, block);
+                            root.remove(rootKey);
+                        }
+                    }
+                }
             }
 
-            if (targetDataset != null && Neodymium.getData() != null)
+            if (targetDataset != null)
             {
-                for (final Map.Entry<String, String> entry : Neodymium.getData().entrySet())
+                final java.util.Set<String> allowedKeys = new java.util.HashSet<>(targetDataset.keySet());
+                allowedKeys.addAll(this.modifiedDataBindings.keySet());
+
+                for (final String key : allowedKeys)
                 {
-                    final String key = entry.getKey();
-                    if (!key.startsWith("neodymium.") && !key.equals("steps") && !key.equals("_steps")
-                        && !key.equals("before") && !key.equals("_beforeEach") && !key.equals("beforeAll") && !key.equals("_beforeAll")
-                        && !key.equals("after") && !key.equals("_afterEach") && !key.equals("afterAll") && !key.equals("_afterAll")
-                        && !key.equals("onSuccess") && !key.equals("_onSuccess") && !key.equals("onFailure") && !key.equals("_onFailure"))
+                    if (!key.equals("steps") && !key.equals("_steps") && !key.equals("raw_steps")
+                        && !key.equals("before") && !key.equals("_beforeEach") && !key.equals("beforeAll") && !key.equals("_beforeAll") && !key.equals("raw_before")
+                        && !key.equals("after") && !key.equals("_afterEach") && !key.equals("afterAll") && !key.equals("_afterAll") && !key.equals("raw_after")
+                        && !key.equals("onSuccess") && !key.equals("_onSuccess") && !key.equals("onFailure") && !key.equals("_onFailure")
+                        && !key.equals("random") && !key.startsWith("neodymium."))
                     {
-                        targetDataset.put(key, entry.getValue());
+                        String value = this.modifiedDataBindings.get(key);
+                        if (value == null && Neodymium.getData() != null)
+                        {
+                            value = Neodymium.getData().get(key);
+                        }
+                        if (value == null && targetDataset.get(key) != null)
+                        {
+                            value = String.valueOf(targetDataset.get(key));
+                        }
+                        if (value != null)
+                        {
+                            targetDataset.put(key, value);
+                        }
                     }
                 }
             }
@@ -3705,7 +3832,11 @@ public class AiAgent
                     for (final Map.Entry<String, Object> entry : map.entrySet())
                     {
                         final String key = entry.getKey();
-                        if (key.startsWith("neodymium."))
+                        if (key.startsWith("neodymium.")
+                            || "steps".equals(key) || "_steps".equals(key) || "raw_steps".equals(key)
+                            || "before".equals(key) || "_beforeEach".equals(key) || "beforeAll".equals(key) || "_beforeAll".equals(key) || "raw_before".equals(key)
+                            || "after".equals(key) || "_afterEach".equals(key) || "afterAll".equals(key) || "_afterAll".equals(key) || "raw_after".equals(key)
+                            || "onSuccess".equals(key) || "_onSuccess".equals(key) || "onFailure".equals(key) || "_onFailure".equals(key))
                         {
                             continue;
                         }
@@ -3714,8 +3845,8 @@ public class AiAgent
                             match = false;
                             break;
                         }
-                        final String originalVal = originalBindings.get(key);
-                        final String yamlVal = String.valueOf(entry.getValue());
+                        final String originalVal = originalBindings.get(key) != null ? originalBindings.get(key).trim() : "";
+                        final String yamlVal = entry.getValue() != null ? String.valueOf(entry.getValue()).trim() : "";
                         if (!yamlVal.equals(originalVal))
                         {
                             match = false;
@@ -3764,11 +3895,12 @@ public class AiAgent
         }
         else if (HudActionType.SAVE_EXIT == e.actionType)
         {
-            this.hudSaveExit = saveYamlAndExit(i, performedInstructions);
+            this.hudSaveExit = saveYamlAndExit(i, performedInstructions, e.payload);
             return -2; // signal break
         }
         else if (HudActionType.ADD == e.actionType)
         {
+            if (this.currentBlock != null) { this.modifiedBlocks.add(this.currentBlock); }
             final String newInstr = e.instruction;
             stepsList.add(newInstr);
             stepLines.add(null);
@@ -3794,6 +3926,7 @@ public class AiAgent
         }
         else if (HudActionType.EDIT == e.actionType)
         {
+            if (this.currentBlock != null) { this.modifiedBlocks.add(this.currentBlock); }
             final String editInstr = e.instruction;
             int editIdx = i;
             if (e.index >= 0 && e.index < stepsList.size())
@@ -3804,6 +3937,14 @@ public class AiAgent
             final Map<String, String> updatedBindings = e.bindings;
             if (updatedBindings != null && !updatedBindings.isEmpty())
             {
+                for (final Map.Entry<String, String> entry : updatedBindings.entrySet())
+                {
+                    final String key = entry.getKey();
+                    if (!key.equals("random") && !key.startsWith("neodymium.") && !key.equals("steps") && !key.equals("before") && !key.equals("after"))
+                    {
+                        this.modifiedDataBindings.put(key, entry.getValue());
+                    }
+                }
                 Neodymium.getData().putAll(updatedBindings);
                 updateConsoleState(activeResult.get(), null);
             }
@@ -3834,6 +3975,10 @@ public class AiAgent
         }
         else if (HudActionType.APPEND == e.actionType)
         {
+            if (this.currentBlock != null)
+            {
+                this.modifiedBlocks.add(this.currentBlock);
+            }
             final String newInstr = e.instruction;
             stepsList.add(newInstr);
             stepLines.add(null);
@@ -3860,6 +4005,10 @@ public class AiAgent
         }
         else if (HudActionType.REORDER == e.actionType)
         {
+            if (this.currentBlock != null)
+            {
+                this.modifiedBlocks.add(this.currentBlock);
+            }
             final int fromIdx = e.index;
             final int toIdx = e.indexTo;
 
@@ -3917,6 +4066,10 @@ public class AiAgent
         }
         else if (HudActionType.SKIP == e.actionType)
         {
+            if (this.currentBlock != null)
+            {
+                this.modifiedBlocks.add(this.currentBlock);
+            }
             final String step = stepsList.get(i);
             LOG.info("Skipped step: {}", step);
             final Playbook playbook = Neodymium.getAiPlaybook();
@@ -3928,6 +4081,7 @@ public class AiAgent
             if (result != null && result.getSteps().size() > i)
             {
                 result.getSteps().get(i).setExpandedInstruction(step + " (Skipped)");
+                result.getSteps().get(i).setSkipped(true);
             }
             performedInstructions.add("// [SKIPPED] " + step);
             // A higher delay (1000ms) is needed here to prevent flickering because a
@@ -3943,6 +4097,23 @@ public class AiAgent
             {
             }
             return i;
+        }
+        else if (HudActionType.HUD_PROMPT_CHANGED == e.actionType)
+        {
+            if (this.currentBlock != null)
+            {
+                this.modifiedBlocks.add(this.currentBlock);
+            }
+            final Map<String, String> updatedBindings = e.bindings;
+            if (updatedBindings != null && !updatedBindings.isEmpty())
+            {
+                this.modifiedDataBindings.putAll(updatedBindings);
+                Neodymium.getData().putAll(updatedBindings);
+                updateConsoleState(activeResult.get(), null);
+            }
+            this.hudPromptChanged = true;
+            LOG.info("Updated data bindings: {}", updatedBindings);
+            return i - 1;
         }
         else if (HudActionType.ABORT == e.actionType)
         {

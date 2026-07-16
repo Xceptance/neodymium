@@ -276,26 +276,35 @@ public class AiBrowser implements AutoCloseable {
         try {
             if (Neodymium.getData().exists("before")) {
                 agent.setCurrentBlock("before");
+                if (!Neodymium.getData().exists("steps") && !Neodymium.getData().exists("after")) {
+                    agent.setFinalBlock(true);
+                }
                 // We use the already created result if it exists
                 final AiExecutionResult res = runResult.getBeforeResult();
                 String key = Neodymium.getData().exists("raw_before") ? "raw_before" : "before";
                 agent.execute(Neodymium.getData().asString(key), res);
+                if (agent.isHudSaveExit()) return runResult;
             }
 
             if (Neodymium.getData().exists("steps")) {
                 agent.setCurrentBlock("steps");
+                if (!Neodymium.getData().exists("after")) {
+                    agent.setFinalBlock(true);
+                }
                 final AiExecutionResult res = runResult.getStepsResult();
                 String key = Neodymium.getData().exists("raw_steps") ? "raw_steps" : "steps";
                 agent.execute(Neodymium.getData().asString(key), res);
+                if (agent.isHudSaveExit()) return runResult;
             }
         } catch (final Throwable t)
         {
             testError = t;
             throw t;
         } finally {
-            if (Neodymium.getData().exists("after")) {
+            if (Neodymium.getData().exists("after") && !agent.isHudSaveExit()) {
                 try {
                     agent.setCurrentBlock("after");
+                    agent.setFinalBlock(true);
                     executeListAfterMode(Neodymium.getData().asString("after"), runResult);
                 } catch (Throwable afterError) {
                     if (testError != null) {
@@ -346,6 +355,7 @@ public class AiBrowser implements AutoCloseable {
             for (final String item : list) {
                 try {
                     runResult.addAfterResult(execute(item));
+                    if (agent.isHudSaveExit()) return;
                 } catch (Throwable t) {
                     if (accumulatedError == null) {
                         accumulatedError = t;
