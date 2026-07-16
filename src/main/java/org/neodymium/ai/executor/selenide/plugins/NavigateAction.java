@@ -45,9 +45,17 @@ public final class NavigateAction implements BrowserActionPlugin
     @Override
     public void execute(final Action action) throws Exception
     {
-        if (action != null && action.getTarget() != null)
+        if (action != null)
         {
-            Selenide.open(action.getTarget());
+            String url = action.getTarget();
+            if ("url".equalsIgnoreCase(url) && action.getValue() != null)
+            {
+                url = action.getValue();
+            }
+            if (url != null)
+            {
+                Selenide.open(url);
+            }
         }
     }
 }

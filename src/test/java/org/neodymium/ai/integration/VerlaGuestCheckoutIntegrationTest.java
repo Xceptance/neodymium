@@ -109,4 +109,30 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
         // we do that independent of the AI part to ensure we are really ok
         $("h2").shouldHave(text("Thank you for your purchase!"));
     }
+
+    /**
+     * Live mode execution running with all datasets (perfect, normal, bad) defined in the playbook.
+     */
+    @Order(3)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
+    public void testCheckoutLiveAllDataSets()
+    {
+        // Assert order success screen checkmark is displayed
+        // we do that independent of the AI part to ensure we are really ok
+        $("h2").shouldHave(text("Thank you for your purchase!"));
+    }
+
+    /**
+     * Strict replay mode execution running with all datasets (perfect, normal, bad) defined in the playbook.
+     */
+    @Order(4)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
+    public void testCheckoutReplayAllDataSets()
+    {
+        // Assert order success screen checkmark is displayed
+        // we do that independent of the AI part to ensure we are really ok
+        $("h2").shouldHave(text("Thank you for your purchase!"));
+    }
 }
