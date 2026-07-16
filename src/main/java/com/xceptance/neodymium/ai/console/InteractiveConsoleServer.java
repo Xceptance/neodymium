@@ -386,25 +386,38 @@ public final class InteractiveConsoleServer
             }
 
             final String query = exchange.getRequestURI().getQuery();
-            if (query != null && query.startsWith("file="))
+            if (query != null)
             {
-                final String fileName = query.substring(5);
-                if (fileName.contains("/") || fileName.contains("\\") || fileName.contains(".."))
+                String fileName = null;
+                for (final String param : query.split("&"))
                 {
-                    exchange.sendResponseHeaders(403, -1);
-                    return;
-                }
-                final Path file = Paths.get("target/ai-console-screenshots", fileName);
-                if (Files.exists(file))
-                {
-                    exchange.getResponseHeaders().set("Content-Type", "image/png");
-                    final byte[] bytes = Files.readAllBytes(file);
-                    exchange.sendResponseHeaders(200, bytes.length);
-                    try (final OutputStream os = exchange.getResponseBody())
+                    final String[] pair = param.split("=");
+                    if (pair.length > 1 && "file".equals(pair[0]))
                     {
-                        os.write(bytes);
+                        fileName = pair[1];
+                        break;
                     }
-                    return;
+                }
+
+                if (fileName != null)
+                {
+                    if (fileName.contains("/") || fileName.contains("\\") || fileName.contains(".."))
+                    {
+                        exchange.sendResponseHeaders(403, -1);
+                        return;
+                    }
+                    final Path file = Paths.get("target/ai-console-screenshots", fileName);
+                    if (Files.exists(file))
+                    {
+                        exchange.getResponseHeaders().set("Content-Type", "image/png");
+                        final byte[] bytes = Files.readAllBytes(file);
+                        exchange.sendResponseHeaders(200, bytes.length);
+                        try (final OutputStream os = exchange.getResponseBody())
+                        {
+                            os.write(bytes);
+                        }
+                        return;
+                    }
                 }
             }
             exchange.sendResponseHeaders(404, -1);

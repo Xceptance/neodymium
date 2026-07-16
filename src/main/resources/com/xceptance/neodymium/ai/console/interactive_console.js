@@ -723,8 +723,9 @@ function buildStepDetailsHtml(step, isActiveStep) {
     }
     const screenshotBlock = screenshotUrl
         ? `<div class="acc-screenshot-block" style="margin-top:12px;">
-                       <div style="font-size:12px;"><i class="fa-solid fa-image" aria-hidden="true"></i> Screenshot: <a href="#" class="screenshot-overlay-link" onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="color:var(--accent-primary);text-decoration:underline;">View Fullscreen</a></div>
+                       <div class="screenshot-header" style="font-size:12px;"><i class="fa-solid fa-image" aria-hidden="true"></i> Screenshot: <a href="#" class="screenshot-overlay-link" onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="color:var(--accent-primary);text-decoration:underline;">View Fullscreen</a></div>
                        <img class="acc-screenshot" src="${escAttr(screenshotUrl)}" alt="Step screenshot"
+                            onerror="handleScreenshotError(this)"
                             onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="cursor:pointer;margin-top:8px;max-height:200px;width:100%;object-fit:cover;border-radius:8px;">
                    </div>`
         : '';
@@ -1842,6 +1843,20 @@ let panY = 0;
 let isPanning = false;
 let startX = 0;
 let startY = 0;
+
+function handleScreenshotError(imgElement) {
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        const container = imgElement.closest('.acc-screenshot-block');
+        if (container) {
+            const header = container.querySelector('.screenshot-header');
+            if (header) {
+                header.innerHTML = `<i class="fa-solid fa-image-slash" aria-hidden="true"></i> No screenshot taken`;
+                header.style.color = 'var(--text-muted)';
+            }
+        }
+    }
+}
 
 function openScreenshotOverlay(event, src) {
     if (event) event.preventDefault();

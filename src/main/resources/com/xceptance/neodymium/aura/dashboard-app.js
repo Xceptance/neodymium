@@ -2270,7 +2270,7 @@
                                 const sidebarBadge = document.getElementById('sidebarRunBadge');
                                 if (sidebarBadge) {
                                     sidebarBadge.style.display = 'flex';
-                                    sidebarBadge.innerHTML = `<i class="fa-solid fa-circle-notch spinner"></i> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${statusData.total}`;
+                                    sidebarBadge.innerHTML = `<i class="fa-solid fa-circle-notch spinner"></i> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${statusData.tests.length}`;
                                 }
                                 updateRunButtons();
                             } else {
