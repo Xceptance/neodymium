@@ -2265,13 +2265,13 @@ public final class EmbeddedHtmlServer
                   .append("      </div>")
                   .append("    </div>");
             }
-            sb.append("  </div>")
+    sb.append("  </div>")
               .append("  <div class=\"cart-dropdown-footer\">")
               .append("    <div class=\"cart-dropdown-subtotal\">")
               .append("      <span>Subtotal</span>")
               .append("      <span>").append(formatPrice(subtotal, country)).append("</span>")
               .append("    </div>")
-              .append("    <a href=\"cart.html\" class=\"cart-dropdown-checkout-btn\">View Cart & Checkout</a>")
+              .append("    <a href=\"cart.html\" id=\"mini-cart-checkout-btn\" class=\"cart-dropdown-checkout-btn\">View Cart & Checkout</a>")
               .append("  </div>");
         }
         sb.append("</div>");
@@ -2424,7 +2424,7 @@ public final class EmbeddedHtmlServer
           .append("        <span>").append(formatPrice(total, country)).append("</span>")
           .append("      </div>")
           .append("    </div>")
-          .append("    <a href=\"checkout.html\" class=\"btn-primary\" style=\"display: block; text-align: center; margin-top: 24px; padding: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 12px;\">")
+          .append("    <a href=\"checkout.html\" id=\"checkout-btn\" class=\"btn-primary\" style=\"display: block; text-align: center; margin-top: 24px; padding: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 12px;\">")
           .append("      ").append(trans.getOrDefault("checkout", "Checkout"))
           .append("    </a>")
           .append("  </div>")
