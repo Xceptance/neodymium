@@ -34,6 +34,8 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import org.neodymium.ai.config.AiConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * OpenAI-compatible LLM provider designed for Llama 4 and other open models
@@ -46,6 +48,8 @@ import org.neodymium.ai.config.AiConfiguration;
  */
 public final class VertexAiLlamaProvider implements LlmProvider
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(VertexAiLlamaProvider.class);
+
     private final AiConfiguration config;
     private final String apiKey;
     private final String modelName;
@@ -117,7 +121,8 @@ public final class VertexAiLlamaProvider implements LlmProvider
                 {
                     if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/"))
                     {
-                        contents.add(ImageContent.from(attachment.base64Data(), attachment.mediaType()));
+                        // Ignore image attachments to avoid the Vertex AI openapi proxy "media_resolution parameter not supported" error
+                        LOGGER.warn("Ignoring image attachment for Vertex AI Llama provider to avoid media_resolution error.");
                     }
                     else
                     {
@@ -166,7 +171,6 @@ public final class VertexAiLlamaProvider implements LlmProvider
     {
         return EnumSet.of(
             LlmCapability.TEXT_ONLY,
-            LlmCapability.VISION,
             LlmCapability.STRUCTURED_JSON,
             LlmCapability.STEP_SPLITTING,
             LlmCapability.VERIFICATION
