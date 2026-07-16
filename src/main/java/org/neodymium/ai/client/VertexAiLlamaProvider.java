@@ -107,7 +107,8 @@ public final class VertexAiLlamaProvider implements LlmProvider
         if (request.systemMessage() != null && !request.systemMessage().isBlank())
         {
             final String llamaSystemMessage = request.systemMessage() + "\n\n" +
-                "CRITICAL: You MUST output ONLY the raw JSON block. Do NOT include any conversational preamble, introduction, explanation, markdown fences, or postfix text. Your output must start with '{' and end with '}'.";
+                "CRITICAL: You MUST output ONLY the raw JSON block. Do NOT include any conversational preamble, introduction, explanation, markdown fences, or postfix text. Your output must start with '{' and end with '}'.\n" +
+                "CRITICAL SELECTOR RULE: Never use dynamic 'data-neo-ref' attributes (e.g., [data-neo-ref='...']) in your CSS selectors. They are temporary and volatile. Instead, identify and use robust, stable CSS selectors using standard attributes (like id, class, tag names, name, role, etc.).";
             messages.add(SystemMessage.from(llamaSystemMessage));
         }
 
