@@ -23,7 +23,9 @@ import static com.codeborne.selenide.Selenide.$;
 
 import com.xceptance.neodymium.ai.BaseAiTest;
 import com.xceptance.neodymium.common.browser.Browser;
+
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -88,6 +90,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
     @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
+    @TestTemplate
     public void testCheckoutLive()
     {
         // Assert order success screen checkmark is displayed
@@ -102,6 +105,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
     @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
+    @TestTemplate
     public void testCheckoutReplay()
     {
         // Assert order success screen checkmark is displayed
@@ -115,6 +119,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(3)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
+    @TestTemplate
     public void testCheckoutLiveAllDataSets()
     {
         // Assert order success screen checkmark is displayed
@@ -128,6 +133,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(4)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
+    @TestTemplate
     public void testCheckoutReplayAllDataSets()
     {
         // Assert order success screen checkmark is displayed
