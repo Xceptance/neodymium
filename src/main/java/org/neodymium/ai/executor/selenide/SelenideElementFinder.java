@@ -121,7 +121,7 @@ public final class SelenideElementFinder
                             for (final com.codeborne.selenide.SelenideElement cand : candidates)
                             {
                                 final String text = cand.text().trim().toLowerCase();
-                                final String cursor = cand.cssValue("cursor");
+                                final String cursor = cand.getCssValue("cursor");
                                 if ("pointer".equals(cursor) || text.contains("add") || text.contains("cart"))
                                 {
                                     return cand;
