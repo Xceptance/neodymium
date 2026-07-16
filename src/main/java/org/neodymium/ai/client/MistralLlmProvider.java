@@ -51,6 +51,7 @@ public final class MistralLlmProvider implements LlmProvider
     private final AiConfiguration config;
     private final String apiKey;
     private final String modelName;
+    private final ChatModel model;
 
     /**
      * Constructs a MistralLlmProvider and dynamically resolves its configuration.
@@ -63,23 +64,23 @@ public final class MistralLlmProvider implements LlmProvider
         final String resolvedKey = this.config.getProperty("neodymium.ai.mistral.apiKey", this.config.getApiKey("mistral"));
         this.apiKey = resolvedKey != null ? resolvedKey : System.getenv("MISTRAL_API_KEY");
         
+        if (this.apiKey == null || this.apiKey.isBlank())
+        {
+            throw new IllegalArgumentException("Mistral API key is missing. Please configure neodymium.ai.mistral.apiKey or set MISTRAL_API_KEY.");
+        }
+
         this.modelName = this.config.getProperty("neodymium.ai.mistral.model", this.config.getModel("mistral"));
+
+        this.model = MistralAiChatModel.builder()
+            .apiKey(this.apiKey)
+            .modelName(this.modelName != null ? this.modelName : "mistral-large-latest")
+            .temperature(0.0)
+            .build();
     }
 
     @Override
     public LlmResponse chat(final LlmRequest request) throws IOException
     {
-        if (this.apiKey == null || this.apiKey.isBlank())
-        {
-            throw new IOException("Mistral API key is missing. Please configure neodymium.ai.mistral.apiKey or set MISTRAL_API_KEY.");
-        }
-
-        final ChatModel model = MistralAiChatModel.builder()
-            .apiKey(this.apiKey)
-            .modelName(this.modelName != null ? this.modelName : "mistral-large-latest")
-            .temperature(request.temperature())
-            .build();
-
         final List<ChatMessage> messages = new ArrayList<>();
         if (request.systemMessage() != null && !request.systemMessage().isBlank())
         {
@@ -95,7 +96,7 @@ public final class MistralLlmProvider implements LlmProvider
 
         try
         {
-            final ChatResponse response = model.chat(messages);
+            final ChatResponse response = this.model.chat(messages);
             final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
             
             TokenUsage mappedUsage = null;

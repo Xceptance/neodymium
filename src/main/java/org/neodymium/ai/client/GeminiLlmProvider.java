@@ -48,6 +48,7 @@ public final class GeminiLlmProvider implements LlmProvider
     private final AiConfiguration config;
     private final String apiKey;
     private final String modelName;
+    private final ChatModel model;
 
     /**
      * Constructs a GeminiLlmProvider and dynamically resolves its configuration.
@@ -60,24 +61,24 @@ public final class GeminiLlmProvider implements LlmProvider
         final String resolvedKey = this.config.getProperty("neodymium.ai.gemini.apiKey", this.config.getApiKey("gemini"));
         this.apiKey = resolvedKey != null ? resolvedKey : System.getenv("GEMINI_API_KEY");
         
+        if (this.apiKey == null || this.apiKey.isBlank())
+        {
+            throw new IllegalArgumentException("Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.");
+        }
+
         this.modelName = this.config.getProperty("neodymium.ai.gemini.model", this.config.getModel("gemini"));
+
+        this.model = GoogleAiGeminiChatModel.builder()
+            .apiKey(this.apiKey)
+            .modelName(this.modelName != null ? this.modelName : "gemini-3.5-flash")
+            .temperature(0.0)
+            .timeout(java.time.Duration.ofSeconds(180))
+            .build();
     }
 
     @Override
     public LlmResponse chat(final LlmRequest request) throws IOException
     {
-        if (this.apiKey == null || this.apiKey.isBlank())
-        {
-            throw new IOException("Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.");
-        }
-
-        final ChatModel model = GoogleAiGeminiChatModel.builder()
-            .apiKey(this.apiKey)
-            .modelName(this.modelName != null ? this.modelName : "gemini-3.5-flash")
-            .temperature(request.temperature())
-            .timeout(java.time.Duration.ofSeconds(request.timeoutSeconds() > 0 ? request.timeoutSeconds() : 180))
-            .build();
-
         final List<ChatMessage> messages = new ArrayList<>();
         if (request.systemMessage() != null && !request.systemMessage().isBlank())
         {
@@ -121,7 +122,7 @@ public final class GeminiLlmProvider implements LlmProvider
 
         try
         {
-            final ChatResponse response = model.chat(messages);
+            final ChatResponse response = this.model.chat(messages);
             final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
             
             TokenUsage mappedUsage = null;
