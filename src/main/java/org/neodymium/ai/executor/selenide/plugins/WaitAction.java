@@ -88,20 +88,27 @@ public final class WaitAction implements BrowserActionPlugin
         }
         else
         {
-            WebElementCondition condition = Condition.visible;
-            if (value != null)
+            if ("text".equalsIgnoreCase(target) && value != null && !value.isBlank())
             {
-                final String val = value.toLowerCase().trim();
-                if (val.contains("exist") || val.contains("present"))
-                {
-                    condition = Condition.exist;
-                }
-                else if (val.contains("hidden") || val.contains("invisible"))
-                {
-                    condition = Condition.hidden;
-                }
+                SelenideElementFinder.findElement(value).shouldBe(Condition.visible, Duration.ofSeconds(10));
             }
-            SelenideElementFinder.findElement(target).shouldBe(condition, Duration.ofSeconds(10));
+            else
+            {
+                WebElementCondition condition = Condition.visible;
+                if (value != null)
+                {
+                    final String val = value.toLowerCase().trim();
+                    if (val.contains("exist") || val.contains("present"))
+                    {
+                        condition = Condition.exist;
+                    }
+                    else if (val.contains("hidden") || val.contains("invisible"))
+                    {
+                        condition = Condition.hidden;
+                    }
+                }
+                SelenideElementFinder.findElement(target).shouldBe(condition, Duration.ofSeconds(10));
+            }
         }
     }
 }
