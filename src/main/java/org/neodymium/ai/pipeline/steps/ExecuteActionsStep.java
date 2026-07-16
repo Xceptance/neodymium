@@ -136,74 +136,82 @@ public final class ExecuteActionsStep implements PipelineStep
         final ExecutionContext context
     ) throws PipelineException
     {
-         if (action == null)
-         {
-             return;
-         }
-
-        // Intercept control / assertion actions that require no SUT execution
-        if ("NONE".equalsIgnoreCase(action.getType()) || "VERIFY".equalsIgnoreCase(action.getType()))
-        {
-            return;
-        }
-
-        // Intercept INCLUDE control actions to perform dynamic runtime inclusion expansion
-        if (action.getType().equalsIgnoreCase("INCLUDE"))
-        {
-            executeIncludeAction(action, session, context, recordedActions);
-            return;
-        }
-
+        ExecutionContext.setActiveContext(context);
         try
         {
-            LOGGER.debug("   ▶️ [Action] Type:        {}", action.getType());
-            if (action.getDescription() != null && !action.getDescription().trim().isEmpty())
+            if (action == null)
             {
-                LOGGER.debug("      🤖 Description: {}", action.getDescription());
-            }
-            if (action.getTarget() != null && !action.getTarget().trim().isEmpty())
-            {
-                LOGGER.debug("      🎯 Target:      {}", action.getTarget());
-            }
-            final String val = action.getValue();
-            if (val != null && !val.trim().isEmpty())
-            {
-                LOGGER.debug("      💵 Value:       {}", val);
+                return;
             }
 
-            // Execute SUT action via targeted SUT driver
-            executor.execute(action);
-            
-            // Mask any raw sensitive inputs dynamically matching SessionData variable keys
-            final Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());
-             final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-             if (step != null)
-             {
-                 sanitized.setStepInstruction(step.getInstruction());
-                 sanitized.setStepLine(step.getLineNumber());
-                 sanitized.setStepFile(step.getSourceFile());
-                 final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
-                 if (mode != null && !mode.isReplay())
-                 {
-                     step.getActions().add(sanitized);
-                 }
-             }
-            
-            // Log to local recording and dispatch verification updates to active event listeners
-            recordedActions.add(sanitized);
-            @SuppressWarnings("unchecked")
-            final List<Action> stepActions = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
-            if (stepActions != null)
+            // Intercept control / assertion actions that require no SUT execution
+            if ("NONE".equalsIgnoreCase(action.getType()) || "VERIFY".equalsIgnoreCase(action.getType()))
             {
-                stepActions.add(sanitized);
+                return;
             }
-            session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
+
+            // Intercept INCLUDE control actions to perform dynamic runtime inclusion expansion
+            if (action.getType().equalsIgnoreCase("INCLUDE"))
+            {
+                executeIncludeAction(action, session, context, recordedActions);
+                return;
+            }
+
+            try
+            {
+                LOGGER.debug("   ▶️ [Action] Type:        {}", action.getType());
+                if (action.getDescription() != null && !action.getDescription().trim().isEmpty())
+                {
+                    LOGGER.debug("      🤖 Description: {}", action.getDescription());
+                }
+                if (action.getTarget() != null && !action.getTarget().trim().isEmpty())
+                {
+                    LOGGER.debug("      🎯 Target:      {}", action.getTarget());
+                }
+                final String val = action.getValue();
+                if (val != null && !val.trim().isEmpty())
+                {
+                    LOGGER.debug("      💵 Value:       {}", val);
+                }
+
+                // Execute SUT action via targeted SUT driver
+                executor.execute(action);
+                
+                // Mask any raw sensitive inputs dynamically matching SessionData variable keys
+                final Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());
+                final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                if (step != null)
+                {
+                     sanitized.setStepInstruction(step.getInstruction());
+                     sanitized.setStepLine(step.getLineNumber());
+                     sanitized.setStepFile(step.getSourceFile());
+                     final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+                     if (mode != null && !mode.isReplay())
+                     {
+                         step.getActions().add(sanitized);
+                     }
+                }
+                
+                // Log to local recording and dispatch verification updates to active event listeners
+                recordedActions.add(sanitized);
+                @SuppressWarnings("unchecked")
+                final List<Action> stepActions = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
+                if (stepActions != null)
+                {
+                    stepActions.add(sanitized);
+                }
+                session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
+            }
+            catch (final IOException e)
+            {
+                // Dispatch failed event status and throw HealingRequiredException to initiate recovery
+                session.getEventBus().dispatch(new ActionExecutedEvent(action, false));
+                throw new HealingRequiredException("Action execution failed against SUT: " + action.getDescription(), e);
+            }
         }
-        catch (final IOException e)
+        finally
         {
-            // Dispatch failed event status and throw HealingRequiredException to initiate recovery
-            session.getEventBus().dispatch(new ActionExecutedEvent(action, false));
-            throw new HealingRequiredException("Action execution failed against SUT: " + action.getDescription(), e);
+            ExecutionContext.setActiveContext(null);
         }
     }
 

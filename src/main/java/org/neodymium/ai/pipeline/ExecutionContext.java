@@ -34,6 +34,35 @@ import org.neodymium.ai.pipeline.structural.EndTryStep;
  */
 public final class ExecutionContext
 {
+    private static final ThreadLocal<ExecutionContext> activeContext = new ThreadLocal<>();
+
+    /**
+     * Retrieves the thread-active ExecutionContext.
+     *
+     * @return the active context, or null if none is bound to the current thread
+     */
+    public static ExecutionContext getActiveContext()
+    {
+        return activeContext.get();
+    }
+
+    /**
+     * Binds or unbinds the ExecutionContext to the current thread.
+     *
+     * @param context the context to bind, or null to unbind
+     */
+    public static void setActiveContext(final ExecutionContext context)
+    {
+        if (context == null)
+        {
+            activeContext.remove();
+        }
+        else
+        {
+            activeContext.set(context);
+        }
+    }
+
     /**
      * Context transient data map keys.
      */

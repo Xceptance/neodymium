@@ -98,27 +98,31 @@ public final class SelenideElementFinder
                 }
 
                 // Dynamic text-matching assertion fallback for missing data-neo-ref targets
-                final org.neodymium.ai.model.PlaybookStep step = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-                if (step != null)
+                final org.neodymium.ai.pipeline.ExecutionContext context = org.neodymium.ai.pipeline.ExecutionContext.getActiveContext();
+                if (context != null)
                 {
-                    for (final org.neodymium.ai.action.Action action : step.getActions())
+                    final org.neodymium.ai.model.PlaybookStep step = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(org.neodymium.ai.pipeline.ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                    if (step != null)
                     {
-                        if ("ASSERT".equalsIgnoreCase(action.getType()) && action.getValue() != null)
+                        for (final org.neodymium.ai.action.Action action : step.getActions())
                         {
-                            final String expectedVal = action.getValue();
-                            final ElementsCollection allElements = Selenide.$$("*");
-                            for (final com.codeborne.selenide.SelenideElement el : allElements)
+                            if ("ASSERT".equalsIgnoreCase(action.getType()) && action.getValue() != null)
                             {
-                                try
+                                final String expectedVal = action.getValue();
+                                final ElementsCollection allElements = Selenide.$$("*");
+                                for (final com.codeborne.selenide.SelenideElement el : allElements)
                                 {
-                                    final String text = el.text().trim();
-                                    if (text.equals(expectedVal) || text.contains(expectedVal) || text.matches(expectedVal))
+                                    try
                                     {
-                                        return el;
+                                        final String text = el.text().trim();
+                                        if (text.equals(expectedVal) || text.contains(expectedVal) || text.matches(expectedVal))
+                                        {
+                                            return el;
+                                        }
                                     }
-                                }
-                                catch (final Exception ignored)
-                                {
+                                    catch (final Exception ignored)
+                                    {
+                                    }
                                 }
                             }
                         }
