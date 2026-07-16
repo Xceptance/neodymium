@@ -87,6 +87,13 @@ public final class LocalFileResourceManager implements PlaybookResourceManager
         Files.writeString(target, content, StandardCharsets.UTF_8);
     }
 
+    @Override
+    public void delete(final String identifier) throws IOException
+    {
+        final Path target = this.baseDirectory.resolve(identifier).normalize();
+        Files.deleteIfExists(target);
+    }
+
     /**
      * Resolves a relative resource inclusion path against a parent file path.
      * Normalizes the result and returns a string with standardized forward slashes.

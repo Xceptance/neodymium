@@ -85,6 +85,27 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
     }
 
     @Override
+    public void delete(final String identifier) throws IOException
+    {
+        final java.net.URL rootUrl = classLoader.getResource("");
+        if (rootUrl != null && "file".equals(rootUrl.getProtocol()))
+        {
+            try
+            {
+                final Path rootPath = Path.of(rootUrl.toURI());
+                final Path targetPath = rootPath.resolve(identifier);
+                java.nio.file.Files.deleteIfExists(targetPath);
+                return;
+            }
+            catch (final Exception e)
+            {
+                throw new IOException("Failed to delete resource from classpath output directory", e);
+            }
+        }
+        throw new UnsupportedOperationException("ClasspathResourceManager is read-only when not running from local file system");
+    }
+
+    @Override
     public String resolveInclude(final String parentIdentifier, final String relativePath)
     {
         if (parentIdentifier == null || parentIdentifier.trim().isEmpty())

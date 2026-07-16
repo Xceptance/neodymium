@@ -80,6 +80,12 @@ public final class InMemoryResourceManager implements PlaybookResourceManager
         this.storage.put(identifier, content);
     }
 
+    @Override
+    public void delete(final String identifier) throws IOException
+    {
+        this.storage.remove(identifier);
+    }
+
     /**
      * Resolves a relative resource inclusion path against a parent resource path.
      * Normalizes the result and returns a string with standardized forward slashes.

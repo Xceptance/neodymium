@@ -49,6 +49,14 @@ public interface PlaybookResourceManager
     void write(String identifier, String content) throws IOException;
 
     /**
+     * Deletes the resource identified by the target identifier.
+     *
+     * @param identifier the resource path, database key, or classpath URI
+     * @throws IOException if deletion fails
+     */
+    void delete(String identifier) throws IOException;
+
+    /**
      * Resolves a relative resource identifier (like an include path)
      * against a parent playbook's identifier.
      *
