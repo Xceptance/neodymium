@@ -77,8 +77,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
         com.xceptance.neodymium.util.Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
         if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
         {
-            com.codeborne.selenide.Selenide.clearBrowserCookies();
-            com.codeborne.selenide.Selenide.clearBrowserLocalStorage();
+            com.codeborne.selenide.Selenide.closeWebDriver();
         }
     }
 
