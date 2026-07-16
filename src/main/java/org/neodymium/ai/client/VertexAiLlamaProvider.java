@@ -54,7 +54,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
     private final String apiKey;
     private final String modelName;
     private final String baseUrl;
-    private ChatModel model;
+    private final ChatModel model;
 
     /**
      * Constructs a VertexAiLlamaProvider and dynamically resolves its configuration.
@@ -66,6 +66,11 @@ public final class VertexAiLlamaProvider implements LlmProvider
         // Resolve api key from properties or env
         final String resolvedKey = this.config.getProperty("neodymium.ai.vertex.apiKey", null);
         this.apiKey = resolvedKey != null ? resolvedKey : System.getenv("VERTEX_API_KEY");
+
+        if (this.apiKey == null || this.apiKey.isBlank())
+        {
+            throw new IllegalArgumentException("Vertex API key is missing. Please configure neodymium.ai.vertex.apiKey or set VERTEX_API_KEY.");
+        }
 
         // Resolve model name, default to llama-4-maverick-17b-128e-instruct-maas
         final String resolvedModel = this.config.getProperty("neodymium.ai.vertex.model", null);
@@ -84,31 +89,19 @@ public final class VertexAiLlamaProvider implements LlmProvider
             this.baseUrl = String.format("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/endpoints/openapi",
                 location, projectId, location);
         }
-    }
 
-    private ChatModel getModel() throws IOException
-    {
-        if (this.model == null)
-        {
-            if (this.apiKey == null || this.apiKey.isBlank())
-            {
-                throw new IOException("Vertex API key is missing. Please configure neodymium.ai.vertex.apiKey or set VERTEX_API_KEY.");
-            }
-            this.model = OpenAiChatModel.builder()
-                .baseUrl(this.baseUrl)
-                .apiKey(this.apiKey)
-                .modelName(this.modelName)
-                .temperature(0.0)
-                .timeout(java.time.Duration.ofSeconds(180))
-                .build();
-        }
-        return this.model;
+        this.model = OpenAiChatModel.builder()
+            .baseUrl(this.baseUrl)
+            .apiKey(this.apiKey)
+            .modelName(this.modelName)
+            .temperature(0.0)
+            .timeout(java.time.Duration.ofSeconds(180))
+            .build();
     }
 
     @Override
     public LlmResponse chat(final LlmRequest request) throws IOException
     {
-        final ChatModel activeModel = getModel();
 
         final List<ChatMessage> messages = new ArrayList<>();
         if (request.systemMessage() != null && !request.systemMessage().isBlank())
@@ -153,7 +146,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
 
         try
         {
-            final ChatResponse response = activeModel.chat(messages);
+            final ChatResponse response = this.model.chat(messages);
             final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
 
             TokenUsage mappedUsage = null;
