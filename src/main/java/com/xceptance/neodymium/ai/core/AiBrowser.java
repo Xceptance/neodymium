@@ -261,6 +261,7 @@ public class AiBrowser implements AutoCloseable {
         final AiTestRunResult runResult = new AiTestRunResult();
         this.lastTestRunResult = runResult;
         Throwable testError = null;
+        boolean afterExecuted = false;
 
         // Pre-initialize results with instructions so they are visible as pending in the console
         if (Neodymium.getData().exists("before")) {
@@ -315,6 +316,7 @@ public class AiBrowser implements AutoCloseable {
                     if (agent.isHudSaveExit())
                         return runResult;
                 }
+                afterExecuted = true;
             }
 
         } catch (final Throwable t)
@@ -322,7 +324,7 @@ public class AiBrowser implements AutoCloseable {
             testError = t;
             throw t;
         } finally {
-            if (Neodymium.getData().exists("after") && !agent.isHudSaveExit()) {
+            if (Neodymium.getData().exists("after") && !agent.isHudSaveExit() && !afterExecuted) {
                 try {
                     agent.setCurrentBlock("after");
                     agent.setFinalBlock(true);
@@ -362,6 +364,8 @@ public class AiBrowser implements AutoCloseable {
     }
 
     private void executeListAfterMode(final String jsonOrString, final AiTestRunResult runResult) throws Throwable {
+        // Clear pre-initialized placeholder result to avoid duplication
+        runResult.getAfterResults().clear();
         java.util.List<String> list = null;
         try {
             list = new com.google.gson.Gson().fromJson(jsonOrString,
@@ -730,102 +734,6 @@ public class AiBrowser implements AutoCloseable {
         }
 
         return value;
-    }
-
-    /**
-     * Executes the generative AI agent to create a natural language playbook.
-     * 
-     * @param intent The high-level intent or goal for the AI to achieve.
-     */
-    public void generatePrompt(final String intent) {
-        generatePrompt(intent, null);
-    }
-
-    /**
-     * Executes the generative AI agent to create a natural language playbook.
-     * 
-     * @param intent        The high-level intent or goal for the AI to achieve.
-     * @param systemContext System-specific context to guide the AI's behavior.
-     */
-    public void generatePrompt(final String intent, final String systemContext) {
-        // 1. Enforce @NeodymiumTestGenerator
-        boolean isGenerator = false;
-        try {
-            if (test != null) {
-                Class<?> testClass = test.getClass();
-                if (testClass.isAnnotationPresent(com.xceptance.neodymium.junit5.NeodymiumTestGenerator.class)) {
-                    isGenerator = true;
-                } else {
-                    String testName = Neodymium.getTestName();
-                    if (testName != null && testName.contains(" :: ")) {
-                        String methodName = testName.split(" :: ")[1];
-                        try {
-                            java.lang.reflect.Method method = testClass.getMethod(methodName);
-                            if (method
-                                    .isAnnotationPresent(com.xceptance.neodymium.junit5.NeodymiumTestGenerator.class)) {
-                                isGenerator = true;
-                            }
-                        } catch (NoSuchMethodException e) {
-                            // ignore
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-        }
-
-        org.junit.jupiter.api.Assertions.assertTrue(isGenerator,
-                "Method must be annotated with @NeodymiumTestGenerator to use AiBrowser.generatePrompt()");
-
-        // 2. Build URL
-        String url = Neodymium.configuration().url();
-        if (url == null || url.trim().isEmpty()) {
-            try {
-                url = com.codeborne.selenide.WebDriverRunner.url();
-            } catch (Exception e) {
-            }
-        }
-        if (url == null || url.trim().isEmpty() || url.equals("about:blank")) {
-            throw new IllegalArgumentException("No URL provided in configuration. Please provide a neodymium.url");
-        }
-
-        // 3. Build Output Path
-        String outputPath = "src/test/resources/ai-playbooks/generated.yml";
-        String testName = Neodymium.getTestName();
-        if (testName != null && testName.contains(" :: ")) {
-            String[] parts = testName.split(" :: ");
-            String className = parts[0];
-            String methodName = parts[1];
-            outputPath = "src/test/resources/" + className.replace('.', '/') + "/" + methodName + ".yml";
-
-            // Support @DataFolder overrides
-            try {
-                if (test != null) {
-                    Class<?> testClass = test.getClass();
-                    com.xceptance.neodymium.common.testdata.DataFolder[] folders = testClass
-                            .getAnnotationsByType(com.xceptance.neodymium.common.testdata.DataFolder.class);
-                    if (folders != null && folders.length > 0) {
-                        outputPath = "src/test/resources/" + folders[0].value() + "/" + methodName + ".yml";
-                    }
-                }
-            } catch (Exception e) {
-            }
-        }
-
-        String resolvedSutContext = systemContext;
-        try {
-            if (resolvedSutContext == null && Neodymium.getData() != null && Neodymium.getData().exists("context")) {
-                resolvedSutContext = resolveTestDataToPrompt(Neodymium.getData().asString("context"));
-            }
-        } catch (Exception e) {
-            // ignore if no data is available
-        }
-
-        // 4. Trigger logic utilizing a generator-mode LLM Client
-        // (uses neodymium.ai.generate.temperature, not the agent temperature)
-        final LlmClient generatorClient = new LlmClient(config, aiStats, LlmMode.GENERATOR);
-        com.xceptance.neodymium.ai.generator.AiPromptGenerator generator = new com.xceptance.neodymium.ai.generator.AiPromptGenerator();
-        generator.generate(generatorClient, url, intent, resolvedSutContext, outputPath);
     }
 
     /**

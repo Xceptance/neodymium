@@ -1699,7 +1699,16 @@
             let activeIdx = -1;
             if (activeFile) {
                 if (activeTestId) {
-                    activeIdx = liveTests.findIndex(t => t.file === activeFile && String(t.id) === String(activeTestId));
+                    const normalizeId = (id) => {
+                        if (!id) return '';
+                        let s = String(id).trim().toLowerCase();
+                        if (s.startsWith('dataset ')) {
+                            s = s.substring(8).trim();
+                        }
+                        return s;
+                    };
+                    const normActive = normalizeId(activeTestId);
+                    activeIdx = liveTests.findIndex(t => t.file === activeFile && t.id && normalizeId(t.id) === normActive);
                 }
                 if (activeIdx < 0) {
                     activeIdx = liveTests.findIndex(t => t.file === activeFile);
