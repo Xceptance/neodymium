@@ -23,6 +23,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
+import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Hierarchical configuration properties loader for Neodymium AI.
@@ -88,6 +89,17 @@ public final class AiConfiguration
     }
 
     /**
+     * Maps an environment variable name to a lowercase dot-separated property key.
+     *
+     * @param envKey the environment variable key
+     * @return the mapped dot-separated property key
+     */
+    private String envToPropKey(final String envKey)
+    {
+        return envKey.toLowerCase().replace('_', '.');
+    }
+
+    /**
      * Loads properties from a file if it exists.
      *
      * @param filePath the file path to load properties from
@@ -109,18 +121,8 @@ public final class AiConfiguration
     }
 
     /**
-     * Maps an environment variable name to a lowercase dot-separated property key.
-     *
-     * @param envKey the environment variable key
-     * @return the mapped dot-separated property key
-     */
-    private String envToPropKey(final String envKey)
-    {
-        return envKey.toLowerCase().replace('_', '.');
-    }
-
-    /**
      * Gets a configuration value by key, returning the default value if key is not found.
+     * Checks thread-local overrides in Neodymium data first.
      *
      * @param key the property key
      * @param defaultValue the default value fallback
@@ -128,6 +130,18 @@ public final class AiConfiguration
      */
     public String getProperty(final String key, final String defaultValue)
     {
+        try
+        {
+            final Object threadVal = Neodymium.getData().get(key);
+            if (threadVal != null)
+            {
+                return String.valueOf(threadVal);
+            }
+        }
+        catch (final Throwable ignored)
+        {
+            // Fallback in case Neodymium class is not initialized or on classpath
+        }
         return this.properties.getProperty(key, defaultValue);
     }
 
@@ -140,7 +154,7 @@ public final class AiConfiguration
      */
     public int getInt(final String key, final int defaultValue)
     {
-        final String val = this.properties.getProperty(key);
+        final String val = getProperty(key, null);
         if (val == null)
         {
             return defaultValue;
@@ -164,7 +178,7 @@ public final class AiConfiguration
      */
     public double getDouble(final String key, final double defaultValue)
     {
-        final String val = this.properties.getProperty(key);
+        final String val = getProperty(key, null);
         if (val == null)
         {
             return defaultValue;
@@ -188,7 +202,7 @@ public final class AiConfiguration
      */
     public boolean getBoolean(final String key, final boolean defaultValue)
     {
-        final String val = this.properties.getProperty(key);
+        final String val = getProperty(key, null);
         if (val == null)
         {
             return defaultValue;

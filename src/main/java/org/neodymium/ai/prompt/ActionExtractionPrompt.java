@@ -69,7 +69,11 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                Always use the exact values (e.g. names, emails, addresses, numbers) specified in the active instruction; do NOT use placeholders or dummy values.
                
                Identify the correct sequence of actions required to complete the user's instruction.
-               Valid actions are: CLICK, TYPE, NAVIGATE, CLEAR, HOVER, SCROLL, WAIT, SELECT, KEY_PRESS, ASSERT.
+               Valid actions are: CLICK, TYPE, NAVIGATE, CLEAR, HOVER, SCROLL, WAIT, SELECT, KEY_PRESS, ASSERT, BACK, FORWARD, REFRESH.
+               
+               For a BACK action, set 'action' to 'BACK'. Target and value can be empty.
+               For a FORWARD action, set 'action' to 'FORWARD'. Target and value can be empty.
+               For a REFRESH action, set 'action' to 'REFRESH'. Target and value can be empty.
                
                For an ASSERT action, set 'action' to 'ASSERT', set 'locator' to the element identifier (or 'url' to verify current URL), and set 'value' to the expected state, text, or a regular expression pattern to match (e.g., 'visible', 'hidden', 'focused', or 'V-[0-9]+-US'). CRITICAL: For regular expressions, output the regex pattern directly; do NOT wrap it in forward slashes (e.g. use 'V-[0-9]+-US' instead of '/V-[0-9]+-US/').
                
