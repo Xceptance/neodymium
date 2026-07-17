@@ -1,6 +1,7 @@
 package com.xceptance.neodymium.util;
 
 import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
 import com.xceptance.neodymium.common.testdata.TestData;
 
 /**

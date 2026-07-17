@@ -50,34 +50,27 @@ import java.net.URI;
 import java.net.URLEncoder;
 
 /**
- * 
  * Core engine for the Interactive Console.
  * 
- *
  * <p>
  * Exposes two HTTP endpoints intended to be registered on either an
- * link InteractiveConsoleServer} (standalone mode) or the Neodymium Aura Manage
- * 's
- * ng {@link HttpServer} (managed mode):
+ * {@link InteractiveConsoleServer} (standalone mode) or the Neodymium Aura Manager's
+ * embedded {@link HttpServer} (managed mode):
  * </p>
  * 
- * l>
- * {@code GET /api/console/events} — Server-Sent Events (SSE) stream pushing
- * live
- * state JSON to all connected browser clients. Clients should open this with
+ * <ul>
+ * <li>{@code GET /api/console/events} — Server-Sent Events (SSE) stream pushing
+ * live state JSON to all connected browser clients. Clients should open this with
  * {@code new EventSource('/api/console/events')}.</li>
  * <li>{@code POST /api/console/action} — Receives a user-triggered command from
  * a browser client. The body must be a JSON object containing at minimum:
- * 
- * {@code "runId"}, {@code "pauseId"}, and {@cod
- * "action"}.</li>
+ * {@code "runId"}, {@code "pauseId"}, and {@code "action"}.</li>
  * </ul>
  *
  * <h2>Multi-tab / Multi-device Safety</h2>
  * 
  * <p>
- * Every time the Java test runner pauses and calls {@link #waitForA
- * tion(long)},
+ * Every time the Java test runner pauses and calls {@link #waitForAction(long)},
  * a fresh {@code pauseId} UUID is broadcast to
  * all SSE clients. The first POST
  * carrying the correct {@code runId} and {@code pauseId} wins; duplicate POSTs
@@ -87,7 +80,8 @@ import java.net.URLEncoder;
  * stale-tab
  * hint the browser UI can render as a warning.
  * </p>
- * * @author AI-generated: Claude Sonnet 4.5
+ *
+ * @author AI-generated: Claude Sonnet 4.5
  * @author AI-generated: Antigravity
  * 
  * @author Xceptance GmbH 2026

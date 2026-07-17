@@ -59,7 +59,7 @@ public class WaitAction implements AiActionPlugin
 
     /**
      * Parses direct instructions that do not require full LLM analysis.
-     * Looks for commands matching the pattern: WAIT <value>[s|ms].
+     * Looks for commands matching the pattern: {@code WAIT <value>[s|ms]}.
      * 
      * @param instruction the input natural language instruction
      * @return a list containing a single parsed Action, or null if instruction doesn't match
