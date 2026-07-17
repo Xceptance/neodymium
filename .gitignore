@@ -58,4 +58,5 @@ tmp/
 
 # Neodymium AI playbooks
 /src/test/resources/ai-playbooks/
+/src/test/resources/playbooks/integration/programmatic/
 
