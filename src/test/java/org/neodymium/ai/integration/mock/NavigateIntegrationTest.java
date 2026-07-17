@@ -24,6 +24,10 @@ import static com.codeborne.selenide.Selenide.$;
 import com.xceptance.neodymium.ai.BaseAiTest;
 import com.xceptance.neodymium.common.browser.Browser;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.client.LlmCapability;
@@ -101,5 +105,23 @@ public class NavigateIntegrationTest extends BaseAiTest
             """);
 
         $("h1").shouldHave(text("Assert Action Test"));
+
+        // Verify that the recorded playbook contains the parameterized placeholders instead of hardcoded URLs
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_navigate_playbook.json");
+        org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
+        try
+        {
+            final String content = Files.readString(recordingFile.toPath(), StandardCharsets.UTF_8);
+            org.junit.jupiter.api.Assertions.assertTrue(content.contains("\"target\" : \"${navigate.test.url}\""), 
+                "Recorded target should be parameterized");
+            org.junit.jupiter.api.Assertions.assertTrue(content.contains("\"value\" : \"${navigate.test.url}\""), 
+                "Recorded value should be parameterized");
+            org.junit.jupiter.api.Assertions.assertFalse(content.contains("http://localhost:"), 
+                "Recorded playbook should not contain any hardcoded localhost URLs");
+        }
+        catch (final IOException e)
+        {
+            throw new RuntimeException("Failed to read recorded playbook file for assertion verification", e);
+        }
     }
 }
