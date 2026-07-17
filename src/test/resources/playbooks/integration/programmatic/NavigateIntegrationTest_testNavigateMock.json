@@ -1,0 +1,29 @@
+[ {
+  "instruction" : "Open ${navigate.test.url} in the browser",
+  "subSteps" : [ ],
+  "actions" : [ {
+    "condition" : null,
+    "then" : null,
+    "adjust" : false,
+    "type" : "NAVIGATE",
+    "target" : "http://localhost:43377/AssertActionTest/testAssertHappyPath.html",
+    "description" : "Extracted NAVIGATE action",
+    "reasoning" : "Navigate to the Assert Action Test page",
+    "stepInstruction" : "Open ${navigate.test.url} in the browser",
+    "stepLine" : 4,
+    "stepFile" : "programmatic-playbook.yaml",
+    "stepScreenshotHash" : "",
+    "parameters" : { },
+    "else" : null,
+    "values" : [ "http://localhost:43377/AssertActionTest/testAssertHappyPath.html" ],
+    "value" : "http://localhost:43377/AssertActionTest/testAssertHappyPath.html"
+  } ],
+  "status" : "PENDING",
+  "failed" : false,
+  "failureReason" : null,
+  "baselineState" : null,
+  "screenshotHash" : null,
+  "lineNumber" : 4,
+  "sourceFile" : "programmatic-playbook.yaml",
+  "composite" : false
+} ]
