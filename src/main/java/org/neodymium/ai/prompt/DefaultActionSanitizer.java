@@ -62,11 +62,15 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             return rawAction;
         }
 
-        final Map<String, String> sensitiveMap = data.getRawSensitiveData();
-        if (sensitiveMap.isEmpty())
+        final Map<String, String> varMap = data.getAllVariables();
+        if (varMap.isEmpty())
         {
             return rawAction;
         }
+
+        // Sort entries by value length descending to prevent substring collision (e.g. nested URLs)
+        final List<Map.Entry<String, String>> sortedEntries = new ArrayList<>(varMap.entrySet());
+        sortedEntries.sort((e1, e2) -> Integer.compare(e2.getValue().length(), e1.getValue().length()));
 
         // 1. Sanitize values list
         final List<String> sanitizedValues = new ArrayList<>();
@@ -79,13 +83,13 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             else
             {
                 String cleanVal = val;
-                for (final Map.Entry<String, String> entry : sensitiveMap.entrySet())
+                for (final Map.Entry<String, String> entry : sortedEntries)
                 {
                     final String varKey = entry.getKey();
-                    final String secretValue = entry.getValue();
-                    if (secretValue != null && !secretValue.isEmpty())
+                    final String rawVal = entry.getValue();
+                    if (rawVal != null && !rawVal.isEmpty())
                     {
-                        cleanVal = cleanVal.replace(secretValue, "${" + varKey + "}");
+                        cleanVal = cleanVal.replace(rawVal, "${" + varKey + "}");
                     }
                 }
                 sanitizedValues.add(cleanVal);
@@ -96,13 +100,13 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         String sanitizedTarget = rawAction.getTarget();
         if (sanitizedTarget != null)
         {
-            for (final Map.Entry<String, String> entry : sensitiveMap.entrySet())
+            for (final Map.Entry<String, String> entry : sortedEntries)
             {
                 final String varKey = entry.getKey();
-                final String secretValue = entry.getValue();
-                if (secretValue != null && !secretValue.isEmpty())
+                final String rawVal = entry.getValue();
+                if (rawVal != null && !rawVal.isEmpty())
                 {
-                    sanitizedTarget = sanitizedTarget.replace(secretValue, "${" + varKey + "}");
+                    sanitizedTarget = sanitizedTarget.replace(rawVal, "${" + varKey + "}");
                 }
             }
         }
@@ -111,13 +115,13 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         String sanitizedDesc = rawAction.getDescription();
         if (sanitizedDesc != null)
         {
-            for (final Map.Entry<String, String> entry : sensitiveMap.entrySet())
+            for (final Map.Entry<String, String> entry : sortedEntries)
             {
                 final String varKey = entry.getKey();
-                final String secretValue = entry.getValue();
-                if (secretValue != null && !secretValue.isEmpty())
+                final String rawVal = entry.getValue();
+                if (rawVal != null && !rawVal.isEmpty())
                 {
-                    sanitizedDesc = sanitizedDesc.replace(secretValue, "${" + varKey + "}");
+                    sanitizedDesc = sanitizedDesc.replace(rawVal, "${" + varKey + "}");
                 }
             }
         }

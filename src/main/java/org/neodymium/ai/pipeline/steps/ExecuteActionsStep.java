@@ -157,18 +157,20 @@ public final class ExecuteActionsStep implements PipelineStep
                 return;
             }
 
+            final Action resolvedAction = resolveActionVariables(action, context.getSessionData());
+
             try
             {
-                LOGGER.debug("   ▶️ [Action] Type:        {}", action.getType());
-                if (action.getDescription() != null && !action.getDescription().trim().isEmpty())
+                LOGGER.debug("   ▶️ [Action] Type:        {}", resolvedAction.getType());
+                if (resolvedAction.getDescription() != null && !resolvedAction.getDescription().trim().isEmpty())
                 {
-                    LOGGER.debug("      🤖 Description: {}", action.getDescription());
+                    LOGGER.debug("      🤖 Description: {}", resolvedAction.getDescription());
                 }
-                if (action.getTarget() != null && !action.getTarget().trim().isEmpty())
+                if (resolvedAction.getTarget() != null && !resolvedAction.getTarget().trim().isEmpty())
                 {
-                    LOGGER.debug("      🎯 Target:      {}", action.getTarget());
+                    LOGGER.debug("      🎯 Target:      {}", resolvedAction.getTarget());
                 }
-                final String val = action.getValue();
+                final String val = resolvedAction.getValue();
                 if (val != null && !val.trim().isEmpty())
                 {
                     LOGGER.debug("      💵 Value:       {}", val);
@@ -177,8 +179,8 @@ public final class ExecuteActionsStep implements PipelineStep
                 // Execute SUT action via targeted SUT driver
                 try
                 {
-                    context.getTransientData().put("currentAction", action);
-                    executor.execute(action);
+                    context.getTransientData().put("currentAction", resolvedAction);
+                    executor.execute(resolvedAction);
                 }
                 finally
                 {
@@ -799,5 +801,40 @@ public final class ExecuteActionsStep implements PipelineStep
             }
         }
         return stats;
+    }
+
+    private Action resolveActionVariables(final Action rawAction, final org.neodymium.ai.model.SessionData data)
+    {
+        if (rawAction == null || data == null)
+        {
+            return rawAction;
+        }
+
+        // 1. Resolve values list
+        final List<String> resolvedValues = new ArrayList<>();
+        for (final String val : rawAction.getValues())
+        {
+            resolvedValues.add(val != null ? data.resolveVariables(val) : null);
+        }
+
+        // 2. Resolve target selector/URL
+        final String resolvedTarget = rawAction.getTarget() != null ? data.resolveVariables(rawAction.getTarget()) : null;
+
+        // 3. Resolve description
+        final String resolvedDesc = rawAction.getDescription() != null ? data.resolveVariables(rawAction.getDescription()) : null;
+
+        // Construct the new resolved action
+        final Action resolvedAction = new Action(
+            rawAction.getType(),
+            resolvedTarget,
+            resolvedValues,
+            resolvedDesc,
+            rawAction.getReasoning()
+        );
+
+        // Copy dynamic parameters map
+        resolvedAction.getParameters().putAll(rawAction.getParameters());
+
+        return resolvedAction;
     }
 }

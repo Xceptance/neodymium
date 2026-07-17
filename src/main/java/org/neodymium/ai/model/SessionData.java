@@ -285,4 +285,33 @@ public final class SessionData
         }
         return result;
     }
+
+    /**
+     * Returns a map containing all raw variables (static and dynamic) and their current values.
+     * Used for sanitizing and parameterizing executed actions.
+     *
+     * @return the map of variable values mapped to their keys
+     */
+    public Map<String, String> getAllVariables()
+    {
+        final Map<String, String> varMap = new java.util.HashMap<>();
+        
+        for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
+        {
+            if (entry.getValue().value() != null)
+            {
+                varMap.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+            }
+        }
+        
+        for (final Map.Entry<String, DataEntry> entry : this.dynamicData.entrySet())
+        {
+            if (entry.getValue().value() != null)
+            {
+                varMap.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+            }
+        }
+        
+        return varMap;
+    }
 }

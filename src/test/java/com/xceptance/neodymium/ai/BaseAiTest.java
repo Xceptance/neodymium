@@ -27,8 +27,6 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.playbook.PlaybookParser;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.resources.InMemoryResourceManager;
-import org.neodymium.ai.model.Playbook;
-import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.runner.StateMachineRunner;
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
@@ -962,7 +960,7 @@ public abstract class BaseAiTest extends BaseLlmTest
             }
 
             manager.write("programmatic-playbook.yaml", stepsYaml);
-            final Playbook playbook = parser.parse("programmatic-playbook.yaml", manager);
+            final org.neodymium.ai.model.Playbook playbook = parser.parse("programmatic-playbook.yaml", manager);
 
             // Synchronize steps to the active playbook instance so the PlaybookRecorder records them correctly
             @SuppressWarnings("unchecked")
@@ -974,7 +972,7 @@ public abstract class BaseAiTest extends BaseLlmTest
             }
 
             // Push steps in reverse order onto execution context stack
-            final List<PlaybookStep> steps = playbook.getSteps();
+            final List<org.neodymium.ai.model.PlaybookStep> steps = playbook.getSteps();
             for (int i = steps.size() - 1; i >= 0; i--)
             {
                 context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(steps.get(i), session, context));
