@@ -26,8 +26,6 @@ import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.ai.BaseAiTest;
 import com.xceptance.neodymium.common.browser.Browser;
 
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -49,17 +47,6 @@ import org.neodymium.ai.session.AiSession;
 @AiPlaybook("programmatic")
 public class BackIntegrationTest extends BaseAiTest
 {
-
-    /**
-     * Skip live tests if GEMINI_API_KEY is not present in the environment.
-     */
-    @BeforeEach
-    public void checkApiKey()
-    {
-        final String apiKey = System.getenv("GEMINI_API_KEY");
-        Assumptions.assumeTrue(apiKey != null && !apiKey.trim().isEmpty(),
-            "Skipping Live API test because GEMINI_API_KEY is not set.");
-    }
 
     /**
      * Executes Back integration test in both live (recording) and strict replay modes.
