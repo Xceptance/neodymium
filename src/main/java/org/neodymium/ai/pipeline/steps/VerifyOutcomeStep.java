@@ -18,8 +18,6 @@
  */
 package org.neodymium.ai.pipeline.steps;
 
-import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 
 import org.neodymium.ai.action.Action;
@@ -34,7 +32,6 @@ import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
-import org.neodymium.ai.pipeline.HealingRequiredException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.model.PlaybookStep;
@@ -191,15 +188,16 @@ public final class VerifyOutcomeStep implements PipelineStep
             try
             {
                 final VerificationResult result = prompt.parseResponse(response.content(), context);
-                LOGGER.debug("Successfully parsed verification result: passed={}, reasoning={}", result.passed(), result.reasoning());
+                LOGGER.debug("Successfully parsed verification result: passed={}, actionReasoning={}, visualReasoning={}", result.passed(), result.actionReasoning(), result.visualReasoning());
                 if (!result.passed())
                 {
                     @SuppressWarnings("unchecked")
                     final List<String> warnings = (List<String>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
                     final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), step.getInstruction()) : "Unknown Step";
-                    warnings.add(String.format("Step: %s. Reason: %s", stepStr, result.reasoning()));
+                    final String combinedReason = String.format("Action Check: %s | Visual Check: %s", result.actionReasoning(), result.visualReasoning());
+                    warnings.add(String.format("Step: %s. Reason: %s", stepStr, combinedReason));
                     LOGGER.warn("   ⚠️ Semantic outcome verification FAILED for step: {}", stepStr);
-                    LOGGER.warn("   ⚠️ Reason: {}", result.reasoning());
+                    LOGGER.warn("   ⚠️ Reason: {}", combinedReason);
                 }
             }
             catch (final Exception e)

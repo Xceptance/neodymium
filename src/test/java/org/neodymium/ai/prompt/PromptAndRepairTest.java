@@ -162,7 +162,7 @@ public final class PromptAndRepairTest
     @Test
     public void testInvalidJsonDeserializationFailure()
     {
-        final String invalidJson = "invalid JSON structure {";
+        final String invalidJson = "invalid JSON structure";
         assertThrows(IOException.class, () -> {
             ResponseRepairService.deserialize(invalidJson, TestDto.class);
         });

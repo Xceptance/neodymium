@@ -47,6 +47,7 @@ import org.neodymium.ai.event.ExecutionListener;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.executor.MockSutState;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.model.SessionData;
@@ -98,11 +99,11 @@ public final class RunnerIntegrationTest
         {
             if (request.responseSchema() == ResponseSchema.ASSERTION)
             {
-                if (this.responseContent != null && this.responseContent.contains("\"passed\""))
+                if (this.responseContent != null)
                 {
                     return new LlmResponse(this.responseContent, new TokenUsage(10, 10, 20), "test-model");
                 }
-                return new LlmResponse("{\"passed\": true, \"reasoning\": \"Mock assertion passed\"}", new TokenUsage(10, 10, 20), "test-model");
+                return new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"Mock assertion passed\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"Mock assertion passed\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"Mock assertion passed\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"Mock assertion passed\"}}", new TokenUsage(10, 10, 20), "test-model");
             }
             return new LlmResponse(this.responseContent, new TokenUsage(10, 10, 20), "test-model");
         }
@@ -392,6 +393,8 @@ public final class RunnerIntegrationTest
         final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
         final ExecutionContext context = session.getExecutionContext();
 
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+
         // 1. Prepare in-memory resource manager with include files
         final org.neodymium.ai.resources.InMemoryResourceManager resourceManager = new org.neodymium.ai.resources.InMemoryResourceManager();
         resourceManager.write("fragments/login.steps", "steps:\n  - Click login button\n  - Type username\n");
@@ -447,7 +450,7 @@ public final class RunnerIntegrationTest
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final TestLlmProvider provider = new TestLlmProvider();
-        provider.setResponseContent("{\"passed\": true, \"reasoning\": \"Looks great\"}");
+        provider.setResponseContent("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"Looks great\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"Looks great\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"Looks great\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"Looks great\"}}");
 
         final LlmRegistry registry = new LlmRegistry();
         registry.setDefaultProvider(provider);
@@ -456,6 +459,7 @@ public final class RunnerIntegrationTest
         final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
         final ExecutionContext context = session.getExecutionContext();
 
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
         context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click login");
@@ -499,7 +503,7 @@ public final class RunnerIntegrationTest
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final TestLlmProvider provider = new TestLlmProvider();
-        provider.setResponseContent("{\"passed\": false, \"reasoning\": \"State did not change\"}");
+        provider.setResponseContent("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"State did not change\",\"score\":\"FAIL\"},\"visualDelta\":{\"analysis\":\"State did not change\",\"score\":\"FAIL\"},\"absenceOfErrors\":{\"analysis\":\"State did not change\",\"score\":\"FAIL\"}},\"overallVerdict\":{\"passed\":false,\"summary\":\"State did not change\"}}");
 
         final LlmRegistry registry = new LlmRegistry();
         registry.setDefaultProvider(provider);
@@ -508,6 +512,7 @@ public final class RunnerIntegrationTest
         final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
         final ExecutionContext context = session.getExecutionContext();
 
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
         context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click login");
@@ -533,7 +538,14 @@ public final class RunnerIntegrationTest
         });
 
         final VerifyOutcomeStep step = new VerifyOutcomeStep();
-        assertThrows(HealingRequiredException.class, () -> step.execute(context));
+        step.execute(context);
+
+        @SuppressWarnings("unchecked")
+        final List<String> warnings = (List<String>) context.getTransientData().get("verificationWarnings");
+        assertNotNull(warnings);
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.get(0).contains("Action Check: State did not change"));
+        assertTrue(warnings.get(0).contains("Visual Check: State did not change"));
     }
 
     /**

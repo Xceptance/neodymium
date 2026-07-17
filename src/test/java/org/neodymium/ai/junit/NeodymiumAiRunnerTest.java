@@ -127,10 +127,10 @@ public final class NeodymiumAiRunnerTest
             }
             // Step 1: Action extraction + Verification
             mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
-            mock.addResponse(new LlmResponse("{\"passed\":true,\"reasoning\":\"step 1 verified\"}", null, "mock"));
+            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"step 1 verified\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"step 1 verified\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"step 1 verified\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"step 1 verified\"}}", null, "mock"));
             // Step 2: Action extraction + Verification
             mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
-            mock.addResponse(new LlmResponse("{\"passed\":true,\"reasoning\":\"step 2 verified\"}", null, "mock"));
+            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"step 2 verified\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"step 2 verified\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"step 2 verified\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"step 2 verified\"}}", null, "mock"));
         }
 
         @AiPlaybook
@@ -158,10 +158,10 @@ public final class NeodymiumAiRunnerTest
             }
             // Step A: Action extraction + Verification
             mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
-            mock.addResponse(new LlmResponse("{\"passed\":true,\"reasoning\":\"step A verified\"}", null, "mock"));
+            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"step A verified\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"step A verified\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"step A verified\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"step A verified\"}}", null, "mock"));
             // Step B: Action extraction + Verification
             mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
-            mock.addResponse(new LlmResponse("{\"passed\":true,\"reasoning\":\"step B verified\"}", null, "mock"));
+            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"step B verified\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"step B verified\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"step B verified\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"step B verified\"}}", null, "mock"));
         }
 
         @AiPlaybook("org/neodymium/ai/junit/ExplicitTest.yaml")

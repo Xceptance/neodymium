@@ -200,7 +200,7 @@ public final class CallLlmStep<T> implements PipelineStep
             }
             else if (parsedResult instanceof org.neodymium.ai.prompt.VerificationResult vr)
             {
-                LOGGER.debug("Successfully parsed response: VerificationResult (passed={}, reasoning='{}')", vr.passed(), vr.reasoning());
+                LOGGER.debug("Successfully parsed response: VerificationResult (passed={}, actionReasoning='{}', visualReasoning='{}')", vr.passed(), vr.actionReasoning(), vr.visualReasoning());
             }
             else
             {
