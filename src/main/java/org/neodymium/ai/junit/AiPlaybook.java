@@ -31,7 +31,7 @@ import org.junit.jupiter.api.TestTemplate;
  * @author Xceptance GmbH 2026
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.METHOD)
+@Target({ElementType.TYPE, ElementType.METHOD})
 @TestTemplate
 public @interface AiPlaybook
 {
@@ -41,4 +41,11 @@ public @interface AiPlaybook
      * @return the playbook resource path
      */
     String value() default "";
+
+    /**
+     * The custom base name for the playbook file (used when value is "programmatic").
+     *
+     * @return the playbook base name
+     */
+    String name() default "";
 }

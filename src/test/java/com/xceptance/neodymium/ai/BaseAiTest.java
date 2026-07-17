@@ -22,6 +22,15 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.playbook.PlaybookParser;
+import org.neodymium.ai.playbook.YamlPlaybookParser;
+import org.neodymium.ai.resources.InMemoryResourceManager;
+import org.neodymium.ai.model.Playbook;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
+import org.neodymium.ai.runner.StateMachineRunner;
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
 import com.xceptance.neodymium.common.browser.BrowserRunner;
 import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
@@ -926,5 +935,62 @@ public abstract class BaseAiTest extends BaseLlmTest
             }
         }
         directory.delete();
+    }
+
+    /**
+     * Helper to programmatically parse and execute a playbook YAML string on the given AI session.
+     *
+     * @param session   the executing thread-isolated AiSession
+     * @param stepsYaml the multiline YAML steps/playbook string
+     */
+    protected final void runPlaybook(final AiSession session, final String stepsYaml)
+    {
+        final ExecutionContext context = session.getExecutionContext();
+        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+
+        final PlaybookParser parser = new YamlPlaybookParser();
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        try
+        {
+            if (mode != null && mode.isReplay() && context.hasSteps())
+            {
+                // Replay mode: The recorded steps were already parsed and pushed by the runner's beforeEach.
+                // Run the StateMachineRunner directly on the pre-pushed steps.
+                final StateMachineRunner runner = new StateMachineRunner(session);
+                runner.run();
+                return;
+            }
+
+            manager.write("programmatic-playbook.yaml", stepsYaml);
+            final Playbook playbook = parser.parse("programmatic-playbook.yaml", manager);
+
+            // Synchronize steps to the active playbook instance so the PlaybookRecorder records them correctly
+            @SuppressWarnings("unchecked")
+            final List<org.neodymium.ai.model.PlaybookStep> sessionSteps = (List<org.neodymium.ai.model.PlaybookStep>) context.getTransientData().get("playbook.steps");
+            if (sessionSteps != null)
+            {
+                sessionSteps.clear();
+                sessionSteps.addAll(playbook.getSteps());
+            }
+
+            // Push steps in reverse order onto execution context stack
+            final List<PlaybookStep> steps = playbook.getSteps();
+            for (int i = steps.size() - 1; i >= 0; i--)
+            {
+                context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(steps.get(i), session, context));
+            }
+
+            // Execute using the StateMachineRunner
+            final StateMachineRunner runner = new StateMachineRunner(session);
+            runner.run();
+        }
+        catch (final Exception e)
+        {
+            if (e instanceof RuntimeException)
+            {
+                throw (RuntimeException) e;
+            }
+            throw new RuntimeException("Failed to run programmatic playbook", e);
+        }
     }
 }

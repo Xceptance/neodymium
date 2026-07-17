@@ -51,8 +51,8 @@ public final class Playbook
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets)
     {
-        // Defensive copy and wrap steps to ensure immutability
-        this.steps = Collections.unmodifiableList(steps != null ? new ArrayList<>(steps) : new ArrayList<>());
+        // Defensive copy of steps
+        this.steps = steps != null ? new ArrayList<>(steps) : new ArrayList<>();
 
         // Defensive copy of datasets list and individual dataset parameter maps
         final List<Map<String, SessionData.DataEntry>> datasetsCopy = new ArrayList<>();

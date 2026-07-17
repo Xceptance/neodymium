@@ -18,11 +18,16 @@
  */
 package org.neodymium.ai.junit;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -70,6 +75,11 @@ import com.xceptance.neodymium.util.Neodymium;
 public final class NeodymiumAiRunner implements TestTemplateInvocationContextProvider
 {
     /**
+     * In-memory storage for inline playbooks registered at test runtime.
+     */
+    private static final Map<String, String> INLINE_PLAYBOOKS = new ConcurrentHashMap<>();
+
+    /**
      * Constructs a default NeodymiumAiRunner.
      */
     public NeodymiumAiRunner()
@@ -80,7 +90,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
     public boolean supportsTestTemplate(final ExtensionContext context)
     {
         return context.getTestMethod().isPresent()
-            && context.getTestMethod().get().isAnnotationPresent(AiPlaybook.class);
+            && (context.getTestMethod().get().isAnnotationPresent(AiPlaybook.class)
+                || context.getRequiredTestClass().isAnnotationPresent(AiPlaybook.class));
     }
 
     @Override
@@ -92,20 +103,28 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         // 1. Resolve playbook paths
         final List<String> playbookPaths = new ArrayList<>();
         final AiPlaybook methodPlaybook = method.getAnnotation(AiPlaybook.class);
+        final AiPlaybook classPlaybook = testClass.getAnnotation(AiPlaybook.class);
         if (methodPlaybook != null && !methodPlaybook.value().isEmpty())
         {
             playbookPaths.add(methodPlaybook.value());
         }
         else
         {
-            final NeodymiumAiTest classAiTest = testClass.getAnnotation(NeodymiumAiTest.class);
-            if (classAiTest != null && classAiTest.value().length > 0)
+            if (classPlaybook != null && !classPlaybook.value().isEmpty())
             {
-                for (final String path : classAiTest.value())
+                playbookPaths.add(classPlaybook.value());
+            }
+            else
+            {
+                final NeodymiumAiTest classAiTest = testClass.getAnnotation(NeodymiumAiTest.class);
+                if (classAiTest != null && classAiTest.value().length > 0)
                 {
-                    if (path != null && !path.isEmpty())
+                    for (final String path : classAiTest.value())
                     {
-                        playbookPaths.add(path);
+                        if (path != null && !path.isEmpty())
+                        {
+                            playbookPaths.add(path);
+                        }
                     }
                 }
             }
@@ -194,11 +213,38 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             Collections.addAll(datasetFilters, classDataSets.value());
         }
 
+        final List<String> resolvedPaths = new ArrayList<>();
+        for (final String path : playbookPaths)
+        {
+            if (path != null)
+            {
+                if ("programmatic".equalsIgnoreCase(path))
+                {
+                    final String name = (methodPlaybook != null && !methodPlaybook.name().isEmpty()) ? methodPlaybook.name()
+                                      : (classPlaybook != null && !classPlaybook.name().isEmpty()) ? classPlaybook.name()
+                                      : testClass.getSimpleName() + "_" + method.getName();
+                    final String virtualPath = "playbooks/integration/programmatic/" + name + ".yaml";
+                    resolvedPaths.add(virtualPath);
+                }
+                else if (path.startsWith("inline:"))
+                {
+                    final String yamlContent = path.substring("inline:".length()).trim();
+                    final String key = "inline-" + Math.abs(yamlContent.hashCode()) + ".yaml";
+                    INLINE_PLAYBOOKS.put(key, yamlContent);
+                    resolvedPaths.add(key);
+                }
+                else
+                {
+                    resolvedPaths.add(path);
+                }
+            }
+        }
+
         final List<TestTemplateInvocationContext> invocationContexts = new ArrayList<>();
         final PlaybookParser parser = new YamlPlaybookParser();
-        final PlaybookResourceManager manager = new ClasspathResourceManager();
+        final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
 
-        for (final String playbookPath : playbookPaths)
+        for (final String playbookPath : resolvedPaths)
         {
             Playbook playbook;
             try
@@ -426,6 +472,28 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     Neodymium.getTestName());
             }
 
+            // Automatically detect mock integration test package and apply thread-local overrides
+            if (context.getRequiredTestClass() != null)
+            {
+                final String fqcn = context.getRequiredTestClass().getName();
+                if (fqcn.contains(".integration.mock."))
+                {
+                    Neodymium.getData().put("neodymium.ai.global.provider", "mock");
+                    Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
+                }
+            }
+
+            // Copy playbook dataset variables to Neodymium.getData() for thread-local overrides
+            if (dataset != null)
+            {
+                dataset.forEach((key, entry) -> {
+                    if (entry != null && entry.value() != null)
+                    {
+                        Neodymium.getData().put(key, String.valueOf(entry.value()));
+                    }
+                });
+            }
+
             final SessionData sessionData = new SessionData(new HashMap<>(dataset));
             
             final LlmRegistry registry = new LlmRegistry();
@@ -440,7 +508,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             executor.setExecutionContext(executionContext);
             
             final PlaybookParser parser = new YamlPlaybookParser();
-            final PlaybookResourceManager manager = new ClasspathResourceManager();
+            final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
             
             String resolvedPlaybookPath = playbookPath;
             if (this.mode.isReplay())
@@ -539,6 +607,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final List<PlaybookStep> flatSteps = new ArrayList<>();
             flattenSteps(playbookSteps, flatSteps);
             executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
+            executionContext.getTransientData().put("playbook.steps", playbookSteps);
 
             executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
             executionContext.getTransientData().put(ExecutionContext.KEY_RESOURCE_MANAGER, manager);
@@ -547,6 +616,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId != null ? this.datasetId : "default");
             executionContext.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.executor.selenide.ContextLevel.LEAN);
             executionContext.getTransientData().put("junit.testInstance", context.getRequiredTestInstance());
+
+            if (resolvedPlaybookPath != null && resolvedPlaybookPath.contains("/programmatic/"))
+            {
+                executionContext.getTransientData().put("playbook.programmatic", true);
+            }
 
             if (this.mode.isRecording())
             {
@@ -607,7 +681,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExtensionContext extensionContext
         ) throws Throwable
         {
-            if (this.session != null)
+            if (this.session != null && !this.session.getExecutionContext().getTransientData().containsKey("playbook.programmatic"))
             {
                 final StateMachineRunner runner = new StateMachineRunner(this.session);
                 runner.run();
@@ -659,6 +733,100 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 target.add(step);
             }
+        }
+    }
+
+    /**
+     * A hybrid resource manager that intercepts inline playbooks stored in memory,
+     * falling back to classpath/filesystem resolution for standard file paths.
+     *
+     * @author AI-generated: Gemini 3.5 Flash
+     * @author Xceptance GmbH 2026
+     */
+    public static final class HybridResourceManager implements PlaybookResourceManager
+    {
+        private final PlaybookResourceManager delegate;
+
+        /**
+         * Constructs a HybridResourceManager wrapping a delegate.
+         *
+         * @param delegate the fallback resource manager delegate
+         */
+        public HybridResourceManager(final PlaybookResourceManager delegate)
+        {
+            this.delegate = delegate;
+        }
+
+        /**
+         * Reads the raw resource stream. Intercepts inline keys.
+         *
+         * @param identifier the resource key
+         * @return the raw stream
+         * @throws IOException on resolution failure
+         */
+        @Override
+        public InputStream read(final String identifier) throws IOException
+        {
+            if (identifier != null)
+            {
+                if (INLINE_PLAYBOOKS.containsKey(identifier))
+                {
+                    return new ByteArrayInputStream(INLINE_PLAYBOOKS.get(identifier).getBytes(StandardCharsets.UTF_8));
+                }
+                if (identifier.contains("/programmatic/") && (identifier.endsWith(".yaml") || identifier.endsWith(".yml")))
+                {
+                    return new ByteArrayInputStream("steps: []".getBytes(StandardCharsets.UTF_8));
+                }
+            }
+            return this.delegate.read(identifier);
+        }
+
+        /**
+         * Writes raw content. Redirects inline keys to memory.
+         *
+         * @param identifier the resource key
+         * @param content the content payload
+         * @throws IOException on I/O failure
+         */
+        @Override
+        public void write(final String identifier, final String content) throws IOException
+        {
+            if (identifier != null && identifier.startsWith("inline-"))
+            {
+                INLINE_PLAYBOOKS.put(identifier, content);
+                return;
+            }
+            this.delegate.write(identifier, content);
+        }
+
+        /**
+         * Deletes a resource. Removes from memory if inline.
+         *
+         * @param identifier the resource key
+         * @throws IOException on I/O failure
+         */
+        @Override
+        public void delete(final String identifier) throws IOException
+        {
+            if (identifier != null && INLINE_PLAYBOOKS.containsKey(identifier))
+            {
+                INLINE_PLAYBOOKS.remove(identifier);
+                return;
+            }
+            this.delegate.delete(identifier);
+        }
+
+        /**
+         * Resolves relative inclusions against parent resources.
+         *
+         * @param parentIdentifier the parent resource key
+         * @param relativePath the relative path to resolve
+         * @return the resolved normalized path
+         */
+        @Override
+        public String resolveInclude(final String parentIdentifier, final String relativePath)
+        {
+            return this.delegate.resolveInclude(parentIdentifier, relativePath);
         }
     }
 }
