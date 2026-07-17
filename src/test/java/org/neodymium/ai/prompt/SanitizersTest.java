@@ -144,4 +144,40 @@ public final class SanitizersTest
         assertEquals("//input[@id='pass']", sanitizedAction.getTarget());
         assertEquals("Type ${password} into password field", sanitizedAction.getDescription());
     }
+
+    /**
+     * Verifies that the ActionSanitizer parameterizes both sensitive and non-sensitive
+     * dynamic/static variables, sorting by length to prevent substring replacement collision.
+     */
+    @Test
+    public void testActionSanitizerAllVariablesParameterization()
+    {
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("url.base", new SessionData.DataEntry("http://localhost:8080", false));
+        staticMap.put("url.detail", new SessionData.DataEntry("http://localhost:8080/details/123", false));
+
+        final SessionData session = new SessionData(staticMap);
+        session.putDynamic("username", "admin_user", false);
+        session.putDynamic("secret.token", "secret_abc_123", true);
+
+        // Action containing raw values of the variables
+        final Action rawAction = new Action(
+            "NAVIGATE",
+            "http://localhost:8080/details/123",
+            List.of("admin_user", "secret_abc_123"),
+            "Login as admin_user with token secret_abc_123 on http://localhost:8080",
+            "navigation"
+        );
+
+        final ActionSanitizer sanitizer = new DefaultActionSanitizer();
+        final Action sanitizedAction = sanitizer.sanitize(rawAction, session);
+
+        assertNotNull(sanitizedAction);
+        
+        // Assert values are parameterized
+        assertEquals("${url.detail}", sanitizedAction.getTarget());
+        assertEquals("${username}", sanitizedAction.getValues().get(0));
+        assertEquals("${secret.token}", sanitizedAction.getValues().get(1));
+        assertEquals("Login as ${username} with token ${secret.token} on ${url.base}", sanitizedAction.getDescription());
+    }
 }
