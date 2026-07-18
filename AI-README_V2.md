@@ -56,3 +56,38 @@ Ensures recorded playbooks remain reusable across environment and data changes:
 * **Resolution**: Resolves variables (e.g. `${username}`) at runtime before executing actions.
 * **Masking & Sanitization**: Compares SUT actions against sensitive dataset keys (e.g., passwords or tokens) and dynamically masks/sanitizes them before recording.
 * **Parameterization**: Automatically matches generated dynamic values (such as order numbers or generated URLs) back to their variable definitions, writing parameterized entries like `"${order.number}"` into the companion JSON instead of hardcoded session values.
+
+---
+
+## 6. Decoupled Core Components & Resource Management
+To ensure a modular architecture, all key interfaces are cleanly decoupled:
+* **`PlaybookResourceManager`**: Decouples playbook loading/writing from specific file systems, serving as the interface for reading/saving playbooks (YAML & JSON) across local, classpath, or virtualized directories.
+* **`TargetExecutor`**: Abstract driver interface separating the pipeline execution logic from browser drivers (e.g., Selenide/WebDriver) and REST clients.
+* **`PlaybookParser`**: Standard interface for parsing structured or nested playbooks and inclusions.
+
+---
+
+## 7. Session-Centric Architecture & Thread Isolation
+To support robust parallel execution (e.g., executing multiple tests concurrently in separate threads):
+* **`AiSession`**: Serving as the thread-isolated lifecycle holder containing context state, target drivers, prompts, and config parameters.
+* **Hierarchy Isolation**: Prompts and sessions can inherit configs from parent scopes but remain completely isolated at runtime, preventing thread cross-talk.
+* **Dynamic Lifecycle Hooks**: Supports registering pre/post-execution hooks on sessions (e.g., clearing caches, starting servers, compiling reports).
+
+---
+
+## 8. Unified Event-Driven HUD & Logging
+* **`EventBus`**: Centrally coordinates all framework execution events (e.g., `ActionExecutedEvent`, `SessionFinishedEvent`).
+* **Heads-Up Display (HUD)**: Decoupled HUD listeners listen to event streams to render interactive overlays and debug windows without polluting the core execution pipeline.
+* **Metrics Summary**: Automatically tracks duration, token count, LLM provider invocation logs, and semantic outcome errors on a per-step basis.
+
+---
+
+## 9. Registry & Pluggable LLM Routing
+* **`LlmProviderRegistry`**: Hosts registered providers for LLM capabilities (e.g., `TEXT_ONLY`, `VISION`, `VERIFICATION`).
+* **Capability-Based Routing**: Dynamically inspects SUT level requirements and routes prompts to the appropriate registered provider (e.g., utilizing vision models only when screenshots are attached).
+
+---
+
+## 10. Session-Level Authentication Setup
+* **`BasicAuth` Configuration**: Registers credentials (username/password) dynamically on `AiSession` setup.
+* **CDP Interception**: Intercepts basic auth browser challenges via low-level Chrome DevTools Protocol mechanisms, ensuring seamless authentication setup for headless SUT environments.
