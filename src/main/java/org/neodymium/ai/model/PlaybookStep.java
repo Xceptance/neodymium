@@ -44,6 +44,11 @@ public final class PlaybookStep
     private boolean noReplay;
 
     /**
+     * Flag indicating that this step is optional, meaning failures do not break the test.
+     */
+    private boolean optional;
+
+    /**
      * Nested child steps in the composite hierarchy if this step was split or structured.
      */
     private final List<PlaybookStep> subSteps = new ArrayList<>();
@@ -170,15 +175,28 @@ public final class PlaybookStep
     {
         if (instruction != null)
         {
-            final java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(?i)\\(\\s*no-replay\\s*\\)");
-            if (pattern.matcher(instruction).find())
+            String cleaned = instruction;
+
+            final java.util.regex.Pattern noReplayPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*no-replay\\s*\\)");
+            if (noReplayPattern.matcher(cleaned).find())
             {
                 this.noReplay = true;
-                this.instruction = instruction.replaceAll("(?i)\\s*\\(\\s*no-replay\\s*\\)\\s*", " ").trim();
-                return;
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*no-replay\\s*\\)\\s*", " ");
             }
+
+            final java.util.regex.Pattern optionalPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*(optional|soft)\\s*\\)");
+            if (optionalPattern.matcher(cleaned).find())
+            {
+                this.optional = true;
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*(optional|soft)\\s*\\)\\s*", " ");
+            }
+
+            this.instruction = cleaned.trim();
         }
-        this.instruction = instruction;
+        else
+        {
+            this.instruction = instruction;
+        }
     }
 
     /**
@@ -208,6 +226,35 @@ public final class PlaybookStep
     public void setNoReplay(final boolean noReplay)
     {
         this.noReplay = noReplay;
+    }
+
+    /**
+     * Checks if this step is marked as optional.
+     * If this step or any of its parent steps is optional, returns true.
+     *
+     * @return true if optional, false otherwise
+     */
+    public boolean isOptional()
+    {
+        if (this.optional)
+        {
+            return true;
+        }
+        if (this.parent != null)
+        {
+            return this.parent.isOptional();
+        }
+        return false;
+    }
+
+    /**
+     * Sets the optional flag.
+     *
+     * @param optional the optional flag to set
+     */
+    public void setOptional(final boolean optional)
+    {
+        this.optional = optional;
     }
 
     /**

@@ -750,7 +750,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     c.pushStep(new CaptureStateStep());
                 });
             }
-            else if (mode.supportsHealing() && isReplay)
+            else if (mode.supportsHealing() && isReplay && !step.isOptional())
             {
                 // Replay Healing: PrepareRetryStep -> SemanticDivergenceAnalysisStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
                 handlers.put(HealingRequiredException.class, c -> {

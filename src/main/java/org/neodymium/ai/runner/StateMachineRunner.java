@@ -99,8 +99,23 @@ public final class StateMachineRunner
                 {
                     step.execute(context);
                 }
-                catch (PipelineException e)
+                catch (final Throwable t)
                 {
+                    if (t instanceof VirtualMachineError || t instanceof ThreadDeath || t instanceof LinkageError)
+                    {
+                        throw (Error) t;
+                    }
+
+                    final PipelineException e;
+                    if (t instanceof PipelineException)
+                    {
+                        e = (PipelineException) t;
+                    }
+                    else
+                    {
+                        e = new org.neodymium.ai.pipeline.ConclusiveFailureException(t.getMessage() != null ? t.getMessage() : t.toString(), t);
+                    }
+
                     // Check if an active TryCatch scope can handle this exception
                     final PipelineStep activeScope = context.peekTryCatch();
                     if (activeScope instanceof TryCatchStep tryCatch)
@@ -119,7 +134,45 @@ public final class StateMachineRunner
                             continue;
                         }
                     }
+
+                    // Check if the current PlaybookStep is optional
+                    final org.neodymium.ai.model.PlaybookStep playbookStep = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                    if (playbookStep != null && playbookStep.isOptional())
+                    {
+                        if (activeScope instanceof TryCatchStep tryCatch)
+                        {
+                            // Pop TryCatch from the exception scope stack
+                            context.popTryCatch();
+                            // Discard the remaining pending steps of this step block
+                            context.discardStepsUpToTryCatch(tryCatch);
+                        }
+
+                        // Add failure to warnings/reporting list
+                        @SuppressWarnings("unchecked")
+                        final List<String> warnings = (List<String>) context.getTransientData()
+                            .computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
+
+                        final String stepStr = String.format("%s:%d (%s)",
+                            playbookStep.getSourceFile(),
+                            playbookStep.getLineNumber(),
+                            playbookStep.getInstruction());
+
+                        warnings.add(String.format("Step: %s. Optional step execution failed: %s", stepStr, e.getMessage()));
+                        LOGGER.warn("   ⚠️ Optional step execution FAILED: {}", stepStr);
+                        LOGGER.warn("   ⚠️ Reason: {}", e.getMessage());
+
+                        continue;
+                    }
+
                     // Bubbling up out of loop
+                    if (t instanceof RuntimeException)
+                    {
+                        throw (RuntimeException) t;
+                    }
+                    if (t instanceof Error)
+                    {
+                        throw (Error) t;
+                    }
                     throw e;
                 }
             }
