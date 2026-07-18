@@ -242,4 +242,12 @@ public final class ExecutionContext
             }
         }
     }
+
+    /**
+     * Clears all pending steps from the execution stack.
+     */
+    public void clearSteps()
+    {
+        this.runStack.clear();
+    }
 }

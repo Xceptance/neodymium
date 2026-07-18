@@ -135,8 +135,42 @@ public final class StateMachineRunner
                         }
                     }
 
-                    // Check if the current PlaybookStep is optional
+                    // Check if the current PlaybookStep is marked with a bug
                     final org.neodymium.ai.model.PlaybookStep playbookStep = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                    if (playbookStep != null && playbookStep.isBug() && !Boolean.TRUE.equals(context.getTransientData().get("BUG_STEP_UNEXPECTED_SUCCESS")))
+                    {
+                        if (activeScope instanceof TryCatchStep tryCatch)
+                        {
+                            // Pop TryCatch from the exception scope stack
+                            context.popTryCatch();
+                            // Discard the remaining pending steps of this step block
+                            context.discardStepsUpToTryCatch(tryCatch);
+                        }
+
+                        // Mark step status on playbook step
+                        playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS);
+
+                        final String bugComment = playbookStep.getBugDetails();
+                        final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
+                        LOGGER.info("   🐞 Expected bug hit{} on step: {}:{} ({}) - Error: {}",
+                            bugStr,
+                            playbookStep.getSourceFile(),
+                            playbookStep.getLineNumber(),
+                            playbookStep.getInstruction(),
+                            e.getMessage());
+
+                        if (playbookStep.isContinueOnError())
+                        {
+                            continue;
+                        }
+                        else
+                        {
+                            context.clearSteps();
+                            continue;
+                        }
+                    }
+
+                    // Check if the current PlaybookStep is optional
                     if (playbookStep != null && playbookStep.isOptional())
                     {
                         if (activeScope instanceof TryCatchStep tryCatch)

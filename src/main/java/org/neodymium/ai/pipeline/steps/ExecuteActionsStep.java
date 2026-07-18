@@ -707,7 +707,7 @@ public final class ExecuteActionsStep implements PipelineStep
             // Register exception handlers based on execution mode
             final Map<Class<? extends PipelineException>, PipelineStep> handlers = new HashMap<>();
 
-            if (mode.isLive() || (!isReplay && mode.supportsHealing()))
+            if (!step.isNoHealing() && (mode.isLive() || (!isReplay && mode.supportsHealing())))
             {
                 // Live Escalation: PrepareRetryStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
                 handlers.put(HealingRequiredException.class, c -> {
@@ -750,7 +750,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     c.pushStep(new CaptureStateStep());
                 });
             }
-            else if (mode.supportsHealing() && isReplay && !step.isOptional())
+            else if (mode.supportsHealing() && isReplay && !step.isOptional() && !step.isNoHealing())
             {
                 // Replay Healing: PrepareRetryStep -> SemanticDivergenceAnalysisStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
                 handlers.put(HealingRequiredException.class, c -> {
@@ -780,6 +780,28 @@ public final class ExecuteActionsStep implements PipelineStep
                     if (stepActions != null)
                     {
                         stepStats.getActions().addAll(stepActions);
+                    }
+                }
+
+                if (step.isBug())
+                {
+                    final String bugComment = step.getBugDetails();
+                    final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
+                    final String msg = String.format("Expected bug%s but step succeeded: %s:%d (%s)",
+                        bugStr, step.getSourceFile(), step.getLineNumber(), step.getInstruction());
+                    org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).error("   ❌ {}", msg);
+
+                    if (!step.isContinueOnError())
+                    {
+                        c.getTransientData().put("BUG_STEP_UNEXPECTED_SUCCESS", Boolean.TRUE);
+                        throw new org.neodymium.ai.pipeline.ConclusiveFailureException(msg);
+                    }
+                    else
+                    {
+                        @SuppressWarnings("unchecked")
+                        final List<String> warnings = (List<String>) c.getTransientData()
+                            .computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
+                        warnings.add(msg);
                     }
                 }
             });
@@ -897,7 +919,9 @@ public final class ExecuteActionsStep implements PipelineStep
         }
         String prepared = instruction;
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*no-replay\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*bug(?:\\s*:\\s*[^)]+)?\\)\\s*", " ");
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*bug(?:\\s*:\\s*[^)]+)?\\s*\\)\\s*", " ");
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*continue-on-error\\s*\\)\\s*", " ");
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*no-healing\\s*\\)\\s*", " ");
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*(optional|soft)\\s*\\)\\s*", " ");
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\)\\s*", " ");
         return prepared.replaceAll("\\s+", " ").trim();

@@ -30,12 +30,26 @@ Allows failures on steps to be tolerated and logged as warnings instead of faili
 * **No Replay Healing**: During replay of an optional step, the runner does not attempt semantic healing; it immediately logs the failure as a warning and continues.
 * **Syntax Examples**: `(optional)`, `(soft)`, `( OPTIONAL )`, `( Soft )`
 
+### `(bug)` / `(bug: id)` / `(bug: comment)`
+Negates the outcome of a step when an expected bug exists in the SUT.
+* **Expected Failure**: If the step fails for any reason (interaction or verification), the failure is caught, logged, and treated as **passed**. By default, execution halts immediately and skips subsequent steps (to prevent cascaded failures), but the overall test completes successfully.
+* **Unexpected Success**: If the step succeeds (meaning the expected bug did not happen), the runner raises a failure and aborts the test immediately to flag that the bug has been resolved or was not encountered.
+* **`(continue-on-error)` Support**: If a step is also tagged with `(continue-on-error)` (e.g. `Click button (bug) (continue-on-error)`), the runner continues executing subsequent steps regardless of whether the bug step failed or succeeded (if it succeeded, it just reports it as a warning).
+* **Syntax Examples**: `(bug)`, `(bug: APP-123)`, `(bug: button missing)`
+
+### `(no-healing)`
+A standalone tag that disables all self-healing mechanisms for a specific step.
+* **Behavior**: If the step fails during live or replay execution, the framework does not attempt LLM escalations or semantic self-healing. The failure is immediately propagated (which will either fail the test, trigger bug negation, or trigger optional soft-failure warnings, depending on the other tags present).
+* **Syntax Examples**: `(no-healing)`, `(NO-HEALING)`, `( no-healing )`
+
 ---
 
 ## 3. Runtime Instruction Preparation
 Before compiling prompts or sending request payloads to the LLM, the framework runs a dedicated instruction preparation helper. It dynamically strips all explicit control tags case-insensitively, including:
 * `(no-replay)`
 * `(bug)` / `(bug: ...)`
+* `(continue-on-error)`
+* `(no-healing)`
 * `(optional)` / `(soft)`
 * `(timeout: ...)`
 

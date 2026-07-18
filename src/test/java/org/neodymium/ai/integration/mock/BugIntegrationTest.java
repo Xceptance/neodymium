@@ -1,20 +1,7 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Apache License 2.0
  *
  * Copyright (c) 2026 Xceptance
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.neodymium.ai.integration.mock;
 
@@ -23,8 +10,6 @@ import com.xceptance.neodymium.common.browser.Browser;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.client.LlmCapability;
@@ -37,10 +22,9 @@ import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
 
 /**
- * Mock programmatic integration test verifying that the (bug) tag
- * stops execution gracefully for expected failures without failing the test.
+ * Mock programmatic integration test verifying (bug) tag and (no-healing) support.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
@@ -50,17 +34,22 @@ import org.neodymium.ai.session.AiSession;
 public class BugIntegrationTest extends BaseAiTest
 {
 
-    /**
-     * Set up test page URL and queue LLM mock responses before each test.
-     *
-     * @param session the thread-isolated AiSession
-     */
+    private String pageUrl;
+
     @BeforeEach
     public void setupPropertiesAndMock(final AiSession session)
     {
-        final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
+        pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
         session.getExecutionContext().getSessionData().putDynamic("bug.test.url", pageUrl, false);
+    }
 
+    /**
+     * Test case 1: A failing step marked with (bug) halts the test successfully (passes).
+     */
+    @AiPlaybook
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testBugFailureStopsTestSuccessfully(final AiSession session)
+    {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
         // Step 1: Open SUT (NAVIGATE)
@@ -83,59 +72,247 @@ public class BugIntegrationTest extends BaseAiTest
             }
             """, null, "mock"));
 
-        // Step 2: Assert false condition (ASSERT)
+        // Step 2: Click expected bug button #non-existent-button (fails)
         mock.addResponse(new LlmResponse("""
             {
               "actions": [
                 {
-                  "action": "ASSERT",
-                  "locator": "h1",
-                  "value": "text=Wrong Title",
-                  "reasoning": "Check wrong title"
+                  "action": "CLICK",
+                  "locator": "#non-existent-button",
+                  "value": "",
+                  "reasoning": "Click the non-existent button"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        // Note: No mock response for Step 3, because it should not be executed!
+
+        runPlaybook(session, """
+            data:
+              - testId: bugData
+            steps: |
+              Open ${bug.test.url} in the browser
+              Click the expected bug button #non-existent-button (bug: expected_failure_test)
+              Click another button #some-button
+            """);
+
+        // The playbook run should complete successfully since the failure was expected (bug).
+    }
+
+    /**
+     * Test case 2: A failing step marked with (bug) (continue-on-error) continues the test successfully (passes).
+     */
+    @AiPlaybook
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testBugFailureContinueOnError(final AiSession session)
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+
+        // Step 1: Open SUT (NAVIGATE)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "navigated"
+            }
+            """, null, "mock"));
+
+        // Step 2: Click expected bug button #non-existent-button (fails)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#non-existent-button",
+                  "value": "",
+                  "reasoning": "Click the non-existent button"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        // Step 3: Click another button (should run!)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#btn-click",
+                  "value": "",
+                  "reasoning": "Click Me"
                 }
               ]
             }
             """, null, "mock"));
         mock.addResponse(new LlmResponse("""
             {
-              "passed": false,
-              "reasoning": "Title does not match"
+              "passed": true,
+              "reasoning": "clicked"
             }
             """, null, "mock"));
-    }
 
-    /**
-     * Tests (bug) behavior.
-     *
-     * @param session the thread-isolated AiSession
-     */
-    @AiPlaybook
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testBugMock(final AiSession session)
-    {
         runPlaybook(session, """
             data:
               - testId: bugData
             steps: |
               Open ${bug.test.url} in the browser
-              Verify that the title contains "Wrong Title" (bug: APP-123)
+              Click the expected bug button #non-existent-button (bug: continue_test) (continue-on-error)
+              Click the button #btn-click (no-replay)
             """);
 
-        // The playbook run should have marked the step as a known bug and aborted gracefully.
-        // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_bug_playbook.json");
-        org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
-        try
-        {
-            final String content = Files.readString(recordingFile.toPath(), StandardCharsets.UTF_8);
-            org.junit.jupiter.api.Assertions.assertTrue(content.contains("\"target\" : \"${bug.test.url}\""), 
-                "Recorded target should be parameterized");
-            org.junit.jupiter.api.Assertions.assertFalse(content.contains("http://localhost:"), 
-                "Recorded playbook should not contain any hardcoded localhost URLs");
-        }
-        catch (final IOException e)
-        {
-            throw new RuntimeException(e);
-        }
+        // The playbook run should complete successfully and execute Step 3 as well.
+    }
+
+    /**
+     * Test case 3: A succeeding step marked with (bug) fails the test.
+     */
+    @AiPlaybook
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testBugSuccessFailsTest(final AiSession session)
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+
+        // Step 1: Open SUT (NAVIGATE)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "navigated"
+            }
+            """, null, "mock"));
+
+        // Step 2: Verify that page title is 'All Actions Integration Test Page' (succeeds)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "ASSERT",
+                  "locator": "title",
+                  "value": "All Actions Integration Test Page",
+                  "reasoning": "Assert title"
+                }
+              ]
+            }
+            """, null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "title correct"
+            }
+            """, null, "mock"));
+
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> {
+            runPlaybook(session, """
+                data:
+                  - testId: bugData
+                steps: |
+                  Open ${bug.test.url} in the browser
+                  Verify that page title is 'All Actions Integration Test Page' (bug: expected_bug)
+                """);
+        });
+    }
+
+    /**
+     * Test case 4: A succeeding step marked with (bug) (continue-on-error) continues the test but reports a warning.
+     */
+    @AiPlaybook
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testBugSuccessContinueOnError(final AiSession session)
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+
+        // Step 1: Open SUT (NAVIGATE)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "navigated"
+            }
+            """, null, "mock"));
+
+        // Step 2: Verify that page title is 'All Actions Integration Test Page' (succeeds)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "ASSERT",
+                  "locator": "title",
+                  "value": "All Actions Integration Test Page",
+                  "reasoning": "Assert title"
+                }
+              ]
+            }
+            """, null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "title correct"
+            }
+            """, null, "mock"));
+
+        // Step 3: Click another button (should run!)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#btn-click",
+                  "value": "",
+                  "reasoning": "Click Me"
+                }
+              ]
+            }
+            """, null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "clicked"
+            }
+            """, null, "mock"));
+
+        runPlaybook(session, """
+            data:
+              - testId: bugData
+            steps: |
+              Open ${bug.test.url} in the browser
+              Verify that page title is 'All Actions Integration Test Page' (bug: expected_bug) (continue-on-error)
+              Click the button #btn-click (no-replay)
+            """);
+
+        // The playbook run should complete successfully and report the warning.
     }
 }

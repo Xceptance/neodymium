@@ -49,6 +49,26 @@ public final class PlaybookStep
     private boolean optional;
 
     /**
+     * Flag indicating that this step expects a bug (failing is expected, success is a failure).
+     */
+    private boolean bug;
+
+    /**
+     * Optional description or ID of the bug.
+     */
+    private String bugDetails;
+
+    /**
+     * Flag indicating that test execution should continue even if this step fails or has unexpected success.
+     */
+    private boolean continueOnError;
+
+    /**
+     * Flag indicating that self-healing is disabled for this step.
+     */
+    private boolean noHealing;
+
+    /**
      * Nested child steps in the composite hierarchy if this step was split or structured.
      */
     private final List<PlaybookStep> subSteps = new ArrayList<>();
@@ -191,6 +211,29 @@ public final class PlaybookStep
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*(optional|soft)\\s*\\)\\s*", " ");
             }
 
+            final java.util.regex.Pattern bugPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*bug(?:\\s*:\\s*([^)]+))?\\s*\\)");
+            final java.util.regex.Matcher bugMatcher = bugPattern.matcher(cleaned);
+            if (bugMatcher.find())
+            {
+                this.bug = true;
+                this.bugDetails = bugMatcher.group(1) != null ? bugMatcher.group(1).trim() : null;
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*bug(?:\\s*:\\s*[^)]+)?\\s*\\)\\s*", " ");
+            }
+
+            final java.util.regex.Pattern continueOnErrorPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*continue-on-error\\s*\\)");
+            if (continueOnErrorPattern.matcher(cleaned).find())
+            {
+                this.continueOnError = true;
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*continue-on-error\\s*\\)\\s*", " ");
+            }
+
+            final java.util.regex.Pattern noHealingPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*no-healing\\s*\\)");
+            if (noHealingPattern.matcher(cleaned).find())
+            {
+                this.noHealing = true;
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*no-healing\\s*\\)\\s*", " ");
+            }
+
             this.instruction = cleaned.trim();
         }
         else
@@ -255,6 +298,122 @@ public final class PlaybookStep
     public void setOptional(final boolean optional)
     {
         this.optional = optional;
+    }
+
+    /**
+     * Checks if this step expects a bug.
+     * If this step or any of its parent steps expects a bug, returns true.
+     *
+     * @return true if bug expected, false otherwise
+     */
+    public boolean isBug()
+    {
+        if (this.bug)
+        {
+            return true;
+        }
+        if (this.parent != null)
+        {
+            return this.parent.isBug();
+        }
+        return false;
+    }
+
+    /**
+     * Sets the bug flag.
+     *
+     * @param bug the bug flag to set
+     */
+    public void setBug(final boolean bug)
+    {
+        this.bug = bug;
+    }
+
+    /**
+     * Gets the bug details.
+     * If this step does not have bug details, it will check the parent chain.
+     *
+     * @return the bug details, or null
+     */
+    public String getBugDetails()
+    {
+        if (this.bugDetails != null)
+        {
+            return this.bugDetails;
+        }
+        if (this.parent != null)
+        {
+            return this.parent.getBugDetails();
+        }
+        return null;
+    }
+
+    /**
+     * Sets the bug details.
+     *
+     * @param bugDetails the bug details to set
+     */
+    public void setBugDetails(final String bugDetails)
+    {
+        this.bugDetails = bugDetails;
+    }
+
+    /**
+     * Checks if this step continues on error.
+     * If this step or any of its parent steps continues on error, returns true.
+     *
+     * @return true if continue on error, false otherwise
+     */
+    public boolean isContinueOnError()
+    {
+        if (this.continueOnError)
+        {
+            return true;
+        }
+        if (this.parent != null)
+        {
+            return this.parent.isContinueOnError();
+        }
+        return false;
+    }
+
+    /**
+     * Sets the continue-on-error flag.
+     *
+     * @param continueOnError the continueOnError flag to set
+     */
+    public void setContinueOnError(final boolean continueOnError)
+    {
+        this.continueOnError = continueOnError;
+    }
+
+    /**
+     * Checks if this step has self-healing disabled.
+     * If this step or any of its parent steps has self-healing disabled, returns true.
+     *
+     * @return true if self-healing is disabled, false otherwise
+     */
+    public boolean isNoHealing()
+    {
+        if (this.noHealing)
+        {
+            return true;
+        }
+        if (this.parent != null)
+        {
+            return this.parent.isNoHealing();
+        }
+        return false;
+    }
+
+    /**
+     * Sets the no-healing flag.
+     *
+     * @param noHealing the no-healing flag to set
+     */
+    public void setNoHealing(final boolean noHealing)
+    {
+        this.noHealing = noHealing;
     }
 
     /**
