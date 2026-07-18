@@ -224,7 +224,7 @@ public class BugIntegrationTest extends BaseAiTest
             }
             """, null, "mock"));
 
-        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> {
+        final RuntimeException ex = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> {
             runPlaybook(session, """
                 data:
                   - testId: bugData
@@ -233,6 +233,9 @@ public class BugIntegrationTest extends BaseAiTest
                   Verify that page title is 'All Actions Integration Test Page' (bug: expected_bug)
                 """);
         });
+
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getCause() instanceof org.neodymium.ai.pipeline.UnexpectedSuccessException,
+            "Cause of the exception should be UnexpectedSuccessException");
     }
 
     /**
