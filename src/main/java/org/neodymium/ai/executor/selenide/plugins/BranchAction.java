@@ -18,8 +18,11 @@
 package org.neodymium.ai.executor.selenide.plugins;
 
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.UnpopulatedBranchAssertionError;
+import org.neodymium.ai.pipeline.HealingRequiredException;
 
 /**
  * Action plugin that implements conditional branching (if-then-else) for AI execution.
@@ -103,6 +106,28 @@ public final class BranchAction implements BrowserActionPlugin
         }
 
         lastConditionResult.set(conditionMet);
+
+        final ExecutionMode mode = (ExecutionMode) this.context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+        if (mode != null && mode.isReplay())
+        {
+            final boolean pathUnpopulated = conditionMet
+                ? (action.getThen() == null || action.getThen().isEmpty())
+                : (action.getElseActions() == null || action.getElseActions().isEmpty());
+
+            if (pathUnpopulated)
+            {
+                final String errorMsg = "Branch path is unpopulated. Condition met: " + conditionMet 
+                    + ", but nested '" + (conditionMet ? "then" : "else") + "' actions are missing/empty.";
+                if (mode == ExecutionMode.REPLAY_STRICT)
+                {
+                    throw new UnpopulatedBranchAssertionError(errorMsg);
+                }
+                else if (mode.supportsHealing())
+                {
+                    throw new HealingRequiredException(errorMsg);
+                }
+            }
+        }
 
         if (conditionMet)
         {

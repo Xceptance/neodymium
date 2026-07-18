@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
@@ -37,6 +38,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.pipeline.UnpopulatedBranchAssertionError;
 import org.neodymium.ai.session.AiSession;
 
 /**
@@ -156,5 +158,421 @@ public class BranchIntegrationTest extends BaseAiTest
         {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * Tests that an unpopulated branch path fails with UnpopulatedBranchAssertionError in strict replay mode.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", name = "unpopulated_branch_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testBranchUnpopulatedStrictMock(final AiSession session)
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        try
+        {
+            while (true)
+            {
+                mock.chat(null);
+            }
+        }
+        catch (final java.io.IOException e)
+        {
+            // Empty queue
+        }
+
+        final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to branch test page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "navigated"
+            }
+            """, null, "mock"));
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "locator": "",
+                  "value": "",
+                  "reasoning": "Conditional check",
+                  "condition": [
+                    {
+                      "action": "ASSERT",
+                      "locator": "#btn-accept",
+                      "value": "hidden",
+                      "reasoning": "Check if button is hidden (which it isn't)"
+                    }
+                  ],
+                  "then": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#btn-accept",
+                      "value": "",
+                      "reasoning": "Click accept button"
+                    }
+                  ]
+                }
+              ]
+            }
+            """, null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "branch evaluated"
+            }
+            """, null, "mock"));
+
+        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) session.getExecutionContext().getTransientData().get(org.neodymium.ai.pipeline.ExecutionContext.KEY_EXECUTION_MODE);
+
+        if (mode == ExecutionMode.REPLAY_STRICT)
+        {
+            org.junit.jupiter.api.Assertions.assertThrows(UnpopulatedBranchAssertionError.class, () -> {
+                runPlaybook(session, """
+                    data:
+                      - testId: branchData
+                    steps: |
+                      Open ${branch.test.url} in the browser
+                      If #cookie-banner is visible, click #btn-accept
+                    """);
+            });
+        }
+        else
+        {
+            runPlaybook(session, """
+                data:
+                  - testId: branchData
+                steps: |
+                  Open ${branch.test.url} in the browser
+                  If #cookie-banner is visible, click #btn-accept
+                """);
+        }
+    }
+
+    /**
+     * Tests that an unpopulated branch path fails with HealingRequiredException in replay with healing mode.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", name = "unpopulated_branch_healing_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testBranchUnpopulatedHealingMock(final AiSession session)
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        try
+        {
+            while (true)
+            {
+                mock.chat(null);
+            }
+        }
+        catch (final java.io.IOException e)
+        {
+            // Empty queue
+        }
+
+        final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to branch test page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "navigated"
+            }
+            """, null, "mock"));
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "locator": "",
+                  "value": "",
+                  "reasoning": "Conditional check",
+                  "condition": [
+                    {
+                      "action": "ASSERT",
+                      "locator": "#btn-accept",
+                      "value": "hidden",
+                      "reasoning": "Check if button is hidden"
+                    }
+                  ],
+                  "then": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#btn-accept",
+                      "value": "",
+                      "reasoning": "Click accept button"
+                    }
+                  ]
+                }
+              ]
+            }
+            """, null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "branch evaluated"
+            }
+            """, null, "mock"));
+
+        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) session.getExecutionContext().getTransientData().get(org.neodymium.ai.pipeline.ExecutionContext.KEY_EXECUTION_MODE);
+
+        if (mode == ExecutionMode.REPLAY_STRICT)
+        {
+            // First open the SUT using Selenide
+            com.codeborne.selenide.Selenide.open(pageUrl);
+
+            session.getExecutionContext().getTransientData().put(org.neodymium.ai.pipeline.ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+            session.getExecutionContext().getTransientData().put(org.neodymium.ai.pipeline.ExecutionContext.KEY_TARGET_EXECUTOR, session.getTargetExecutor());
+            try
+            {
+                final org.neodymium.ai.executor.selenide.plugins.BranchAction branchAction = new org.neodymium.ai.executor.selenide.plugins.BranchAction(session.getExecutionContext());
+                
+                final Action branchAct = new Action("BRANCH", "", "");
+                branchAct.setCondition(java.util.Collections.singletonList(new Action("ASSERT", "#btn-accept", java.util.Collections.singletonList("hidden"), "", "")));
+                branchAct.setThen(java.util.Collections.singletonList(new Action("CLICK", "#btn-accept", "")));
+
+                org.junit.jupiter.api.Assertions.assertThrows(org.neodymium.ai.pipeline.HealingRequiredException.class, () -> {
+                    branchAction.execute(branchAct);
+                });
+            }
+            finally
+            {
+                session.getExecutionContext().getTransientData().put(org.neodymium.ai.pipeline.ExecutionContext.KEY_EXECUTION_MODE, mode);
+            }
+        }
+        else
+        {
+            runPlaybook(session, """
+                data:
+                  - testId: branchData
+                steps: |
+                  Open ${branch.test.url} in the browser
+                  If #cookie-banner is visible, click #btn-accept
+                """);
+        }
+    }
+
+    /**
+     * Tests that the 'then' path of an if-else branch is executed when the condition is met.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", name = "ifelse_then_branch_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testBranchIfElseThenMock(final AiSession session)
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        try
+        {
+            while (true)
+            {
+                mock.chat(null);
+            }
+        }
+        catch (final java.io.IOException e)
+        {
+            // Empty queue
+        }
+
+        final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
+        session.getExecutionContext().getSessionData().putDynamic("branch.test.url", pageUrl, false);
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to branch test page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "navigated"
+            }
+            """, null, "mock"));
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "locator": "",
+                  "value": "",
+                  "reasoning": "Conditional check",
+                  "condition": [
+                    {
+                      "action": "ASSERT",
+                      "locator": "#cookie-banner",
+                      "value": "visible",
+                      "reasoning": "Check if cookie banner is visible"
+                    }
+                  ],
+                  "then": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#btn-accept",
+                      "value": "",
+                      "reasoning": "Click accept button"
+                    }
+                  ],
+                  "else": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#btn-main-action",
+                      "value": "",
+                      "reasoning": "Click main action button"
+                    }
+                  ]
+                }
+              ]
+            }
+            """, null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "branch evaluated"
+            }
+            """, null, "mock"));
+
+        runPlaybook(session, """
+            data:
+              - testId: branchData
+            steps: |
+              Open ${branch.test.url} in the browser
+              If #cookie-banner is visible, click #btn-accept, else click #btn-main-action
+            """);
+
+        $("#result").shouldHave(text("Cookies Accepted!"));
+    }
+
+    /**
+     * Tests that the 'else' path of an if-else branch is executed when the condition is not met.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", name = "ifelse_else_branch_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testBranchIfElseElseMock(final AiSession session)
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        try
+        {
+            while (true)
+            {
+                mock.chat(null);
+            }
+        }
+        catch (final java.io.IOException e)
+        {
+            // Empty queue
+        }
+
+        final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html?noCookies=true", server.getPort());
+        session.getExecutionContext().getSessionData().putDynamic("branch.test.url", pageUrl, false);
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to branch test page with cookies hidden"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "navigated"
+            }
+            """, null, "mock"));
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "locator": "",
+                  "value": "",
+                  "reasoning": "Conditional check",
+                  "condition": [
+                    {
+                      "action": "ASSERT",
+                      "locator": "#cookie-banner",
+                      "value": "visible",
+                      "reasoning": "Check if cookie banner is visible"
+                    }
+                  ],
+                  "then": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#btn-accept",
+                      "value": "",
+                      "reasoning": "Click accept button"
+                    }
+                  ],
+                  "else": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#btn-main-action",
+                      "value": "",
+                      "reasoning": "Click main action button"
+                    }
+                  ]
+                }
+              ]
+            }
+            """, null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "branch evaluated"
+            }
+            """, null, "mock"));
+
+        runPlaybook(session, """
+            data:
+              - testId: branchData
+            steps: |
+              Open ${branch.test.url} in the browser
+              If #cookie-banner is visible, click #btn-accept, else click #btn-main-action
+            """);
+
+        $("#result").shouldHave(text("Main Action Triggered!"));
     }
 }
