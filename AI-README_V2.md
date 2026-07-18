@@ -44,14 +44,27 @@ This prevents internal execution instructions from polluting the natural languag
 ---
 
 ## 4. Pre-Step Split Analysis (PESAP)
-To handle complex or compound steps, the pipeline executes a Pre-Step Split Analysis.
-* **Behavior**: Before execution, a lightweight LLM query checks if a step represents multiple separate actions (e.g., `"Enter username and password, then click login"`).
-* **Splitting**: If compound, it splits the instruction into distinct sub-steps (leaf steps) and pushes them onto the execution stack sequentially.
-* **Bypassing on Replay**: PESAP is only executed in live recording mode; replay runs execute the pre-split leaf steps directly from the companion JSON.
+To handle complex, compound, or ambiguous instructions, the pipeline executes a **Pre-Step Split Analysis (PESAP)** using the `LlmCapability.STEP_SPLITTING` capability:
+* **Contextual Inputs**: The analysis receives the current step, the previously executed step's instruction (for flow context), and up to two subsequent steps' instructions.
+* **JIT Upfront Step Splitting**: If a compound step (e.g. `"Search for shirt, select size L, and click Checkout"`) is identified, the LLM splits the instruction into distinct leaf sub-steps. These are instantiated dynamically as child `PlaybookStep` instances and pushed onto the execution stack.
+* **JIT Context-Level Detection**: Rather than relying on static defaults, PESAP dynamically determines the optimal interaction mode (Context Level) required for the step:
+  - `LEAN`: Basic DOM-only execution.
+  - `VISUAL_LEAN`: DOM with screenshot captures.
+  - `VISUAL`: Full visual screenshot representation.
+  - `HINT`: Targeted visual hints.
+* **Bypassing on Replay**: PESAP runs during live recording mode; replay runs skip this analysis and execute the already-split steps directly from the JSON companion.
 
 ---
 
-## 5. Dynamic Variable Parameterization
+## 5. Post-Action AI Outcome Verification
+After executing the SUT actions for a step, the framework performs a **Post-Action Outcome Verification**:
+* **Always Visual**: Regardless of the initial execution context level, the outcome verification always captures the SUT state at the `VISUAL` level to record baseline images and compute screenshot dHash baselines.
+* **Semantic Verification Prompt**: Evaluates the natural language instruction against the final page DOM and screenshot using the `VerificationPrompt` template via the `LlmCapability.VERIFICATION` capability.
+* **Soft Failures**: Verification failures do not immediately break the test. Instead, they are collected and reported as warnings at the end of the test case, allowing developers to inspect semantic discrepancies without crashing the automation flow.
+
+---
+
+## 6. Dynamic Variable Parameterization
 Ensures recorded playbooks remain reusable across environment and data changes:
 * **Resolution**: Resolves variables (e.g. `${username}`) at runtime before executing actions.
 * **Masking & Sanitization**: Compares SUT actions against sensitive dataset keys (e.g., passwords or tokens) and dynamically masks/sanitizes them before recording.
@@ -59,7 +72,7 @@ Ensures recorded playbooks remain reusable across environment and data changes:
 
 ---
 
-## 6. Decoupled Core Components & Resource Management
+## 7. Decoupled Core Components & Resource Management
 To ensure a modular architecture, all key interfaces are cleanly decoupled:
 * **`PlaybookResourceManager`**: Decouples playbook loading/writing from specific file systems, serving as the interface for reading/saving playbooks (YAML & JSON) across local, classpath, or virtualized directories.
 * **`TargetExecutor`**: Abstract driver interface separating the pipeline execution logic from browser drivers (e.g., Selenide/WebDriver) and REST clients.
@@ -67,7 +80,7 @@ To ensure a modular architecture, all key interfaces are cleanly decoupled:
 
 ---
 
-## 7. Session-Centric Architecture & Thread Isolation
+## 8. Session-Centric Architecture & Thread Isolation
 To support robust parallel execution (e.g., executing multiple tests concurrently in separate threads):
 * **`AiSession`**: Serving as the thread-isolated lifecycle holder containing context state, target drivers, prompts, and config parameters.
 * **Hierarchy Isolation**: Prompts and sessions can inherit configs from parent scopes but remain completely isolated at runtime, preventing thread cross-talk.
@@ -75,19 +88,19 @@ To support robust parallel execution (e.g., executing multiple tests concurrentl
 
 ---
 
-## 8. Unified Event-Driven HUD & Logging
+## 9. Unified Event-Driven HUD & Logging
 * **`EventBus`**: Centrally coordinates all framework execution events (e.g., `ActionExecutedEvent`, `SessionFinishedEvent`).
 * **Heads-Up Display (HUD)**: Decoupled HUD listeners listen to event streams to render interactive overlays and debug windows without polluting the core execution pipeline.
 * **Metrics Summary**: Automatically tracks duration, token count, LLM provider invocation logs, and semantic outcome errors on a per-step basis.
 
 ---
 
-## 9. Registry & Pluggable LLM Routing
-* **`LlmProviderRegistry`**: Hosts registered providers for LLM capabilities (e.g., `TEXT_ONLY`, `VISION`, `VERIFICATION`).
+## 10. Registry & Pluggable LLM Routing
+* **`LlmProviderRegistry`**: Hosts registered providers for LLM capabilities (e.g., `TEXT_ONLY`, `VISION`, `VERIFICATION`, `STEP_SPLITTING`).
 * **Capability-Based Routing**: Dynamically inspects SUT level requirements and routes prompts to the appropriate registered provider (e.g., utilizing vision models only when screenshots are attached).
 
 ---
 
-## 10. Session-Level Authentication Setup
+## 11. Session-Level Authentication Setup
 * **`BasicAuth` Configuration**: Registers credentials (username/password) dynamically on `AiSession` setup.
 * **CDP Interception**: Intercepts basic auth browser challenges via low-level Chrome DevTools Protocol mechanisms, ensuring seamless authentication setup for headless SUT environments.
