@@ -490,6 +490,14 @@ public final class ExecuteActionsStep implements PipelineStep
                             subStep.setSourceFile(step.getSourceFile());
                             subStep.setLineNumber(step.getLineNumber());
                             subStep.setParent(step);
+                            
+                            // Explicitly copy control flags from the parent step
+                            subStep.setBug(step.isBug());
+                            subStep.setBugDetails(step.getBugDetails());
+                            subStep.setContinueOnError(step.isContinueOnError());
+                            subStep.setNoHealing(step.isNoHealing());
+                            subStep.setOptional(step.isOptional());
+                            
                             step.getSubSteps().add(subStep);
                         }
 
@@ -771,6 +779,10 @@ public final class ExecuteActionsStep implements PipelineStep
 
             // Push end-hook step first, so it runs AFTER tryCatch executes
             contextState.pushStep(c -> {
+                if (step.getSubSteps() != null && !step.getSubSteps().isEmpty())
+                {
+                    return;
+                }
                 final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
                 if (statsObj instanceof org.neodymium.ai.pipeline.StepStats stepStats)
                 {

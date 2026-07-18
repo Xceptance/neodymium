@@ -20,6 +20,7 @@ import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
+import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Mock programmatic integration test verifying (bug) tag and (no-healing) support.
@@ -317,5 +318,79 @@ public class BugIntegrationTest extends BaseAiTest
             """);
 
         // The playbook run should complete successfully and report the warning.
+    }
+
+    /**
+     * Test case 5: When we split a step up, the bug flag should be copied to all split steps.
+     */
+    @AiPlaybook
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testBugSplitStepInheritsFlags(final AiSession session)
+    {
+        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
+        try
+        {
+            final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+
+            // Step 1: Open SUT (NAVIGATE)
+            mock.addResponse(new LlmResponse("""
+                {
+                  "actions": [
+                    {
+                      "action": "NAVIGATE",
+                      "locator": "",
+                      "value": "%s",
+                      "reasoning": "Navigate to page"
+                    }
+                  ]
+                }
+                """.formatted(pageUrl), null, "mock"));
+            mock.addResponse(new LlmResponse("""
+                {
+                  "passed": true,
+                  "reasoning": "navigated"
+                }
+                """, null, "mock"));
+
+            // Step 2: Split expected bug compound step (PESAP split request)
+            mock.addResponse(new LlmResponse("""
+                {
+                  "c": "LEAN",
+                  "jm": false,
+                  "sp": [
+                    "Click the first button #non-existent-button-1",
+                    "Click the second button #non-existent-button-2"
+                  ]
+                }
+                """, null, "mock"));
+
+            // Step 2a: Sub-step 1: Click the first button (fails)
+            mock.addResponse(new LlmResponse("""
+                {
+                  "actions": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#non-existent-button-1",
+                      "value": "",
+                      "reasoning": "Click first button"
+                    }
+                  ]
+                }
+                """, null, "mock"));
+
+            // Note: Sub-step 2 is skipped because Sub-step 1 fails and it's a bug step, which halts the test!
+
+            runPlaybook(session, """
+                data:
+                  - testId: bugData
+                steps: |
+                  Open ${bug.test.url} in the browser
+                  Click button 1 and click button 2 (bug: split_bug_test)
+                """);
+        }
+        finally
+        {
+            Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
+        }
     }
 }
