@@ -1,0 +1,38 @@
+# AI-generated: Gemini 3.5 Flash
+# @author AI-generated: Gemini 3.5 Flash
+# @author Xceptance GmbH 2026
+
+steps: |
+  Open ${verla.url}/verla-${quality}/index.html
+  Close cookie consent or promo banner if any is shown (optional)
+  Click the country trigger button #country-trigger-btn
+  Select 'Sweden' from the country list modal
+  Assert that the mini-cart price currency symbol is 'kr'
+  Type 'tshirt' into the search input field #search-input
+  Wait for the autocomplete suggestions dropdown to appear (optional)
+  Click the search icon or submit the search form
+  Click on the first product card in the search results list
+  When this string '${quality}' is not equal 'bad', click size 'L'
+  Click the 'Add to Cart' button (no-healing)
+  Assert that the cart count badge displays 1
+  Go to the cart page /verla-${quality}/cart.html
+  Type coupon '10p-off' in the coupon field #couponCode
+  Click 'Apply Coupon'
+  Assert that the discount is applied and the subtotal is recalculated
+  Click 'Checkout'
+  Enter 'Alice' as first name, 'Sundquist' as last name, and the email address 'alice@verlamail.se'
+  Enter 'Kungsgatan 12' as street address, 'Stockholm' as city, and '111 22' as postcode
+  Card number is '4111 1111 1111 1200', expiry date '12/29', and CVV is '111'
+  Click 'Purchase' (bug: Payment Card Declined) (continue-on-error)
+  Card number is '4111 1111 1111 1100', expiry date '12/29', and CVV is '111'
+  Click 'Purchase'
+  Wait for text "Thank you for your purchase!" to appear
+  Verify that the order success page is loaded showing the thank you message
+
+data:
+  - testId: "perfect"
+    quality: "perfect"
+  - testId: "normal"
+    quality: "normal"
+  - testId: "bad"
+    quality: "bad"
