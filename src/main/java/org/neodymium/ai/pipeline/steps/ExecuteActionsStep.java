@@ -793,8 +793,7 @@ public final class ExecuteActionsStep implements PipelineStep
 
                     if (!step.isContinueOnError())
                     {
-                        c.getTransientData().put("BUG_STEP_UNEXPECTED_SUCCESS", Boolean.TRUE);
-                        throw new org.neodymium.ai.pipeline.ConclusiveFailureException(msg);
+                        throw new org.neodymium.ai.pipeline.UnexpectedSuccessException(msg);
                     }
                     else
                     {
