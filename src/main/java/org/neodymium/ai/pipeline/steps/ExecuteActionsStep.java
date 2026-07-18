@@ -195,11 +195,17 @@ public final class ExecuteActionsStep implements PipelineStep
                      sanitized.setStepInstruction(step.getInstruction());
                      sanitized.setStepLine(step.getLineNumber());
                      sanitized.setStepFile(step.getSourceFile());
-                     final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
-                     if (mode != null && !mode.isReplay())
-                     {
-                         step.getActions().add(sanitized);
-                     }
+                      final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+                      final boolean isNoReplay = step.isNoReplay();
+                      if (mode != null && (!mode.isReplay() || isNoReplay))
+                      {
+                          if (isNoReplay && Boolean.TRUE.equals(context.getTransientData().get("KEY_CURRENT_STEP_FIRST_ACTION")))
+                          {
+                              step.getActions().clear();
+                              context.getTransientData().put("KEY_CURRENT_STEP_FIRST_ACTION", false);
+                          }
+                          step.getActions().add(sanitized);
+                      }
                 }
                 
                 // Log to local recording and dispatch verification updates to active event listeners
@@ -339,8 +345,16 @@ public final class ExecuteActionsStep implements PipelineStep
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
             final String rawInstruction = step.getInstruction();
             final String resolvedInstruction = contextState.getSessionData().resolveVariables(rawInstruction);
-            contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, resolvedInstruction);
+            final String preparedInstruction = prepareInstruction(resolvedInstruction);
+            contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_STEP_ACTIONS, new CopyOnWriteArrayList<Action>());
+
+            final boolean stepNoReplay = step.isNoReplay();
+            contextState.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", stepNoReplay);
+            if (stepNoReplay)
+            {
+                contextState.getTransientData().put("KEY_CURRENT_STEP_FIRST_ACTION", true);
+            }
 
             @SuppressWarnings("unchecked")
             List<org.neodymium.ai.pipeline.StepStats> allStats = (List<org.neodymium.ai.pipeline.StepStats>) contextState.getTransientData().get("execution.stepStatsList");
@@ -356,7 +370,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     .computeIfAbsent("execution.stepStatsMap", k -> new java.util.HashMap<>());
 
             final org.neodymium.ai.config.ExecutionMode executionMode = (org.neodymium.ai.config.ExecutionMode) contextState.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
-            final boolean isReplayStats = executionMode != null && executionMode.isReplay();
+            final boolean isReplayStats = executionMode != null && executionMode.isReplay() && !stepNoReplay;
 
             final org.neodymium.ai.pipeline.StepStats stats = getOrCreateStatsForStep(step, System.currentTimeMillis(), isReplayStats, stepStatsMap, allStats);
             contextState.getTransientData().put("KEY_CURRENT_STEP_STATS", stats);
@@ -383,7 +397,7 @@ public final class ExecuteActionsStep implements PipelineStep
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.flatSteps");
 
-            final boolean isReplayMode = executionMode != null && executionMode.isReplay();
+            final boolean isReplayMode = executionMode != null && executionMode.isReplay() && !stepNoReplay;
             final org.neodymium.ai.config.AiConfiguration config = new org.neodymium.ai.config.AiConfiguration();
             if (!isReplayMode && config.getBoolean("neodymium.ai.pesap.enabled", true) && !alreadySplitSteps.contains(step))
             {
@@ -555,7 +569,7 @@ public final class ExecuteActionsStep implements PipelineStep
                 .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> new org.neodymium.ai.config.AiConfiguration().getExecutionMode());
 
             // Check if we are in replay mode and have a recorded dHash for this step
-            if (mode.isReplay() && step.isVisualStep() && step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
+            if (mode.isReplay() && !stepNoReplay && step.isVisualStep() && step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
             {
                 final TargetExecutor executor = (TargetExecutor) contextState.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                 if (executor != null)
@@ -642,7 +656,7 @@ public final class ExecuteActionsStep implements PipelineStep
 
             final List<PipelineStep> standardFlow = new ArrayList<>();
 
-            final boolean isReplay = mode.isReplay();
+            final boolean isReplay = mode.isReplay() && !stepNoReplay;
 
             if (isReplay)
             {
@@ -867,5 +881,25 @@ public final class ExecuteActionsStep implements PipelineStep
         }
 
         return resolvedAction;
+    }
+
+    /**
+     * Prepares the instruction by stripping all explicit control tags case-insensitively.
+     *
+     * @param instruction the raw instruction prompt
+     * @return the cleaned instruction string
+     */
+    public static String prepareInstruction(final String instruction)
+    {
+        if (instruction == null)
+        {
+            return null;
+        }
+        String prepared = instruction;
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*no-replay\\s*\\)\\s*", " ");
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*bug(?:\\s*:\\s*[^)]+)?\\)\\s*", " ");
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*(optional|soft)\\s*\\)\\s*", " ");
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\)\\s*", " ");
+        return prepared.replaceAll("\\s+", " ").trim();
     }
 }

@@ -39,6 +39,11 @@ public final class PlaybookStep
     private String instruction;
 
     /**
+     * Flag indicating that this step should bypass the replay cache and execute live.
+     */
+    private boolean noReplay;
+
+    /**
      * Nested child steps in the composite hierarchy if this step was split or structured.
      */
     private final List<PlaybookStep> subSteps = new ArrayList<>();
@@ -143,7 +148,7 @@ public final class PlaybookStep
      */
     public PlaybookStep(final String instruction)
     {
-        this.instruction = instruction;
+        setInstruction(instruction);
     }
 
     /**
@@ -163,7 +168,46 @@ public final class PlaybookStep
      */
     public void setInstruction(final String instruction)
     {
+        if (instruction != null)
+        {
+            final java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(?i)\\(\\s*no-replay\\s*\\)");
+            if (pattern.matcher(instruction).find())
+            {
+                this.noReplay = true;
+                this.instruction = instruction.replaceAll("(?i)\\s*\\(\\s*no-replay\\s*\\)\\s*", " ").trim();
+                return;
+            }
+        }
         this.instruction = instruction;
+    }
+
+    /**
+     * Checks if this step is marked as no-replay.
+     * If this step or any of its parent steps is no-replay, returns true.
+     *
+     * @return true if no-replay, false otherwise
+     */
+    public boolean isNoReplay()
+    {
+        if (this.noReplay)
+        {
+            return true;
+        }
+        if (this.parent != null)
+        {
+            return this.parent.isNoReplay();
+        }
+        return false;
+    }
+
+    /**
+     * Sets the no-replay flag.
+     *
+     * @param noReplay the no-replay flag to set
+     */
+    public void setNoReplay(final boolean noReplay)
+    {
+        this.noReplay = noReplay;
     }
 
     /**
