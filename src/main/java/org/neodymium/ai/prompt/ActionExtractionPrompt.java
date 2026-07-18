@@ -145,22 +145,66 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         {
             for (final JsonNode node : actionsNode)
             {
-                final String actionType = node.path("action").asText();
-                String locator = node.path("locator").asText();
-                final String valueStr = node.hasNonNull("value") ? node.path("value").asText() : "";
-                final String reasoning = node.path("reasoning").asText();
-                
-                if (actionType.equalsIgnoreCase("NAVIGATE") && locator.isEmpty() && !valueStr.isEmpty())
-                {
-                    locator = valueStr;
-                }
-                
-                final List<String> valueList = valueStr.isEmpty() ? Collections.emptyList() : Collections.singletonList(valueStr);
-                
-                actions.add(new Action(actionType, locator, valueList, "Extracted " + actionType + " action", reasoning));
+                actions.add(parseActionNode(node));
             }
         }
         
         return actions;
+    }
+
+    private Action parseActionNode(final JsonNode node)
+    {
+        final String actionType = node.path("action").asText();
+        String locator = node.path("locator").asText();
+        final String valueStr = node.hasNonNull("value") ? node.path("value").asText() : "";
+        final String reasoning = node.path("reasoning").asText();
+        
+        if (actionType.equalsIgnoreCase("NAVIGATE") && locator.isEmpty() && !valueStr.isEmpty())
+        {
+            locator = valueStr;
+        }
+        
+        final List<String> valueList = valueStr.isEmpty() ? Collections.emptyList() : Collections.singletonList(valueStr);
+        
+        final Action action = new Action(actionType, locator, valueList, "Extracted " + actionType + " action", reasoning);
+        
+        final JsonNode condNode = node.path("condition");
+        if (condNode.isArray())
+        {
+            final List<Action> condition = new ArrayList<>();
+            for (final JsonNode subNode : condNode)
+            {
+                condition.add(parseActionNode(subNode));
+            }
+            action.setCondition(condition);
+        }
+        
+        final JsonNode thenNode = node.path("then");
+        if (thenNode.isArray())
+        {
+            final List<Action> then = new ArrayList<>();
+            for (final JsonNode subNode : thenNode)
+            {
+                then.add(parseActionNode(subNode));
+            }
+            action.setThen(then);
+        }
+        
+        JsonNode elseNode = node.path("else");
+        if (!elseNode.isArray())
+        {
+            elseNode = node.path("elseActions");
+        }
+        if (elseNode.isArray())
+        {
+            final List<Action> elseActions = new ArrayList<>();
+            for (final JsonNode subNode : elseNode)
+            {
+                elseActions.add(parseActionNode(subNode));
+            }
+            action.setElseActions(elseActions);
+        }
+        
+        return action;
     }
 }

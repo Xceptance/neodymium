@@ -835,6 +835,37 @@ public final class ExecuteActionsStep implements PipelineStep
         // Copy dynamic parameters map
         resolvedAction.getParameters().putAll(rawAction.getParameters());
 
+        // Recursively resolve nested branch/conditional action lists
+        if (rawAction.getCondition() != null)
+        {
+            final List<Action> resolvedCondition = new ArrayList<>();
+            for (final Action condAct : rawAction.getCondition())
+            {
+                resolvedCondition.add(resolveActionVariables(condAct, data));
+            }
+            resolvedAction.setCondition(resolvedCondition);
+        }
+        
+        if (rawAction.getThen() != null)
+        {
+            final List<Action> resolvedThen = new ArrayList<>();
+            for (final Action thenAct : rawAction.getThen())
+            {
+                resolvedThen.add(resolveActionVariables(thenAct, data));
+            }
+            resolvedAction.setThen(resolvedThen);
+        }
+        
+        if (rawAction.getElseActions() != null)
+        {
+            final List<Action> resolvedElse = new ArrayList<>();
+            for (final Action elseAct : rawAction.getElseActions())
+            {
+                resolvedElse.add(resolveActionVariables(elseAct, data));
+            }
+            resolvedAction.setElseActions(resolvedElse);
+        }
+
         return resolvedAction;
     }
 }

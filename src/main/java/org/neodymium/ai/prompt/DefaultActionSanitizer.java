@@ -138,6 +138,37 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         // Copy dynamic parameters map
         sanitizedAction.getParameters().putAll(rawAction.getParameters());
 
+        // Recursively sanitize nested branch/conditional action lists
+        if (rawAction.getCondition() != null)
+        {
+            final List<Action> sanitizedCondition = new ArrayList<>();
+            for (final Action condAct : rawAction.getCondition())
+            {
+                sanitizedCondition.add(sanitize(condAct, data));
+            }
+            sanitizedAction.setCondition(sanitizedCondition);
+        }
+        
+        if (rawAction.getThen() != null)
+        {
+            final List<Action> sanitizedThen = new ArrayList<>();
+            for (final Action thenAct : rawAction.getThen())
+            {
+                sanitizedThen.add(sanitize(thenAct, data));
+            }
+            sanitizedAction.setThen(sanitizedThen);
+        }
+        
+        if (rawAction.getElseActions() != null)
+        {
+            final List<Action> sanitizedElse = new ArrayList<>();
+            for (final Action elseAct : rawAction.getElseActions())
+            {
+                sanitizedElse.add(sanitize(elseAct, data));
+            }
+            sanitizedAction.setElseActions(sanitizedElse);
+        }
+
         return sanitizedAction;
     }
 }
