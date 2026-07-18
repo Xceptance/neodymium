@@ -64,11 +64,6 @@ public class VerlaComplexStorefrontIntegrationTest extends BaseAiTest
     public void setup()
     {
         Neodymium.getData().put("verla.url", String.format("http://localhost:%d", server.getPort()));
-        com.codeborne.selenide.Configuration.browserSize = "1500x1000";
-        if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
-        {
-            com.codeborne.selenide.Selenide.closeWebDriver();
-        }
     }
 
     /**

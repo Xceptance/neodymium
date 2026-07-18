@@ -69,11 +69,6 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     {
         // Resolve dynamic server port for the test execution
         com.xceptance.neodymium.util.Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
-        com.codeborne.selenide.Configuration.browserSize = "1500x1000";
-        if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
-        {
-            com.codeborne.selenide.Selenide.closeWebDriver();
-        }
     }
 
     /**
