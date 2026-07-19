@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
-import com.xceptance.neodymium.common.ScreenshotWriter;
+import org.neodymium.common.ScreenshotWriter;
 
 /**
  * Captures page context (screenshot + simplified DOM) for the LLM. The DOM is

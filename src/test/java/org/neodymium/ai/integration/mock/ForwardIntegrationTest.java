@@ -22,8 +22,8 @@ import static com.codeborne.selenide.Selenide.$;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.codeborne.selenide.WebDriverRunner;
-import com.xceptance.neodymium.ai.BaseAiTest;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.common.browser.Browser;
 
 import java.io.File;
 import java.io.IOException;

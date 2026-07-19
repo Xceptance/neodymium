@@ -18,7 +18,7 @@
  */
 package org.neodymium.ai.resources;
 
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -136,7 +136,7 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
     {
         try
         {
-            final String globalDir = Neodymium.aiConfiguration().playbookDirectoryGlobal();
+            final String globalDir = Neodymium.aiConfiguration().getProperty("playbook.directory.global", "src/test/resources/ai-playbooks/");
             if (globalDir != null && !globalDir.trim().isEmpty())
             {
                 final String normalized = globalDir.replace('\\', '/');

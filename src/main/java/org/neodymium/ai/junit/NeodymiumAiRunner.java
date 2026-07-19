@@ -59,11 +59,11 @@ import org.neodymium.ai.playbook.PlaybookParser;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.Browsers;
-import com.xceptance.neodymium.common.browser.BrowserMethodData;
-import com.xceptance.neodymium.common.browser.BrowserRunner;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.Browsers;
+import org.neodymium.common.browser.BrowserMethodData;
+import org.neodymium.common.browser.BrowserRunner;
+import org.neodymium.util.Neodymium;
 
 /**
  * JUnit 5 {@link TestTemplateInvocationContextProvider} implementation for Neodymium AI tests.

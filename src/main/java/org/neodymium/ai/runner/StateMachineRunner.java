@@ -79,7 +79,7 @@ public final class StateMachineRunner
 
         final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
         final String datasetLabel = (String) context.getTransientData().get(ExecutionContext.KEY_ACTIVE_DATASET_LABEL);
-        final String testName = com.xceptance.neodymium.util.Neodymium.getTestName();
+        final String testName = org.neodymium.util.Neodymium.getTestName();
 
         LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
         LOGGER.debug("║ 🚀 STARTING TEST CASE: {}", testName != null ? testName : "Unknown Test");

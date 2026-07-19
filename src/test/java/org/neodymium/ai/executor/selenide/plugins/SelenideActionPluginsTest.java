@@ -24,8 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.xceptance.neodymium.ai.BaseAiTest;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.common.browser.Browser;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;

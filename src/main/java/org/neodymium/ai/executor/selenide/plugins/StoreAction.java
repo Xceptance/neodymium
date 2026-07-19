@@ -22,7 +22,7 @@ import org.neodymium.ai.action.Action;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import com.codeborne.selenide.SelenideElement;
-import com.xceptance.neodymium.ai.util.AiAssertions;
+import org.neodymium.ai.util.AiAssertions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

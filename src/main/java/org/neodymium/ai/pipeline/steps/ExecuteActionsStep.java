@@ -594,7 +594,7 @@ public final class ExecuteActionsStep implements PipelineStep
                             {
                                 if (attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
                                 {
-                                    currentHash = com.xceptance.neodymium.ai.util.ScreenshotHasher.computeHash(attachment.base64Data());
+                                    currentHash = org.neodymium.ai.util.ScreenshotHasher.computeHash(attachment.base64Data());
                                     break;
                                 }
                             }
@@ -602,7 +602,7 @@ public final class ExecuteActionsStep implements PipelineStep
 
                         if (currentHash != null)
                         {
-                            final int distance = com.xceptance.neodymium.ai.util.ScreenshotHasher.getHammingDistance(step.getScreenshotHash(), currentHash);
+                            final int distance = org.neodymium.ai.util.ScreenshotHasher.getHammingDistance(step.getScreenshotHash(), currentHash);
                             final boolean hasActualActions = step.getActions() != null && !step.getActions().isEmpty()
                                 && step.getActions().stream().anyMatch(a -> !"NONE".equalsIgnoreCase(a.getType()));
 

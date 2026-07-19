@@ -220,7 +220,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 {
                     if (attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
                     {
-                        dHash = com.xceptance.neodymium.ai.util.ScreenshotHasher.computeHash(attachment.base64Data());
+                        dHash = org.neodymium.ai.util.ScreenshotHasher.computeHash(attachment.base64Data());
                         break;
                     }
                 }

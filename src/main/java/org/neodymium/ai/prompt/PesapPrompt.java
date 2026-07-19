@@ -19,7 +19,6 @@ package org.neodymium.ai.prompt;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.xceptance.neodymium.ai.core.AiAgentPrompts;
 import java.util.ArrayList;
 import java.util.List;
 import org.neodymium.ai.client.ResponseSchema;

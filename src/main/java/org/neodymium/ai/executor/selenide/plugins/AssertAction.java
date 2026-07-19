@@ -33,7 +33,7 @@ import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import com.codeborne.selenide.WebElementCondition;
 import org.neodymium.ai.action.Action;
-import com.xceptance.neodymium.util.SelenideAddons;
+import org.neodymium.util.SelenideAddons;
 
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 

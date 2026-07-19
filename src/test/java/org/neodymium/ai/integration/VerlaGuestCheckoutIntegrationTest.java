@@ -21,8 +21,8 @@ package org.neodymium.ai.integration;
 import static com.codeborne.selenide.Condition.text;
 import static com.codeborne.selenide.Selenide.$;
 
-import com.xceptance.neodymium.ai.BaseAiTest;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.common.browser.Browser;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,7 +68,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     public void setup()
     {
         // Resolve dynamic server port for the test execution
-        com.xceptance.neodymium.util.Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
+        org.neodymium.util.Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
     }
 
     /**

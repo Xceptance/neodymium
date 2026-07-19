@@ -106,9 +106,9 @@ public final class SessionData
         // 4. Fallback to Neodymium test data properties
         try
         {
-            if (com.xceptance.neodymium.util.Neodymium.getData().exists(key))
+            if (org.neodymium.util.Neodymium.getData().exists(key))
             {
-                final String neoProp = com.xceptance.neodymium.util.Neodymium.getData().asString(key);
+                final String neoProp = org.neodymium.util.Neodymium.getData().asString(key);
                 if (neoProp != null)
                 {
                     return new DataEntry(neoProp, false);
@@ -122,7 +122,7 @@ public final class SessionData
         // 5. Fallback to Neodymium configuration properties
         try
         {
-            final String configProp = com.xceptance.neodymium.util.Neodymium.configuration().getProperty(key);
+            final String configProp = org.neodymium.util.Neodymium.configuration().getProperty(key);
             if (configProp != null)
             {
                 return new DataEntry(configProp, false);

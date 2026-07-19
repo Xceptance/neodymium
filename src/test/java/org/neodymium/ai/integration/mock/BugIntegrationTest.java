@@ -5,8 +5,8 @@
  */
 package org.neodymium.ai.integration.mock;
 
-import com.xceptance.neodymium.ai.BaseAiTest;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.common.browser.Browser;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,7 +20,7 @@ import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 /**
  * Mock programmatic integration test verifying (bug) tag and (no-healing) support.
