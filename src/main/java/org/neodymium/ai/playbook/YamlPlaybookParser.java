@@ -21,6 +21,7 @@ package org.neodymium.ai.playbook;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -129,6 +130,26 @@ public final class YamlPlaybookParser implements PlaybookParser
             }
         }
 
+        Map<String, String> systemPromptAddons = new HashMap<>();
+        if (!identifier.endsWith(".json"))
+        {
+            try (final InputStream in = manager.read(identifier))
+            {
+                if (in != null)
+                {
+                    final byte[] bytes = in.readAllBytes();
+                    final String fileContent = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                    final Yaml yaml = new Yaml();
+                    final Map<String, Object> loadedMap = yaml.load(fileContent);
+                    systemPromptAddons = parseSystemPromptAddons(loadedMap);
+                }
+            }
+            catch (final Exception e)
+            {
+                // ignore
+            }
+        }
+
         // Check if it is a JSON recording
         try (final InputStream in = manager.read(identifier))
         {
@@ -146,7 +167,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                     final List<PlaybookStep> parsedSteps = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<PlaybookStep>>(){});
                     if (parsedSteps != null && !parsedSteps.isEmpty() && parsedSteps.get(0).getInstruction() != null)
                     {
-                        return new Playbook(parsedSteps, dataSets);
+                        return new Playbook(parsedSteps, dataSets, systemPromptAddons);
                     }
                 }
                 catch (final Exception e)
@@ -196,13 +217,62 @@ public final class YamlPlaybookParser implements PlaybookParser
                         steps.add(currentStep);
                     }
                 }
-                return new Playbook(steps, dataSets);
+                return new Playbook(steps, dataSets, systemPromptAddons);
             }
         }
 
         parseRecursive(identifier, manager, activeStack, steps, dataSets);
 
-        return new Playbook(steps, dataSets);
+        return new Playbook(steps, dataSets, systemPromptAddons);
+    }
+
+    private Map<String, String> parseSystemPromptAddons(final Map<String, Object> loadedMap)
+    {
+        final Map<String, String> addons = new HashMap<>();
+        if (loadedMap == null)
+        {
+            return addons;
+        }
+
+        for (final Map.Entry<String, Object> entry : loadedMap.entrySet())
+        {
+            final String key = entry.getKey();
+            if (key.startsWith("systemPromptAddon.") && entry.getValue() instanceof String)
+            {
+                final String type = key.substring("systemPromptAddon.".length());
+                addons.put(type, (String) entry.getValue());
+            }
+            else if (key.equals("systemPromptAddon") && entry.getValue() instanceof String)
+            {
+                addons.put("default", (String) entry.getValue());
+            }
+        }
+
+        final Object addonObj = loadedMap.get("systemPromptAddon");
+        if (addonObj instanceof Map)
+        {
+            parseAddonMap((Map<?, ?>) addonObj, addons);
+        }
+
+        final Object addonsObj = loadedMap.get("systemPromptAddons");
+        if (addonsObj instanceof Map)
+        {
+            parseAddonMap((Map<?, ?>) addonsObj, addons);
+        }
+
+        return addons;
+    }
+
+    private void parseAddonMap(final Map<?, ?> sourceMap, final Map<String, String> targetMap)
+    {
+        for (final Map.Entry<?, ?> entry : sourceMap.entrySet())
+        {
+            final String subKey = String.valueOf(entry.getKey());
+            if (entry.getValue() instanceof String)
+            {
+                targetMap.put(subKey, (String) entry.getValue());
+            }
+        }
     }
 
     /**
@@ -409,10 +479,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 try
                 {
                     final List<PlaybookStep> jsonSteps = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<PlaybookStep>>(){});
-                    if (jsonSteps != null && !jsonSteps.isEmpty() && jsonSteps.get(0).getInstruction() != null)
-                    {
-                        return new Playbook(jsonSteps, yamlPlaybook.getDataSets());
-                    }
+                        return new Playbook(jsonSteps, yamlPlaybook.getDataSets(), yamlPlaybook.getSystemPromptAddons());
                 }
                 catch (final Exception e)
                 {

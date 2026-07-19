@@ -603,11 +603,15 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
 
             final Playbook playbook = parser.parse(resolvedPlaybookPath, manager);
-            final List<PlaybookStep> playbookSteps = playbook.getSteps();
+            final List<PlaybookStep> playbookSteps = new ArrayList<>(playbook.getSteps());
             final List<PlaybookStep> flatSteps = new ArrayList<>();
             flattenSteps(playbookSteps, flatSteps);
             executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
             executionContext.getTransientData().put("playbook.steps", playbookSteps);
+            if (playbook.getSystemPromptAddons() != null)
+            {
+                executionContext.getTransientData().put("playbook.systemPromptAddons", playbook.getSystemPromptAddons());
+            }
 
             executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
             executionContext.getTransientData().put(ExecutionContext.KEY_RESOURCE_MANAGER, manager);

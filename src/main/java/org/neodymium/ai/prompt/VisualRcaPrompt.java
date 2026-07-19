@@ -55,7 +55,7 @@ public final class VisualRcaPrompt implements AiPrompt<String>
     @Override
     public String compileSystemMessage(final ExecutionContext context)
     {
-        return "You are an expert QA visual debugger. You are analyzing a screenshot of a failed System Under Test (SUT) web page. Explain in plain English why the action/test step failed (e.g., if there is a blocking cookies popup, overlapping elements, or validation error on the page). Be concise.";
+        return SystemPromptAddonHelper.appendAddon("You are an expert QA visual debugger. You are analyzing a screenshot of a failed System Under Test (SUT) web page. Explain in plain English why the action/test step failed (e.g., if there is a blocking cookies popup, overlapping elements, or validation error on the page). Be concise.", "rca", context);
     }
 
     @Override

@@ -75,7 +75,7 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
     @Override
     public String compileSystemMessage(final ExecutionContext context)
     {
-        return AiAgentPrompts.getPesapPreStepPrompt();
+        return SystemPromptAddonHelper.appendAddon(AiAgentPrompts.getPesapPreStepPrompt(), "pesap", context);
     }
 
     @Override

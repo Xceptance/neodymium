@@ -118,3 +118,57 @@ To support robust parallel execution (e.g., executing multiple tests concurrentl
 ## 11. Session-Level Authentication Setup
 * **`BasicAuth` Configuration**: Registers credentials (username/password) dynamically on `AiSession` setup.
 * **CDP Interception**: Intercepts basic auth browser challenges via low-level Chrome DevTools Protocol mechanisms, ensuring seamless authentication setup for headless SUT environments.
+
+---
+
+## 12. AI Prompt Taxonomy & Custom System Add-ons
+
+The framework utilizes a dedicated taxonomy of prompts, each mapped to specific pipeline phases and LLM capabilities. To customize LLM behaviors without changing the core codebase, the framework supports injecting **Custom System Add-on Prompts**.
+
+### A. Prompt Taxonomy
+
+| Prompt Class | Pipeline Step / Context | LLM Capability | Inputs | Purpose & Output |
+| :--- | :--- | :--- | :--- | :--- |
+| **`PesapPrompt`** | `BeforeStep` / pre-step analysis | `STEP_SPLITTING` | Current instruction, previous instruction, next instructions. | Analyzes instruction flow to predict interaction `ContextLevel`, split compound instructions into sub-steps, and check if custom Java reflection methods are required. Outputs a structured JSON. |
+| **`ActionExtractionPrompt`** | `CallLlmStep` / live action generation | `ACTIONS` | Current SUT DOM state, natural language instruction, step history. | Identifies the correct sequence of web automation actions (`CLICK`, `TYPE`, etc.) and CSS selectors to implement the instruction. Outputs structured JSON actions. |
+| **`VerificationPrompt`** | `VerifyOutcomeStep` / post-action validation | `VERIFICATION` | Natural language instruction, executed actions, pre/post screenshots. | Acts as an objective AI judge, scoring the outcome on rubrics (`intentMatch`, `visualDelta`, `absenceOfErrors`). Outputs a structured `VerificationResult` JSON. |
+| **`SemanticDivergencePrompt`** | `SemanticDivergenceAnalysisStep` / replay healing | `TEXT_ONLY` | Baseline page source, current page source. | Compares expected vs actual SUT page states during a replay cache divergence to generate a plain-English diff summary (e.g. `ID changed from checkout to pay-now`). |
+| **`VisualRcaPrompt`** | `StateMachineRunner.runVisualRca` / final error debug | `VISION` | Failed instruction, error details, current page screenshot. | Diagnoses visual root causes on conclusive execution failures (e.g., overlapping elements, cookie popups). Publishes a `DiagnosticErrorEvent`. |
+
+### B. Custom System Add-on Prompts
+
+To tune the LLM's system instructions for specific environments, applications, or testing scenarios, custom system prompt add-ons can be declared dynamically:
+
+1. **Resolution Precedence**:
+   System prompt add-ons are resolved with the following priority (first match wins):
+   1. **Test Dataset Layer**: Defined inside a dataset entry (e.g. `systemPromptAddon.general: "Prefer CSS selectors"`).
+   2. **YAML Playbook Layer**: Defined at the top level of the YAML playbook file.
+   3. **System/Environment Properties**: Defined in system properties or configuration files (e.g., `neodymium.properties`).
+
+2. **Per-Capability Customization Keys**:
+   Add-on keys can target a specific type of LLM prompt or apply generally to all prompts:
+   - `systemPromptAddon` (or `systemPromptAddon.default`): Appends to all system prompts.
+   - `systemPromptAddon.pesap`: Appends specifically to the `PesapPrompt`.
+   - `systemPromptAddon.general`: Appends specifically to the `ActionExtractionPrompt`.
+   - `systemPromptAddon.verification`: Appends specifically to the `VerificationPrompt`.
+   - `systemPromptAddon.rca`: Appends specifically to the `VisualRcaPrompt`.
+   - `systemPromptAddon.divergence`: Appends specifically to the `SemanticDivergencePrompt`.
+
+3. **YAML Playbook Declaration Examples**:
+   Add-ons can be specified at the top level of a YAML playbook in flat key format, nested map format, or plural map format:
+   ```yaml
+   # Flat key format
+   systemPromptAddon.general: "Always look for button text first"
+
+   # Nested map format
+   systemPromptAddon:
+     pesap: "Predict shorter execution timeouts"
+     verification: "Be extremely strict about price format changes"
+   ```
+
+4. **Safety Limits & Adherence Enforcement**:
+   To prevent custom prompt add-ons from diluting or overriding essential prompt instructions (such as JSON output schemas and capability rules), the following safety controls are enforced:
+   * **Length Limit**: Any custom prompt add-on value must not exceed **2000 characters**. If it does, a validation check throws an `IllegalArgumentException` early.
+   * **Adherence Enforcement Suffix**: When appending the custom add-on prompt, the compiler automatically appends a strict reminder suffix:
+     `"CRITICAL REMINDER: The above rules are custom extensions for this test step. You MUST still strictly follow all JSON schema formatting rules, action capabilities, and output guidelines specified in the main system prompt above."`
+     This prevents the LLM from generating invalid text/HTML outputs when guided by custom user rules.

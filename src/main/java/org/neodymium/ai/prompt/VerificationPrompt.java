@@ -49,7 +49,7 @@ public final class VerificationPrompt implements AiPrompt<VerificationResult>
     @Override
     public String compileSystemMessage(final ExecutionContext context)
     {
-        return """
+        final String basePrompt = """
             You are a strict, objective SUT Execution and Action Validator acting as an AI Judge.
             Your task is to evaluate if:
             1. The executed actions logically and correctly match the intent of the natural language instruction.
@@ -100,6 +100,7 @@ public final class VerificationPrompt implements AiPrompt<VerificationResult>
               }
             }
             """;
+        return SystemPromptAddonHelper.appendAddon(basePrompt, "verification", context);
     }
 
     @Override

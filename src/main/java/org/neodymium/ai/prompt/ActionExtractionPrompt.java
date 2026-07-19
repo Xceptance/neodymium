@@ -55,7 +55,7 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
     @Override
     public String compileSystemMessage(final ExecutionContext context)
     {
-        return """
+        final String basePrompt = """
                You are a professional web automation assistant. Your task is to fulfill the user's intent by analyzing the current DOM and visual state of the web application.
                
                CRITICAL: You must ONLY generate actions directly required by the active instruction. You can generate multiple sequential actions in the 'actions' array if needed to complete the current active instruction. However, do NOT anticipate or perform subsequent steps of the larger scenario (e.g., if the current instruction is to fill in the first name, last name, and email, do NOT fill in shipping addresses, card details, or click purchase/submit buttons unless explicitly instructed in the current active instruction).
@@ -88,6 +88,7 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                3. 'reasoning': String. Explanation for the actions chosen, why the visual check passed/failed, or why escalation is required.
                4. 'actions': Array of action objects. Each action must include 'action' (the type), 'locator' (the CSS selector), 'value' (string to type or select, optional), and 'reasoning'. Empty if status is 'ESCALATE' or it is a pure visual check.
                """;
+        return SystemPromptAddonHelper.appendAddon(basePrompt, "general", context);
     }
 
     @Override
@@ -95,10 +96,18 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
     {
         final SutState state = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
         final String instruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
-        
-        return "Instruction: " + instruction + "\n\n" +
-               "Current DOM State:\n" +
-               (state != null ? state.getTextContent() : "No DOM available");
+        final String diffSummary = (String) context.getTransientData().get(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY);
+
+        final StringBuilder sb = new StringBuilder();
+        sb.append("Instruction: ").append(instruction).append("\n\n");
+        if (diffSummary != null && !diffSummary.trim().isEmpty())
+        {
+            sb.append("Semantic Divergence/Change Summary (baseline vs current SUT state):\n")
+              .append(diffSummary).append("\n\n");
+        }
+        sb.append("Current DOM State:\n")
+          .append(state != null ? state.getTextContent() : "No DOM available");
+        return sb.toString();
     }
 
     @Override

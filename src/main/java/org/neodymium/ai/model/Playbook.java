@@ -44,12 +44,29 @@ public final class Playbook
     private final List<Map<String, SessionData.DataEntry>> dataSets;
 
     /**
+     * The unmodifiable map of custom system prompt add-ons by type.
+     */
+    private final Map<String, String> systemPromptAddons;
+
+    /**
      * Constructs an immutable Playbook with defensive copies of steps and datasets.
      *
      * @param steps the list of logical playbook steps
      * @param dataSets the list of dataset parameters maps
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets)
+    {
+        this(steps, dataSets, Collections.emptyMap());
+    }
+
+    /**
+     * Constructs an immutable Playbook with defensive copies of steps, datasets, and custom system prompt add-ons.
+     *
+     * @param steps the list of logical playbook steps
+     * @param dataSets the list of dataset parameters maps
+     * @param systemPromptAddons the map of custom system prompt add-ons by type
+     */
+    public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets, final Map<String, String> systemPromptAddons)
     {
         // Defensive copy of steps
         this.steps = steps != null ? new ArrayList<>(steps) : new ArrayList<>();
@@ -67,6 +84,7 @@ public final class Playbook
             }
         }
         this.dataSets = Collections.unmodifiableList(datasetsCopy);
+        this.systemPromptAddons = systemPromptAddons != null ? Collections.unmodifiableMap(new HashMap<>(systemPromptAddons)) : Collections.emptyMap();
     }
 
     /**
@@ -76,7 +94,7 @@ public final class Playbook
      */
     public List<PlaybookStep> getSteps()
     {
-        return this.steps;
+        return Collections.unmodifiableList(this.steps);
     }
 
     /**
@@ -88,4 +106,15 @@ public final class Playbook
     {
         return this.dataSets;
     }
+
+    /**
+     * Returns the unmodifiable map of custom system prompt add-ons by type.
+     *
+     * @return the unmodifiable system prompt add-ons map
+     */
+    public Map<String, String> getSystemPromptAddons()
+    {
+        return this.systemPromptAddons;
+    }
 }
+
