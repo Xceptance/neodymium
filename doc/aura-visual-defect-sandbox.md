@@ -46,6 +46,7 @@ src/test/resources/
 │       │   ├── escalation.html     # AXTREE to LEAN context level escalation interactive challenge
 │       │   ├── visual-escalation.html # STANDARD to VISUAL context level escalation interactive challenge
 │       │   └── sandbox/            # Focused scenario playground
+│       │       ├── index.html          # Playground portal linking all standalone scenarios
 │       │       ├── svg-icons.html      # SVG icon-only naming challenge
 │       │       ├── canvas-click.html   # Pixel coordinate click challenge
 │       │       ├── shadow-dom.html     # Shadow DOM piercing challenge
@@ -156,6 +157,22 @@ mvn test-compile
 Execute the JUnit 5 test classes:
 ```bash
 mvn test -Pjunit-5 -Dtest=com.xceptance.neodymium.ai.Aura*Test
+```
+
+### Start Server Indefinitely (For Development & Visual Inspection)
+There are two ways to start the embedded HTML server and keep it running indefinitely:
+
+#### Option A: Running the Main Class Directly (Recommended - No Code Modification Needed)
+Execute the `main` method of the `EmbeddedHtmlServer` class using Maven's exec plugin:
+```bash
+mvn compile test-compile exec:java -Dexec.mainClass="org.neodymium.ai.util.EmbeddedHtmlServer" -Dexec.classpathScope="test"
+```
+
+#### Option B: Running via JUnit (Requires Modifying RunServerTest)
+1. Open [RunServerTest.java](file:///home/rschwietzke/projects/GIT/neodymium-library/src/test/java/com/xceptance/neodymium/ai/core/RunServerTest.java) and temporarily remove or comment out the `@Disabled` annotation on the `runServerIndefinitely()` method.
+2. Execute the JUnit 5 test class:
+```bash
+mvn test -Pjunit-5 -Dtest=com.xceptance.neodymium.ai.core.RunServerTest#runServerIndefinitely
 ```
 
 ---
@@ -275,6 +292,33 @@ To benchmark and stress-test the robustness of test automation locators (IDs, CS
 The requirements, business features, and quality-level dimensions of the dynamic VÉRLA storefront have been extracted to a dedicated specification. 
 
 Please refer to the complete documentation in [VERLA_DEMO_STORE.md](VERLA_DEMO_STORE.md).
+
+---
+
+## 11. Isolated Action Test Pages (Unit Test Resources)
+
+In addition to the complex Apparel storefront, dashboard, and SPA applications, the sandbox includes directories containing simple, unstyled HTML files. Each directory corresponds to a specific JUnit action verification test suite class under `com.xceptance.neodymium.ai.action.*`. These pages contain minimalist structures designed to test isolated AI capabilities:
+
+| Test Directory | Path Pattern | Purpose / Test Coverage |
+| :--- | :--- | :--- |
+| **`ActionEdgeCasesTest/`** | `/{className}/test*.html` | Boundary and validation checks for core actions. |
+| **`AllActionsTest/`** | `/{className}/test*.html` | Flow combinations testing sequentially. |
+| **`AssertActionTest/`** | `/{className}/test*.html` | Simple target elements verifying textual or visual assertions. |
+| **`BranchActionTest/`** | `/{className}/test*.html` | Conditional flow switches and dynamic branching routes. |
+| **`CheckActionTest/`** | `/{className}/test*.html` | Basic checkboxes, radio buttons, and switches. |
+| **`ClickActionTest/`** | `/{className}/test*.html` | Standard buttons, link tags, invisible overlays, and SVG icons. |
+| **`DownloadTest/`** | `/{className}/test*.html` | Static/dynamic anchor tags initiating file downloads. |
+| **`FailureLineTracingTest/`** | `/{className}/test*.html` | Actions intentionally failing to verify framework trace outputs. |
+| **`HoverActionTest/`** | `/{className}/test*.html` | Mouse-over interactive menus and hover states. |
+| **`IncludeTest/`** | `/{className}/test*.html` | Nested frames and template insertions. |
+| **`NestedFrameTest/`** | `/{className}/test*.html` | Multi-layered iframe hierarchies. |
+| **`ScrollActionTest/`** | `/{className}/test*.html` | Scrolling viewports and inner containers. |
+| **`SelectActionTest/`** | `/{className}/test*.html` | Single and multi-select dropdown options. |
+| **`SwitchWindowActionTest/`** | `/{className}/test*.html` | Multi-window / browser tab switches. |
+| **`TypeActionTest/`** | `/{className}/test*.html` | Text input typing validations and textarea submissions. |
+| **`WaitActionTest/`** | `/{className}/test*.html` | Timeout delays and loading transitions. |
+
+These simple pages are loaded dynamically by their corresponding integration tests (e.g. `ClickActionTest.java` or `TypeActionTest.java`) which extend `BaseAiTest.java` and resolve URLs using the pattern `http://localhost:<port>/<ClassName>/<methodName>.html`.
 
 
 

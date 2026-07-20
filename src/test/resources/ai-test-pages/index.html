@@ -102,13 +102,25 @@
             </a>
             <ul class="nav-links">
                 <li><a href="#" class="active">Hub Home</a></li>
-                <li><a href="AuraGlanceTest/shop/index.html">Shop Home</a></li>
-                <li><a href="AuraGlanceTest/shop/forms.html">Forms Demo</a></li>
-                <li><a href="AuraGlanceTest/shop/escalation.html">Escalation Challenge</a></li>
-                <li><a href="AuraGlanceTest/shop/visual-escalation.html">Visual Escalation</a></li>
-                <li><a href="AuraGlanceTest/dashboard/index.html">Dashboard</a></li>
-                <li><a href="AuraGlanceTest/a11y/index.html">A11y Arena</a></li>
-                <li><a href="AuraGlanceTest/spa/index.html">React SPA</a></li>
+                <li class="dropdown">
+                    <a href="#" class="dropdown-trigger">
+                        Aura Sandbox
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: 4px; display: inline-block; vertical-align: middle;">
+                            <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a href="AuraGlanceTest/dashboard/index.html">SaaS Dashboard</a></li>
+                        <li><a href="AuraGlanceTest/shop/index.html">Poster Store</a></li>
+                        <li><a href="AuraGlanceTest/shop/forms.html">Forms Demo</a></li>
+                        <li><a href="AuraGlanceTest/a11y/index.html">A11y Arena</a></li>
+                        <li><a href="AuraGlanceTest/spa/index.html">React SPA</a></li>
+                        <li><a href="AuraGlanceTest/shop/escalation.html">Escalation Challenge</a></li>
+                        <li><a href="AuraGlanceTest/shop/visual-escalation.html">Visual Escalation</a></li>
+                    </ul>
+                </li>
+                <li><a href="AuraGlanceTest/shop/sandbox/index.html">Playground</a></li>
+                <li><a href="action-test-pages.html">Action Pages</a></li>
             </ul>
         </div>
     </header>
@@ -185,10 +197,9 @@
             </div>
         </div>
 
-        <div class="aura-grid-3" style="grid-template-columns: repeat(3, 1fr);">
-            <div style="grid-column: span 1;"></div>
+        <div class="aura-grid-3">
             <!-- Card 7: Visual Escalation -->
-            <div class="aura-card" style="grid-column: span 1;">
+            <div class="aura-card">
                 <div class="card-header-flex">
                     <h3 style="font-size: 1.25rem; font-weight: 600;">Visual Escalation</h3>
                     <span class="badge badge-purple">Multimodal Visual</span>
@@ -196,7 +207,26 @@
                 <p style="color: var(--text-secondary); font-size: 0.9rem;">Verify text and click elements drawn purely graphically on canvas or via CSS pseudo-elements, forcing escalation from STANDARD to VISUAL.</p>
                 <a href="AuraGlanceTest/shop/visual-escalation.html" class="app-link">Launch Visual Escalation &rarr;</a>
             </div>
-            <div style="grid-column: span 1;"></div>
+
+            <!-- Card 8: Sandbox Playground -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Focused Playgrounds</h3>
+                    <span class="badge badge-cyan">Isolated Scenarios</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Navigate to our isolated web challenge pages (Shadow DOM, Canvas clicks, Click Interceptions, SVG icons, Scroll Overflows, Hover chains, etc.).</p>
+                <a href="AuraGlanceTest/shop/sandbox/index.html" class="app-link">Launch Scenario Playground &rarr;</a>
+            </div>
+
+            <!-- Card 9: Action Pages -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Action Test Pages</h3>
+                    <span class="badge badge-purple">Isolated Units</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Browse the full collection of simple, unstyled HTML pages designed for verifying individual Selenium / Selenide actions (Clicks, Typings, Drops, Frames, etc.).</p>
+                <a href="action-test-pages.html" class="app-link">Browse Action Pages &rarr;</a>
+            </div>
         </div>
 
         <div class="aura-card" style="margin-top: 2.5rem; background: radial-gradient(circle at center, hsla(260, 85%, 65%, 0.05), transparent 80%);">

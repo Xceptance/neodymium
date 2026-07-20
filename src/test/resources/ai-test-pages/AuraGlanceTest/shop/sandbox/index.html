@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Sandbox - Focused Scenario Playground</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <style>
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .badge-purple {
+            background: rgba(139, 92, 246, 0.2);
+            color: hsl(260, 85%, 65%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        .badge-cyan {
+            background: rgba(6, 182, 212, 0.2);
+            color: hsl(190, 90%, 50%);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+        .badge-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--status-success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--status-warning);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .app-link {
+            display: inline-block;
+            margin-top: 1.5rem;
+            text-decoration: none;
+            color: var(--accent-cyan);
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: var(--transition-smooth);
+        }
+        .app-link:hover {
+            color: var(--text-primary);
+            text-shadow: 0 0 8px var(--accent-cyan-glow);
+        }
+        .glow-title {
+            background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.8rem;
+            font-weight: 800;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.02em;
+        }
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.15rem;
+            margin-bottom: 2rem;
+            max-width: 800px;
+        }
+        .card-header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="../../index.html" class="brand">
+                <span class="brand-icon"></span>
+                <span>AURA SANDBOX</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="../../index.html">Hub Home</a></li>
+                <li><a href="../index.html">Poster Store</a></li>
+                <li><a href="../homepage-perfect.html">Apparel Store</a></li>
+                <li><a href="../forms.html">Forms Demo</a></li>
+                <li><a href="../escalation.html">Escalation Challenge</a></li>
+                <li><a href="../visual-escalation.html">Visual Escalation</a></li>
+                <li><a href="../../dashboard/index.html">Dashboard</a></li>
+                <li><a href="../../a11y/index.html">A11y Arena</a></li>
+                <li><a href="../../spa/index.html">React SPA</a></li>
+                <li><a href="#" class="active">Playground</a></li>
+            </ul>
+        </div>
+    </header>
+
+    <main class="aura-container">
+        <div class="aura-hero">
+            <h1 class="glow-title">Focused Scenario Playground</h1>
+            <p class="subtitle">A library of isolated standalone scenario pages designed to stress-test specific automation, selection, and visual checking capabilities of the Neodymium Aura AI framework.</p>
+        </div>
+
+        <div class="aura-grid-3">
+            <!-- 1. SVG Icons -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">SVG Icon Buttons</h3>
+                    <span class="badge badge-purple">Visual Lean</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Buttons enclosing raw SVGs with no text or labels. Tests AI visual shape recognition for icon identification (Edit, Delete, etc.).</p>
+                <a href="svg-icons.html" class="app-link">Open Challenge &rarr;</a>
+            </div>
+
+            <!-- 2. Canvas Click -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Canvas Hotspots</h3>
+                    <span class="badge badge-purple">Coordinates</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Canvas element containing pixel-rendered targets. Tests visual mapping and offset coordinate clicks on graphical objects.</p>
+                <a href="canvas-click.html" class="app-link">Open Challenge &rarr;</a>
+            </div>
+
+            <!-- 3. Shadow DOM -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Shadow DOM</h3>
+                    <span class="badge badge-cyan">DOM Piercing</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Interactive input form wrapped inside an open Web Component shadow root. Tests automatic shadow DOM traversal.</p>
+                <a href="shadow-dom.html" class="app-link">Open Challenge &rarr;</a>
+            </div>
+        </div>
+
+        <div class="aura-grid-3" style="margin-top: 2rem;">
+            <!-- 4. Click Intercept -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Click Interception</h3>
+                    <span class="badge badge-cyan">Self-Healing</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Action targets blocked by overlaying elements. Tests error recovery when encountering click interceptions.</p>
+                <a href="click-intercept.html" class="app-link">Open Challenge &rarr;</a>
+            </div>
+
+            <!-- 5. Dynamic Reveal -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Dynamic Reveal</h3>
+                    <span class="badge badge-success">Timing</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Elements injected dynamically after asynchronous timing delays. Tests execution settling limits and waits.</p>
+                <a href="dynamic-reveal.html" class="app-link">Open Challenge &rarr;</a>
+            </div>
+
+            <!-- 6. Hover Chain -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Hover Chain Menu</h3>
+                    <span class="badge badge-success">Mouse Actions</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Nested dropdown items that are only rendered when hover states are actively maintained. Tests sequential mouse hover chains.</p>
+                <a href="hover-chain.html" class="app-link">Open Challenge &rarr;</a>
+            </div>
+        </div>
+
+        <div class="aura-grid-3" style="margin-top: 2rem;">
+            <!-- 7. Table Sorting -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Table Sorting</h3>
+                    <span class="badge badge-success">Wait States</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Data table sorting with overlay loader lag. Tests waiting for DOM stability prior to validating assertions.</p>
+                <a href="table-sorting.html" class="app-link">Open Challenge &rarr;</a>
+            </div>
+
+            <!-- 8. Scroll List -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Scroll Overflow</h3>
+                    <span class="badge badge-success">Viewport</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Buttons hidden deep inside narrow scrollable overflow container elements. Tests scrolling to target actions.</p>
+                <a href="scroll-list.html" class="app-link">Open Challenge &rarr;</a>
+            </div>
+
+            <!-- 9. Floating Labels -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Floating Label Overlaps</h3>
+                    <span class="badge badge-warning">Visual Anomaly</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Input field labels visually colliding with autofilled values. Tests visual anomaly checking and layout warnings.</p>
+                <a href="floating-labels.html" class="app-link">Open Challenge &rarr;</a>
+            </div>
+        </div>
+
+        <div class="aura-grid-3" style="margin-top: 2rem; margin-bottom: 3rem;">
+            <!-- 10. Cross-Origin Frame -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Cross-Origin Frames</h3>
+                    <span class="badge badge-cyan">Security</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Parent document nesting an iframe served from a different origin. Tests switching WebDriver context domains.</p>
+                <a href="cross-origin-iframe.html" class="app-link">Open Challenge &rarr;</a>
+            </div>
+
+            <!-- 11. Mock OAuth Login -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Mock OAuth Login</h3>
+                    <span class="badge badge-cyan">Redirection</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Simulates external auth redirection and callback parameters. Tests handling redirects and window handles.</p>
+                <a href="mock-oauth-login.html" class="app-link">Open Challenge &rarr;</a>
+            </div>
+
+            <!-- Spacer -->
+            <div style="visibility: hidden;"></div>
+        </div>
+    </main>
+
+</body>
+</html>
