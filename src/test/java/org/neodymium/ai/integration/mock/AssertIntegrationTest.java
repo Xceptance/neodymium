@@ -53,17 +53,28 @@ public class AssertIntegrationTest extends BaseAiTest
 {
 
     /**
-     * Set up test page URL and queue LLM mock responses before each test.
+     * Set up test page URL before each test.
      *
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupPropertiesAndMock(final AiSession session)
+    public void setupProperties(final AiSession session)
     {
         final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
         session.getExecutionContext().getSessionData().putDynamic("assert.test.url", pageUrl, false);
+    }
 
+    /**
+     * Tests Assert action.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testAssertMock(final AiSession session)
+    {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        final String pageUrl = (String) session.getExecutionContext().getSessionData().get("assert.test.url");
 
         // Step 1: Open SUT
         mock.addResponse(new LlmResponse("""
@@ -104,17 +115,7 @@ public class AssertIntegrationTest extends BaseAiTest
               "reasoning": "assertion verified"
             }
             """, null, "mock"));
-    }
 
-    /**
-     * Tests Assert action.
-     *
-     * @param session the thread-isolated AiSession
-     */
-    @AiPlaybook
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testAssertMock(final AiSession session)
-    {
         runPlaybook(session, """
             data:
               - testId: assertData
@@ -140,5 +141,62 @@ public class AssertIntegrationTest extends BaseAiTest
         {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * Tests that a failing ASSERT step throws AssertionError.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", name = "custom_assert_failure_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertFailureMock(final AiSession session)
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        
+        // Mock navigate (succeeds)
+        final String pageUrl = (String) session.getExecutionContext().getSessionData().get("assert.test.url");
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to assert test page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+        mock.addResponse(new LlmResponse("""
+            {
+              "passed": true,
+              "reasoning": "navigated"
+            }
+            """, null, "mock"));
+
+        // Mock failing ASSERT step
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "ASSERT",
+                  "locator": "#welcome-message",
+                  "value": "Goodbye!",
+                  "reasoning": "Verify failing welcome text"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        // The assertion should fail, throwing AssertionError
+        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            runPlaybook(session, """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that #welcome-message has text 'Goodbye!'
+                """);
+        });
     }
 }

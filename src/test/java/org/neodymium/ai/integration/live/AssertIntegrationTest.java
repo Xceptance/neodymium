@@ -18,9 +18,13 @@
  */
 package org.neodymium.ai.integration.live;
 
+import static com.codeborne.selenide.Condition.exist;
+import static com.codeborne.selenide.Condition.hidden;
 import static com.codeborne.selenide.Condition.text;
+import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 
+import com.codeborne.selenide.Selenide;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
@@ -64,9 +68,17 @@ public class AssertIntegrationTest extends BaseAiTest
               - testId: assertData
             steps: |
               Open ${assert.test.url} in the browser
-              Assert that #welcome-message has text 'Welcome to our web store!'
+              Assert that the page title is 'Assert Action Test'
+              Assert that the welcome text 'Welcome to our web store!' is visible
+              Assert that the 'Clickable Button' button is visible
+              Assert that the hidden 'Secret Button' is invisible
+              Assert that the 'Clickable Button' button exists
             """);
 
+        Selenide.Wait().until(d -> "Assert Action Test".equals(d.getTitle()));
         $("#welcome-message").shouldHave(text("Welcome to our web store!"));
+        $("#visible-btn").shouldBe(visible);
+        $("#hidden-btn").shouldBe(hidden);
+        $("#visible-btn").should(exist);
     }
 }

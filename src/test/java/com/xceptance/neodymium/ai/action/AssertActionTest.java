@@ -49,4 +49,26 @@ public final class AssertActionTest extends BaseAiTest
         // Verify element invisibility
         Neodymium.ai().execute("Verify that the 'Secret Button' button is hidden.");
     }
+
+    /**
+     * Verifies that negative assertions throw AssertionError as expected.
+     */
+    @NeodymiumTest
+    public void testAssertFailure()
+    {
+        currentTestUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        open(currentTestUrl);
+
+        // Expect AssertionError when title is wrong
+        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            Neodymium.ai().execute("Assert that the page title is 'Wrong Title'.");
+        });
+
+        // Expect AssertionError when welcome message is wrong
+        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            Neodymium.ai().execute("Verify that the welcome message is 'Goodbye!'.");
+        });
+    }
 }
