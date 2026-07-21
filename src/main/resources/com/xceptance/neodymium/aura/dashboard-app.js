@@ -154,8 +154,8 @@
         const dashboardView = document.getElementById('dashboardView');
         const reportView = document.getElementById('reportView');
 
-        const editorFileName = document.getElementById('editorFileName');
-        const editorContent = document.getElementById('editorContent');
+        const getEditorFileName = () => document.getElementById('editorFileName');
+        const getEditorContent = () => document.getElementById('editorContent');
         const reportDisplayName = document.getElementById('reportDisplayName');
         const reportIframe = document.getElementById('reportIframe');
 
@@ -174,7 +174,7 @@
         const terminalConsole = document.getElementById('terminalConsole');
         const runSpinner = document.getElementById('runSpinner');
         const yamlFileList = document.getElementById('yamlFileList');
-        const allureHistoryList = document.getElementById('allureHistoryList');
+        const reportingHistoryList = document.getElementById('reportingHistoryList');
 
         // State variables
         const clientId = 'c-' + Math.random().toString(36).substring(2) + '-' + Date.now().toString(36);
@@ -197,6 +197,12 @@
             initResizers();
             // Start history view in State 1 (full-width runs list)
             applyHistoryState(1);
+
+            document.addEventListener('htmx:afterSwap', function(evt) {
+                if (evt.detail.target.id === 'yamlFileList') {
+                    syncCheckboxesFromState();
+                }
+            });
 
             document.getElementById('chatInput').addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
@@ -275,72 +281,63 @@
         }
 
         function toggleExpandFile(file) {
-            expandedFiles[file] = !expandedFiles[file];
-            loadFilesList(currentFilesListCached);
+            htmx.ajax('POST', '/api/files/toggle?file=' + encodeURIComponent(file), { target: '#yamlFileList', swap: 'outerHTML' });
         }
 
-        async function loadFiles() {
-            try {
-                const res = await fetch('/api/files');
-                currentFilesListCached = await res.json();
-                loadFilesList(currentFilesListCached);
-            } catch (e) {
-                console.error("Failed to load files", e);
-            }
+        function loadFiles() {
+            return new Promise(async (resolve, reject) => {
+                let resolved = false;
+                const done = () => {
+                    if (!resolved) {
+                        resolved = true;
+                        resolve();
+                    }
+                };
+                setTimeout(done, 1000);
+                try {
+                    const res = await fetch('/api/files');
+                    currentFilesListCached = await res.json();
+                    if (window.initializedAlready) {
+                        const listener = function(evt) {
+                            if (evt.detail.target && evt.detail.target.id === 'yamlFileList') {
+                                document.removeEventListener('htmx:afterSwap', listener);
+                                done();
+                            }
+                        };
+                        document.addEventListener('htmx:afterSwap', listener);
+                        htmx.ajax('GET', '/api/files/list', { target: '#yamlFileList', swap: 'outerHTML' });
+                    } else {
+                        window.initializedAlready = true;
+                        syncCheckboxesFromState();
+                        done();
+                    }
+                } catch (e) {
+                    console.error("Failed to load files", e);
+                    done();
+                }
+            });
+        }
+
+        function syncCheckboxesFromState() {
+            const fileCbs = document.querySelectorAll('.file-select-cb');
+            fileCbs.forEach(cb => {
+                const file = cb.getAttribute('data-file');
+                const fileDto = currentFilesListCached.find(f => f.file === file);
+                if (fileDto) {
+                    cb.checked = isAllDatasetsChecked(fileDto);
+                }
+            });
+
+            const datasetCbs = document.querySelectorAll('.dataset-select-cb');
+            datasetCbs.forEach(cb => {
+                const file = cb.getAttribute('data-file');
+                const id = cb.getAttribute('data-id');
+                cb.checked = isDatasetSelected(file, id);
+            });
         }
 
         function loadFilesList(files) {
-            if (!Array.isArray(files)) {
-                yamlFileList.innerHTML = `<div style="padding: 12px; color: var(--danger); font-size: 12px;">Failed to load files. Response was not an array.</div>`;
-                return;
-            }
-            if (files.length === 0) {
-                yamlFileList.innerHTML = `<div style="padding: 12px; color: var(--text-secondary); font-size: 12px; font-style: italic; text-align: center;">No YAML test files found in src/test/resources.</div>`;
-                return;
-            }
-            yamlFileList.innerHTML = files.map(item => {
-                const isExpanded = !!expandedFiles[item.file];
-                const allChecked = isAllDatasetsChecked(item);
-
-                return `
-                    <div class="file-container" style="display: flex; flex-direction: column; margin-bottom: 6px;">
-                        <div class="list-item" style="position: relative; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0" onclick="toggleExpandFile('${item.file}')">
-                            <div class="item-main" style="min-width: 0; overflow: hidden; display: flex; align-items: center; flex-grow: 1;">
-                                <i class="fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}" 
-                                   style="margin-right: 8px; color: var(--text-secondary); font-size: 10px; width: 12px; text-align: center;"></i>
-                                <input type="checkbox" class="file-select-cb" data-file="${item.file}" 
-                                       style="margin-right: 8px; cursor: pointer;" 
-                                       ${allChecked ? 'checked' : ''} 
-                                       onclick="event.stopPropagation(); toggleSelectAllDatasets('${item.file}', this.checked)">
-                                <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.file}</span>
-                            </div>
-                            <button class="edit-icon-btn" onclick="event.stopPropagation(); openYamlEditor('${item.file}')" 
-                                    style="padding: 4px 8px; color: var(--text-secondary);" 
-                                    title="Edit YAML Steps" alt="Edit YAML Steps for ${item.file}" aria-label="Edit YAML Steps for ${item.file}">
-                                <i class="fa-solid fa-pen" style="font-size: 11px;" aria-hidden="true"></i>
-                            </button>
-                        </div>
-                        
-                        <div class="dataset-list" id="datasets-${item.file}" style="display: ${isExpanded ? 'flex' : 'none'}; flex-direction: column; padding-left: 24px; margin-top: 4px; gap: 4px;">
-                            ${item.datasets.map(dataset => {
-                    const isChecked = isDatasetSelected(item.file, dataset.id);
-                    return `
-                                    <div class="dataset-item" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); justify-content: space-between; cursor: pointer;" onclick="const cb = this.querySelector('.dataset-select-cb'); cb.checked = !cb.checked; toggleSelectDataset('${item.file}', '${dataset.id}', cb.checked);">
-                                        <div style="display: flex; align-items: center; min-width: 0; overflow: hidden;">
-                                            <input type="checkbox" class="dataset-select-cb" data-file="${item.file}" data-id="${dataset.id}" 
-                                                   style="margin-right: 8px; cursor: pointer;" 
-                                                   ${isChecked ? 'checked' : ''} 
-                                                   onclick="event.stopPropagation(); toggleSelectDataset('${item.file}', '${dataset.id}', this.checked)">
-                                            <i class="fa-solid fa-database" style="margin-right: 6px; color: var(--accent-primary); opacity: 0.7; flex-shrink: 0;"></i>
-                                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 4px;">${dataset.label}</span>
-                                        </div>
-                                    </div>
-                                `;
-                }).join('')}
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            syncCheckboxesFromState();
             updateQueueList();
         }
 
@@ -461,6 +458,16 @@
             const header = bar.querySelector('.col-runs-mini-header');
             bar.innerHTML = '';
             if (header) bar.appendChild(header);
+
+            if (activeRunStats.running) {
+                const chip = document.createElement('div');
+                chip.className = 'mini-run-chip running selected';
+                chip.title = 'Running \u00b7 Live Execution';
+                chip.innerHTML = `<span class="chip-number">#—</span><span class="chip-dot"></span>`;
+                chip.addEventListener('click', () => openCurrentRunView());
+                bar.appendChild(chip);
+            }
+
             historyCached.forEach(run => {
                 let statusClass = 'failed';
                 if (run.status === 'Passed') {
@@ -659,11 +666,11 @@
 
         async function loadHistory() {
             try {
-                const res = await fetch('/api/allure/history');
+                const res = await fetch('/api/reporting/history');
                 historyCached = await res.json();
                 renderHistoryTable();
             } catch (e) {
-                console.error("Failed to load allure history", e);
+                console.error("Failed to load reporting history", e);
             }
         }
 
@@ -725,7 +732,7 @@
                         : (!hasReport ? 'title="Allure report not available"' : '');
                     const allureDisabled = (!hasReport || !allureEnabled) ? 'disabled' : '';
                     const allureAction = hasReport
-                        ? `onclick="event.stopPropagation(); window.open('/api/allure/report/${item.id}/allure-report/index.html', '_blank')"`
+                        ? `onclick="event.stopPropagation(); window.open('/api/reporting/report/${item.id}/allure-report/index.html', '_blank')"`
                         : '';
 
                     const allureNote = (!allureEnabled)
@@ -768,7 +775,7 @@
                     `;
                 }).join('');
             }
-            allureHistoryList.innerHTML = rowsHtml;
+            reportingHistoryList.innerHTML = rowsHtml;
         }
 
         let currentTestFile = null;
@@ -953,7 +960,7 @@
 
             document.getElementById('historyPlaceholder').style.display = 'none';
             const iframe = document.getElementById('historyConsoleIframe');
-            const dataUrl = '/api/allure/report/' + reportId + '/' + testFile;
+            const dataUrl = '/api/reporting/report/' + reportId + '/' + testFile;
             iframe.src = '/interactive_console.html?dataUrl=' + encodeURIComponent(dataUrl);
 
             // Transition to State 4: mini-runs bar, tests list, and wide details
@@ -1040,7 +1047,7 @@
             content.innerText = 'Loading...';
             modal.style.display = 'flex';
             try {
-                const res = await fetch(`/api/allure/report/${runId}/${safeLogName}`);
+                const res = await fetch(`/api/reporting/report/${runId}/${safeLogName}`);
                 if (res.ok) {
                     const text = await res.text();
                     content.innerText = text || '(empty log)';
@@ -1064,9 +1071,9 @@
         }
 
         async function deleteReport(reportId) {
-            if (confirm(`Are you sure you want to delete Allure report "${reportId}"?`)) {
+            if (confirm(`Are you sure you want to delete report "${reportId}"?`)) {
                 try {
-                    const res = await fetch('/api/allure/delete', {
+                    const res = await fetch('/api/reporting/delete', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ id: reportId })
@@ -1091,7 +1098,7 @@
             content.innerText = 'Loading...';
             modal.style.display = 'flex';
             try {
-                const res = await fetch(`/api/allure/report/${reportId}/execution.log`);
+                const res = await fetch(`/api/reporting/report/${reportId}/execution.log`);
                 if (res.ok) {
                     const text = await res.text();
                     content.innerText = text;
@@ -1321,7 +1328,7 @@
                 } else {
                     createTestModal.style.display = 'none';
                     await loadFiles();
-                    openYamlEditor(data.file);
+                    await openYamlEditor(data.file);
                 }
             } catch (e) {
                 console.error("Failed to create test", e);
@@ -1509,13 +1516,14 @@
                         });
                     }
                     await loadFiles();
+                    updateQueueList();
                 } else if (data.action === 'edit_or_create_test' && data.filename && data.content) {
                     await loadFiles();
                     activeEditingFile = data.filename;
-                    editorFileName.innerText = data.filename;
-                    editorContent.value = data.content;
+                    getEditorFileName().innerText = data.filename;
+                    getEditorContent().value = data.content;
                     updateCenterLayout();
-                    editorContent.focus();
+                    getEditorContent().focus();
                 }
 
             } catch (e) {
@@ -1550,17 +1558,27 @@
             updateCenterLayout();
         }
 
-        async function openYamlEditor(filename) {
-            activeEditingFile = filename;
-            editorFileName.innerText = filename;
-            try {
-                const res = await fetch(`/api/read?file=${encodeURIComponent(filename)}`);
-                const data = await res.json();
-                editorContent.value = data.content || '';
+        function openYamlEditor(filename) {
+            return new Promise((resolve) => {
+                let resolved = false;
+                const done = () => {
+                    if (!resolved) {
+                        resolved = true;
+                        resolve();
+                    }
+                };
+                setTimeout(done, 1000);
+                activeEditingFile = filename;
                 updateCenterLayout();
-            } catch (e) {
-                showToast("Failed to load file content: " + e.message, "error");
-            }
+                const listener = function(evt) {
+                    if (evt.detail.target && evt.detail.target.id === 'editorPanel') {
+                        document.removeEventListener('htmx:afterSwap', listener);
+                        done();
+                    }
+                };
+                document.addEventListener('htmx:afterSwap', listener);
+                htmx.ajax('GET', `/api/editor?file=${encodeURIComponent(filename)}`, { target: '#editorPanel', swap: 'outerHTML' });
+            });
         }
 
         async function saveYamlFile() {
@@ -1569,7 +1587,7 @@
                 const res = await fetch('/api/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ file: activeEditingFile, content: editorContent.value })
+                    body: JSON.stringify({ file: activeEditingFile, content: getEditorContent().value })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -1601,7 +1619,7 @@
                 if (data.success) {
                     selectedDatasets = selectedDatasets.filter(d => d.file !== activeEditingFile);
                     closeEditor();
-                    loadFiles();
+                    await loadFiles();
                 } else {
                     showToast("Error deleting: " + data.error, "error");
                 }
@@ -1617,7 +1635,7 @@
 
         function openReportView(reportId) {
             reportDisplayName.innerText = reportId;
-            reportIframe.src = `/api/allure/report/${reportId}/allure-report/index.html`;
+            reportIframe.src = `/api/reporting/report/${reportId}/allure-report/index.html`;
 
             document.body.classList.add('report-active');
             showView('reportView');
@@ -1800,7 +1818,7 @@
             const video = document.getElementById('optVideo').checked;
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
-            const allure = document.getElementById('optAllure').checked;
+            const allure = document.getElementById('optReporting').checked;
 
             isRunning = true;
             consoleOpened = true;
@@ -1864,7 +1882,7 @@
             const video = document.getElementById('optVideo').checked;
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
-            const allure = document.getElementById('optAllure').checked;
+            const allure = document.getElementById('optReporting').checked;
 
             isRunning = true;
             consoleOpened = true;
@@ -1924,7 +1942,7 @@
             const video = document.getElementById('optVideo').checked;
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
-            const allure = document.getElementById('optAllure').checked;
+            const allure = document.getElementById('optReporting').checked;
 
             isRunning = true;
             consoleOpened = true;
@@ -2323,7 +2341,7 @@
                                 }
 
                                 // Only reload history and update layout on the running→stopped
-                                // transition edge to avoid redundant /api/allure/history fetches
+                                // transition edge to avoid redundant /api/reporting/history fetches
                                 // and unnecessary DOM updates on every idle poll cycle.
                                 if (lastKnownRunning) {
                                     loadHistory();

@@ -502,5 +502,10 @@
 			<artifactId>langchain4j-google-ai-gemini</artifactId>
 			<version>${langchain4j.version}</version>
 		</dependency>
+		<dependency>
+			<groupId>org.thymeleaf</groupId>
+			<artifactId>thymeleaf</artifactId>
+			<version>3.1.2.RELEASE</version>
+		</dependency>
 	</dependencies>
 </project>

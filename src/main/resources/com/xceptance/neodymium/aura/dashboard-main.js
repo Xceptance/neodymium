@@ -174,7 +174,7 @@
         const terminalConsole = document.getElementById('terminalConsole');
         const runSpinner = document.getElementById('runSpinner');
         const yamlFileList = document.getElementById('yamlFileList');
-        const allureHistoryList = document.getElementById('allureHistoryList');
+        const reportingHistoryList = document.getElementById('reportingHistoryList');
 
         // State variables
         const clientId = 'c-' + Math.random().toString(36).substring(2) + '-' + Date.now().toString(36);
@@ -461,6 +461,16 @@
             const header = bar.querySelector('.col-runs-mini-header');
             bar.innerHTML = '';
             if (header) bar.appendChild(header);
+
+            if (activeRunStats.running) {
+                const chip = document.createElement('div');
+                chip.className = 'mini-run-chip running selected';
+                chip.title = 'Running \u00b7 Live Execution';
+                chip.innerHTML = `<span class="chip-number">#—</span><span class="chip-dot"></span>`;
+                chip.addEventListener('click', () => openCurrentRunView());
+                bar.appendChild(chip);
+            }
+
             historyCached.forEach(run => {
                 let statusClass = 'failed';
                 if (run.status === 'Passed') {
@@ -659,11 +669,11 @@
 
         async function loadHistory() {
             try {
-                const res = await fetch('/api/allure/history');
+                const res = await fetch('/api/reporting/history');
                 historyCached = await res.json();
                 renderHistoryTable();
             } catch (e) {
-                console.error("Failed to load allure history", e);
+                console.error("Failed to load reporting history", e);
             }
         }
 
@@ -725,7 +735,7 @@
                         : (!hasReport ? 'title="Allure report not available"' : '');
                     const allureDisabled = (!hasReport || !allureEnabled) ? 'disabled' : '';
                     const allureAction = hasReport
-                        ? `onclick="event.stopPropagation(); window.open('/api/allure/report/${item.id}/allure-report/index.html', '_blank')"`
+                        ? `onclick="event.stopPropagation(); window.open('/api/reporting/report/${item.id}/allure-report/index.html', '_blank')"`
                         : '';
 
                     const allureNote = (!allureEnabled)
@@ -768,7 +778,7 @@
                     `;
                 }).join('');
             }
-            allureHistoryList.innerHTML = rowsHtml;
+            reportingHistoryList.innerHTML = rowsHtml;
         }
 
         let currentTestFile = null;
@@ -953,7 +963,7 @@
 
             document.getElementById('historyPlaceholder').style.display = 'none';
             const iframe = document.getElementById('historyConsoleIframe');
-            const dataUrl = '/api/allure/report/' + reportId + '/' + testFile;
+            const dataUrl = '/api/reporting/report/' + reportId + '/' + testFile;
             iframe.src = '/interactive_console.html?dataUrl=' + encodeURIComponent(dataUrl);
 
             // Transition to State 4: mini-runs bar, tests list, and wide details
@@ -1040,7 +1050,7 @@
             content.innerText = 'Loading...';
             modal.style.display = 'flex';
             try {
-                const res = await fetch(`/api/allure/report/${runId}/${safeLogName}`);
+                const res = await fetch(`/api/reporting/report/${runId}/${safeLogName}`);
                 if (res.ok) {
                     const text = await res.text();
                     content.innerText = text || '(empty log)';
@@ -1064,9 +1074,9 @@
         }
 
         async function deleteReport(reportId) {
-            if (confirm(`Are you sure you want to delete Allure report "${reportId}"?`)) {
+            if (confirm(`Are you sure you want to delete report "${reportId}"?`)) {
                 try {
-                    const res = await fetch('/api/allure/delete', {
+                    const res = await fetch('/api/reporting/delete', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ id: reportId })
@@ -1091,7 +1101,7 @@
             content.innerText = 'Loading...';
             modal.style.display = 'flex';
             try {
-                const res = await fetch(`/api/allure/report/${reportId}/execution.log`);
+                const res = await fetch(`/api/reporting/report/${reportId}/execution.log`);
                 if (res.ok) {
                     const text = await res.text();
                     content.innerText = text;
@@ -1509,6 +1519,7 @@
                         });
                     }
                     await loadFiles();
+                    updateQueueList();
                 } else if (data.action === 'edit_or_create_test' && data.filename && data.content) {
                     await loadFiles();
                     activeEditingFile = data.filename;
@@ -1617,7 +1628,7 @@
 
         function openReportView(reportId) {
             reportDisplayName.innerText = reportId;
-            reportIframe.src = `/api/allure/report/${reportId}/allure-report/index.html`;
+            reportIframe.src = `/api/reporting/report/${reportId}/allure-report/index.html`;
 
             document.body.classList.add('report-active');
             showView('reportView');
@@ -1800,7 +1811,7 @@
             const video = document.getElementById('optVideo').checked;
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
-            const allure = document.getElementById('optAllure').checked;
+            const allure = document.getElementById('optReporting').checked;
 
             isRunning = true;
             consoleOpened = true;
@@ -1864,7 +1875,7 @@
             const video = document.getElementById('optVideo').checked;
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
-            const allure = document.getElementById('optAllure').checked;
+            const allure = document.getElementById('optReporting').checked;
 
             isRunning = true;
             consoleOpened = true;
@@ -1924,7 +1935,7 @@
             const video = document.getElementById('optVideo').checked;
             const keepOpen = document.getElementById('optKeepOpen').checked;
             const interactive = document.getElementById('optInteractive').checked;
-            const allure = document.getElementById('optAllure').checked;
+            const allure = document.getElementById('optReporting').checked;
 
             isRunning = true;
             consoleOpened = true;
@@ -2323,7 +2334,7 @@
                                 }
 
                                 // Only reload history and update layout on the running→stopped
-                                // transition edge to avoid redundant /api/allure/history fetches
+                                // transition edge to avoid redundant /api/reporting/history fetches
                                 // and unnecessary DOM updates on every idle poll cycle.
                                 if (lastKnownRunning) {
                                     loadHistory();

@@ -21,9 +21,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests Allure report endpoints: generating reports, reading history, serving report files, and deleting reports.
+ * Tests Reporting history, report serving, compilation triggers, and report deletions.
+ *
+ * @author AI-generated: Antigravity
+ * @author Xceptance GmbH 2026
  */
-public final class AuraManagerAllureApiTest
+public final class AuraManagerReportingApiTest
 {
     private HttpServer server;
     private int port;
@@ -54,7 +57,7 @@ public final class AuraManagerAllureApiTest
     public void testGetHistoryEmpty() throws IOException, InterruptedException
     {
         final HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:" + port + "/api/allure/history"))
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/reporting/history"))
             .GET()
             .build();
         final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -65,10 +68,10 @@ public final class AuraManagerAllureApiTest
     }
 
     @Test
-    public void testGenerateAllureReport() throws IOException, InterruptedException
+    public void testGenerateReportingReport() throws IOException, InterruptedException
     {
         final HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:" + port + "/api/allure/generate"))
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/reporting/generate"))
             .POST(HttpRequest.BodyPublishers.noBody())
             .build();
         final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -81,7 +84,7 @@ public final class AuraManagerAllureApiTest
     @Test
     public void testServeReportFileAndSecurity() throws IOException, InterruptedException
     {
-        final File historyDir = com.xceptance.neodymium.aura.NeodymiumAuraManager.getReportHistoryDir();
+        final File historyDir = new com.xceptance.neodymium.aura.AuraReportingService().getReportHistoryDir();
         if (!historyDir.exists())
         {
             historyDir.mkdirs();
@@ -103,7 +106,7 @@ public final class AuraManagerAllureApiTest
         {
             // 1. Valid request
             HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://127.0.0.1:" + port + "/api/allure/report/" + reportId + "/allure-report/index.html"))
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/reporting/report/" + reportId + "/allure-report/index.html"))
                 .GET()
                 .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -112,7 +115,7 @@ public final class AuraManagerAllureApiTest
 
             // 2. Directory traversal attempt
             request = HttpRequest.newBuilder()
-                .uri(URI.create("http://127.0.0.1:" + port + "/api/allure/report/../../pom.xml"))
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/reporting/report/../../pom.xml"))
                 .GET()
                 .build();
             response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -139,7 +142,7 @@ public final class AuraManagerAllureApiTest
     public void testServeReportNonExistentFile() throws IOException, InterruptedException
     {
         final HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:" + port + "/api/allure/report/test-report-nonexistent-999/index.html"))
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/reporting/report/test-report-nonexistent-999/index.html"))
             .GET()
             .build();
         final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -149,7 +152,7 @@ public final class AuraManagerAllureApiTest
     @Test
     public void testDeleteReportAndSecurity() throws IOException, InterruptedException
     {
-        final File historyDir = com.xceptance.neodymium.aura.NeodymiumAuraManager.getReportHistoryDir();
+        final File historyDir = new com.xceptance.neodymium.aura.AuraReportingService().getReportHistoryDir();
         if (!historyDir.exists())
         {
             historyDir.mkdirs();
@@ -168,7 +171,7 @@ public final class AuraManagerAllureApiTest
         // 1. Perform a valid report deletion
         final String deleteBody = gson.toJson(Map.of("id", reportId));
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:" + port + "/api/allure/delete"))
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/reporting/delete"))
             .POST(HttpRequest.BodyPublishers.ofString(deleteBody))
             .header("Content-Type", "application/json")
             .build();
@@ -180,7 +183,7 @@ public final class AuraManagerAllureApiTest
         // 2. Perform a directory traversal exploit attempt
         final String badDeleteBody = gson.toJson(Map.of("id", "../pom.xml"));
         request = HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:" + port + "/api/allure/delete"))
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/reporting/delete"))
             .POST(HttpRequest.BodyPublishers.ofString(badDeleteBody))
             .header("Content-Type", "application/json")
             .build();
@@ -194,7 +197,7 @@ public final class AuraManagerAllureApiTest
     {
         final String deleteBody = gson.toJson(Map.of("id", "test-report-nonexistent-999"));
         final HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:" + port + "/api/allure/delete"))
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/reporting/delete"))
             .POST(HttpRequest.BodyPublishers.ofString(deleteBody))
             .header("Content-Type", "application/json")
             .build();
@@ -207,7 +210,7 @@ public final class AuraManagerAllureApiTest
     public void testReportHistoryDirResolution()
     {
         // 1. Verify default relative path configuration
-        final File defaultDir = NeodymiumAuraManager.getReportHistoryDir();
+        final File defaultDir = new com.xceptance.neodymium.aura.AuraReportingService().getReportHistoryDir();
         Assertions.assertNotNull(defaultDir);
         Assertions.assertTrue(defaultDir.isAbsolute());
         Assertions.assertEquals("report-history", defaultDir.getName());
@@ -220,7 +223,7 @@ public final class AuraManagerAllureApiTest
 
         try
         {
-            final File resolvedAbsoluteDir = NeodymiumAuraManager.getReportHistoryDir();
+            final File resolvedAbsoluteDir = new com.xceptance.neodymium.aura.AuraReportingService().getReportHistoryDir();
             Assertions.assertEquals(new File(tempAbsoluteDir).getAbsoluteFile(), resolvedAbsoluteDir);
         }
         finally

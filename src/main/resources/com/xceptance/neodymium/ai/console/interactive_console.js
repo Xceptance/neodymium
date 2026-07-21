@@ -100,9 +100,9 @@ function tryStaticLoad() {
     const dataUrl = params.get('dataUrl') || params.get('data') || '/run_data.json';
 
     // Extract history run ID if loaded from history
-    if (dataUrl.includes('/api/allure/report/')) {
+    if (dataUrl.includes('/api/reporting/report/')) {
         const parts = dataUrl.split('/');
-        // /api/allure/report/<runId>/...
+        // /api/reporting/report/<runId>/...
         if (parts.length > 4) {
             window.historyRunId = parts[4];
         }
@@ -148,7 +148,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // ── Mode detection ───────────────────────────────────────────────────────
     // Two mutually-exclusive display modes alter what the console shows:
     //
-    //  mode-results   → loaded from history (/api/allure/report/…); read-only.
+    //  mode-results   → loaded from history (/api/reporting/report/…); read-only.
     //                   Hides: add-step buttons, bottom action bar, progress
     //                   pill/bar, shortcuts & info icon.
     //  mode-embedded  → running inside an iframe (window.parent !== window).
@@ -156,7 +156,7 @@ window.addEventListener('DOMContentLoaded', () => {
     //                   mobile-QR button (all owned by the parent dashboard).
     //
     const dataUrl = params.get('dataUrl') || params.get('data') || '';
-    if (dataUrl.includes('/api/allure/report/')) {
+    if (dataUrl.includes('/api/reporting/report/')) {
         document.body.classList.add('mode-results');
     }
     if (window.parent !== window) {

@@ -315,6 +315,12 @@
             background: var(--border);
         }
 
+        .btn-edit.active {
+            background-color: var(--sidebar-active);
+            color: var(--sidebar-active-text);
+            border-color: var(--sidebar-active-text);
+        }
+
         /* Queue View */
         .queue-list {
             display: flex;
@@ -781,6 +787,16 @@
 
         .mini-run-chip.aborted .chip-dot {
             background: #9ca3af;
+        }
+
+        .mini-run-chip.running .chip-dot {
+            background: var(--accent);
+            animation: pulse-mini-chip-dot 1.5s infinite ease-in-out;
+        }
+
+        @keyframes pulse-mini-chip-dot {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.5; }
         }
 
         .mini-run-chip.selected {
