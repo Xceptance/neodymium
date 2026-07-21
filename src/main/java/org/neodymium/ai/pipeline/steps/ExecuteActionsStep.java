@@ -177,16 +177,6 @@ public final class ExecuteActionsStep implements PipelineStep
                 }
 
                 // Execute SUT action via targeted SUT driver
-                try
-                {
-                    context.getTransientData().put("currentAction", resolvedAction);
-                    executor.execute(resolvedAction);
-                }
-                finally
-                {
-                    context.getTransientData().remove("currentAction");
-                }
-                
                 // Mask any raw sensitive inputs dynamically matching SessionData variable keys
                 final Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());
                 final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
@@ -216,6 +206,17 @@ public final class ExecuteActionsStep implements PipelineStep
                 {
                     stepActions.add(sanitized);
                 }
+
+                try
+                {
+                    context.getTransientData().put("currentAction", resolvedAction);
+                    executor.execute(resolvedAction);
+                }
+                finally
+                {
+                    context.getTransientData().remove("currentAction");
+                }
+                
                 session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
             }
             catch (final IOException e)

@@ -164,13 +164,64 @@ public final class NeodymiumAiRunnerTest
             mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"step B verified\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"step B verified\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"step B verified\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"step B verified\"}}", null, "mock"));
         }
 
-        @AiPlaybook("org/neodymium/ai/junit/ExplicitTest.yaml")
+        @AiPlaybook("/org/neodymium/ai/junit/ExplicitTest.yaml")
         @AiDataSet("explicit1")
         public void myTestMethod(final AiSession session)
         {
             executionCount++;
             final Object paramVal = session.getExecutionContext().getSessionData().get("param");
             resolvedParamValues.add(String.valueOf(paramVal));
+        }
+    }
+
+    @Test
+    public void testRelativeAndAbsoluteClasspathResolution()
+    {
+        RelativeAndAbsoluteTest.executionCount = 0;
+
+        final LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
+            .selectors(DiscoverySelectors.selectClass(RelativeAndAbsoluteTest.class))
+            .build();
+        final Launcher launcher = LauncherFactory.create();
+        final SummaryGeneratingListener listener = new SummaryGeneratingListener();
+        launcher.registerTestExecutionListeners(listener);
+        launcher.execute(request);
+
+        for (final org.junit.platform.launcher.listeners.TestExecutionSummary.Failure failure : listener.getSummary().getFailures())
+        {
+            System.err.println("LAUNCHER FAILURE in RelativeAndAbsoluteTest: " + failure.getException().getMessage());
+            failure.getException().printStackTrace();
+        }
+
+        assertEquals(0, listener.getSummary().getTestsFailedCount(), "No tests should fail");
+        assertEquals(1, listener.getSummary().getTestsSucceededCount(), "Relative and absolute resolution test should succeed");
+        assertEquals(1, RelativeAndAbsoluteTest.executionCount);
+    }
+
+    @NeodymiumAiTest
+    public static class RelativeAndAbsoluteTest
+    {
+        public static int executionCount = 0;
+
+        @BeforeEach
+        public void setup(final AiSession session)
+        {
+            final MockLlmProvider mock = new MockLlmProvider();
+            for (final LlmCapability cap : LlmCapability.values())
+            {
+                session.getLlmRegistry().registerProvider(cap, mock);
+            }
+            mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
+            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"ok\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"ok\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"ok\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"ok\"}}", null, "mock"));
+            mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
+            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"ok\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"ok\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"ok\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"ok\"}}", null, "mock"));
+        }
+
+        @AiPlaybook("ExplicitTest.yaml")
+        @AiDataSet("explicit1")
+        public void testRelativePath(final AiSession session)
+        {
+            executionCount++;
         }
     }
 }

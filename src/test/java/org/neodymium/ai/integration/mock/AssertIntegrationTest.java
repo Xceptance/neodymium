@@ -149,45 +149,67 @@ public class AssertIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook(value = "programmatic", name = "custom_assert_failure_playbook")
-    @AiMode({ExecutionMode.FORCE_RECORDING})
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testAssertFailureMock(final AiSession session)
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
-        
-        // Mock navigate (succeeds)
         final String pageUrl = (String) session.getExecutionContext().getSessionData().get("assert.test.url");
-        mock.addResponse(new LlmResponse("""
-            {
-              "actions": [
-                {
-                  "action": "NAVIGATE",
-                  "locator": "",
-                  "value": "%s",
-                  "reasoning": "Navigate to assert test page"
-                }
-              ]
-            }
-            """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
+        final org.neodymium.ai.pipeline.ExecutionContext context = session.getExecutionContext();
+        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(org.neodymium.ai.pipeline.ExecutionContext.KEY_EXECUTION_MODE);
 
-        // Mock failing ASSERT step
-        mock.addResponse(new LlmResponse("""
-            {
-              "actions": [
+        if (mode == org.neodymium.ai.config.ExecutionMode.FORCE_RECORDING)
+        {
+            // Mock navigate (succeeds)
+            mock.addResponse(new LlmResponse("""
                 {
-                  "action": "ASSERT",
-                  "locator": "#welcome-message",
-                  "value": "Goodbye!",
-                  "reasoning": "Verify failing welcome text"
+                  "actions": [
+                    {
+                      "action": "NAVIGATE",
+                      "locator": "",
+                      "value": "%s",
+                      "reasoning": "Navigate to assert test page"
+                    }
+                  ]
                 }
-              ]
-            }
-            """, null, "mock"));
+                """.formatted(pageUrl), null, "mock"));
+            mock.addResponse(new LlmResponse("""
+                {
+                  "passed": true,
+                  "reasoning": "navigated"
+                }
+                """, null, "mock"));
+
+            // Mock failing ASSERT step
+            mock.addResponse(new LlmResponse("""
+                {
+                  "actions": [
+                    {
+                      "action": "ASSERT",
+                      "locator": "#welcome-message",
+                      "value": "Goodbye!",
+                      "reasoning": "Verify failing welcome text"
+                    }
+                  ]
+                }
+                """, null, "mock"));
+        }
+        else if (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_WITH_HEALING)
+        {
+            // Healing mode: when the assertion fails, it will attempt self-healing
+            // and call the LLM. We queue a failing response for the self-healing attempt.
+            mock.addResponse(new LlmResponse("""
+                {
+                  "actions": [
+                    {
+                      "action": "ASSERT",
+                      "locator": "#welcome-message",
+                      "value": "Goodbye!",
+                      "reasoning": "Failing self-heal attempt"
+                    }
+                  ]
+                }
+                """, null, "mock"));
+        }
 
         // The assertion should fail, throwing AssertionError
         org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 

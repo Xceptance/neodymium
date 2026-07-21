@@ -172,3 +172,39 @@ To tune the LLM's system instructions for specific environments, applications, o
    * **Adherence Enforcement Suffix**: When appending the custom add-on prompt, the compiler automatically appends a strict reminder suffix:
      `"CRITICAL REMINDER: The above rules are custom extensions for this test step. You MUST still strictly follow all JSON schema formatting rules, action capabilities, and output guidelines specified in the main system prompt above."`
      This prevents the LLM from generating invalid text/HTML outputs when guided by custom user rules.
+
+---
+
+## 13. `@AiPlaybook` Path Resolution & Scoping Rules
+
+The `@AiPlaybook` annotation configures the target playbook file for AI test execution and companion replay cache storage. Path resolution follows standard, deterministic Java resource rules:
+
+### Path Resolution Rules
+
+| Annotation Syntax | Resolution Strategy | Resolved Resource Path Example (Class: `org.neodymium.ai.live.AssertTest`, Method: `testOne`) |
+| :--- | :--- | :--- |
+| **No `@AiPlaybook`** / `@AiPlaybook` (empty) | **Package-Relative Default** | `org/neodymium/ai/live/AssertTest_testOne.yaml` |
+| **`@AiPlaybook("custom.yaml")`** | **Package-Relative Custom Name** | `org/neodymium/ai/live/custom.yaml` |
+| **`@AiPlaybook("sub/custom.yaml")`** | **Package-Relative Subdirectory** | `org/neodymium/ai/live/sub/custom.yaml` |
+| **`@AiPlaybook("/playbooks/foo.yaml")`** | **Absolute Classpath Root** (leading `/`) | `playbooks/foo.yaml` |
+
+### Scoping Rules
+
+* **Class Level**: Declaring `@AiPlaybook` at the class level sets the default playbook for all test methods in that test class.
+* **Method Level**: Declaring `@AiPlaybook` on a test method overrides any class-level annotation.
+* **Programmatic Java Tests**: Test classes marked with `@NeodymiumAiTest` that execute steps programmatically via `runPlaybook(session, "...")` do not require `@AiPlaybook`. Replay recordings automatically use standard package-relative path resolution or absolute paths if specified.
+
+### Global Resource Root Redirection & CI/CD Write Safety
+
+By default, companion recording JSON files generated during `FORCE_RECORDING` runs are written to the compiled output directory (`target/test-classes/`) and synced to the local source resources directory (`src/test/resources/`).
+
+In environments where writing to `src/` is prohibited or undesirable (e.g., CI/CD build pipelines, read-only containers, or ephemeral build agents), you can redirect the source recording sync output directory globally using the configuration property:
+
+```properties
+# Redirect source recording output to target/ (or another directory) instead of src/test/resources/
+neodymium.ai.playbook.directory.global=target/ai-recordings/
+```
+
+This ensures that recording artifacts are saved safely within build output directories without attempting to mutate read-only source trees.
+
+

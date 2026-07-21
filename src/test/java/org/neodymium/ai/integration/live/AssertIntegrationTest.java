@@ -28,6 +28,7 @@ import com.codeborne.selenide.Selenide;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiPlaybook;
@@ -46,23 +47,31 @@ import org.neodymium.ai.session.AiSession;
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
-@AiPlaybook("programmatic")
 public class AssertIntegrationTest extends BaseAiTest
 {
+
+    /**
+     * Set up test page URL before each test.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @BeforeEach
+    public void setupProperties(final AiSession session)
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        session.getExecutionContext().getSessionData().putDynamic("assert.test.url", pageUrl, false);
+    }
 
     /**
      * Executes Assert integration test in both live and strict replay modes.
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssert.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("assertData")
     public void testAssert(final AiSession session)
     {
-        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("assert.test.url", pageUrl, false);
-
         runPlaybook(session, """
             data:
               - testId: assertData
@@ -80,5 +89,100 @@ public class AssertIntegrationTest extends BaseAiTest
         $("#visible-btn").shouldBe(visible);
         $("#hidden-btn").shouldBe(hidden);
         $("#visible-btn").should(exist);
+    }
+
+    /**
+     * Verifies that incorrect page title assertion throws AssertionError in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertTitleFailure.yaml")
+    @AiMode({ExecutionMode.REPLAY_STRICT})
+    public void testAssertTitleFailure(final AiSession session)
+    {
+        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            runPlaybook(session, """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the page title is 'Incorrect Title'
+                """);
+        });
+    }
+
+    /**
+     * Verifies that incorrect element text assertion throws AssertionError in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertTextFailure.yaml")
+    @AiMode({ExecutionMode.REPLAY_STRICT})
+    public void testAssertTextFailure(final AiSession session)
+    {
+        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            runPlaybook(session, """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the welcome text 'Goodbye!' is visible
+                """);
+        });
+    }
+
+    /**
+     * Verifies that visible hidden element assertion throws AssertionError in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertVisibilityFailure.yaml")
+    @AiMode({ExecutionMode.REPLAY_STRICT})
+    public void testAssertVisibilityFailure(final AiSession session)
+    {
+        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            runPlaybook(session, """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the hidden 'Secret Button' is visible
+                """);
+        });
+    }
+
+    /**
+     * Verifies that hidden visible element assertion throws AssertionError in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertInvisibilityFailure.yaml")
+    @AiMode({ExecutionMode.REPLAY_STRICT})
+    public void testAssertInvisibilityFailure(final AiSession session)
+    {
+        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            runPlaybook(session, """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'Clickable Button' button is hidden
+                """);
+        });
+    }
+
+    /**
+     * Verifies that existing non-existent element assertion throws AssertionError in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertExistenceFailure.yaml")
+    @AiMode({ExecutionMode.REPLAY_STRICT})
+    public void testAssertExistenceFailure(final AiSession session)
+    {
+        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            runPlaybook(session, """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the non-existent button exists
+                """);
+        });
     }
 }

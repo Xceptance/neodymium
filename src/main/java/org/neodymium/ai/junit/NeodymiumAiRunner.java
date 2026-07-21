@@ -89,9 +89,15 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
     @Override
     public boolean supportsTestTemplate(final ExtensionContext context)
     {
-        return context.getTestMethod().isPresent()
-            && (context.getTestMethod().get().isAnnotationPresent(AiPlaybook.class)
-                || context.getRequiredTestClass().isAnnotationPresent(AiPlaybook.class));
+        if (context.getTestMethod().isEmpty())
+        {
+            return false;
+        }
+        final Class<?> testClass = context.getRequiredTestClass();
+        final Method method = context.getRequiredTestMethod();
+        return testClass.isAnnotationPresent(NeodymiumAiTest.class)
+            || testClass.isAnnotationPresent(AiPlaybook.class)
+            || method.isAnnotationPresent(AiPlaybook.class);
     }
 
     @Override
@@ -216,7 +222,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         final List<String> resolvedPaths = new ArrayList<>();
         for (final String path : playbookPaths)
         {
-            if (path != null)
+            if (path != null && !path.isEmpty())
             {
                 if ("programmatic".equalsIgnoreCase(path))
                 {
@@ -233,9 +239,23 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     INLINE_PLAYBOOKS.put(key, yamlContent);
                     resolvedPaths.add(key);
                 }
+                else if (path.startsWith("/"))
+                {
+                    // Absolute path from classpath root (leading slash stripped)
+                    resolvedPaths.add(path.substring(1));
+                }
                 else
                 {
-                    resolvedPaths.add(path);
+                    // Relative path from test class package
+                    final String packagePath = testClass.getPackageName().replace('.', '/');
+                    if (path.startsWith(packagePath + "/"))
+                    {
+                        resolvedPaths.add(path);
+                    }
+                    else
+                    {
+                        resolvedPaths.add(packagePath + "/" + path);
+                    }
                 }
             }
         }

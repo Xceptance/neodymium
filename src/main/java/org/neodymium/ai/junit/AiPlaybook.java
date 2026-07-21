@@ -25,9 +25,22 @@ import java.lang.annotation.Target;
 import org.junit.jupiter.api.TestTemplate;
 
 /**
- * Method-level annotation to customize or override the playbook file to execute.
+ * Annotation to customize or override the playbook file to execute.
+ * <p>
+ * <b>Path Resolution Rules:</b>
+ * <ul>
+ *   <li><b>Package-relative:</b> Values without a leading slash (e.g. {@code "my-playbook.yaml"} or {@code "sub/playbook.yaml"})
+ *       are resolved relative to the package directory of the test class.</li>
+ *   <li><b>Absolute Classpath:</b> Values with a leading slash (e.g. {@code "/playbooks/integration/store.yaml"})
+ *       are resolved starting from the classpath root.</li>
+ *   <li><b>Default Convention:</b> If value is omitted or empty ({@code @AiPlaybook}), the runner computes a default path
+ *       in the test's package directory as {@code <TestClass>_<methodName>.yaml}.</li>
+ * </ul>
+ * <p>
+ * <b>Scoping:</b> When declared on the class level, it sets the default playbook for all test methods in that class.
+ * Declaring it on a method overrides any class-level annotation.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Retention(RetentionPolicy.RUNTIME)
@@ -36,16 +49,18 @@ import org.junit.jupiter.api.TestTemplate;
 public @interface AiPlaybook
 {
     /**
-     * The playbook resource path (e.g. "verla/HomepageTest.yaml").
+     * The playbook resource path (e.g. {@code "HomepageTest.yaml"} or {@code "/playbooks/integration/store.yaml"}).
      *
      * @return the playbook resource path
      */
     String value() default "";
 
     /**
-     * The custom base name for the playbook file (used when value is "programmatic").
+     * The custom base name for the playbook file.
      *
      * @return the playbook base name
+     * @deprecated Legacy name override when using programmatic resolution. Use explicit relative or absolute paths in {@link #value()}.
      */
+    @Deprecated
     String name() default "";
 }
