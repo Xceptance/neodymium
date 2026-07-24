@@ -46,6 +46,7 @@ import org.slf4j.LoggerFactory;
 public final class SemanticDivergenceAnalysisStep implements PipelineStep
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(SemanticDivergenceAnalysisStep.class);
+
     /**
      * Constructs a SemanticDivergenceAnalysisStep.
      */
@@ -56,30 +57,38 @@ public final class SemanticDivergenceAnalysisStep implements PipelineStep
     @Override
     public void execute(final ExecutionContext context) throws PipelineException
     {
+        // 1. Retrieve the active session instance
         final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
         if (session == null)
         {
+            LOGGER.debug("No active session found in context. Skipping semantic divergence analysis.");
             return;
         }
 
+        // 2. Extract current playbook step and current SUT page state
         final PlaybookStep currentStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         final SutState currentState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
 
+        // 3. Extract baseline DOM representation from playbook step if present
         String baselineState = null;
         if (currentStep != null)
         {
             baselineState = currentStep.getBaselineState();
         }
 
+        // 4. Extract current DOM text content from captured SUT state
         String currentStateText = null;
         if (currentState != null)
         {
             currentStateText = currentState.getTextContent();
         }
 
-        // If both baseline and current state are available and they differ:
+        // 5. Compare baseline and current states to determine if structural diffing is required
         if (baselineState != null && currentStateText != null && !baselineState.equals(currentStateText))
         {
+            LOGGER.debug("DOM state divergence detected. Compiling SemanticDivergencePrompt...");
+
+            // 6. Build prompt comparing baseline DOM text vs current DOM text
             final SemanticDivergencePrompt diffPrompt = new SemanticDivergencePrompt(baselineState, currentStateText);
             final String system = diffPrompt.compileSystemMessage(context);
             final String user = diffPrompt.compileUserMessage(context);
@@ -95,23 +104,29 @@ public final class SemanticDivergenceAnalysisStep implements PipelineStep
 
             try
             {
+                // 7. Call text-capable LLM provider to compute semantic diff
                 final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
                 LOGGER.debug("Calling LLM provider '{}' via capability: TEXT_ONLY", provider.getClass().getSimpleName());
                 final long startTime = System.currentTimeMillis();
                 final LlmResponse response = provider.chat(request);
                 final long durationMs = System.currentTimeMillis() - startTime;
                 LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
+                
+                // 8. Parse plain-English diff summary and store in transient context map
                 final String diffSummary = diffPrompt.parseResponse(response.content(), context);
                 context.getTransientData().put(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY, diffSummary);
             }
             catch (final IOException e)
             {
-                // Soft fallback: log and set placeholder, do not crash self-healing
+                // 9. Soft fallback on IO error to keep execution resilient
+                LOGGER.warn("Failed to execute semantic divergence diff request: {}", e.getMessage(), e);
                 context.getTransientData().put(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY, "Failed to analyze semantic divergence.");
             }
         }
         else
         {
+            // 10. Record match when baseline and current DOM text are structurally identical
+            LOGGER.debug("No layout changes detected (DOM states match or baseline unavailable).");
             context.getTransientData().put(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY, "No layout changes detected (states match or baseline unavailable).");
         }
     }

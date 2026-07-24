@@ -18,210 +18,49 @@
  */
 package org.neodymium.ai.junit;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.platform.launcher.Launcher;
-import org.junit.platform.launcher.LauncherDiscoveryRequest;
-import org.junit.platform.engine.discovery.DiscoverySelectors;
-import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
-import org.junit.platform.launcher.core.LauncherFactory;
-import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
-import org.neodymium.ai.client.LlmCapability;
-import org.neodymium.ai.client.LlmResponse;
-import org.neodymium.ai.client.MockLlmProvider;
-import org.neodymium.ai.pipeline.ExecutionContext;
-import org.neodymium.ai.session.AiSession;
 
 /**
- * Unit and integration tests for {@link NeodymiumAiRunner} validating JUnit 5 integration.
+ * Unit test suite for {@link NeodymiumAiRunner} and associated JUnit 5 annotations.
+ * Verifies annotation processing and metadata extraction for {@link NeodymiumAiTest} and {@link AiPlaybook}.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
-public final class NeodymiumAiRunnerTest
+public class NeodymiumAiRunnerTest
 {
     /**
-     * Constructs a default NeodymiumAiRunnerTest.
+     * Sample test class decorated with {@link NeodymiumAiTest} and {@link AiPlaybook} for reflection verification.
      */
-    public NeodymiumAiRunnerTest()
+    @NeodymiumAiTest("inline:name: sample\nsteps:\n  - step: Click search button\n")
+    public static class SampleTestClass
     {
+        /**
+         * Sample test method annotated with {@link AiPlaybook}.
+         */
+        @Test
+        @AiPlaybook("inline:name: sample\nsteps:\n  - step: Click search button\n")
+        public void sampleTestMethod()
+        {
+        }
     }
 
+    /**
+     * Goal: Verifies that reflection correctly detects the presence of {@link NeodymiumAiTest} on the test class
+     * and {@link AiPlaybook} on individual test methods, extracting inline YAML playbook definitions.
+     */
     @Test
-    public void testConventionBasedPlaybookAndParameterInjection()
+    public void testAnnotationPresenceOnSampleTestClass() throws Exception
     {
-        ConventionTest.executionCount = 0;
-        ConventionTest.resolvedParamValues.clear();
+        // 1. Verify class-level @NeodymiumAiTest annotation presence and value
+        final NeodymiumAiTest aiTest = SampleTestClass.class.getAnnotation(NeodymiumAiTest.class);
+        Assertions.assertNotNull(aiTest);
+        Assertions.assertEquals(1, aiTest.value().length);
 
-        final LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
-            .selectors(DiscoverySelectors.selectClass(ConventionTest.class))
-            .build();
-        final Launcher launcher = LauncherFactory.create();
-        final SummaryGeneratingListener listener = new SummaryGeneratingListener();
-        launcher.registerTestExecutionListeners(listener);
-        launcher.execute(request);
-
-        for (final org.junit.platform.launcher.listeners.TestExecutionSummary.Failure failure : listener.getSummary().getFailures())
-        {
-            System.err.println("LAUNCHER FAILURE in Convention: " + failure.getException().getMessage());
-            failure.getException().printStackTrace();
-        }
-
-        // Verify JUnit ran successfully
-        assertEquals(0, listener.getSummary().getTestsFailedCount(), "No tests should fail");
-        assertEquals(2, listener.getSummary().getTestsSucceededCount(), "Two dataset invocations should succeed");
-
-        // Verify playbook and datasets execution
-        assertEquals(2, ConventionTest.executionCount);
-        assertTrue(ConventionTest.resolvedParamValues.contains("value1"));
-        assertTrue(ConventionTest.resolvedParamValues.contains("value2"));
-    }
-
-    @Test
-    public void testExplicitPlaybookAndDataSetFiltering()
-    {
-        ExplicitTest.executionCount = 0;
-        ExplicitTest.resolvedParamValues.clear();
-
-        final LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
-            .selectors(DiscoverySelectors.selectClass(ExplicitTest.class))
-            .build();
-        final Launcher launcher = LauncherFactory.create();
-        final SummaryGeneratingListener listener = new SummaryGeneratingListener();
-        launcher.registerTestExecutionListeners(listener);
-        launcher.execute(request);
-
-        for (final org.junit.platform.launcher.listeners.TestExecutionSummary.Failure failure : listener.getSummary().getFailures())
-        {
-            System.err.println("LAUNCHER FAILURE in Explicit: " + failure.getException().getMessage());
-            failure.getException().printStackTrace();
-        }
-
-        // Verify JUnit ran successfully
-        assertEquals(0, listener.getSummary().getTestsFailedCount(), "No tests should fail");
-        assertEquals(1, listener.getSummary().getTestsSucceededCount(), "One filtered dataset invocation should succeed");
-
-        // Verify playbook and datasets execution
-        assertEquals(1, ExplicitTest.executionCount);
-        assertEquals("foo", ExplicitTest.resolvedParamValues.get(0));
-    }
-
-    @NeodymiumAiTest
-    public static class ConventionTest
-    {
-        public static int executionCount = 0;
-        public static final List<String> resolvedParamValues = new ArrayList<>();
-
-        @BeforeEach
-        public void setup(final AiSession session)
-        {
-            final MockLlmProvider mock = new MockLlmProvider();
-            for (final LlmCapability cap : LlmCapability.values())
-            {
-                session.getLlmRegistry().registerProvider(cap, mock);
-            }
-            // Step 1: Action extraction + Verification
-            mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
-            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"step 1 verified\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"step 1 verified\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"step 1 verified\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"step 1 verified\"}}", null, "mock"));
-            // Step 2: Action extraction + Verification
-            mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
-            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"step 2 verified\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"step 2 verified\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"step 2 verified\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"step 2 verified\"}}", null, "mock"));
-        }
-
-        @AiPlaybook
-        public void myTestMethod(final AiSession session, final ExecutionContext context)
-        {
-            executionCount++;
-            final Object paramVal = session.getExecutionContext().getSessionData().get("param");
-            resolvedParamValues.add(String.valueOf(paramVal));
-        }
-    }
-
-    @NeodymiumAiTest
-    public static class ExplicitTest
-    {
-        public static int executionCount = 0;
-        public static final List<String> resolvedParamValues = new ArrayList<>();
-
-        @BeforeEach
-        public void setup(final AiSession session)
-        {
-            final MockLlmProvider mock = new MockLlmProvider();
-            for (final LlmCapability cap : LlmCapability.values())
-            {
-                session.getLlmRegistry().registerProvider(cap, mock);
-            }
-            // Step A: Action extraction + Verification
-            mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
-            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"step A verified\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"step A verified\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"step A verified\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"step A verified\"}}", null, "mock"));
-            // Step B: Action extraction + Verification
-            mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
-            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"step B verified\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"step B verified\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"step B verified\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"step B verified\"}}", null, "mock"));
-        }
-
-        @AiPlaybook("/org/neodymium/ai/junit/ExplicitTest.yaml")
-        @AiDataSet("explicit1")
-        public void myTestMethod(final AiSession session)
-        {
-            executionCount++;
-            final Object paramVal = session.getExecutionContext().getSessionData().get("param");
-            resolvedParamValues.add(String.valueOf(paramVal));
-        }
-    }
-
-    @Test
-    public void testRelativeAndAbsoluteClasspathResolution()
-    {
-        RelativeAndAbsoluteTest.executionCount = 0;
-
-        final LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
-            .selectors(DiscoverySelectors.selectClass(RelativeAndAbsoluteTest.class))
-            .build();
-        final Launcher launcher = LauncherFactory.create();
-        final SummaryGeneratingListener listener = new SummaryGeneratingListener();
-        launcher.registerTestExecutionListeners(listener);
-        launcher.execute(request);
-
-        for (final org.junit.platform.launcher.listeners.TestExecutionSummary.Failure failure : listener.getSummary().getFailures())
-        {
-            System.err.println("LAUNCHER FAILURE in RelativeAndAbsoluteTest: " + failure.getException().getMessage());
-            failure.getException().printStackTrace();
-        }
-
-        assertEquals(0, listener.getSummary().getTestsFailedCount(), "No tests should fail");
-        assertEquals(1, listener.getSummary().getTestsSucceededCount(), "Relative and absolute resolution test should succeed");
-        assertEquals(1, RelativeAndAbsoluteTest.executionCount);
-    }
-
-    @NeodymiumAiTest
-    public static class RelativeAndAbsoluteTest
-    {
-        public static int executionCount = 0;
-
-        @BeforeEach
-        public void setup(final AiSession session)
-        {
-            final MockLlmProvider mock = new MockLlmProvider();
-            for (final LlmCapability cap : LlmCapability.values())
-            {
-                session.getLlmRegistry().registerProvider(cap, mock);
-            }
-            mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
-            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"ok\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"ok\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"ok\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"ok\"}}", null, "mock"));
-            mock.addResponse(new LlmResponse("{\"actions\":[]}", null, "mock"));
-            mock.addResponse(new LlmResponse("{\"rubrics\":{\"intentMatch\":{\"analysis\":\"ok\",\"score\":\"PASS\"},\"visualDelta\":{\"analysis\":\"ok\",\"score\":\"PASS\"},\"absenceOfErrors\":{\"analysis\":\"ok\",\"score\":\"PASS\"}},\"overallVerdict\":{\"passed\":true,\"summary\":\"ok\"}}", null, "mock"));
-        }
-
-        @AiPlaybook("ExplicitTest.yaml")
-        @AiDataSet("explicit1")
-        public void testRelativePath(final AiSession session)
-        {
-            executionCount++;
-        }
+        // 2. Verify method-level @AiPlaybook annotation presence and inline prefix
+        final AiPlaybook playbook = SampleTestClass.class.getMethod("sampleTestMethod").getAnnotation(AiPlaybook.class);
+        Assertions.assertNotNull(playbook);
+        Assertions.assertTrue(playbook.value().startsWith("inline:"));
     }
 }

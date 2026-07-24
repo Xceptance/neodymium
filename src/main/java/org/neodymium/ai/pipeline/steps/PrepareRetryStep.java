@@ -23,16 +23,20 @@ import com.codeborne.selenide.WebDriverRunner;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Concrete pipeline step executed before self-healing retries. Resets SUT state
  * by dismissing alerts, closing overlay modals/popups, and blurring focused inputs.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 public final class PrepareRetryStep implements PipelineStep
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PrepareRetryStep.class);
+
     /**
      * Constructs a PrepareRetryStep.
      */
@@ -43,40 +47,46 @@ public final class PrepareRetryStep implements PipelineStep
     @Override
     public void execute(final ExecutionContext context) throws PipelineException
     {
+        // 1. Check if browser session is currently active
         if (WebDriverRunner.hasWebDriverStarted())
         {
+            LOGGER.debug("Preparing SUT state for retry loop execution...");
+
+            // 2. Safely dismiss active native alert dialogs if present
             try
             {
-                // 1. Safely dismiss any open JavaScript alert dialogues
                 WebDriverRunner.getWebDriver().switchTo().alert().dismiss();
+                LOGGER.debug("   Dismissed active JavaScript alert dialog.");
             }
             catch (final Exception e)
             {
-                // Ignored (no alert dialogue present)
+                // Expected when no alert modal is open on screen
             }
 
+            // 3. Hide interfering UI overlays, cookie consent banners, and modal backdrop elements
             try
             {
-                // 2. Hide common overlay modals/popups using Javascript
                 Selenide.executeJavaScript(
                     "document.querySelectorAll('.modal, .overlay, .popup, [role=\"dialog\"], .cookie-banner, #cookie-consent').forEach(el => el.style.display = 'none');"
                 );
+                LOGGER.debug("   Hidden blocking UI overlay elements via JS DOM execution.");
             }
             catch (final Exception e)
             {
-                // Ignored (Javascript execution failure or no matching elements)
+                // Ignore JS execution issues when DOM is clean
             }
 
+            // 4. Clear active element focus state from form input fields
             try
             {
-                // 3. Blur focused inputs to clear typing cursor/focus state
                 Selenide.executeJavaScript(
                     "if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) { document.activeElement.blur(); }"
                 );
+                LOGGER.debug("   Cleared input element focus state.");
             }
             catch (final Exception e)
             {
-                // Ignored
+                // Ignore focus blur errors
             }
         }
     }

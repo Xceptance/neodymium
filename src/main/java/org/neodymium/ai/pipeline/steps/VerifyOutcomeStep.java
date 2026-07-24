@@ -43,7 +43,7 @@ import org.neodymium.ai.session.AiSession;
  * Pipeline step executed after ExecuteActionsStep. Evaluates step execution
  * outcome by performing a dual-state semantic validation comparison if enabled.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 public final class VerifyOutcomeStep implements PipelineStep
@@ -51,7 +51,7 @@ public final class VerifyOutcomeStep implements PipelineStep
     private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(VerifyOutcomeStep.class);
 
     /**
-     * Constructs a VerifyOutcomeStep.
+     * Constructs a default VerifyOutcomeStep.
      */
     public VerifyOutcomeStep()
     {
@@ -60,15 +60,19 @@ public final class VerifyOutcomeStep implements PipelineStep
     @Override
     public void execute(final ExecutionContext context) throws PipelineException
     {
+        // 1. Check if semantic verification is enabled in configuration
         final AiConfiguration config = new AiConfiguration();
         if (!config.isSemanticVerificationEnabled())
         {
+            LOGGER.debug("Semantic outcome verification is disabled in configuration. Skipping step.");
             return;
         }
 
+        // 2. Retrieve required context instances from transient execution data map
         final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
         final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
 
+        // Fail conclusively if essential session runtime structures are missing
         if (session == null)
         {
             throw new ConclusiveFailureException("No active AiSession registered in ExecutionContext transient data");
@@ -78,12 +82,14 @@ public final class VerifyOutcomeStep implements PipelineStep
             throw new ConclusiveFailureException("No active TargetExecutor registered in ExecutionContext transient data");
         }
 
+        // 3. Evaluate replay mode and skip verification if current step was replayed without active modification
         final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
         final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         final boolean stepWasReplayed = mode != null && mode.isReplay() && (step == null || !step.isNoReplay());
 
         if (mode == null || stepWasReplayed)
         {
+            LOGGER.debug("Step was replayed from baseline. Bypassing semantic outcome verification.");
             return;
         }
 
@@ -94,13 +100,13 @@ public final class VerifyOutcomeStep implements PipelineStep
 
         try
         {
-            // 1. Capture the final state dynamically after action execution (always VISUAL to ensure screenshots are captured for verification and dHash baselines)
+            // 4. Capture the post-execution SUT state (always VISUAL level to capture post-action screenshots)
             final org.neodymium.ai.executor.selenide.ContextLevel verificationLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL;
             LOGGER.debug("📸 [Capture] Capturing SUT state (level: {}) AFTER executing actions", verificationLevel);
             final SutState finalState = executor.captureState(verificationLevel);
             context.getTransientData().put("finalState", finalState);
 
-            // 2. Query the LLM using VerificationPrompt
+            // 5. Build system and user prompt messages using VerificationPrompt template
             final VerificationPrompt prompt = new VerificationPrompt();
             LOGGER.debug("Compiling prompt: VerificationPrompt");
             final String system = prompt.compileSystemMessage(context);
@@ -112,6 +118,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 LOGGER.trace("User Prompt:\n{}", user);
             }
 
+            // 6. Gather visual image attachments from initial and final SUT states for multimodal LLM comparison
             final List<SutAttachment> attachments = new java.util.ArrayList<>();
             final SutState initialState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
             if (initialState != null && initialState.getAttachments() != null)
@@ -135,6 +142,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 }
             }
 
+            // 7. Dispatch verification LLM request to configured provider capability
             final LlmRequest request = new LlmRequest(
                 system,
                 user,
@@ -155,7 +163,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
             }
 
-            // 3. Accumulate token usage stats separately for verification
+            // 8. Track and accumulate token usage metrics specifically for verification calls
             final TokenUsage newUsage = response.tokenUsage();
             if (newUsage != null)
             {
@@ -184,7 +192,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 }
             }
 
-            // 4. Parse response and verify outcome without throwing exception to keep execution running
+            // 9. Parse multi-rubric verification result and log soft warnings on failure
             try
             {
                 final VerificationResult result = prompt.parseResponse(response.content(), context);
@@ -202,6 +210,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             }
             catch (final Exception e)
             {
+                // Soft-handle parsing errors without failing the whole test pipeline
                 @SuppressWarnings("unchecked")
                 final List<String> warnings = (List<String>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
                 final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), step.getInstruction()) : "Unknown Step";
@@ -209,10 +218,10 @@ public final class VerifyOutcomeStep implements PipelineStep
                 LOGGER.warn("   ⚠️ Semantic outcome verification response parsing FAILED for step: {}", stepStr, e);
             }
 
-            // 5. Update lastState to the verified finalState
+            // 10. Update last state to post-verification finalState for subsequent steps
             context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, finalState);
 
-            // Compute and store dHash if a screenshot exists in the final state and the step is a visual step
+            // 11. Calculate difference hash (dHash) for visual baselines when image attachment is available
             if (finalState != null && finalState.getAttachments() != null && step != null && step.isVisualStep())
             {
                 String dHash = null;
@@ -230,7 +239,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                     LOGGER.debug("   📸 Computed dHash: {} for instruction: \"{}\"", dHash, step.getInstruction());
                     step.setScreenshotHash(dHash);
 
-                    // If the step has no actions recorded yet, create a dummy NONE action to store the visual baseline
+                    // 12. Create synthetic NONE action if no explicit DOM actions were generated to hold visual baseline
                     if (step.getActions().isEmpty())
                     {
                         final Action noneAction = new Action("NONE", "", "Visual baseline check");
@@ -244,7 +253,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                     }
                     else
                     {
-                        // Set it on the last action of the step
+                        // Attach hash to the last action in the playbook step
                         final Action lastAction = step.getActions().get(step.getActions().size() - 1);
                         LOGGER.debug("   📝 Setting screenshot hash on last action: {} ({})", lastAction.getType(), lastAction.getTarget());
                         lastAction.setStepScreenshotHash(dHash);
@@ -258,6 +267,7 @@ public final class VerifyOutcomeStep implements PipelineStep
         }
         catch (final Exception e)
         {
+            // Catch unexpected runtime errors during verification and record as verification warnings
             @SuppressWarnings("unchecked")
             final List<String> warnings = (List<String>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
             final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), step.getInstruction()) : "Unknown Step";
@@ -266,7 +276,7 @@ public final class VerifyOutcomeStep implements PipelineStep
         }
         finally
         {
-            // Cleanup transient finalState from the context
+            // Always clean transient state to prevent context leakage across pipeline steps
             context.getTransientData().remove("finalState");
         }
     }
