@@ -97,9 +97,20 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         final SutState state = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
         final String instruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
         final String diffSummary = (String) context.getTransientData().get(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY);
+        final Object lastError = context.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
         final StringBuilder sb = new StringBuilder();
         sb.append("Instruction: ").append(instruction).append("\n\n");
+
+        if (lastError != null)
+        {
+            final String errorMsg = lastError instanceof Throwable t ? t.getMessage() : lastError.toString();
+            sb.append("⚠️ PREVIOUS ATTEMPT FAILURE:\n")
+              .append("The previous action execution failed with error:\n")
+              .append(errorMsg).append("\n")
+              .append("Please inspect the DOM elements below and select a different, valid CSS selector or locator.\n\n");
+        }
+
         if (diffSummary != null && !diffSummary.trim().isEmpty())
         {
             sb.append("Semantic Divergence/Change Summary (baseline vs current SUT state):\n")
