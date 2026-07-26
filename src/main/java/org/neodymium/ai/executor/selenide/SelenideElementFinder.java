@@ -26,7 +26,8 @@ import com.codeborne.selenide.WebDriverRunner;
 import org.neodymium.ai.executor.selenide.ContextLevel;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.PlaybookStep;
-import org.neodymium.ai.pipeline.ExecutionContext;
+import java.util.ArrayList;
+import java.util.List;
 import org.openqa.selenium.By;
 
 /**
@@ -69,233 +70,18 @@ public final class SelenideElementFinder
             throw new IllegalArgumentException("Target cannot be empty");
         }
 
-        String clean = target.trim();
-        boolean forceXpath = false;
-        boolean forceCss = false;
-
-        // Strip explicit strategy prefixes
-        if (clean.toLowerCase().startsWith("xpath="))
-        {
-            clean = clean.substring(6).trim();
-            forceXpath = true;
-        }
-        else if (clean.toLowerCase().startsWith("css="))
-        {
-            clean = clean.substring(4).trim();
-            forceCss = true;
-        }
-
         final long start = System.currentTimeMillis();
         final long timeoutMs = Configuration.timeout;
 
         while (true)
         {
-            // -------------------------------------------------------------------------
-            // Strategy 1: Neodymium Automation ID (data-neo-ref / xc_...)
-            // -------------------------------------------------------------------------
-            if (!forceXpath && (clean.contains("data-neo-ref") || clean.contains("xc_")))
+            final List<String> candidates = splitCandidates(target);
+            for (final String candidate : candidates)
             {
-                final ElementsCollection els = clean.matches("^xc_.*")
-                    ? Selenide.$$(By.cssSelector("[data-neo-ref='" + clean + "']"))
-                    : Selenide.$$(By.cssSelector(clean));
-                if (!els.isEmpty())
+                final SelenideElement found = tryResolveCandidate(candidate);
+                if (found != null)
                 {
-                    return els.first();
-                }
-
-                // If not found, dynamically stamp data-neo-ref attributes into the live DOM (crucial for offline replays)
-                try
-                {
-                    new PageAnalyzer(WebDriverRunner.getWebDriver()).captureSimplifiedDom(ContextLevel.LEAN);
-                }
-                catch (final Exception ignored)
-                {
-                    // Ignore DOM stamping failures and continue to retry
-                }
-
-                final ElementsCollection retryEls = clean.matches("^xc_.*")
-                    ? Selenide.$$(By.cssSelector("[data-neo-ref='" + clean + "']"))
-                    : Selenide.$$(By.cssSelector(clean));
-                if (!retryEls.isEmpty())
-                {
-                    return retryEls.first();
-                }
-
-                // Dynamic text-matching assertion fallback for missing data-neo-ref targets
-                final ExecutionContext context = ExecutionContext.getActiveContext();
-                if (context != null)
-                {
-                    final Action currentAction = (Action) context.getTransientData().get("currentAction");
-                    if (currentAction != null && "ASSERT".equalsIgnoreCase(currentAction.getType()) && currentAction.getValue() != null)
-                    {
-                        final String expectedVal = currentAction.getValue();
-                        final ElementsCollection allElements = Selenide.$$("*");
-                        for (final SelenideElement el : allElements)
-                        {
-                            try
-                            {
-                                final String text = el.text().trim();
-                                if (text.equals(expectedVal) || text.contains(expectedVal) || text.matches(expectedVal))
-                                {
-                                    return el;
-                                }
-                            }
-                            catch (final Exception ignored)
-                            {
-                                // Ignore non-accessible or stale elements during scan
-                            }
-                        }
-                    }
-                    else
-                    {
-                        final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-                        if (step != null)
-                        {
-                            for (final Action action : step.getActions())
-                            {
-                                if ("ASSERT".equalsIgnoreCase(action.getType()) && action.getValue() != null)
-                                {
-                                    final String expectedVal = action.getValue();
-                                    final ElementsCollection allElements = Selenide.$$("*");
-                                    for (final SelenideElement el : allElements)
-                                    {
-                                        try
-                                        {
-                                            final String text = el.text().trim();
-                                            if (text.equals(expectedVal) || text.contains(expectedVal) || text.matches(expectedVal))
-                                            {
-                                                return el;
-                                            }
-                                        }
-                                        catch (final Exception ignored)
-                                        {
-                                            // Ignore non-accessible or stale elements during scan
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // -------------------------------------------------------------------------
-            // Strategy 2: CSS Selector with Parent-Relative Button Healing
-            // -------------------------------------------------------------------------
-            if (!forceXpath)
-            {
-                try
-                {
-                    final ElementsCollection els = Selenide.$$(By.cssSelector(clean));
-                    if (!els.isEmpty())
-                    {
-                        return els.first();
-                    }
-
-                    // Fallback healing for CSS button selectors that are actually divs/spans
-                    final String[] selectors = clean.split(",");
-                    for (final String sel : selectors)
-                    {
-                        final String trimmedSel = sel.trim();
-                        if (trimmedSel.endsWith(" button") || trimmedSel.endsWith(" a") || trimmedSel.endsWith(" .add-btn"))
-                        {
-                            int suffixLength = 7;
-                            if (trimmedSel.endsWith(" a"))
-                            {
-                                suffixLength = 2;
-                            }
-                            else if (trimmedSel.endsWith(" .add-btn"))
-                            {
-                                suffixLength = 9;
-                            }
-
-                            final String parentSelector = trimmedSel.substring(0, trimmedSel.length() - suffixLength).trim();
-                            final ElementsCollection parentEls = Selenide.$$(By.cssSelector(parentSelector));
-                            if (!parentEls.isEmpty())
-                            {
-                                final SelenideElement parent = parentEls.first();
-                                final ElementsCollection candidates = parent.$$(By.cssSelector("div, span, a, button, [role='button']"));
-                                for (final SelenideElement cand : candidates)
-                                {
-                                    final String text = cand.text().trim().toLowerCase();
-                                    final String cursor = cand.getCssValue("cursor");
-                                    if ("pointer".equals(cursor) || text.contains("add") || text.contains("cart"))
-                                    {
-                                        return cand;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (final Exception e)
-                {
-                    // Ignored - CSS execution failed, try next strategy
-                }
-            }
-
-            // -------------------------------------------------------------------------
-            // Strategy 3: XPath Expression
-            // -------------------------------------------------------------------------
-            if (!forceCss)
-            {
-                if (forceXpath || clean.startsWith("/") || clean.startsWith("(") || clean.startsWith(".") || clean.startsWith("*") || clean.contains("["))
-                {
-                    try
-                    {
-                        final ElementsCollection els = Selenide.$$x(clean);
-                        if (!els.isEmpty())
-                        {
-                            return els.first();
-                        }
-                    }
-                    catch (final Exception e)
-                    {
-                        // Ignored - XPath evaluation failed, try next strategy
-                    }
-                }
-            }
-
-            // -------------------------------------------------------------------------
-            // Strategy 4: Link Text Matching
-            // -------------------------------------------------------------------------
-            if (!forceCss && !forceXpath)
-            {
-                try
-                {
-                    final ElementsCollection els = Selenide.$$(By.linkText(clean));
-                    if (!els.isEmpty())
-                    {
-                        return els.first();
-                    }
-                }
-                catch (final Exception e)
-                {
-                    // Ignored - Link text lookup failed, try next strategy
-                }
-            }
-
-            // -------------------------------------------------------------------------
-            // Strategy 5: Text Content & ARIA Substring Searching via Normalized XPath
-            // -------------------------------------------------------------------------
-            if (!forceCss && !forceXpath)
-            {
-                try
-                {
-                    final String escaped = escapeXpath(clean);
-                    final String xpath = String.format(
-                        "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
-                        escaped, escaped, escaped
-                    );
-                    final ElementsCollection els = Selenide.$$x(xpath);
-                    if (!els.isEmpty())
-                    {
-                        return els.first();
-                    }
-                }
-                catch (final Exception e)
-                {
-                    // Ignored - Normalized text search failed
+                    return found;
                 }
             }
 
@@ -316,12 +102,288 @@ public final class SelenideElementFinder
             }
         }
 
-        // Final Fallback: Default Selenide behavior to throw appropriate Selenide ElementNotFound exception if missing
-        if (forceXpath)
+        // Final Fallback: Default Selenide behavior to throw appropriate Selenide ElementNotFound exception
+        final String firstCandidate = splitCandidates(target).get(0);
+        if (firstCandidate.startsWith("/") || firstCandidate.startsWith("("))
         {
-            return Selenide.$x(clean);
+            return Selenide.$x(firstCandidate);
         }
-        return Selenide.$(clean);
+        return Selenide.$(firstCandidate);
+    }
+
+    /**
+     * Attempts to resolve a single candidate locator across Neodymium ID, CSS, XPath, and text matching.
+     */
+    private static SelenideElement tryResolveCandidate(final String rawCandidate)
+    {
+        if (rawCandidate == null || rawCandidate.trim().isEmpty())
+        {
+            return null;
+        }
+
+        String clean = rawCandidate.trim();
+        boolean forceXpath = false;
+        boolean forceCss = false;
+
+        if (clean.toLowerCase().startsWith("xpath="))
+        {
+            clean = clean.substring(6).trim();
+            forceXpath = true;
+        }
+        else if (clean.toLowerCase().startsWith("css="))
+        {
+            clean = clean.substring(4).trim();
+            forceCss = true;
+        }
+
+        // -------------------------------------------------------------------------
+        // Strategy 1: Neodymium Automation ID (xc_...) extraction
+        // -------------------------------------------------------------------------
+        if (!forceXpath && clean.contains("xc_"))
+        {
+            final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(xc_[a-zA-Z0-9_\\-]+)").matcher(clean);
+            if (matcher.find())
+            {
+                final String neoId = matcher.group(1);
+                try
+                {
+                    final ElementsCollection els = Selenide.$$(By.cssSelector("[data-neo-ref='" + neoId + "']"));
+                    if (!els.isEmpty())
+                    {
+                        return els.first();
+                    }
+
+                    // Dynamically stamp data-neo-ref attributes into live DOM if absent
+                    try
+                    {
+                        new PageAnalyzer(WebDriverRunner.getWebDriver()).captureSimplifiedDom(ContextLevel.LEAN);
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+
+                    final ElementsCollection retryEls = Selenide.$$(By.cssSelector("[data-neo-ref='" + neoId + "']"));
+                    if (!retryEls.isEmpty())
+                    {
+                        return retryEls.first();
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
+
+        // -------------------------------------------------------------------------
+        // Strategy 2: Playwright Pseudo-Selector Translation (:has-text, :text, :contains, text=..., has-text=...)
+        // -------------------------------------------------------------------------
+        if (!forceXpath && !forceCss)
+        {
+            final String lower = clean.toLowerCase();
+            if (lower.startsWith("text=") || lower.startsWith("has-text="))
+            {
+                String text = clean.substring(clean.indexOf('=') + 1).trim();
+                if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'")))
+                {
+                    if (text.length() >= 2)
+                    {
+                        text = text.substring(1, text.length() - 1);
+                    }
+                }
+                if (!text.isEmpty())
+                {
+                    try
+                    {
+                        final String escaped = escapeXpath(text);
+                        final String xpath = String.format(
+                            "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(normalize-space(.), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
+                            escaped, escaped, escaped, escaped
+                        );
+                        final ElementsCollection els = Selenide.$$x(xpath);
+                        if (!els.isEmpty())
+                        {
+                            return els.first();
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+            }
+
+            final java.util.regex.Matcher pwMatcher = java.util.regex.Pattern.compile("^(.*?):(has-text|text|contains)\\(['\"]?(.*?)['\"]?\\)$", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(clean);
+            if (pwMatcher.find())
+            {
+                String tag = pwMatcher.group(1).trim();
+                if (tag.isEmpty())
+                {
+                    tag = "*";
+                }
+                final String text = pwMatcher.group(3).trim();
+                if (!text.isEmpty())
+                {
+                    try
+                    {
+                        final String xpath = String.format("//%s[contains(normalize-space(.), %s)]", tag, escapeXpath(text));
+                        final ElementsCollection els = Selenide.$$x(xpath);
+                        if (!els.isEmpty())
+                        {
+                            return els.first();
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+            }
+        }
+
+        // -------------------------------------------------------------------------
+        // Strategy 3: Standard CSS Selector
+        // -------------------------------------------------------------------------
+        if (!forceXpath)
+        {
+            try
+            {
+                final ElementsCollection els = Selenide.$$(By.cssSelector(clean));
+                if (!els.isEmpty())
+                {
+                    return els.first();
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        // -------------------------------------------------------------------------
+        // Strategy 4: XPath Expression
+        // -------------------------------------------------------------------------
+        if (!forceCss)
+        {
+            if (forceXpath || clean.startsWith("/") || clean.startsWith("(") || clean.startsWith(".") || clean.startsWith("*") || clean.contains("["))
+            {
+                try
+                {
+                    final ElementsCollection els = Selenide.$$x(clean);
+                    if (!els.isEmpty())
+                    {
+                        return els.first();
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
+
+        // -------------------------------------------------------------------------
+        // Strategy 5: Link Text Matching
+        // -------------------------------------------------------------------------
+        if (!forceCss && !forceXpath)
+        {
+            try
+            {
+                final ElementsCollection els = Selenide.$$(By.linkText(clean));
+                if (!els.isEmpty())
+                {
+                    return els.first();
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        // -------------------------------------------------------------------------
+        // Strategy 6: Text Content Searching
+        // -------------------------------------------------------------------------
+        if (!forceCss && !forceXpath && !clean.contains("<") && !clean.contains(">"))
+        {
+            try
+            {
+                final String escaped = escapeXpath(clean);
+                final String xpath = String.format(
+                    "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
+                    escaped, escaped, escaped
+                );
+                final ElementsCollection els = Selenide.$$x(xpath);
+                if (!els.isEmpty())
+                {
+                    return els.first();
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Splits a comma-separated target string into individual candidate locators, respecting quotes and brackets.
+     */
+    private static List<String> splitCandidates(final String target)
+    {
+        final List<String> result = new java.util.ArrayList<>();
+        if (target == null)
+        {
+            return result;
+        }
+
+        final StringBuilder current = new StringBuilder();
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
+        int bracketDepth = 0;
+
+        for (int i = 0; i < target.length(); i++)
+        {
+            final char c = target.charAt(i);
+            if (c == '\'' && !inDoubleQuote)
+            {
+                inSingleQuote = !inSingleQuote;
+            }
+            else if (c == '"' && !inSingleQuote)
+            {
+                inDoubleQuote = !inDoubleQuote;
+            }
+            else if (c == '[' && !inSingleQuote && !inDoubleQuote)
+            {
+                bracketDepth++;
+            }
+            else if (c == ']' && !inSingleQuote && !inDoubleQuote)
+            {
+                bracketDepth--;
+            }
+
+            if (c == ',' && !inSingleQuote && !inDoubleQuote && bracketDepth <= 0)
+            {
+                final String candidate = current.toString().trim();
+                if (!candidate.isEmpty())
+                {
+                    result.add(candidate);
+                }
+                current.setLength(0);
+            }
+            else
+            {
+                current.append(c);
+            }
+        }
+
+        final String finalCandidate = current.toString().trim();
+        if (!finalCandidate.isEmpty())
+        {
+            result.add(finalCandidate);
+        }
+
+        if (result.isEmpty())
+        {
+            result.add(target.trim());
+        }
+
+        return result;
     }
 
     /**

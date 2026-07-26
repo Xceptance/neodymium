@@ -118,12 +118,12 @@ public final class AssertAction implements BrowserActionPlugin
         try
         {
             // Focus assertion: Verify that the targeted element is currently focused (document.activeElement)
-            if ("focused".equals(expected))
+            if ("focused".equalsIgnoreCase(expected) || "[focused]".equalsIgnoreCase(expected))
             {
                 element.shouldBe(Condition.focused);
             }
-            // Visibility assertion: Verify that the targeted element is visible on the page
-            else if ("visible".equals(expected))
+            // Visibility assertion: Verify that the targeted element is visible/present on the page
+            else if ("visible".equalsIgnoreCase(expected) || "[visible]".equalsIgnoreCase(expected) || "present".equalsIgnoreCase(expected) || "[present]".equalsIgnoreCase(expected))
             {
                 element.shouldBe(Condition.visible);
             }
