@@ -1,6 +1,6 @@
 package org.neodymium;
 
-import org.neodymium.util.DebugUtils;
+import org.neodymium.util.ElementHighlightUtils;
 import org.neodymium.util.Neodymium;
 import org.neodymium.util.SelenideAddons;
 import org.openqa.selenium.By;
@@ -53,8 +53,8 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         {
             if (Neodymium.configuration().debuggingHighlightSelectedElements() && !isHighlightOrOutlineSelector(by) && shouldTriggerHighlight(by))
             {
-                DebugUtils.injectHighlightingJs();
-                DebugUtils.highlightAllElements(by, driver);
+                ElementHighlightUtils.injectHighlightingJs();
+                ElementHighlightUtils.highlightAllElements(by, driver);
             }
         }
         catch (final Throwable e)
@@ -71,8 +71,8 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         {
             if (Neodymium.configuration().debuggingHighlightSelectedElements() && !isHighlightOrOutlineSelector(by) && shouldTriggerHighlight(by))
             {
-                DebugUtils.injectHighlightingJs();
-                DebugUtils.highlightAllElements(by, driver);
+                ElementHighlightUtils.injectHighlightingJs();
+                ElementHighlightUtils.highlightAllElements(by, driver);
             }
         }
         catch (final Throwable e)
@@ -89,8 +89,8 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         {
             if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasDriver() && !isHighlightOrOutlineSelector(locator) && shouldTriggerHighlight(locator))
             {
-                DebugUtils.injectHighlightingJs();
-                SelenideAddons.$safe(() -> DebugUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));
+                ElementHighlightUtils.injectHighlightingJs();
+                SelenideAddons.$safe(() -> ElementHighlightUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));
             }
         }
         catch (final Throwable e)
@@ -107,8 +107,8 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         {
             if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasDriver() && !isHighlightOrOutlineSelector(locator) && shouldTriggerHighlight(locator))
             {
-                DebugUtils.injectHighlightingJs();
-                SelenideAddons.$safe(() -> DebugUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));
+                ElementHighlightUtils.injectHighlightingJs();
+                SelenideAddons.$safe(() -> ElementHighlightUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));
             }
         }
         catch (final Throwable e)
