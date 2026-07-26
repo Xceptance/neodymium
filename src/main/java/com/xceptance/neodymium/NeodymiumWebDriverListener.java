@@ -59,7 +59,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         }
         catch (final Throwable e)
         {
-            LOGGER.warn("Could not find element to highlight. If you don't need the highlight, please set the neodymium.debugUtils.highlight to false", e);
+            LOGGER.debug("Could not highlight element: {}", e.getMessage());
         }
     }
 
@@ -77,7 +77,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         }
         catch (final Throwable e)
         {
-            LOGGER.warn("Could not find element to highlight. If you don't need the highlight, please set the neodymium.debugUtils.highlight to false", e);
+            LOGGER.debug("Could not highlight element: {}", e.getMessage());
         }
     }
 
@@ -95,7 +95,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         }
         catch (final Throwable e)
         {
-            LOGGER.warn("Could not find element to highlight. If you don't need the highlight, please set the neodymium.debugUtils.highlight to false", e);
+            LOGGER.debug("Could not highlight element: {}", e.getMessage());
         }
     }
 
@@ -113,7 +113,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         }
         catch (final Throwable e)
         {
-            LOGGER.warn("Could not find element to highlight. If you don't need the highlight, please set the neodymium.debugUtils.highlight to false", e);
+            LOGGER.debug("Could not highlight element: {}", e.getMessage());
         }
     }
 }
