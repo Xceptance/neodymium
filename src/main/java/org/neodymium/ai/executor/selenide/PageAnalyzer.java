@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -35,8 +37,6 @@ import org.openqa.selenium.chromium.HasCdp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codeborne.selenide.Selenide;
-import com.codeborne.selenide.WebDriverRunner;
 import org.neodymium.common.ScreenshotWriter;
 
 /**
@@ -50,10 +50,54 @@ import org.neodymium.common.ScreenshotWriter;
  * @author AI-generated: Gemini 2.5 Flash
  * @author Xceptance GmbH 2026
  */
-public class PageAnalyzer {
+public class PageAnalyzer
+{
     private static final Logger LOG = LoggerFactory.getLogger(PageAnalyzer.class);
 
     private static final String FINGERPRINT_JS_FUNCTIONS = loadResource("ai-scripts/neodymium-dom-helpers.js");
+
+    private final WebDriver providedDriver;
+
+    /**
+     * Default constructor for PageAnalyzer.
+     * Requires a WebDriver to be passed explicitly when calling analysis methods.
+     */
+    public PageAnalyzer()
+    {
+        this(null);
+    }
+
+    /**
+     * Constructs a PageAnalyzer bound to an explicit WebDriver instance.
+     *
+     * @param driver the WebDriver instance to analyze
+     */
+    public PageAnalyzer(final WebDriver driver)
+    {
+        this.providedDriver = driver;
+    }
+
+    /**
+     * Resolves the target WebDriver instance using the following priority:
+     * 1. Explicit argument passed at invocation time
+     * 2. Instance provided at constructor initialization
+     *
+     * @param explicitDriver driver override passed to method, or null
+     * @return the resolved active WebDriver instance, or null if uninitialized
+     */
+    private WebDriver resolveDriver(final WebDriver explicitDriver)
+    {
+        if (explicitDriver != null)
+        {
+            return explicitDriver;
+        }
+        if (this.providedDriver != null)
+        {
+            return this.providedDriver;
+        }
+        LOG.warn("No WebDriver provided to PageAnalyzer instance.");
+        return null;
+    }
 
     /**
      * JavaScript that runs in the browser and extracts all needed DOM data in a
@@ -564,15 +608,13 @@ public class PageAnalyzer {
             })(arguments[0], arguments[1]);
             """;
 
-    public PageAnalyzer() {
-    }
-
-    private boolean hasActiveWebDriver() {
-        if (!WebDriverRunner.hasWebDriverStarted()) {
+    private boolean hasActiveWebDriver(final WebDriver explicitDriver) {
+        final WebDriver driver = resolveDriver(explicitDriver);
+        if (driver == null) {
             return false;
         }
         try {
-            WebDriverRunner.getWebDriver();
+            driver.getCurrentUrl();
             return true;
         } catch (final Exception e) {
             LOG.debug("Active WebDriver check failed: {}", e.getMessage());
@@ -588,15 +630,20 @@ public class PageAnalyzer {
      */
     public String captureScreenshot(final String title) throws IOException
     {
-        if (!hasActiveWebDriver())
+        return captureScreenshot(title, null);
+    }
+
+    public String captureScreenshot(final String title, final WebDriver explicitDriver) throws IOException
+    {
+        final WebDriver driver = resolveDriver(explicitDriver);
+        if (!hasActiveWebDriver(driver))
         {
             return null;
         }
         LOG.debug("   📸 Capturing screenshot for: {}", title);
-        final WebDriver driver = WebDriverRunner.getWebDriver();
         try
         {
-            return captureScreenshotInternal(title);
+            return captureScreenshotInternal(title, driver);
         }
         catch (final Exception e)
         {
@@ -611,7 +658,7 @@ public class PageAnalyzer {
                         final String fallback = activeHandles.iterator().next();
                         driver.switchTo().window(fallback);
                         driver.switchTo().defaultContent();
-                        return captureScreenshotInternal(title);
+                        return captureScreenshotInternal(title, driver);
                     }
                 }
                 catch (final Exception ex)
@@ -627,77 +674,72 @@ public class PageAnalyzer {
         return null;
     }
 
-    private String captureScreenshotInternal(final String title) throws Exception
+    private String captureScreenshotInternal(final String title, final WebDriver driver) throws Exception
     {
         boolean hidden = false;
-        try
+        if (driver instanceof final JavascriptExecutor js)
         {
-            final String script =
-                    "var callback = arguments[arguments.length - 1];\n" +
-                    // Check if FontAwesome is already loaded; inject it if not
-                    "if (!document.querySelector('link[href*=\"font-awesome\"]')) {\n" +
-                    "    var fa = document.createElement('link');\n" +
-                    "    fa.rel = 'stylesheet';\n" +
-                    "    fa.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';\n" +
-                    "    document.head.appendChild(fa);\n" +
-                    "}\n" +
-                    // Guard: don't stack overlays if already showing
-                    "if (document.getElementById('neo-screenshot-flash-overlay')) {\n" +
-                    "    var hud0 = document.getElementById('neodymium-ai-hud-container');\n" +
-                    "    if (hud0 && hud0.style.display !== 'none') { hud0.style.display = 'none'; callback(true); } else { callback(false); }\n" +
-                    "    return;\n" +
-                    "}\n" +
-                    "var hud = document.getElementById('neodymium-ai-hud-container');\n" +
-                    "var hasHud = !!(hud && hud.style.display !== 'none');\n" +
-                    // Build overlay — pointer-events:none means it's invisible to the screenshot driver
-                    "var overlay = document.createElement('div');\n" +
-                    "overlay.id = 'neo-screenshot-flash-overlay';\n" +
-                    "overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(255,255,255,0); z-index: 2147483646; display: flex; align-items: center; justify-content: center; pointer-events: none; transition: background-color 0.12s ease-out;';\n" +
-                    // Icon badge
-                    "var badge = document.createElement('div');\n" +
-                    "badge.style.cssText = 'background: rgba(30,30,46,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.12); border-radius: 50%; width: 110px; height: 110px; display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 36px rgba(0,0,0,0.55); opacity: 0; transform: scale(0.75); transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.175,0.885,0.32,1.275);';\n" +
-                    "var icon = document.createElement('i');\n" +
-                    "icon.className = 'fa-solid fa-camera';\n" +
-                    "icon.style.cssText = 'font-size: 46px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.4);';\n" +
-                    "badge.appendChild(icon);\n" +
-                    "overlay.appendChild(badge);\n" +
-                    "document.body.appendChild(overlay);\n" +
-                    "void overlay.offsetWidth;\n" +
-                    // Phase 1: white flash
-                    "overlay.style.backgroundColor = 'rgba(255,255,255,0.38)';\n" +
-                    // Phase 2: fade in badge, fade out flash
-                    "setTimeout(function() {\n" +
-                    "    overlay.style.backgroundColor = 'rgba(255,255,255,0)';\n" +
-                    "    badge.style.opacity = '1';\n" +
-                    "    badge.style.transform = 'scale(1)';\n" +
-                    "}, 55);\n" +
-                    // Phase 3: after ~420ms total, fade badge out, then hide HUD and call back
-                    "setTimeout(function() {\n" +
-                    "    badge.style.opacity = '0';\n" +
-                    "    badge.style.transform = 'scale(1.08)';\n" +
-                    "    setTimeout(function() {\n" +
-                    "        if (document.body.contains(overlay)) { document.body.removeChild(overlay); }\n" +
-                    "        if (hasHud) { hud.style.display = 'none'; }\n" +
-                    "        callback(hasHud);\n" +
-                    "    }, 180);\n" +
-                    "}, 420);";
-            final Object hudExists = Selenide.executeAsyncJavaScript(script);
-            hidden = Boolean.TRUE.equals(hudExists);
-        }
-        catch (final Exception e)
-        {
-            // Animation failed or timed out — fall back to simply hiding the HUD synchronously
             try
             {
-                final Object hudExists = Selenide.executeJavaScript(
-                        "var hud = document.getElementById('neodymium-ai-hud-container'); " +
-                        "if (hud && hud.style.display !== 'none') { hud.style.display = 'none'; return true; } " +
-                        "return false;");
+                final String script = """
+                        var callback = arguments[arguments.length - 1];
+                        if (!document.querySelector('link[href*="font-awesome"]')) {
+                            var fa = document.createElement('link');
+                            fa.rel = 'stylesheet';
+                            fa.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
+                            document.head.appendChild(fa);
+                        }
+                        if (document.getElementById('neo-screenshot-flash-overlay')) {
+                            var hud0 = document.getElementById('neodymium-ai-hud-container');
+                            if (hud0 && hud0.style.display !== 'none') { hud0.style.display = 'none'; callback(true); } else { callback(false); }
+                            return;
+                        }
+                        var hud = document.getElementById('neodymium-ai-hud-container');
+                        var hasHud = !!(hud && hud.style.display !== 'none');
+                        var overlay = document.createElement('div');
+                        overlay.id = 'neo-screenshot-flash-overlay';
+                        overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(255,255,255,0); z-index: 2147483646; display: flex; align-items: center; justify-content: center; pointer-events: none; transition: background-color 0.12s ease-out;';
+                        var badge = document.createElement('div');
+                        badge.style.cssText = 'background: rgba(30,30,46,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.12); border-radius: 50%; width: 110px; height: 110px; display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 36px rgba(0,0,0,0.55); opacity: 0; transform: scale(0.75); transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.175,0.885,0.32,1.275);';
+                        var icon = document.createElement('i');
+                        icon.className = 'fa-solid fa-camera';
+                        icon.style.cssText = 'font-size: 46px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.4);';
+                        badge.appendChild(icon);
+                        overlay.appendChild(badge);
+                        document.body.appendChild(overlay);
+                        void overlay.offsetWidth;
+                        overlay.style.backgroundColor = 'rgba(255,255,255,0.38)';
+                        setTimeout(function() {
+                            overlay.style.backgroundColor = 'rgba(255,255,255,0)';
+                            badge.style.opacity = '1';
+                            badge.style.transform = 'scale(1)';
+                        }, 55);
+                        setTimeout(function() {
+                            badge.style.opacity = '0';
+                            badge.style.transform = 'scale(1.08)';
+                            setTimeout(function() {
+                                if (document.body.contains(overlay)) { document.body.removeChild(overlay); }
+                                if (hasHud) { hud.style.display = 'none'; }
+                                callback(hasHud);
+                            }, 180);
+                        }, 420);
+                        """;
+                final Object hudExists = js.executeAsyncScript(script);
                 hidden = Boolean.TRUE.equals(hudExists);
             }
-            catch (final Exception ignored)
+            catch (final Exception e)
             {
-                // Ignore if browser is not open or JS fails
+                try
+                {
+                    final Object hudExists = js.executeScript(
+                            "var hud = document.getElementById('neodymium-ai-hud-container'); " +
+                            "if (hud && hud.style.display !== 'none') { hud.style.display = 'none'; return true; } " +
+                            "return false;");
+                    hidden = Boolean.TRUE.equals(hudExists);
+                }
+                catch (final Exception ignored)
+                {
+                }
             }
         }
 
@@ -709,11 +751,11 @@ public class PageAnalyzer {
         }
         finally
         {
-            if (hidden)
+            if (hidden && driver instanceof final JavascriptExecutor js)
             {
                 try
                 {
-                    Selenide.executeJavaScript(
+                    js.executeScript(
                             "var hud = document.getElementById('neodymium-ai-hud-container'); " +
                                     "if (hud) { hud.style.display = ''; }");
                 }
@@ -773,16 +815,36 @@ public class PageAnalyzer {
      *              the context level controlling how much DOM data to capture
      * @return simplified DOM as a structured text
      */
-    @SuppressWarnings("unchecked")
+    /**
+     * Captures a simplified representation of the current page's DOM at the
+     * specified context level using dynamically resolved WebDriver.
+     *
+     * @param level the context level controlling how much DOM data to capture
+     * @return simplified DOM as structured text
+     */
     public String captureSimplifiedDom(final ContextLevel level) {
-        if (!hasActiveWebDriver()) {
+        return captureSimplifiedDom(level, null);
+    }
+
+    /**
+     * Captures a simplified representation of the current page's DOM at the
+     * specified context level using an explicitly provided WebDriver.
+     *
+     * @param level          the context level controlling how much DOM data to capture
+     * @param explicitDriver explicit WebDriver instance override, or null for dynamic resolution
+     * @return simplified DOM as structured text formatted for LLM consumption
+     */
+    @SuppressWarnings("unchecked")
+    public String captureSimplifiedDom(final ContextLevel level, final WebDriver explicitDriver) {
+        final WebDriver driver = resolveDriver(explicitDriver);
+        if (!hasActiveWebDriver(driver)) {
             return "Page URL: <empty page>\nPage Title: \n\n";
         }
         final String url;
         final String title;
         try {
-            url = WebDriverRunner.url();
-            title = Selenide.title();
+            url = driver.getCurrentUrl();
+            title = driver.getTitle();
         } catch (final Exception e) {
             return "Page URL: <empty page>\nPage Title: \n\n";
         }
@@ -794,7 +856,7 @@ public class PageAnalyzer {
 
         final StringBuilder dom = new StringBuilder();
         dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
-        dom.append("Page Title: ").append(Selenide.title()).append("\n\n");
+        dom.append("Page Title: ").append(title != null ? title : "").append("\n\n");
 
         if (isEmptyPage) {
             return dom.toString();
@@ -802,7 +864,7 @@ public class PageAnalyzer {
 
         if (level == ContextLevel.AXTREE) {
             try {
-                final String axTreeContent = captureAXTreeDOM();
+                final String axTreeContent = captureAXTreeDOM(driver);
                 if (axTreeContent != null) {
                     dom.append(axTreeContent);
                     final String result = dom.toString();
@@ -812,11 +874,10 @@ public class PageAnalyzer {
                     return result;
                 }
             } catch (final Exception e) {
-                LOG.warn("Failed to capture AXTree via CDP, falling back to frame tree extraction: {}", e.getMessage());
+                LOG.warn("Failed to capture AXTree via CDP or JS fallback, falling back to frame tree extraction: {}", e.getMessage());
             }
         }
 
-        final org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
         final String currentWindow = driver.getWindowHandle();
 
         boolean showFrameId = true;
@@ -846,7 +907,7 @@ public class PageAnalyzer {
                     dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
                     dom.append("Title: ").append(driver.getTitle()).append("\n\n");
                 }
-                captureFrameTree(dom, level, logicalWindowName, "main", showFrameId);
+                captureFrameTree(dom, level, logicalWindowName, "main", showFrameId, driver);
             }
         } catch (final Exception e) {
             LOG.warn("Error capturing full frame tree: {}", e.getMessage());
@@ -867,11 +928,14 @@ public class PageAnalyzer {
 
     @SuppressWarnings("unchecked")
     private void captureFrameTree(final StringBuilder dom, final ContextLevel level, final String windowHandle,
-            final String framePath, final boolean showFrameId) {
+            final String framePath, final boolean showFrameId, final WebDriver driver) {
         final String frameId = windowHandle + ":" + framePath;
+        if (!(driver instanceof final JavascriptExecutor js)) {
+            return;
+        }
         try {
-            final Map<String, Object> data = (Map<String, Object>) com.codeborne.selenide.Selenide
-                    .executeJavaScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent());
+            final Map<String, Object> data = (Map<String, Object>) js
+                    .executeScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent());
             // Render element sections
             final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");
             if (sections != null) {
@@ -934,63 +998,63 @@ public class PageAnalyzer {
             }
 
             // Now recursively process iframes in this frame
-            final com.codeborne.selenide.ElementsCollection frames = com.codeborne.selenide.Selenide
-                    .$$("iframe, frame");
+            final List<WebElement> frames = driver.findElements(By.cssSelector("iframe, frame"));
             for (int i = 0; i < frames.size(); i++) {
                 try {
                     // Generate a stable selector for this frame in the parent context
-                    final String selector = com.codeborne.selenide.Selenide.executeJavaScript(
-                            "var el = arguments[0];" +
-                            "function escapeId(str) {" +
-                            "  if (typeof CSS !== 'undefined' && CSS.escape) { return CSS.escape(str); }" +
-                            "  return str.replace(/([!\"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])/g, '\\\\$1');" +
-                            "}" +
-                            "function escapeAttr(str) {" +
-                            "  return str.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"\\\\'\");" +
-                            "}" +
-                            "if (el.id) { return '#' + escapeId(el.id); }" +
-                            "if (el.name) { return el.tagName.toLowerCase() + '[name=\\'' + escapeAttr(el.name) + '\\']'; }" +
-                            "var path = [];" +
-                            "while (el && el.nodeType === 1) {" +
-                            "  if (el.id) {" +
-                            "    path.unshift('#' + escapeId(el.id));" +
-                            "    break;" +
-                            "  }" +
-                            "  var tag = el.tagName.toLowerCase();" +
-                            "  var parent = el.parentNode;" +
-                            "  if (parent) {" +
-                            "    var siblings = Array.from(parent.children).filter(function(s) { return s.tagName === el.tagName; });" +
-                            "    if (siblings.length > 1) {" +
-                            "      tag += ':nth-of-type(' + (siblings.indexOf(el) + 1) + ')';" +
-                            "    }" +
-                            "  }" +
-                            "  path.unshift(tag);" +
-                            "  el = el.parentNode;" +
-                            "}" +
-                            "return path.join(' > ');",
+                    final String selector = (String) js.executeScript("""
+                            var el = arguments[0];
+                            function escapeId(str) {
+                              if (typeof CSS !== 'undefined' && CSS.escape) { return CSS.escape(str); }
+                              return str.replace(/([!"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])/g, '\\\\$1');
+                            }
+                            function escapeAttr(str) {
+                              return str.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'");
+                            }
+                            if (el.id) { return '#' + escapeId(el.id); }
+                            if (el.name) { return el.tagName.toLowerCase() + "[name='" + escapeAttr(el.name) + "']"; }
+                            var path = [];
+                            while (el && el.nodeType === 1) {
+                              if (el.id) {
+                                path.unshift('#' + escapeId(el.id));
+                                break;
+                              }
+                              var tag = el.tagName.toLowerCase();
+                              var parent = el.parentNode;
+                              if (parent) {
+                                var siblings = Array.from(parent.children).filter(function(s) { return s.tagName === el.tagName; });
+                                if (siblings.length > 1) {
+                                  tag += ':nth-of-type(' + (siblings.indexOf(el) + 1) + ')';
+                                }
+                              }
+                              path.unshift(tag);
+                              el = el.parentNode;
+                            }
+                            return path.join(' > ');
+                            """,
                             frames.get(i));
-                    com.codeborne.selenide.Selenide.switchTo().frame(frames.get(i));
-                    captureFrameTree(dom, level, windowHandle, framePath + " >>> " + selector, showFrameId);
-                    com.codeborne.selenide.Selenide.switchTo().parentFrame();
+                    driver.switchTo().frame(frames.get(i));
+                    captureFrameTree(dom, level, windowHandle, framePath + " >>> " + selector, showFrameId, driver);
+                    driver.switchTo().parentFrame();
                 } catch (final Exception e) {
                     LOG.debug("Could not switch to frame: {}", e.getMessage());
                     try {
-                        com.codeborne.selenide.Selenide.switchTo().defaultContent();
+                        driver.switchTo().defaultContent();
                         // Recover path
                         if (!"main".equals(framePath)) {
                             if (framePath.contains(" >>> ")) {
                                 final String[] selectors = framePath.split(" >>> ");
                                 for (final String sel : selectors) {
                                     if (!sel.equals("main") && !sel.isBlank()) {
-                                        final WebElement iframeElement = com.codeborne.selenide.Selenide.$(sel);
-                                        com.codeborne.selenide.Selenide.switchTo().frame(iframeElement);
+                                        final WebElement iframeElement = driver.findElement(org.openqa.selenium.By.cssSelector(sel));
+                                        driver.switchTo().frame(iframeElement);
                                     }
                                 }
                             } else {
                                 final String[] indices = framePath.substring(5).split("\\."); // remove "main."
                                 for (final String indexStr : indices) {
                                     if (!indexStr.equals("main") && !indexStr.isBlank()) {
-                                        com.codeborne.selenide.Selenide.switchTo().frame(Integer.parseInt(indexStr));
+                                        driver.switchTo().frame(Integer.parseInt(indexStr));
                                     }
                                 }
                             }
@@ -1148,23 +1212,164 @@ public class PageAnalyzer {
                 .replace(">", "&gt;");
     }
 
+    /**
+     * Captures the page's Accessibility Tree (AXTree).
+     * Attempts Chrome DevTools Protocol (CDP) first for native high-fidelity accessibility extraction.
+     * Falls back to client-side JavaScript emulation for non-Chrome/non-CDP drivers (e.g. Firefox, Safari).
+     *
+     * @param driver the resolved WebDriver instance
+     * @return formatted AXTree string, or null if accessibility tree capture fails or is unsupported
+     */
     @SuppressWarnings("unchecked")
-    private String captureAXTreeDOM() {
-        final WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
-        if (!(driver instanceof final HasCdp cdpDriver)) {
-            LOG.debug("Driver does not support CDP, AXTree is unavailable. Falling back to LEAN.");
-            return null;
+    private String captureAXTreeDOM(final WebDriver driver) {
+        if (driver instanceof final HasCdp cdpDriver) {
+            try {
+                final Map<String, Object> axTree = cdpDriver.executeCdpCommand("Accessibility.getFullAXTree", Map.of());
+                if (axTree != null && axTree.containsKey("nodes")) {
+                    final List<Map<String, Object>> nodes = (List<Map<String, Object>>) axTree.get("nodes");
+                    if (nodes != null && !nodes.isEmpty()) {
+                        return formatCdpAXTree(nodes, cdpDriver);
+                    }
+                }
+            } catch (final Exception e) {
+                LOG.debug("CDP Accessibility.getFullAXTree failed: {}", e.getMessage());
+            }
         }
 
-        final Map<String, Object> axTree = cdpDriver.executeCdpCommand("Accessibility.getFullAXTree", Map.of());
-        if (axTree == null || !axTree.containsKey("nodes")) {
-            return null;
+        if (driver instanceof final JavascriptExecutor js) {
+            LOG.debug("Using JavascriptExecutor for emulated AXTree fallback");
+            final String emulated = captureEmulatedAXTreeDOM(js);
+            if (emulated != null && !emulated.isBlank()) {
+                return "=== Accessibility Tree (AXTree) ===\n" + emulated;
+            }
         }
 
-        final List<Map<String, Object>> nodes = (List<Map<String, Object>>) axTree.get("nodes");
-        if (nodes == null || nodes.isEmpty()) {
-            return null;
+        LOG.debug("AXTree is unavailable via CDP and JS execution. Falling back to LEAN.");
+        return null;
+    }
+
+    /**
+     * Emulates Accessibility Tree extraction via JavaScript for drivers without native CDP support.
+     * Evaluates explicit WAI-ARIA roles, implicit HTML5 tag semantic mappings, and accessible name computation
+     * (aria-label, aria-labelledby, associated <label> elements, placeholder, title, alt).
+     *
+     * @param js the JavascriptExecutor instance
+     * @return formatted accessibility tree content lines, or null on failure
+     */
+    private String captureEmulatedAXTreeDOM(final JavascriptExecutor js) {
+        try {
+            final String script = """
+                return (function() {
+                    const interactiveRoles = new Set([
+                        "button", "link", "checkbox", "radio", "combobox", "listbox", "searchbox",
+                        "textbox", "slider", "spinbutton", "switch", "tab", "menuitem",
+                        "menuitemcheckbox", "menuitemradio", "input", "textarea", "select",
+                        "option", "treeitem", "tabpanel", "dialog", "menu"
+                    ]);
+                    const landmarkRoles = new Set([
+                        "heading", "form", "main", "navigation", "banner", "contentinfo", "alert", "status"
+                    ]);
+
+                    function getRole(el) {
+                        const explicitRole = el.getAttribute("role");
+                        if (explicitRole) return explicitRole.toLowerCase();
+                        const tag = el.tagName.toLowerCase();
+                        if (tag === "button") return "button";
+                        if (tag === "a" && el.hasAttribute("href")) return "link";
+                        if (tag === "textarea") return "textbox";
+                        if (tag === "select") return "combobox";
+                        if (tag === "option") return "option";
+                        if (tag === "form") return "form";
+                        if (tag === "nav") return "navigation";
+                        if (tag === "main") return "main";
+                        if (tag === "header") return "banner";
+                        if (tag === "footer") return "contentinfo";
+                        if (/^h[1-6]$/.test(tag)) return "heading";
+                        if (tag === "input") {
+                            const type = (el.getAttribute("type") || "text").toLowerCase();
+                            if (type === "checkbox") return "checkbox";
+                            if (type === "radio") return "radio";
+                            if (type === "submit" || type === "button" || type === "reset") return "button";
+                            return "textbox";
+                        }
+                        return "";
+                    }
+
+                    function getAccessibleName(el) {
+                        if (el.hasAttribute("aria-label")) return el.getAttribute("aria-label");
+                        if (el.hasAttribute("aria-labelledby")) {
+                            const labelEl = document.getElementById(el.getAttribute("aria-labelledby"));
+                            if (labelEl) return labelEl.innerText;
+                        }
+                        if (el.id) {
+                            try {
+                                const labelEl = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+                                if (labelEl) return labelEl.innerText;
+                            } catch (e) {}
+                        }
+                        const parentLabel = el.closest("label");
+                        if (parentLabel) {
+                            const clone = parentLabel.cloneNode(true);
+                            const childInputs = clone.querySelectorAll("input, select, textarea, button");
+                            childInputs.forEach(c => c.remove());
+                            const text = clone.innerText.trim();
+                            if (text) return text;
+                        }
+                        if (el.hasAttribute("placeholder")) return el.getAttribute("placeholder");
+                        if (el.hasAttribute("title")) return el.getAttribute("title");
+                        if (el.hasAttribute("alt")) return el.getAttribute("alt");
+                        if (el.children.length === 0) return el.innerText;
+                        return "";
+                    }
+
+                    const results = [];
+                    const allElements = document.querySelectorAll("*");
+
+                    allElements.forEach(el => {
+                        if (el.offsetWidth === 0 && el.offsetHeight === 0 && !el.getClientRects().length) return;
+                        const role = getRole(el);
+                        const isInteractive = interactiveRoles.has(role);
+                        const isLandmark = landmarkRoles.has(role);
+                        if (!isInteractive && !isLandmark) return;
+
+                        const name = (getAccessibleName(el) || "").trim().replace(/\\s+/g, " ");
+                        const val = (el.value || el.getAttribute("value") || "").trim();
+                        const disabled = el.disabled || el.getAttribute("aria-disabled") === "true";
+                        const required = el.required || el.getAttribute("aria-required") === "true";
+                        const readonly = el.readOnly || el.getAttribute("aria-readonly") === "true";
+                        const checked = el.checked || el.getAttribute("aria-checked") === "true";
+                        const placeholder = el.getAttribute("placeholder") || "";
+
+                        const props = [];
+                        if (disabled) props.push("disabled");
+                        if (required) props.push("required");
+                        if (readonly) props.push("readonly");
+                        if (checked) props.push("checked");
+                        if (placeholder) props.push('placeholder="' + placeholder + '"');
+
+                        let line = "  [" + role + "]";
+                        if (name) line += " " + name;
+                        if (val) line += ' ("' + val + '")';
+                        if (props.length > 0) line += " [" + props.join(", ") + "]";
+
+                        results.push(line);
+                    });
+
+                    return results.join("\\n");
+                })();
+            """;
+            final Object result = js.executeScript(script);
+            if (result instanceof final String text && !text.isBlank()) {
+                return text;
+            }
+        } catch (final Exception e) {
+            LOG.debug("Failed to extract emulated AXTree via JavascriptExecutor: {}", e.getMessage());
         }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String formatCdpAXTree(final List<Map<String, Object>> nodes, final HasCdp cdpDriver) {
 
         final Set<String> interactiveRoles = Set.of(
                 "button", "link", "checkbox", "radio", "combobox", "listbox", "searchbox",

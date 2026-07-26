@@ -161,7 +161,7 @@ class PageAnalyzerAXTreeTest
 
         WebDriverRunner.setWebDriver(mockDriver);
 
-        final PageAnalyzer analyzer = new PageAnalyzer();
+        final PageAnalyzer analyzer = new PageAnalyzer(mockDriver);
         final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
 
         assertNotNull(result);
@@ -200,7 +200,7 @@ class PageAnalyzerAXTreeTest
 
         WebDriverRunner.setWebDriver(mockDriver);
 
-        final PageAnalyzer analyzer = new PageAnalyzer();
+        final PageAnalyzer analyzer = new PageAnalyzer(mockDriver);
         final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
 
         assertNotNull(result);
@@ -301,7 +301,7 @@ class PageAnalyzerAXTreeTest
 
         WebDriverRunner.setWebDriver(mockDriver);
 
-        final PageAnalyzer analyzer = new PageAnalyzer();
+        final PageAnalyzer analyzer = new PageAnalyzer(mockDriver);
         final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
 
         assertNotNull(result);
@@ -470,7 +470,7 @@ class PageAnalyzerAXTreeTest
 
         WebDriverRunner.setWebDriver(mockDriver);
 
-        final PageAnalyzer analyzer = new PageAnalyzer();
+        final PageAnalyzer analyzer = new PageAnalyzer(mockDriver);
         final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
 
         assertNotNull(result);
@@ -550,7 +550,7 @@ class PageAnalyzerAXTreeTest
 
         WebDriverRunner.setWebDriver(mockDriver);
 
-        final PageAnalyzer analyzer = new PageAnalyzer();
+        final PageAnalyzer analyzer = new PageAnalyzer(mockDriver);
         final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
 
         assertNotNull(result);
@@ -646,7 +646,7 @@ class PageAnalyzerAXTreeTest
 
         WebDriverRunner.setWebDriver(mockDriver);
 
-        final PageAnalyzer analyzer = new PageAnalyzer();
+        final PageAnalyzer analyzer = new PageAnalyzer(mockDriver);
         final String result = analyzer.captureSimplifiedDom(ContextLevel.AXTREE);
 
         assertNotNull(result);
