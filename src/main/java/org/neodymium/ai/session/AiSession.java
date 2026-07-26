@@ -291,6 +291,27 @@ public abstract class AiSession implements AutoCloseable
     public abstract void close() throws Exception;
 
     /**
+     * Static factory creating a Selenide browser automation session with default LLM_ONLY execution mode.
+     *
+     * @return a new Selenide browser session
+     */
+    public static AiSession selenide()
+    {
+        return selenide(ExecutionMode.LLM_ONLY);
+    }
+
+    /**
+     * Static factory creating a Selenide browser automation session with custom initial session data and default LLM_ONLY mode.
+     *
+     * @param sessionData initial session parameters
+     * @return a new Selenide browser session
+     */
+    public static AiSession selenide(final SessionData sessionData)
+    {
+        return selenide(ExecutionMode.LLM_ONLY, sessionData);
+    }
+
+    /**
      * Static factory creating a Selenide browser automation session.
      *
      * @param mode the execution mode
@@ -311,6 +332,27 @@ public abstract class AiSession implements AutoCloseable
     public static AiSession selenide(final ExecutionMode mode, final SessionData sessionData)
     {
         return new SelenideBrowserSession(mode, sessionData);
+    }
+
+    /**
+     * Static factory creating a REST API automation session with default LLM_ONLY execution mode.
+     *
+     * @return a new REST API session
+     */
+    public static AiSession rest()
+    {
+        return rest(ExecutionMode.LLM_ONLY);
+    }
+
+    /**
+     * Static factory creating a REST API automation session with custom initial session data and default LLM_ONLY mode.
+     *
+     * @param sessionData initial session parameters
+     * @return a new REST API session
+     */
+    public static AiSession rest(final SessionData sessionData)
+    {
+        return rest(ExecutionMode.LLM_ONLY, sessionData);
     }
 
     /**
@@ -337,6 +379,27 @@ public abstract class AiSession implements AutoCloseable
     }
 
     /**
+     * Static factory creating a Mock testing session with default LLM_ONLY execution mode.
+     *
+     * @return a new mock testing session
+     */
+    public static AiSession mock()
+    {
+        return mock(ExecutionMode.LLM_ONLY);
+    }
+
+    /**
+     * Static factory creating a Mock testing session with custom initial session data and default LLM_ONLY mode.
+     *
+     * @param sessionData initial session parameters
+     * @return a new mock testing session
+     */
+    public static AiSession mock(final SessionData sessionData)
+    {
+        return mock(ExecutionMode.LLM_ONLY, sessionData);
+    }
+
+    /**
      * Static factory creating a Mock testing session with default parameters.
      *
      * @param mode the execution mode
@@ -359,6 +422,61 @@ public abstract class AiSession implements AutoCloseable
         final LlmRegistry registry = new LlmRegistry();
         registry.registerProvider(createMockLlmProvider());
         return new MockSession(sessionData, registry, new ExecutionEventBus(), new MockTargetExecutor(), mode);
+    }
+
+    /**
+     * Static shortcut method to execute a playbook using a default Selenide browser session in LLM_ONLY mode.
+     *
+     * @param playbook the playbook containing steps to run
+     * @return the resulting playbook recording
+     * @throws Exception if execution or resource closing fails
+     */
+    public static PlaybookRecording execute(final Playbook playbook) throws Exception
+    {
+        return execute(ExecutionMode.LLM_ONLY, playbook, null);
+    }
+
+    /**
+     * Static shortcut method to execute a playbook with session data using a default Selenide browser session in LLM_ONLY mode.
+     *
+     * @param playbook the playbook containing steps to run
+     * @param sessionData parameter dataset values to seed into the execution context
+     * @return the resulting playbook recording
+     * @throws Exception if execution or resource closing fails
+     */
+    public static PlaybookRecording execute(final Playbook playbook, final SessionData sessionData) throws Exception
+    {
+        return execute(ExecutionMode.LLM_ONLY, playbook, sessionData);
+    }
+
+    /**
+     * Static shortcut method to execute a playbook using a default Selenide browser session in the specified execution mode.
+     *
+     * @param mode the execution mode governing the session
+     * @param playbook the playbook containing steps to run
+     * @return the resulting playbook recording
+     * @throws Exception if execution or resource closing fails
+     */
+    public static PlaybookRecording execute(final ExecutionMode mode, final Playbook playbook) throws Exception
+    {
+        return execute(mode, playbook, null);
+    }
+
+    /**
+     * Static shortcut method to execute a playbook with session data using a default Selenide browser session in the specified execution mode.
+     *
+     * @param mode the execution mode governing the session
+     * @param playbook the playbook containing steps to run
+     * @param sessionData parameter dataset values to seed into the execution context
+     * @return the resulting playbook recording
+     * @throws Exception if execution or resource closing fails
+     */
+    public static PlaybookRecording execute(final ExecutionMode mode, final Playbook playbook, final SessionData sessionData) throws Exception
+    {
+        try (final AiSession session = selenide(mode, sessionData))
+        {
+            return session.execute(playbook, sessionData);
+        }
     }
 
     private static LlmProvider createMockLlmProvider()

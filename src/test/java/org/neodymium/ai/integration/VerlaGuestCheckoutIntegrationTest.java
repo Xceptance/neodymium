@@ -77,7 +77,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(1)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
-    @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
+    @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
     public void testCheckoutLive()
     {
         // Assert order success screen checkmark is displayed
@@ -91,7 +91,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
-    @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
+    @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
     public void testCheckoutReplay()
     {
         // Assert order success screen checkmark is displayed
@@ -104,7 +104,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
      */
     @Order(3)
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
+    @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
     public void testCheckoutLiveAllDataSets()
     {
         // Assert order success screen checkmark is displayed
@@ -117,7 +117,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
      */
     @Order(4)
     @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiPlaybook("playbooks/integration/guest-checkout-verla.yaml")
+    @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
     public void testCheckoutReplayAllDataSets()
     {
         // Assert order success screen checkmark is displayed

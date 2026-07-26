@@ -74,6 +74,72 @@ public class AiSessionTest
     }
 
     @Test
+    @DisplayName("selenide() default factory creates a SelenideBrowserSession with default LLM_ONLY mode")
+    public void testSelenideDefaultFactoryCreation()
+    {
+        final AiSession session = AiSession.selenide();
+        Assertions.assertNotNull(session);
+        Assertions.assertTrue(session instanceof SelenideBrowserSession);
+        Assertions.assertTrue(session.getTargetExecutor() instanceof SelenideTargetExecutor);
+        Assertions.assertEquals(ExecutionMode.LLM_ONLY, session.getExecutionMode());
+    }
+
+    @Test
+    @DisplayName("selenide(SessionData) factory creates a SelenideBrowserSession with seeded session data")
+    public void testSelenideDataFactoryCreation()
+    {
+        final SessionData data = new SessionData();
+        data.set("env", "staging");
+        final AiSession session = AiSession.selenide(data);
+        Assertions.assertNotNull(session);
+        Assertions.assertEquals("staging", session.getExecutionContext().getSessionData().get("env"));
+    }
+
+    @Test
+    @DisplayName("rest() default factory creates a RestApiSession with default LLM_ONLY mode")
+    public void testRestDefaultFactoryCreation()
+    {
+        final AiSession session = AiSession.rest();
+        Assertions.assertNotNull(session);
+        Assertions.assertTrue(session instanceof RestApiSession);
+        Assertions.assertTrue(session.getTargetExecutor() instanceof RestTargetExecutor);
+        Assertions.assertEquals(ExecutionMode.LLM_ONLY, session.getExecutionMode());
+    }
+
+    @Test
+    @DisplayName("rest(SessionData) factory creates a RestApiSession with seeded session data")
+    public void testRestDataFactoryCreation()
+    {
+        final SessionData data = new SessionData();
+        data.set("baseUrl", "http://api.example.com");
+        final AiSession session = AiSession.rest(data);
+        Assertions.assertNotNull(session);
+        Assertions.assertEquals("http://api.example.com", session.getExecutionContext().getSessionData().get("baseUrl"));
+    }
+
+    @Test
+    @DisplayName("mock() default factory creates a MockSession with default LLM_ONLY mode")
+    public void testMockDefaultFactoryCreation()
+    {
+        final AiSession session = AiSession.mock();
+        Assertions.assertNotNull(session);
+        Assertions.assertTrue(session instanceof MockSession);
+        Assertions.assertTrue(session.getTargetExecutor() instanceof MockTargetExecutor);
+        Assertions.assertEquals(ExecutionMode.LLM_ONLY, session.getExecutionMode());
+    }
+
+    @Test
+    @DisplayName("mock(SessionData) factory creates a MockSession with seeded session data")
+    public void testMockDataFactoryCreation()
+    {
+        final SessionData data = new SessionData();
+        data.set("key", "value");
+        final AiSession session = AiSession.mock(data);
+        Assertions.assertNotNull(session);
+        Assertions.assertEquals("value", session.getExecutionContext().getSessionData().get("key"));
+    }
+
+    @Test
     @DisplayName("execute(Playbook) runs steps and returns a valid PlaybookRecording")
     public void testExecutePlaybook() throws Exception
     {

@@ -70,4 +70,16 @@ public final class SessionFinishedEvent extends ExecutionEvent
     {
         return this.success;
     }
+
+    @Override
+    public String getEventType()
+    {
+        return "session.finished";
+    }
+
+    @Override
+    public org.neodymium.ai.event.EventCategory getCategory()
+    {
+        return org.neodymium.ai.event.EventCategory.STRUCTURAL;
+    }
 }

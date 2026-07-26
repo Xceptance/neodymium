@@ -53,4 +53,16 @@ public final class DiagnosticWarningEvent extends ExecutionEvent
     {
         return this.message;
     }
+
+    @Override
+    public String getEventType()
+    {
+        return "diagnostic.warning";
+    }
+
+    @Override
+    public org.neodymium.ai.event.EventCategory getCategory()
+    {
+        return org.neodymium.ai.event.EventCategory.DIAGNOSTIC;
+    }
 }

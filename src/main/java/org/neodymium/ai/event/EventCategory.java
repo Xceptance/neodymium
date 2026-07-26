@@ -16,43 +16,29 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.neodymium.ai.model;
+package org.neodymium.ai.event;
 
 /**
- * Represents the execution status of a single playbook step.
+ * Enumeration representing high-level event categories for event routing,
+ * classification, and network filtering.
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-public enum PlaybookStepStatus
+public enum EventCategory
 {
-    /**
-     * The step is pending execution.
-     */
-    PENDING,
+    /** Core execution lifecycle steps and state changes */
+    STRUCTURAL,
 
-    /**
-     * The step is currently running.
-     */
-    RUNNING,
+    /** Low-level LLM request and response interaction metrics */
+    LLM,
 
-    /**
-     * The step completed successfully.
-     */
-    SUCCESS,
+    /** Diagnostic logs, warnings, soft errors, and RCA findings */
+    DIAGNOSTIC,
 
-    /**
-     * The step completed successfully via self-healing or escalation.
-     */
-    HEALED,
+    /** Aggregate session telemetry updates */
+    TELEMETRY,
 
-    /**
-     * The step failed during execution.
-     */
-    FAILED,
-
-    /**
-     * The step was split into sub-steps.
-     */
-    SPLITTED
+    /** Custom extension events published by plugins or hooks */
+    CUSTOM
 }

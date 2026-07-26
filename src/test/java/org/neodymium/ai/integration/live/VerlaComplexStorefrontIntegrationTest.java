@@ -71,7 +71,7 @@ public class VerlaComplexStorefrontIntegrationTest extends BaseAiTest
      */
     @Order(1)
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiPlaybook("playbooks/integration/complex-storefront-verla.yaml")
+    @AiPlaybook("/playbooks/integration/complex-storefront-verla.yaml")
     public void testComplexCheckoutLive()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -82,7 +82,7 @@ public class VerlaComplexStorefrontIntegrationTest extends BaseAiTest
      */
     @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiPlaybook("playbooks/integration/complex-storefront-verla.yaml")
+    @AiPlaybook("/playbooks/integration/complex-storefront-verla.yaml")
     public void testComplexCheckoutReplay()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));

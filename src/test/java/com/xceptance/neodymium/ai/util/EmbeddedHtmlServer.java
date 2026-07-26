@@ -658,7 +658,7 @@ public final class EmbeddedHtmlServer
      */
     public EmbeddedHtmlServer() throws IOException
     {
-        final int httpPort = Integer.getInteger("neodymium.ai.http.port", 43377);
+        final int httpPort = Integer.getInteger("neodymium.ai.http.port", 0);
         this.server = HttpServer.create(new InetSocketAddress(httpPort), 0);
         this.port = this.server.getAddress().getPort();
         
@@ -671,7 +671,7 @@ public final class EmbeddedHtmlServer
         this.server.createContext("/verla-bad/", new LoggingHandler(verlaHandler));
         this.server.setExecutor(Executors.newCachedThreadPool());
 
-        final int httpsPort = Integer.getInteger("neodymium.ai.https.port", 39389);
+        final int httpsPort = Integer.getInteger("neodymium.ai.https.port", 0);
         this.httpsServer = HttpsServer.create(new InetSocketAddress(httpsPort), 0);
         this.httpsPort = this.httpsServer.getAddress().getPort();
 

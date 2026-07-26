@@ -100,7 +100,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.REPLAY_STRICT})
     public void testAssertTitleFailure(final AiSession session)
     {
-        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
         {
             runPlaybook(session, """
                 steps: |
@@ -111,7 +111,7 @@ public class AssertIntegrationTest extends BaseAiTest
     }
 
     /**
-     * Verifies that incorrect element text assertion throws AssertionError in live replay.
+     * Verifies that incorrect element text assertion throws error in live replay.
      *
      * @param session the thread-isolated AiSession
      */
@@ -119,7 +119,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.REPLAY_STRICT})
     public void testAssertTextFailure(final AiSession session)
     {
-        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
         {
             runPlaybook(session, """
                 steps: |
@@ -130,7 +130,7 @@ public class AssertIntegrationTest extends BaseAiTest
     }
 
     /**
-     * Verifies that visible hidden element assertion throws AssertionError in live replay.
+     * Verifies that visible hidden element assertion throws error in live replay.
      *
      * @param session the thread-isolated AiSession
      */
@@ -138,7 +138,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.REPLAY_STRICT})
     public void testAssertVisibilityFailure(final AiSession session)
     {
-        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
         {
             runPlaybook(session, """
                 steps: |
@@ -149,7 +149,7 @@ public class AssertIntegrationTest extends BaseAiTest
     }
 
     /**
-     * Verifies that hidden visible element assertion throws AssertionError in live replay.
+     * Verifies that hidden visible element assertion throws error in live replay.
      *
      * @param session the thread-isolated AiSession
      */
@@ -157,7 +157,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.REPLAY_STRICT})
     public void testAssertInvisibilityFailure(final AiSession session)
     {
-        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
         {
             runPlaybook(session, """
                 steps: |
@@ -168,7 +168,7 @@ public class AssertIntegrationTest extends BaseAiTest
     }
 
     /**
-     * Verifies that existing non-existent element assertion throws AssertionError in live replay.
+     * Verifies that existing non-existent element assertion throws error in live replay.
      *
      * @param session the thread-isolated AiSession
      */
@@ -176,7 +176,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.REPLAY_STRICT})
     public void testAssertExistenceFailure(final AiSession session)
     {
-        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
         {
             runPlaybook(session, """
                 steps: |

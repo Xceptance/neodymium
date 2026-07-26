@@ -16,54 +16,55 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.neodymium.ai.event.structural;
+package org.neodymium.ai.event.telemetry;
 
+import org.neodymium.ai.event.EventCategory;
 import org.neodymium.ai.event.ExecutionEvent;
-import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.telemetry.SessionTelemetry;
 
 /**
- * Event indicating that a new SUT state has been captured.
+ * Event dispatched whenever aggregate session telemetry metrics are updated.
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-public final class StateCapturedEvent extends ExecutionEvent
+public final class TelemetryUpdatedEvent extends ExecutionEvent
 {
     /**
-     * The captured SUT state.
+     * The updated session telemetry snapshot.
      */
-    private final SutState state;
+    private final SessionTelemetry telemetry;
 
     /**
-     * Constructs a StateCapturedEvent.
+     * Constructs a TelemetryUpdatedEvent.
      *
-     * @param state the captured SUT state
+     * @param telemetry updated telemetry snapshot
      */
-    public StateCapturedEvent(final SutState state)
+    public TelemetryUpdatedEvent(final SessionTelemetry telemetry)
     {
         super();
-        this.state = state;
+        this.telemetry = telemetry;
     }
 
     /**
-     * Gets the captured state.
+     * Gets the updated telemetry snapshot.
      *
-     * @return the SUT state
+     * @return the SessionTelemetry
      */
-    public SutState getState()
+    public SessionTelemetry getTelemetry()
     {
-        return this.state;
+        return this.telemetry;
     }
 
     @Override
     public String getEventType()
     {
-        return "state.captured";
+        return "telemetry.updated";
     }
 
     @Override
-    public org.neodymium.ai.event.EventCategory getCategory()
+    public EventCategory getCategory()
     {
-        return org.neodymium.ai.event.EventCategory.STRUCTURAL;
+        return EventCategory.TELEMETRY;
     }
 }

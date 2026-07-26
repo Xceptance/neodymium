@@ -16,43 +16,22 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.neodymium.ai.model;
+package org.neodymium.ai.telemetry;
 
 /**
- * Represents the execution status of a single playbook step.
+ * Interface representing a telemetry output sink (e.g. local file writer,
+ * live WebSocket stream, HTTP reporter).
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-public enum PlaybookStepStatus
+@FunctionalInterface
+public interface TelemetrySink
 {
     /**
-     * The step is pending execution.
+     * Consumes an updated telemetry snapshot.
+     *
+     * @param telemetry the current session telemetry state
      */
-    PENDING,
-
-    /**
-     * The step is currently running.
-     */
-    RUNNING,
-
-    /**
-     * The step completed successfully.
-     */
-    SUCCESS,
-
-    /**
-     * The step completed successfully via self-healing or escalation.
-     */
-    HEALED,
-
-    /**
-     * The step failed during execution.
-     */
-    FAILED,
-
-    /**
-     * The step was split into sub-steps.
-     */
-    SPLITTED
+    void consume(final SessionTelemetry telemetry);
 }

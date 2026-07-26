@@ -128,12 +128,15 @@ public final class CallLlmStep<T> implements PipelineStep
 
         final LlmProvider provider = session.getLlmRegistry().getProvider(this.capability);
         LOGGER.debug("Calling LLM provider '{}' via capability: {}", provider.getClass().getSimpleName(), this.capability);
+        final String capName = this.capability != null ? this.capability.name() : "DEFAULT";
+        session.getEventBus().dispatch(new org.neodymium.ai.event.llm.LlmRequestSentEvent(request, capName));
         final long startTime = System.currentTimeMillis();
         final LlmResponse response;
         try
         {
             response = provider.chat(request);
             final long durationMs = System.currentTimeMillis() - startTime;
+            session.getEventBus().dispatch(new org.neodymium.ai.event.llm.LlmResponseReceivedEvent(request, response, durationMs, capName));
             LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
             if (LOGGER.isTraceEnabled())
             {

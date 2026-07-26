@@ -71,4 +71,16 @@ public final class StepStartedEvent extends ExecutionEvent
     {
         return this.stepIndex;
     }
+
+    @Override
+    public String getEventType()
+    {
+        return "step.started";
+    }
+
+    @Override
+    public org.neodymium.ai.event.EventCategory getCategory()
+    {
+        return org.neodymium.ai.event.EventCategory.STRUCTURAL;
+    }
 }

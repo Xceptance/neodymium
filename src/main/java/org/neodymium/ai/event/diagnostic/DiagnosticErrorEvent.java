@@ -80,4 +80,16 @@ public final class DiagnosticErrorEvent extends ExecutionEvent
     {
         return this.cause;
     }
+
+    @Override
+    public String getEventType()
+    {
+        return "diagnostic.error";
+    }
+
+    @Override
+    public org.neodymium.ai.event.EventCategory getCategory()
+    {
+        return org.neodymium.ai.event.EventCategory.DIAGNOSTIC;
+    }
 }

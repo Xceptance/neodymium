@@ -72,4 +72,16 @@ public final class StepFinishedEvent extends ExecutionEvent
     {
         return this.status;
     }
+
+    @Override
+    public String getEventType()
+    {
+        return "step.finished";
+    }
+
+    @Override
+    public org.neodymium.ai.event.EventCategory getCategory()
+    {
+        return org.neodymium.ai.event.EventCategory.STRUCTURAL;
+    }
 }

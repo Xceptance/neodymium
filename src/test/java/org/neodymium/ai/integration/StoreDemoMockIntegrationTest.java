@@ -30,6 +30,8 @@ import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
@@ -71,6 +73,7 @@ public class StoreDemoMockIntegrationTest extends BaseAiTest
     {
         final String pageUrl = String.format("http://localhost:%d/ClickActionTest/testClickStandardButton.html", server.getPort());
         System.setProperty("demo.url", pageUrl);
+        org.neodymium.util.Neodymium.getData().put("demo.url", pageUrl);
 
         // Retrieve mock provider and queue responses
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
@@ -116,7 +119,8 @@ public class StoreDemoMockIntegrationTest extends BaseAiTest
             """, null, "mock"));
     }
 
-    @AiPlaybook("playbooks/integration/store-click-demo.yaml")
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiPlaybook("/playbooks/integration/store-click-demo.yaml")
     public void testMockStoreClick()
     {
         // Assert the button click listener was triggered successfully by checking the result label

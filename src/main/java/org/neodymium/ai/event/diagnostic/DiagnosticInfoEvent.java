@@ -53,4 +53,16 @@ public final class DiagnosticInfoEvent extends ExecutionEvent
     {
         return this.message;
     }
+
+    @Override
+    public String getEventType()
+    {
+        return "diagnostic.info";
+    }
+
+    @Override
+    public org.neodymium.ai.event.EventCategory getCategory()
+    {
+        return org.neodymium.ai.event.EventCategory.DIAGNOSTIC;
+    }
 }

@@ -104,6 +104,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("SWITCH_WINDOW", new SwitchWindowAction());
         this.plugins.put("ASSERT", new AssertAction());
         this.plugins.put("CHECK", new CheckAction());
+        this.plugins.put("SPLIT", action -> {});
         this.plugins.put("NONE", action -> {});
     }
 
@@ -305,6 +306,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
             new ActionDefinition("STORE", "Store variable values", Collections.emptyMap()),
             new ActionDefinition("BRANCH", "Conditional branch logic", Collections.emptyMap()),
             new ActionDefinition("INCLUDE", "Include external playbook", Collections.emptyMap()),
+            new ActionDefinition("SPLIT", "Split step into child instructions", Collections.emptyMap()),
             new ActionDefinition("JAVA_METHOD", "Invoke Java reflection method", Collections.emptyMap())
         );
     }

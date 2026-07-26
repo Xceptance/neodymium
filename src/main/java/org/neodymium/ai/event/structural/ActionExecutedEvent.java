@@ -71,4 +71,16 @@ public final class ActionExecutedEvent extends ExecutionEvent
     {
         return this.success;
     }
+
+    @Override
+    public String getEventType()
+    {
+        return "action.executed";
+    }
+
+    @Override
+    public org.neodymium.ai.event.EventCategory getCategory()
+    {
+        return org.neodymium.ai.event.EventCategory.STRUCTURAL;
+    }
 }

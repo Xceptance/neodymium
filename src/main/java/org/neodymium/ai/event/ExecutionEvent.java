@@ -19,6 +19,7 @@
 package org.neodymium.ai.event;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Abstract base class representing all pipeline and diagnostic events dispatched
@@ -30,16 +31,32 @@ import java.time.Instant;
 public abstract class ExecutionEvent
 {
     /**
+     * Unique identifier for this event instance.
+     */
+    private final String eventId;
+
+    /**
      * The instant timestamp when the event was generated.
      */
     private final Instant timestamp;
 
     /**
-     * Constructs a base ExecutionEvent initializing the timestamp.
+     * Constructs a base ExecutionEvent initializing the event ID and timestamp.
      */
     protected ExecutionEvent()
     {
+        this.eventId = UUID.randomUUID().toString();
         this.timestamp = Instant.now();
+    }
+
+    /**
+     * Returns the unique event ID.
+     *
+     * @return the event ID
+     */
+    public final String getEventId()
+    {
+        return this.eventId;
     }
 
     /**
@@ -51,4 +68,18 @@ public abstract class ExecutionEvent
     {
         return this.timestamp;
     }
+
+    /**
+     * Returns the specific event type identifier (e.g. "step.started", "llm.response_received").
+     *
+     * @return the string event type
+     */
+    public abstract String getEventType();
+
+    /**
+     * Returns the high-level category governing this event type.
+     *
+     * @return the EventCategory
+     */
+    public abstract EventCategory getCategory();
 }

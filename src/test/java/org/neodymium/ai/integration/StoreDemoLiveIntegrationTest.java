@@ -25,6 +25,8 @@ import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 
@@ -52,9 +54,11 @@ public class StoreDemoLiveIntegrationTest extends BaseAiTest
     {
         final String pageUrl = String.format("http://localhost:%d/ClickActionTest/testClickStandardButton.html", server.getPort());
         System.setProperty("demo.url", pageUrl);
+        org.neodymium.util.Neodymium.getData().put("demo.url", pageUrl);
     }
 
-    @AiPlaybook("playbooks/integration/store-click-demo.yaml")
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiPlaybook("/playbooks/integration/store-click-demo.yaml")
     public void testLiveStoreClick()
     {
         // Assert the button click listener was triggered successfully by checking the result label
