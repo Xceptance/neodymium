@@ -320,10 +320,22 @@ public final class StateMachineRunner
         final List<String> warnings = (List<String>) context.getTransientData().get("verificationWarnings");
         if (warnings != null && !warnings.isEmpty())
         {
-            LOGGER.warn("⚠️ Semantic Verification Warnings/Failures:");
+            LOGGER.warn("⚠️ Semantic Verification Warnings/Failures ({} issue(s)):", warnings.size());
             for (final String warn : warnings)
             {
-                LOGGER.warn("  - {}", warn);
+                if (warn.contains(" | "))
+                {
+                    final String[] parts = warn.split(" \\| ");
+                    LOGGER.warn("  - {}", parts[0]);
+                    for (int i = 1; i < parts.length; i++)
+                    {
+                        LOGGER.warn("      • {}", parts[i]);
+                    }
+                }
+                else
+                {
+                    LOGGER.warn("  - {}", warn);
+                }
             }
         }
     }

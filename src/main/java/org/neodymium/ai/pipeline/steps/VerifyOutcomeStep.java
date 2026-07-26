@@ -196,7 +196,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             try
             {
                 final VerificationResult result = prompt.parseResponse(response.content(), context);
-                LOGGER.debug("Successfully parsed verification result: passed={}, actionReasoning={}, visualReasoning={}", result.passed(), result.actionReasoning(), result.visualReasoning());
+                logVerificationResult(result);
                 if (!result.passed())
                 {
                     @SuppressWarnings("unchecked")
@@ -279,5 +279,59 @@ public final class VerifyOutcomeStep implements PipelineStep
             // Always clean transient state to prevent context leakage across pipeline steps
             context.getTransientData().remove("finalState");
         }
+    }
+
+    /**
+     * Formats and logs the verification result in a structured, human-readable box layout.
+     *
+     * @param result the verification result to log
+     */
+    private void logVerificationResult(final VerificationResult result)
+    {
+        if (result == null)
+        {
+            return;
+        }
+
+        final boolean passed = result.passed();
+        final String statusStr = passed ? "PASS" : "FAIL";
+        final String icon = passed ? "🔍" : "⚠️";
+
+        LOGGER.debug("   ┌─ {} Verification Verdict: {} (passed={}) ─────────────────────────", icon, statusStr, passed);
+
+        if (result.getOverallVerdict() != null && result.getOverallVerdict().summary() != null)
+        {
+            LOGGER.debug("   │ Summary:        {}", result.getOverallVerdict().summary());
+        }
+
+        if (result.getRubrics() != null)
+        {
+            final VerificationResult.Rubrics rubrics = result.getRubrics();
+            if (rubrics.intentMatch() != null)
+            {
+                LOGGER.debug("   │ Intent Check:   [{}] {}", rubrics.intentMatch().score(), rubrics.intentMatch().analysis());
+            }
+            if (rubrics.visualDelta() != null)
+            {
+                LOGGER.debug("   │ Visual Check:   [{}] {}", rubrics.visualDelta().score(), rubrics.visualDelta().analysis());
+            }
+            if (rubrics.absenceOfErrors() != null)
+            {
+                LOGGER.debug("   │ Error Check:    [{}] {}", rubrics.absenceOfErrors().score(), rubrics.absenceOfErrors().analysis());
+            }
+        }
+        else
+        {
+            if (result.actionReasoning() != null && !result.actionReasoning().trim().isEmpty())
+            {
+                LOGGER.debug("   │ Action Reasoning: {}", result.actionReasoning());
+            }
+            if (result.visualReasoning() != null && !result.visualReasoning().trim().isEmpty())
+            {
+                LOGGER.debug("   │ Visual Reasoning: {}", result.visualReasoning());
+            }
+        }
+
+        LOGGER.debug("   └────────────────────────────────────────────────────────");
     }
 }

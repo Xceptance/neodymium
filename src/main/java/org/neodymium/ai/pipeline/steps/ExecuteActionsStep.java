@@ -218,12 +218,18 @@ public final class ExecuteActionsStep implements PipelineStep
                 }
                 
                 session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
+                context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
             }
-            catch (final IOException e)
+            catch (final Exception e)
             {
-                // Dispatch failed event status and throw HealingRequiredException to initiate recovery
+                // Dispatch failed event status and log error immediately
+                LOGGER.error("   ❌ Action execution failed on SUT: {}", e.getMessage());
                 session.getEventBus().dispatch(new ActionExecutedEvent(action, false));
-                throw new HealingRequiredException("Action execution failed against SUT: " + action.getDescription(), e);
+                if (e instanceof PipelineException pe)
+                {
+                    throw pe;
+                }
+                throw new HealingRequiredException("Action execution failed against SUT: " + action.getDescription() + " (" + e.getMessage() + ")", e);
             }
         }
         finally
@@ -398,6 +404,38 @@ public final class ExecuteActionsStep implements PipelineStep
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.flatSteps");
 
+            LOGGER.debug("================================================================================");
+            if (flatSteps != null && flatSteps.contains(step))
+            {
+                final int stepIndex = flatSteps.indexOf(step) + 1;
+                LOGGER.debug("▶ [Step {}/{}] Instruction: \"{}\"", stepIndex, flatSteps.size(), resolvedInstruction);
+            }
+            else
+            {
+                LOGGER.debug("▶ [Step] Instruction: \"{}\"", resolvedInstruction);
+            }
+
+            if (step.getSourceFile() != null && !step.getSourceFile().isEmpty())
+            {
+                LOGGER.debug("       Location:    {}:{}", step.getSourceFile(), step.getLineNumber());
+            }
+            if (executionMode != null)
+            {
+                LOGGER.debug("       Mode:        {}", executionMode);
+            }
+
+            final List<String> flags = new ArrayList<>();
+            if (step.isOptional()) flags.add("optional");
+            if (step.isBug()) flags.add("bug");
+            if (step.isNoHealing()) flags.add("noHealing");
+            if (step.isNoReplay()) flags.add("noReplay");
+            if (step.isContinueOnError()) flags.add("continueOnError");
+            if (!flags.isEmpty())
+            {
+                LOGGER.debug("       Flags:       {}", flags);
+            }
+            LOGGER.debug("================================================================================");
+
             final boolean isReplayMode = executionMode != null && executionMode.isReplay() && !stepNoReplay;
             final org.neodymium.ai.config.AiConfiguration config = new org.neodymium.ai.config.AiConfiguration();
             if (!isReplayMode && config.getBoolean("neodymium.ai.pesap.enabled", true) && !alreadySplitSteps.contains(step))
@@ -437,9 +475,7 @@ public final class ExecuteActionsStep implements PipelineStep
                         timeoutSeconds
                     );
 
-                    LOGGER.debug("================================================================================");
-                    LOGGER.debug("💬 [Pre-Step PESAP] Running analysis for: \"{}\" using provider '{}'", resolvedInstruction, provider.getClass().getSimpleName());
-                    LOGGER.debug("================================================================================");
+                    LOGGER.debug("💬 [Pre-Step PESAP] Running analysis using provider '{}'", provider.getClass().getSimpleName());
                     if (LOGGER.isTraceEnabled())
                     {
                         LOGGER.trace("System Prompt:\n{}", request.systemMessage());
@@ -534,36 +570,6 @@ public final class ExecuteActionsStep implements PipelineStep
 
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, initialLevel);
             stats.getContextLevels().add(initialLevel.name());
-            String stepIndicator = "";
-            if (flatSteps != null)
-            {
-                final int idx = flatSteps.indexOf(step);
-                if (idx != -1)
-                {
-                    stepIndicator = " " + (idx + 1) + "/" + flatSteps.size();
-                }
-            }
-
-            final String sourceFile = step.getSourceFile();
-            final int lineNumber = step.getLineNumber();
-            final String locationInfo;
-            if (sourceFile != null && lineNumber != -1)
-            {
-                locationInfo = " " + sourceFile + ":" + lineNumber;
-            }
-            else if (sourceFile != null)
-            {
-                locationInfo = " " + sourceFile;
-            }
-            else
-            {
-                locationInfo = "";
-            }
-
-            LOGGER.debug("--------------------------------------------------------------------------------");
-            LOGGER.debug("👉 [Executing Step{}]{}", stepIndicator, locationInfo);
-            LOGGER.debug("       Instruction: \"{}\"", resolvedInstruction);
-            LOGGER.debug("--------------------------------------------------------------------------------");
 
             @SuppressWarnings("unchecked")
             final AiPrompt<List<Action>> activePrompt = (AiPrompt<List<Action>>) contextState.getTransientData()
