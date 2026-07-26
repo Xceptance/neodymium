@@ -58,7 +58,8 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
     @Override
     public InputStream read(final String identifier) throws IOException
     {
-        final InputStream in = classLoader.getResourceAsStream(identifier);
+        final String normalized = identifier != null && identifier.startsWith("/") ? identifier.substring(1) : identifier;
+        final InputStream in = classLoader.getResourceAsStream(normalized);
         if (in == null)
         {
             throw new FileNotFoundException("Classpath resource not found: " + identifier);

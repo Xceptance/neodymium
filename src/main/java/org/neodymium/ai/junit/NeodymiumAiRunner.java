@@ -688,14 +688,33 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 eventBus.registerListener(recorder);
             }
 
-            for (int i = playbookSteps.size() - 1; i >= 0; i--)
-            {
-                executionContext.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookSteps.get(i), this.session, executionContext));
-            }
+            executionContext.getTransientData().put("playbook.mainSteps", playbookSteps);
 
             final ExtensionContext.Store store = context.getStore(ExtensionContext.Namespace.create(context.getRequiredTestInstance()));
             store.put(AiSession.class, this.session);
             store.put(ExecutionContext.class, executionContext);
+        }
+
+        @Override
+        public void interceptBeforeEachMethod(
+            final Invocation<Void> invocation,
+            final ReflectiveInvocationContext<Method> invocationContext,
+            final ExtensionContext extensionContext
+        ) throws Throwable
+        {
+            runPlaybookForMethod(invocationContext.getExecutable());
+            invocation.proceed();
+        }
+
+        @Override
+        public void interceptTestMethod(
+            final Invocation<Void> invocation,
+            final ReflectiveInvocationContext<Method> invocationContext,
+            final ExtensionContext extensionContext
+        ) throws Throwable
+        {
+            runMainTestPlaybook();
+            invocation.proceed();
         }
 
         @Override
@@ -705,12 +724,71 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExtensionContext extensionContext
         ) throws Throwable
         {
+            runMainTestPlaybook();
+            invocation.proceed();
+        }
+
+        @Override
+        public void interceptAfterEachMethod(
+            final Invocation<Void> invocation,
+            final ReflectiveInvocationContext<Method> invocationContext,
+            final ExtensionContext extensionContext
+        ) throws Throwable
+        {
+            try
+            {
+                runPlaybookForMethod(invocationContext.getExecutable());
+            }
+            finally
+            {
+                invocation.proceed();
+            }
+        }
+
+        private void runPlaybookForMethod(final Method method) throws Exception
+        {
+            if (method != null && method.isAnnotationPresent(AiPlaybook.class) && this.session != null)
+            {
+                final AiPlaybook playbookAnnot = method.getAnnotation(AiPlaybook.class);
+                final String path = playbookAnnot.value();
+
+                final ExecutionContext execCtx = this.session.getExecutionContext();
+                final PlaybookParser parser = (PlaybookParser) execCtx.getTransientData().get(ExecutionContext.KEY_PLAYBOOK_PARSER);
+                final PlaybookResourceManager manager = (PlaybookResourceManager) execCtx.getTransientData().get(ExecutionContext.KEY_RESOURCE_MANAGER);
+
+                if (parser != null && manager != null)
+                {
+                    final Playbook playbook = parser.parse(path, manager);
+                    final List<PlaybookStep> playbookSteps = new ArrayList<>(playbook.getSteps());
+
+                    for (int i = playbookSteps.size() - 1; i >= 0; i--)
+                    {
+                        execCtx.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookSteps.get(i), this.session, execCtx));
+                    }
+
+                    final StateMachineRunner runner = new StateMachineRunner(this.session);
+                    runner.run();
+                }
+            }
+        }
+
+        private void runMainTestPlaybook() throws Exception
+        {
             if (this.session != null && !this.session.getExecutionContext().getTransientData().containsKey("playbook.programmatic"))
             {
+                @SuppressWarnings("unchecked")
+                final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) this.session.getExecutionContext().getTransientData().remove("playbook.mainSteps");
+                if (playbookSteps != null && !playbookSteps.isEmpty())
+                {
+                    final ExecutionContext execCtx = this.session.getExecutionContext();
+                    for (int i = playbookSteps.size() - 1; i >= 0; i--)
+                    {
+                        execCtx.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookSteps.get(i), this.session, execCtx));
+                    }
+                }
                 final StateMachineRunner runner = new StateMachineRunner(this.session);
                 runner.run();
             }
-            invocation.proceed();
         }
 
         @Override

@@ -1,0 +1,2 @@
+steps: |
+  Open ${demo.url} in the browser

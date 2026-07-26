@@ -2,8 +2,28 @@
   "id": "com.xceptance.neodymium.ai.action.ClickActionTest :: testClickDisabledButton",
   "steps": [
     {
-      "actions": [],
-      "expectedFailure": false
+      "promptLine": "Click the Disabled Order Button.",
+      "reasoning": "Clicking the button with ID \u0027btn-disabled\u0027 as requested by the instruction.",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#btn-disabled",
+          "description": "Click the Disabled Order Button",
+          "elementDetails": "Disabled Order Button",
+          "elementContext": {
+            "text": "Disabled Order Button",
+            "id": "btn-disabled",
+            "tagName": "button",
+            "type": "submit"
+          },
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "expectedErrorType": "com.codeborne.selenide.ex.ElementShould",
+      "expectedErrorMessage": "Element should be clickable: interactable and enabled {#btn-disabled[0]}\nElement: \u0027\u003cbutton data-neo-ref\u003d\"xc_5gnx04\" disabled id\u003d\"btn-disabled\" type\u003d\"submit\"\u003eDisabled Order Button\u003c/button\u003e\u0027\nActual value: disabled\n(Timeout: 4s)",
+      "healedContextLevel": "VISUAL"
     }
   ]
 }

@@ -12,7 +12,7 @@
     "then" : null,
     "adjust" : false,
     "type" : "NAVIGATE",
-    "target" : "http://localhost:32873/ClickActionTest/testClickStandardButton.html",
+    "target" : "http://localhost:44929/ClickActionTest/testClickStandardButton.html",
     "description" : "Extracted NAVIGATE action",
     "reasoning" : "Navigate to standard click action test page",
     "stepInstruction" : "Open ${demo.url} in the browser",
@@ -21,8 +21,8 @@
     "stepScreenshotHash" : "",
     "parameters" : { },
     "else" : null,
-    "values" : [ "http://localhost:32873/ClickActionTest/testClickStandardButton.html" ],
-    "value" : "http://localhost:32873/ClickActionTest/testClickStandardButton.html"
+    "values" : [ "http://localhost:44929/ClickActionTest/testClickStandardButton.html" ],
+    "value" : "http://localhost:44929/ClickActionTest/testClickStandardButton.html"
   } ],
   "status" : "PENDING",
   "failed" : false,
