@@ -123,7 +123,7 @@ public class AiPromptGenerator {
 
         openBrowser(url);
 
-        PageAnalyzer pageAnalyzer = new PageAnalyzer();
+        PageAnalyzer pageAnalyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
         ActionExecutor actionExecutor = new ActionExecutor(this);
 
         List<Action> successfulPath = new ArrayList<>();
@@ -520,7 +520,7 @@ public class AiPromptGenerator {
         LOG.info("========================================================================");
         openBrowser(url);
 
-        PageAnalyzer pageAnalyzer = new PageAnalyzer();
+        PageAnalyzer pageAnalyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
         ActionExecutor actionExecutor = new ActionExecutor(this);
 
         Neodymium.initializePlaybook();
@@ -1074,7 +1074,7 @@ public class AiPromptGenerator {
 
         openBrowser(url);
 
-        PageAnalyzer pageAnalyzer = new PageAnalyzer();
+        PageAnalyzer pageAnalyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
 
         ActionExecutor actionExecutor = new ActionExecutor(this);
         for (int i = 0; i < cleanPath.size(); i++) {

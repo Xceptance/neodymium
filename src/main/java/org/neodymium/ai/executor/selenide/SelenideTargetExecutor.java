@@ -141,7 +141,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
         }
 
         final ContextLevel activeLevel = level != null ? level : ContextLevel.STANDARD;
-        final String html = new PageAnalyzer().captureSimplifiedDom(activeLevel);
+        final String html = new PageAnalyzer(WebDriverRunner.getWebDriver()).captureSimplifiedDom(activeLevel);
         final String hash = calculateHtmlHash(html);
 
         final List<SutAttachment> attachments = new ArrayList<>();

@@ -425,31 +425,6 @@ public abstract class AiSession implements AutoCloseable
     }
 
     /**
-     * Static shortcut method to execute a playbook using a default Selenide browser session in LLM_ONLY mode.
-     *
-     * @param playbook the playbook containing steps to run
-     * @return the resulting playbook recording
-     * @throws Exception if execution or resource closing fails
-     */
-    public static PlaybookRecording execute(final Playbook playbook) throws Exception
-    {
-        return execute(ExecutionMode.LLM_ONLY, playbook, null);
-    }
-
-    /**
-     * Static shortcut method to execute a playbook with session data using a default Selenide browser session in LLM_ONLY mode.
-     *
-     * @param playbook the playbook containing steps to run
-     * @param sessionData parameter dataset values to seed into the execution context
-     * @return the resulting playbook recording
-     * @throws Exception if execution or resource closing fails
-     */
-    public static PlaybookRecording execute(final Playbook playbook, final SessionData sessionData) throws Exception
-    {
-        return execute(ExecutionMode.LLM_ONLY, playbook, sessionData);
-    }
-
-    /**
      * Static shortcut method to execute a playbook using a default Selenide browser session in the specified execution mode.
      *
      * @param mode the execution mode governing the session

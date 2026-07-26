@@ -18,9 +18,10 @@
  */
 package org.neodymium.ai.executor.selenide;
 
+import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
-import com.codeborne.selenide.ElementsCollection;
+import com.codeborne.selenide.WebDriverRunner;
 import org.openqa.selenium.By;
 
 /**
@@ -83,7 +84,7 @@ public final class SelenideElementFinder
                 // If not found, dynamically stamp data-neo-ref attributes into the DOM (crucial for offline replays)
                 try
                 {
-                    new PageAnalyzer().captureSimplifiedDom(ContextLevel.LEAN);
+                    new PageAnalyzer(WebDriverRunner.getWebDriver()).captureSimplifiedDom(ContextLevel.LEAN);
                 }
                 catch (final Exception ignored)
                 {
