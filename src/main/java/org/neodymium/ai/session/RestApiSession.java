@@ -19,80 +19,73 @@
 package org.neodymium.ai.session;
 
 import org.neodymium.ai.client.LlmRegistry;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
-import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.executor.rest.RestTargetExecutor;
 import org.neodymium.ai.model.SessionData;
 
 /**
- * Concrete package-private mock session implementation for testing.
+ * Package-private {@link AiSession} implementation tailored for REST API automation
+ * backed by {@link RestTargetExecutor}.
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-final class MockSession extends AiSession
+class RestApiSession extends AiSession
 {
     /**
-     * Flag tracking if close was invoked on this session.
-     */
-    private boolean closed = false;
-
-    /**
-     * Constructs a MockSession with default LLM_ONLY mode.
+     * Constructs a RestApiSession with default session data.
      *
-     * @param sessionData the session variables mapping
-     * @param llmRegistry the provider registry
-     * @param eventBus the event bus
-     * @param targetExecutor the SUT target driver
+     * @param executionMode the mode governing session execution
      */
-    MockSession(
-        final SessionData sessionData,
-        final LlmRegistry llmRegistry,
-        final ExecutionEventBus eventBus,
-        final TargetExecutor targetExecutor
-    )
+    RestApiSession(final ExecutionMode executionMode)
     {
-        super(sessionData, llmRegistry, eventBus, targetExecutor, ExecutionMode.LLM_ONLY);
+        this(executionMode, new SessionData());
     }
 
     /**
-     * Constructs a MockSession with explicit execution mode.
+     * Constructs a RestApiSession with custom session data and mode.
      *
+     * @param executionMode the mode governing session execution
      * @param sessionData the session variables mapping
-     * @param llmRegistry the provider registry
-     * @param eventBus the event bus
-     * @param targetExecutor the SUT target driver
-     * @param executionMode the execution mode
      */
-    MockSession(
+    RestApiSession(final ExecutionMode executionMode, final SessionData sessionData)
+    {
+        this(
+            sessionData,
+            createLlmRegistry(),
+            new ExecutionEventBus(),
+            new RestTargetExecutor(),
+            executionMode
+        );
+    }
+
+    private RestApiSession(
         final SessionData sessionData,
         final LlmRegistry llmRegistry,
         final ExecutionEventBus eventBus,
-        final TargetExecutor targetExecutor,
+        final RestTargetExecutor targetExecutor,
         final ExecutionMode executionMode
     )
     {
         super(sessionData, llmRegistry, eventBus, targetExecutor, executionMode);
     }
 
-    /**
-     * Checks if this session is closed.
-     *
-     * @return true if closed, false otherwise
-     */
-    public boolean isClosed()
+    private static LlmRegistry createLlmRegistry()
     {
-        return this.closed;
+        final LlmRegistry registry = new LlmRegistry();
+        final AiConfiguration config = new AiConfiguration();
+        LlmRegistry.bootstrap(registry, config);
+        return registry;
     }
 
-    /**
-     * Closes the session.
-     *
-     * @throws Exception if closing fails
-     */
     @Override
     public void close() throws Exception
     {
-        this.closed = true;
+        if (getTargetExecutor() instanceof AutoCloseable closeable)
+        {
+            closeable.close();
+        }
     }
 }

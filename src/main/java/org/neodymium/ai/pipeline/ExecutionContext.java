@@ -91,6 +91,7 @@ public final class ExecutionContext
     public static final String KEY_EXECUTION_MODE = "executionMode";
     public static final String KEY_LAST_EXECUTION_ERROR = "lastExecutionError";
     public static final String KEY_ACTIVE_DATASET_LABEL = "activeDatasetLabel";
+    public static final String KEY_PLAYBOOK = "playbook";
 
     /**
      * The LIFO execution stack containing steps yet to be processed.

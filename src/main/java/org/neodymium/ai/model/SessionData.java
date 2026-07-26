@@ -56,6 +56,14 @@ public final class SessionData
     private final Map<Integer, Map<String, DataEntry>> dynamicHistory = new ConcurrentHashMap<>();
 
     /**
+     * Constructs a default empty SessionData instance.
+     */
+    public SessionData()
+    {
+        this(Collections.emptyMap());
+    }
+
+    /**
      * Constructs a SessionData instance with a static dataset.
      * The input map is defensively copied and wrapped as unmodifiable.
      *
@@ -63,7 +71,18 @@ public final class SessionData
      */
     public SessionData(final Map<String, DataEntry> staticData)
     {
-        this.staticData = Collections.unmodifiableMap(new HashMap<>(staticData));
+        this.staticData = staticData != null ? Collections.unmodifiableMap(new HashMap<>(staticData)) : Collections.emptyMap();
+    }
+
+    /**
+     * Sets a non-sensitive variable in the dynamic dataset.
+     *
+     * @param key the variable key name
+     * @param value the variable object value
+     */
+    public void set(final String key, final Object value)
+    {
+        putDynamic(key, value, false);
     }
 
     /**
@@ -175,6 +194,19 @@ public final class SessionData
         
         // Remove history for steps after the rollback target
         this.dynamicHistory.keySet().removeIf(idx -> idx > stepIndex);
+    }
+
+    /**
+     * Returns a merged map of static and dynamic entries with raw unmasked values.
+     *
+     * @return the raw data map
+     */
+    public Map<String, Object> getAllRawDataMap()
+    {
+        final Map<String, Object> merged = new HashMap<>();
+        this.staticData.forEach((k, v) -> merged.put(k, v.value()));
+        this.dynamicData.forEach((k, v) -> merged.put(k, v.value()));
+        return merged;
     }
 
     /**

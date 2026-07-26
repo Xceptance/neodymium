@@ -18,14 +18,28 @@
  */
 package org.neodymium.ai.session;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Set;
+import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRegistry;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.model.Playbook;
+import org.neodymium.ai.model.PlaybookRecording;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.PipelineException;
+import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
+import org.neodymium.ai.prompt.ActionExtractionPrompt;
+import org.neodymium.ai.runner.StateMachineRunner;
 
 /**
  * Abstract class representing an execution session context that manages the active
@@ -58,6 +72,11 @@ public abstract class AiSession implements AutoCloseable
     private final TargetExecutor targetExecutor;
 
     /**
+     * The execution mode governing this session.
+     */
+    private final ExecutionMode executionMode;
+
+    /**
      * Sequential pre-execution boundary hooks.
      */
     private final List<PreExecutionHook> preHooks = new CopyOnWriteArrayList<>();
@@ -68,7 +87,7 @@ public abstract class AiSession implements AutoCloseable
     private final List<PostExecutionHook> postHooks = new CopyOnWriteArrayList<>();
 
     /**
-     * Constructs an AiSession.
+     * Constructs an AiSession with default LLM_ONLY execution mode.
      *
      * @param sessionData the session variables mapping
      * @param llmRegistry the provider registry
@@ -82,10 +101,41 @@ public abstract class AiSession implements AutoCloseable
         final TargetExecutor targetExecutor
     )
     {
+        this(sessionData, llmRegistry, eventBus, targetExecutor, ExecutionMode.LLM_ONLY);
+    }
+
+    /**
+     * Constructs an AiSession with explicit execution mode.
+     *
+     * @param sessionData the session variables mapping
+     * @param llmRegistry the provider registry
+     * @param eventBus the event bus
+     * @param targetExecutor the SUT target driver
+     * @param executionMode the execution mode
+     */
+    protected AiSession(
+        final SessionData sessionData,
+        final LlmRegistry llmRegistry,
+        final ExecutionEventBus eventBus,
+        final TargetExecutor targetExecutor,
+        final ExecutionMode executionMode
+    )
+    {
         this.executionContext = new ExecutionContext(sessionData);
         this.llmRegistry = llmRegistry;
         this.eventBus = eventBus;
         this.targetExecutor = targetExecutor;
+        this.executionMode = executionMode != null ? executionMode : ExecutionMode.LLM_ONLY;
+    }
+
+    /**
+     * Retrieves the execution mode governing this session.
+     *
+     * @return the execution mode
+     */
+    public final ExecutionMode getExecutionMode()
+    {
+        return this.executionMode;
     }
 
     /**
@@ -179,6 +229,60 @@ public abstract class AiSession implements AutoCloseable
     }
 
     /**
+     * Programmatically executes a playbook in this session using the active target executor.
+     *
+     * @param playbook the playbook containing steps to run
+     * @return the resulting playbook recording
+     * @throws PipelineException if execution fails
+     */
+    public final PlaybookRecording execute(final Playbook playbook) throws PipelineException
+    {
+        return execute(playbook, null);
+    }
+
+    /**
+     * Programmatically executes a playbook in this session with seeded dataset variables.
+     *
+     * @param playbook the playbook containing steps to run
+     * @param sessionData parameter dataset values to seed into the execution context
+     * @return the resulting playbook recording
+     * @throws PipelineException if execution fails
+     */
+    public final PlaybookRecording execute(final Playbook playbook, final SessionData sessionData) throws PipelineException
+    {
+        if (playbook == null)
+        {
+            throw new IllegalArgumentException("Playbook must not be null.");
+        }
+
+        if (sessionData != null)
+        {
+            sessionData.getAllRawDataMap().forEach((k, v) -> this.executionContext.getSessionData().set(k, v));
+        }
+
+        this.executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.executionMode);
+        this.executionContext.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, playbook);
+
+        if (!this.executionContext.getTransientData().containsKey(ExecutionContext.KEY_ACTIVE_PROMPT))
+        {
+            this.executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
+        }
+
+        final List<PlaybookStep> playbookSteps = playbook.getSteps();
+        for (int i = playbookSteps.size() - 1; i >= 0; i--)
+        {
+            this.executionContext.pushStep(
+                ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookSteps.get(i), this, this.executionContext)
+            );
+        }
+
+        final StateMachineRunner runner = new StateMachineRunner(this);
+        runner.run();
+
+        return new PlaybookRecording(playbookSteps);
+    }
+
+    /**
      * Closes the session and associated resources.
      *
      * @throws Exception if closing resources fails
@@ -187,7 +291,96 @@ public abstract class AiSession implements AutoCloseable
     public abstract void close() throws Exception;
 
     /**
-     * Static factory method to instantiate a Mock session for unit testing.
+     * Static factory creating a Selenide browser automation session.
+     *
+     * @param mode the execution mode
+     * @return a new Selenide browser session
+     */
+    public static AiSession selenide(final ExecutionMode mode)
+    {
+        return new SelenideBrowserSession(mode);
+    }
+
+    /**
+     * Static factory creating a Selenide browser session with initial session variables.
+     *
+     * @param mode the execution mode
+     * @param sessionData initial session parameters
+     * @return a new Selenide browser session
+     */
+    public static AiSession selenide(final ExecutionMode mode, final SessionData sessionData)
+    {
+        return new SelenideBrowserSession(mode, sessionData);
+    }
+
+    /**
+     * Static factory creating a REST API automation session.
+     *
+     * @param mode the execution mode
+     * @return a new REST API session
+     */
+    public static AiSession rest(final ExecutionMode mode)
+    {
+        return new RestApiSession(mode);
+    }
+
+    /**
+     * Static factory creating a REST API session with initial session variables.
+     *
+     * @param mode the execution mode
+     * @param sessionData initial session parameters
+     * @return a new REST API session
+     */
+    public static AiSession rest(final ExecutionMode mode, final SessionData sessionData)
+    {
+        return new RestApiSession(mode, sessionData);
+    }
+
+    /**
+     * Static factory creating a Mock testing session with default parameters.
+     *
+     * @param mode the execution mode
+     * @return a new mock testing session
+     */
+    public static AiSession mock(final ExecutionMode mode)
+    {
+        return mock(mode, new SessionData());
+    }
+
+    /**
+     * Static factory creating a Mock testing session with initial session data.
+     *
+     * @param mode the execution mode
+     * @param sessionData initial session parameters
+     * @return a new mock testing session
+     */
+    public static AiSession mock(final ExecutionMode mode, final SessionData sessionData)
+    {
+        final LlmRegistry registry = new LlmRegistry();
+        registry.registerProvider(createMockLlmProvider());
+        return new MockSession(sessionData, registry, new ExecutionEventBus(), new MockTargetExecutor(), mode);
+    }
+
+    private static LlmProvider createMockLlmProvider()
+    {
+        return new LlmProvider()
+        {
+            @Override
+            public LlmResponse chat(final LlmRequest request)
+            {
+                return new LlmResponse("[]", new TokenUsage(10, 0, 10), "mock-model");
+            }
+
+            @Override
+            public Set<LlmCapability> getCapabilities()
+            {
+                return Set.of(LlmCapability.values());
+            }
+        };
+    }
+
+    /**
+     * Static factory method to instantiate a Mock session with custom mocks for unit testing.
      *
      * @param data the session variables
      * @param registry the LLM registry
@@ -202,6 +395,6 @@ public abstract class AiSession implements AutoCloseable
         final TargetExecutor executor
     )
     {
-        return new MockSession(data, registry, bus, executor);
+        return new MockSession(data, registry, bus, executor, ExecutionMode.LLM_ONLY);
     }
 }

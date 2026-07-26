@@ -1,0 +1,111 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.session;
+
+import java.util.Collections;
+import java.util.List;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.executor.rest.RestTargetExecutor;
+import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
+import org.neodymium.ai.model.Playbook;
+import org.neodymium.ai.model.PlaybookRecording;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.SessionData;
+
+/**
+ * Unit tests verifying static factory methods and execution on {@link AiSession}.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
+ */
+public class AiSessionTest
+{
+    @Test
+    @DisplayName("selenide() factory creates a SelenideBrowserSession with SelenideTargetExecutor")
+    public void testSelenideFactoryCreation()
+    {
+        final AiSession session = AiSession.selenide(ExecutionMode.REPLAY_WITH_HEALING);
+        Assertions.assertNotNull(session);
+        Assertions.assertTrue(session instanceof SelenideBrowserSession);
+        Assertions.assertTrue(session.getTargetExecutor() instanceof SelenideTargetExecutor);
+        Assertions.assertEquals(ExecutionMode.REPLAY_WITH_HEALING, session.getExecutionMode());
+    }
+
+    @Test
+    @DisplayName("rest() factory creates a RestApiSession with RestTargetExecutor")
+    public void testRestFactoryCreation()
+    {
+        final AiSession session = AiSession.rest(ExecutionMode.LLM_RECORDING);
+        Assertions.assertNotNull(session);
+        Assertions.assertTrue(session instanceof RestApiSession);
+        Assertions.assertTrue(session.getTargetExecutor() instanceof RestTargetExecutor);
+        Assertions.assertEquals(ExecutionMode.LLM_RECORDING, session.getExecutionMode());
+    }
+
+    @Test
+    @DisplayName("mock() factory creates a MockSession with MockTargetExecutor")
+    public void testMockFactoryCreation()
+    {
+        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY);
+        Assertions.assertNotNull(session);
+        Assertions.assertTrue(session instanceof MockSession);
+        Assertions.assertTrue(session.getTargetExecutor() instanceof MockTargetExecutor);
+        Assertions.assertEquals(ExecutionMode.LLM_ONLY, session.getExecutionMode());
+    }
+
+    @Test
+    @DisplayName("execute(Playbook) runs steps and returns a valid PlaybookRecording")
+    public void testExecutePlaybook() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            final PlaybookStep step1 = new PlaybookStep("Navigate to homepage");
+            final PlaybookStep step2 = new PlaybookStep("Click login");
+            final Playbook playbook = new Playbook(List.of(step1, step2), Collections.emptyList());
+
+            final PlaybookRecording recording = session.execute(playbook);
+            Assertions.assertNotNull(recording);
+            Assertions.assertEquals(2, recording.getRecordedSteps().size());
+            Assertions.assertEquals("Navigate to homepage", recording.getRecordedSteps().get(0).getInstruction());
+            Assertions.assertEquals("Click login", recording.getRecordedSteps().get(1).getInstruction());
+        }
+    }
+
+    @Test
+    @DisplayName("execute(Playbook, SessionData) seeds session data and executes successfully")
+    public void testExecutePlaybookWithSessionData() throws Exception
+    {
+        final SessionData customData = new SessionData();
+        customData.set("user", "testAdmin");
+
+        try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
+        {
+            final PlaybookStep step = new PlaybookStep("Verify user ${user}");
+            final Playbook playbook = new Playbook(List.of(step), Collections.emptyList());
+
+            final PlaybookRecording recording = session.execute(playbook, customData);
+            Assertions.assertNotNull(recording);
+            Assertions.assertEquals("testAdmin", session.getExecutionContext().getSessionData().get("user"));
+        }
+    }
+}
