@@ -223,7 +223,7 @@ public final class AiConfiguration
         {
             return roleVal;
         }
-        return getProperty("neodymium.ai.model", "gemini-3.5-flash");
+        return getProperty("neodymium.ai.model", "gemini-3.5-flash-lite");
     }
 
     /**

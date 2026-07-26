@@ -38,6 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.neodymium.common.ScreenshotWriter;
+import org.neodymium.ai.executor.selenide.ContextLevel;
 
 /**
  * Captures page context (screenshot + simplified DOM) for the LLM. The DOM is

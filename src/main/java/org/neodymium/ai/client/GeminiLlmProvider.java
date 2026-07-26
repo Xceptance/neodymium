@@ -70,7 +70,7 @@ public final class GeminiLlmProvider implements LlmProvider
 
         this.model = GoogleAiGeminiChatModel.builder()
             .apiKey(this.apiKey)
-            .modelName(this.modelName != null ? this.modelName : "gemini-3.5-flash")
+            .modelName(this.modelName != null ? this.modelName : "gemini-3.5-flash-lite")
             .temperature(0.0)
             .timeout(java.time.Duration.ofSeconds(180))
             .build();
