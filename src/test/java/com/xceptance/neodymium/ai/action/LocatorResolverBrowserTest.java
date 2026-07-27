@@ -86,6 +86,14 @@ public class LocatorResolverBrowserTest
     }
 
     @Test
+    public void testPlaywrightTextStarPrefixInLiveBrowser()
+    {
+        final ElementsCollection elements = LocatorResolver.findElements("text*=Total Paid: $");
+        Assertions.assertFalse(elements.isEmpty());
+        Assertions.assertEquals("Total Paid: $27.58", elements.first().getText().trim());
+    }
+
+    @Test
     public void testPlaywrightHasTextPseudoSelectorInLiveBrowser()
     {
         final ElementsCollection elements = LocatorResolver.findElements("button:has-text('Total Paid')");

@@ -180,9 +180,11 @@ public final class SelenideElementFinder
         if (!forceXpath && !forceCss)
         {
             final String lower = clean.toLowerCase();
-            if (lower.startsWith("text=") || lower.startsWith("has-text="))
+            if (lower.startsWith("text=") || lower.startsWith("text*=") || lower.startsWith("text:") || lower.startsWith("text*:")
+                    || lower.startsWith("has-text=") || lower.startsWith("has-text*=") || lower.startsWith("has-text:") || lower.startsWith("has-text*:"))
             {
-                String text = clean.substring(clean.indexOf('=') + 1).trim();
+                final int delimIdx = clean.indexOf(clean.contains("=") ? '=' : ':');
+                String text = clean.substring(delimIdx + 1).trim();
                 if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'")))
                 {
                     if (text.length() >= 2)
@@ -211,7 +213,7 @@ public final class SelenideElementFinder
                 }
             }
 
-            final java.util.regex.Matcher pwMatcher = java.util.regex.Pattern.compile("^(.*?):(has-text|text|contains)\\(['\"]?(.*?)['\"]?\\)$", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(clean);
+            final java.util.regex.Matcher pwMatcher = java.util.regex.Pattern.compile("^(.*?):(has-text|has-text\\*|text|text\\*|contains)\\(['\"]?(.*?)['\"]?\\)$", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(clean);
             if (pwMatcher.find())
             {
                 String tag = pwMatcher.group(1).trim();

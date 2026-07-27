@@ -52,7 +52,7 @@ public final class LocatorResolver
     private static final Logger LOG = LoggerFactory.getLogger(LocatorResolver.class);
 
     private static final Pattern PLAYWRIGHT_PSEUDO_PATTERN = Pattern.compile(
-            "^(.*?):(has-text|contains|text)\\((.*?)\\)$", Pattern.CASE_INSENSITIVE);
+            "^(.*?):(has-text|has-text\\*|contains|text|text\\*)\\((.*?)\\)$", Pattern.CASE_INSENSITIVE);
 
     private LocatorResolver()
     {
@@ -62,8 +62,8 @@ public final class LocatorResolver
     /**
      * Resolves a target selector string into a Selenium/Selenide {@link By} locator.
      * <p>
-     * Handles XPath, Playwright text prefixes, Playwright/jQuery pseudo-selectors,
-     * Shadow DOM hosts, and standard CSS selectors.
+     * Handles XPath, Playwright text prefixes (including {@code text*=...}, {@code has-text*=...}),
+     * Playwright/jQuery pseudo-selectors, Shadow DOM hosts, and standard CSS selectors.
      * </p>
      *
      * @param target the target selector string
@@ -91,9 +91,10 @@ public final class LocatorResolver
             return By.xpath(clean);
         }
 
-        // 3. Playwright text= / text: prefix (e.g. text=Total Paid: $27.58 or text:Total Paid: $27.58)
-        if (clean.toLowerCase().startsWith("text=") || clean.toLowerCase().startsWith("text:")
-                || clean.toLowerCase().startsWith("has-text=") || clean.toLowerCase().startsWith("has-text:"))
+        // 3. Playwright text= / text*= / text: / text*: / has-text= / has-text*= / has-text: / has-text*:
+        final String lower = clean.toLowerCase();
+        if (lower.startsWith("text=") || lower.startsWith("text*=") || lower.startsWith("text:") || lower.startsWith("text*:")
+                || lower.startsWith("has-text=") || lower.startsWith("has-text*=") || lower.startsWith("has-text:") || lower.startsWith("has-text*:"))
         {
             final int delimIdx = clean.indexOf(clean.contains("=") ? '=' : ':');
             String textVal = clean.substring(delimIdx + 1).trim();
@@ -175,24 +176,18 @@ public final class LocatorResolver
         try
         {
             final By locator = resolveLocator(clean);
-            final ElementsCollection elements = Selenide.$$(locator);
-            if (!elements.isEmpty())
-            {
-                return elements;
-            }
+            return Selenide.$$(locator);
         }
         catch (final InvalidSelectorException e)
         {
-            LOG.warn("⚠️ Invalid CSS selector '{}', falling back to text search: {}", clean, e.getMessage());
+            LOG.warn("⚠️ Invalid selector '{}', falling back to text search: {}", clean, e.getMessage());
             return Selenide.$$(Selectors.withText(clean));
         }
         catch (final Exception e)
         {
             LOG.debug("🔍 Locator resolution failed for target '{}': {}", clean, e.getMessage());
+            return Selenide.$$(Selectors.withText(clean));
         }
-
-        // Fallback: try direct text matching
-        return Selenide.$$(Selectors.withText(clean));
     }
 
     /**
