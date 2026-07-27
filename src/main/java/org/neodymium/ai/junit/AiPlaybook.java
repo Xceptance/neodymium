@@ -63,4 +63,23 @@ public @interface AiPlaybook
      */
     @Deprecated
     String name() default "";
+
+    /**
+     * The name of the test method whose recorded companion JSON file should be loaded during replay.
+     * <p>
+     * Useful when a separate live/recording method (e.g. {@code testCheckoutLive}) generates the companion JSON file
+     * and a replay method (e.g. {@code testCheckoutReplay}) replays it.
+     *
+     * @return the target test method name for recording resolution
+     */
+    String recordingMethod() default "";
+
+    /**
+     * A custom base name or relative path for the companion recording JSON file.
+     * <p>
+     * Multi-dimensional dataset and browser profile suffixes will automatically be attached to this base name.
+     *
+     * @return the custom companion recording file base name or path
+     */
+    String recordingFileName() default "";
 }

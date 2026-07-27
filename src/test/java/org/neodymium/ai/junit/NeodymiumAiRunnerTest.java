@@ -63,4 +63,39 @@ public class NeodymiumAiRunnerTest
         Assertions.assertNotNull(playbook);
         Assertions.assertTrue(playbook.value().startsWith("inline:"));
     }
+
+    /**
+     * Sample test class with explicit recordingMethod and recordingFileName configuration.
+     */
+    public static class RecordingAnnotationTestClass
+    {
+        @Test
+        @AiPlaybook(value = "/playbooks/sample.yaml", recordingMethod = "testSourceLive")
+        public void sampleReplayMethod()
+        {
+        }
+
+        @Test
+        @AiPlaybook(value = "/playbooks/sample.yaml", recordingFileName = "custom-baseline-file")
+        public void sampleCustomFileNameMethod()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that recordingMethod and recordingFileName attributes on @AiPlaybook are correctly read.
+     */
+    @Test
+    public void testRecordingMethodAndFileNameAnnotationAttributes() throws Exception
+    {
+        final AiPlaybook replayPb = RecordingAnnotationTestClass.class.getMethod("sampleReplayMethod").getAnnotation(AiPlaybook.class);
+        Assertions.assertNotNull(replayPb);
+        Assertions.assertEquals("testSourceLive", replayPb.recordingMethod());
+        Assertions.assertEquals("", replayPb.recordingFileName());
+
+        final AiPlaybook filePb = RecordingAnnotationTestClass.class.getMethod("sampleCustomFileNameMethod").getAnnotation(AiPlaybook.class);
+        Assertions.assertNotNull(filePb);
+        Assertions.assertEquals("", filePb.recordingMethod());
+        Assertions.assertEquals("custom-baseline-file", filePb.recordingFileName());
+    }
 }

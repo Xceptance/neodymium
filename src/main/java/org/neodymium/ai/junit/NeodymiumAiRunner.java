@@ -536,28 +536,36 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final Method method = context.getRequiredTestMethod();
             final String browserProfile = Neodymium.getBrowserProfileName();
 
+            String recMethod = null;
+            String recFileName = null;
+            final AiPlaybook methodPb = method.getAnnotation(AiPlaybook.class);
+            final AiPlaybook classPb = testClass != null ? testClass.getAnnotation(AiPlaybook.class) : null;
+            if (methodPb != null && !methodPb.recordingMethod().isEmpty())
+            {
+                recMethod = methodPb.recordingMethod();
+            }
+            else if (classPb != null && !classPb.recordingMethod().isEmpty())
+            {
+                recMethod = classPb.recordingMethod();
+            }
+            if (methodPb != null && !methodPb.recordingFileName().isEmpty())
+            {
+                recFileName = methodPb.recordingFileName();
+            }
+            else if (classPb != null && !classPb.recordingFileName().isEmpty())
+            {
+                recFileName = classPb.recordingFileName();
+            }
+
             String resolvedPlaybookPath = playbookPath;
             if (this.mode.isReplay())
             {
-                // Replay modes: try multi-dimensional candidates in order, including other methods in test class, then legacy names
+                // Replay modes: try candidate paths using recordingMethod / recordingFileName, then method defaults
                 final List<String> candidatePaths = new ArrayList<>();
-                candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile));
-                candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, null));
-
-                if (testClass != null)
-                {
-                    for (final Method m : testClass.getDeclaredMethods())
-                    {
-                        if (method == null || !m.getName().equals(method.getName()))
-                        {
-                            candidatePaths.add(computeRecordingPath(playbookPath, testClass, m, this.datasetId, browserProfile));
-                            candidatePaths.add(computeRecordingPath(playbookPath, testClass, m, this.datasetId, null));
-                        }
-                    }
-                }
-
-                candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, browserProfile));
-                candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, null));
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName));
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, null, recMethod, recFileName));
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, browserProfile, null, recFileName));
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, null, null, recFileName));
                 candidatePaths.add(computeLegacyRecordingPath(playbookPath, this.datasetId));
 
                 String companionJsonPath = null;
@@ -662,7 +670,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             if (this.mode.isRecording())
             {
-                final String recordingPath = computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile);
+                final String recordingPath = computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName);
 
                 if (this.mode == org.neodymium.ai.config.ExecutionMode.FORCE_RECORDING)
                 {
@@ -938,8 +946,60 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         return "";
     }
 
-    private static String computeRecordingPath(final String playbookPath, final Class<?> testClass, final Method method, final String datasetId, final String browserProfile)
+    private static String computeRecordingPath(
+        final String playbookPath,
+        final Class<?> testClass,
+        final Method method,
+        final String datasetId,
+        final String browserProfile
+    )
     {
+        return computeRecordingPath(playbookPath, testClass, method, datasetId, browserProfile, null, null);
+    }
+
+    private static String computeRecordingPath(
+        final String playbookPath,
+        final Class<?> testClass,
+        final Method method,
+        final String datasetId,
+        final String browserProfile,
+        final String recordingMethod,
+        final String recordingFileName
+    )
+    {
+        if (recordingFileName != null && !recordingFileName.trim().isEmpty())
+        {
+            String name = recordingFileName.trim();
+            if (name.toLowerCase().endsWith(".json"))
+            {
+                name = name.substring(0, name.length() - 5);
+            }
+
+            final StringBuilder sb = new StringBuilder();
+            if (name.startsWith("/"))
+            {
+                sb.append(name);
+            }
+            else
+            {
+                final String parentDir = extractParentDir(playbookPath);
+                sb.append(parentDir).append(name);
+            }
+
+            if (datasetId != null && !datasetId.isEmpty())
+            {
+                sb.append("_").append(datasetId);
+            }
+
+            if (browserProfile != null && !browserProfile.isEmpty())
+            {
+                sb.append("_").append(browserProfile);
+            }
+
+            sb.append(".json");
+            return sb.toString();
+        }
+
         final String parentDir = extractParentDir(playbookPath);
         final StringBuilder sb = new StringBuilder();
         sb.append(parentDir);
@@ -949,13 +1009,27 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             sb.append(testClass.getSimpleName());
         }
 
-        if (method != null)
+        final String targetMethodName;
+        if (recordingMethod != null && !recordingMethod.trim().isEmpty())
+        {
+            targetMethodName = recordingMethod.trim();
+        }
+        else if (method != null)
+        {
+            targetMethodName = method.getName();
+        }
+        else
+        {
+            targetMethodName = null;
+        }
+
+        if (targetMethodName != null && !targetMethodName.isEmpty())
         {
             if (testClass != null)
             {
                 sb.append("_");
             }
-            sb.append(method.getName());
+            sb.append(targetMethodName);
         }
 
         if (datasetId != null && !datasetId.isEmpty())
