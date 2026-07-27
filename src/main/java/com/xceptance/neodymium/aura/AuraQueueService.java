@@ -358,6 +358,7 @@ public final class AuraQueueService
                     command.add("-Dvideo.enableFilming=" + req.video);
                     command.add("-Dneodymium.webDriver.keepBrowserOpen=" + req.keepOpen);
                     command.add("-Dneodymium.managerActive=true");
+                    command.add("-Dneodymium.aura.test=" + System.getProperty("neodymium.aura.test", "false"));
                     command.add("-Dneodymium.managerRunId=" + runId);
                     command.add("-Dneodymium.managerUrl=http://localhost:" + serverPort);
                     command.add("-Dfile.encoding=UTF-8");

@@ -23,8 +23,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.thymeleaf.context.Context;
+
+import com.xceptance.neodymium.aura.dto.ChatSessionDto;
 
 /**
  * Controller handling dashboard core rendering, static themes, and assets.
@@ -36,12 +40,21 @@ public final class AuraManagerDashboardController
 {
     private final AuraInteractiveService interactiveService;
     private final AuraFileService fileService;
+    private final AuraManagerQueueController queueController;
+    private final AuraManagerReportingController reportingController;
+    private final AuraChatSessionService sessionService;
     private final NeodymiumAuraManager manager;
 
-    public AuraManagerDashboardController(final AuraInteractiveService interactiveService, final AuraFileService fileService, final NeodymiumAuraManager manager)
+    public AuraManagerDashboardController(final AuraInteractiveService interactiveService,
+            final AuraFileService fileService, final AuraManagerQueueController queueController,
+            final AuraManagerReportingController reportingController, final AuraChatSessionService sessionService,
+            final NeodymiumAuraManager manager)
     {
         this.interactiveService = interactiveService;
         this.fileService = fileService;
+        this.queueController = queueController;
+        this.reportingController = reportingController;
+        this.sessionService = sessionService;
         this.manager = manager;
     }
 
@@ -51,6 +64,41 @@ public final class AuraManagerDashboardController
         context.setVariable("theme", interactiveService.getActiveTheme());
         context.setVariable("files", fileService.getYamlFilesList());
         context.setVariable("expandedFiles", fileService.getExpandedFiles());
+        context.setVariable("queue", queueController.getSelectedQueue());
+        context.setVariable("headless", queueController.isHeadless());
+        context.setVariable("video", queueController.isVideo());
+        context.setVariable("keepOpen", queueController.isKeepOpen());
+        context.setVariable("interactive", queueController.isInteractive());
+        context.setVariable("allure", queueController.isAllure());
+
+        // Inject chat session variables
+        final List<ChatSessionDto> chatSessions = sessionService.getSessions();
+        final String currentSessionId = chatSessions.isEmpty() ? "" : chatSessions.get(0).id;
+        context.setVariable("chatSessions", chatSessions);
+        context.setVariable("currentSessionId", currentSessionId);
+        context.setVariable("chatMessages", chatSessions.isEmpty() ? List.of() : chatSessions.get(0).messages);
+
+        // Inject execution status variables
+        final boolean running = queueController.isRunning();
+        context.setVariable("running", running);
+        context.setVariable("total", queueController.getGlobalTestsRun());
+        context.setVariable("passed", queueController.getGlobalPassed());
+        context.setVariable("failed", queueController.getGlobalFailed());
+        context.setVariable("skipped", queueController.getGlobalSkipped());
+        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+
+        // Inject initial reporting history list
+        final List<Map<String, Object>> historyList = reportingController.getHistoryList();
+        context.setVariable("history", historyList);
+
+        if (running)
+        {
+            // Just use current time or some fallback for the initial running row
+            final java.time.LocalDateTime ldt = java.time.LocalDateTime.now();
+            final java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            context.setVariable("runningStartTime", ldt.format(formatter));
+        }
+
         final String html = manager.getTemplateEngine().process("dashboard", context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }

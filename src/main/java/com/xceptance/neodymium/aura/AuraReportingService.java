@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.aura;
 
+import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
 import com.xceptance.neodymium.util.Neodymium;
 import java.io.BufferedReader;
@@ -30,6 +31,7 @@ import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -410,7 +412,7 @@ public final class AuraReportingService
             final File targetDir = new File("target/allure-results");
             final File[] consoleFiles = targetDir
                     .listFiles((dir, name) -> name.startsWith("console-execution") && name.endsWith(".json"));
-            if (consoleFiles != null)
+            if (consoleFiles != null && consoleFiles.length > 0)
             {
                 for (final File consoleFile : consoleFiles)
                 {
@@ -419,6 +421,53 @@ public final class AuraReportingService
                 }
                 LOGGER.info("[Aura Server] Archived {} console-execution JSONs to {}", consoleFiles.length,
                         destDir.getName());
+            }
+            else if (files != null && !files.isEmpty())
+            {
+                int testCounter = 1;
+                for (final String file : files)
+                {
+                    final String baseName = new File(file).getName();
+                    final String yamlLabel = baseName.endsWith(".yaml") ? baseName.substring(0, baseName.length() - 5) : baseName;
+                    final List<String> datasets = new ArrayList<>();
+                    if (req != null && req.datasets != null)
+                    {
+                        for (final DatasetSelection ds : req.datasets)
+                        {
+                            if (file.equals(ds.file) && ds.id != null && !ds.id.isEmpty())
+                            {
+                                datasets.add(ds.id);
+                            }
+                        }
+                    }
+                    
+                    if (!datasets.isEmpty())
+                    {
+                        for (final String ds : datasets)
+                        {
+                            final Map<String, Object> testData = new HashMap<>();
+                            testData.put("testName", yamlLabel + " (" + ds + ")");
+                            testData.put("testId", ds);
+                            testData.put("yamlSource", file);
+                            testData.put("status", status);
+                            testData.put("steps", Collections.emptyList());
+                            
+                            final String json = AuraHttpUtils.gson.toJson(testData);
+                            Files.writeString(new File(destDir, "console-execution-" + (testCounter++) + ".json").toPath(), json, StandardCharsets.UTF_8);
+                        }
+                    }
+                    else
+                    {
+                        final Map<String, Object> testData = new HashMap<>();
+                        testData.put("testName", yamlLabel);
+                        testData.put("yamlSource", file);
+                        testData.put("status", status);
+                        testData.put("steps", Collections.emptyList());
+                        
+                        final String json = AuraHttpUtils.gson.toJson(testData);
+                        Files.writeString(new File(destDir, "console-execution-" + (testCounter++) + ".json").toPath(), json, StandardCharsets.UTF_8);
+                    }
+                }
             }
 
             final File screenshotsDir = new File("target/ai-console-screenshots");

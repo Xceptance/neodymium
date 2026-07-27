@@ -475,18 +475,54 @@
             line-height: 1.4;
         }
 
-        .message-ai {
+        .chat-message.message-ai, .chat-message.ai {
             background: var(--bg-main);
             border: 1px solid var(--border);
             align-self: flex-start;
             border-bottom-left-radius: 2px;
         }
 
-        .message-user {
+        .chat-message.message-user, .chat-message.user {
             background: var(--accent);
             color: white;
             align-self: flex-end;
             border-bottom-right-radius: 2px;
+        }
+
+        .chat-message .sender {
+            font-weight: 600;
+            font-size: 11px;
+            opacity: 0.8;
+            margin-bottom: 2px;
+        }
+
+        .thinking-block {
+            margin-top: 6px;
+            margin-bottom: 6px;
+            font-size: 11px;
+        }
+
+        .thinking-block details {
+            background: rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 6px 10px;
+        }
+
+        .thinking-block summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .thinking-text {
+            margin-top: 6px;
+            white-space: pre-wrap;
+            font-family: var(--font-mono);
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 10px;
+            color: var(--text-secondary);
         }
 
         .chat-input {

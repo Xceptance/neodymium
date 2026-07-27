@@ -49,6 +49,78 @@ public final class AuraHttpUtils
         }
     }
 
+    public static Map<String, String> getQueryParams(final HttpExchange exchange)
+    {
+        final String query = exchange.getRequestURI().getQuery();
+        if (query == null || query.isEmpty())
+        {
+            return Map.of();
+        }
+
+        final Map<String, String> params = new java.util.HashMap<>();
+        for (final String param : query.split("&"))
+        {
+            final String[] pair = param.split("=", 2);
+            if (pair.length > 1)
+            {
+                params.put(java.net.URLDecoder.decode(pair[0], StandardCharsets.UTF_8),
+                        java.net.URLDecoder.decode(pair[1], StandardCharsets.UTF_8));
+            }
+            else if (pair.length == 1)
+            {
+                params.put(java.net.URLDecoder.decode(pair[0], StandardCharsets.UTF_8), "");
+            }
+        }
+        return params;
+    }
+
+    public static Map<String, String> getRequestParams(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = new java.util.HashMap<>(getQueryParams(exchange));
+        if ("POST".equalsIgnoreCase(exchange.getRequestMethod()) || "PUT".equalsIgnoreCase(exchange.getRequestMethod()))
+        {
+            final String body = readBody(exchange);
+            if (body != null && !body.trim().isEmpty())
+            {
+                if (body.trim().startsWith("{"))
+                {
+                    try
+                    {
+                        final com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(body).getAsJsonObject();
+                        for (final String key : json.keySet())
+                        {
+                            if (!json.get(key).isJsonNull())
+                            {
+                                params.put(key, json.get(key).getAsString());
+                            }
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        // ignore JSON parse error
+                    }
+                }
+                else
+                {
+                    for (final String param : body.split("&"))
+                    {
+                        final String[] pair = param.split("=", 2);
+                        if (pair.length > 1)
+                        {
+                            params.put(java.net.URLDecoder.decode(pair[0], StandardCharsets.UTF_8),
+                                    java.net.URLDecoder.decode(pair[1], StandardCharsets.UTF_8));
+                        }
+                        else if (pair.length == 1)
+                        {
+                            params.put(java.net.URLDecoder.decode(pair[0], StandardCharsets.UTF_8), "");
+                        }
+                    }
+                }
+            }
+        }
+        return params;
+    }
+
     public static void sendResponse(final HttpExchange exchange, final int status, final String contentType,
             final byte[] bytes) throws IOException
     {

@@ -1,346 +1,221 @@
 <!DOCTYPE html>
-
-<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<!--
+  Xceptance Aura Executive Control Center Dashboard
+  @author AI-generated: Antigravity
+  Xceptance GmbH 2026
+-->
+<html xmlns:th="http://www.thymeleaf.org">
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Neodymium Aura Manager</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
-<link href="dashboard-styles.css" rel="stylesheet"/>
-<script src="dashboard-htmx.js"></script>
+    <meta charset="UTF-8"/>
+    <title>Neodymium Aura Manager</title>
+    <!-- Stylesheets, fonts, and scripts -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+    <link href="dashboard-styles.css" rel="stylesheet"/>
+    <script src="dashboard-htmx.js"></script>
 </head>
-<body>
-<div class="toast-container" id="toastContainer"></div>
-<div class="sidebar">
-<div class="logo"><i class="fa-solid fa-atom"></i></div>
-<div class="nav-item active" id="navWorkspace" onclick="showView('dashboardView')" title="Workspace">
-<i class="fa-solid fa-laptop-code"></i>
-<div class="nav-badge neo-u-1" id="sidebarRunBadge"><i class="fa-solid fa-circle-notch spinner"></i></div>
-</div>
-<div class="nav-item" id="navReports" onclick="showView('reportViewContainer')" title="History &amp; Reports">
-<i class="fa-solid fa-chart-bar"></i>
-</div>
-</div>
-<div class="main-container">
-<div class="top-navbar">
-<div class="neo-u-2">Neodymium Aura Dashboard</div>
-<div class="neo-u-3">
-<div class="neo-u-4" id="themeContainer" th:fragment="themeContainer">
-<button class="btn-edit neo-u-5" th:classappend="${theme == 'light'} ? 'active' : ''" id="themeLight" hx-post="/api/theme?theme=light" hx-target="#themeContainer" hx-swap="outerHTML" title="Light Mode" onclick="changeTheme('light')"><i class="fa-solid fa-sun"></i></button>
-<button class="btn-edit neo-u-5" th:classappend="${theme == 'dark'} ? 'active' : ''" id="themeDark" hx-post="/api/theme?theme=dark" hx-target="#themeContainer" hx-swap="outerHTML" title="Dark Mode" onclick="changeTheme('dark')"><i class="fa-solid fa-moon"></i></button>
-<button class="btn-edit neo-u-5" th:classappend="${theme == 'system'} ? 'active' : ''" id="themeSystem" hx-post="/api/theme?theme=system" hx-target="#themeContainer" hx-swap="outerHTML" title="System Theme" onclick="changeTheme('system')"><i class="fa-solid fa-desktop"></i></button>
-</div>
-</div>
-</div>
-<!-- DASHBOARD VIEW -->
-<div class="neo-u-6" id="dashboardView">
-<div class="workspace-layout">
-<!-- LEFT AREA -->
-<div class="left-area neo-u-7" id="leftArea">
-<!-- STATE: Selection & Queue -->
-<div class="view-state active" id="state-selection">
-<div class="selection-queue-grid">
-<div class="panel">
-<div class="panel-header">
-<span>Test Selection</span>
-<button class="btn-edit neo-u-8" onclick="loadFiles()" title="Refresh Files"><i class="fa-solid fa-rotate-right"></i></button>
-</div>
-                <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList">
-                    <!-- If files is null or empty, display a message -->
-                    <div th:if="${files == null || files.isEmpty()}" style="padding: 12px; color: var(--text-secondary); font-size: 12px; font-style: italic; text-align: center;">
-                        No YAML test files found in src/test/resources.
-                    </div>
+<body th:classappend="${theme == 'light' ? 'light-mode' : ''}">
 
-                    <!-- Otherwise, render the list using Thymeleaf loop -->
-                    <th:block th:unless="${files == null || files.isEmpty()}">
-                        <div class="file-container" th:each="item : ${files}" style="display: flex; flex-direction: column; margin-bottom: 6px;">
-                            <div class="list-item" style="position: relative; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0" th:data-file="${item.file}" onclick="toggleExpandFile(this.getAttribute('data-file'))">
-                                <div class="item-main" style="min-width: 0; overflow: hidden; display: flex; align-items: center; flex-grow: 1;">
-                                    <i class="fa-solid" 
-                                       th:classappend="${#sets.contains(expandedFiles, item.file) ? 'fa-chevron-down' : 'fa-chevron-right'}"
-                                       style="margin-right: 8px; color: var(--text-secondary); font-size: 10px; width: 12px; text-align: center;"></i>
-                                    <input type="checkbox" class="file-select-cb" th:data-file="${item.file}" 
-                                           style="margin-right: 8px; cursor: pointer;" 
-                                           onclick="event.stopPropagation(); toggleSelectAllDatasets(this.getAttribute('data-file'), this.checked)">
-                                    <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" th:text="${item.file}">filename.yaml</span>
-                                </div>
-                                <button class="edit-icon-btn" th:data-file="${item.file}" onclick="event.stopPropagation(); openYamlEditor(this.getAttribute('data-file'))" 
-                                        style="padding: 4px 8px; color: var(--text-secondary);" 
-                                        th:title="'Edit YAML Steps for ' + ${item.file}" th:alt="'Edit YAML Steps for ' + ${item.file}" th:aria-label="'Edit YAML Steps for ' + ${item.file}">
-                                    <i class="fa-solid fa-pen" style="font-size: 11px;" aria-hidden="true"></i>
-                                </button>
-                            </div>
-                            
-                            <div class="dataset-list" th:id="'datasets-' + ${item.file}" th:style="'display: ' + (${#sets.contains(expandedFiles, item.file) ? 'flex' : 'none'}) + '; flex-direction: column; padding-left: 24px; margin-top: 4px; gap: 4px;'">
-                                <div class="dataset-item" th:each="dataset : ${item.datasets}" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); justify-content: space-between; cursor: pointer;" th:data-file="${item.file}" th:data-id="${dataset.id}" onclick="const cb = this.querySelector('.dataset-select-cb'); cb.checked = !cb.checked; toggleSelectDataset(this.getAttribute('data-file'), this.getAttribute('data-id'), cb.checked);">
-                                    <div style="display: flex; align-items: center; min-width: 0; overflow: hidden;">
-                                        <input type="checkbox" class="dataset-select-cb" th:data-file="${item.file}" th:data-id="${dataset.id}" 
-                                               style="margin-right: 8px; cursor: pointer;" 
-                                               onclick="event.stopPropagation(); toggleSelectDataset(this.getAttribute('data-file'), this.getAttribute('data-id'), this.checked)">
-                                        <i class="fa-solid fa-database" style="margin-right: 6px; color: var(--accent-primary); opacity: 0.7; flex-shrink: 0;"></i>
-                                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 4px;" th:text="${dataset.label}">dataset label</span>
-                                    </div>
-                                </div>
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Sidebar Navigation -->
+<div class="sidebar">
+    <div class="logo"><i class="fa-solid fa-atom"></i></div>
+    <div class="nav-item active" id="navWorkspace" onclick="showView('dashboardView')" title="Workspace Explorer">
+        <i class="fa-solid fa-folder-tree"></i>
+        <div class="nav-badge neo-u-1" id="sidebarRunBadge" style="display: none;"><i class="fa-solid fa-circle-notch spinner"></i></div>
+    </div>
+    <div class="nav-item" id="navReports" onclick="showView('reportViewContainer')" title="History &amp; Reports">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+    </div>
+</div>
+
+<div class="main-container" id="mainWorkspace">
+    <!-- Top Navbar -->
+    <div class="top-navbar" id="themeContainer" th:fragment="themeContainer">
+        <div class="neo-u-2">Neodymium Aura Dashboard</div>
+        <div class="neo-u-3">
+            <div class="neo-u-4">
+                <button class="btn-edit neo-u-5" id="themeLight" onclick="changeTheme('light')" title="Light Mode"><i class="fa-solid fa-sun"></i></button>
+                <button class="btn-edit neo-u-5" id="themeDark" onclick="changeTheme('dark')" title="Dark Mode"><i class="fa-solid fa-moon"></i></button>
+                <button class="btn-edit neo-u-5" id="themeSystem" onclick="changeTheme('system')" title="System Theme"><i class="fa-solid fa-desktop"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layout Container: Workspace -->
+    <div class="workspace-layout active neo-u-6" id="dashboardView">
+        <!-- LEFT AREA -->
+        <div class="left-area neo-u-7" id="leftArea">
+            <!-- STATE: Selection & Queue -->
+            <div class="view-state active" id="state-selection">
+                <div class="selection-queue-grid">
+                    <!-- Insert Test Selection Panel Fragment -->
+                    <div th:replace="~{fragments/test-selection :: testSelectionContent}"></div>
+                    
+                    <!-- Insert Run Queue Panel Fragment -->
+                    <div class="panel">
+                        <div class="panel-header">Run Queue</div>
+                        <div class="content-scroll">
+                            <div class="queue-list" id="queueListContainer" th:fragment="queueListContainer">
+                                <div th:replace="~{fragments/queue :: queueListContainerContent}"></div>
                             </div>
                         </div>
-                    </th:block>
+                    </div>
                 </div>
-<div class="neo-u-9"><button class="btn-edit neo-u-10" id="openModalBtn" onclick="document.getElementById('createTestModal').style.display='flex'; document.getElementById('newTestName').focus();"><i class="fa-solid fa-plus"></i> Create New Test</button></div>
-</div>
-<div class="panel">
-<div class="panel-header">Run Queue</div>
-<div class="content-scroll">
-<div class="queue-list" id="queueListContainer">
-<!-- Populated by JS -->
-</div>
-</div>
-</div>
-</div>
-</div>
-<!-- STATE: Editor -->
-<div class="view-state" id="state-editor">
-<div class="panel editor-container" id="editorPanel" th:fragment="editorPanel">
-<div class="panel-header">
-<div class="neo-u-11">
-<i class="fa-solid fa-file-lines neo-u-12"></i>
-<span id="editorFileName" th:text="${activeEditingFile != null ? activeEditingFile : 'test.yaml'}">test.yaml</span>
-</div>
-<div class="editor-actions">
-<button class="btn-editor save" onclick="saveYamlFile()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
-<button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><i class="fa-solid fa-trash"></i> Delete</button>
-<button class="btn-editor" onclick="closeEditor()"><i class="fa-solid fa-xmark"></i>
-                                        Close</button>
-</div>
-</div>
-<textarea class="editor-textarea" id="editorContent" spellcheck="false" th:text="${editorContent != null ? editorContent : ''}"></textarea>
-</div>
-</div>
-<div class="panel neo-u-13" id="statsPanel">
-<div class="neo-u-14">
-<div>Total Run: <span class="neo-u-15" id="statsTotalExecution">0</span></div>
-<div>Passed: <span class="neo-u-16" id="statsPassed">0</span></div>
-<div>Failed: <span class="neo-u-17" id="statsFailed">0</span></div>
-<div>Skipped: <span class="neo-u-18" id="statsSkipped">0</span></div>
-</div>
-</div>
-<!-- Terminal Panel -->
-<div class="resizer-v neo-u-1" id="consoleResizer"></div>
-<div class="panel neo-u-19" id="consolePanel">
-<div class="terminal-panel">
-<div class="neo-u-20">
-<span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner"><i class="fa-solid fa-circle-notch spinner neo-u-21"></i></span></span>
-<div class="neo-u-22">
-<input checked="" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" type="checkbox"/>
-<label for="aiOnlyCb">AI Only</label>
-<input id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)" type="checkbox"/>
-<label for="errorsOnlyCb">Errors Only</label>
-</div>
-</div>
-<div id="terminalConsole">Console idle.</div>
-</div>
-</div>
-</div>
-<!-- HORIZONTAL RESIZER -->
-<div class="resizer-h" id="sidebarResizer"></div>
-<!-- RIGHT AREA -->
-<div class="right-area" id="rightArea">
-<div class="panel chat-container">
-<div class="panel-header neo-u-23">
-<div><i class="fa-solid fa-sparkles neo-u-15"></i> Aura Assistant</div>
-<div class="neo-u-24">
-<select class="neo-u-25" id="chatSessionSelect" onchange="switchChatSession()"></select>
-<button class="btn-edit neo-u-8" onclick="createNewChatSession()" title="New Chat"><i class="fa-solid fa-plus"></i></button>
-<button class="btn-edit neo-u-8" onclick="renameCurrentChatSession()" title="Rename Chat"><i class="fa-solid fa-pen"></i></button>
-<button class="btn-edit neo-u-26" onclick="deleteCurrentChatSession()" title="Delete Chat"><i class="fa-solid fa-trash"></i></button>
-</div>
-</div>
-<div class="api-key-banner neo-u-27" id="apiKeyBanner">
-<i class="fa-solid fa-triangle-exclamation"></i> <span id="apiKeyBannerText"></span>
-</div>
-<div class="api-key-banner neo-u-28" id="warningBanner">
-<i class="fa-solid fa-triangle-exclamation"></i> <span id="warningBannerText"></span>
-</div>
-<div class="chat-messages" id="chatMessages"></div>
-<input class="chat-input" id="chatInput" placeholder="Ask Aura..." type="text"/>
-</div>
-<div class="panel config-container">
-<div class="panel-header">Run Configuration</div>
-<div class="config-panel neo-u-29">
-<div class="config-row-wrapper neo-u-30">
-<div class="config-row neo-u-31">
-<span class="neo-u-2">Headless Mode</span>
-<label class="switch" for="optHeadless"><input checked="" id="optHeadless" type="checkbox"/><span class="slider"></span></label>
-</div>
-<span class="neo-u-32">Runs the browser in the
-                                    background without a GUI.</span>
-</div>
-<div class="config-row-wrapper neo-u-30">
-<div class="config-row neo-u-31">
-<span class="neo-u-2">Record Video</span>
-<label class="switch" for="optVideo"><input id="optVideo" type="checkbox"/><span class="slider"></span></label>
-</div>
-<span class="neo-u-32">Records execution video and
-                                    attaches it to the Allure report.</span>
-</div>
-<div class="config-row-wrapper neo-u-30">
-<div class="config-row neo-u-31">
-<span class="neo-u-2">Keep Browser Open</span>
-<label class="switch" for="optKeepOpen"><input id="optKeepOpen" type="checkbox"/><span class="slider"></span></label>
-</div>
-<span class="neo-u-32">Leaves the browser window
-                                    open after execution finishes.</span>
-</div>
-<div class="config-row-wrapper neo-u-30">
-<div class="config-row neo-u-31">
-<span class="neo-u-2">Interactive Mode</span>
-<label class="switch" for="optInteractive"><input id="optInteractive" type="checkbox"/><span class="slider"></span></label>
-</div>
-<span class="neo-u-32">Enables interactive AI
-                                    elements in the browser during execution.</span>
-</div>
-<div class="config-row-wrapper neo-u-30">
-<div class="config-row neo-u-31">
-<span class="neo-u-2">Test Report</span>
-<label class="switch" for="optReporting"><input checked="" id="optReporting" type="checkbox"/><span class="slider"></span></label>
-</div>
-<span class="neo-u-32">Compiles and opens the
-                                    visual test report after execution completes.</span>
-</div>
-<button class="btn-primary" id="runQueueBtn" onclick="runQueue()"><i class="fa-solid fa-play"></i> Run Queue</button>
-<button class="btn-primary neo-u-33" id="runCurrentTestBtn" onclick="runCurrentFile()"><i class="fa-solid fa-play"></i> Run
-                                Open Test</button>
-<button class="btn-danger neo-u-1" id="stopQueueBtn" onclick="stopQueue()"><i class="fa-solid fa-stop"></i> Stop Execution</button>
-</div>
-</div>
-</div>
-</div>
-</div>
-<!-- HISTORY & REPORTS VIEW -->
-<div class="workspace-layout neo-u-34" id="reportViewContainer">
-<!-- Mini-runs status bar: shown in State 4 (after step is selected in details iframe).
-                 A narrow vertical strip with one chip per run: run number + pass/fail dot. -->
-<div class="col-runs-mini" id="colRunsMini">
-<div class="col-runs-mini-header">Runs</div>
-<!-- Populated by JS via refreshMiniRunsBar() -->
-</div>
-<!-- Left Side: History List -->
-<div class="left-area" id="colRuns">
-<div class="panel neo-u-35">
-<div class="panel-header">
-<span>Run History</span>
-<button class="btn btn-secondary neo-u-36" onclick="loadHistory()"><i aria-hidden="true" class="fa-solid fa-arrows-rotate"></i></button>
-</div>
-<div class="neo-u-37">
-<table class="history-table neo-u-38">
-<tbody id="reportingHistoryList">
-<!-- Populated by JS -->
-</tbody>
-</table>
-</div>
-</div>
-</div>
-<div class="resizer-h neo-u-34" id="historyResizer1"></div>
-<!-- Middle Side: Tests List -->
-<div class="left-area neo-u-34" id="colTests">
-<div class="panel neo-u-35">
-<div class="panel-header">
-<span id="historyTestsHeader">Test Cases</span>
-</div>
-<div class="neo-u-37" id="historyTestsList">
-<!-- Populated by JS -->
-</div>
-</div>
-</div>
-<div class="resizer-h neo-u-34" id="historyResizer2"></div>
-<!-- Mini-tests status bar: shown in State 4 alongside colRunsMini.
-                 Mirrors the colRunsMini pattern for test cases. -->
-<div class="col-runs-mini" id="colTestsMini">
-<div class="col-runs-mini-header">Tests</div>
-<!-- Populated by JS via refreshMiniTestsBar() -->
-</div>
-<div class="resizer-h neo-u-34" id="historyResizer3"></div>
-<!-- Right Side: Interactive Console -->
-<div class="right-area neo-u-34" id="colReport">
-<div class="panel neo-u-39">
-<div class="panel-header">
-<span id="historyDetailsHeader">Test Case Details</span>
-</div>
-<div class="neo-u-40">
-<iframe class="neo-u-41" id="historyConsoleIframe"></iframe>
-<div class="neo-u-42" id="historyPlaceholder">
-<i class="fa-solid fa-clock-rotate-left neo-u-43"></i>
-<p>Select a run from the history to view its interactive report.</p>
-</div>
-</div>
-</div>
-</div>
-</div>
-<!-- REPORT IFRAME VIEW (Hidden until report opened) -->
-<div class="iframe-view-pane" id="reportView">
-<div class="neo-report-header">
-<div class="neo-u-44"><i class="fa-solid fa-chart-column neo-u-45"></i>
-                    Test Report: <span id="reportDisplayName"></span></div>
-<button class="btn-edit" onclick="closeReportView()"><i class="fa-solid fa-arrow-left"></i>
-                    Back</button>
-</div>
-<iframe class="report-iframe" id="reportIframe" src="about:blank"></iframe>
-</div>
-<!-- INTERACTIVE CONSOLE VIEW -->
-<div class="iframe-view-pane" id="interactiveConsoleView">
-<div class="neo-report-header">
-<div class="neo-u-44"><i class="fa-solid fa-terminal neo-u-46"></i>
-                    Interactive Console</div>
-<button class="btn-edit" onclick="closeInteractiveConsoleView()"><i class="fa-solid fa-arrow-left"></i>
-                    Back</button>
-</div>
-<iframe class="report-iframe" id="interactiveConsoleIframe" src="about:blank"></iframe>
-</div>
-</div>
-<!-- CREATE TEST MODAL -->
-<div class="modal-overlay" id="createTestModal">
-<div class="modal-card">
-<div class="modal-header" id="modalTitle">Create New Test Case</div>
-<div class="modal-body">
-<label class="neo-u-47">Test Case Name</label>
-<input class="modal-input" id="newTestName" placeholder="e.g. Add Product to Basket" type="text"/>
-</div>
-<div class="modal-footer">
-<button class="btn-editor" id="closeModalBtn">Cancel</button>
-<button class="btn-primary neo-u-48" id="submitCreateTestBtn" onclick="submitCreateTest()">Create Test</button>
-</div>
-</div>
-</div>
-<!-- DELETE CONFIRMATION MODAL -->
-<div class="modal-overlay" id="deleteTestModal">
-<div class="modal-card">
-<div class="modal-header">Delete Test Case</div>
-<div class="modal-body">
-<p>Are you sure you want to delete <span class="neo-u-44" id="deleteFileNameDisplay"></span>?
-                </p>
-</div>
-<div class="modal-footer">
-<button class="btn-editor" onclick="document.getElementById('deleteTestModal').style.display='none'">Cancel</button>
-<button class="btn-danger neo-u-48" onclick="submitDeleteTest()">Confirm Delete</button>
-</div>
-</div>
-</div>
+            </div>
+            
+            <!-- STATE: Editor -->
+            <div class="view-state" id="state-editor">
+                <!-- Insert Editor Panel Fragment -->
+                <div class="panel editor-container" id="editorPanel" th:fragment="editorPanel">
+                    <div th:replace="~{fragments/editor :: editorPanelContent}"></div>
+                </div>
+            </div>
+            
+            <!-- Insert Progress Stats Panel Fragment -->
+            <div class="panel neo-u-13" id="statsPanel" th:fragment="statsPanel" hx-swap-oob="true"
+                 th:style="${running or (total != null and total > 0) ? 'display: block;' : 'display: none;'}">
+                <div th:replace="~{fragments/queue :: statsPanelContent}"></div>
+            </div>
+            
+            <!-- Terminal Panel -->
+            <div class="resizer-v neo-u-1" id="consoleResizer"></div>
+            <div class="panel neo-u-19" id="consolePanel">
+                <div class="terminal-panel">
+                    <div class="neo-u-20">
+                        <span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner"><i class="fa-solid fa-circle-notch spinner neo-u-21"></i></span></span>
+                        <div class="neo-u-22">
+                            <input checked="" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" type="checkbox"/>
+                            <label for="aiOnlyCb">AI Only</label>
+                            <input id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)" type="checkbox"/>
+                            <label for="errorsOnlyCb">Errors Only</label>
+                        </div>
+                    </div>
+                    <div id="terminalConsole">Console idle.</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- HORIZONTAL RESIZER -->
+        <div class="resizer-h" id="sidebarResizer"></div>
+        
+        <!-- RIGHT AREA -->
+        <div class="right-area" id="rightArea">
+            <!-- Insert Chat Assistant Panel Fragment -->
+            <div class="panel chat-container" id="chatContainer" th:fragment="chatContainer">
+                <div th:replace="~{fragments/chat :: chatContainerContent}"></div>
+            </div>
+            
+            <!-- Insert Configuration Panel Fragment -->
+            <div class="panel config-container">
+                <div class="panel-header">Run Configuration</div>
+                <div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel">
+                    <div th:replace="~{fragments/queue :: configPanelContent}"></div>
+                </div>
+                <div id="runControls" style="display: flex; gap: 8px; margin-top: 12px; padding: 0 16px 16px;">
+                    <th:block th:replace="~{fragments/queue :: runControlsContent}"></th:block>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HISTORY & REPORTS VIEW -->
+    <div class="workspace-layout neo-u-34" id="reportViewContainer">
+        <!-- Mini-runs status bar -->
+        <div class="col-runs-mini" id="colRunsMini">
+            <div class="col-runs-mini-header">Runs</div>
+        </div>
+        <!-- Left Side: History List -->
+        <div class="left-area" id="colRuns">
+            <div class="panel neo-u-35">
+                <div class="panel-header">
+                    <span>Run History</span>
+                    <button class="btn btn-secondary neo-u-36" hx-get="/api/reporting/history" hx-target="#allureHistoryList" hx-swap="outerHTML"><i aria-hidden="true" class="fa-solid fa-arrows-rotate"></i></button>
+                </div>
+                <div class="neo-u-37" id="reportingHistoryList">
+                    <table class="history-table neo-u-38">
+                        <!-- Insert History List Fragment -->
+                        <tbody id="allureHistoryList" th:fragment="reportingHistoryList">
+                            <th:block th:replace="~{fragments/history :: reportingHistoryListContent}"></th:block>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="resizer-h neo-u-34" id="historyResizer1"></div>
+        <!-- Middle Side: Tests List -->
+        <div class="left-area" id="colTests" th:fragment="historyTests" hx-on:htmx:after-swap="applyHistoryState(2)">
+            <th:block th:replace="~{fragments/history :: historyTestsContent}"></th:block>
+        </div>
+        <div class="resizer-h neo-u-34" id="historyResizer2"></div>
+        <!-- Mini-tests status bar -->
+        <div class="col-runs-mini" id="colTestsMini">
+            <div class="col-runs-mini-header">Tests</div>
+        </div>
+        <div class="resizer-h neo-u-34" id="historyResizer3"></div>
+        <!-- Right Side: Interactive Console -->
+        <div class="right-area neo-u-34" id="colReport">
+            <div class="panel neo-u-39">
+                <div class="panel-header">
+                    <span id="historyDetailsHeader">Test Case Details</span>
+                </div>
+                <div class="neo-u-40">
+                    <iframe class="neo-u-41" id="historyConsoleIframe"></iframe>
+                    <div class="neo-u-42" id="historyPlaceholder">
+                        <i class="fa-solid fa-clock-rotate-left neo-u-43"></i>
+                        <p>Select a run from the history to view its interactive report.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- REPORT IFRAME VIEW (Hidden until report opened) -->
+    <div class="iframe-view-pane" id="reportView">
+        <div class="neo-report-header">
+            <div class="neo-u-44"><i class="fa-solid fa-chart-column neo-u-45"></i>
+                Test Report: <span id="reportDisplayName"></span></div>
+            <button class="btn-edit" onclick="closeReportView()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+        </div>
+        <iframe class="report-iframe" id="reportIframe" src="about:blank"></iframe>
+    </div>
+    
+    <!-- INTERACTIVE CONSOLE VIEW -->
+    <div class="iframe-view-pane" id="interactiveConsoleView">
+        <div class="neo-report-header">
+            <div class="neo-u-44"><i class="fa-solid fa-terminal neo-u-46"></i> Interactive Console</div>
+            <button class="btn-edit" onclick="closeInteractiveConsoleView()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+        </div>
+        <iframe class="report-iframe" id="interactiveConsoleIframe" src="about:blank"></iframe>
+    </div>
+</div>
+
+<!-- MODALS -->
+<div th:replace="~{fragments/modals :: createTestModal}"></div>
+<div th:replace="~{fragments/modals :: deleteTestModal}"></div>
+
 <!-- VIEW LOG MODAL -->
 <div class="modal-overlay neo-u-49" id="logModal">
-<div class="modal-card neo-u-50">
-<div class="modal-header neo-u-31">
-<span>Execution Log</span>
-<button class="btn-editor neo-u-51" id="downloadLogBtn"><i class="fa-solid fa-download"></i>
-                    Download</button>
+    <div class="modal-card neo-u-50">
+        <div class="modal-header neo-u-31">
+            <span>Execution Log</span>
+            <button class="btn-editor neo-u-51" id="downloadLogBtn"><i class="fa-solid fa-download"></i> Download</button>
+        </div>
+        <div class="modal-body neo-u-52">
+            <pre class="neo-u-53" id="logModalContent"></pre>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-primary neo-u-51" onclick="closeLogModal()">Close</button>
+        </div>
+    </div>
 </div>
-<div class="modal-body neo-u-52">
-<pre class="neo-u-53" id="logModalContent"></pre>
+
+<!-- Polling Trigger Container -->
+<div id="executionTrigger" th:fragment="executionTrigger" hx-swap-oob="true">
+    <th:block th:replace="~{fragments/queue :: executionTriggerContent}"></th:block>
 </div>
-<div class="modal-footer">
-<button class="btn-primary neo-u-51" onclick="closeLogModal()">Close</button>
-</div>
-</div>
-</div>
+
 <script src="dashboard-app.js"></script>
 </body>
 </html>

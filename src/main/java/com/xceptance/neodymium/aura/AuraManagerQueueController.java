@@ -21,8 +21,10 @@ package com.xceptance.neodymium.aura;
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -54,11 +56,11 @@ public final class AuraManagerQueueController
     private final NeodymiumAuraManager manager;
 
     private final List<DatasetSelection> selectedQueue = Collections.synchronizedList(new ArrayList<>());
-    private boolean headless = false;
+    private boolean headless = true;
     private boolean video = false;
     private boolean keepOpen = false;
     private boolean interactive = false;
-    private boolean allure = false;
+    private boolean allure = true;
 
     public AuraManagerQueueController(final AuraQueueService queueService, final AuraFileService fileService, final AuraInteractiveService interactiveService, final NeodymiumAuraManager manager)
     {
@@ -68,29 +70,67 @@ public final class AuraManagerQueueController
         this.manager = manager;
     }
 
+    public final List<DatasetSelection> getSelectedQueue()
+    {
+        return this.selectedQueue;
+    }
+
+    public final boolean isHeadless()
+    {
+        return this.headless;
+    }
+
+    public final boolean isVideo()
+    {
+        return this.video;
+    }
+
+    public final boolean isKeepOpen()
+    {
+        return this.keepOpen;
+    }
+
+    public final boolean isInteractive()
+    {
+        return this.interactive;
+    }
+
+    public final boolean isAllure()
+    {
+        return this.allure;
+    }
+
+    public final boolean isRunning()
+    {
+        return this.queueService.isRunningQueue();
+    }
+
+    public final int getGlobalTestsRun()
+    {
+        return this.queueService.getGlobalTestsRun();
+    }
+
+    public final int getGlobalPassed()
+    {
+        return this.queueService.getGlobalPassed();
+    }
+
+    public final int getGlobalFailed()
+    {
+        return this.queueService.getGlobalFailed();
+    }
+
+    public final int getGlobalSkipped()
+    {
+        return this.queueService.getGlobalSkipped();
+    }
+
+
     public void handleToggleQueue(final HttpExchange exchange) throws IOException
     {
-        final String query = exchange.getRequestURI().getQuery();
-        String file = null;
-        String id = null;
-        if (query != null)
-        {
-            for (final String param : query.split("&"))
-            {
-                final String[] pair = param.split("=");
-                if (pair.length > 1)
-                {
-                    if ("file".equals(pair[0]))
-                    {
-                        file = URLDecoder.decode(pair[1], StandardCharsets.UTF_8);
-                    }
-                    else if ("id".equals(pair[0]))
-                    {
-                        id = URLDecoder.decode(pair[1], StandardCharsets.UTF_8);
-                    }
-                }
-            }
-        }
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String file = params.get("file");
+        final String id = params.get("id");
 
         if (file != null && id != null)
         {
@@ -119,38 +159,122 @@ public final class AuraManagerQueueController
 
         final Context context = new Context();
         context.setVariable("queue", selectedQueue);
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("queueListContainer"), context);
+        context.setVariable("running", isRunning());
+        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("queueListContainer", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
-    public void handleMoveQueue(final HttpExchange exchange) throws IOException
+    public void handleToggleAllQueue(final HttpExchange exchange) throws IOException
     {
-        final String query = exchange.getRequestURI().getQuery();
-        int index = -1;
-        String direction = null;
-        if (query != null)
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String file = params.get("file");
+
+        if (file != null)
         {
-            for (final String param : query.split("&"))
+            final String targetFile = file;
+            final List<YamlFileDto> files = fileService.getYamlFilesList();
+            List<DatasetDto> datasets = null;
+            for (final YamlFileDto f : files)
             {
-                final String[] pair = param.split("=");
-                if (pair.length > 1)
+                if (targetFile.equals(f.file))
                 {
-                    if ("index".equals(pair[0]))
+                    datasets = f.datasets;
+                    break;
+                }
+            }
+
+            if (datasets != null && !datasets.isEmpty())
+            {
+                synchronized (selectedQueue)
+                {
+                    final boolean shouldAdd;
+                    if (params.containsKey("checked"))
                     {
-                        try
+                        shouldAdd = Boolean.parseBoolean(params.get("checked"));
+                    }
+                    else
+                    {
+                        int count = 0;
+                        for (final DatasetDto d : datasets)
                         {
-                            index = Integer.parseInt(pair[1]);
+                            for (final DatasetSelection item : selectedQueue)
+                            {
+                                if (targetFile.equals(item.file) && d.id.equals(item.id))
+                                {
+                                    count++;
+                                    break;
+                                }
+                            }
                         }
-                        catch (final NumberFormatException e)
+                        shouldAdd = (count < datasets.size());
+                    }
+
+                    if (shouldAdd)
+                    {
+                        for (final DatasetDto d : datasets)
                         {
-                            // ignore
+                            boolean found = false;
+                            for (final DatasetSelection item : selectedQueue)
+                            {
+                                if (targetFile.equals(item.file) && d.id.equals(item.id))
+                                {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found)
+                            {
+                                final DatasetSelection sel = new DatasetSelection();
+                                sel.file = targetFile;
+                                sel.id = d.id;
+                                selectedQueue.add(sel);
+                            }
                         }
                     }
-                    else if ("direction".equals(pair[0]))
+                    else
                     {
-                        direction = pair[1];
+                        selectedQueue.removeIf(item -> targetFile.equals(item.file));
                     }
                 }
+            }
+        }
+
+        final Context context = new Context();
+        context.setVariable("queue", selectedQueue);
+        context.setVariable("running", isRunning());
+        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("queueListContainer", "runControls"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+
+    public void handleMoveQueue(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        int index = -1;
+        if (params.containsKey("index"))
+        {
+            try
+            {
+                index = Integer.parseInt(params.get("index"));
+            }
+            catch (final NumberFormatException e)
+            {
+                // ignore
+            }
+        }
+        String direction = params.get("direction");
+        if (direction == null && params.containsKey("dir"))
+        {
+            final String dirVal = params.get("dir");
+            if ("-1".equals(dirVal) || "up".equalsIgnoreCase(dirVal))
+            {
+                direction = "up";
+            }
+            else if ("1".equals(dirVal) || "down".equalsIgnoreCase(dirVal))
+            {
+                direction = "down";
             }
         }
 
@@ -171,7 +295,9 @@ public final class AuraManagerQueueController
 
         final Context context = new Context();
         context.setVariable("queue", selectedQueue);
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("queueListContainer"), context);
+        context.setVariable("running", isRunning());
+        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("queueListContainer", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -180,26 +306,16 @@ public final class AuraManagerQueueController
         selectedQueue.clear();
         final Context context = new Context();
         context.setVariable("queue", selectedQueue);
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("queueListContainer"), context);
+        context.setVariable("running", isRunning());
+        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("queueListContainer", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
     public void handleToggleConfig(final HttpExchange exchange) throws IOException
     {
-        final String query = exchange.getRequestURI().getQuery();
-        String key = null;
-        if (query != null)
-        {
-            for (final String param : query.split("&"))
-            {
-                final String[] pair = param.split("=");
-                if (pair.length > 1 && "key".equals(pair[0]))
-                {
-                    key = pair[1];
-                    break;
-                }
-            }
-        }
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String key = params.get("key");
 
         if (key != null)
         {
@@ -219,6 +335,9 @@ public final class AuraManagerQueueController
         context.setVariable("keepOpen", keepOpen);
         context.setVariable("interactive", interactive);
         context.setVariable("allure", allure);
+        context.setVariable("queue", getSelectedQueue());
+        context.setVariable("running", isRunning());
+        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
 
         final String html = manager.getTemplateEngine().process("dashboard", Set.of("configPanel"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
@@ -226,11 +345,46 @@ public final class AuraManagerQueueController
 
     public void handleRunQueue(final HttpExchange exchange) throws IOException
     {
-        final String body = AuraHttpUtils.readBody(exchange);
-        RunRequest req = null;
-        if (body != null && !body.trim().isEmpty())
+        final String query = exchange.getRequestURI().getQuery();
+        boolean runCurrent = false;
+        if (query != null)
         {
-            req = AuraHttpUtils.gson.fromJson(body, RunRequest.class);
+            for (final String param : query.split("&"))
+            {
+                final String[] pair = param.split("=");
+                if (pair.length > 1 && "runCurrent".equals(pair[0]) && "true".equals(pair[1]))
+                {
+                    runCurrent = true;
+                    break;
+                }
+            }
+        }
+
+        RunRequest req = null;
+        if (runCurrent)
+        {
+            final String activeFile = fileService.getActiveEditingFile();
+            if (activeFile != null)
+            {
+                req = new RunRequest();
+                final DatasetSelection sel = new DatasetSelection();
+                sel.file = activeFile;
+                sel.id = null;
+                req.datasets = List.of(sel);
+                req.headless = headless;
+                req.video = video;
+                req.interactive = interactive;
+                req.allure = allure;
+            }
+        }
+
+        if (req == null)
+        {
+            final String body = AuraHttpUtils.readBody(exchange);
+            if (body != null && !body.trim().isEmpty() && body.trim().startsWith("{"))
+            {
+                req = AuraHttpUtils.gson.fromJson(body, RunRequest.class);
+            }
         }
 
         if (req == null || req.datasets == null || req.datasets.isEmpty())
@@ -260,7 +414,8 @@ public final class AuraManagerQueueController
         LOGGER.info("[Aura Server] Spawning test run queue for {} dataset(s) (headless={}, interactive={})",
                 req.datasets.size(), req.headless, req.interactive);
         queueService.executeQueue(req, manager.getPort());
-        AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(Map.of("success", true)));
+        
+        renderExecutionStatePanels(exchange);
     }
 
     public void handleStatusStream(final HttpExchange exchange) throws IOException
@@ -397,10 +552,30 @@ public final class AuraManagerQueueController
         AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(response));
     }
 
+    public void handleStatusPanel(final HttpExchange exchange) throws IOException
+    {
+        renderExecutionStatePanels(exchange);
+    }
+
     public void handleStopProcess(final HttpExchange exchange) throws IOException
     {
         LOGGER.info("[Aura Server] User requested to stop active execution subprocess");
         queueService.stopProcess();
-        AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(Map.of("success", true)));
+        renderExecutionStatePanels(exchange);
+    }
+
+    private void renderExecutionStatePanels(final HttpExchange exchange) throws IOException
+    {
+        final Context context = new Context();
+        context.setVariable("running", isRunning());
+        context.setVariable("total", getGlobalTestsRun());
+        context.setVariable("passed", getGlobalPassed());
+        context.setVariable("failed", getGlobalFailed());
+        context.setVariable("skipped", getGlobalSkipped());
+        context.setVariable("queue", getSelectedQueue());
+        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("runControls", "statsPanel", "executionTrigger"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 }

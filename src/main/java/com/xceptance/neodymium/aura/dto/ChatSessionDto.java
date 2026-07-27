@@ -18,32 +18,30 @@
  */
 package com.xceptance.neodymium.aura.dto;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * Data transfer object representing an LLM chat message role and content.
+ * Data transfer object representing an AI chat session and its full message history.
  *
  * @author AI-generated: Antigravity
  * @author Xceptance GmbH 2026
  */
-public final class ChatMessageDto
+public final class ChatSessionDto
 {
-    public String role;
-    public String content;
-    public String thinking;
+    public String id;
+    public String name;
+    public List<ChatMessageDto> messages;
 
-    public ChatMessageDto()
+    public ChatSessionDto()
     {
+        this.messages = new ArrayList<>();
     }
 
-    public ChatMessageDto(final String role, final String content)
+    public ChatSessionDto(final String id, final String name, final List<ChatMessageDto> messages)
     {
-        this.role = role;
-        this.content = content;
-    }
-
-    public ChatMessageDto(final String role, final String content, final String thinking)
-    {
-        this.role = role;
-        this.content = content;
-        this.thinking = thinking;
+        this.id = id;
+        this.name = name;
+        this.messages = messages != null ? messages : new ArrayList<>();
     }
 }

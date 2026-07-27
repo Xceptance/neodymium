@@ -30,14 +30,26 @@
 
         function applyTheme(theme) {
             const root = document.documentElement;
+            const body = document.body;
             if (theme === 'dark') {
                 root.classList.add('force-dark');
                 root.classList.remove('force-light');
+                if (body) {
+                    body.classList.add('force-dark');
+                    body.classList.remove('force-light');
+                }
             } else if (theme === 'light') {
                 root.classList.add('force-light');
                 root.classList.remove('force-dark');
+                if (body) {
+                    body.classList.add('force-light');
+                    body.classList.remove('force-dark');
+                }
             } else {
                 root.classList.remove('force-dark', 'force-light');
+                if (body) {
+                    body.classList.remove('force-dark', 'force-light');
+                }
             }
 
             localStorage.setItem('aura_theme', theme);
@@ -123,6 +135,9 @@
             // browser has not computed any layout — re-applying after the container
             // is shown guarantees correct column widths.
             if (viewId === 'reportViewContainer') {
+                if (historyNavState === 4) {
+                    historyNavState = 1;
+                }
                 requestAnimationFrame(() => applyHistoryState(historyNavState));
             }
 
@@ -190,7 +205,11 @@
         let lastActiveView = 'dashboardView';
 
         function init() {
-            loadSessions();
+            if (window.location.search.includes('test=true')) {
+                window.confirm = () => true;
+                window.prompt = (msg, defaultText) => defaultText || "Mocked Input";
+            }
+            scrollToBottom();
             loadFiles();
             loadHistory();
             startPolling();
@@ -198,16 +217,92 @@
             // Start history view in State 1 (full-width runs list)
             applyHistoryState(1);
 
-            document.addEventListener('htmx:afterSwap', function(evt) {
-                if (evt.detail.target.id === 'yamlFileList') {
-                    syncCheckboxesFromState();
+            function onEditorPanelSwapped() {
+                const fileSpan = document.getElementById('editorFileName');
+                if (fileSpan && fileSpan.textContent && fileSpan.textContent.trim() !== 'test.yaml' && fileSpan.textContent.trim() !== '') {
+                    activeEditingFile = fileSpan.textContent.trim();
+                } else {
+                    activeEditingFile = null;
+                }
+                updateCenterLayout();
+            }
+
+            document.addEventListener('htmx:oobAfterSwap', function(evt) {
+                if (evt.detail && evt.detail.target) {
+                    htmx.process(evt.detail.target);
+                    if (evt.detail.target.id === 'editorPanel') {
+                        onEditorPanelSwapped();
+                    }
                 }
             });
 
-            document.getElementById('chatInput').addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    sendChatMessage();
+            document.addEventListener('htmx:afterSwap', function(evt) {
+                if (evt.detail.target.id === 'yamlFileList') {
+                    syncCheckboxesFromState();
+                } else if (evt.detail.target.id === 'editorPanel') {
+                    onEditorPanelSwapped();
+                } else if (evt.detail.target.id === 'queueListContainer') {
+                    syncStateFromQueueContainer();
+                } else if (evt.detail.target.id === 'colTests') {
+                    applyHistoryState(2);
+                } else if (evt.detail.target.id === 'colReport') {
+                    applyHistoryState(3);
+                }
+            });
+
+            document.addEventListener('htmx:afterRequest', function(evt) {
+                const path = evt.detail.pathInfo ? evt.detail.pathInfo.requestPath : '';
+                if (path === '/api/reporting/delete' || path === '/api/reporting/history') {
+                    loadHistory();
+                    updateCenterLayout();
+                }
+            });
+
+            syncStateFromQueueContainer();
+
+            // Listen for AI Action triggers sent from server-side htmx responses
+            document.body.addEventListener('aiAction', async function(evt) {
+                const data = evt.detail;
+                if (!data) return;
+
+                if (data.action === 'select_tests') {
+                    if (data.selectedDatasets) {
+                        selectedDatasets = data.selectedDatasets;
+                    } else if (data.files) {
+                        selectedDatasets = [];
+                        data.files.forEach(file => {
+                            const fileDto = currentFilesListCached.find(f => f.file === file);
+                            if (fileDto && fileDto.datasets) {
+                                fileDto.datasets.forEach(d => {
+                                    selectedDatasets.push({ file, id: d.id });
+                                });
+                            }
+                        });
+                    }
+                    await loadFiles();
+                    updateQueueList();
+                } else if (data.action === 'edit_or_create_test' && data.filename && data.content) {
+                    await loadFiles();
+                    activeEditingFile = data.filename;
+                    getEditorFileName().innerText = data.filename;
+                    getEditorContent().value = data.content;
+                    updateCenterLayout();
+                    getEditorContent().focus();
+                }
+            });
+
+            // Listen for fileSaved trigger sent from server-side HTMX responses
+            document.body.addEventListener('fileSaved', function(evt) {
+                const detail = evt.detail;
+                if (detail && detail.file) {
+                    showToast(`💾 ${detail.file} successfully saved to disk!`, "success");
+                }
+            });
+
+            // Auto-scroll chat to bottom after swap
+            document.body.addEventListener('htmx:afterSwap', function(evt) {
+                if (evt.detail.target.id === 'chatMessages' || evt.detail.target.id === 'chatContainer') {
+                    scrollToBottom();
                 }
             });
 
@@ -229,19 +324,30 @@
         }
 
         // Modal Controls
-        openModalBtn.onclick = () => {
-            createTestModal.style.display = 'flex';
-            newTestName.value = '';
-            newTestName.focus();
-        };
-        closeModalBtn.onclick = () => {
-            createTestModal.style.display = 'none';
-        };
-        newTestName.onkeydown = (event) => {
-            if (event.key === 'Enter') {
-                submitCreateTest();
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('#openModalBtn');
+            if (btn) {
+                const modal = document.getElementById('createTestModal');
+                const nameInput = document.getElementById('newTestName');
+                if (modal) modal.style.display = 'flex';
+                if (nameInput) {
+                    nameInput.value = '';
+                    nameInput.focus();
+                }
             }
-        };
+        });
+        if (closeModalBtn) {
+            closeModalBtn.onclick = () => {
+                createTestModal.style.display = 'none';
+            };
+        }
+        if (newTestName) {
+            newTestName.onkeydown = (event) => {
+                if (event.key === 'Enter') {
+                    submitCreateTest();
+                }
+            };
+        }
 
 
         function isDatasetSelected(file, id) {
@@ -254,34 +360,37 @@
         }
 
         function toggleSelectDataset(file, id, checked) {
-            if (checked) {
-                if (!isDatasetSelected(file, id)) {
-                    selectedDatasets.push({ file, id });
-                }
-            } else {
-                selectedDatasets = selectedDatasets.filter(d => !(d.file === file && d.id === id));
-            }
-            loadFilesList(currentFilesListCached);
+            htmx.ajax('POST', '/api/queue/toggle?file=' + encodeURIComponent(file) + '&id=' + encodeURIComponent(id), { target: '#queueListContainer', swap: 'outerHTML' });
         }
 
         function toggleSelectAllDatasets(file, checked) {
-            const fileDto = currentFilesListCached.find(f => f.file === file);
-            if (!fileDto) return;
-
-            fileDto.datasets.forEach(d => {
-                if (checked) {
-                    if (!isDatasetSelected(file, d.id)) {
-                        selectedDatasets.push({ file, id: d.id });
-                    }
-                } else {
-                    selectedDatasets = selectedDatasets.filter(ds => !(ds.file === file && ds.id === d.id));
-                }
-            });
-            loadFilesList(currentFilesListCached);
+            htmx.ajax('POST', '/api/queue/toggleAll?file=' + encodeURIComponent(file) + '&checked=' + checked, { target: '#queueListContainer', swap: 'outerHTML' });
         }
 
         function toggleExpandFile(file) {
-            htmx.ajax('POST', '/api/files/toggle?file=' + encodeURIComponent(file), { target: '#yamlFileList', swap: 'outerHTML' });
+            const list = document.getElementById('datasets-' + file);
+            if (list) {
+                const isHidden = list.style.display === 'none';
+                list.style.display = isHidden ? 'flex' : 'none';
+                
+                // Find list item to update chevron icon
+                const escapedFile = file.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                const listItem = document.querySelector(`.list-item[data-file="${escapedFile}"]`);
+                if (listItem) {
+                    const icon = listItem.querySelector('.item-main i');
+                    if (icon) {
+                        if (isHidden) {
+                            icon.classList.remove('fa-chevron-right');
+                            icon.classList.add('fa-chevron-down');
+                        } else {
+                            icon.classList.remove('fa-chevron-down');
+                            icon.classList.add('fa-chevron-right');
+                        }
+                    }
+                }
+            }
+            // Sync expansion state on the server in the background without re-rendering HTML
+            fetch('/api/files/toggle?file=' + encodeURIComponent(file), { method: 'POST' });
         }
 
         function loadFiles() {
@@ -531,12 +640,21 @@
          *
          * @param {string} runId - the ID of the clicked run
          */
+        function selectHistoryRun(reportId) {
+            currentReportId = reportId;
+            htmx.ajax('GET', '/api/reporting/run?id=' + encodeURIComponent(reportId), {
+                target: '#colTests',
+                swap: 'outerHTML'
+            }).then(() => {
+                applyHistoryState(2);
+            });
+        }
+        window.selectHistoryRun = selectHistoryRun;
+
         function onMiniRunChipClick(runId) {
             if (runId === currentReportId) {
-                // Same run: restore to State 3 (full runs panel back)
-                applyHistoryState(3);
+                applyHistoryState(2);
             } else {
-                // Different run: go to State 2 and load its tests
                 selectHistoryRun(runId);
             }
         }
@@ -666,9 +784,8 @@
 
         async function loadHistory() {
             try {
-                const res = await fetch('/api/reporting/history');
+                const res = await fetch('/api/reporting/history-json');
                 historyCached = await res.json();
-                renderHistoryTable();
             } catch (e) {
                 console.error("Failed to load reporting history", e);
             }
@@ -676,268 +793,14 @@
 
         let currentReportId = null;
 
-        /** Converts a duration in milliseconds to a human-readable string like "3m 12s" or "45s". */
-        function formatDuration(ms) {
-            if (!ms || ms <= 0) return '';
-            const totalSec = Math.round(ms / 1000);
-            if (totalSec < 60) return totalSec + 's';
-            const min = Math.floor(totalSec / 60);
-            const sec = totalSec % 60;
-            return sec > 0 ? min + 'm ' + sec + 's' : min + 'm';
-        }
-
         function renderHistoryTable() {
-            let rowsHtml = '';
-
-            if (activeRunStats.running) {
-                const statusBadge = `<span style="background: rgba(59,130,246,0.1); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;"><i class="fa-solid fa-circle-notch spinner" style="margin-right: 4px;"></i> Running</span>`;
-                const formattedTime = activeRunStats.startTime ? activeRunStats.startTime.toLocaleString() : new Date().toLocaleString();
-
-                rowsHtml += `
-                    <tr class="history-row" style="cursor: pointer; border-left: 3px solid var(--accent);" onclick="openCurrentRunView()">
-                        <td style="padding: 10px 12px;">
-                            <div class="run-row-header">
-                                <span class="run-number">#—</span>
-                                <span class="run-timestamp">${formattedTime}</span>
-                                ${statusBadge}
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }
-
-            if (historyCached.length === 0 && !activeRunStats.running) {
-                rowsHtml += `<tr><td style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No historical reports.</td></tr>`;
-            } else {
-                rowsHtml += historyCached.map(item => {
-                    let statusBadge = `<span class="badge-failed">${item.status || 'Failed'}</span>`;
-                    if (item.status === 'Passed') {
-                        statusBadge = `<span class="badge-success">Passed</span>`;
-                    } else if (item.status === 'Aborted') {
-                        statusBadge = `<span class="badge-aborted">Aborted</span>`;
-                    }
-
-                    const formattedTime = formatHistoryTimestamp(item.timestamp || item.id.substring(0, 15));
-                    const durationLabel = formatDuration(item.durationMs);
-                    const runNum = item.runNumber ? '#' + item.runNumber : '';
-
-                    const isSelected = item.id === currentReportId;
-                    const selectedStyle = isSelected ? 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);' : '';
-
-                    // Inline action buttons: Allure Report (disabled when not available), View Log, Delete
-                    const hasReport = item.hasReport === 'true' || item.hasReport === true;
-                    const allureEnabled = item.allureEnabled === true || item.allureEnabled === 'true';
-                    const allureTitle = (!allureEnabled)
-                        ? 'title="Allure was disabled for this run"'
-                        : (!hasReport ? 'title="Allure report not available"' : '');
-                    const allureDisabled = (!hasReport || !allureEnabled) ? 'disabled' : '';
-                    const allureAction = hasReport
-                        ? `onclick="event.stopPropagation(); window.open('/api/reporting/report/${item.id}/allure-report/index.html', '_blank')"`
-                        : '';
-
-                    const allureNote = (!allureEnabled)
-                        ? `<div class="run-allure-note"><i class="fa-solid fa-circle-info"></i> Allure was disabled for this run</div>`
-                        : '';
-
-                    // Passed/failed counts as clear text
-                    const passedCount = parseInt(item.passed) || 0;
-                    const failedCount = parseInt(item.failed) || 0;
-                    const skippedCount = parseInt(item.skipped) || 0;
-
-                    return `
-                        <tr class="history-row" style="cursor: pointer; ${selectedStyle}" onclick="selectHistoryRun('${item.id}', ${hasReport})">
-                            <td style="padding: 10px 12px;">
-                                <div class="run-row-header">
-                                    <span class="run-number">${runNum}</span>
-                                    <span class="run-timestamp">${formattedTime}</span>
-                                    ${statusBadge}
-                                    ${durationLabel ? `<span class="run-duration-chip"><i class="fa-regular fa-clock"></i> ${durationLabel}</span>` : ''}
-                                </div>
-                                <div class="run-stats-row">
-                                    <span class="run-stat-passed"><i class="fa-solid fa-check" aria-hidden="true"></i> ${passedCount} passed</span>
-                                    <span class="run-stat-failed"><i class="fa-solid fa-xmark" aria-hidden="true"></i> ${failedCount} failed</span>
-                                    ${skippedCount > 0 ? `<span class="run-stat-skipped" style="color:var(--text-muted); font-weight:600;"><i class="fa-solid fa-forward-step" aria-hidden="true"></i> ${skippedCount} skipped</span>` : ''}
-                                </div>
-                                <div class="run-actions-row">
-                                    <button class="run-action-btn" ${allureDisabled} ${allureTitle} ${allureAction}>
-                                        <i class="fa-solid fa-chart-bar"></i> Allure Report
-                                    </button>
-                                    ${item.runConfig && !isRunning ? `<button class="run-action-btn" onclick="event.stopPropagation(); rerunFullRun('${JSON.stringify(item.runConfig).replace(/"/g, '&quot;')}')" title="Re-run this entire suite with the same configuration"><i class="fa-solid fa-rotate-right"></i> Rerun</button>` : ''}
-                                </div>
-                                <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
-                                    <button class="run-action-btn danger" style="font-size: 10px; padding: 2px 6px; opacity: 0.65;" onclick="event.stopPropagation(); deleteReport('${item.id}')" title="Delete this run">
-                                        <i class="fa-solid fa-trash-can"></i> Delete
-                                    </button>
-                                </div>
-                                ${allureNote}
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            }
-            reportingHistoryList.innerHTML = rowsHtml;
+            htmx.ajax('GET', '/api/reporting/history', { target: '#allureHistoryList', swap: 'outerHTML' });
         }
 
         let currentTestFile = null;
 
-        function selectHistoryRun(reportId, hasReport) {
+        window.loadInteractiveTest = function(reportId, testFile, testName, rowElement) {
             currentReportId = reportId;
-            currentTestFile = null;
-            renderHistoryTable(); // Update selection styling
-
-            const run = historyCached.find(r => r.id === reportId);
-
-            // Update column headers with selected run context
-            const runNum = run && run.runNumber ? '#' + run.runNumber : '';
-            const runLabel = runNum ? ` - Run ${runNum}` : '';
-            const testsHeader = document.getElementById('historyTestsHeader');
-            if (testsHeader) {
-                testsHeader.textContent = `Test Cases${runLabel}`;
-            }
-            const detailsHeader = document.getElementById('historyDetailsHeader');
-            if (detailsHeader) {
-                detailsHeader.textContent = 'Test Case Details';
-            }
-
-            // Transition to State 2: runs (fixed) | tests (flex-grow)
-            applyHistoryState(2);
-
-            // Show the "select a test" placeholder in the details panel and blank the iframe
-            document.getElementById('historyPlaceholder').style.display = 'flex';
-            document.getElementById('historyPlaceholder').innerHTML = `
-                <i class="fa-solid fa-arrow-left" style="font-size: 32px; margin-bottom: 16px; opacity: 0.5;"></i>
-                <p>Select a test case from the list.</p>
-            `;
-            document.getElementById('historyConsoleIframe').src = 'about:blank';
-
-            // Render Tests (same as before)
-            const testsList = document.getElementById('historyTestsList');
-            if (!run || !run.tests || run.tests.length === 0) {
-                testsList.innerHTML = `<div style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 24px;">No tests available.</div>`;
-            } else {
-                testsList.innerHTML = run.tests.map(t => {
-                    let cardBadgeClass = 'badge-failed';
-                    let cardBadgeText = 'Failed';
-                    let dotClass = 'failed';
-                    if (t.status === 'Passed') {
-                        cardBadgeClass = 'badge-success';
-                        cardBadgeText = 'Passed';
-                        dotClass = 'passed';
-                    } else if (t.status === 'Aborted') {
-                        cardBadgeClass = 'badge-aborted';
-                        cardBadgeText = 'Aborted';
-                        dotClass = 'aborted';
-                    }
-
-                    // Browser icon: BrowserDefault / Default → Chrome; unknown → generic globe
-                    let browserIcon = 'fa-solid fa-globe';
-                    let browserLabel = t.browser || '';
-                    if (t.browser) {
-                        const b = t.browser.toLowerCase();
-                        if (b.includes('chrome') || b === 'browserdefault' || b === 'default') {
-                            browserIcon = 'fa-brands fa-chrome';
-                            if (b === 'browserdefault' || b === 'default') browserLabel = 'Chrome';
-                        } else if (b.includes('firefox')) {
-                            browserIcon = 'fa-brands fa-firefox-browser';
-                        } else if (b.includes('edge')) {
-                            browserIcon = 'fa-brands fa-edge';
-                        } else if (b.includes('safari')) {
-                            browserIcon = 'fa-brands fa-safari';
-                        }
-                    }
-
-                    // Test label: yamlLabel (YAML filename without .yaml) + dataset ID
-                    const label = t.yamlLabel || t.name || 'Test';
-                    const datasetPart = t.testId ? ` · ${t.testId}` : '';
-
-                    // Duration
-                    const durText = t.durationMs ? (parseFloat(t.durationMs) / 1000).toFixed(1) + 's' : '';
-
-                    // Playbook mode badge
-                    const mode = t.playbookMode || 'llm';
-                    const pbLabel = mode === 'playbook' ? 'Playbook'
-                        : mode === 'healing' ? 'Healing'
-                            : 'AI';
-                    const pbIcon = mode === 'playbook' ? 'fa-solid fa-rotate'
-                        : mode === 'healing' ? 'fa-solid fa-wrench'
-                            : 'fa-solid fa-wand-magic-sparkles';
-                    const pbBadge = `<span class="pb-badge ${mode}"><i class="${pbIcon}"></i> ${pbLabel}</span>`;
-
-                    // Per-test log button
-                    const logBtn = (t.hasLog === 'true' || t.hasLog === true)
-                        ? `<button class="run-action-btn" style="font-size:10px; padding:2px 7px;" onclick="event.stopPropagation(); openTestLog('${reportId}', '${t.name}')" title="View test log"><i class="fa-solid fa-file-lines"></i> Log</button>`
-                        : '';
-
-                    const run = historyCached.find(r => r.id === reportId);
-                    // Build the rerun payload for a single-dataset re-run:
-                    // find the dataset entry from the run's stored runConfig that matches
-                    // this test's yamlSource file path, then build a single-item payload
-                    // reusing all the original run flags (headless, interactive, etc.).
-                    let rerunBtn = '';
-                    if (run && run.runConfig && !isRunning) {
-                        const rc = run.runConfig;
-                        // Derive the dataset file from yamlSource stored in the console-execution JSON
-                        // We match the run's datasets by file path against the test's yamlSource
-                        let matchedDataset = null;
-                        if (t.yamlLabel && rc.datasets) {
-                            matchedDataset = rc.datasets.find(d => {
-                                const fname = d.file ? d.file.replace(/\\/g, '/').split('/').pop() : '';
-                                return fname === t.yamlLabel + '.yaml' || fname === t.yamlLabel;
-                            });
-                        }
-                        if (!matchedDataset && rc.datasets && rc.datasets.length > 0) {
-                            // Fallback: use the first dataset if only one test file was in this run
-                            matchedDataset = rc.datasets[0];
-                        }
-                        if (matchedDataset) {
-                            let finalId = matchedDataset.id || null;
-                            if (!finalId && t.testId) {
-                                finalId = t.testId;
-                                if (finalId.startsWith('Dataset ')) {
-                                    finalId = finalId.substring(8);
-                                }
-                            }
-                            // Build single-dataset payload: same flags but only this one dataset + testId
-                            const singlePayload = {
-                                datasets: [{ file: matchedDataset.file, id: finalId }],
-                                headless: rc.headless,
-                                interactive: rc.interactive,
-                                allure: rc.allure,
-                                video: rc.video,
-                                keepOpen: rc.keepOpen
-                            };
-                            const payloadStr = JSON.stringify(singlePayload).replace(/"/g, '&quot;');
-                            rerunBtn = `<button class="run-action-btn" style="font-size:10px; padding:2px 7px;" onclick="event.stopPropagation(); rerunSingleTest('${payloadStr}')" title="Re-run this test case with the same configuration"><i class="fa-solid fa-rotate-right"></i> Rerun</button>`;
-                        }
-                    }
-
-                    return `<div class="test-card" data-test-name="${t.name}" onclick="loadInteractiveTest('${reportId}', '${t.file}', '${t.name}', this)">
-                        <div class="test-card-title-row">
-                            <span class="${cardBadgeClass}">${cardBadgeText}</span>
-                            <span class="test-card-label">${label}${datasetPart}</span>
-                        </div>
-                        <div class="test-card-meta">
-                            <span title="${t.browser || 'Browser'}"><i class="${browserIcon}"></i> ${browserLabel}</span>
-                            ${durText ? `<span><i class="fa-regular fa-clock"></i> ${durText}</span>` : ''}
-                            ${pbBadge}
-                        </div>
-                        ${(logBtn || rerunBtn) ? `<div class="test-card-actions">${logBtn}${rerunBtn}</div>` : ''}
-                    </div>`;
-                }).join('');
-            }
-        }
-
-        /**
-         * Loads the interactive replay for a specific test case in the details iframe.
-         * Also populates the mini history strip with status bubbles for this test
-         * across all archived runs.
-         *
-         * @param {string} reportId   - the run/report directory ID
-         * @param {string} testFile   - the console-execution JSON filename
-         * @param {string} testName   - human-readable test name (used for mini-widget matching)
-         * @param {Element} rowElement - the clicked table row for highlight
-         */
-        function loadInteractiveTest(reportId, testFile, testName, rowElement) {
             currentTestFile = testFile;
 
             // Highlight selection in the test list using CSS class
@@ -958,17 +821,19 @@
                 detailsHeader.textContent = `Test Case Details${runLabel}`;
             }
 
-            document.getElementById('historyPlaceholder').style.display = 'none';
+            const placeholder = document.getElementById('historyPlaceholder');
+            if (placeholder) placeholder.style.display = 'none';
             const iframe = document.getElementById('historyConsoleIframe');
-            const dataUrl = '/api/reporting/report/' + reportId + '/' + testFile;
-            iframe.src = '/interactive_console.html?dataUrl=' + encodeURIComponent(dataUrl);
+            if (iframe) {
+                const dataUrl = '/api/reporting/report/' + reportId + '/' + testFile;
+                iframe.src = '/interactive_console.html?dataUrl=' + encodeURIComponent(dataUrl);
+            }
 
-            // Transition to State 4: mini-runs bar, tests list, and wide details
             applyHistoryState(4);
 
             // Populate the mini history strip with bubbles for this test across all runs
             renderMiniHistoryStrip(testName, reportId);
-        }
+        };
 
         /**
          * Renders the mini history strip inside the Test Case Details panel.
@@ -1126,94 +991,94 @@
             document.getElementById('logModal').style.display = 'none';
         }
 
-        function updateQueueList() {
+        function syncStateFromQueueContainer() {
+            const container = document.getElementById('queueListContainer');
+            if (!container) return;
+            const items = container.querySelectorAll('.queue-item');
+            selectedDatasets = [];
+            items.forEach(item => {
+                const file = item.getAttribute('data-file');
+                const id = item.getAttribute('data-id');
+                if (file && id) {
+                    selectedDatasets.push({ file, id });
+                }
+            });
+            
             const statsQueueCount = document.getElementById('statsQueueCount');
             if (statsQueueCount) {
                 statsQueueCount.innerText = `${selectedDatasets.length} Dataset${selectedDatasets.length === 1 ? '' : 's'}`;
             }
 
-            if (selectedDatasets.length === 0) {
-                queueListContainer.innerHTML = `
-                    <div style="font-size: 13px; color: var(--text-secondary); font-style: italic; padding: 15px; border: 1px dashed var(--border-hover); border-radius: 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                        <i class="fa-solid fa-arrow-left" style="font-size: 16px; color: var(--accent-primary);"></i>
-                        <span>No tests selected. Please check one or more YAML test cases in the sidebar explorer.</span>
-                    </div>
-                `;
-                runQueueBtn.disabled = true;
-            } else {
-                queueListContainer.innerHTML = selectedDatasets.map((ds, index) => `
-                    <div class="queue-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; margin-bottom: 4px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); border-radius: 6px;">
-                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; padding-right: 5px; font-size: 12.5px;">
-                            ${index + 1}. <strong>${ds.file}</strong> (Dataset: ${ds.id})
-                        </span>
-                        <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
-                            <button onclick="moveQueueItem(${index}, -1)" class="editor-btn" style="padding: 2px 6px; font-size: 10px; border-radius: 4px;" title="Move Up" ${index === 0 ? 'disabled' : ''}>
-                                <i class="fa-solid fa-arrow-up"></i>
-                            </button>
-                            <button onclick="moveQueueItem(${index}, 1)" class="editor-btn" style="padding: 2px 6px; font-size: 10px; border-radius: 4px;" title="Move Down" ${index === selectedDatasets.length - 1 ? 'disabled' : ''}>
-                                <i class="fa-solid fa-arrow-down"></i>
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
-                if (!isRunning) {
-                    runQueueBtn.disabled = false;
+            const runQueueBtn = document.getElementById('runQueueBtn');
+            if (runQueueBtn) {
+                const countSpan = runQueueBtn.querySelector('span');
+                if (countSpan) {
+                    countSpan.textContent = selectedDatasets.length;
+                }
+                if (selectedDatasets.length > 0) {
+                    runQueueBtn.removeAttribute('disabled');
+                    runQueueBtn.style.opacity = '1';
+                    runQueueBtn.style.cursor = 'pointer';
+                    runQueueBtn.style.filter = 'none';
+                } else {
+                    runQueueBtn.setAttribute('disabled', 'disabled');
+                    runQueueBtn.style.opacity = '0.5';
+                    runQueueBtn.style.cursor = 'not-allowed';
+                    runQueueBtn.style.filter = 'grayscale(1)';
                 }
             }
             updateRunButtons();
+
+            syncCheckboxesFromState();
+        }
+
+        function updateQueueList() {
+            syncStateFromQueueContainer();
         }
 
         function moveQueueItem(index, direction) {
-            const newIndex = index + direction;
-            if (newIndex >= 0 && newIndex < selectedDatasets.length) {
-                const temp = selectedDatasets[index];
-                selectedDatasets[index] = selectedDatasets[newIndex];
-                selectedDatasets[newIndex] = temp;
-                updateQueueList();
+            htmx.ajax('POST', '/api/queue/move?index=' + index + '&direction=' + (direction === -1 ? 'up' : 'down'), { target: '#queueListContainer', swap: 'innerHTML' });
+        }
+
+
+        function updateHiddenSessionId(val) {
+            const hidden = document.getElementById('hiddenSessionId');
+            if (hidden) {
+                hidden.value = val;
             }
         }
 
-        function loadSessions() {
-            try {
-                const stored = localStorage.getItem('aura_chat_sessions');
-                if (stored) {
-                    chatSessions = JSON.parse(stored);
-                }
-            } catch (e) {
-                console.error("Failed to parse chat sessions", e);
+        function clearChatInput() {
+            const input = document.getElementById('chatInput');
+            const prompt = input.value.trim();
+            if (!prompt) return;
+
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+                const userBubble = document.createElement('div');
+                userBubble.className = 'chat-message user';
+                userBubble.innerHTML = `<div class="sender">You</div><div class="text">${escapeHtml(prompt)}</div>`;
+                chatMessages.appendChild(userBubble);
+
+                const thinkingBubble = document.createElement('div');
+                thinkingBubble.className = 'chat-message ai thinking-bubble';
+                thinkingBubble.innerHTML = `
+                    <div class="sender">Aura Assistant</div>
+                    <div class="typing-indicator"><span></span><span></span><span></span></div>
+                `;
+                chatMessages.appendChild(thinkingBubble);
+                scrollToBottom();
             }
 
-            if (!chatSessions || chatSessions.length === 0) {
-                const defaultSession = {
-                    id: 's-' + Math.random().toString(36).substring(2) + '-' + Date.now().toString(36),
-                    name: 'Default Chat',
-                    history: []
-                };
-                chatSessions = [defaultSession];
-                currentSessionId = defaultSession.id;
-                saveSessions();
-            } else {
-                currentSessionId = localStorage.getItem('aura_active_session_id');
-                if (!currentSessionId || !chatSessions.some(s => s.id === currentSessionId)) {
-                    currentSessionId = chatSessions[0].id;
-                }
-            }
-
-            updateSessionDropdown();
-            loadCurrentSessionHistory();
+            setTimeout(() => {
+                input.value = '';
+            }, 50);
         }
 
-        function saveSessions() {
-            localStorage.setItem('aura_chat_sessions', JSON.stringify(chatSessions));
-            localStorage.setItem('aura_active_session_id', currentSessionId);
-        }
-
-        function updateSessionDropdown() {
-            const select = document.getElementById('chatSessionSelect');
-            if (select) {
-                select.innerHTML = chatSessions.map(session => `
-                    <option value="${session.id}" ${session.id === currentSessionId ? 'selected' : ''}>${escapeHtml(session.name)}</option>
-                `).join('');
+        function scrollToBottom() {
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             }
         }
 
@@ -1221,95 +1086,27 @@
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         }
 
-        function loadCurrentSessionHistory() {
-            const session = chatSessions.find(s => s.id === currentSessionId);
-            conversationHistory = session ? session.history : [];
-
-            const chatMessages = document.getElementById('chatMessages');
-            if (chatMessages) {
-                chatMessages.innerHTML = '';
-
-                if (conversationHistory.length === 0) {
-                    appendGreeting();
-                } else {
-                    conversationHistory.forEach(msg => {
-                        const bubble = appendChatMessage(msg.role, msg.content);
-                        if (msg.thinking) {
-                            const details = document.createElement('details');
-                            details.className = 'thinking-details';
-
-                            const summary = document.createElement('summary');
-                            summary.innerHTML = '<i class="fa-solid fa-brain" aria-hidden="true"></i> AI Reasoning & Escalations';
-                            details.appendChild(summary);
-
-                            const content = document.createElement('pre');
-                            content.className = 'thinking-content';
-                            content.innerText = msg.thinking;
-                            details.appendChild(content);
-
-                            bubble.appendChild(details);
-                        }
-                    });
-                }
-            }
-        }
-
-        function appendGreeting() {
-            const chatMessages = document.getElementById('chatMessages');
-            if (chatMessages) {
-                chatMessages.innerHTML = `
-                    <div class="chat-message message-ai">
-                        <span>Hello! I am Aura, your test automation assistant. How can I help you today? You can ask me to select/run test suites or create/modify tests!</span>
-                    </div>
-                `;
-            }
-        }
-
-        function switchChatSession() {
-            const select = document.getElementById('chatSessionSelect');
-            if (select) {
-                currentSessionId = select.value;
-                saveSessions();
-                loadCurrentSessionHistory();
-            }
-        }
-
-        function createNewChatSession(name = 'New Chat') {
-            const newSession = {
-                id: 's-' + Math.random().toString(36).substring(2) + '-' + Date.now().toString(36),
-                name: name,
-                history: []
-            };
-            chatSessions.push(newSession);
-            currentSessionId = newSession.id;
-            saveSessions();
-            updateSessionDropdown();
-            loadCurrentSessionHistory();
-        }
-
         function renameCurrentChatSession() {
-            const session = chatSessions.find(s => s.id === currentSessionId);
-            if (!session) return;
-            const newName = prompt('Rename Chat Session:', session.name);
-            if (newName && newName.trim().length > 0) {
-                session.name = newName.trim();
-                saveSessions();
-                updateSessionDropdown();
+            const select = document.getElementById('chatSessionSelect');
+            const currentId = select.value;
+            const currentName = select.options[select.selectedIndex].text;
+            const newName = prompt("Enter new name for this chat session:", currentName);
+            if (newName && newName.trim() !== "") {
+                htmx.ajax('POST', '/api/chat/rename?id=' + currentId + '&name=' + encodeURIComponent(newName.trim()), {
+                    target: '#chatContainer',
+                    swap: 'outerHTML'
+                });
             }
         }
 
         function deleteCurrentChatSession() {
-            if (chatSessions.length <= 1) {
-                showToast("Cannot delete the only chat session.", "error");
-                return;
-            }
-            const session = chatSessions.find(s => s.id === currentSessionId);
-            if (confirm(`Are you sure you want to delete session "${session.name}"?`)) {
-                chatSessions = chatSessions.filter(s => s.id !== currentSessionId);
-                currentSessionId = chatSessions[0].id;
-                saveSessions();
-                updateSessionDropdown();
-                loadCurrentSessionHistory();
+            const select = document.getElementById('chatSessionSelect');
+            const currentId = select.value;
+            if (confirm("Are you sure you want to delete this chat session?")) {
+                htmx.ajax('POST', '/api/chat/delete?id=' + currentId, {
+                    target: '#chatContainer',
+                    swap: 'outerHTML'
+                });
             }
         }
 
@@ -1394,164 +1191,9 @@
                     consolePanel.style.height = '0px'; setTimeout(() => { if (!consoleOpened && !isRunning) consolePanel.style.display = 'none'; }, 300);
                 }
             }
-            updateRunButtons();
         }
 
-        function updateRunButtons() {
-            const runQueueBtn = document.getElementById('runQueueBtn');
-            const runCurrentTestBtn = document.getElementById('runCurrentTestBtn');
-            const stopQueueBtn = document.getElementById('stopQueueBtn');
-            if (!runQueueBtn || !runCurrentTestBtn || !stopQueueBtn) return;
 
-            const queueCount = selectedDatasets ? selectedDatasets.length : 0;
-            runQueueBtn.innerHTML = `<i class="fa-solid fa-play"></i> Run Queue (${queueCount})`;
-
-            if (isRunning) {
-                runQueueBtn.style.display = 'none';
-                runCurrentTestBtn.style.display = 'none';
-                stopQueueBtn.style.display = 'flex';
-                return;
-            }
-
-            stopQueueBtn.style.display = 'none';
-            runQueueBtn.style.display = 'flex';
-
-            if (activeEditingFile) {
-                runCurrentTestBtn.style.display = 'flex';
-                runCurrentTestBtn.disabled = false;
-                runQueueBtn.style.filter = 'saturate(50%) opacity(0.7)';
-                runQueueBtn.disabled = true;
-            } else {
-                runCurrentTestBtn.style.display = 'none';
-                runQueueBtn.style.filter = 'none';
-                runQueueBtn.disabled = queueCount === 0;
-            }
-        }
-
-        async function sendChatMessage() {
-            const input = document.getElementById('chatInput');
-            const prompt = input.value.trim();
-            if (!prompt) return;
-
-            input.value = '';
-            appendChatMessage('user', prompt);
-
-            const thinkingBubble = appendChatMessage('ai', 'Thinking...', true);
-            const apiKeyBanner = document.getElementById('apiKeyBanner');
-            apiKeyBanner.style.display = 'none';
-
-            // Clone history before pushing user message
-            const payloadHistory = [...conversationHistory];
-            conversationHistory.push({ role: 'user', content: prompt });
-
-            // Auto-rename session on first message
-            const session = chatSessions.find(s => s.id === currentSessionId);
-            if (session && (session.name === 'New Chat' || session.name === 'Default Chat' || session.history.length === 1)) {
-                session.name = prompt.substring(0, 25) + (prompt.length > 25 ? '...' : '');
-                updateSessionDropdown();
-            }
-            saveSessions();
-
-            try {
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        prompt: prompt,
-                        activeFile: activeEditingFile,
-                        history: payloadHistory
-                    })
-                });
-
-                const data = await response.json();
-                thinkingBubble.remove();
-
-                if (data.error) {
-                    if (data.error.includes("API Key") || data.error.includes("LLM Client Error")) {
-                        const apiKeyBannerText = document.getElementById('apiKeyBannerText');
-                        apiKeyBannerText.innerHTML = data.error;
-                        apiKeyBanner.style.display = 'flex';
-                    }
-                    appendChatMessage('ai', "Error: " + data.error);
-                    return;
-                }
-
-                const aiBubble = appendChatMessage('ai', data.message);
-
-                const msgObj = { role: 'assistant', content: data.message };
-                if (data.thinking) {
-                    msgObj.thinking = data.thinking;
-                }
-                conversationHistory.push(msgObj);
-                saveSessions();
-
-                if (data.thinking) {
-                    const details = document.createElement('details');
-                    details.className = 'thinking-details';
-
-                    const summary = document.createElement('summary');
-                    summary.innerHTML = '<i class="fa-solid fa-brain" aria-hidden="true"></i> AI Reasoning & Escalations';
-                    details.appendChild(summary);
-
-                    const content = document.createElement('pre');
-                    content.className = 'thinking-content';
-                    content.innerText = data.thinking;
-                    details.appendChild(content);
-
-                    aiBubble.appendChild(details);
-                }
-
-                if (data.action === 'select_tests') {
-                    if (data.selectedDatasets) {
-                        selectedDatasets = data.selectedDatasets;
-                    } else if (data.files) {
-                        selectedDatasets = [];
-                        data.files.forEach(file => {
-                            const fileDto = currentFilesListCached.find(f => f.file === file);
-                            if (fileDto && fileDto.datasets) {
-                                fileDto.datasets.forEach(d => {
-                                    selectedDatasets.push({ file, id: d.id });
-                                });
-                            }
-                        });
-                    }
-                    await loadFiles();
-                    updateQueueList();
-                } else if (data.action === 'edit_or_create_test' && data.filename && data.content) {
-                    await loadFiles();
-                    activeEditingFile = data.filename;
-                    getEditorFileName().innerText = data.filename;
-                    getEditorContent().value = data.content;
-                    updateCenterLayout();
-                    getEditorContent().focus();
-                }
-
-            } catch (e) {
-                thinkingBubble.remove();
-                appendChatMessage('ai', "Error connecting to AI Server: " + e.message);
-            }
-        }
-
-        function appendChatMessage(sender, text, isThinking = false) {
-            const chatMessages = document.getElementById('chatMessages');
-            const bubble = document.createElement('div');
-            bubble.className = `chat-message message-${sender}`;
-
-            const contentSpan = document.createElement('span');
-            contentSpan.innerText = text;
-            bubble.appendChild(contentSpan);
-
-            if (isThinking) {
-                const indicator = document.createElement('div');
-                indicator.className = 'typing-indicator';
-                indicator.innerHTML = '<span></span><span></span><span></span>';
-                bubble.appendChild(indicator);
-            }
-
-            chatMessages.appendChild(bubble);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            return bubble;
-        }
 
         function closeConsole() {
             consoleOpened = false;
@@ -1583,27 +1225,36 @@
 
         async function saveYamlFile() {
             if (!activeEditingFile) return;
-            try {
-                const res = await fetch('/api/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ file: activeEditingFile, content: getEditorContent().value })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(`💾 ${activeEditingFile} successfully saved to disk!`, "success");
-                } else {
-                    showToast("Error saving: " + data.error, "error");
+            const saveBtn = document.getElementById('saveYamlBtn');
+            if (saveBtn && typeof htmx !== 'undefined') {
+                htmx.trigger(saveBtn, 'click');
+            } else {
+                try {
+                    const res = await fetch('/api/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ file: activeEditingFile, content: getEditorContent().value })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast(`💾 ${activeEditingFile} successfully saved to disk!`, "success");
+                    } else {
+                        showToast("Error saving: " + data.error, "error");
+                    }
+                } catch (e) {
+                    showToast("Error saving file: " + e.message, "error");
                 }
-            } catch (e) {
-                showToast("Error saving file: " + e.message, "error");
             }
         }
 
         async function deleteYamlFile() {
             if (!activeEditingFile) return;
-            document.getElementById('deleteFileNameDisplay').textContent = activeEditingFile;
-            document.getElementById('deleteTestModal').style.display = 'flex';
+            const nameDisplay = document.getElementById('deleteFileNameDisplay');
+            if (nameDisplay) nameDisplay.textContent = activeEditingFile;
+            const input = document.getElementById('deleteFileNameInput');
+            if (input) input.value = activeEditingFile;
+            const modal = document.getElementById('deleteTestModal');
+            if (modal) modal.style.display = 'flex';
         }
 
         async function submitDeleteTest() {
@@ -1811,15 +1462,39 @@
             openInteractiveConsoleViewLive('/interactive_console.html');
         }
 
-        async function runTestByFile(testFile) {
-            const fileDatasets = [{ file: testFile, id: null }];
+        function updateRunButtons() {
+            const runQueueBtn = document.getElementById('runQueueBtn');
+            const runCurrentTestBtn = document.getElementById('runCurrentTestBtn');
+            const stopQueueBtn = document.getElementById('stopQueueBtn');
+            if (!runQueueBtn || !stopQueueBtn) return;
 
-            const headless = document.getElementById('optHeadless').checked;
-            const video = document.getElementById('optVideo').checked;
-            const keepOpen = document.getElementById('optKeepOpen').checked;
-            const interactive = document.getElementById('optInteractive').checked;
-            const allure = document.getElementById('optReporting').checked;
+            if (isRunning) {
+                runQueueBtn.style.display = 'none';
+                if (runCurrentTestBtn) runCurrentTestBtn.style.display = 'none';
+                stopQueueBtn.style.display = 'flex';
+            } else {
+                stopQueueBtn.style.display = 'none';
+                runQueueBtn.style.display = 'flex';
+                if (activeEditingFile && runCurrentTestBtn) {
+                    runCurrentTestBtn.style.display = 'flex';
+                } else if (runCurrentTestBtn) {
+                    runCurrentTestBtn.style.display = 'none';
+                }
+            }
+        }
+        window.updateRunButtons = updateRunButtons;
 
+        window.stopQueue = async function() {
+            try {
+                await fetch('/api/stop', { method: 'POST' });
+            } catch (e) {
+                console.error('Failed to stop queue', e);
+            }
+            isRunning = false;
+            updateRunButtons();
+        };
+
+        window.prepareClientForExecution = function() {
             isRunning = true;
             consoleOpened = true;
             currentPollSession++;
@@ -1834,166 +1509,17 @@
             activeRunStats.skipped = 0;
             activeRunStats.activeFile = null;
             activeRunStats.activeTestId = null;
-            activeRunStats.tests = fileDatasets;
-            // Reset per-file completion tracking for the fresh run.
+            activeRunStats.tests = [];
             liveCompletedFiles.clear();
             liveLastActiveFile = null;
             renderHistoryTable();
 
-            runSpinner.style.display = 'inline-block';
+            if (runSpinner) runSpinner.style.display = 'inline-block';
             updateCenterLayout();
-            runSpinner.style.display = 'inline-block';
-            terminalConsole.innerHTML = 'Connecting to run stream...\n';
+            updateRunButtons();
+            if (terminalConsole) terminalConsole.innerHTML = 'Connecting to run stream...\n';
             hasShownStartMessage = false;
-
-            try {
-                const res = await fetch('/api/run', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ datasets: fileDatasets, headless, video, keepOpen, interactive, allure })
-                });
-                const data = await res.json();
-                if (data.error) {
-                    showToast("Execution failed to start: " + data.error, "error");
-                    isRunning = false;
-                    activeRunStats.running = false;
-                    renderHistoryTable();
-                    consoleOpened = false;
-                    updateCenterLayout();
-                }
-            } catch (e) {
-                showToast("Failed to start run: " + e.message, "error");
-                isRunning = false;
-                activeRunStats.running = false;
-                renderHistoryTable();
-                consoleOpened = false;
-                updateCenterLayout();
-            }
-        }
-
-        async function runCurrentFile() {
-            if (!activeEditingFile) return;
-
-            await saveYamlFile();
-
-            const fileDatasets = [{ file: activeEditingFile, id: null }];
-
-            const headless = document.getElementById('optHeadless').checked;
-            const video = document.getElementById('optVideo').checked;
-            const keepOpen = document.getElementById('optKeepOpen').checked;
-            const interactive = document.getElementById('optInteractive').checked;
-            const allure = document.getElementById('optReporting').checked;
-
-            isRunning = true;
-            consoleOpened = true;
-            currentPollSession++;
-            lastLogIndex = 0;
-            lastEventIndex = 0;
-
-            activeRunStats.running = true;
-            activeRunStats.startTime = new Date();
-            activeRunStats.total = 0;
-            activeRunStats.passed = 0;
-            activeRunStats.failed = 0;
-            activeRunStats.skipped = 0;
-            activeRunStats.activeFile = null;
-            activeRunStats.activeTestId = null;
-            activeRunStats.tests = fileDatasets;
-            // Reset per-file completion tracking for the fresh run.
-            liveCompletedFiles.clear();
-            liveLastActiveFile = null;
-            renderHistoryTable();
-
-            runSpinner.style.display = 'inline-block';
-            updateCenterLayout();
-            runSpinner.style.display = 'inline-block';
-            terminalConsole.innerHTML = 'Connecting to run stream...\n';
-            hasShownStartMessage = false;
-
-            try {
-                const res = await fetch('/api/run', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ datasets: fileDatasets, headless, video, keepOpen, interactive, allure })
-                });
-                const data = await res.json();
-                if (data.error) {
-                    showToast("Execution failed to start: " + data.error, "error");
-                    isRunning = false;
-                    activeRunStats.running = false;
-                    renderHistoryTable();
-                    consoleOpened = false;
-                    updateCenterLayout();
-                }
-            } catch (e) {
-                showToast("Failed to start run for current file: " + e.message, "error");
-                isRunning = false;
-                activeRunStats.running = false;
-                renderHistoryTable();
-                consoleOpened = false;
-                updateCenterLayout();
-            }
-        }
-
-        async function runQueue() {
-            if (selectedDatasets.length === 0) return;
-
-            const headless = document.getElementById('optHeadless').checked;
-            const video = document.getElementById('optVideo').checked;
-            const keepOpen = document.getElementById('optKeepOpen').checked;
-            const interactive = document.getElementById('optInteractive').checked;
-            const allure = document.getElementById('optReporting').checked;
-
-            isRunning = true;
-            consoleOpened = true;
-            currentPollSession++;
-            lastLogIndex = 0;
-            lastEventIndex = 0;
-
-            activeRunStats.running = true;
-            activeRunStats.startTime = new Date();
-            activeRunStats.total = 0;
-            activeRunStats.passed = 0;
-            activeRunStats.failed = 0;
-            activeRunStats.skipped = 0;
-            activeRunStats.activeFile = null;
-            activeRunStats.activeTestId = null;
-            activeRunStats.tests = selectedDatasets.map(d => ({ file: d.file, id: d.id }));
-            // Reset per-file completion tracking for the fresh run.
-            liveCompletedFiles.clear();
-            liveLastActiveFile = null;
-            renderHistoryTable();
-
-            runSpinner.style.display = 'inline-block';
-            updateCenterLayout();
-            runSpinner.style.display = 'inline-block';
-            terminalConsole.innerHTML = 'Connecting to run stream...\n';
-            hasShownStartMessage = false;
-
-            try {
-                const res = await fetch('/api/run', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ datasets: selectedDatasets, headless, video, keepOpen, interactive, allure })
-                });
-                const data = await res.json();
-                if (data.error) {
-                    showToast("Execution failed to start: " + data.error, "error");
-                    isRunning = false;
-                    activeRunStats.running = false;
-                    renderHistoryTable();
-                    consoleOpened = false;
-                    updateCenterLayout();
-                }
-            } catch (e) {
-                showToast("Failed to start run queue: " + e.message, "error");
-                isRunning = false;
-                activeRunStats.running = false;
-                renderHistoryTable();
-                consoleOpened = false;
-                updateCenterLayout();
-            }
-        }
+        };
 
         /**
          * Re-runs a complete historical run using its stored run configuration.
@@ -2012,30 +1538,8 @@
                 return;
             }
 
-            isRunning = true;
-            consoleOpened = true;
-            currentPollSession++;
-            lastLogIndex = 0;
-            lastEventIndex = 0;
-
-            activeRunStats.running = true;
-            activeRunStats.startTime = new Date();
-            activeRunStats.total = 0;
-            activeRunStats.passed = 0;
-            activeRunStats.failed = 0;
-            activeRunStats.skipped = 0;
-            activeRunStats.activeFile = null;
-            activeRunStats.activeTestId = null;
+            prepareClientForExecution();
             activeRunStats.tests = (payload.datasets || []).map(d => ({ file: d.file, id: d.id }));
-            // Reset per-file completion tracking for the fresh re-run.
-            liveCompletedFiles.clear();
-            liveLastActiveFile = null;
-            renderHistoryTable();
-
-            runSpinner.style.display = 'inline-block';
-            updateCenterLayout();
-            terminalConsole.innerHTML = 'Connecting to run stream...\n';
-            hasShownStartMessage = false;
 
             try {
                 const res = await fetch('/api/run', {
@@ -2070,14 +1574,6 @@
          */
         async function rerunSingleTest(payloadJson) {
             await rerunFullRun(payloadJson);
-        }
-
-        async function stopQueue() {
-            try {
-                await fetch('/api/stop', { method: 'POST' });
-            } catch (e) {
-                console.error("Failed to stop queue", e);
-            }
         }
 
         function isAiLogLine(line) {
@@ -2271,7 +1767,7 @@
                             statsPanel.style.display = (statusData.running || statusData.total > 0) ? 'block' : 'none';
                         }
 
-                        document.getElementById('statsTotalExecution').innerText = `${statusData.total} Test${statusData.total === 1 ? '' : 's'}`;
+                        document.getElementById('statsTotalExecution').innerText = statusData.total;
                         document.getElementById('statsPassed').innerText = statusData.passed;
                         document.getElementById('statsFailed').innerText = statusData.failed;
                         document.getElementById('statsSkipped').innerText = statusData.skipped || 0;
@@ -2292,6 +1788,7 @@
 
                         try {
                             isRunning = statusData.running;
+                            updateRunButtons();
                             if (isRunning) {
                                 lastKnownRunning = true;
                                 if (activeRunStats.activeFile !== statusData.activeFile || activeRunStats.activeTestId !== statusData.activeTestId) {
@@ -2318,7 +1815,6 @@
                                     sidebarBadge.style.display = 'flex';
                                     sidebarBadge.innerHTML = `<i class="fa-solid fa-circle-notch spinner"></i> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${statusData.tests.length}`;
                                 }
-                                updateRunButtons();
                             } else {
                                 if (runSpinner) runSpinner.style.display = 'none';
                                 const sidebarBadge = document.getElementById('sidebarRunBadge');
@@ -2462,11 +1958,5 @@
         // Initialize Theme
         initTheme();
 
-        // Ensure Enter works on chat input since we decoupled the original listener
-        document.getElementById('chatInput').addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                sendChatMessage();
-            }
-        });
+
     

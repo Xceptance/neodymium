@@ -116,6 +116,30 @@ public final class AuraManagerEditorUiTest
     }
 
     @NeodymiumTest
+    public final void testCreateDuplicateTestName()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create the test case first time
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+
+        // Close editor panel to return to test selection view
+        $(".btn-editor:not(.save):not(.delete)").shouldBe(Condition.visible).click();
+        $("#editorPanel").shouldNotBe(Condition.visible);
+
+        // Try creating the same test case again
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+
+        // Should display error feedback / toast
+        $(".toast.error, .error-message, .alert-danger").shouldBe(Condition.visible);
+    }
+
+    @NeodymiumTest
     public final void testSaveTestEdits()
     {
         Selenide.open("http://localhost:" + this.port + "/");

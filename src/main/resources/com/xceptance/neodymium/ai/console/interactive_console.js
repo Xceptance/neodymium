@@ -598,15 +598,29 @@ function checkActionApprovals() {
     const s = allSteps.find(st => st.index === idx);
     const isThinking = s && s.status === 'running' && !s.reasoning;
 
-    if (isThinking || isAutoMode) {
-        document.getElementById('btnRun').disabled = true;
-    } else {
-        document.getElementById('btnRun').disabled = false;
+    const runBtn = document.getElementById('btnRun');
+    if (runBtn) {
+        if (isThinking || isAutoMode) {
+            runBtn.disabled = true;
+            runBtn.setAttribute('disabled', 'true');
+        } else {
+            runBtn.disabled = false;
+            runBtn.removeAttribute('disabled');
+        }
     }
 
     // Handle toolbar Back button disabled if index is 0 or auto is on
     const isFirstStep = s && s.index === 0;
-    document.getElementById('btnBack').disabled = isFirstStep || isAutoMode;
+    const backBtn = document.getElementById('btnBack');
+    if (backBtn) {
+        if (isFirstStep || isAutoMode) {
+            backBtn.disabled = true;
+            backBtn.setAttribute('disabled', 'true');
+        } else {
+            backBtn.disabled = false;
+            backBtn.removeAttribute('disabled');
+        }
+    }
 }
 
 function renderBlock(blockName, steps) {
@@ -1644,19 +1658,19 @@ function setButtonsEnabled(enabled) {
         if (btnCancel) btnCancel.style.display = '';
 
         if (isAutoMode) {
-            if (runBtn) runBtn.disabled = true;
-            if (skipBtn) skipBtn.disabled = true;
-            if (backBtn) backBtn.disabled = true;
-            if (autoBtn) autoBtn.disabled = isEditing;
-            if (btnCancel) btnCancel.disabled = isEditing;
+            if (runBtn) { runBtn.disabled = true; runBtn.setAttribute('disabled', 'true'); }
+            if (skipBtn) { skipBtn.disabled = true; skipBtn.setAttribute('disabled', 'true'); }
+            if (backBtn) { backBtn.disabled = true; backBtn.setAttribute('disabled', 'true'); }
+            if (autoBtn) { autoBtn.disabled = isEditing; if (isEditing) autoBtn.setAttribute('disabled', 'true'); else autoBtn.removeAttribute('disabled'); }
+            if (btnCancel) { btnCancel.disabled = isEditing; if (isEditing) btnCancel.setAttribute('disabled', 'true'); else btnCancel.removeAttribute('disabled'); }
         } else {
-            if (runBtn) runBtn.disabled = !enabled || isEditing;
-            if (skipBtn) skipBtn.disabled = !enabled || isEditing;
-            if (backBtn) backBtn.disabled = !enabled || isEditing;
-            if (autoBtn) autoBtn.disabled = !enabled || isEditing;
-            if (btnCancel) btnCancel.disabled = isEditing;
+            if (runBtn) { runBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) runBtn.setAttribute('disabled', 'true'); else runBtn.removeAttribute('disabled'); }
+            if (skipBtn) { skipBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) skipBtn.setAttribute('disabled', 'true'); else skipBtn.removeAttribute('disabled'); }
+            if (backBtn) { backBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) backBtn.setAttribute('disabled', 'true'); else backBtn.removeAttribute('disabled'); }
+            if (autoBtn) { autoBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) autoBtn.setAttribute('disabled', 'true'); else autoBtn.removeAttribute('disabled'); }
+            if (btnCancel) { btnCancel.disabled = isEditing; if (isEditing) btnCancel.setAttribute('disabled', 'true'); else btnCancel.removeAttribute('disabled'); }
             const kebabBtn = document.getElementById('btnKebab');
-            if (kebabBtn) kebabBtn.disabled = !enabled || isEditing;
+            if (kebabBtn) { kebabBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) kebabBtn.setAttribute('disabled', 'true'); else kebabBtn.removeAttribute('disabled'); }
         }
     }
 }

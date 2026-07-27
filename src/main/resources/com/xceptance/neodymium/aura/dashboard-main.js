@@ -123,6 +123,9 @@
             // browser has not computed any layout — re-applying after the container
             // is shown guarantees correct column widths.
             if (viewId === 'reportViewContainer') {
+                if (historyNavState === 4) {
+                    historyNavState = 1;
+                }
                 requestAnimationFrame(() => applyHistoryState(historyNavState));
             }
 
@@ -536,10 +539,8 @@
          */
         function onMiniRunChipClick(runId) {
             if (runId === currentReportId) {
-                // Same run: restore to State 3 (full runs panel back)
-                applyHistoryState(3);
+                applyHistoryState(2);
             } else {
-                // Different run: go to State 2 and load its tests
                 selectHistoryRun(runId);
             }
         }
@@ -2264,7 +2265,7 @@
                             statsPanel.style.display = (statusData.running || statusData.total > 0) ? 'block' : 'none';
                         }
 
-                        document.getElementById('statsTotalExecution').innerText = `${statusData.total} Test${statusData.total === 1 ? '' : 's'}`;
+                        document.getElementById('statsTotalExecution').innerText = statusData.total;
                         document.getElementById('statsPassed').innerText = statusData.passed;
                         document.getElementById('statsFailed').innerText = statusData.failed;
                         document.getElementById('statsSkipped').innerText = statusData.skipped || 0;

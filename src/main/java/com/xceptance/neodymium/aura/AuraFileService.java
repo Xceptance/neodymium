@@ -48,9 +48,20 @@ public final class AuraFileService
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraFileService.class);
 
     private final Set<String> expandedFiles = ConcurrentHashMap.newKeySet();
+    private volatile String activeEditingFile = null;
 
     public AuraFileService()
     {
+    }
+
+    public String getActiveEditingFile()
+    {
+        return activeEditingFile;
+    }
+
+    public void setActiveEditingFile(final String file)
+    {
+        this.activeEditingFile = file;
     }
 
     public Set<String> getExpandedFiles()
@@ -94,6 +105,38 @@ public final class AuraFileService
             responseList.add(new YamlFileDto(file, datasets != null ? datasets : new ArrayList<>()));
         }
         return responseList;
+    }
+
+    public List<YamlFileDto> getFilteredYamlFilesList(final String query)
+    {
+        final List<YamlFileDto> fullList = getYamlFilesList();
+        if (query == null || query.trim().isEmpty())
+        {
+            return fullList;
+        }
+        final String lowerQuery = query.toLowerCase().trim();
+        final List<YamlFileDto> filtered = new ArrayList<>();
+        for (final YamlFileDto file : fullList)
+        {
+            boolean match = file.file != null && file.file.toLowerCase().contains(lowerQuery);
+            if (!match && file.datasets != null)
+            {
+                for (final DatasetDto dataset : file.datasets)
+                {
+                    if ((dataset.label != null && dataset.label.toLowerCase().contains(lowerQuery))
+                            || (dataset.id != null && dataset.id.toLowerCase().contains(lowerQuery)))
+                    {
+                        match = true;
+                        break;
+                    }
+                }
+            }
+            if (match)
+            {
+                filtered.add(file);
+            }
+        }
+        return filtered;
     }
 
     public void scanDirStatic(final File baseDir, final File currentDir, final List<String> yamlFiles)

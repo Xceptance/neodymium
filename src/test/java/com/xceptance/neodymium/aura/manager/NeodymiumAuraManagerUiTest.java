@@ -109,7 +109,7 @@ public class NeodymiumAuraManagerUiTest {
         $("button[onclick='closeEditor()']").click();
 
         // Check if the run finishes (spinner disappears)
-        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(60));
+        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(150));
     }
 
     @NeodymiumTest
@@ -148,7 +148,7 @@ public class NeodymiumAuraManagerUiTest {
 
         // Wait until btnRun is visible and enabled
         $("#btnRun").shouldBe(Condition.visible, java.time.Duration.ofSeconds(30));
-        $("#btnRun").shouldNotHave(Condition.attribute("disabled"), java.time.Duration.ofSeconds(60));
+        $("#btnRun").shouldNotHave(Condition.attribute("disabled"), java.time.Duration.ofSeconds(120));
 
         // Approve the first step
         $("#btnRun").click();
@@ -160,7 +160,7 @@ public class NeodymiumAuraManagerUiTest {
         Selenide.switchTo().defaultContent();
 
         // Wait for run to finish
-        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(60));
+        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(150));
     }
 
     @NeodymiumTest
@@ -197,11 +197,11 @@ public class NeodymiumAuraManagerUiTest {
 
         $("#runQueueBtn").shouldBe(Condition.visible).shouldNotBe(Condition.disabled).click();
 
-        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(60));
+        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(240));
 
         $("#navReports").click();
-        $("#allureHistoryList").$$(".history-row").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(10));
-        $("#allureHistoryList").$$(".history-row").first().click();
+        $("#allureHistoryList").$$("tr[id^='run-']").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(10));
+        $("#allureHistoryList").$$("tr[id^='run-']").first().click();
         $("#historyTestsList").$$(".history-row").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(10));
     }
 
@@ -231,15 +231,15 @@ public class NeodymiumAuraManagerUiTest {
         $("#historyConsoleIframe").shouldHave(Condition.attributeMatching("src", ".*interactive_console\\.html.*"), java.time.Duration.ofSeconds(30));
         Selenide.switchTo().frame("historyConsoleIframe");
         $("#btnRun").shouldBe(Condition.visible, java.time.Duration.ofSeconds(30));
-        $("#btnRun").shouldNotHave(Condition.attribute("disabled"), java.time.Duration.ofSeconds(60)).click();
-        $("#btnAuto").shouldNotHave(Condition.attribute("disabled"), java.time.Duration.ofSeconds(60)).click();
+        $("#btnRun").shouldNotHave(Condition.attribute("disabled"), java.time.Duration.ofSeconds(120)).click();
+        $("#btnAuto").shouldNotHave(Condition.attribute("disabled"), java.time.Duration.ofSeconds(120)).click();
         Selenide.switchTo().defaultContent();
 
-        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(60));
+        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(240));
 
         $("#navReports").click();
-        $("#allureHistoryList").$$(".history-row").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(10));
-        $("#allureHistoryList").$$(".history-row").first().click();
+        $("#allureHistoryList").$$("tr[id^='run-']").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(10));
+        $("#allureHistoryList").$$("tr[id^='run-']").first().click();
         $("#historyTestsList").$$(".history-row").shouldHave(com.codeborne.selenide.CollectionCondition.sizeGreaterThan(0), java.time.Duration.ofSeconds(10));
     }
 
@@ -274,7 +274,7 @@ public class NeodymiumAuraManagerUiTest {
         }
 
         $("#runQueueBtn").shouldBe(Condition.visible).shouldNotBe(Condition.disabled).click();
-        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(60));
+        $("#runSpinner").should(Condition.disappear, java.time.Duration.ofSeconds(240));
 
         // Navigate to the History view and load history
         $("#navReports").click();

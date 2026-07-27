@@ -115,4 +115,25 @@ public final class AuraManagerTestSelectionPanelUiTest
         // Verify that the list re-renders successfully and contains file containers
         $$("#yamlFileList .file-container").shouldHave(CollectionCondition.sizeGreaterThan(0));
     }
+
+    @NeodymiumTest
+    public final void testSearchFilterFiles()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Verify initial files list has items
+        final int initialCount = $$("#yamlFileList .file-container").size();
+
+        // Enter search term into search input
+        $("#testSearchInput").shouldBe(Condition.visible).setValue("test");
+
+        // Verify filtering retains or updates the list items matching the query
+        $$("#yamlFileList .file-container").shouldHave(CollectionCondition.sizeGreaterThan(0));
+
+        // Clear search input
+        $("#testSearchInput").clear();
+
+        // List should restore back to initial count
+        $$("#yamlFileList .file-container").shouldHave(CollectionCondition.size(initialCount));
+    }
 }

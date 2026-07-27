@@ -23,6 +23,7 @@ import com.xceptance.neodymium.aura.dto.DeleteReportRequest;
 import com.xceptance.neodymium.aura.dto.RunRequest;
 import java.io.File;
 import java.io.IOException;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -30,8 +31,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.thymeleaf.context.Context;
 
 /**
  * Controller handling reporting history serving, manual report compilation triggers, and report deletion.
@@ -45,14 +48,157 @@ public final class AuraManagerReportingController
 
     private final AuraReportingService reportingService;
     private final AuraQueueService queueService;
+    private final NeodymiumAuraManager manager;
 
-    public AuraManagerReportingController(final AuraReportingService reportingService, final AuraQueueService queueService)
+    public AuraManagerReportingController(final AuraReportingService reportingService, final AuraQueueService queueService, final NeodymiumAuraManager manager)
     {
         this.reportingService = reportingService;
         this.queueService = queueService;
+        this.manager = manager;
     }
 
     public void handleReportingHistory(final HttpExchange exchange) throws IOException
+    {
+        final List<Map<String, Object>> historyList = getHistoryList();
+        final Context context = new Context();
+        context.setVariable("history", historyList);
+        context.setVariable("running", queueService.isRunningQueue());
+
+        if (queueService.isRunningQueue())
+        {
+            final long runStartMs = queueService.getRunStartTimeMs();
+            final java.time.Instant instant = java.time.Instant.ofEpochMilli(runStartMs);
+            final java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
+            final java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            context.setVariable("runningStartTime", ldt.format(formatter));
+        }
+
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("reportingHistoryList"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public void handleReportingHistoryJson(final HttpExchange exchange) throws IOException
+    {
+        final List<Map<String, Object>> historyList = getHistoryList();
+        AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(historyList));
+    }
+
+    public void handleReportingRun(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String id = params.get("id");
+
+        final List<Map<String, Object>> historyList = getHistoryList();
+        Map<String, Object> foundItem = null;
+        for (final Map<String, Object> item : historyList)
+        {
+            if (id != null && id.equals(item.get("id")))
+            {
+                foundItem = item;
+                break;
+            }
+        }
+
+        final Context context = new Context();
+        if (foundItem != null)
+        {
+            context.setVariable("tests", foundItem.get("tests"));
+            context.setVariable("reportId", id);
+            context.setVariable("selectedRunNumber", foundItem.get("runNumber"));
+        }
+        context.setVariable("running", queueService.isRunningQueue());
+
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("historyTests"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public void handleServeReportFile(final HttpExchange exchange) throws IOException
+    {
+        final String path = exchange.getRequestURI().getPath();
+        final String prefix = "/api/reporting/report/";
+        final String subPath = path.substring(prefix.length());
+        final int slashIdx = subPath.indexOf('/');
+        if (slashIdx == -1)
+        {
+            AuraHttpUtils.sendError(exchange, 404, "File not found");
+            return;
+        }
+        final String reportId = subPath.substring(0, slashIdx);
+        final String assetPath = subPath.substring(slashIdx + 1);
+        try
+        {
+            final File file = reportingService.resolveReportAsset(reportId, assetPath);
+            if (!file.exists() || !file.isFile())
+            {
+                AuraHttpUtils.sendError(exchange, 404, "File not found");
+                return;
+            }
+            final byte[] bytes = Files.readAllBytes(file.toPath());
+            final String contentType = AuraHttpUtils.getMimeType(file.getName());
+            AuraHttpUtils.sendResponse(exchange, 200, contentType, bytes);
+        }
+        catch (final SecurityException se)
+        {
+            AuraHttpUtils.sendError(exchange, 403, se.getMessage());
+        }
+    }
+
+    public void handleGenerateReporting(final HttpExchange exchange) throws IOException
+    {
+        if (queueService.isRunningQueue())
+        {
+            LOGGER.error("[Aura Server] Reporting compilation trigger failed: Queue is currently executing");
+            AuraHttpUtils.sendError(exchange, 409, "Cannot compile report while queue is executing");
+            return;
+        }
+
+        LOGGER.info("[Aura Server] Spawning thread to compile reporting files...");
+
+        final String body = AuraHttpUtils.readBody(exchange);
+        final RunRequest req = AuraHttpUtils.gson.fromJson(body, RunRequest.class);
+        final Thread thread = new Thread(() -> reportingService.generateReport(List.of(), req, queueService.getRunStartTimeMs(), queueService.getGlobalTestsRun(), queueService.getGlobalPassed(), queueService.getGlobalFailed(), queueService.getGlobalSkipped(), queueService.isManuallyStopped(), queueService.getCurrentRunLogs(), queueService.getCurrentRunEvents()));
+        thread.setName("NeodymiumAuraManualReportCompiler");
+        thread.start();
+
+        AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(Map.of("success", true)));
+    }
+
+    public void handleDeleteReport(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String id = params.get("id");
+
+        if (id == null || id.isEmpty())
+        {
+            LOGGER.error("[Aura Server] Delete report request failed: Missing 'id'");
+            AuraHttpUtils.sendError(exchange, 400, "Missing 'id'");
+            return;
+        }
+
+        LOGGER.info("[Aura Server] POST /api/reporting/delete - Request received for ID: {}", id);
+
+        try
+        {
+            reportingService.deleteReport(id);
+            LOGGER.info("[Aura Server] Deleted report history directory: {}", id);
+
+            // Rebuild history list and return the updated history fragment for HTMX OOB / in-place swap
+            final List<Map<String, Object>> historyList = getHistoryList();
+            final Context context = new Context();
+            context.setVariable("history", historyList);
+            context.setVariable("running", queueService.isRunningQueue());
+
+            final String html = manager.getTemplateEngine().process("dashboard", Set.of("reportingHistoryList"), context);
+            AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+        }
+        catch (final SecurityException se)
+        {
+            LOGGER.error("[Aura Server] Directory traversal attempt detected: {}", id);
+            AuraHttpUtils.sendError(exchange, 403, se.getMessage());
+        }
+    }
+
+    public List<Map<String, Object>> getHistoryList() throws IOException
     {
         final File historyDir = reportingService.getReportHistoryDir();
         final List<Map<String, Object>> historyList = new ArrayList<>();
@@ -137,7 +283,7 @@ public final class AuraManagerReportingController
                         }
                     }
 
-                    String runConfigRaw = null;
+                    Object runConfig = null;
                     if (metadataFile.exists() && metadataFile.isFile())
                     {
                         try
@@ -147,7 +293,8 @@ public final class AuraManagerReportingController
                                     .parseString(meta).getAsJsonObject();
                             if (metaObj.has("runConfig") && !metaObj.get("runConfig").isJsonNull())
                             {
-                                runConfigRaw = AuraHttpUtils.gson.toJson(metaObj.get("runConfig"));
+                                final String runConfigRaw = AuraHttpUtils.gson.toJson(metaObj.get("runConfig"));
+                                runConfig = AuraHttpUtils.gson.fromJson(runConfigRaw, Object.class);
                             }
                         }
                         catch (final Exception e)
@@ -294,10 +441,49 @@ public final class AuraManagerReportingController
                             }
 
                             testMap.put("name", testName);
+
+                            String displayName = testName;
+                            if (displayName.contains("."))
+                            {
+                                displayName = displayName.substring(displayName.lastIndexOf('.') + 1);
+                            }
+                            final String yamlLabel = testMap.get("yamlLabel");
+                            final String testId = testMap.get("testId");
+                            if (yamlLabel != null && testId != null && !testId.isEmpty())
+                            {
+                                displayName = yamlLabel + " (" + testId + ")";
+                            }
+                            else if (testId != null && !testId.isEmpty())
+                            {
+                                displayName = testId;
+                            }
+                            else if (yamlLabel != null && !yamlLabel.isEmpty())
+                            {
+                                displayName = yamlLabel;
+                            }
+                            testMap.put("displayName", displayName);
+
                             testMap.put("file", cf.getName());
                             testMap.put("status", testStatus);
                             final String safeLogName = testName.replaceAll("[^a-zA-Z0-9_\\-]", "_") + ".log";
                             testMap.put("hasLog", String.valueOf(new File(dir, safeLogName).exists()));
+
+                            // Calculate test case duration label
+                            String testDurationLabel = "";
+                            if (testMap.containsKey("durationMs"))
+                            {
+                                try
+                                {
+                                    final double dMs = Double.parseDouble(testMap.get("durationMs"));
+                                    testDurationLabel = String.format("%.1fs", dMs / 1000.0);
+                                }
+                                catch (final Exception ignore)
+                                {
+                                    // ignore
+                                }
+                            }
+                            testMap.put("durationLabel", testDurationLabel);
+
                             tests.add(testMap);
                         }
                     }
@@ -316,9 +502,9 @@ public final class AuraManagerReportingController
                     item.put("hasReport", hasReport);
                     item.put("hasInteractiveReport", hasInteractiveReport);
                     item.put("tests", tests);
-                    if (runConfigRaw != null)
+                    if (runConfig != null)
                     {
-                        item.put("runConfig", AuraHttpUtils.gson.fromJson(runConfigRaw, Object.class));
+                        item.put("runConfig", runConfig);
                     }
                     historyList.add(item);
                 }
@@ -328,86 +514,109 @@ public final class AuraManagerReportingController
         final int total2 = historyList.size();
         for (int idx = 0; idx < total2; idx++)
         {
-            historyList.get(idx).put("runNumber", total2 - idx);
-        }
+            final Map<String, Object> item = historyList.get(idx);
+            item.put("runNumber", total2 - idx);
 
-        AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(historyList));
-    }
-
-    public void handleServeReportFile(final HttpExchange exchange) throws IOException
-    {
-        final String path = exchange.getRequestURI().getPath();
-        final String prefix = "/api/reporting/report/";
-        final String subPath = path.substring(prefix.length());
-        final int slashIdx = subPath.indexOf('/');
-        if (slashIdx == -1)
-        {
-            AuraHttpUtils.sendError(exchange, 404, "File not found");
-            return;
-        }
-        final String reportId = subPath.substring(0, slashIdx);
-        final String assetPath = subPath.substring(slashIdx + 1);
-        try
-        {
-            final File file = reportingService.resolveReportAsset(reportId, assetPath);
-            if (!file.exists() || !file.isFile())
+            // Compute formatted timestamp
+            final String timestamp = String.valueOf(item.get("timestamp"));
+            try
             {
-                AuraHttpUtils.sendError(exchange, 404, "File not found");
-                return;
+                final java.time.Instant instant = java.time.Instant.parse(timestamp);
+                final java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
+                final java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+                item.put("formattedTime", ldt.format(formatter));
             }
-            final byte[] bytes = Files.readAllBytes(file.toPath());
-            final String contentType = AuraHttpUtils.getMimeType(file.getName());
-            AuraHttpUtils.sendResponse(exchange, 200, contentType, bytes);
+            catch (final Exception e)
+            {
+                item.put("formattedTime", timestamp != null && !timestamp.isEmpty() ? timestamp : String.valueOf(item.get("id")));
+            }
+
+            // Compute run duration label
+            final long durationMs = (long) item.get("durationMs");
+            String durationLabel = "";
+            if (durationMs > 0L)
+            {
+                final long durSec = Math.round(durationMs / 1000.0);
+                if (durSec < 60)
+                {
+                    durationLabel = durSec + "s";
+                }
+                else
+                {
+                    durationLabel = (durSec / 60) + "m " + (durSec % 60) + "s";
+                }
+            }
+            item.put("durationLabel", durationLabel);
+
+            // Compute run config JSON and test case rerun payloads
+            if (item.containsKey("runConfig") && item.get("runConfig") != null)
+            {
+                final String escapedJson = AuraHttpUtils.gson.toJson(item.get("runConfig")).replace("'", "\\'");
+                item.put("runConfigJson", escapedJson);
+
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> rc = (Map<String, Object>) item.get("runConfig");
+                @SuppressWarnings("unchecked")
+                final List<Map<String, String>> tests = (List<Map<String, String>>) item.get("tests");
+
+                if (tests != null && rc.containsKey("datasets"))
+                {
+                    @SuppressWarnings("unchecked")
+                    final List<Map<String, Object>> datasets = (List<Map<String, Object>>) rc.get("datasets");
+                    if (datasets != null)
+                    {
+                        for (final Map<String, String> testMap : tests)
+                        {
+                            Map<String, Object> matchedDataset = null;
+                            final String yamlLabel = testMap.get("yamlLabel");
+                            if (yamlLabel != null)
+                            {
+                                for (final Map<String, Object> d : datasets)
+                                {
+                                    final String fileVal = String.valueOf(d.get("file"));
+                                    final String fname = new File(fileVal).getName();
+                                    if (fname.equals(yamlLabel + ".yaml") || fname.equals(yamlLabel))
+                                    {
+                                        matchedDataset = d;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (matchedDataset == null && !datasets.isEmpty())
+                            {
+                                matchedDataset = datasets.get(0);
+                            }
+                            if (matchedDataset != null)
+                            {
+                                String finalId = matchedDataset.containsKey("id") ? String.valueOf(matchedDataset.get("id")) : null;
+                                if (finalId == null && testMap.containsKey("testId"))
+                                {
+                                    finalId = testMap.get("testId");
+                                    if (finalId != null && finalId.startsWith("Dataset "))
+                                    {
+                                        finalId = finalId.substring(8);
+                                    }
+                                }
+                                final Map<String, Object> singlePayload = new HashMap<>();
+                                final Map<String, Object> datasetEntry = new HashMap<>();
+                                datasetEntry.put("file", matchedDataset.get("file"));
+                                datasetEntry.put("id", finalId);
+                                singlePayload.put("datasets", List.of(datasetEntry));
+                                singlePayload.put("headless", rc.get("headless"));
+                                singlePayload.put("interactive", rc.get("interactive"));
+                                singlePayload.put("allure", rc.get("allure"));
+                                singlePayload.put("video", rc.get("video"));
+                                singlePayload.put("keepOpen", rc.get("keepOpen"));
+
+                                final String payloadStr = AuraHttpUtils.gson.toJson(singlePayload).replace("'", "\\'");
+                                testMap.put("rerunPayload", payloadStr);
+                            }
+                        }
+                    }
+                }
+            }
         }
-        catch (final SecurityException se)
-        {
-            AuraHttpUtils.sendError(exchange, 403, se.getMessage());
-        }
-    }
 
-    public void handleGenerateReporting(final HttpExchange exchange) throws IOException
-    {
-        if (queueService.isRunningQueue())
-        {
-            LOGGER.error("[Aura Server] Reporting compilation trigger failed: Queue is currently executing");
-            AuraHttpUtils.sendError(exchange, 409, "Cannot compile report while queue is executing");
-            return;
-        }
-
-        LOGGER.info("[Aura Server] Spawning thread to compile reporting files...");
-
-        final String body = AuraHttpUtils.readBody(exchange);
-        final RunRequest req = AuraHttpUtils.gson.fromJson(body, RunRequest.class);
-        final Thread thread = new Thread(() -> reportingService.generateReport(List.of(), req, queueService.getRunStartTimeMs(), queueService.getGlobalTestsRun(), queueService.getGlobalPassed(), queueService.getGlobalFailed(), queueService.getGlobalSkipped(), queueService.isManuallyStopped(), queueService.getCurrentRunLogs(), queueService.getCurrentRunEvents()));
-        thread.setName("NeodymiumAuraManualReportCompiler");
-        thread.start();
-
-        AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(Map.of("success", true)));
-    }
-
-    public void handleDeleteReport(final HttpExchange exchange) throws IOException
-    {
-        final String body = AuraHttpUtils.readBody(exchange);
-        final DeleteReportRequest req = AuraHttpUtils.gson.fromJson(body, DeleteReportRequest.class);
-        if (req == null || req.id == null)
-        {
-            LOGGER.error("[Aura Server] Delete report request failed: Missing 'id' in body");
-            AuraHttpUtils.sendError(exchange, 400, "Missing 'id' in body");
-            return;
-        }
-
-        LOGGER.info("[Aura Server] POST /api/reporting/delete - Request received for ID: {}", req.id);
-
-        try
-        {
-            reportingService.deleteReport(req.id);
-            LOGGER.info("[Aura Server] Deleted report history directory: {}", req.id);
-            AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(Map.of("success", true)));
-        }
-        catch (final SecurityException se)
-        {
-            LOGGER.error("[Aura Server] Directory traversal attempt detected: {}", req.id);
-            AuraHttpUtils.sendError(exchange, 403, se.getMessage());
-        }
+        return historyList;
     }
 }

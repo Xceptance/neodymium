@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.thymeleaf.context.Context;
 
@@ -94,7 +95,26 @@ public final class AuraManagerFileController
         final List<YamlFileDto> responseList = fileService.getYamlFilesList();
         context.setVariable("files", responseList);
         context.setVariable("expandedFiles", fileService.getExpandedFiles());
-        return "dashboard :: yamlFileList";
+        return "fragments/test-selection :: yamlFileList";
+    }
+
+    public void handleSearchFiles(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> queryParams = AuraHttpUtils.getQueryParams(exchange);
+        String query = queryParams.get("q");
+        if (query == null)
+        {
+            query = queryParams.get("query");
+        }
+
+        final List<YamlFileDto> filteredList = fileService.getFilteredYamlFilesList(query);
+
+        final Context context = new Context();
+        context.setVariable("files", filteredList);
+        context.setVariable("expandedFiles", fileService.getExpandedFiles());
+
+        final String html = manager.getTemplateEngine().process("fragments/test-selection", Set.of("yamlFileList"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
     public String toggleFileExpansion(final String file, final Context context)

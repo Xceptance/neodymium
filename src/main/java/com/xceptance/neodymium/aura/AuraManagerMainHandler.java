@@ -39,18 +39,19 @@ public final class AuraManagerMainHandler implements HttpHandler
         // Instantiate singletons of domain services
         final AuraFileService fileService = new AuraFileService();
         final AuraChatService chatService = new AuraChatService(fileService);
+        final AuraChatSessionService sessionService = new AuraChatSessionService();
         final AuraReportingService reportingService = new AuraReportingService();
         final AuraInteractiveService interactiveService = new AuraInteractiveService();
         final AuraQueueService queueService = new AuraQueueService(reportingService, interactiveService);
 
         // Instantiate standalone public controller classes injecting stateless/stateful singletons and manager
-        final AuraManagerDashboardController dashboardController = new AuraManagerDashboardController(interactiveService, fileService, manager);
+        final AuraManagerQueueController queueController = new AuraManagerQueueController(queueService, fileService, interactiveService, manager);
+        final AuraManagerReportingController reportingController = new AuraManagerReportingController(reportingService, queueService, manager);
+        final AuraManagerDashboardController dashboardController = new AuraManagerDashboardController(interactiveService, fileService, queueController, reportingController, sessionService, manager);
         final AuraManagerFileController fileController = new AuraManagerFileController(fileService, manager);
         final AuraManagerEditorController editorController = new AuraManagerEditorController(fileService, manager);
-        final AuraManagerQueueController queueController = new AuraManagerQueueController(queueService, fileService, interactiveService, manager);
-        final AuraManagerReportingController reportingController = new AuraManagerReportingController(reportingService, queueService);
         final AuraManagerInteractiveController interactiveController = new AuraManagerInteractiveController(interactiveService, reportingService, queueService, manager);
-        final AuraManagerChatController chatController = new AuraManagerChatController(chatService);
+        final AuraManagerChatController chatController = new AuraManagerChatController(chatService, sessionService, manager);
 
         // Register GET & POST mappings declaratively
         router.GET("/", dashboardController::handleDashboard);
@@ -58,6 +59,8 @@ public final class AuraManagerMainHandler implements HttpHandler
 
         router.GET("/api/files", fileController::handleListFiles);
         router.GET("/api/files/list", fileController::handleListFilesPanel);
+        router.GET("/api/files/search", fileController::handleSearchFiles);
+        router.GET("/api/files/expand", fileController::handleToggleFileExpansion);
         router.POST("/api/files/toggle", fileController::handleToggleFileExpansion);
 
         router.GET("/api/editor", editorController::handleEditorPanel);
@@ -65,14 +68,19 @@ public final class AuraManagerMainHandler implements HttpHandler
         router.POST("/api/save", editorController::handleSaveFile);
         router.POST("/api/delete", editorController::handleDeleteFile);
         router.POST("/api/create", editorController::handleCreateFile);
+        router.GET("/api/modals/create", editorController::handleGetCreateModal);
+        router.GET("/api/modals/delete", editorController::handleGetDeleteModal);
+        router.POST("/api/editor/close", editorController::handleCloseEditor);
 
         router.POST("/api/queue/toggle", queueController::handleToggleQueue);
+        router.POST("/api/queue/toggleAll", queueController::handleToggleAllQueue);
         router.POST("/api/queue/move", queueController::handleMoveQueue);
         router.POST("/api/queue/clear", queueController::handleClearQueue);
         router.POST("/api/config/toggle", queueController::handleToggleConfig);
 
         router.POST("/api/run", queueController::handleRunQueue);
         router.GET("/api/status", queueController::handleStatusStream);
+        router.GET("/api/status/panel", queueController::handleStatusPanel);
         router.POST("/api/stop", queueController::handleStopProcess);
 
         // Serve Static Assets & Views
@@ -83,11 +91,17 @@ public final class AuraManagerMainHandler implements HttpHandler
 
         // Reporting Mappings (Renamed from Allure to Reporting as requested)
         router.GET("/api/reporting/history", reportingController::handleReportingHistory);
+        router.GET("/api/reporting/history-json", reportingController::handleReportingHistoryJson);
+        router.GET("/api/reporting/run", reportingController::handleReportingRun);
         router.prefix("GET", "/api/reporting/report/", reportingController::handleServeReportFile);
         router.POST("/api/reporting/generate", reportingController::handleGenerateReporting);
         router.POST("/api/reporting/delete", reportingController::handleDeleteReport);
 
         // Chat & Interactive AI Console Actions (Kept /api/console routes for compatibility as requested)
+        router.GET("/api/chat/messages", chatController::handleGetMessages);
+        router.POST("/api/chat/create", chatController::handleCreateSession);
+        router.POST("/api/chat/delete", chatController::handleDeleteSession);
+        router.POST("/api/chat/rename", chatController::handleRenameSession);
         router.POST("/api/chat", chatController::handleChat);
         router.POST("/api/disconnect", interactiveController::handleDisconnect);
         router.prefix(null, "/api/console/events", interactiveController::handleConsoleEvents);

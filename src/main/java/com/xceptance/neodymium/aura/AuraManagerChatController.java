@@ -4,30 +4,32 @@
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * Loved by AI developers and functional testers alike.
  */
 package com.xceptance.neodymium.aura;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.xceptance.neodymium.aura.dto.ChatRequest;
-import com.xceptance.neodymium.aura.dto.ChatResponse;
-import com.xceptance.neodymium.util.Neodymium;
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.thymeleaf.context.Context;
+
+import com.sun.net.httpserver.HttpExchange;
+import com.xceptance.neodymium.aura.dto.ChatMessageDto;
+import com.xceptance.neodymium.aura.dto.ChatRequest;
+import com.xceptance.neodymium.aura.dto.ChatResponse;
+import com.xceptance.neodymium.aura.dto.ChatSessionDto;
+import com.xceptance.neodymium.util.Neodymium;
 
 /**
- * Controller handling chat requests, verifying configuration, and invoking the AI reasoning workflows.
+ * Controller handling chat operations, managing active chat session states,
+ * and returning Thymeleaf HTML fragments for the chat sidebar.
  *
  * @author AI-generated: Antigravity
  * @author Xceptance GmbH 2026
@@ -37,21 +39,141 @@ public final class AuraManagerChatController
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraManagerChatController.class);
 
     private final AuraChatService chatService;
+    private final AuraChatSessionService sessionService;
+    private final NeodymiumAuraManager manager;
 
-    public AuraManagerChatController(final AuraChatService chatService)
+    public AuraManagerChatController(final AuraChatService chatService, final AuraChatSessionService sessionService,
+            final NeodymiumAuraManager manager)
     {
         this.chatService = chatService;
+        this.sessionService = sessionService;
+        this.manager = manager;
     }
 
+    /**
+     * GET /api/chat/messages?id=...
+     * Renders only the chat messages list for a session.
+     */
+    public void handleGetMessages(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String sessionId = params.get("sessionId"); // From select name=sessionId
+
+        final ChatSessionDto session = sessionService.getSession(sessionId);
+
+        final Context context = new Context();
+        context.setVariable("chatMessages", session.messages);
+        context.setVariable("currentSessionId", session.id);
+
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatMessagesContent"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * POST /api/chat/create
+     * Creates a new session and returns the full chat container fragment.
+     */
+    public void handleCreateSession(final HttpExchange exchange) throws IOException
+    {
+        final ChatSessionDto newSession = sessionService.createSession("New Chat");
+
+        final List<ChatSessionDto> sessions = sessionService.getSessions();
+        final Context context = new Context();
+        context.setVariable("chatSessions", sessions);
+        context.setVariable("currentSessionId", newSession.id);
+        context.setVariable("chatMessages", newSession.messages);
+
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatContainer"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * POST /api/chat/delete?id=...
+     * Deletes a session and returns the full chat container fragment.
+     */
+    public void handleDeleteSession(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String id = params.getOrDefault("id", params.get("sessionId"));
+
+        sessionService.deleteSession(id);
+
+        final List<ChatSessionDto> sessions = sessionService.getSessions();
+        final ChatSessionDto fallbackSession = sessions.get(0);
+
+        final Context context = new Context();
+        context.setVariable("chatSessions", sessions);
+        context.setVariable("currentSessionId", fallbackSession.id);
+        context.setVariable("chatMessages", fallbackSession.messages);
+
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatContainer"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * POST /api/chat/rename?id=...&name=...
+     * Renames a session and returns the full chat container fragment.
+     */
+    public void handleRenameSession(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String id = params.getOrDefault("id", params.get("sessionId"));
+        String name = params.get("name");
+        if (name == null || name.trim().isEmpty())
+        {
+            name = exchange.getRequestHeaders().getFirst("HX-Prompt");
+        }
+        if (name == null || name.trim().isEmpty())
+        {
+            name = "Renamed Chat";
+        }
+
+        final ChatSessionDto renamed = sessionService.renameSession(id, name);
+
+        final List<ChatSessionDto> sessions = sessionService.getSessions();
+        final Context context = new Context();
+        context.setVariable("chatSessions", sessions);
+        context.setVariable("currentSessionId", renamed.id);
+        context.setVariable("chatMessages", renamed.messages);
+
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatContainer"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * POST /api/chat
+     * Handles sending a message to a session, executing the AI reasoner,
+     * appending the response, and returning the updated messages list fragment.
+     */
     public void handleChat(final HttpExchange exchange) throws IOException
     {
-        final String body = AuraHttpUtils.readBody(exchange);
-        final ChatRequest req = AuraHttpUtils.gson.fromJson(body, ChatRequest.class);
-        if (req == null || req.prompt == null || req.prompt.trim().isEmpty())
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String sessionId = params.get("sessionId");
+        final String prompt = params.get("prompt");
+
+        final ChatSessionDto session = sessionService.getSession(sessionId);
+
+        if (prompt == null || prompt.trim().isEmpty())
         {
-            LOGGER.error("[Aura Server] Chat request failed: Missing 'prompt' in body");
-            AuraHttpUtils.sendError(exchange, 400, "Missing 'prompt' in body");
+            final Context context = new Context();
+            context.setVariable("chatMessages", session.messages);
+            context.setVariable("currentSessionId", session.id);
+            final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatMessages"), context);
+            AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
             return;
+        }
+
+        // 1. Save user prompt
+        final ChatMessageDto userMsg = new ChatMessageDto("user", prompt);
+        session.messages.add(userMsg);
+        sessionService.addMessage(session.id, userMsg);
+
+        // 2. Auto-rename session if it's currently generic
+        if ("New Chat".equalsIgnoreCase(session.name) || "Default Session".equalsIgnoreCase(session.name)
+                || session.messages.size() <= 1)
+        {
+            final String newName = prompt.length() > 25 ? prompt.substring(0, 25) + "..." : prompt;
+            sessionService.renameSession(session.id, newName);
         }
 
         try
@@ -59,19 +181,57 @@ public final class AuraManagerChatController
             final String apiKey = Neodymium.aiConfiguration().aiApiKey();
             if (apiKey == null || apiKey.trim().isEmpty())
             {
-                AuraHttpUtils.sendError(exchange, 400,
+                final ChatMessageDto errorMsg = new ChatMessageDto("ai",
                         "API Key is missing or invalid. Please configure 'neodymium.ai.apiKey' in properties or system environment.");
-                return;
+                session.messages.add(errorMsg);
+                sessionService.addMessage(session.id, errorMsg);
             }
+            else
+            {
+                // Clone the history list up to but excluding the newly appended user prompt for the request body
+                final int historyEnd = Math.max(0, session.messages.size() - 1);
+                final List<ChatMessageDto> history = session.messages.subList(0, historyEnd);
+                final ChatRequest req = new ChatRequest(prompt, null, history);
 
-            final ChatResponse response = chatService.runChatWorkflow(req);
-            AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(response));
+                // Run visual/logical workflow classification via Gemini
+                final ChatResponse response = chatService.runChatWorkflow(req);
+
+                // Save assistant answer and deep thinking log to session
+                final ChatMessageDto assistantMsg = new ChatMessageDto("ai", response.message, response.thinking);
+                session.messages.add(assistantMsg);
+                sessionService.addMessage(session.id, assistantMsg);
+
+                // Set HX-Trigger header if an action needs to execute client-side
+                if (response.action != null && !response.action.trim().isEmpty())
+                {
+                    final Map<String, Object> triggerPayload = new HashMap<>();
+                    triggerPayload.put("action", response.action);
+                    triggerPayload.put("selectedDatasets", response.selectedDatasets);
+                    triggerPayload.put("files", response.files);
+                    triggerPayload.put("filename", response.filename);
+                    triggerPayload.put("content", response.content);
+
+                    final String triggerJson = AuraHttpUtils.gson.toJson(Map.of("aiAction", triggerPayload));
+                    exchange.getResponseHeaders().set("HX-Trigger", triggerJson);
+                }
+            }
         }
         catch (final AssertionError | Exception e)
         {
             LOGGER.error("[Aura Server] Chat execution failed", e);
-            AuraHttpUtils.sendError(exchange, 500, "LLM Client Error: " + e.getMessage()
-                    + ". Please verify that your Gemini API key is configured and valid.");
+            final ChatMessageDto errorMsg = new ChatMessageDto("ai",
+                    "LLM Client Error: " + e.getMessage()
+                            + ". Please verify that your Gemini API key is configured and valid.");
+            session.messages.add(errorMsg);
+            sessionService.addMessage(session.id, errorMsg);
         }
+
+        // Return updated message logs fragment
+        final Context context = new Context();
+        context.setVariable("chatMessages", session.messages);
+        context.setVariable("currentSessionId", session.id);
+
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatMessagesContent"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 }
