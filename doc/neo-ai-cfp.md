@@ -9,7 +9,7 @@
 ---
 
 > [!NOTE]
-> **Open Source Research & Non-Commercial Commitment**: This session is strictly focused on open engineering research, architectural discoveries, and advancing quality engineering standards. Neo AI is developed as a 100% free, community-accessible open-source framework (`GNU AGPLv3 / MIT`). We are not pitching a product or selling commercial SaaS subscriptions; our goal is sharing empirical learnings to help the software testing ecosystem evaluate and understand AI-driven test automation effectively.
+> **Open Source Research Commitment**: This session is strictly focused on open engineering research, architectural discoveries, and advancing quality engineering standards. Neo AI is developed as a free, community-accessible open-source framework (`GNU AGPLv3 / MIT`). Our goal is sharing empirical learnings to help the software testing ecosystem evaluate and understand AI-driven test automation effectively.
 
 Software test automation has reached a critical inflection point. For decades, teams relied on code-based frameworks (Selenium, Playwright, Cypress, Selenide) or BDD tools (Cucumber). While fast in execution, all traditional tools share a common bottleneck: **unforgiving reliance on explicit DOM locators** (CSS, XPath, IDs) and **strict, rigid framework syntax**. In modern Single-Page Applications (React, Next.js, Vue, Angular), component hydration, generated utility classes, and layout shifts across deployments regularly break locators, forcing QA engineers to spend significant effort repairing brittle step definitions or begging developers for custom `data-testid` attributes.
 
@@ -85,13 +85,13 @@ The 45-minute technical presentation walks through the six engineering pillars p
 ```
 
 ### 2.1 Multi-Lingual Natural Language Authoring & AST Synchronization
-Engineers and domain experts author test scenarios in plain human language formatted in YAML—without writing Gherkin step bindings or code abstractions:
+Engineers and domain experts author test scenarios in plain human language formatted in YAML—without writing Gherkin step bindings or code abstractions. Instruction steps can range from direct action commands to conversational free-text descriptions:
 
 ```yaml
-# Multi-Lingual Natural Language Test Scenario (YAML Authoring)
-- step: "Click the checkout button and proceed to payment"        # English
-- step: "Klicke auf 'In den Warenkorb' und prüfe die Gesamtsumme" # German
-- step: "Cliquez sur 'Commander' et vérifiez le montant"          # French
+# Imperative & Free-Text Natural Language Authoring (YAML)
+- step: "Click the checkout button and proceed to payment"                # Imperative Command
+- step: "Add the first product to cart and verify the total is under $50" # Free-Text High-Level Step
+- step: "Lege das Poster in den Warenkorb und gehe direkt zur Kasse"     # German Free-Text Step
 ```
 
 YAML acts as an intermediate serialization format representing an underlying **Test Step Abstract Syntax Tree (AST)**, establishing 1-to-1 bidirectional synchronization between human definitions and compiled machine playbooks.

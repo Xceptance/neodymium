@@ -117,7 +117,7 @@ Building Neo AI provides direct architectural control over model interaction, co
 
 Neo AI extends **Neodymium Classic**—a JVM-native testing platform built on Selenium/Selenide and JUnit 5—by adding plain-language instruction parsing, playbook compilation, and self-healing mechanics to its runner foundation.
 
-* **Open Source & Non-Commercial Mission**: Neo AI is developed as a 100% free, community-accessible open-source framework (`GNU AGPLv3 / MIT`). It is built strictly for open engineering research, architectural exploration, and community advancement without commercial SaaS offerings, proprietary paywalls, or product pitches.
+* **Open Source & Research Mission**: Neo AI is developed as a free, community-accessible open-source framework (`GNU AGPLv3 / MIT`). It is built strictly for open engineering research, architectural exploration, and community advancement.
 
 ---
 
@@ -156,13 +156,13 @@ Neo AI integrates natural-language compilation, localized self-healing, token-op
 ```
 
 ### 2.1 Zero-Cost Offline Replay via JSON Playbooks
-When executing a natural language test case for the first time, Neo AI operates in **Creation Mode**. The LLM inspects the page DOM, determines locator strategies and action sequences, and compiles them into a structured **JSON Playbook** saved in local project directories (`src/test/resources/ai-playbooks`).
+When executing a natural language test case for the first time, Neo AI operates in **Creation Mode**. The LLM inspects the page DOM, determines locator strategies and action sequences, and compiles them into a structured **JSON Playbook** saved in local project directories (`src/test/resources/ai-playbooks`). Test instructions can range from explicit action commands to conversational free-text steps:
 
 ```yaml
-# Multi-Lingual Natural Language Test Scenario (YAML Authoring)
-- step: "Click the checkout button and proceed to payment"        # English
-- step: "Klicke auf 'In den Warenkorb' und prüfe die Gesamtsumme" # German
-- step: "Cliquez sur 'Commander' et vérifiez le montant"          # French
+# Imperative & Free-Text Natural Language Authoring (YAML)
+- step: "Click the checkout button and proceed to payment"                # Imperative Command
+- step: "Add the first product to cart and verify the total is under $50" # Free-Text High-Level Step
+- step: "Lege das Poster in den Warenkorb und gehe direkt zur Kasse"     # German Free-Text Step
 ```
 
 ```json
