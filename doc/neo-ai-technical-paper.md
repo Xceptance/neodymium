@@ -99,7 +99,7 @@ Artificial intelligence introduced six fundamental architectural paradigms to we
 
 ### 1.3 Core Design Goals & Requirements
 
-Neo AI was designed to fulfill five core architectural requirements, laying the ground rules for the platform implementation mechanisms detailed in Section 2:
+Neo AI was designed to fulfill five core architectural requirements, establishing the foundation for the features detailed in Section 2:
 
 * **Multi-Lingual Natural-Language Test Authoring**: Non-programmers and domain experts author tests using natural language instructions in their preferred spoken language (e.g., English, German, French, Spanish, or mixed steps) formatted in clean YAML without writing glue code or managing Gherkin step bindings.
 * **YAML as Intermediate Serialization & Test Step AST**: YAML serves as an intermediate serialization format representing an underlying **Test Step Abstract Syntax Tree (AST)**. This decouples human authoring interfaces (visual forms, Markdown documents, or rich text editors) from machine execution, establishing a normalized 1-to-1 mapping that enables seamless bidirectional (two-way) synchronization between human-readable specifications and compiled machine playbooks.
@@ -329,7 +329,7 @@ Developing Neo AI provided unique empirical insights into LLM behavior, prompt e
    * Neo AI itself was engineered using AI pair-programming tools to rapidly prototype capabilities, generate initial component implementations, and accelerate feature development.
    * *The Architectural Trade-Off*: While AI assistance enables unmatched velocity during initial feature creation, unconstrained rapid addition of AI features can cause codebase architecture to lose modular alignment over time.
 2. **The 5-Iteration Architectural Evolution**:
-   * To maintain software craftsmanship, Neo AI underwent **five major internal architectural refactorings**.
+   * To maintain code quality and modular design, Neo AI underwent **five major internal architectural refactorings**.
    * *Iteration 5 Focus*: Rebuilding the framework core into a clean, decoupled modular architecture (built around abstract state interfaces such as `TargetExecutor`, `SutState`, `StateMachineRunner`, and `ActionSanitizer`). This modular design ensures that new context levels, prompt formats, and interaction modes can be plugged in seamlessly without modifying core runner logic.
 3. **Model Evolution & Elimination of Hallucinations**:
    * *Early Prototyping Discoveries*: Early framework iterations frequently encountered LLM hallucinations, where models invented non-existent DOM element attributes, proposed unparseable selector syntax, or produced invalid step actions.

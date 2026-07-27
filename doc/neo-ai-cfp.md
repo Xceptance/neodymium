@@ -50,9 +50,9 @@ Neo AI occupies the **"Sweet Spot" of Quality Engineering**: positioned strictly
 
 ---
 
-## 2. Core Architectural Pillars & Mechanisms
+## 2. Core Architecture & Components
 
-The 45-minute technical presentation walks through the six engineering pillars powering Neo AI:
+The 45-minute technical presentation walks through the core components powering Neo AI:
 
 ```
 +-----------------------------------------------------------------------------------+
@@ -130,7 +130,7 @@ To prevent LLM calculation or formatting errors during assertions, complex data 
 
 ## 3. Engineering Retrospective: Meta-AI & Architectural Iterations
 
-Developing Neo AI yielded four major empirical takeaways regarding LLM integration and framework craftsmanship:
+Developing Neo AI yielded four major empirical takeaways regarding LLM integration and framework design:
 
 1. **Building AI with AI (Meta-Development)**: Neo AI was developed using AI pair-programming tools for rapid component prototyping. However, unconstrained feature additions can cause codebase accretion, requiring active human architectural governance.
 2. **The 5-Iteration Architectural Evolution**: Neo AI underwent **five major internal refactorings**. Iteration 5 rebuilt the framework into a clean, decoupled modular engine (with abstract interfaces like `TargetExecutor`, `SutState`, `StateMachineRunner`, and `ActionSanitizer`) to allow new context tiers and interaction modes to be plugged in cleanly.
