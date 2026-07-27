@@ -117,6 +117,8 @@ Building Neo AI provides direct architectural control over model interaction, co
 
 Neo AI extends **Neodymium Classic**—a JVM-native testing platform built on Selenium/Selenide and JUnit 5—by adding plain-language instruction parsing, playbook compilation, and self-healing mechanics to its runner foundation.
 
+* **Open Source & Non-Commercial Mission**: Neo AI is developed as a 100% free, community-accessible open-source framework (`GNU AGPLv3 / MIT`). It is built strictly for open engineering research, architectural exploration, and community advancement without commercial SaaS offerings, proprietary paywalls, or product pitches.
+
 ---
 
 ## 2. Platform Architecture & Core Features

@@ -8,7 +8,8 @@
 
 ---
 
-## 1. Presentation Abstract & Session Overview
+> [!NOTE]
+> **Open Source Research & Non-Commercial Commitment**: This session is strictly focused on open engineering research, architectural discoveries, and advancing quality engineering standards. Neo AI is developed as a 100% free, community-accessible open-source framework (`GNU AGPLv3 / MIT`). We are not pitching a product or selling commercial SaaS subscriptions; our goal is sharing empirical learnings to help the software testing ecosystem evaluate and understand AI-driven test automation effectively.
 
 Software test automation has reached a critical inflection point. For decades, teams relied on code-based frameworks (Selenium, Playwright, Cypress, Selenide) or BDD tools (Cucumber). While fast in execution, all traditional tools share a common bottleneck: **unforgiving reliance on explicit DOM locators** (CSS, XPath, IDs) and **strict, rigid framework syntax**. In modern Single-Page Applications (React, Next.js, Vue, Angular), component hydration, generated utility classes, and layout shifts across deployments regularly break locators, forcing QA engineers to spend significant effort repairing brittle step definitions or begging developers for custom `data-testid` attributes.
 
