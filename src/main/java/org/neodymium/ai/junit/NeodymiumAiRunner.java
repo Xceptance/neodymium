@@ -539,10 +539,23 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             String resolvedPlaybookPath = playbookPath;
             if (this.mode.isReplay())
             {
-                // Replay modes: try multi-dimensional candidates in order, then legacy names
+                // Replay modes: try multi-dimensional candidates in order, including other methods in test class, then legacy names
                 final List<String> candidatePaths = new ArrayList<>();
                 candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile));
                 candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, null));
+
+                if (testClass != null)
+                {
+                    for (final Method m : testClass.getDeclaredMethods())
+                    {
+                        if (method == null || !m.getName().equals(method.getName()))
+                        {
+                            candidatePaths.add(computeRecordingPath(playbookPath, testClass, m, this.datasetId, browserProfile));
+                            candidatePaths.add(computeRecordingPath(playbookPath, testClass, m, this.datasetId, null));
+                        }
+                    }
+                }
+
                 candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, browserProfile));
                 candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, null));
                 candidatePaths.add(computeLegacyRecordingPath(playbookPath, this.datasetId));
@@ -570,6 +583,18 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 if (companionJsonPath != null)
                 {
                     resolvedPlaybookPath = companionJsonPath;
+                }
+                else
+                {
+                    final String msg = String.format(
+                        "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s",
+                        this.mode,
+                        testClass != null ? testClass.getSimpleName() : "UnknownClass",
+                        method != null ? method.getName() : "unknownMethod",
+                        String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
+                    );
+                    org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
+                    throw new java.io.FileNotFoundException(msg);
                 }
             }
             else if (this.mode.isLive())
@@ -621,6 +646,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 executionContext.getTransientData().put("playbook.systemPromptAddons", playbook.getSystemPromptAddons());
             }
 
+            executionContext.getTransientData().put("playbook.resolvedPath", resolvedPlaybookPath);
             executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
             executionContext.getTransientData().put(ExecutionContext.KEY_RESOURCE_MANAGER, manager);
             executionContext.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_PARSER, parser);
