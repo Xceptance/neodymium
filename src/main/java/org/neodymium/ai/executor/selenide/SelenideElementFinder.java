@@ -108,7 +108,7 @@ public final class SelenideElementFinder
         {
             return Selenide.$x(firstCandidate);
         }
-        return Selenide.$(firstCandidate);
+        return Selenide.$(resolveLocator(firstCandidate));
     }
 
     /**
@@ -239,13 +239,13 @@ public final class SelenideElementFinder
         }
 
         // -------------------------------------------------------------------------
-        // Strategy 3: Standard CSS Selector
+        // Strategy 3: Standard CSS Selector / Playwright Pseudo / Text Selector
         // -------------------------------------------------------------------------
         if (!forceXpath)
         {
             try
             {
-                final ElementsCollection els = Selenide.$$(By.cssSelector(clean));
+                final ElementsCollection els = Selenide.$$(resolveLocator(clean));
                 if (!els.isEmpty())
                 {
                     return els.first();
@@ -404,5 +404,10 @@ public final class SelenideElementFinder
             return "\"" + value + "\"";
         }
         return "concat('" + value.replace("'", "', \"'\", '") + "')";
+    }
+
+    public static By resolveLocator(final String target)
+    {
+        return com.xceptance.neodymium.ai.action.LocatorResolver.resolveLocator(target);
     }
 }

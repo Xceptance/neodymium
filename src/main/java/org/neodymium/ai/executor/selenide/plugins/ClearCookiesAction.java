@@ -46,5 +46,14 @@ public final class ClearCookiesAction implements BrowserActionPlugin
     public void execute(final Action action) throws Exception
     {
         Selenide.clearBrowserCookies();
+        try
+        {
+            Selenide.clearBrowserLocalStorage();
+            Selenide.clearBrowserCookies();
+        }
+        catch (final Exception e)
+        {
+            // Ignore if driver context or domain is not yet active
+        }
     }
 }

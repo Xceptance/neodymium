@@ -174,6 +174,24 @@ public final class AssertAction implements BrowserActionPlugin
     private void wrapAndRethrow(final SelenideElement element, final String expected, final Throwable e)
     {
         String attributesStr = "Error retrieving attributes";
+        String actualText = "";
+        String actualValue = "";
+        try
+        {
+            actualText = element.getText();
+        }
+        catch (final Exception ex)
+        {
+            actualText = "<unable to fetch: " + ex.getMessage() + ">";
+        }
+        try
+        {
+            actualValue = element.getValue();
+        }
+        catch (final Exception ex)
+        {
+            actualValue = "<unable to fetch: " + ex.getMessage() + ">";
+        }
         try
         {
             final Map<String, String> attributes = Selenide.executeJavaScript(
@@ -189,7 +207,7 @@ public final class AssertAction implements BrowserActionPlugin
         {
             // Ignore JS execution errors
         }
-        final String actualDetails = String.format("Text: '%s', Value: '%s', Attributes: %s", element.getText(), element.getValue(), attributesStr);
+        final String actualDetails = String.format("Text: '%s', Value: '%s', Attributes: %s", actualText, actualValue, attributesStr);
         SelenideAddons.wrapAssertionError(() ->
         {
             throw new AssertionError(String.format("Assertion failed: '%s' not found in common or element attributes. Found: [%s]", expected, actualDetails), e);

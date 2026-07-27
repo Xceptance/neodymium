@@ -472,24 +472,26 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
 
             // Automatically reset/clean the browser state at the start of a new AI session
+            try
+            {
+                com.codeborne.selenide.Selenide.closeWebDriver();
+            }
+            catch (final Exception e)
+            {
+                // Ignore driver closure errors
+            }
+
             final String profileName = Neodymium.getBrowserProfileName();
             if (profileName != null)
             {
                 final BrowserRunner runner = new BrowserRunner();
-                runner.teardown(false, true,
-                    new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
-                    Neodymium.getWebDriverStateContainer());
-                try
-                {
-                    Thread.sleep(500);
-                }
-                catch (final InterruptedException e)
-                {
-                    Thread.currentThread().interrupt();
-                }
                 runner.setUpTest(
                     new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
                     Neodymium.getTestName());
+                if (Neodymium.getWebDriverStateContainer() != null && Neodymium.getWebDriverStateContainer().getWebDriver() != null)
+                {
+                    com.codeborne.selenide.WebDriverRunner.setWebDriver(Neodymium.getWebDriverStateContainer().getWebDriver());
+                }
             }
 
             // Automatically detect mock integration test package and apply thread-local overrides
@@ -530,27 +532,34 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final PlaybookParser parser = new YamlPlaybookParser();
             final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
             
+            final Class<?> testClass = context.getRequiredTestClass();
+            final Method method = context.getRequiredTestMethod();
+            final String browserProfile = Neodymium.getBrowserProfileName();
+
             String resolvedPlaybookPath = playbookPath;
             if (this.mode.isReplay())
             {
-                // Replay modes: automatically prefer companion JSON file if present
+                // Replay modes: try multi-dimensional candidates in order, then legacy names
+                final List<String> candidatePaths = new ArrayList<>();
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile));
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, null));
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, browserProfile));
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, null));
+                candidatePaths.add(computeLegacyRecordingPath(playbookPath, this.datasetId));
+
                 String companionJsonPath = null;
-                if (this.datasetId != null && !this.datasetId.isEmpty())
+                for (final String candidate : candidatePaths)
                 {
-                    String suffixed = playbookPath;
-                    if (suffixed.endsWith(".yaml"))
+                    if (candidate == null || candidate.isEmpty())
                     {
-                        suffixed = suffixed.substring(0, suffixed.length() - 5) + "_" + this.datasetId + ".json";
+                        continue;
                     }
-                    else if (suffixed.endsWith(".yml"))
-                    {
-                        suffixed = suffixed.substring(0, suffixed.length() - 4) + "_" + this.datasetId + ".json";
-                    }
-                    try (final java.io.InputStream in = manager.read(suffixed))
+                    try (final java.io.InputStream in = manager.read(candidate))
                     {
                         if (in != null)
                         {
-                            companionJsonPath = suffixed;
+                            companionJsonPath = candidate;
+                            break;
                         }
                     }
                     catch (final Exception ignored)
@@ -558,30 +567,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     }
                 }
 
-                if (companionJsonPath == null)
+                if (companionJsonPath != null)
                 {
-                    String standard = playbookPath;
-                    if (standard.endsWith(".yaml"))
-                    {
-                        standard = standard.substring(0, standard.length() - 5) + ".json";
-                    }
-                    else if (standard.endsWith(".yml"))
-                    {
-                        standard = standard.substring(0, standard.length() - 4) + ".json";
-                    }
-                    companionJsonPath = standard;
-                }
-
-                try (final java.io.InputStream in = manager.read(companionJsonPath))
-                {
-                    if (in != null)
-                    {
-                        resolvedPlaybookPath = companionJsonPath;
-                    }
-                }
-                catch (final Exception e)
-                {
-                    // Fall back to original path
+                    resolvedPlaybookPath = companionJsonPath;
                 }
             }
             else if (this.mode.isLive())
@@ -648,29 +636,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             if (this.mode.isRecording())
             {
-                String recordingPath = playbookPath;
-                if (this.datasetId != null && !this.datasetId.isEmpty())
-                {
-                    if (recordingPath.endsWith(".yaml"))
-                    {
-                        recordingPath = recordingPath.substring(0, recordingPath.length() - 5) + "_" + this.datasetId + ".json";
-                    }
-                    else if (recordingPath.endsWith(".yml"))
-                    {
-                        recordingPath = recordingPath.substring(0, recordingPath.length() - 4) + "_" + this.datasetId + ".json";
-                    }
-                }
-                else
-                {
-                    if (recordingPath.endsWith(".yaml"))
-                    {
-                        recordingPath = recordingPath.substring(0, recordingPath.length() - 5) + ".json";
-                    }
-                    else if (recordingPath.endsWith(".yml"))
-                    {
-                        recordingPath = recordingPath.substring(0, recordingPath.length() - 4) + ".json";
-                    }
-                }
+                final String recordingPath = computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile);
 
                 if (this.mode == org.neodymium.ai.config.ExecutionMode.FORCE_RECORDING)
                 {
@@ -930,5 +896,82 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         {
             return this.delegate.resolveInclude(parentIdentifier, relativePath);
         }
+    }
+
+    private static String extractParentDir(final String path)
+    {
+        if (path == null)
+        {
+            return "";
+        }
+        final int lastSlash = path.lastIndexOf('/');
+        if (lastSlash >= 0)
+        {
+            return path.substring(0, lastSlash + 1);
+        }
+        return "";
+    }
+
+    private static String computeRecordingPath(final String playbookPath, final Class<?> testClass, final Method method, final String datasetId, final String browserProfile)
+    {
+        final String parentDir = extractParentDir(playbookPath);
+        final StringBuilder sb = new StringBuilder();
+        sb.append(parentDir);
+
+        if (testClass != null)
+        {
+            sb.append(testClass.getSimpleName());
+        }
+
+        if (method != null)
+        {
+            if (testClass != null)
+            {
+                sb.append("_");
+            }
+            sb.append(method.getName());
+        }
+
+        if (datasetId != null && !datasetId.isEmpty())
+        {
+            sb.append("_").append(datasetId);
+        }
+
+        if (browserProfile != null && !browserProfile.isEmpty())
+        {
+            sb.append("_").append(browserProfile);
+        }
+
+        sb.append(".json");
+        return sb.toString();
+    }
+
+    private static String computeLegacyRecordingPath(final String playbookPath, final String datasetId)
+    {
+        if (playbookPath == null)
+        {
+            return null;
+        }
+        String path = playbookPath;
+        if (datasetId != null && !datasetId.isEmpty())
+        {
+            if (path.endsWith(".yaml"))
+            {
+                return path.substring(0, path.length() - 5) + "_" + datasetId + ".json";
+            }
+            else if (path.endsWith(".yml"))
+            {
+                return path.substring(0, path.length() - 4) + "_" + datasetId + ".json";
+            }
+        }
+        if (path.endsWith(".yaml"))
+        {
+            return path.substring(0, path.length() - 5) + ".json";
+        }
+        else if (path.endsWith(".yml"))
+        {
+            return path.substring(0, path.length() - 4) + ".json";
+        }
+        return path + ".json";
     }
 }

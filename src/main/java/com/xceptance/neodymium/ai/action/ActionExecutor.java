@@ -519,10 +519,10 @@ public class ActionExecutor {
             return Selenide.$$("head > title");
         }
 
-        // Strategy 1: Try as CSS selector
+        // Strategy 1: Try resolved locator (CSS / Playwright text / XPath)
         try
         {
-            final ElementsCollection elements = Selenide.$$(By.cssSelector(target));
+            final ElementsCollection elements = Selenide.$$(resolveLocator(target));
             if (!elements.isEmpty())
             {
                 logDebug(logErrors, "   🔍 Resolved using Strategy 1: CSS selector [{}]", target);
@@ -726,20 +726,8 @@ public class ActionExecutor {
                         action.getElementDetails()));
     }
 
-    public By resolveLocator(final String target) {
-        if (target.startsWith("/") || target.startsWith("(")) {
-            return By.xpath(target);
-        }
-        if (target.contains("::shadow")) {
-            String[] parts = target.split("::shadow");
-            String shadowTarget = parts[parts.length - 1].trim();
-            String[] shadowHosts = new String[parts.length - 1];
-            for (int i = 0; i < parts.length - 1; i++) {
-                shadowHosts[i] = parts[i].trim();
-            }
-            return Selectors.shadowCss(shadowTarget, shadowHosts);
-        }
-        return By.cssSelector(target);
+    public static By resolveLocator(final String target) {
+        return LocatorResolver.resolveLocator(target);
     }
 
     private boolean isValidXPath(String target) {

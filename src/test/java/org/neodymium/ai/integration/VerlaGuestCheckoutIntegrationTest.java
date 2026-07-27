@@ -25,8 +25,6 @@ import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;

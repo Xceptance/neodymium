@@ -1885,8 +1885,8 @@ public class AiAgent {
                         {
                             final EscalationDetails lastEsc = prevDetails.getEscalations().get(prevDetails.getEscalations().size() - 1);
                             flowContext.append("  └ Execution Outcome: Context escalated from ")
-                                    .append(lastEsc.fromLevel()).append(" to ").append(lastEsc.toLevel())
-                                    .append(" (Reason: ").append(lastEsc.reason()).append(")\n");
+                                    .append(lastEsc.getFromLevel()).append(" to ").append(lastEsc.getToLevel())
+                                    .append(" (Reason: ").append(lastEsc.getReason()).append(")\n");
                         }
                         if (prevDetails.getFailureReason() != null)
                         {
@@ -2019,7 +2019,7 @@ public class AiAgent {
                 splitSteps = List.of();
             }
 
-            final PreStepPesapResult result = new PreStepPesapResult(
+            final PreStepPesapResult pesapRes = new PreStepPesapResult(
                 level, requiresJavaMethods, splitSteps
             );
 
@@ -2027,7 +2027,7 @@ public class AiAgent {
             stepDetails.setPesapPredictedContextLevel(level);
             stepDetails.setPesapRequiresJavaMethods(requiresJavaMethods);
 
-            return result;
+            return pesapRes;
         }
         catch (final Exception e)
         {

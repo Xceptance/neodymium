@@ -61,29 +61,96 @@ public final class AiAgentPrompts
         PROMPT_CACHE.clear();
     }
 
-    private static String getPrompt(final String filename)
+    public static String getPrompt(final String filename)
     {
-        return PROMPT_CACHE.computeIfAbsent(filename, AiAgentPrompts::loadPrompt);
+        return getPrompt(filename, ExecutionEngine.SELENIDE, null);
     }
 
-    private static String loadPrompt(final String filename)
+    public static String getPrompt(final String filename, final ExecutionEngine engine, final String modelName)
     {
-        final String resourcePath = "ai-prompts/" + filename;
+        final ExecutionEngine activeEngine = (engine != null) ? engine : ExecutionEngine.SELENIDE;
+        final String cleanModel = sanitizeModelName(modelName);
+        final String cacheKey = activeEngine.getEngineId() + ":" + cleanModel + ":" + filename;
+
+        return PROMPT_CACHE.computeIfAbsent(cacheKey, k -> loadMultiDimensionalPrompt(filename, activeEngine, cleanModel));
+    }
+
+    private static String sanitizeModelName(final String modelName)
+    {
+        if (modelName == null || modelName.isBlank())
+        {
+            return "default";
+        }
+        return modelName.trim().toLowerCase().replaceAll("[^a-z0-9_\\-]", "-");
+    }
+
+    private static String loadMultiDimensionalPrompt(final String filename, final ExecutionEngine engine, final String cleanModel)
+    {
+        final java.util.List<String> candidatePaths = new java.util.ArrayList<>();
+
+        // 1. Engine + Model specific
+        if (!"default".equals(cleanModel))
+        {
+            candidatePaths.add("ai-prompts/engines/" + engine.getEngineId() + "/models/" + cleanModel + "/" + filename);
+        }
+        // 2. Engine specific
+        candidatePaths.add("ai-prompts/engines/" + engine.getEngineId() + "/" + filename);
+        // 3. Model specific
+        if (!"default".equals(cleanModel))
+        {
+            candidatePaths.add("ai-prompts/models/" + cleanModel + "/" + filename);
+        }
+        // 4. Default fallback
+        candidatePaths.add("ai-prompts/default/" + filename);
+        // 5. Direct root fallback
+        candidatePaths.add("ai-prompts/" + filename);
+
+        for (final String path : candidatePaths)
+        {
+            final String content = tryReadClasspathResource(path);
+            if (content != null)
+            {
+                return applyPromptPlaceholders(content, engine, cleanModel);
+            }
+        }
+
+        throw new RuntimeException("Could not find prompt file on classpath for any candidate path: " + candidatePaths);
+    }
+
+    private static String tryReadClasspathResource(final String resourcePath)
+    {
         try (final InputStream is = AiAgentPrompts.class.getClassLoader().getResourceAsStream(resourcePath))
         {
             if (is != null)
             {
                 return new String(is.readAllBytes(), StandardCharsets.UTF_8);
             }
-            else
-            {
-                throw new RuntimeException("Could not find prompt file on classpath: " + resourcePath);
-            }
         }
         catch (final Exception e)
         {
-            throw new RuntimeException("Failed to load prompt file: " + resourcePath, e);
+            // Ignore and fall through to next candidate
         }
+        return null;
+    }
+
+    private static String applyPromptPlaceholders(final String rawPrompt, final ExecutionEngine engine, final String cleanModel)
+    {
+        if (rawPrompt == null)
+        {
+            return "";
+        }
+        String resolved = rawPrompt;
+
+        if (resolved.contains("{{ENGINE_LOCATOR_RULES}}"))
+        {
+            final String snippet = tryReadClasspathResource("ai-prompts/engines/" + engine.getEngineId() + "/locator-rules.md");
+            resolved = resolved.replace("{{ENGINE_LOCATOR_RULES}}", snippet != null ? snippet.trim() : "");
+        }
+
+        resolved = resolved.replace("{{ENGINE_NAME}}", engine.getDisplayName());
+        resolved = resolved.replace("{{MODEL_NAME}}", cleanModel);
+
+        return resolved;
     }
 
     /**

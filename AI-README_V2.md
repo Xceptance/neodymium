@@ -194,18 +194,19 @@ The `@AiPlaybook` annotation configures the target playbook file for AI test exe
 * **Method Level**: Declaring `@AiPlaybook` on a test method overrides any class-level annotation.
 * **Programmatic Java Tests**: Test classes marked with `@NeodymiumAiTest` that execute steps programmatically via `runPlaybook(session, "...")` do not require `@AiPlaybook`. Replay recordings automatically use standard package-relative path resolution or absolute paths if specified.
 
-### Global Resource Root Redirection & CI/CD Write Safety
+### Multi-Dimensional Companion Recording Filenames
 
-By default, companion recording JSON files generated during `FORCE_RECORDING` runs are written to the compiled output directory (`target/test-classes/`) and synced to the local source resources directory (`src/test/resources/`).
+To prevent recording collisions across different test methods, datasets, or browser profiles referencing the same playbook YAML template, companion JSON recording files are constructed automatically using all active execution dimensions:
 
-In environments where writing to `src/` is prohibited or undesirable (e.g., CI/CD build pipelines, read-only containers, or ephemeral build agents), you can redirect the source recording sync output directory globally using the configuration property:
+$$\text{RecordingPath} = \text{\{DirectoryPath\}} / \text{\{ClassName\}} \_\, \text{\{MethodName\}} [\_ \, \text{\{DataSet\}} ] [\_ \, \text{\{Browser\}}] \, . \text{json}$$
 
-```properties
-# Redirect source recording output to target/ (or another directory) instead of src/test/resources/
-neodymium.ai.playbook.directory.global=target/ai-recordings/
-```
+* **Class Name**: Identifies the test suite class (e.g. `VerlaGuestCheckoutIntegrationTest`).
+* **Method Name**: Guarantees uniqueness for each test method (e.g. `testCheckoutLive`).
+* **Dataset ID**: Appended when parameterized dataset execution is active (e.g. `_perfect`).
+* **Browser Profile**: Appended when `@Browser("...")` annotation is present (e.g. `_Chrome_1500x1000`).
 
-This ensures that recording artifacts are saved safely within build output directories without attempting to mutate read-only source trees.
+**Example Recording Path:**
+`playbooks/integration/VerlaGuestCheckoutIntegrationTest_testCheckoutLive_perfect_Chrome_1500x1000.json`
 
 ---
 
@@ -231,6 +232,73 @@ $$\text{Accessibility Coverage Ratio} = \frac{\text{Interactive Nodes in AXTree}
 # Default is 0.30 (30% coverage). Below this, context is elevated to LEAN.
 neodymium.ai.pesap.axtreeCoverageThreshold=0.30
 ```
+
+---
+
+## 15. Centralized Selenide Locator Resolver (`LocatorResolver`)
+
+To support vendor-neutral prompt outputs and handle custom browser pseudo-selectors without failing W3C CSS parsing engines, Neodymium AI provides a centralized **`LocatorResolver`**:
+
+### Concept & Scope
+* **Selenium/Selenide Exclusive**: `LocatorResolver` is strictly used by the Selenide/Selenium execution layer (`ActionExecutor` and `SelenideElementFinder`) to translate target strings into W3C-compliant `org.openqa.selenium.By` locators.
+* **Native Playwright Bypass**: Native Playwright execution drivers execute raw Playwright selector strings directly in Playwright's native JavaScript engine without routing through `LocatorResolver`.
+
+### Supported Selector Translations
+
+| Target Format | Translation Strategy | Resulting Selenium / Selenide Locator |
+| :--- | :--- | :--- |
+| **`text=Total Paid: $27.58`** | Playwright `text=` prefix | `Selectors.withText("Total Paid: $27.58")` |
+| **`button:has-text('Total Paid')`** | Playwright `:has-text(...)` pseudo-selector | `By.xpath("//button[contains(normalize-space(.), 'Total Paid')]")` |
+| **`span:contains('Shopping Cart')`** | jQuery/Playwright `:contains(...)` | `By.xpath("//span[contains(normalize-space(.), 'Shopping Cart')]")` |
+| **`:text('Checkout')`** | Standalone `:text(...)` | `Selectors.withText("Checkout")` |
+| **`neo-ref=c42`** | Neodymium automation reference ID | `By.cssSelector("[data-neo-ref='c42']")` |
+| **`custom-card ::shadow .btn`** | Explicit Shadow DOM target | `Selectors.shadowCss(".btn", "custom-card")` |
+| **`//button[@id='pay']`** | Standard XPath | `By.xpath("//button[@id='pay']")` |
+| **`button#pay.primary`** | Standard W3C CSS | `By.cssSelector("button#pay.primary")` |
+
+---
+
+## 16. Multi-Dimensional Prompt Resolution Architecture
+
+To optimize prompt engineering across different LLM providers (e.g. Gemini, GPT-4o, Claude 3.5) and target execution engines (e.g. Selenide/Selenium vs. Playwright), Neodymium AI implements **Multi-Dimensional Prompt Resolution** in `AiAgentPrompts`.
+
+### Resolution Hierarchy
+
+When a prompt template (e.g., `system-prompt-rules.md`) is requested for a given `ExecutionEngine` and `Model`, the framework evaluates classpath candidates in the following order (first match wins):
+
+```
+                       Prompt Request: "system-prompt-rules.md"
+                                       │
+                                       ▼
+  1. Engine + Model Specific : ai-prompts/engines/{engine}/models/{model}/system-prompt-rules.md
+                                       │
+                                       ▼
+  2. Engine Specific         : ai-prompts/engines/{engine}/system-prompt-rules.md
+                                       │
+                                       ▼
+  3. Model Specific          : ai-prompts/models/{model}/system-prompt-rules.md
+                                       │
+                                       ▼
+  4. Default Fallback        : ai-prompts/default/system-prompt-rules.md
+                                       │
+                                       ▼
+  5. Direct Root Fallback    : ai-prompts/system-prompt-rules.md
+```
+
+### Plug-and-Play Snippet Substitution vs Full Copies
+
+The framework supports two prompt tuning workflows:
+
+1. **Plug-and-Play Snippet Injection (DRY Default)**:
+   Base prompt templates remain shared across engines and include dynamic placeholders such as `{{ENGINE_LOCATOR_RULES}}`.
+   * **Selenide Target** (`ai-prompts/engines/selenide/locator-rules.md`):
+     > *"Target browser engine is W3C Selenium / Selenide. Generated CSS selectors MUST be valid W3C CSS level 3/4 selectors."*
+   * **Playwright Target** (`ai-prompts/engines/playwright/locator-rules.md`):
+     > *"Target browser engine is native Playwright. You MAY generate native Playwright pseudo-selectors such as `:has-text(...)`, `text=...`, or `:visible`."*
+
+2. **Full Prompt Copy Overrides**:
+   If a specific model or engine requires a fundamentally different prompt structure, a full prompt copy can be placed in `ai-prompts/engines/{engine}/system-prompt-rules.md`, overriding the default prompt entirely.
+
 
 
 
