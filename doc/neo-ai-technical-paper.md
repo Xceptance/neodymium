@@ -156,6 +156,26 @@ Neo AI integrates natural-language compilation, localized self-healing, token-op
 ### 2.1 Zero-Cost Offline Replay via JSON Playbooks
 When executing a natural language test case for the first time, Neo AI operates in **Creation Mode**. The LLM inspects the page DOM, determines locator strategies and action sequences, and compiles them into a structured **JSON Playbook** saved in local project directories (`src/test/resources/ai-playbooks`).
 
+```yaml
+# Multi-Lingual Natural Language Test Scenario (YAML Authoring)
+- step: "Click the checkout button and proceed to payment"        # English
+- step: "Klicke auf 'In den Warenkorb' und prüfe die Gesamtsumme" # German
+- step: "Cliquez sur 'Commander' et vérifiez le montant"          # French
+```
+
+```json
+// Compiled Machine Playbook Step (JSON Artifact)
+{
+  "stepText": "Click the checkout button and proceed to payment",
+  "action": "CLICK",
+  "locators": [
+    { "type": "CSS", "value": "button.btn-checkout" },
+    { "type": "ARIA", "value": "button[name='Proceed to Payment']" }
+  ],
+  "healedContextLevel": "AXTREE"
+}
+```
+
 In subsequent executions (such as regression runs in CI/CD pipelines), Neo AI operates in **Replay Mode**:
 * **Offline Execution**: Replays native WebDriver/Selenide commands directly from the local Playbook file.
 * **Zero Token Cost**: Requires zero LLM API calls during successful replay executions.
@@ -312,8 +332,10 @@ Developing Neo AI provided unique empirical insights into LLM behavior, prompt e
 3. **Model Evolution & Elimination of Hallucinations**:
    * *Early Prototyping Discoveries*: Early framework iterations frequently encountered LLM hallucinations, where models invented non-existent DOM element attributes, proposed unparseable selector syntax, or produced invalid step actions.
    * *Current Deterministic State*: Through strict JSON schema enforcement, PESAP static analysis, and multi-stage defensive parsing (`ModelResponseParser`), Neo AI achieves near 100% output determinism with zero hallucinations during playbook creation and self-healing.
-4. **Cross-Model Vendor Dynamics**:
-   * The primary empirical variance observed during testing occurs when switching between different underlying LLM vendors (e.g., Gemini vs. Claude vs. local open-source models). Different model families display subtle prompt sensitivities and formatting habits, which Neo AI normalizes through defensive response parsing to ensure cross-model playbook portability.
+4. **Cross-Model Vendor Dynamics & Task-Specific Model Routing**:
+   * *Task-Specific Model Routing*: Iteration 5 introduces architectural routing that directs different tasks to specialized models—such as routing heavy visual screenshot analysis to specialized external vision endpoints (VLMs) while executing routine DOM parsing and text reasoning through fast local LLMs or lightweight models.
+   * *Model-Specific Prompt Engineering*: Supports tailored prompt structures per LLM family to account for unique model habits.
+   * *Empirical Behavioral Reality*: Testing demonstrates that **changing models changes agent behavior**. Different LLM families make distinct locator selection choices when presented with complex DOM trees. While `ModelResponseParser` normalizes syntax, seamlessly hot-swapping model providers without prompt adjustments remains an active research area, as models currently require tailored prompt tuning to guarantee identical locator selection choices.
 
 ---
 
@@ -382,3 +404,12 @@ Fundamentally, this model keeps human domain experts **in the loop** during test
 * **Deterministic Reliability**: Machine execution remains anchored to explicit programmatic Java extensions (`JAVA_METHOD`) and local playbook determinism, eliminating LLM hallucinations while automating routine locator maintenance.
 
 Supported by a decoupled state machine engine and the Aura diagnostic platform, Neo AI provides a sustainable, human-centric foundation for enterprise software quality engineering.
+
+---
+
+### Resource Links & Repository References
+
+For framework implementation details, test suite examples, and documentation:
+* **Framework Repository**: [Neodymium Library on GitHub](https://github.com/Xceptance/neodymium-library)
+* **Technical Documentation**: [Neodymium AI Architectural Docs](https://github.com/Xceptance/neodymium-library/tree/master/doc)
+* **Integration Examples**: See sample natural-language YAML scenarios under `src/test/resources/playbooks/`.
