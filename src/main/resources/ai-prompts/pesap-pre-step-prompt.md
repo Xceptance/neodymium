@@ -25,7 +25,7 @@ Return ONLY minified JSON:
        * "Verify the message 'Order placed successfully' is displayed"
        * "Check that the total shows '$42.99'"
        * "The error text 'Invalid email' appears below the input"
-2. Analyze the `[CURRENT]` step exclusively. `[PREVIOUS]`/`[NEXT]` are for context only.
+2. Analyze `[CURRENT]` step in conjunction with `[PREVIOUS]` step execution outcomes. If `[PREVIOUS]` step indicates that context was escalated (e.g., from AXTREE to LEAN, STANDARD, or VISUAL) or failed due to sparse accessibility data, upgrade the predicted context level (`c`) for the `[CURRENT]` step accordingly (e.g. predict `LEAN` or `STANDARD` instead of `AXTREE`). `[NEXT]` steps are for flow context only.
 3. Set "jm" to true ONLY if a custom Java method name (e.g., assertCalculation, validateShippingCost, runPriceCheck) is explicitly identified in the step. Do NOT set to true for natural language descriptions like "verify the calculation" or "check the total".
 4. Step Splitting: Only split a step into "sp" if it contains multiple mutually independent interaction flows.
    - If the step is not split, omit the "sp" field entirely or set it to an empty array `[]`.

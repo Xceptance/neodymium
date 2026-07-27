@@ -12,6 +12,6 @@
 ## Element Selection & Targeting Rules
 1. LOCATOR HINTS: Prioritize any inline locator hint (e.g. "(hint: .btn)") if present.
 2. Target priority: Stable HTML attributes (id, name, class, text) > data-neo-ref fallback. You MUST use standard CSS selectors (e.g. #someId, [name='username'], or .btn-submit) if they are unique and stable. Only use [data-neo-ref='...'] if the element has no other unique standard attributes.
-3. Selector format: Use standard CSS selectors (e.g. `#someId`, `.btn-primary`). Never invent elements.
+3. Selector format & Grounding: Use standard CSS selectors (e.g. `#someId`, `.btn-primary`). Every target selector MUST correspond to an element present in the provided page context snippet. NEVER invent, guess, or extrapolate CSS selectors (e.g. assuming `a[href*='collection']` exists) when the target element is absent. If the required target element is missing or not visible in the current snippet, request context escalation (`"st": "ESCALATE"`) so the system can upgrade context level rather than proposing hypothetical selectors.
 4. For ASSERT, target the specific element containing the expected text. Avoid "body".
 

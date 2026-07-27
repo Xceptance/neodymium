@@ -553,7 +553,7 @@ public class AiAgent {
                 {
                     final Object testInstance = actionExecutor.getTestInstance();
                     final Class<?> testClass = testInstance != null ? testInstance.getClass() : null;
-                    final PreStepPesapResult pesapResult = runPreStepPesap(i, testClass, stepDetails);
+                    final PreStepPesapResult pesapResult = runPreStepPesap(i, testClass, stepDetails, result);
                     if (pesapResult != null && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
                     {
                         LOG.info("✂️ Upfront JIT step split detected: '{}' split into {}", strippedStep, pesapResult.splitSteps());
@@ -1851,7 +1851,7 @@ public class AiAgent {
      * @return the parsed result, or {@code null} if the call failed
      */
     private PreStepPesapResult runPreStepPesap(final int stepIndex, final Class<?> testClass,
-            final StepDetails stepDetails)
+            final StepDetails stepDetails, final AiExecutionResult result)
     {
         if (Boolean.getBoolean("neodymium.ai.offline") || this.currentStepsList == null)
         {
@@ -1876,6 +1876,25 @@ public class AiAgent {
             {
                 final String prev = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex - 1));
                 flowContext.append("[PREVIOUS] Step ").append(stepIndex).append(": ").append(stripAllTags(prev)).append("\n");
+                if (result != null && result.getSteps().size() >= stepIndex)
+                {
+                    final StepDetails prevDetails = result.getSteps().get(stepIndex - 1);
+                    if (prevDetails != null)
+                    {
+                        if (!prevDetails.getEscalations().isEmpty())
+                        {
+                            final EscalationDetails lastEsc = prevDetails.getEscalations().get(prevDetails.getEscalations().size() - 1);
+                            flowContext.append("  └ Execution Outcome: Context escalated from ")
+                                    .append(lastEsc.fromLevel()).append(" to ").append(lastEsc.toLevel())
+                                    .append(" (Reason: ").append(lastEsc.reason()).append(")\n");
+                        }
+                        if (prevDetails.getFailureReason() != null)
+                        {
+                            flowContext.append("  └ Execution Outcome: Step Failed (Reason: ")
+                                    .append(prevDetails.getFailureReason()).append(")\n");
+                        }
+                    }
+                }
             }
             final String current = AiBrowser.resolveTestDataToPrompt(this.currentStepsList.get(stepIndex));
             flowContext.append("[CURRENT]  Step ").append(stepIndex + 1).append(": ").append(stripAllTags(current)).append("\n");
@@ -2030,7 +2049,7 @@ public class AiAgent {
             final StepDetails stepDetails)
     {
         this.currentStepsList = steps;
-        return this.runPreStepPesap(stepIndex, null, stepDetails);
+        return this.runPreStepPesap(stepIndex, null, stepDetails, null);
     }
 
     /**
@@ -2135,7 +2154,7 @@ public class AiAgent {
                 }
                 else if (baseLevel == ContextLevel.AXTREE && !isRecoveryAttempt && Neodymium.aiConfiguration().pesapEnabled())
                 {
-                    pesapResult = runPreStepPesap(stepIndex, testClass, stepDetails);
+                    pesapResult = runPreStepPesap(stepIndex, testClass, stepDetails, result);
                     if (pesapResult != null)
                     {
                         contextLevel = pesapResult.contextLevel();
@@ -2157,6 +2176,22 @@ public class AiAgent {
             if (contextLevel == null)
             {
                 contextLevel = baseLevel;
+            }
+
+            // AXTree Coverage Ratio Floor Check
+            if (contextLevel == ContextLevel.AXTREE || contextLevel == ContextLevel.HINT)
+            {
+                final double threshold = Neodymium.aiConfiguration().pesapAxtreeCoverageThreshold();
+                if (threshold > 0.0)
+                {
+                    final double ratio = pageAnalyzer.getAxtreeCoverageRatio(null);
+                    if (ratio < threshold)
+                    {
+                        LOG.info("    ⚠️ AXTree coverage ratio ({}) is below threshold ({}) on current page. Elevating context level from {} to LEAN.",
+                                String.format("%.2f", ratio), String.format("%.2f", threshold), contextLevel);
+                        contextLevel = ContextLevel.LEAN;
+                    }
+                }
             }
         }
 

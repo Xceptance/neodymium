@@ -59,6 +59,15 @@ public interface AiConfiguration extends Mutable
     @DefaultValue("true")
     public boolean pesapEnabled();
 
+    /**
+     * Threshold ratio (0.0 to 1.0) of AXTree interactive nodes to LEAN DOM interactive elements.
+     * If AXTree coverage ratio is below this threshold, AXTREE context is considered sparse/insufficient,
+     * and PESAP predictions defaulting to AXTREE are elevated to LEAN.
+     */
+    @Key("neodymium.ai.pesap.axtreeCoverageThreshold")
+    @DefaultValue("0.30")
+    public double pesapAxtreeCoverageThreshold();
+
     @Key("neodymium.ai.pesap.classify.enabled")
     @DefaultValue("true")
     public boolean pesapClassifyEnabled();

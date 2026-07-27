@@ -1829,4 +1829,49 @@ public class PageAnalyzer
 
         return sb.toString().replace('\u00a0', ' ').strip().replaceAll("\\s+", " ");
     }
+
+    /**
+     * Calculates the ratio of interactive nodes present in the Accessibility Tree (AXTree)
+     * relative to the interactive elements present in the LEAN DOM.
+     *
+     * @param explicitDriver explicit WebDriver instance override, or null
+     * @return the coverage ratio (0.0 to 1.0+), or 1.0 if ratio cannot be calculated
+     */
+    public double getAxtreeCoverageRatio(final WebDriver explicitDriver)
+    {
+        final WebDriver driver = resolveDriver(explicitDriver);
+        if (!hasActiveWebDriver(driver))
+        {
+            return 1.0;
+        }
+        try
+        {
+            final String axTree = captureAXTreeDOM(driver);
+            if (axTree == null || axTree.isBlank())
+            {
+                return 0.0;
+            }
+            final long axTreeNodes = axTree.lines().filter(l -> !l.isBlank()).count();
+
+            if (driver instanceof final JavascriptExecutor js)
+            {
+                final Long domElements = (Long) js.executeScript(
+                    "return document.querySelectorAll('a, button, input, select, option, textarea, [onclick], [role=\"button\"], [role=\"link\"], [role=\"tab\"], [role=\"menuitem\"]').length;"
+                );
+                if (domElements == null || domElements == 0)
+                {
+                    return 1.0;
+                }
+                final double ratio = (double) axTreeNodes / (double) domElements;
+                LOG.debug("   📊 AXTree coverage ratio: {} (AXTree lines: {}, LEAN DOM elements: {})",
+                        String.format("%.2f", ratio), axTreeNodes, domElements);
+                return ratio;
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.debug("Failed to calculate AXTree coverage ratio: {}", e.getMessage());
+        }
+        return 1.0;
+    }
 }
