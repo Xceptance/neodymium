@@ -328,6 +328,62 @@ public final class SessionData
     {
         final Map<String, String> varMap = new java.util.HashMap<>();
         
+        // 1. Neodymium configuration properties
+        try
+        {
+            if (org.neodymium.util.Neodymium.configuration() instanceof org.aeonbits.owner.Accessible)
+            {
+                final org.aeonbits.owner.Accessible acc = (org.aeonbits.owner.Accessible) org.neodymium.util.Neodymium.configuration();
+                final String urlVal = acc.getProperty("url", null);
+                if (urlVal != null && urlVal.length() >= 3)
+                {
+                    varMap.put("url", urlVal);
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 2. Neodymium test data properties
+        try
+        {
+            if (org.neodymium.util.Neodymium.getData() != null)
+            {
+                for (final Map.Entry<String, String> entry : org.neodymium.util.Neodymium.getData().entrySet())
+                {
+                    if (entry.getValue() != null && entry.getValue().length() >= 3)
+                    {
+                        varMap.put(entry.getKey(), entry.getValue());
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 3. System properties
+        try
+        {
+            final java.util.Properties sysProps = System.getProperties();
+            if (sysProps != null)
+            {
+                for (final String key : sysProps.stringPropertyNames())
+                {
+                    final String val = sysProps.getProperty(key);
+                    if (val != null && val.length() >= 3 && !key.startsWith("java.") && !key.startsWith("sun.") && !key.startsWith("user.") && !key.startsWith("path.") && !key.startsWith("file.") && !key.startsWith("line."))
+                    {
+                        varMap.put(key, val);
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 4. Static dataset layer
         for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
         {
             if (entry.getValue().value() != null)
@@ -336,6 +392,7 @@ public final class SessionData
             }
         }
         
+        // 5. Dynamic data layer
         for (final Map.Entry<String, DataEntry> entry : this.dynamicData.entrySet())
         {
             if (entry.getValue().value() != null)
