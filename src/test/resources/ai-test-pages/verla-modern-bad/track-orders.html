@@ -1,0 +1,23 @@
+<div class="auth-card">
+    <h2 style="font-family: var(--font-family-serif); font-size: 26px; font-weight: 600; text-align: center; margin-bottom: 24px;">${lang_trackOrders}</h2>
+
+    <!-- HTMX order lookup form -->
+    <form hx-post="api/order/lookup" hx-target="#order-lookup-result" hx-swap="innerHTML">
+        <div class="form-group">
+            <label for="orderNumber" class="form-label">${lang_orderNumber}</label>
+            <input type="text" id="orderNumber" name="orderNumber" class="form-control" placeholder="V-102931-DE" required>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 24px;">
+            <label for="zipCode" class="form-label">${lang_zipCode}</label>
+            <input type="text" id="zipCode" name="zipCode" class="form-control" placeholder="12345" required>
+        </div>
+
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 20px;">
+            ${lang_lookup}
+        </button>
+    </form>
+
+    <!-- Result container -->
+    <div id="order-lookup-result" style="margin-top: 20px;"></div>
+</div>

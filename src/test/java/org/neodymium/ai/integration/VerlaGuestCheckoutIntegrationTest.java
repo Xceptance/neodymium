@@ -100,7 +100,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     }
 
     /**
-     * Live mode execution running with all datasets (perfect, normal, bad) defined in the playbook.
+     * Live mode execution running with all datasets (perfect, normal, bad, modern-bad, modern-bad-nowcag) defined in the playbook.
      */
     @Order(3)
     @AiMode(ExecutionMode.FORCE_RECORDING)
@@ -113,7 +113,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     }
 
     /**
-     * Strict replay mode execution running with all datasets (perfect, normal, bad) defined in the playbook.
+     * Strict replay mode execution running with all datasets (perfect, normal, bad, modern-bad, modern-bad-nowcag) defined in the playbook.
      */
     @Order(4)
     @AiMode(ExecutionMode.REPLAY_STRICT)

@@ -651,15 +651,33 @@ public final class EmbeddedHtmlServer
         }
     }
 
+    public static final int DEFAULT_HTTP_PORT = 8542;
+    public static final int DEFAULT_HTTPS_PORT = 8543;
+
     /**
-     * Creates a new embedded HTTP and HTTPS server bound to random free ports.
+     * Creates a new embedded HTTP and HTTPS server bound to the default ports (8542 / 8543)
+     * or ports configured via system properties ('neodymium.ai.http.port' / 'neodymium.ai.https.port').
      * 
      * @throws IOException if the server cannot be bound or created
      */
     public EmbeddedHtmlServer() throws IOException
     {
-        final int httpPort = Integer.getInteger("neodymium.ai.http.port", 0);
-        this.server = HttpServer.create(new InetSocketAddress(httpPort), 0);
+        this(Integer.getInteger("neodymium.ai.http.port", DEFAULT_HTTP_PORT),
+             Integer.getInteger("neodymium.ai.https.port", DEFAULT_HTTPS_PORT));
+    }
+
+    /**
+     * Creates a new embedded HTTP and HTTPS server bound to the specified ports.
+     * Pass 0 to bind to random available free ports.
+     * 
+     * @param httpPort the HTTP port to listen on
+     * @param httpsPort the HTTPS port to listen on
+     * @throws IOException if the server cannot be bound or created
+     */
+    public EmbeddedHtmlServer(final int httpPort, final int httpsPort) throws IOException
+    {
+        final int targetHttpPort = httpPort < 0 ? DEFAULT_HTTP_PORT : httpPort;
+        this.server = HttpServer.create(new InetSocketAddress(targetHttpPort), 0);
         this.port = this.server.getAddress().getPort();
         
         final ResourceHandler resourceHandler = new ResourceHandler();
@@ -669,10 +687,12 @@ public final class EmbeddedHtmlServer
         this.server.createContext("/verla-perfect/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-normal/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-bad/", new LoggingHandler(verlaHandler));
+        this.server.createContext("/verla-modern-bad/", new LoggingHandler(verlaHandler));
+        this.server.createContext("/verla-modern-bad-nowcag/", new LoggingHandler(verlaHandler));
         this.server.setExecutor(Executors.newCachedThreadPool());
 
-        final int httpsPort = Integer.getInteger("neodymium.ai.https.port", 0);
-        this.httpsServer = HttpsServer.create(new InetSocketAddress(httpsPort), 0);
+        final int targetHttpsPort = httpsPort < 0 ? DEFAULT_HTTPS_PORT : httpsPort;
+        this.httpsServer = HttpsServer.create(new InetSocketAddress(targetHttpsPort), 0);
         this.httpsPort = this.httpsServer.getAddress().getPort();
 
         try
@@ -698,6 +718,8 @@ public final class EmbeddedHtmlServer
             this.httpsServer.createContext("/verla-perfect/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-normal/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-bad/", new LoggingHandler(verlaHandler));
+            this.httpsServer.createContext("/verla-modern-bad/", new LoggingHandler(verlaHandler));
+            this.httpsServer.createContext("/verla-modern-bad-nowcag/", new LoggingHandler(verlaHandler));
             this.httpsServer.setExecutor(Executors.newCachedThreadPool());
         }
         catch (final Exception e)
@@ -910,7 +932,7 @@ public final class EmbeddedHtmlServer
                 LOG.info("VerlaHandler request: {} {}", requestMethod, fullPath);
             }
             
-            // Extract the SUT Quality Suffix (perfect, normal, bad)
+            // Extract the SUT Quality Suffix (perfect, normal, bad, modern-bad-wcag, modern-bad)
             final String qualitySuffix;
             if (fullPath.startsWith("/verla-perfect/"))
             {
@@ -923,6 +945,14 @@ public final class EmbeddedHtmlServer
             else if (fullPath.startsWith("/verla-bad/"))
             {
                 qualitySuffix = "bad";
+            }
+            else if (fullPath.startsWith("/verla-modern-bad-nowcag/"))
+            {
+                qualitySuffix = "modern-bad-nowcag";
+            }
+            else if (fullPath.startsWith("/verla-modern-bad/"))
+            {
+                qualitySuffix = "modern-bad";
             }
             else
             {
@@ -1612,9 +1642,9 @@ public final class EmbeddedHtmlServer
             if (user != null)
             {
                 // Perfect vs normal/bad style
-                if ("bad".equals(quality))
+                if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
                 {
-                    model.put("user_nav_status", "<div onclick=\"location.href='/verla-bad/account.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + user.email.split("@")[0] + "</div>");
+                    model.put("user_nav_status", "<div onclick=\"location.href='/verla-" + quality + "/account.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + user.email.split("@")[0] + "</div>");
                 }
                 else
                 {
@@ -1623,9 +1653,9 @@ public final class EmbeddedHtmlServer
             }
             else
             {
-                if ("bad".equals(quality))
+                if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
                 {
-                    model.put("user_nav_status", "<div onclick=\"location.href='/verla-bad/login.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> Login</div>");
+                    model.put("user_nav_status", "<div onclick=\"location.href='/verla-" + quality + "/login.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> Login</div>");
                 }
                 else
                 {
@@ -2086,7 +2116,7 @@ public final class EmbeddedHtmlServer
             for (final Country c : catalogConfig.countries)
             {
                 final String selectedClass = c.code.equals(country.code) ? "selected" : "";
-                if ("bad".equals(quality))
+                if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
                 {
                     countriesList.append("<div class=\"country-item ").append(selectedClass).append("\" style=\"padding:10px;cursor:pointer;\" onclick=\"document.cookie='verla_country=").append(c.code).append(";path=/';location.reload();\">")
                                  .append(c.name).append(" (").append(c.symbol).append(")</div>");
@@ -2111,6 +2141,17 @@ public final class EmbeddedHtmlServer
             LOG.error("Failed to render template page: {}", pageName, e);
             return "500 Internal Template Error";
         }
+    }
+
+    private static String getDynamicId(final String prefix)
+    {
+        final int rand = (int) (Math.random() * 900000) + 100000;
+        return prefix + "-" + rand;
+    }
+
+    private static String getTailwindSoup()
+    {
+        return "flex flex-col min-w-0 break-words bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-4 m-1";
     }
 
     private static String renderProductCard(final Product p, final Country country, final Map<String, String> trans, final String quality)
@@ -2142,7 +2183,7 @@ public final class EmbeddedHtmlServer
         final String localeName = p.names.getOrDefault(country.locale, p.names.get("en"));
         final String pdpLink = "/verla-" + quality + "/p/" + p.slug + ".html";
 
-        // Generate card layout based on perfect/normal/bad rules
+        // Generate card layout based on perfect/normal/bad/modern-bad-wcag/modern-bad rules
         if ("bad".equals(quality))
         {
             return "<div class=\"product-card-bad\" style=\"border:1px solid #ccc;padding:10px;\" id=\"prod-info\">" +
@@ -2154,6 +2195,67 @@ public final class EmbeddedHtmlServer
                    "    <div class=\"product-price-bad\">" + priceHtml + "</div>" +
                    "    <div class=\"add-btn product-quick-add\" style=\"background:#C87A53;color:white;text-align:center;padding:8px;margin-top:8px;cursor:pointer;\" " +
                    "         hx-post=\"api/cart/add?productId=" + p.id + "\" hx-target=\"#cart-btn-wrapper\" hx-swap=\"outerHTML\">Add</div>" +
+                   "  </div>" +
+                   "</div>";
+        }
+        else if ("modern-bad".equals(quality))
+        {
+            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
+            final String cardId = getDynamicId("react-hydrated-card");
+            final String btnId = getDynamicId("v-btn");
+
+            return "<div id=\"" + cardId + "\" class=\"" + getTailwindSoup() + "\">" +
+                   "  <div class=\"w-full flex flex-col justify-between h-full\">" +
+                   "    <div class=\"relative bg-gray-50 rounded-lg p-2 flex items-center justify-center h-44\">" +
+                   "      " + badgeHtml +
+                   "      <a href=\"" + pdpLink + "\" aria-label=\"View details of " + localeName + "\" class=\"w-full h-full flex items-center justify-center\">" +
+                   "        <svg viewBox=\"0 0 100 100\" class=\"w-24 h-24 text-gray-700\">" + p.svgPath + "</svg>" +
+                   "      </a>" +
+                   "    </div>" +
+                   "    <div class=\"mt-3 flex flex-col gap-1\">" +
+                   "      <div class=\"text-sm font-semibold text-gray-900\">" +
+                   "        <a href=\"" + pdpLink + "\">" + localeName + "</a>" +
+                   "      </div>" +
+                   "      <div class=\"text-sm font-medium text-gray-500\">" + priceHtml + "</div>" +
+                   "      <div class=\"mt-2 relative\">" +
+                   "        <button id=\"" + btnId + "\" class=\"product-quick-add w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm transition-colors text-xs uppercase tracking-wider flex items-center justify-center\" " +
+                   "                data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" aria-label=\"Add " + localeName + " to shopping cart\">" +
+                   "          " + trans.getOrDefault("addToCart", "Add to Cart") +
+                   "        </button>" +
+                   "      </div>" +
+                   "    </div>" +
+                   "  </div>" +
+                   "</div>";
+        }
+        else if ("modern-bad-nowcag".equals(quality))
+        {
+            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
+            final String cardId = getDynamicId("v-node");
+            final String wrapId1 = getDynamicId("react-div");
+            final String wrapId2 = getDynamicId("v-inner");
+            final String btnId = getDynamicId("v-btn");
+
+            return "<div id=\"" + cardId + "\" class=\"" + getTailwindSoup() + "\">" +
+                   "  <div id=\"" + wrapId1 + "\" class=\"w-full flex flex-col justify-between h-full\">" +
+                   "    <div id=\"" + wrapId2 + "\" class=\"bg-slate-50 rounded-lg p-2 flex items-center justify-center h-44 cursor-pointer\" onclick=\"location.href='" + pdpLink + "'\">" +
+                   "      <div class=\"w-full h-full flex items-center justify-center\">" +
+                   "        <span class=\"block w-24 h-24\">" +
+                   "          <svg viewBox=\"0 0 100 100\" class=\"w-full h-full text-slate-700\">" + p.svgPath + "</svg>" +
+                   "        </span>" +
+                   "      </div>" +
+                   "    </div>" +
+                   "    <div class=\"mt-3 flex flex-col gap-1\">" +
+                   "      <div class=\"text-sm font-bold text-slate-900 cursor-pointer\" onclick=\"location.href='" + pdpLink + "'\">" +
+                   "        <span><span>" + localeName + "</span></span>" +
+                   "      </div>" +
+                   "      <div class=\"text-xs text-slate-500\"><span>" + priceHtml + "</span></div>" +
+                   "      <div class=\"mt-2 relative\">" +
+                   "        <div id=\"" + btnId + "\" class=\"product-quick-add w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm transition-colors text-xs uppercase tracking-wider flex items-center justify-center cursor-pointer\" " +
+                   "             data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\">" +
+                   "          <span><span>" + trans.getOrDefault("addToCart", "Add to Cart") + "</span></span>" +
+                   "        </div>" +
+                   "      </div>" +
+                   "    </div>" +
                    "  </div>" +
                    "</div>";
         }
@@ -2199,15 +2301,30 @@ public final class EmbeddedHtmlServer
     private static String getCartBadgeWrapperHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
     {
         final int count = cart.items.values().stream().mapToInt(Integer::intValue).sum();
-        final String dropdownHtml;
-        if ("bad".equals(quality))
+        final String dropdownHtml = getCartDropdownHtml(cart, trans, country, quality, showTemp);
+
+        if ("modern-bad".equals(quality))
         {
-            dropdownHtml = "";
+            return "<div id=\"cart-btn-wrapper\" class=\"relative inline-block flex flex-row items-center cursor-pointer\">" +
+                   "  <a href=\"cart.html\" class=\"utility-btn flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium transition-all\" id=\"cart-btn-anchor\" aria-label=\"Shopping Cart with " + count + " items\">" +
+                   "    <svg class=\"icon-svg w-4 h-4\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect x=\"3\" y=\"8\" width=\"18\" height=\"13\" rx=\"2\" ry=\"2\"></rect><path d=\"M16 8a4 4 0 0 0-8 0\"></path></svg>" +
+                   "    <span><span>" + trans.getOrDefault("cart", "Cart") + "</span></span> <span class=\"cart-badge bg-indigo-600 text-white rounded-full px-2 py-0.5 text-xs font-bold\">" + count + "</span>" +
+                   "  </a>" +
+                   dropdownHtml +
+                   "</div>";
         }
-        else
+
+        if ("modern-bad-nowcag".equals(quality))
         {
-            dropdownHtml = getCartDropdownHtml(cart, trans, country, quality, showTemp);
+            return "<div id=\"cart-btn-wrapper\" class=\"relative inline-block flex flex-row items-center cursor-pointer\">" +
+                   "  <div onclick=\"location.href='cart.html'\" class=\"utility-btn flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium transition-all\" id=\"cart-btn-anchor\">" +
+                   "    <svg class=\"icon-svg w-4 h-4\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect x=\"3\" y=\"8\" width=\"18\" height=\"13\" rx=\"2\" ry=\"2\"></rect><path d=\"M16 8a4 4 0 0 0-8 0\"></path></svg>" +
+                   "    <span><span>" + trans.getOrDefault("cart", "Cart") + "</span></span> <span class=\"cart-badge bg-indigo-600 text-white rounded-full px-2 py-0.5 text-xs font-bold\">" + count + "</span>" +
+                   "  </div>" +
+                   dropdownHtml +
+                   "</div>";
         }
+
         return "<div style=\"position: relative; display: inline-block;\" id=\"cart-btn-wrapper\">" +
                "  <a href=\"cart.html\" class=\"utility-btn\" id=\"cart-btn-anchor\">" +
                "    <svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"8\" width=\"18\" height=\"13\" rx=\"2\" ry=\"2\"></rect><path d=\"M16 8a4 4 0 0 0-8 0\"></path></svg> " + trans.getOrDefault("cart", "Cart") + " <span class=\"cart-badge\">" + count + "</span>" +
@@ -2423,11 +2540,22 @@ public final class EmbeddedHtmlServer
           .append("        <span>").append(trans.getOrDefault("total", "Total")).append("</span>")
           .append("        <span>").append(formatPrice(total, country)).append("</span>")
           .append("      </div>")
-          .append("    </div>")
-          .append("    <a href=\"checkout.html\" id=\"checkout-btn\" class=\"btn-primary\" style=\"display: block; text-align: center; margin-top: 24px; padding: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 12px;\">")
-          .append("      ").append(trans.getOrDefault("checkout", "Checkout"))
-          .append("    </a>")
-          .append("  </div>")
+          .append("    </div>");
+
+        if ("modern-bad-nowcag".equals(quality))
+        {
+            sb.append("    <div onclick=\"location.href='checkout.html'\" id=\"checkout-btn\" class=\"btn-primary cursor-pointer\" style=\"display: block; text-align: center; margin-top: 24px; padding: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 12px;\">")
+              .append("      <span><span>").append(trans.getOrDefault("checkout", "Checkout")).append("</span></span>")
+              .append("    </div>");
+        }
+        else
+        {
+            sb.append("    <a href=\"checkout.html\" id=\"checkout-btn\" class=\"btn-primary\" style=\"display: block; text-align: center; margin-top: 24px; padding: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 12px;\">")
+              .append("      ").append(trans.getOrDefault("checkout", "Checkout"))
+              .append("    </a>");
+        }
+
+        sb.append("  </div>")
           .append("</div>")
           .append("</div>");
 
@@ -2761,20 +2889,24 @@ public final class EmbeddedHtmlServer
             System.out.println("    - Dashboard:            http://localhost:" + server.getPort() + "/AuraGlanceTest/dashboard/index.html");
             System.out.println("    - Accessibility:        http://localhost:" + server.getPort() + "/AuraGlanceTest/a11y/index.html");
             System.out.println("    - React SPA:            http://localhost:" + server.getPort() + "/AuraGlanceTest/spa/index.html");
-            System.out.println("    - VÉRLA Perfect Store:  http://localhost:" + server.getPort() + "/verla-perfect/index.html");
-            System.out.println("    - VÉRLA Normal Store:   http://localhost:" + server.getPort() + "/verla-normal/index.html");
-            System.out.println("    - VÉRLA Bad Store:      http://localhost:" + server.getPort() + "/verla-bad/index.html");
+            System.out.println("    - VÉRLA Perfect Store:      http://localhost:" + server.getPort() + "/verla-perfect/index.html");
+            System.out.println("    - VÉRLA Normal Store:       http://localhost:" + server.getPort() + "/verla-normal/index.html");
+            System.out.println("    - VÉRLA Bad Store:          http://localhost:" + server.getPort() + "/verla-bad/index.html");
+            System.out.println("    - VÉRLA Modern Bad (WCAG):  http://localhost:" + server.getPort() + "/verla-modern-bad/index.html");
+            System.out.println("    - VÉRLA Modern Bad (No WCAG): http://localhost:" + server.getPort() + "/verla-modern-bad-nowcag/index.html");
             System.out.println();
             System.out.println("  [HTTPS Secure Contexts]");
-            System.out.println("    - Starter Hub Portal:   https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/index.html");
-            System.out.println("    - Shop Home:            https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/shop/index.html");
-            System.out.println("    - Forms Demo:           https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/shop/forms.html");
-            System.out.println("    - Dashboard:            https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/dashboard/index.html");
-            System.out.println("    - Accessibility:        https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/a11y/index.html");
-            System.out.println("    - React SPA:            https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/spa/index.html");
-            System.out.println("    - VÉRLA Perfect Store:  https://localhost:" + server.getHttpsPort() + "/verla-perfect/index.html");
-            System.out.println("    - VÉRLA Normal Store:   https://localhost:" + server.getHttpsPort() + "/verla-normal/index.html");
-            System.out.println("    - VÉRLA Bad Store:      https://localhost:" + server.getHttpsPort() + "/verla-bad/index.html");
+            System.out.println("    - Starter Hub Portal:       https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/index.html");
+            System.out.println("    - Shop Home:                https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/shop/index.html");
+            System.out.println("    - Forms Demo:               https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/shop/forms.html");
+            System.out.println("    - Dashboard:                https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/dashboard/index.html");
+            System.out.println("    - Accessibility:            https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/a11y/index.html");
+            System.out.println("    - React SPA:                https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/spa/index.html");
+            System.out.println("    - VÉRLA Perfect Store:      https://localhost:" + server.getHttpsPort() + "/verla-perfect/index.html");
+            System.out.println("    - VÉRLA Normal Store:       https://localhost:" + server.getHttpsPort() + "/verla-normal/index.html");
+            System.out.println("    - VÉRLA Bad Store:          https://localhost:" + server.getHttpsPort() + "/verla-bad/index.html");
+            System.out.println("    - VÉRLA Modern Bad (WCAG):  https://localhost:" + server.getHttpsPort() + "/verla-modern-bad/index.html");
+            System.out.println("    - VÉRLA Modern Bad (No WCAG): https://localhost:" + server.getHttpsPort() + "/verla-modern-bad-nowcag/index.html");
             System.out.println();
             System.out.println("  NOTE: For HTTPS, you will get a self-signed certificate warning.");
             System.out.println("        You can safely bypass this or run with Chrome's '--ignore-certificate-errors' flag.");

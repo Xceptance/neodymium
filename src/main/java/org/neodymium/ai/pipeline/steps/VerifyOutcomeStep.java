@@ -114,8 +114,11 @@ public final class VerifyOutcomeStep implements PipelineStep
 
             if (LOGGER.isTraceEnabled())
             {
-                LOGGER.trace("System Prompt:\n{}", system);
-                LOGGER.trace("User Prompt:\n{}", user);
+                LOGGER.trace("┌─ [Verification System Prompt] ───────────────────────────────────────────");
+                LOGGER.trace("{}", system);
+                LOGGER.trace("├─ [Verification User Prompt] ─────────────────────────────────────────────");
+                LOGGER.trace("{}", user);
+                LOGGER.trace("└──────────────────────────────────────────────────────────────────────────");
             }
 
             // 6. Gather visual image attachments from initial and final SUT states for multimodal LLM comparison
@@ -160,7 +163,9 @@ public final class VerifyOutcomeStep implements PipelineStep
             LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
             if (LOGGER.isTraceEnabled())
             {
-                LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
+                LOGGER.trace("┌─ [Verification Raw Response] ─────────────────────────────────────────────");
+                LOGGER.trace("{}", CallLlmStep.formatJsonForLogging(response.content()));
+                LOGGER.trace("└──────────────────────────────────────────────────────────────────────────");
             }
 
             // 8. Track and accumulate token usage metrics specifically for verification calls
@@ -200,19 +205,55 @@ public final class VerifyOutcomeStep implements PipelineStep
                 if (!result.passed())
                 {
                     @SuppressWarnings("unchecked")
-                    final List<String> warnings = (List<String>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
-                    final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), step.getInstruction()) : "Unknown Step";
-                    final String combinedReason = String.format("Action Check: %s | Visual Check: %s", result.actionReasoning(), result.visualReasoning());
-                    warnings.add(String.format("Step: %s. Reason: %s", stepStr, combinedReason));
-                    LOGGER.warn("   ⚠️ Semantic outcome verification FAILED for step: {}", stepStr);
-                    LOGGER.warn("   ⚠️ Reason: {}", combinedReason);
+                    final List<Object> warnings = (List<Object>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<Object>());
+                    
+                    final String stepLoc = step != null ? String.format("%s:%d", step.getSourceFile(), step.getLineNumber()) : "Unknown Location";
+                    final String instruction = step != null ? step.getInstruction() : "";
+                    final String summary = result.getOverallVerdict() != null ? result.getOverallVerdict().summary() : "";
+
+                    String intentScore = "FAIL";
+                    String intentAnalysis = "";
+                    String visualScore = "FAIL";
+                    String visualAnalysis = "";
+                    String errorScore = "PASS";
+                    String errorAnalysis = "";
+
+                    if (result.getRubrics() != null)
+                    {
+                        final VerificationResult.Rubrics rubrics = result.getRubrics();
+                        if (rubrics.intentMatch() != null)
+                        {
+                            intentScore = rubrics.intentMatch().score();
+                            intentAnalysis = rubrics.intentMatch().analysis();
+                        }
+                        if (rubrics.visualDelta() != null)
+                        {
+                            visualScore = rubrics.visualDelta().score();
+                            visualAnalysis = rubrics.visualDelta().analysis();
+                        }
+                        if (rubrics.absenceOfErrors() != null)
+                        {
+                            errorScore = rubrics.absenceOfErrors().score();
+                            errorAnalysis = rubrics.absenceOfErrors().analysis();
+                        }
+                    }
+
+                    final org.neodymium.ai.prompt.VerificationIssue issue = new org.neodymium.ai.prompt.VerificationIssue(
+                        stepLoc, instruction, summary,
+                        intentScore, intentAnalysis,
+                        visualScore, visualAnalysis,
+                        errorScore, errorAnalysis,
+                        null
+                    );
+                    warnings.add(issue);
+                    LOGGER.warn("   ⚠️ Semantic outcome verification FAILED for step {}: \"{}\"", stepLoc, instruction);
                 }
             }
             catch (final Exception e)
             {
                 // Soft-handle parsing errors without failing the whole test pipeline
                 @SuppressWarnings("unchecked")
-                final List<String> warnings = (List<String>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
+                final List<Object> warnings = (List<Object>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<Object>());
                 final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), step.getInstruction()) : "Unknown Step";
                 warnings.add(String.format("Step: %s. Parse error: %s", stepStr, e.getMessage()));
                 LOGGER.warn("   ⚠️ Semantic outcome verification response parsing FAILED for step: {}", stepStr, e);

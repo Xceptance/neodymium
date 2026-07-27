@@ -1,0 +1,78 @@
+<div class="plp-container">
+    <!-- Sidebar Refinements -->
+    <aside class="plp-sidebar">
+        <h3 style="font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px; font-weight: 600;">${lang_refinements}</h3>
+        
+        <!-- Category refinement filters -->
+        <div style="margin-bottom: 8px;">
+            <h4 style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-secondary); margin-bottom: 12px; font-weight: 600;">${lang_categories}</h4>
+            <ul style="list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 14px;">
+                <li><a href="plp.html" style="color: ${all_active_color}; font-weight: ${all_active_weight};">${lang_all}</a></li>
+                <li><a href="c/tops.html" style="color: ${tops_active_color}; font-weight: ${tops_active_weight};">${lang_tops}</a></li>
+                <li><a href="c/bottoms.html" style="color: ${bottoms_active_color}; font-weight: ${bottoms_active_weight};">${lang_bottoms}</a></li>
+                <li><a href="c/outerwear.html" style="color: ${outerwear_active_color}; font-weight: ${outerwear_active_weight};">${lang_outerwear}</a></li>
+                <li><a href="c/footwear.html" style="color: ${footwear_active_color}; font-weight: ${footwear_active_weight};">${lang_footwear}</a></li>
+                <li><a href="c/accessories.html" style="color: ${accessories_active_color}; font-weight: ${accessories_active_weight};">${lang_accessories}</a></li>
+            </ul>
+        </div>
+
+        <form id="refinement-form" hx-get="${filter_url}" hx-target="#plp-product-grid" hx-trigger="change" hx-include="#sort-select" style="margin-top: 24px;">
+            <!-- Color Refinement -->
+            <div style="margin-bottom: 24px; border-top: 1px solid var(--color-border); padding-top: 16px;">
+                <h4 style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-secondary); margin-bottom: 12px; font-weight: 600;">Color</h4>
+                <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="color" value="off-white" ${color_off_white_checked}> Off-White</label></li>
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="color" value="charcoal" ${color_charcoal_checked}> Charcoal</label></li>
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="color" value="olive" ${color_olive_checked}> Olive</label></li>
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="color" value="sand" ${color_sand_checked}> Sand</label></li>
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="color" value="navy" ${color_navy_checked}> Navy</label></li>
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="color" value="taupe" ${color_taupe_checked}> Taupe</label></li>
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="color" value="sage" ${color_sage_checked}> Sage</label></li>
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="color" value="terracotta" ${color_terracotta_checked}> Terracotta</label></li>
+                </ul>
+            </div>
+
+            <!-- Price Refinement -->
+            <div style="margin-bottom: 24px; border-top: 1px solid var(--color-border); padding-top: 16px;">
+                <h4 style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-secondary); margin-bottom: 12px; font-weight: 600;">${lang_price}</h4>
+                <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="price" value="0-50" ${price_0_50_checked}> ${lang_under50}</label></li>
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="price" value="50-100" ${price_50_100_checked}> ${lang_range50to100}</label></li>
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="price" value="100-200" ${price_100_200_checked}> ${lang_over100}</label></li>
+                </ul>
+            </div>
+
+            <!-- Sale Refinement -->
+            <div style="margin-bottom: 24px; border-top: 1px solid var(--color-border); padding-top: 16px;">
+                <h4 style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-secondary); margin-bottom: 12px; font-weight: 600;">Offer</h4>
+                <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+                    <li><label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" name="sale" value="true" ${sale_checked}> On Sale</label></li>
+                </ul>
+            </div>
+        </form>
+    </aside>
+
+    <!-- Product Grid Listing -->
+    <section class="plp-main">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+            <h2 style="font-family: var(--font-family-serif); font-size: 28px; font-weight: 600; margin: 0;">${plp_heading}</h2>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <span style="font-size: 13px; font-family: var(--font-family-sans); font-weight: 400; color: var(--color-text-secondary);" id="product-count-display">${total_products_count} ${lang_products}</span>
+                <!-- Sorting filter (HTMX dynamic swap in upper right) -->
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label for="sort-select" style="font-size: 13px; color: var(--color-text-secondary); white-space: nowrap;">${lang_sort}:</label>
+                    <select name="sort" id="sort-select" style="padding: 8px 16px; border: 1px solid var(--color-border); border-radius: var(--border-radius); background: var(--color-bg-primary); font-size: 13px; outline: none; cursor: pointer;"
+                            hx-get="${filter_url}" hx-target="#plp-product-grid" hx-include="#refinement-form, #sort-select">
+                        <option value="default" ${sort_default_selected}>Default</option>
+                        <option value="price-asc" ${sort_asc_selected}>${lang_priceLowHigh}</option>
+                        <option value="price-desc" ${sort_desc_selected}>${lang_priceHighLow}</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div id="plp-product-grid" class="products-grid">
+            ${plp_products}
+        </div>
+    </section>
+</div>

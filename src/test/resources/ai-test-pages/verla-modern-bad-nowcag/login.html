@@ -1,0 +1,28 @@
+<div id="login-wrapper" class="auth-card">
+    <h2 style="font-family: var(--font-family-serif); font-size: 26px; font-weight: 600; text-align: center; margin-bottom: 24px;">${lang_login}</h2>
+    
+    <!-- Inline login error display -->
+    <div class="error-message" style="margin-bottom: 16px; text-align: center; font-weight: 600;">${auth_error}</div>
+
+    <form hx-post="api/auth/login" hx-target="#login-wrapper" hx-swap="outerHTML">
+        <div class="form-group">
+            <label for="email" class="form-label">${lang_email}</label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="johndoe@example.com" required value="${input_email}">
+            <div class="error-message">${err_email}</div>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 24px;">
+            <label for="password" class="form-label">${lang_password}</label>
+            <input type="password" id="password" name="password" class="form-control" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" required>
+            <div class="error-message">${err_password}</div>
+        </div>
+
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 20px;">
+            ${lang_login}
+        </button>
+
+        <p style="text-align: center; font-size: 13px; color: var(--color-text-secondary);">
+            Don't have an account? <a href="register.html" style="color: var(--color-accent); font-weight: 600;">${lang_register}</a>
+        </p>
+    </form>
+</div>

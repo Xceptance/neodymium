@@ -317,26 +317,66 @@ public final class StateMachineRunner
             String.format("%,d", totalOut));
         LOGGER.debug("╚════════════════════════════════════════════════════════════════════════════════════");
         @SuppressWarnings("unchecked")
-        final List<String> warnings = (List<String>) context.getTransientData().get("verificationWarnings");
+        final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
         if (warnings != null && !warnings.isEmpty())
         {
-            LOGGER.warn("⚠️ Semantic Verification Warnings/Failures ({} issue(s)):", warnings.size());
-            for (final String warn : warnings)
+            LOGGER.warn("════════════════════════════════════════════════════════════════════════════════");
+            LOGGER.warn("⚠️ Semantic Verification Warnings/Failures ({} issue(s) detected):", warnings.size());
+            LOGGER.warn("════════════════════════════════════════════════════════════════════════════════");
+
+            for (int i = 0; i < warnings.size(); i++)
             {
-                if (warn.contains(" | "))
+                final Object warnObj = warnings.get(i);
+                final int issueNum = i + 1;
+
+                if (warnObj instanceof org.neodymium.ai.prompt.VerificationIssue issue)
                 {
-                    final String[] parts = warn.split(" \\| ");
-                    LOGGER.warn("  - {}", parts[0]);
-                    for (int i = 1; i < parts.length; i++)
+                    LOGGER.warn("  📌 [Issue {}/{}] Step {}", issueNum, warnings.size(), issue.stepLocation());
+                    if (issue.instruction() != null && !issue.instruction().isBlank())
                     {
-                        LOGGER.warn("      • {}", parts[i]);
+                        LOGGER.warn("     Instruction: \"{}\"", issue.instruction());
+                    }
+                    if (issue.summary() != null && !issue.summary().isBlank())
+                    {
+                        LOGGER.warn("     Summary:     {}", issue.summary());
+                    }
+                    if (issue.intentAnalysis() != null && !issue.intentAnalysis().isBlank())
+                    {
+                        LOGGER.warn("     • Intent Match:   [{}] {}", issue.intentScore(), issue.intentAnalysis());
+                    }
+                    if (issue.visualAnalysis() != null && !issue.visualAnalysis().isBlank())
+                    {
+                        LOGGER.warn("     • Visual Delta:   [{}] {}", issue.visualScore(), issue.visualAnalysis());
+                    }
+                    if (issue.errorAnalysis() != null && !issue.errorAnalysis().isBlank())
+                    {
+                        LOGGER.warn("     • Error Check:    [{}] {}", issue.errorScore(), issue.errorAnalysis());
                     }
                 }
-                else
+                else if (warnObj != null)
                 {
-                    LOGGER.warn("  - {}", warn);
+                    final String warnStr = warnObj.toString();
+                    if (warnStr.contains(" | "))
+                    {
+                        final String[] parts = warnStr.split(" \\| ");
+                        LOGGER.warn("  📌 [Issue {}/{}] {}", issueNum, warnings.size(), parts[0]);
+                        for (int p = 1; p < parts.length; p++)
+                        {
+                            LOGGER.warn("     • {}", parts[p]);
+                        }
+                    }
+                    else
+                    {
+                        LOGGER.warn("  📌 [Issue {}/{}] {}", issueNum, warnings.size(), warnStr);
+                    }
+                }
+
+                if (i < warnings.size() - 1)
+                {
+                    LOGGER.warn("");
                 }
             }
+            LOGGER.warn("════════════════════════════════════════════════════════════════════════════════");
         }
     }
 

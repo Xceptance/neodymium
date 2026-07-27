@@ -651,15 +651,33 @@ public final class EmbeddedHtmlServer
         }
     }
 
+    public static final int DEFAULT_HTTP_PORT = 8542;
+    public static final int DEFAULT_HTTPS_PORT = 8543;
+
     /**
-     * Creates a new embedded HTTP and HTTPS server bound to random free ports.
+     * Creates a new embedded HTTP and HTTPS server bound to the default ports (8542 / 8543)
+     * or ports configured via system properties ('neodymium.ai.http.port' / 'neodymium.ai.https.port').
      * 
      * @throws IOException if the server cannot be bound or created
      */
     public EmbeddedHtmlServer() throws IOException
     {
-        final int httpPort = Integer.getInteger("neodymium.ai.http.port", 0);
-        this.server = HttpServer.create(new InetSocketAddress(httpPort), 0);
+        this(Integer.getInteger("neodymium.ai.http.port", DEFAULT_HTTP_PORT),
+             Integer.getInteger("neodymium.ai.https.port", DEFAULT_HTTPS_PORT));
+    }
+
+    /**
+     * Creates a new embedded HTTP and HTTPS server bound to the specified ports.
+     * Pass 0 to bind to random available free ports.
+     * 
+     * @param httpPort the HTTP port to listen on
+     * @param httpsPort the HTTPS port to listen on
+     * @throws IOException if the server cannot be bound or created
+     */
+    public EmbeddedHtmlServer(final int httpPort, final int httpsPort) throws IOException
+    {
+        final int targetHttpPort = httpPort < 0 ? DEFAULT_HTTP_PORT : httpPort;
+        this.server = HttpServer.create(new InetSocketAddress(targetHttpPort), 0);
         this.port = this.server.getAddress().getPort();
         
         final ResourceHandler resourceHandler = new ResourceHandler();
@@ -671,8 +689,8 @@ public final class EmbeddedHtmlServer
         this.server.createContext("/verla-bad/", new LoggingHandler(verlaHandler));
         this.server.setExecutor(Executors.newCachedThreadPool());
 
-        final int httpsPort = Integer.getInteger("neodymium.ai.https.port", 0);
-        this.httpsServer = HttpsServer.create(new InetSocketAddress(httpsPort), 0);
+        final int targetHttpsPort = httpsPort < 0 ? DEFAULT_HTTPS_PORT : httpsPort;
+        this.httpsServer = HttpsServer.create(new InetSocketAddress(targetHttpsPort), 0);
         this.httpsPort = this.httpsServer.getAddress().getPort();
 
         try
@@ -2199,15 +2217,7 @@ public final class EmbeddedHtmlServer
     private static String getCartBadgeWrapperHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
     {
         final int count = cart.items.values().stream().mapToInt(Integer::intValue).sum();
-        final String dropdownHtml;
-        if ("bad".equals(quality))
-        {
-            dropdownHtml = "";
-        }
-        else
-        {
-            dropdownHtml = getCartDropdownHtml(cart, trans, country, quality, showTemp);
-        }
+        final String dropdownHtml = getCartDropdownHtml(cart, trans, country, quality, showTemp);
         return "<div style=\"position: relative; display: inline-block;\" id=\"cart-btn-wrapper\">" +
                "  <a href=\"cart.html\" class=\"utility-btn\" id=\"cart-btn-anchor\">" +
                "    <svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"8\" width=\"18\" height=\"13\" rx=\"2\" ry=\"2\"></rect><path d=\"M16 8a4 4 0 0 0-8 0\"></path></svg> " + trans.getOrDefault("cart", "Cart") + " <span class=\"cart-badge\">" + count + "</span>" +
