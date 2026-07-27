@@ -11,11 +11,11 @@
 > [!NOTE]
 > **Open Source Research Commitment**: This session is strictly focused on open engineering research, architectural discoveries, and advancing quality engineering standards. Neo AI is developed as a free, community-accessible open-source framework (`GNU AGPLv3 / MIT`). Our goal is sharing empirical learnings to help the software testing ecosystem evaluate and understand AI-driven test automation effectively.
 
-Software test automation has reached a critical inflection point. For decades, teams relied on code-based frameworks (Selenium, Playwright, Cypress, Selenide) or BDD tools (Cucumber). While fast in execution, all traditional tools share a common bottleneck: **unforgiving reliance on explicit DOM locators** (CSS, XPath, IDs) and **strict, rigid framework syntax**. In modern Single-Page Applications (React, Next.js, Vue, Angular), component hydration, generated utility classes, and layout shifts across deployments regularly break locators, forcing QA engineers to spend significant effort repairing brittle step definitions or begging developers for custom `data-testid` attributes.
+Historically, software test automation relied on code-based frameworks (Selenium, Playwright, Cypress, Selenide) or BDD tools (Cucumber). While fast in execution, traditional approaches share a primary operational bottleneck: **reliance on handwritten DOM locators** (CSS, XPath, IDs) and **explicit framework syntax**. In modern Single-Page Applications (React, Next.js, Vue, Angular), component hydration, generated utility classes, and layout shifts across deployments regularly alter locators, requiring engineers to update brittle step definitions or request custom `data-testid` attributes.
 
-Recent AI approaches—such as live-LLM browser wrappers—attempt to solve locator fragility by querying LLMs live on *every single test step*. However, querying cloud APIs at runtime introduces steep monthly token bills, 10x CI/CD execution latency, external API dependencies, and validation hallucinations during financial or arithmetic checks.
+Recent AI approaches—such as live-LLM browser drivers—address locator flexibility by querying an LLM live on every test step. However, querying LLMs at runtime introduces recurring API token costs, increased execution latency (often 10x slower than native drivers), external API dependencies, and potential non-determinism during exact arithmetic or business logic checks.
 
-**Neo AI** (Neodymium Aura AI) solves this dilemma through **Intent Compilation into File-Based Playbooks with Zero-Cost Offline Replay**:
+**Neo AI** (Neodymium Aura AI) addresses these operational trade-offs through **Intent Compilation into File-Based Playbooks with Zero-Cost Offline Replay**:
 
 ```
 +-----------------------------------------------------------------------------------------------------------------------------+

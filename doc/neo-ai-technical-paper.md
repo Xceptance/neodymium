@@ -8,11 +8,11 @@
 
 ## Executive Summary
 
-Historically, web test automation operated by driving browser protocols directly against the Document Object Model (DOM). While code-based frameworks (like Selenium or Playwright) brought execution speed and BDD tools (like Cucumber) offered business-readable specs, traditional approaches shared fundamental operational bottlenecks: **reliance on handwritten DOM selectors** and **strict, rigid framework syntax**.
+Historically, web test automation operated by driving browser protocols directly against the Document Object Model (DOM). While code-based frameworks (like Selenium or Playwright) brought execution speed and BDD tools (like Cucumber) offered business-readable specs, traditional approaches shared primary operational bottlenecks: **reliance on handwritten DOM selectors** and **explicit framework syntax**.
 
-As web development evolved toward modern Single-Page Applications (React, Next.js, Vue, Angular), DOM structures became increasingly dynamic. Component hydration, generated class names, and layout shifts across deployments routinely broke existing locators. QA teams frequently had to spend ongoing effort repairing brittle tests and asking developers to add custom test attributes (such as `data-testid` or `data-automation`) or semantic markers just to keep automation suites passing.
+As web development evolved toward modern Single-Page Applications (React, Next.js, Vue, Angular), DOM structures became increasingly dynamic. Component hydration, generated class names, and layout shifts across deployments regularly altered existing locators. QA teams frequently spent ongoing effort updating locators or requesting that developers add custom test attributes (such as `data-testid` or `data-automation`) or semantic markers to production markup.
 
-Artificial intelligence opens up the opportunity to re-imagine this model by replacing fragile DOM queries with intent-driven automation. However, early AI approaches—such as live-LLM browser drivers—query cloud LLMs on every execution step. This introduces recurring API token costs, high CI/CD execution latency (often 10x slower than native drivers), external API dependencies, and hallucination risks during exact arithmetic or business logic checks.
+Artificial intelligence provides an alternative model by replacing explicit DOM queries with intent-driven automation. However, early AI approaches—such as live-LLM browser drivers—query LLMs on every execution step. This introduces recurring API token costs, increased CI/CD execution latency (often 10x slower than native drivers), external API dependencies, and potential non-determinism during exact arithmetic or business logic checks.
 
 **Neo AI** (Neodymium Aura AI) addresses these challenges through **Native Language Automation with Zero-Cost Offline Replay**:
 
