@@ -91,3 +91,14 @@ Natural language steps often require complex test data. Instead of hardcoding ed
     Verify that the validation error 'Invalid email format' is visible.
   ```
 * **Execution:** The agent detects the semantic request for dynamic data, asks the LLM (or a local generator) to generate mutated synthetic strings designed to trigger validation rules, and injects them dynamically during SUT execution.
+
+---
+
+### 8. `@AiPlaybook` Annotation & Playbook Recording Path Architecture
+The current `@AiPlaybook` annotation handles basic YAML playbook loading and deterministic replay file binding (via `recordingMethod` and `recordingFileName`). However, as test suites scale, managing companion recording paths across multiple execution environments, datasets, and cross-class scenarios requires a dedicated architecture review.
+* **Key Areas to Revisit & Explore:**
+  * **Recording Directory Scoping:** Allow configuring custom output directories for recorded companion JSON files (e.g., separating integration baseline recordings from staging/prod baselines via annotation or properties).
+  * **First-Class Cross-Class Replay Reference:** Support referencing recordings from different test classes directly via annotation (e.g., `recordingClass = LoginTest.class, recordingMethod = "testLogin"`).
+  * **Explicit Shared Recording Registries:** Create a central registry/catalog for shared test workflows (e.g. login, guest checkout setup) where multiple test classes can bind to a single canonical baseline recording without duplicating JSON companion files.
+  * **Annotation Syntax Streamlining:** Evaluate combining `@AiPlaybook`, `@AiMode`, and `@AiDataSet` into unified meta-annotations or composable test annotations to reduce boilerplate on test methods.
+
