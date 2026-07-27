@@ -16,7 +16,7 @@ Artificial intelligence provides an alternative model by replacing explicit DOM 
 
 **Neo AI** (Neodymium Aura AI) addresses these challenges through **Native Language Automation with Zero-Cost Offline Replay**:
 
-* **Natural-Language Authoring**: Engineers and domain experts author test cases using natural language instructions in any spoken language (English, German, French, Spanish, or mixed steps) formatted in YAML—without managing Gherkin glue code or explicit DOM selectors.
+* **Natural-Language Authoring**: Engineers and domain experts author test cases using natural language instructions in any spoken language (e.g., English, German, French, Spanish, or mixed steps) formatted in YAML—without managing Gherkin glue code or explicit DOM selectors.
 * **Dynamic UI Translation**: The underlying LLM dynamically translates element descriptions and maps natural-language intent across localized UI variants on the fly, simplifying test data for multi-region applications.
 * **Deterministic JSON Playbooks**: On initial execution (Creation Mode), Neo AI compiles steps into file-based JSON Playbooks stored locally on disk.
 * **Zero-Cost Offline Replay**: In CI/CD regression runs, Neo AI replays playbooks directly via native browser drivers offline at native speeds with zero token consumption.
@@ -50,7 +50,7 @@ Software test automation has evolved through multiple historical phases, moving 
 +-----------------------------------------------------------------------------------------------------------------------------+
 |                                                    THE NEO AI SOLUTION                                                      |
 +-----------------------------------------------------------------------------------------------------------------------------+
-|  [+] Multi-Lingual Natural Authoring (English, German, French, Spanish, or mixed steps in YAML format)                      |
+|  [+] Multi-Lingual Natural Authoring (e.g., English, German, French, Spanish, or mixed steps in YAML format)                |
 |  [+] On-The-Fly Dynamic UI Translation (LLM dynamically maps natural steps across localized UI variants)                    |
 |  [+] Zero-Cost Offline Replay (100% Offline in CI/CD via file-based JSON Playbooks)                                         |
 |  [+] Local Self-Healing (LLM heals locators in local playbook files when UI breaks)                                         |
@@ -101,7 +101,7 @@ Artificial intelligence introduced six fundamental architectural paradigms to we
 
 Neo AI was designed to fulfill five core architectural requirements, laying the ground rules for the platform implementation mechanisms detailed in Section 2:
 
-* **Multi-Lingual Natural-Language Test Authoring**: Non-programmers and domain experts author tests using natural language instructions in their preferred spoken language (English, German, French, Spanish, or mixed steps) formatted in clean YAML without writing glue code or managing Gherkin step bindings.
+* **Multi-Lingual Natural-Language Test Authoring**: Non-programmers and domain experts author tests using natural language instructions in their preferred spoken language (e.g., English, German, French, Spanish, or mixed steps) formatted in clean YAML without writing glue code or managing Gherkin step bindings.
 * **YAML as Intermediate Serialization & Test Step AST**: YAML serves as an intermediate serialization format representing an underlying **Test Step Abstract Syntax Tree (AST)**. This decouples human authoring interfaces (visual forms, Markdown documents, or rich text editors) from machine execution, establishing a normalized 1-to-1 mapping that enables seamless bidirectional (two-way) synchronization between human-readable specifications and compiled machine playbooks.
 * **On-The-Fly Dynamic UI Translation**: The underlying LLM dynamically translates and maps natural-language instructions to different target UI languages at runtime. For example, a single test script written in German can be executed against an English, French, or Spanish web interface, eliminating duplicate localized scripts for multi-region applications.
 * **Self-Healing Locators & Playbooks as Version-Controlled Data**: Instead of generating executable source code, Neo AI compiles natural language into declarative **JSON Playbooks** stored in local project repositories (`src/test/resources/ai-playbooks`). Playbooks require no compilation step, execute via a deterministic state machine runner, self-heal by updating locator nodes in the JSON schema, and remain readable by human reviewers.

@@ -37,7 +37,7 @@ Recent AI approaches—such as live-LLM browser drivers—address locator flexib
 +-----------------------------------------------------------------------------------------------------------------------------+
 |                                                    THE NEO AI SOLUTION                                                      |
 +-----------------------------------------------------------------------------------------------------------------------------+
-|  [+] Multi-Lingual Natural Authoring (English, German, French, Spanish, or mixed steps in YAML format)                      |
+|  [+] Multi-Lingual Natural Authoring (e.g., English, German, French, Spanish, or mixed steps in YAML format)                |
 |  [+] On-The-Fly Dynamic UI Translation (LLM dynamically maps natural steps across localized UI variants)                    |
 |  [+] Zero-Cost Offline Replay (100% Offline in CI/CD via file-based JSON Playbooks)                                         |
 |  [+] Local Self-Healing (LLM heals locators in local playbook files when UI breaks)                                         |
