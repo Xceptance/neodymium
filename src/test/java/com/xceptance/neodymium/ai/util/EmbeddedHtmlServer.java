@@ -674,10 +674,71 @@ public final class EmbeddedHtmlServer
      * @param httpsPort the HTTPS port to listen on
      * @throws IOException if the server cannot be bound or created
      */
+    /**
+     * Creates an {@link HttpServer} bound to the requested port, or falls back to port 0 (dynamic port)
+     * if the requested port is already bound or unavailable.
+     * 
+     * @param requestedPort the target HTTP port to attempt binding
+     * @return the created {@link HttpServer}
+     * @throws IOException if server creation fails completely
+     */
+    private static HttpServer createHttpServerWithFallback(final int requestedPort) throws IOException
+    {
+        final int targetPort = requestedPort < 0 ? DEFAULT_HTTP_PORT : requestedPort;
+        try
+        {
+            return HttpServer.create(new InetSocketAddress(targetPort), 0);
+        }
+        catch (final IOException e)
+        {
+            if (targetPort != 0)
+            {
+                LOG.warn("Target HTTP port {} is unavailable ({}), falling back to random available free port (0).",
+                    targetPort, e.getMessage());
+                return HttpServer.create(new InetSocketAddress(0), 0);
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Creates an {@link HttpsServer} bound to the requested port, or falls back to port 0 (dynamic port)
+     * if the requested port is already bound or unavailable.
+     * 
+     * @param requestedPort the target HTTPS port to attempt binding
+     * @return the created {@link HttpsServer}
+     * @throws IOException if server creation fails completely
+     */
+    private static HttpsServer createHttpsServerWithFallback(final int requestedPort) throws IOException
+    {
+        final int targetPort = requestedPort < 0 ? DEFAULT_HTTPS_PORT : requestedPort;
+        try
+        {
+            return HttpsServer.create(new InetSocketAddress(targetPort), 0);
+        }
+        catch (final IOException e)
+        {
+            if (targetPort != 0)
+            {
+                LOG.warn("Target HTTPS port {} is unavailable ({}), falling back to random available free port (0).",
+                    targetPort, e.getMessage());
+                return HttpsServer.create(new InetSocketAddress(0), 0);
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Creates a new embedded HTTP and HTTPS server bound to the specified ports.
+     * Pass 0 to bind to random available free ports.
+     * 
+     * @param httpPort the HTTP port to listen on
+     * @param httpsPort the HTTPS port to listen on
+     * @throws IOException if the server cannot be bound or created
+     */
     public EmbeddedHtmlServer(final int httpPort, final int httpsPort) throws IOException
     {
-        final int targetHttpPort = httpPort < 0 ? DEFAULT_HTTP_PORT : httpPort;
-        this.server = HttpServer.create(new InetSocketAddress(targetHttpPort), 0);
+        this.server = createHttpServerWithFallback(httpPort);
         this.port = this.server.getAddress().getPort();
         
         final ResourceHandler resourceHandler = new ResourceHandler();
@@ -689,8 +750,7 @@ public final class EmbeddedHtmlServer
         this.server.createContext("/verla-bad/", new LoggingHandler(verlaHandler));
         this.server.setExecutor(Executors.newCachedThreadPool());
 
-        final int targetHttpsPort = httpsPort < 0 ? DEFAULT_HTTPS_PORT : httpsPort;
-        this.httpsServer = HttpsServer.create(new InetSocketAddress(targetHttpsPort), 0);
+        this.httpsServer = createHttpsServerWithFallback(httpsPort);
         this.httpsPort = this.httpsServer.getAddress().getPort();
 
         try
