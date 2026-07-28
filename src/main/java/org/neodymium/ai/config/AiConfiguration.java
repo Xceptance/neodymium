@@ -227,6 +227,16 @@ public final class AiConfiguration
     }
 
     /**
+     * Resolves the default active AI model name for execution.
+     *
+     * @return the active AI model name
+     */
+    public String aiModel()
+    {
+        return getModel("execution");
+    }
+
+    /**
      * Resolves API key for a specific role, falling back to global default.
      *
      * @param role the execution role
