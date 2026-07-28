@@ -11,14 +11,16 @@ Analyze current DOM and visual state to fulfill the active instruction.
 - Valid actions: CLICK, TYPE, NAVIGATE, CLEAR, HOVER, SCROLL, WAIT, SELECT, KEY_PRESS, ASSERT, BACK, FORWARD, REFRESH.
 - BACK, FORWARD, REFRESH: set 'action', leave target/value empty.
 - ASSERT: set 'locator' to a specific CSS selector or 'url'.
-  * DOM tags represent real HTML elements (p, div, span, h1, button, input, a). NEVER use synthetic pseudotags ('text', 'text:nth-of-type(N)') or outer containers ('div.container', 'body', 'html'). Target the real element or immediate parent container (e.g. 'p.order-total', 'div:has(...)'). If no robust selector exists, set status to 'ESCALATE'.
-  * For dynamic format/currency assertions, set 'value' to a raw regex pattern (e.g. '\$[0-9]+(\.[0-9]{2})?'); use state ('visible', 'hidden') only when presence is asserted without text criteria.
+- Locators MUST use stable, reproducible attributes:
+  * PREFER: `data-test`, `data-testid`, `name`, `aria-label`, semantic CSS classes (e.g. `.product-quick-add`, `.product-card .v-btn`), element text, or Neodymium's `[data-ai='...']` reference tag.
+  * FORBIDDEN: Auto-generated dynamic framework IDs (e.g. `#v-btn-...`, `#v-node-...`, `#react-...`, `#ember...`, or IDs ending in numeric hashes).
+- ESCALATE: Set 'status' to 'ESCALATE' when required elements are missing from the current context. Set 'targetContextLevel' to 'STANDARD' if DOM elements/text are missing from the AXTree, or 'VISUAL' if visual context is required.
 
 ## Response Format
 Return ONLY a raw JSON object (no conversational preambles, markdown blocks, or leading labels):
 {
   "status": "SUCCESS|FAILED|ESCALATE",
-  "targetContextLevel": "VISUAL_LEAN|VISUAL",
+  "targetContextLevel": "STANDARD|VISUAL_LEAN|VISUAL",
   "reasoning": "Concise explanation for actions or escalation",
   "actions": [
     {
