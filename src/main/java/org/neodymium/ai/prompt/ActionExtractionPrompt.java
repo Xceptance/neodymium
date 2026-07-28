@@ -92,33 +92,8 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
     @Override
     public List<Action> parseResponse(final String rawContent, final ExecutionContext context) throws Exception
     {
-        // Extract json from possible markdown blocks
-        String jsonContent = rawContent;
-        if (jsonContent.contains("```json"))
-        {
-            jsonContent = jsonContent.substring(jsonContent.indexOf("```json") + 7);
-            if (jsonContent.contains("```"))
-            {
-                jsonContent = jsonContent.substring(0, jsonContent.indexOf("```"));
-            }
-        }
-        else if (jsonContent.contains("```"))
-        {
-            jsonContent = jsonContent.substring(jsonContent.indexOf("```") + 3);
-            if (jsonContent.contains("```"))
-            {
-                jsonContent = jsonContent.substring(0, jsonContent.indexOf("```"));
-            }
-        }
-
-        final int firstBrace = jsonContent.indexOf("{");
-        final int lastBrace = jsonContent.lastIndexOf("}");
-        if (firstBrace >= 0 && lastBrace > firstBrace)
-        {
-            jsonContent = jsonContent.substring(firstBrace, lastBrace + 1);
-        }
-
-        final JsonNode root = MAPPER.readTree(jsonContent.trim());
+        final String jsonContent = LlmResponseSanitizer.extractJson(rawContent);
+        final JsonNode root = MAPPER.readTree(jsonContent);
         
         final String status = root.hasNonNull("status") ? root.path("status").asText() : (root.hasNonNull("st") ? root.path("st").asText() : "");
         final String statusReasoning = root.hasNonNull("reasoning") ? root.path("reasoning").asText() : (root.hasNonNull("r") ? root.path("r").asText() : "");

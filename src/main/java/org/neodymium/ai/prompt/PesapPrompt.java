@@ -104,38 +104,13 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
     @Override
     public PesapResult parseResponse(final String rawContent, final ExecutionContext context) throws Exception
     {
-        if (rawContent == null || rawContent.trim().isEmpty())
+        final String jsonContent = LlmResponseSanitizer.extractJson(rawContent);
+        if (jsonContent.isEmpty())
         {
             return new PesapResult("AXTREE", false, List.of());
         }
 
-        // Extract json from possible markdown blocks
-        String jsonContent = rawContent.trim();
-        if (jsonContent.contains("```json"))
-        {
-            jsonContent = jsonContent.substring(jsonContent.indexOf("```json") + 7);
-            if (jsonContent.contains("```"))
-            {
-                jsonContent = jsonContent.substring(0, jsonContent.indexOf("```"));
-            }
-        }
-        else if (jsonContent.contains("```"))
-        {
-            jsonContent = jsonContent.substring(jsonContent.indexOf("```") + 3);
-            if (jsonContent.contains("```"))
-            {
-                jsonContent = jsonContent.substring(0, jsonContent.indexOf("```"));
-            }
-        }
-
-        final int firstBrace = jsonContent.indexOf("{");
-        final int lastBrace = jsonContent.lastIndexOf("}");
-        if (firstBrace >= 0 && lastBrace > firstBrace)
-        {
-            jsonContent = jsonContent.substring(firstBrace, lastBrace + 1);
-        }
-
-        final JsonNode root = MAPPER.readTree(jsonContent.trim());
+        final JsonNode root = MAPPER.readTree(jsonContent);
         
         final String contextLevel = root.hasNonNull("c") ? root.path("c").asText("AXTREE").toUpperCase().trim() : "AXTREE";
         final boolean requiresJavaMethods = root.hasNonNull("jm") && root.path("jm").asBoolean();
