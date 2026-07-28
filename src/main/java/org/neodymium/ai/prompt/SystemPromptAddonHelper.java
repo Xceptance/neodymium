@@ -107,6 +107,8 @@ public final class SystemPromptAddonHelper
                 validateLength(val);
                 return val;
             }
+        }
+
         // 3. Resolve model-family default add-on
         final String activeModel = resolveActiveModel(context);
         if (activeModel != null && activeModel.toLowerCase().contains("lite") && "general".equalsIgnoreCase(type))
