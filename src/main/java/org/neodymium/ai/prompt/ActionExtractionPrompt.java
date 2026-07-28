@@ -77,8 +77,8 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                
                For an ASSERT action:
                - Set 'action' to 'ASSERT'.
-               - Set 'locator' to a valid, robust CSS selector on the target element (e.g. '#total-paid', '.order-total', 'span.amount'), or 'url' to verify current URL. CRITICAL: Never use synthetic 'text:nth-of-type(N)' or pseudotag index selectors; always resolve a robust CSS selector targeting real elements in the DOM.
-               - Set 'value' to the exact text, substring, or regex pattern to verify (e.g., '\\$[0-9]+(\\.[0-9]{2})?', 'Total Paid:', or 'V-[0-9]+-US'). CRITICAL: When verifying text, values, currency, or numbers (e.g. 'total is in USD'), 'value' MUST contain the expected text string or matching regex pattern, NOT merely 'visible'. Use 'visible', 'hidden', or 'focused' ONLY for structural visibility checks without specific content requirements. For regular expressions, output the regex pattern directly without wrapping in forward slashes.
+               - Set 'locator' to a valid, robust CSS selector targeting the DOM element (e.g., unique IDs, semantic attributes, or structural class selectors), or 'url' to verify the current page URL. CRITICAL: Never use synthetic text index pseudotags (such as 'text:nth-of-type(N)'); always resolve a standard, robust CSS selector targeting real elements in the DOM tree.
+               - Set 'value' to the expected state, text content, substring, or regular expression pattern required by the instruction. CRITICAL: When an instruction asserts specific content (such as text, numbers, codes, symbols, or patterns), 'value' MUST contain the target text string or regular expression to match. Use generic state values ('visible', 'hidden', 'enabled', 'disabled', 'focused') ONLY when the instruction explicitly asks to verify element presence or state without specific content criteria. For regular expression patterns, output the raw regex pattern directly without surrounding delimiters or slashes.
                
                Always identify the most robust CSS selector for the target element.
                
