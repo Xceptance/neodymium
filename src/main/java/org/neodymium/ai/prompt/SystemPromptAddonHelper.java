@@ -131,14 +131,7 @@ public final class SystemPromptAddonHelper
                 return modelObj.toString().trim();
             }
         }
-        try
-        {
-            return com.xceptance.neodymium.util.Neodymium.aiConfiguration().aiModel();
-        }
-        catch (final Exception e)
-        {
-            return null;
-        }
+        return null;
     }
 
     /**

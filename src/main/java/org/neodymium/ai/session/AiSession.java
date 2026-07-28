@@ -267,6 +267,7 @@ public abstract class AiSession implements AutoCloseable
         {
             this.executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
         }
+        this.executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_MODEL, Neodymium.aiConfiguration().aiModel());
 
         final List<PlaybookStep> playbookSteps = playbook.getSteps();
         for (int i = playbookSteps.size() - 1; i >= 0; i--)
