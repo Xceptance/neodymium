@@ -179,10 +179,10 @@ public final class SelenideActionPluginsTest extends BaseAiTest
             @Override
             public Set<LlmCapability> getCapabilities()
             {
-                return Set.of(LlmCapability.STEP_SPLITTING);
+                return Set.of(LlmCapability.PESAP);
             }
         };
-        registry.registerProvider(LlmCapability.STEP_SPLITTING, mockPesapProvider);
+        registry.registerProvider(LlmCapability.PESAP, mockPesapProvider);
 
         final AiSession session = AiSession.mock(this.context.getSessionData(), registry, null, this.executor);
         this.context.getTransientData().put(ExecutionContext.KEY_SESSION, session);

@@ -220,16 +220,22 @@ public final class ExecuteActionsStep implements PipelineStep
                 session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
                 context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
             }
-            catch (final Exception e)
+            catch (final Throwable t)
             {
+                if (t instanceof VirtualMachineError || t instanceof ThreadDeath || t instanceof LinkageError)
+                {
+                    throw (Error) t;
+                }
+
                 // Dispatch failed event status and log error immediately
-                LOGGER.error("   ❌ Action execution failed on SUT: {}", e.getMessage());
+                final String failureMsg = t.getMessage() != null ? t.getMessage() : t.toString();
+                LOGGER.error("   ❌ Action execution failed on SUT: {}", failureMsg);
                 session.getEventBus().dispatch(new ActionExecutedEvent(action, false));
-                if (e instanceof PipelineException pe)
+                if (t instanceof PipelineException pe)
                 {
                     throw pe;
                 }
-                throw new HealingRequiredException("Action execution failed against SUT: " + action.getDescription() + " (" + e.getMessage() + ")", e);
+                throw new HealingRequiredException("Action execution failed against SUT: " + action.getDescription() + " (" + failureMsg + ")", t);
             }
         }
         finally
@@ -462,7 +468,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
 
                     final PesapPrompt pesapPrompt = new PesapPrompt(resolvedInstruction, previousInstruction, nextInstructions);
-                    final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.STEP_SPLITTING);
+                    final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.PESAP);
                     final double temp = config.getTemperature("action");
                     final int timeoutSeconds = config.getTimeoutSeconds("action");
 

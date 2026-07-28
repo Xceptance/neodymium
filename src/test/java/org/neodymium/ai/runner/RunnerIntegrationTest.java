@@ -376,6 +376,70 @@ public final class RunnerIntegrationTest
     }
 
     /**
+     * Verifies that ExecuteActionsStep catches and logs AssertionErrors thrown during action execution.
+     */
+    @Test
+    public void testExecuteActionsStepAssertionErrorHandling() throws Exception
+    {
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final org.neodymium.ai.executor.TargetExecutor executor = new org.neodymium.ai.executor.TargetExecutor()
+        {
+            @Override
+            public void execute(final Action action)
+            {
+                throw new AssertionError("Element not found: " + action.getTarget());
+            }
+
+            @Override
+            public SutState captureState()
+            {
+                return null;
+            }
+
+            @Override
+            public SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level)
+            {
+                return null;
+            }
+
+            @Override
+            public Set<org.neodymium.ai.executor.ActionDefinition> getSupportedActions()
+            {
+                return Collections.emptySet();
+            }
+        };
+
+        final List<ActionExecutedEvent> executedEvents = new ArrayList<>();
+        eventBus.registerListener((ExecutionListener) e ->
+        {
+            if (e instanceof ActionExecutedEvent event)
+            {
+                executedEvents.add(event);
+            }
+        });
+
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_LAST_LLM_RESULT, List.of(
+            new Action("ASSERT", "text:nth-of-type(4)", List.of("[Total Paid: \\$[0-9]+]"), "Verify total", "reasoning")
+        ));
+
+        final ExecuteActionsStep executeStep = new ExecuteActionsStep();
+
+        final HealingRequiredException thrown = assertThrows(
+            HealingRequiredException.class,
+            () -> executeStep.execute(context)
+        );
+
+        assertTrue(thrown.getMessage().contains("Element not found: text:nth-of-type(4)"));
+        assertEquals(1, executedEvents.size());
+        assertFalse(executedEvents.get(0).isSuccess());
+    }
+
+    /**
      * Verifies that the ExecuteActionsStep handles dynamic run-time INCLUDE actions
      * by parsing the included steps and pushing them onto the stack dynamically.
      */
@@ -459,6 +523,7 @@ public final class RunnerIntegrationTest
         final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
         final ExecutionContext context = session.getExecutionContext();
 
+        context.getTransientData().put("semanticVerification.enabled", true);
         context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
@@ -512,6 +577,7 @@ public final class RunnerIntegrationTest
         final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
         final ExecutionContext context = session.getExecutionContext();
 
+        context.getTransientData().put("semanticVerification.enabled", true);
         context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
@@ -541,11 +607,12 @@ public final class RunnerIntegrationTest
         step.execute(context);
 
         @SuppressWarnings("unchecked")
-        final List<String> warnings = (List<String>) context.getTransientData().get("verificationWarnings");
+        final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
         assertNotNull(warnings);
         assertEquals(1, warnings.size());
-        assertTrue(warnings.get(0).contains("Action Check: State did not change"));
-        assertTrue(warnings.get(0).contains("Visual Check: State did not change"));
+        assertTrue(warnings.get(0) instanceof org.neodymium.ai.prompt.VerificationIssue);
+        final org.neodymium.ai.prompt.VerificationIssue issue = (org.neodymium.ai.prompt.VerificationIssue) warnings.get(0);
+        assertEquals("State did not change", issue.summary());
     }
 
     /**

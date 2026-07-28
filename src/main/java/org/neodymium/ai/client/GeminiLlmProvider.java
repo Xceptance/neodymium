@@ -173,8 +173,8 @@ public final class GeminiLlmProvider implements LlmProvider
         return EnumSet.of(
             LlmCapability.TEXT_ONLY,
             LlmCapability.VISION,
-            LlmCapability.STRUCTURED_JSON,
-            LlmCapability.STEP_SPLITTING,
+            LlmCapability.EXECUTION,
+            LlmCapability.PESAP,
             LlmCapability.VERIFICATION
         );
     }

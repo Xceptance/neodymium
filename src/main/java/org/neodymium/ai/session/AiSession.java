@@ -40,6 +40,7 @@ import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.prompt.ActionExtractionPrompt;
 import org.neodymium.ai.runner.StateMachineRunner;
+import org.neodymium.util.Neodymium;
 
 /**
  * Abstract class representing an execution session context that manages the active

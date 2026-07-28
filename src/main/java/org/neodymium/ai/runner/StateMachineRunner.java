@@ -89,6 +89,40 @@ public final class StateMachineRunner
         LOGGER.debug("║ 📜 Loaded Playbook:   {}", loadedPlaybook != null ? loadedPlaybook : "None");
         LOGGER.debug("╚════════════════════════════════════════════════════════════════════════════════════");
 
+        if (LOGGER.isTraceEnabled())
+        {
+            final org.neodymium.ai.config.AiConfiguration config = new org.neodymium.ai.config.AiConfiguration();
+            LOGGER.trace("   ┌─ [Configured LLM Capabilities & Providers] ──────────────────────────────");
+            for (final LlmCapability cap : LlmCapability.values())
+            {
+                final String roleKey = cap.name().toLowerCase();
+                String provName = "Unknown";
+                try
+                {
+                    final LlmProvider prov = this.session.getLlmRegistry().getProvider(cap);
+                    if (prov != null)
+                    {
+                        provName = prov.getClass().getSimpleName();
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                    provName = config.getProvider(roleKey);
+                }
+
+                final String modelName = config.getModel(roleKey);
+                final String apiKey = config.getApiKey(roleKey);
+                final String keyHint = maskApiKeyHint(apiKey);
+
+                LOGGER.trace("   │ {} Provider: {} Model: {} Key: {}",
+                    String.format("%-16s", cap.name() + ":"),
+                    String.format("%-22s", provName),
+                    String.format("%-24s", modelName != null ? modelName : "default"),
+                    keyHint);
+            }
+            LOGGER.trace("   └──────────────────────────────────────────────────────────────────────────");
+        }
+
         boolean success = false;
         Throwable failureCause = null;
 
@@ -266,6 +300,16 @@ public final class StateMachineRunner
                         lastStats.getActions().addAll(stepActions);
                     }
                 }
+            }
+
+            if (!success && failureCause != null)
+            {
+                Throwable root = failureCause;
+                while (root.getCause() != null && root != root.getCause())
+                {
+                    root = root.getCause();
+                }
+                LOGGER.error("   ❌ Step Execution Failed: {}", root.getMessage() != null ? root.getMessage() : root.toString());
             }
 
             LOGGER.debug("======== 📊 AI Step Execution Statistics ========");
@@ -508,5 +552,25 @@ public final class StateMachineRunner
                 logStats(stats.getSubStats().get(j), prefix + "  ", stepNum + "." + (j + 1));
             }
         }
+    }
+
+    /**
+     * Masks an API key for TRACE log hints (e.g. AQ....4E).
+     *
+     * @param apiKey the raw API key to format
+     * @return the masked API key hint
+     */
+    private static String maskApiKeyHint(final String apiKey)
+    {
+        if (apiKey == null || apiKey.isBlank())
+        {
+            return "None";
+        }
+        final String trimmed = apiKey.trim();
+        if (trimmed.length() <= 4)
+        {
+            return "****";
+        }
+        return trimmed.substring(0, 2) + "...." + trimmed.substring(trimmed.length() - 2);
     }
 }

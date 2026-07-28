@@ -44,11 +44,11 @@ public final class MockLlmProvider implements LlmProvider
 
     /**
      * Constructs a MockLlmProvider with standard default capabilities
-     * (TEXT_ONLY, VISION, STRUCTURED_JSON).
+     * (TEXT_ONLY, VISION, EXECUTION).
      */
     public MockLlmProvider()
     {
-        this.capabilities = Set.of(LlmCapability.TEXT_ONLY, LlmCapability.VISION, LlmCapability.STRUCTURED_JSON);
+        this.capabilities = Set.of(LlmCapability.TEXT_ONLY, LlmCapability.VISION, LlmCapability.EXECUTION);
     }
 
     /**

@@ -33,11 +33,11 @@ public enum LlmCapability
     /** Multimodal image and screenshot analysis. */
     VISION,
 
-    /** Structured tool calling or schema-enforced JSON outputs. */
-    STRUCTURED_JSON,
+    /** Primary step execution loop and structured action extraction. */
+    EXECUTION,
 
-    /** Complex compound instruction splitting and preprocessing. */
-    STEP_SPLITTING,
+    /** Pre-execution static analysis phase and instruction splitting. */
+    PESAP,
 
     /** Specialized validation of step execution outcomes and assertions. */
     VERIFICATION

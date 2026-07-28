@@ -91,13 +91,13 @@ public final class LlmClientAndRegistryTest
         assertEquals(textProvider, registry.getProvider(LlmCapability.TEXT_ONLY));
         assertEquals(visionProvider, registry.getProvider(LlmCapability.VISION));
 
-        // 2. Fallback lookup (routing STEP_SPLITTING to default fallback provider)
-        assertEquals(fallbackProvider, registry.getProvider(LlmCapability.STEP_SPLITTING));
+        // 2. Fallback lookup (routing PESAP to default fallback provider)
+        assertEquals(fallbackProvider, registry.getProvider(LlmCapability.PESAP));
 
         // 3. Exception if fallback is removed and no provider matches
         registry.setDefaultProvider(null);
         assertThrows(IllegalStateException.class, () -> {
-            registry.getProvider(LlmCapability.STEP_SPLITTING);
+            registry.getProvider(LlmCapability.PESAP);
         });
     }
 

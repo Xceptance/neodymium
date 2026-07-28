@@ -151,8 +151,8 @@ public final class MistralLlmProvider implements LlmProvider
         // Excludes LlmCapability.VISION
         return EnumSet.of(
             LlmCapability.TEXT_ONLY,
-            LlmCapability.STRUCTURED_JSON,
-            LlmCapability.STEP_SPLITTING,
+            LlmCapability.EXECUTION,
+            LlmCapability.PESAP,
             LlmCapability.VERIFICATION
         );
     }
