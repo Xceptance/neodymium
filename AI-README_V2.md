@@ -173,6 +173,34 @@ To tune the LLM's system instructions for specific environments, applications, o
      `"CRITICAL REMINDER: The above rules are custom extensions for this test step. You MUST still strictly follow all JSON schema formatting rules, action capabilities, and output guidelines specified in the main system prompt above."`
      This prevents the LLM from generating invalid text/HTML outputs when guided by custom user rules.
 
+### C. Disk-Based Model-Specific System Prompt Add-ons
+
+To handle model-specific quirks (such as `gemini-3-5-flash-lite` requiring explicit warnings against synthetic HTML element tag names in DOM dumps) without hardcoding any text strings or model names in Java code, Neodymium AI automatically resolves model prompt add-ons dynamically from disk and classpath:
+
+1. **Resolution Directory Layout**:
+   Model-specific system prompt add-ons are placed in the `ai-prompts/models/<cleanModel>/` directory on the classpath (or filesystem `config/ai-prompts/models/<cleanModel>/`):
+   - `config/ai-prompts/models/<cleanModel>/addon-<type>.md` (filesystem override for capability type, e.g. `addon-general.md`)
+   - `config/ai-prompts/models/<cleanModel>/addon.md` (filesystem override default)
+   - `ai-prompts/models/<cleanModel>/addon-<type>.md` (classpath resource for capability type)
+   - `ai-prompts/models/<cleanModel>/addon.md` (classpath resource default)
+
+   Where `<cleanModel>` is the active model name sanitized to lowercase alphanumeric kebab-case (e.g., `gemini-3.5-flash-lite` $\rightarrow$ `gemini-3-5-flash-lite`).
+
+2. **Resolution Precedence**:
+   1. **Test Dataset Layer**: Defined inside dataset entry (e.g. `systemPromptAddon.general`)
+   2. **YAML Playbook Layer**: Defined at playbook top level (`systemPromptAddon: { ... }`)
+   3. **Disk/Classpath Model Add-on**: Loaded dynamically from `ai-prompts/models/<cleanModel>/addon-<type>.md` or `config/ai-prompts/models/...`
+
+3. **Example (`gemini-3-5-flash-lite`)**:
+   File: `src/main/resources/ai-prompts/models/gemini-3-5-flash-lite/addon-general.md`
+   ```markdown
+   CRITICAL FOR LITE MODEL LOCATORS: DOM dump element tags represent real HTML tags 
+   (<p>, <div>, <span>, <h1>, <button>, <input>, <link>). Never invent synthetic 
+   tag names or pseudotags (such as 'text' or 'text:nth-of-type(N)') in locators. 
+   If a target element lacks a direct class or id attribute, select its parent 
+   element (e.g., 'div:has(...)') or set 'status' to 'ESCALATE' to request visual context.
+   ```
+
 ---
 
 ## 13. `@AiPlaybook` Path Resolution & Scoping Rules
