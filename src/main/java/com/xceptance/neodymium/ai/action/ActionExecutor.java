@@ -429,9 +429,10 @@ public class ActionExecutor {
         }
 
         // Strategy 0.2: Match by computed parentText
-        if (target.contains("parentText="))
+        if (target.contains("parentText=") || target.contains("parentText*="))
         {
-            final Matcher m = Pattern.compile("parentText=['\"]?(.*?)['\"]?\\]?$")
+            final boolean isPartial = target.contains("parentText*=");
+            final Matcher m = Pattern.compile("parentText\\*?=['\"]?(.*?)['\"]?\\]?$")
                     .matcher(target);
             if (m.find())
             {
@@ -440,6 +441,7 @@ public class ActionExecutor {
                 {
                     final String parentTextFinderJs = 
                         "var expectedParentText = arguments[0];\n" +
+                        "var isPartial = arguments[1];\n" +
                         "var candidates = document.querySelectorAll('button, a, input, select, textarea, [role=\"button\"]');\n" +
                         "var results = [];\n" +
                         "for (var i = 0; i < candidates.length; i++) {\n" +
@@ -469,14 +471,15 @@ public class ActionExecutor {
                         "    if (parentText) {\n" +
                         "        var formatted = parentText.replace(/\\s*\\n\\s*/g, ' | ');\n" +
                         "        if (formatted.length > 200) { formatted = formatted.substring(0, 200) + '…'; }\n" +
-                        "        if (formatted === expectedParentText) {\n" +
+                        "        var match = isPartial ? formatted.indexOf(expectedParentText) !== -1 : formatted === expectedParentText;\n" +
+                        "        if (match) {\n" +
                         "            results.push(el);\n" +
                         "        }\n" +
                         "    }\n" +
                         "}\n" +
                         "return results;";
                     
-                    final List<WebElement> matchingEls = Selenide.executeJavaScript(parentTextFinderJs, expectedParentText);
+                    final List<WebElement> matchingEls = Selenide.executeJavaScript(parentTextFinderJs, expectedParentText, isPartial);
                     if (matchingEls != null && !matchingEls.isEmpty())
                     {
                         logDebug(logErrors, "   🔍 Resolved using Strategy 0.2: Computed parentText [{}]", expectedParentText);
