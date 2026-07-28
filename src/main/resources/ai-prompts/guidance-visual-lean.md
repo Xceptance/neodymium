@@ -1,5 +1,5 @@
 ## Context Level: VISUAL_LEAN
-You are receiving a LEAN text context (interactive elements and headings only, NO paragraphs or list items) PLUS a screenshot of the current page. Use the screenshot to visually identify target elements, then map them to the closest element in the text context using their `data-neo-ref` identifier.
+You are receiving a LEAN text context (interactive elements and headings only, NO paragraphs or list items) PLUS a screenshot of the current page. Use the screenshot to visually identify target elements, then map them to the closest element in the text context using their `data-ai` identifier.
 
 ## Context-Specific Critical Rules
 - **Visual-Only Validation**: If the instruction is a visual-only check (e.g., colors, layout, styling, font, visual design, logo details, alignment, image content), you MUST inspect the screenshot and act as the validator. Do NOT return browser actions. Instead, return:

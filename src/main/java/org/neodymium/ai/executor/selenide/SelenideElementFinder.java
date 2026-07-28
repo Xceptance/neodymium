@@ -23,10 +23,6 @@ import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
-import org.neodymium.ai.executor.selenide.ContextLevel;
-import org.neodymium.ai.action.Action;
-import org.neodymium.ai.model.PlaybookStep;
-import java.util.ArrayList;
 import java.util.List;
 import org.openqa.selenium.By;
 
@@ -137,23 +133,23 @@ public final class SelenideElementFinder
         }
 
         // -------------------------------------------------------------------------
-        // Strategy 1: Neodymium Automation ID (xc_...) extraction
+        // Strategy 1: Neodymium Automation ID (xc...) extraction
         // -------------------------------------------------------------------------
-        if (!forceXpath && clean.contains("xc_"))
+        if (!forceXpath && (clean.contains("data-ai=") || clean.contains("xc")))
         {
-            final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(xc_[a-zA-Z0-9_\\-]+)").matcher(clean);
+            final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(xc[a-zA-Z0-9_\\-]+)").matcher(clean);
             if (matcher.find())
             {
                 final String neoId = matcher.group(1);
                 try
                 {
-                    final ElementsCollection els = Selenide.$$(By.cssSelector("[data-neo-ref='" + neoId + "']"));
+                    final ElementsCollection els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
                     if (!els.isEmpty())
                     {
                         return els.first();
                     }
 
-                    // Dynamically stamp data-neo-ref attributes into live DOM if absent
+                    // Dynamically stamp data-ai attributes into live DOM if absent
                     try
                     {
                         new PageAnalyzer(WebDriverRunner.getWebDriver()).captureSimplifiedDom(ContextLevel.LEAN);
@@ -162,7 +158,7 @@ public final class SelenideElementFinder
                     {
                     }
 
-                    final ElementsCollection retryEls = Selenide.$$(By.cssSelector("[data-neo-ref='" + neoId + "']"));
+                    final ElementsCollection retryEls = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
                     if (!retryEls.isEmpty())
                     {
                         return retryEls.first();

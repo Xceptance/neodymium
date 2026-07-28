@@ -1,5 +1,5 @@
 ## Context Level: VISUAL
-You are receiving the FULL standard text context (interactive elements, headings, paragraphs, list items, tables, spans, divs, etc.) PLUS a page screenshot. Use the screenshot to visually identify target elements, and leverage the full text content to understand their meaning and verify copy. Map them using their `data-neo-ref` identifier.
+You are receiving the FULL standard text context (interactive elements, headings, paragraphs, list items, tables, spans, divs, etc.) PLUS a page screenshot. Use the screenshot to visually identify target elements, and leverage the full text content to understand their meaning and verify copy. Map them using their `data-ai` identifier.
 
 ## Context-Specific Critical Rules
 - **Visual-Only Validation**: If the instruction is a visual-only check (e.g., colors, layout, styling, font, visual design, logo details, alignment, image content), you MUST inspect the screenshot and act as the validator. Do NOT return browser actions. Instead, return:

@@ -81,5 +81,5 @@ function fingerprint(el) {
     
     // Combine all stable features into a single fingerprint string
     var raw   = [tag, id, testId, cls, ptag, type, name, text, fwComp].join('|');
-    return 'xc_' + djb2(raw);
+    return 'xc' + djb2(raw);
 }

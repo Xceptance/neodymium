@@ -50,7 +50,7 @@ You can perform these action types:
 CRITICAL INSTRUCTION FOR LOCATORS & RETRIES:
 - LOCATOR HINTS: You may receive explicit element locators inline within the instruction itself (e.g., "Click the search button (hint: .search)"). If an inline hint is provided, you MUST prioritize using that corresponding value as the exact CSS/XPath `target` for your first attempt.
 - When prioritizing 'id', format as valid CSS selector (e.g., "#username"). DO NOT output "id=username", this is invalid.
-- When using 'data-neo-ref', format as an attribute selector (e.g., "[data-neo-ref='xc_123']").
+- When using 'data-ai', format as an attribute selector (e.g., "[data-ai='xc123']").
 
 CRITICAL INSTRUCTION FOR JSON FORMAT:
 Your output MUST be a valid JSON object. Do not include markdown code blocks like ```json ... ```. Output the raw JSON string starting with { and ending with } in a MINIFIED, single-line format with NO unnecessary whitespace (no newlines, no indentation, and minimal spacing) to reduce token consumption. Ensure there are no trailing commas.

@@ -52,7 +52,7 @@ public final class LocatorResolver
     private static final Logger LOG = LoggerFactory.getLogger(LocatorResolver.class);
 
     private static final Pattern PLAYWRIGHT_PSEUDO_PATTERN = Pattern.compile(
-            "^(.*?):(has-text|has-text\\*|contains|text|text\\*)\\((.*?)\\)$", Pattern.CASE_INSENSITIVE);
+            "^(.*?):(has-text|has-text\\*|has-text-is|contains|text|text\\*|text-is|exact-text)\\((.*?)\\)$", Pattern.CASE_INSENSITIVE);
 
     private LocatorResolver()
     {
@@ -77,12 +77,13 @@ public final class LocatorResolver
         }
         final String clean = target.trim();
 
-        // 1. Neodymium Automation Reference ID shorthand (e.g. "c12" or "neo-ref=c12" or "xc_c12")
-        if (clean.toLowerCase().startsWith("neo-ref=") || clean.toLowerCase().startsWith("data-neo-ref="))
+        // 1. Neodymium Automation Reference ID shorthand (e.g. "data-ai=xc123" or "ai=xc123")
+        if (clean.toLowerCase().startsWith("data-ai=") || clean.toLowerCase().startsWith("ai=")
+                || clean.toLowerCase().startsWith("neo-ref=") || clean.toLowerCase().startsWith("data-neo-ref="))
         {
             final int eqIdx = clean.indexOf('=');
             final String refId = clean.substring(eqIdx + 1).trim();
-            return By.cssSelector("[data-neo-ref='" + refId + "']");
+            return By.cssSelector("[data-ai='" + refId + "']");
         }
 
         // 2. XPath Expressions
@@ -116,6 +117,7 @@ public final class LocatorResolver
         if (matcher.matches())
         {
             final String tag = matcher.group(1).trim();
+            final String pseudoType = matcher.group(2).trim().toLowerCase();
             String textVal = matcher.group(3).trim();
             if ((textVal.startsWith("\"") && textVal.endsWith("\"")) || (textVal.startsWith("'") && textVal.endsWith("'")))
             {
@@ -124,9 +126,14 @@ public final class LocatorResolver
                     textVal = textVal.substring(1, textVal.length() - 1);
                 }
             }
+            final boolean isExact = "text-is".equals(pseudoType) || "has-text-is".equals(pseudoType) || "exact-text".equals(pseudoType);
             if (tag.isEmpty() || "*".equals(tag))
             {
-                return Selectors.withText(textVal);
+                return isExact ? Selectors.byText(textVal) : Selectors.withText(textVal);
+            }
+            if (isExact)
+            {
+                return By.xpath("//" + tag + "[normalize-space(.)=" + escapeXpath(textVal) + " or normalize-space(text())=" + escapeXpath(textVal) + "]");
             }
             return By.xpath("//" + tag + "[contains(normalize-space(.), " + escapeXpath(textVal) + ")]");
         }

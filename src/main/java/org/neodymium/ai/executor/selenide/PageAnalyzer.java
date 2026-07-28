@@ -138,10 +138,10 @@ public class PageAnalyzer
                 // (handles repeated script injections on the same page)
                 // Also detects duplicates caused by JS cloning and removes the attribute so a unique one is generated.
                 for (var i = 0; i < allRoots.length; i++) {
-                    allRoots[i].querySelectorAll('[data-neo-ref]').forEach(function(el) {
-                        var ref = el.getAttribute('data-neo-ref');
+                    allRoots[i].querySelectorAll('[data-ai]').forEach(function(el) {
+                        var ref = el.getAttribute('data-ai');
                         if (seenRefs[ref]) {
-                            el.removeAttribute('data-neo-ref');
+                            el.removeAttribute('data-ai');
                         } else {
                             seenRefs[ref] = true;
                             usedIds[ref] = true;
@@ -151,10 +151,10 @@ public class PageAnalyzer
             """
             + FINGERPRINT_JS_FUNCTIONS
             + """
-                // Retrieves or generates and stamps a unique 'data-neo-ref' ID on the DOM element
+                // Retrieves or generates and stamps a unique 'data-ai' ID on the DOM element
                 function assignId(el) {
-                    if (el.hasAttribute('data-neo-ref')) {
-                        return el.getAttribute('data-neo-ref');
+                    if (el.hasAttribute('data-ai')) {
+                        return el.getAttribute('data-ai');
                     }
                     var base = fingerprint(el);
                     var candidate = base;
@@ -165,7 +165,7 @@ public class PageAnalyzer
                         candidate = base + '_' + suffix;
                     }
                     usedIds[candidate] = true;
-                    el.setAttribute('data-neo-ref', candidate);
+                    el.setAttribute('data-ai', candidate);
                     return candidate;
                 }
 
@@ -973,10 +973,10 @@ public class PageAnalyzer
                 }
                 for (final Map<String, Object> form : forms) {
                     if (showFrameId) {
-                        dom.append(String.format("  [form] id='%s' action='%s' data-neo-ref='%s' frameId='%s'\n",
+                        dom.append(String.format("  [form] id='%s' action='%s' data-ai='%s' frameId='%s'\n",
                                 form.get("id"), form.get("action"), form.get("automationId"), frameId));
                     } else {
-                        dom.append(String.format("  [form] id='%s' action='%s' data-neo-ref='%s'\n",
+                        dom.append(String.format("  [form] id='%s' action='%s' data-ai='%s'\n",
                                 form.get("id"), form.get("action"), form.get("automationId")));
                     }
                     final List<Map<String, Object>> fields = (List<Map<String, Object>>) form.get("fields");
@@ -984,12 +984,12 @@ public class PageAnalyzer
                         for (final Map<String, Object> field : fields) {
                             if (showFrameId) {
                                 dom.append(String.format(
-                                        "    [form-field] type='%s' name='%s' id='%s' data-neo-ref='%s' frameId='%s'",
+                                        "    [form-field] type='%s' name='%s' id='%s' data-ai='%s' frameId='%s'",
                                         field.get("type"), field.get("name"), field.get("id"),
                                         field.get("automationId"), frameId));
                             } else {
                                 dom.append(String.format(
-                                        "    [form-field] type='%s' name='%s' id='%s' data-neo-ref='%s'",
+                                        "    [form-field] type='%s' name='%s' id='%s' data-ai='%s'",
                                         field.get("type"), field.get("name"), field.get("id"),
                                         field.get("automationId")));
                             }
@@ -1143,7 +1143,7 @@ public class PageAnalyzer
         appendAttribute(dom, "value", el.get("value"));
         appendAttribute(dom, "options", el.get("options"));
 
-        appendAttribute(dom, "data-neo-ref", el.get("automationId"));
+        appendAttribute(dom, "data-ai", el.get("automationId"));
 
         final Object selector = el.get("selector");
         if (selector != null && !selector.toString().isEmpty()) {
@@ -1606,11 +1606,11 @@ public class PageAnalyzer
                                     return '';
                                 }
 
-                                var refId = this.getAttribute('data-neo-ref');
+                                var refId = this.getAttribute('data-ai');
                                 if (!refId) {
                                     var usedIds = {};
-                                    document.querySelectorAll('[data-neo-ref]').forEach(function(el) {
-                                        usedIds[el.getAttribute('data-neo-ref')] = true;
+                                    document.querySelectorAll('[data-ai]').forEach(function(el) {
+                                        usedIds[el.getAttribute('data-ai')] = true;
                                     });
                             """
                             + FINGERPRINT_JS_FUNCTIONS
@@ -1622,7 +1622,7 @@ public class PageAnalyzer
                                         suffix++;
                                         candidate = base + '_' + suffix;
                                     }
-                                    this.setAttribute('data-neo-ref', candidate);
+                                    this.setAttribute('data-ai', candidate);
                                     refId = candidate;
                                 }
                                 return {

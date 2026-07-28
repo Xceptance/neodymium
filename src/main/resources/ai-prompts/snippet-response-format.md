@@ -9,11 +9,11 @@ CRITICAL ARRAY FORMATTING: If your response requires multiple actions, you MUST 
   "a": [
     {
       "t": "ACTION_TYPE",
-      "tg": "locator string (prefer stable standard attributes like id, name, or class; use data-neo-ref only as a last resort)",
+      "tg": "locator string (prefer stable standard attributes like id, name, or class; use data-ai only as a last resort)",
       "fr": "(optional) the frameId attribute of the element, if present in the DOM representation",
-      "v": "only if action requires it (omit this key entirely if not needed)",
-      "desc": "what this does",
-      "ed": "(mandatory) text, name, id OR a short description of the targeted element (especially important if data-neo-ref is used)",
+      "va": "input text OR '' for CLICK",
+      "re": "short reasoning for step action",
+      "ed": "(mandatory) text, name, id OR a short description of the targeted element (especially important if data-ai is used)",
       "c": [ "... nested actions for BRANCH type (optional) ..." ],
       "th": [ "... nested actions for BRANCH type (optional) ..." ],
       "el": [ "... nested actions for BRANCH type (optional) ..." ]

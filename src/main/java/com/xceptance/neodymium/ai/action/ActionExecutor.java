@@ -184,12 +184,12 @@ public class ActionExecutor {
         }
 
         // Clean up AI hallucinations where the LLM wraps the ID in an attribute selector
-        if (target.contains("data-neo-ref="))
+        if (target.contains("data-ai=") || target.contains("data-neo-ref="))
         {
-            final Matcher m = Pattern.compile("data-neo-ref=['\"]?(xc_[a-zA-Z0-9_]+)['\"]?").matcher(target);
+            final Matcher m = Pattern.compile("(data-ai|data-neo-ref)=['\"]?(xc[a-zA-Z0-9_]+)['\"]?").matcher(target);
             if (m.find())
             {
-                target = m.group(1);
+                target = m.group(2);
                 logDebug("   ⚠️ Auto-corrected AI hallucination: extracted Neodymium ID from attribute selector [{}]", target);
             }
         }
@@ -399,11 +399,11 @@ public class ActionExecutor {
         final String target = cleanTarget(action.getTarget());
 
         // Strategy 0: Direct Match for Neodymium Automation ID
-        if (target.matches("^xc_.*"))
+        if (target.matches("^xc[a-zA-Z0-9].*"))
         {
             try
             {
-                final ElementsCollection elements = Selenide.$$(By.cssSelector("[data-neo-ref='" + target + "']"));
+                final ElementsCollection elements = Selenide.$$(By.cssSelector("[data-ai='" + target + "']"));
                 if (!elements.isEmpty())
                 {
                     logDebug(logErrors, "   🔍 Resolved using Strategy 0: Neodymium Automation ID [{}]", target);
@@ -413,18 +413,18 @@ public class ActionExecutor {
                 {
                     // Fallback to Shadow DOM deep selector via Javascript
                     final List<WebElement> shadowWebEls = Selenide.executeJavaScript(SHADOW_DOM_CSS_SELECTOR_ALL,
-                            "[data-neo-ref='" + target + "']");
+                            "[data-ai='" + target + "']");
                     if (shadowWebEls != null && !shadowWebEls.isEmpty())
                     {
                         logDebug(logErrors, "   🔍 Resolved using Strategy 0 (Shadow DOM JS): Neodymium Automation ID [{}]", target);
                         return Selenide.$$(shadowWebEls);
                     }
-                    logDebug(logErrors, "   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neo-ref='{}']]", target);
+                    logDebug(logErrors, "   ❌ Strategy 0 failed: Neodymium Automation ID [[data-ai='{}']]", target);
                 }
             }
             catch (final Exception e)
             {
-                logDebug(logErrors, "   ❌ Strategy 0 failed: Neodymium Automation ID [[data-neo-ref='{}']] with error: {}", target, e.getMessage());
+                logDebug(logErrors, "   ❌ Strategy 0 failed: Neodymium Automation ID [[data-ai='{}']] with error: {}", target, e.getMessage());
             }
         }
 
