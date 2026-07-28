@@ -111,6 +111,13 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             }
         }
 
+        final int firstBrace = jsonContent.indexOf("{");
+        final int lastBrace = jsonContent.lastIndexOf("}");
+        if (firstBrace >= 0 && lastBrace > firstBrace)
+        {
+            jsonContent = jsonContent.substring(firstBrace, lastBrace + 1);
+        }
+
         final JsonNode root = MAPPER.readTree(jsonContent.trim());
         
         final String status = root.hasNonNull("status") ? root.path("status").asText() : (root.hasNonNull("st") ? root.path("st").asText() : "");

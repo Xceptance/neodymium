@@ -128,6 +128,13 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
             }
         }
 
+        final int firstBrace = jsonContent.indexOf("{");
+        final int lastBrace = jsonContent.lastIndexOf("}");
+        if (firstBrace >= 0 && lastBrace > firstBrace)
+        {
+            jsonContent = jsonContent.substring(firstBrace, lastBrace + 1);
+        }
+
         final JsonNode root = MAPPER.readTree(jsonContent.trim());
         
         final String contextLevel = root.hasNonNull("c") ? root.path("c").asText("AXTREE").toUpperCase().trim() : "AXTREE";

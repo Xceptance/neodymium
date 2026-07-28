@@ -15,7 +15,7 @@ Analyze current DOM and visual state to fulfill the active instruction.
   * For dynamic format/currency assertions, set 'value' to a raw regex pattern (e.g. '\$[0-9]+(\.[0-9]{2})?'); use state ('visible', 'hidden') only when presence is asserted without text criteria.
 
 ## Response Format
-Return JSON object:
+Return ONLY a raw JSON object (no conversational preambles, markdown blocks, or leading labels):
 {
   "status": "SUCCESS|FAILED|ESCALATE",
   "targetContextLevel": "VISUAL_LEAN|VISUAL",
