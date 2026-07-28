@@ -1521,18 +1521,19 @@ public enum LlmCapability
 {
     TEXT_ONLY,       // Basic textual generation/reasoning
     VISION,          // Multimodal image/screenshot analysis
-    STRUCTURED_JSON, // Structured tool calling / schema enforcement
-    STEP_SPLITTING   // Complex compound instruction splitting
+    EXECUTION,       // Primary step execution loop and structured action extraction
+    PESAP,           // Pre-execution static analysis phase & step splitting
+    VERIFICATION     // Post-action outcome verification assertions
 }
 ```
 
 #### Initial Provider Implementations:
 1. **`GeminiLlmProvider`**:
    * Production provider utilizing Google Gemini via LangChain4j.
-   * Supported capabilities: `TEXT_ONLY`, `VISION`, `STRUCTURED_JSON`, `STEP_SPLITTING`.
+   * Supported capabilities: `TEXT_ONLY`, `VISION`, `EXECUTION`, `PESAP`, `VERIFICATION`.
 2. **`MistralLlmProvider`**:
    * Production provider utilizing Mistral AI models via LangChain4j.
-   * Supported capabilities: `TEXT_ONLY`, `STRUCTURED_JSON`.
+   * Supported capabilities: `TEXT_ONLY`, `EXECUTION`, `PESAP`, `VERIFICATION`.
 3. **`MockLlmProvider`**:
    * Simulation provider used for hermetic, browserless unit testing.
    * Configured by test fixtures with a queued sequence of canned responses:
@@ -1671,7 +1672,7 @@ The session reads configuration properties hierarchically (JVM arguments > `ai.p
 #### 2. Provider Instantiation & Registry Registration
 During session initialization, the `AiSession` parses these overrides. For each role, if an override `model` or `apiKey` is provided, it instantiates a separate `LlmProvider` configured with those specific parameters. If no role-specific overrides exist, it falls back to the global defaults.
 
-The registry selects the active provider dynamically based on the required capability (e.g. routing visual checks to the provider registered for `LlmCapability.VISION`, and syntax parsing to `LlmCapability.STEP_SPLITTING`). If no specialized provider is registered for a capability, the registry falls back to the designated default provider. If no default is set, it throws an `IllegalStateException`.
+The registry selects the active provider dynamically based on the required capability (e.g. routing visual checks to the provider registered for `LlmCapability.VISION`, and syntax parsing to `LlmCapability.PESAP`). If no specialized provider is registered for a capability, the registry falls back to the designated default provider. If no default is set, it throws an `IllegalStateException`.
 
 ---
 
