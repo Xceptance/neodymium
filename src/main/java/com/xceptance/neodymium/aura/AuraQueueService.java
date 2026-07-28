@@ -30,9 +30,11 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -73,6 +75,8 @@ public final class AuraQueueService
 
     /** The RunRequest that initiated the most recent queue execution, used for archiving metadata. */
     private final AtomicReference<RunRequest> lastRunRequest = new AtomicReference<>(null);
+
+    private final Set<File> createdTempFiles = Collections.synchronizedSet(new HashSet<>());
 
     private final AuraReportingService reportingService;
     private final AuraInteractiveService interactiveService;
@@ -185,6 +189,18 @@ public final class AuraQueueService
         {
             LOGGER.info("[Aura Server] No active subprocess found to stop.");
         }
+        synchronized (createdTempFiles)
+        {
+            for (final File f : createdTempFiles)
+            {
+                if (f != null && f.exists())
+                {
+                    f.delete();
+                    LOGGER.info("[Aura Server] Deleted temporary test runner on stopProcess: {}", f.getAbsolutePath());
+                }
+            }
+            createdTempFiles.clear();
+        }
     }
 
     public void broadcastLog(final String line)
@@ -210,7 +226,6 @@ public final class AuraQueueService
         }
 
         final Thread thread = new Thread(() -> {
-            final List<File> createdTempFiles = new ArrayList<>();
             final File tempRunnerDir = new File("src/test/java/com/xceptance/neodymium/aura").getAbsoluteFile();
 
             try
@@ -289,10 +304,11 @@ public final class AuraQueueService
                                 "    }\n" +
                                 "}\n";
                         Files.writeString(tempRunnerFile.toPath(), runnerSource, StandardCharsets.UTF_8);
-                        createdTempFiles.add(tempRunnerFile);
                         LOGGER.info("[Aura Server] Created temporary test runner: {}",
                                 tempRunnerFile.getAbsolutePath());
                     }
+                    createdTempFiles.add(tempRunnerFile);
+                    tempRunnerFile.deleteOnExit();
 
                     final StringBuilder idFilterBuilder = new StringBuilder();
                     boolean hasIds = false;
@@ -339,10 +355,6 @@ public final class AuraQueueService
                     else
                     {
                         command.add("mvn");
-                    }
-                    if (i == 0 && !"true".equals(System.getProperty("neodymium.aura.test")))
-                    {
-                        command.add("clean");
                     }
                     command.add("test");
                     command.add("-Dtest=com.xceptance.neodymium.aura." + className);
@@ -504,13 +516,17 @@ public final class AuraQueueService
             }
             finally
             {
-                for (final File f : createdTempFiles)
+                synchronized (createdTempFiles)
                 {
-                    if (f.exists())
+                    for (final File f : createdTempFiles)
                     {
-                        f.delete();
-                        LOGGER.info("[Aura Server] Deleted temporary test runner: {}", f.getAbsolutePath());
+                        if (f != null && f.exists())
+                        {
+                            f.delete();
+                            LOGGER.info("[Aura Server] Deleted temporary test runner: {}", f.getAbsolutePath());
+                        }
                     }
+                    createdTempFiles.clear();
                 }
                 File parent = tempRunnerDir;
                 while (parent != null && parent.getPath().startsWith("src/test/java"))

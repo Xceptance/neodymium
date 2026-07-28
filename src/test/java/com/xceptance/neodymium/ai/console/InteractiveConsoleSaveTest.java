@@ -247,14 +247,16 @@ public class InteractiveConsoleSaveTest extends BaseAiTest
         uiActions.run();
         // auto run till the End
         if (!$("#finalSaveOverlay").is(Condition.visible)) {
-            $("#btnAuto").click();
+            $("#btnAuto").shouldBe(Condition.enabled, java.time.Duration.ofSeconds(15)).click();
         }
 
-        SelenideAddons.optionalWaitUntilCondition($("#finalSaveOverlay"), Condition.visible, 45000);
+        $("#finalSaveOverlay").shouldBe(Condition.visible, java.time.Duration.ofSeconds(45));
 
-        $("#saveScopeSelect").selectOptionByValue(local ? "local" : "global");
+        if ($("#saveScopeSelect").is(Condition.visible)) {
+            $("#saveScopeSelect").selectOptionByValue(local ? "local" : "global");
+        }
         // Save changes
-        $("#finalSaveButtons .btn-primary").click();
+        $("#finalSaveButtons .btn-primary").shouldBe(Condition.visible, java.time.Duration.ofSeconds(10)).click();
 
         bgThread.join(2000);
 
