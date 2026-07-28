@@ -18,6 +18,12 @@
  */
 package org.neodymium.ai.prompt;
 
+import java.io.File;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -109,13 +115,65 @@ public final class SystemPromptAddonHelper
             }
         }
 
-        // 3. Resolve model-family default add-on
+        // 3. Resolve model-specific add-on from disk/classpath
         final String activeModel = resolveActiveModel(context);
-        if (activeModel != null && activeModel.toLowerCase().contains("lite") && "general".equalsIgnoreCase(type))
+        if (activeModel != null && !activeModel.trim().isEmpty())
         {
-            final String val = "CRITICAL FOR LITE MODEL LOCATORS: DOM dump element tags represent real HTML tags (<p>, <div>, <span>, <h1>, <button>, <input>, <link>). Never invent synthetic tag names or pseudotags (such as 'text' or 'text:nth-of-type(N)') in locators. If a target element lacks a direct class or id attribute, select its parent element (e.g., 'div:has(...)') or set 'status' to 'ESCALATE' to request visual context.";
-            validateLength(val);
-            return val;
+            final String cleanModel = activeModel.trim().toLowerCase().replaceAll("[^a-z0-9_\\-]", "-");
+            final String modelAddon = loadModelAddon(cleanModel, type);
+            if (modelAddon != null && !modelAddon.trim().isEmpty())
+            {
+                final String val = modelAddon.trim();
+                validateLength(val);
+                return val;
+            }
+        }
+
+        return null;
+    }
+
+    private static String loadModelAddon(final String cleanModel, final String type)
+    {
+        final List<String> candidatePaths = new ArrayList<>();
+        // Filesystem overrides
+        candidatePaths.add("config/ai-prompts/models/" + cleanModel + "/addon-" + type + ".md");
+        candidatePaths.add("config/ai-prompts/models/" + cleanModel + "/addon.md");
+
+        // Classpath resources
+        candidatePaths.add("ai-prompts/models/" + cleanModel + "/addon-" + type + ".md");
+        candidatePaths.add("ai-prompts/models/" + cleanModel + "/addon.md");
+
+        for (final String path : candidatePaths)
+        {
+            if (path.startsWith("config/"))
+            {
+                final File file = new File(path);
+                if (file.exists() && file.isFile())
+                {
+                    try
+                    {
+                        return Files.readString(file.toPath(), StandardCharsets.UTF_8);
+                    }
+                    catch (final Exception e)
+                    {
+                        // ignore and continue
+                    }
+                }
+            }
+            else
+            {
+                try (final InputStream is = SystemPromptAddonHelper.class.getClassLoader().getResourceAsStream(path))
+                {
+                    if (is != null)
+                    {
+                        return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                    }
+                }
+                catch (final Exception e)
+                {
+                    // ignore and continue
+                }
+            }
         }
 
         return null;
