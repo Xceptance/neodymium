@@ -77,9 +77,8 @@ public final class LocatorResolver
         }
         final String clean = target.trim();
 
-        // 1. Neodymium Automation Reference ID shorthand (e.g. "data-ai=xc123" or "ai=xc123")
-        if (clean.toLowerCase().startsWith("data-ai=") || clean.toLowerCase().startsWith("ai=")
-                || clean.toLowerCase().startsWith("neo-ref=") || clean.toLowerCase().startsWith("data-neo-ref="))
+        // 1. Neodymium Automation Reference ID shorthand (e.g. "data-ai=xc123")
+        if (clean.toLowerCase().startsWith("data-ai="))
         {
             final int eqIdx = clean.indexOf('=');
             final String refId = clean.substring(eqIdx + 1).trim();
