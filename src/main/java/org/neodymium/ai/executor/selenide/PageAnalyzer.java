@@ -1068,6 +1068,8 @@ public class PageAnalyzer
         return captureSimplifiedDom(level);
     }
 
+    private final VolatileIdDetector volatileIdDetector = new VolatileIdDetector();
+
     /**
      * Formats a single element map into the output string builder. Produces the
      * same text format as the original
@@ -1078,7 +1080,11 @@ public class PageAnalyzer
         final String label = (tagObj != null && !tagObj.toString().isEmpty()) ? tagObj.toString() : (el.get("label") != null ? el.get("label").toString() : "element");
         dom.append("<").append(label);
 
-        appendAttribute(dom, "id", el.get("id"));
+        final Object rawId = el.get("id");
+        if (rawId != null && !this.volatileIdDetector.isVolatile(rawId.toString()))
+        {
+            appendAttribute(dom, "id", rawId);
+        }
         appendAttribute(dom, "class", el.get("className"));
         appendAttribute(dom, "name", el.get("name"));
         appendAttribute(dom, "type", el.get("type"));

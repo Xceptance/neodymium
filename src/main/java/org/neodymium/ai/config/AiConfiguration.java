@@ -22,6 +22,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 import org.neodymium.util.Neodymium;
 
@@ -327,5 +329,45 @@ public final class AiConfiguration
         {
             return ExecutionMode.REPLAY_WITH_HEALING;
         }
+    }
+
+    /**
+     * Resolves all configured volatile ID detection regex patterns.
+     * Scans for Option B indexed properties (neodymium.ai.dom.volatileIdPatterns.1, .2, ...)
+     * as well as single comma-separated property (neodymium.ai.dom.volatileIdPatterns).
+     *
+     * @return list of non-empty regex pattern strings
+     */
+    public List<String> getVolatileIdPatterns()
+    {
+        final List<String> patterns = new ArrayList<>();
+        
+        // 1. Scan Option B indexed keys: neodymium.ai.dom.volatileIdPatterns.1, .2, ...
+        int index = 1;
+        while (true)
+        {
+            final String pattern = getProperty("neodymium.ai.dom.volatileIdPatterns." + index, null);
+            if (pattern == null || pattern.isBlank())
+            {
+                break;
+            }
+            patterns.add(pattern.trim());
+            index++;
+        }
+
+        // 2. Also check single comma-separated property fallback: neodymium.ai.dom.volatileIdPatterns
+        final String singleProp = getProperty("neodymium.ai.dom.volatileIdPatterns", null);
+        if (singleProp != null && !singleProp.isBlank())
+        {
+            for (final String token : singleProp.split(","))
+            {
+                if (!token.isBlank())
+                {
+                    patterns.add(token.trim());
+                }
+            }
+        }
+
+        return patterns;
     }
 }
