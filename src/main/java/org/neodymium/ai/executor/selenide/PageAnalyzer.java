@@ -1724,10 +1724,6 @@ public class PageAnalyzer
         if (!domTagName.isEmpty() && !role.equals(domTagName) && !isImplicitRole(domTagName, role)) {
             dom.append(" role=\"").append(escapeAttributeValue(role)).append("\"");
         }
-        if (!refId.isEmpty()) {
-            dom.append(" data-neo-ref=\"").append(escapeAttributeValue(refId)).append("\"");
-        }
-
         if (!domId.isEmpty()) {
             dom.append(" id=\"").append(escapeAttributeValue(domId)).append("\"");
         }
