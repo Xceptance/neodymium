@@ -107,9 +107,36 @@ public final class SystemPromptAddonHelper
                 validateLength(val);
                 return val;
             }
+        // 3. Resolve model-family default add-on
+        final String activeModel = resolveActiveModel(context);
+        if (activeModel != null && activeModel.toLowerCase().contains("lite") && "general".equalsIgnoreCase(type))
+        {
+            final String val = "CRITICAL FOR LITE MODEL LOCATORS: DOM dump element tags represent real HTML tags (<p>, <div>, <span>, <h1>, <button>, <input>, <link>). Never invent synthetic tag names or pseudotags (such as 'text' or 'text:nth-of-type(N)') in locators. If a target element lacks a direct class or id attribute, select its parent element (e.g., 'div:has(...)') or set 'status' to 'ESCALATE' to request visual context.";
+            validateLength(val);
+            return val;
         }
 
         return null;
+    }
+
+    private static String resolveActiveModel(final ExecutionContext context)
+    {
+        if (context != null)
+        {
+            final Object modelObj = context.getTransientData().get(ExecutionContext.KEY_ACTIVE_MODEL);
+            if (modelObj != null && !modelObj.toString().trim().isEmpty())
+            {
+                return modelObj.toString().trim();
+            }
+        }
+        try
+        {
+            return com.xceptance.neodymium.util.Neodymium.aiConfiguration().aiModel();
+        }
+        catch (final Exception e)
+        {
+            return null;
+        }
     }
 
     /**
